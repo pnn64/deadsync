@@ -7,12 +7,12 @@ pub const SCORING_VERSION: &str = "golf-curved-1";
 /// Score the engine's timing error without reducing its millisecond precision.
 #[must_use]
 pub fn tap_strokes(offset_ms: Option<f32>) -> u32 {
-    strokes_from_ms(offset_ms.map(|ms| f64::from(ms).abs()))
+    strokes_from_abs_ms(offset_ms.map(|ms| f64::from(ms).abs()))
 }
 
 #[must_use]
 pub fn tap_strokes_seconds(offset: Option<f64>) -> u32 {
-    strokes_from_ms(offset.map(|offset| offset.abs() * 1000.0))
+    strokes_from_abs_ms(offset.map(|offset| offset.abs() * 1000.0))
 }
 
 // The curve floors absolute milliseconds before scoring, so its finite domain
@@ -25,9 +25,10 @@ const STROKES: [u8; 104] = [
     64, 65, 65,
 ];
 
-fn strokes_from_ms(ms: Option<f64>) -> u32 {
+// Both callers normalize the sign; the upper bound also rejects NaN and infinity.
+fn strokes_from_abs_ms(ms: Option<f64>) -> u32 {
     match ms {
-        Some(ms) if (0.0..=103.5).contains(&ms) => u32::from(STROKES[ms as usize]),
+        Some(ms) if ms <= 103.5 => u32::from(STROKES[ms as u32 as usize]),
         _ => MISS_STROKES,
     }
 }
@@ -106,3 +107,7 @@ mod tests {
         assert_eq!(result.displayed(), 0.430);
     }
 }
+
+#[cfg(test)]
+#[path = "scoring_state_performance.rs"]
+mod scoring_state_performance;

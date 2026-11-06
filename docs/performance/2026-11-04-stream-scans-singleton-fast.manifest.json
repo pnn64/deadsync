@@ -1,0 +1,42 @@
+{
+  "stage": "singleton-fast",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-stream-scans-20261104\\singleton-fast\\compiled.rs",
+    "-o",
+    "D:\\deadsync-stream-scans-20261104\\singleton-fast\\stream_scans.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-rules/src/stream.rs": "982239a8497cea3407e48b09b2fe8508442e25327f9bc6f394fb5f9739443426",
+    "crates/deadsync-rules/src/stream_scans_performance.rs": "88f2d09a84adbae898f21e0dfda48290339c155552ff304206a768f52ae04be6",
+    "crates/deadsync-rules/src/stream_scans_original.rs": "013751240bf66f68c0aebdff461766a768f21dff3cb63a6ed5cf453abb191d9a",
+    "tests/perf/stream_alloc.rs": "be1049d7688e3e497190e554ee4fc9d01931bb399f7f5452806576f917dc0c38",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_stream_scans.py": "cbb8542adbe4b5d120ed8987f52b898e76cdfd794a6a703f365876a2ed4de1b4"
+  },
+  "fragments": {
+    "kernels": "61c4327e8dca7772e18e0c9f3be2f8f88ea42071a64cddd8df84a7169a3ef9e6"
+  },
+  "compiled_sha256": "4e436df52af432088da4424c38c432be56818e6eea2adff5b986ddae8b039740",
+  "binary_sha256": "fab5181768e40fe08f122e483a924f0b22befa2d490b1b6342d9e7a46be39d6b",
+  "correctness_sha256": "0e556735c4625d65a4d858a9c5ff7658554d888f437afc47dbc35dbc4b29f280",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 4,
+  "runs": 3,
+  "trace_sha256": "98d1bd6c1d72372a9e4389a55c7f37caf19c2742c282e523f2f0494b6f1e0186",
+  "trace_bytes": 26202720,
+  "reference_trace": "D:\\deadsync-stream-scans-20261104\\caller-control\\stream_scans-trace.bin",
+  "reference_trace_sha256": "98d1bd6c1d72372a9e4389a55c7f37caf19c2742c282e523f2f0494b6f1e0186"
+}

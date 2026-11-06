@@ -1,0 +1,42 @@
+{
+  "stage": "final",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-notefield-text-20261104\\final\\compiled.rs",
+    "-o",
+    "D:\\deadsync-notefield-text-20261104\\final\\text.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-notefield/src/display_mods.rs": "5c12fa78fbce5fb4e18ca626e52cb44febd6a28a188c56a24b70d94c92fbbbf0",
+    "crates/deadsync-notefield/src/text_performance.rs": "21cbd960b4317a56aae0b53e4b46342224a76a4ef11191570a776a2801e7398d",
+    "crates/deadsync-notefield/src/text_original.rs": "19594ecccd775e7569b8d20847a920c3c7e25863b2f9133981da36d51288580e",
+    "crates/deadsync-rules/src/scroll.rs": "7c88f5ad1a5e3b84702d729867da3bbb4ad8bf2a788d0ef4979561425a5eda65",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_notefield_text.py": "a03258502efb2645a677ca5f9d591f91e8973896117ec2d01c4755968f468a00"
+  },
+  "fragments": {
+    "module": "de44f830fce679eacf872e0061fbd0a60a66825cd4e2164b51a9d5862f437b52",
+    "speed": "94ef4c120e6548258a872f87370103e7caf94a2401b6bc50745331d7f4a2ee44"
+  },
+  "compiled_sha256": "7221769056042a577b7a9ab155dc64433b12f6931bee7536b426f5c657cd44c7",
+  "binary_sha256": "615359751034f3734b9c39e8597e13c91281ef98058006070530b82522fc7877",
+  "correctness_sha256": "c9ee5498c355915657c183a934ad5113b200ba45d983007b469e41b33926786d",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 6,
+  "runs": 5,
+  "trace_sha256": "04df4a190a2781c6f07386b1ea356038995ed8694b5f6e55dfc222bc2e85eb47",
+  "trace_bytes": 8473145
+}

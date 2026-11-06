@@ -288,3 +288,11 @@ fn write_dump_file(path: &Path, content: String) -> Result<(), String> {
     }
     std::fs::write(path, content).map_err(|e| format!("failed to write '{}': {e}", path.display()))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/support/kernel_bench.rs"]
+mod polling_bench;

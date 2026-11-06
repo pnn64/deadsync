@@ -456,21 +456,25 @@ pub fn fsr_button_view(
     readings: [SensorReading; PANEL_SENSOR_COUNT],
     panel_active: bool,
 ) -> ButtonView {
+    let mut aggregate_value = 0;
+    let mut aggregate_threshold = 0;
     let sensors: SensorViews = readings
         .iter()
-        .map(|r| SensorView {
-            firmware_index: r.firmware_index,
-            label: r.label,
-            raw_value: r.value,
-            value_norm: FSR_VALUE_CURVE.normalize(r.value),
-            raw_threshold: r.threshold,
-            threshold_norm: FSR_VALUE_CURVE.normalize(r.threshold),
-            active: r.value >= r.threshold && r.threshold > 0,
-            enabled: r.enabled,
+        .map(|r| {
+            aggregate_value = aggregate_value.max(r.value);
+            aggregate_threshold = aggregate_threshold.max(r.threshold);
+            SensorView {
+                firmware_index: r.firmware_index,
+                label: r.label,
+                raw_value: r.value,
+                value_norm: FSR_VALUE_CURVE.normalize(r.value),
+                raw_threshold: r.threshold,
+                threshold_norm: FSR_VALUE_CURVE.normalize(r.threshold),
+                active: r.value >= r.threshold && r.threshold > 0,
+                enabled: r.enabled,
+            }
         })
         .collect();
-    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-    let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
     ButtonView {
         label: ButtonLabel::Named(label),
         sensors,
@@ -494,21 +498,24 @@ pub fn load_cell_button_view(
     release: u16,
     panel_active: bool,
 ) -> ButtonView {
+    let mut aggregate_value = 0;
     let sensors: SensorViews = values
         .iter()
         .enumerate()
-        .map(|(s, &raw_value)| SensorView {
-            firmware_index: s,
-            label: None, // corners, not edges -> numbered 1-4 in the UI
-            raw_value,
-            value_norm: LOADCELL_VALUE_CURVE.normalize(raw_value),
-            raw_threshold: press,
-            threshold_norm: LOADCELL_VALUE_CURVE.normalize(press),
-            active: panel_active,
-            enabled: true,
+        .map(|(s, &raw_value)| {
+            aggregate_value = aggregate_value.max(raw_value);
+            SensorView {
+                firmware_index: s,
+                label: None, // corners, not edges -> numbered 1-4 in the UI
+                raw_value,
+                value_norm: LOADCELL_VALUE_CURVE.normalize(raw_value),
+                raw_threshold: press,
+                threshold_norm: LOADCELL_VALUE_CURVE.normalize(press),
+                active: panel_active,
+                enabled: true,
+            }
         })
         .collect();
-    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
     ButtonView {
         label: ButtonLabel::Named(label),
         sensors,
@@ -678,4 +685,9 @@ mod tests {
         assert_eq!(first.as_ref(), "StepManiaX P1 [40ea]");
         assert_eq!(changed.as_ref(), "StepManiaX P1 [91ff]");
     }
+}
+
+#[cfg(test)]
+mod view_performance {
+    include!("smx_view_performance.rs");
 }

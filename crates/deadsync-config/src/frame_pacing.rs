@@ -46,12 +46,7 @@ pub const fn queued_input_allowed(
 #[inline(always)]
 #[must_use]
 pub fn seconds_to_us_u32(seconds: f32) -> u32 {
-    let micros = (seconds * 1_000_000.0).max(0.0);
-    if micros > u32::MAX as f32 {
-        u32::MAX
-    } else {
-        micros as u32
-    }
+    (seconds * 1_000_000.0) as u32
 }
 
 /// Slow-decay "worst recent frame" hold for max readouts and graph scale.
@@ -536,4 +531,9 @@ mod tests {
                 < EPS
         );
     }
+}
+
+#[cfg(test)]
+mod frame_kernels {
+    include!("frame_kernels.rs");
 }

@@ -1,0 +1,296 @@
+{
+  "baseline": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "type-reuse": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "hash-mask": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "comment-borrow": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "debug": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "final": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "control": {
+    "artifact_hashes_verified": true,
+    "passed_tests": 7,
+    "trace_sha256": "678bd61a339559ac1dfbfd56d889dd706a74723a4a1de69f26c10091e62df032"
+  },
+  "frozen_prefix_matches_baseline": true,
+  "only_two_production_bodies_changed": true,
+  "production_diff": {
+    "added": 32,
+    "removed": 28,
+    "unsafe_added": false,
+    "new_production_dependencies": false
+  },
+  "clippy": {
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--manifest-path",
+      "D:\\deadsync-partner-hashes-20261104\\workspace\\Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "log_sha256": "23025f5c2a0ee39d34d33b78ba1a6e2bc07c24da095e363b9107ae1468c3875a",
+    "compiled_source_sha256": "20300d3bf36d9751f5047b244d0b6daef99b1fa1bca89b4a3051a53444888749"
+  },
+  "full_release": {
+    "passed_tests": 296,
+    "ignored_tests": 24,
+    "artifact_hashes_verified": true,
+    "overlays_match_checkout": true,
+    "source_archive_sha256": "a1b07e19422e3d81fc8106f8a6644c4e1045733ebd9377a262b142ba298fdb44",
+    "binary_sha256": "b173b53a36941641dce2b2fcc994fc584c482a7cffa0f8d3b1d2b2d19bfac8da",
+    "test_temp": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp"
+  },
+  "format": {
+    "command": [
+      "rustfmt",
+      "--check",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "crates/deadsync-simfile/src/partner_charts.rs",
+      "crates/deadsync-simfile/src/partner_charts/perf.rs",
+      "crates/deadsync-simfile/src/partner_charts/projection.rs",
+      "crates/deadsync-simfile/src/partner_charts/projection_original.rs"
+    ],
+    "exit_code": 0
+  },
+  "python_compile": {
+    "command": [
+      "python",
+      "-m",
+      "py_compile",
+      "scripts/benchmark_partner_charts.py",
+      "scripts/benchmark_partner_hashes.py"
+    ],
+    "exit_code": 0
+  },
+  "whitespace": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0
+  },
+  "final_summary": {
+    "merge/comments/16": {
+      "paired_median": 0.9996576928433295,
+      "paired_range": [
+        0.9555488101235813,
+        1.0353149298442696
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 191,
+          "reallocs": 11,
+          "allocated_bytes": 119620,
+          "peak_bytes": 79310
+        },
+        "current": {
+          "allocs": 191,
+          "reallocs": 11,
+          "allocated_bytes": 119620,
+          "peak_bytes": 79310
+        }
+      }
+    },
+    "merge/plain/16": {
+      "paired_median": 1.3817284262846332,
+      "paired_range": [
+        1.338525966780302,
+        1.39204051279524
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 191,
+          "reallocs": 11,
+          "allocated_bytes": 115525,
+          "peak_bytes": 77262
+        },
+        "current": {
+          "allocs": 190,
+          "reallocs": 0,
+          "allocated_bytes": 78670,
+          "peak_bytes": 58830
+        }
+      }
+    },
+    "merge/trailing/16": {
+      "paired_median": 0.9694941361854791,
+      "paired_range": [
+        0.9352739145753376,
+        0.9928903605322975
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 191,
+          "reallocs": 11,
+          "allocated_bytes": 117255,
+          "peak_bytes": 78992
+        },
+        "current": {
+          "allocs": 191,
+          "reallocs": 11,
+          "allocated_bytes": 117255,
+          "peak_bytes": 78992
+        }
+      }
+    },
+    "project/couple/16": {
+      "paired_median": 1.4343463133344228,
+      "paired_range": [
+        1.394227687991632,
+        1.5036953987759287
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 2,
+          "reallocs": 2,
+          "allocated_bytes": 11274,
+          "peak_bytes": 10794
+        },
+        "current": {
+          "allocs": 2,
+          "reallocs": 2,
+          "allocated_bytes": 11274,
+          "peak_bytes": 10794
+        }
+      }
+    },
+    "project/mixed/16": {
+      "paired_median": 4.545744383287349,
+      "paired_range": [
+        4.489493961155772,
+        4.729215011285141
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 235,
+          "reallocs": 128,
+          "allocated_bytes": 283576,
+          "peak_bytes": 67442
+        },
+        "current": {
+          "allocs": 227,
+          "reallocs": 28,
+          "allocated_bytes": 223776,
+          "peak_bytes": 67442
+        }
+      }
+    },
+    "project/native/16": {
+      "paired_median": 1.0293819045971737,
+      "paired_range": [
+        0.9730542804533312,
+        1.052151730870178
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 0,
+          "reallocs": 0,
+          "allocated_bytes": 0,
+          "peak_bytes": 0
+        },
+        "current": {
+          "allocs": 0,
+          "reallocs": 0,
+          "allocated_bytes": 0,
+          "peak_bytes": 0
+        }
+      }
+    },
+    "project/routine_dense/4": {
+      "paired_median": 3.72727472167413,
+      "paired_range": [
+        3.6271089202338427,
+        3.749745093196113
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 454,
+          "reallocs": 128,
+          "allocated_bytes": 321746,
+          "peak_bytes": 76804
+        },
+        "current": {
+          "allocs": 446,
+          "reallocs": 28,
+          "allocated_bytes": 261946,
+          "peak_bytes": 76804
+        }
+      }
+    },
+    "project/routine_holds/4": {
+      "paired_median": 5.178928560815038,
+      "paired_range": [
+        5.034386530621021,
+        5.41282972255453
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 235,
+          "reallocs": 128,
+          "allocated_bytes": 256754,
+          "peak_bytes": 54148
+        },
+        "current": {
+          "allocs": 227,
+          "reallocs": 28,
+          "allocated_bytes": 196954,
+          "peak_bytes": 54148
+        }
+      }
+    },
+    "project/routine_sparse/4": {
+      "paired_median": 5.63843967576714,
+      "paired_range": [
+        5.104009989370519,
+        5.724578259305924
+      ],
+      "allocations": {
+        "original": {
+          "allocs": 170,
+          "reallocs": 128,
+          "allocated_bytes": 242738,
+          "peak_bytes": 45316
+        },
+        "current": {
+          "allocs": 162,
+          "reallocs": 28,
+          "allocated_bytes": 182938,
+          "peak_bytes": 45316
+        }
+      }
+    }
+  },
+  "baseline_revision": "4d7ae14e6c77c227e8d7ef1c857da46b947302d2",
+  "index_sources_match_after_newline_normalization": true
+}

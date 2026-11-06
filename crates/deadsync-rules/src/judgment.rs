@@ -1,6 +1,9 @@
 use crate::note::{HoldResult, MineResult, Note};
 use crate::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
-use deadsync_core::{note::NoteType, song_time::song_time_ns_invalid};
+use deadsync_core::{
+    note::NoteType,
+    song_time::{normalized_song_rate, song_time_ns_invalid},
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -81,14 +84,10 @@ pub fn judgment_time_error_ms_from_music_ns(time_error_music_ns: i64, music_rate
 #[inline(always)]
 #[must_use]
 pub fn judgment_time_error_music_ns_from_ms(time_error_ms: f32, music_rate: f32) -> i64 {
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    (f64::from(time_error_ms) * f64::from(rate) * 1_000_000.0)
-        .round()
-        .clamp((i64::MIN + 1) as f64, i64::MAX as f64) as i64
+    let rate = normalized_song_rate(music_rate);
+    // Both former f64 clamp bounds round to the i64 endpoints used by the
+    // saturating cast. NaN still casts to zero, and infinities still saturate.
+    (f64::from(time_error_ms) * f64::from(rate) * 1_000_000.0).round() as i64
 }
 
 /// Aggregates per-note judgments on a single row into the final row judgment,
@@ -139,7 +138,8 @@ pub const fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCo
 #[inline(always)]
 #[must_use]
 pub fn normalized_blue_window_ms(ms: f32) -> f32 {
-    if ms.is_finite() && ms > 0.0 {
+    // Positive finite f32 bit patterns occupy 1..0x7f80_0000.
+    if ms.to_bits().wrapping_sub(1) < 0x7f7f_ffff {
         ms
     } else {
         FA_PLUS_W010_MS
@@ -366,19 +366,6 @@ pub fn max_grade_points(
 // Mirrors Simply Love's SL.ExWeights table and CalculateExScore() helper:
 //   W0=3.5, W1=3, W2=2, W3=1, W4=0, W5=0, Miss=0, LetGo=0, Held=1, HitMine=-1.
 
-const EX_WEIGHT_W0: f64 = 3.5;
-const EX_WEIGHT_W1: f64 = 3.0;
-const EX_WEIGHT_W2: f64 = 2.0;
-const EX_WEIGHT_W3: f64 = 1.0;
-const EX_WEIGHT_HELD: f64 = 1.0;
-const EX_WEIGHT_HIT_MINE: f64 = -1.0;
-
-const HARD_EX_WEIGHT_W010: f64 = 3.5;
-const HARD_EX_WEIGHT_W110: f64 = 3.0;
-const HARD_EX_WEIGHT_W2: f64 = 1.0;
-const HARD_EX_WEIGHT_HELD: f64 = 1.0;
-const HARD_EX_WEIGHT_HIT_MINE: f64 = -1.0;
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ExScoreData {
     pub counts: WindowCounts,
@@ -476,12 +463,28 @@ fn compute_ex_score_counts(
     hold_end_times_ns: &[i64],
     fail_time_ns: Option<i64>,
 ) -> ExScoreCounts {
+    // Specialize once so the no-failure scan has no per-row or per-hold time checks.
+    match fail_time_ns {
+        Some(time_ns) => {
+            compute_ex_score_counts_mode::<true>(notes, note_times_ns, hold_end_times_ns, time_ns)
+        }
+        None => compute_ex_score_counts_mode::<false>(notes, note_times_ns, hold_end_times_ns, 0),
+    }
+}
+
+#[inline(always)]
+fn compute_ex_score_counts_mode<const FAILED: bool>(
+    notes: &[Note],
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[i64],
+    fail_time_ns: i64,
+) -> ExScoreCounts {
     let mut counts = ExScoreCounts::default();
     let mut idx: usize = 0;
     while idx < notes.len() {
         let row_index = notes[idx].row_index;
-        let row_time_ns = note_times_ns.get(idx).copied().unwrap_or(0);
-        let row_is_playable = fail_time_ns.is_none_or(|time_ns| row_time_ns <= time_ns);
+        let row_is_playable =
+            !FAILED || note_times_ns.get(idx).copied().unwrap_or(0) <= fail_time_ns;
         let mut row_judgment = None;
         while idx < notes.len() && notes[idx].row_index == row_index {
             let note = &notes[idx];
@@ -499,7 +502,13 @@ fn compute_ex_score_counts(
                     note.note_type,
                     NoteType::Hold | NoteType::Roll | NoteType::Mine
                 )
-                && resolved_before_fail(note, idx, note_times_ns, hold_end_times_ns, fail_time_ns)
+                && resolved_before_fail(
+                    note,
+                    idx,
+                    note_times_ns,
+                    hold_end_times_ns,
+                    if FAILED { Some(fail_time_ns) } else { None },
+                )
             {
                 add_resolved_note(&mut counts, note);
             }
@@ -529,33 +538,23 @@ fn ex_total_possible(data: &ExScoreData) -> f64 {
     if data.total_steps == 0 {
         return 0.0;
     }
-    f64::from(data.total_steps).mul_add(
-        EX_WEIGHT_W0,
-        f64::from(data.holds_total.saturating_add(data.rolls_total)),
-    )
+    let twice = u64::from(data.total_steps) * 7
+        + u64::from(data.holds_total.saturating_add(data.rolls_total)) * 2;
+    twice as f64 * 0.5
 }
 
 #[inline(always)]
 /// Earned EX points before percentage rounding, including mine penalties.
 pub fn ex_score_points(data: &ExScoreData) -> f64 {
-    let mines_effective = data.mines_hit.min(data.mines_total);
-    f64::from(mines_effective).mul_add(
-        EX_WEIGHT_HIT_MINE,
-        f64::from(data.rolls_held).mul_add(
-            EX_WEIGHT_HELD,
-            f64::from(data.holds_held).mul_add(
-                EX_WEIGHT_HELD,
-                f64::from(data.counts.w3).mul_add(
-                    EX_WEIGHT_W3,
-                    f64::from(data.counts.w2).mul_add(
-                        EX_WEIGHT_W2,
-                        f64::from(data.counts.w1)
-                            .mul_add(EX_WEIGHT_W1, f64::from(data.counts.w0) * EX_WEIGHT_W0),
-                    ),
-                ),
-            ),
-        ),
-    )
+    // Twice the weighted sum fits below 2^37, so conversion and halving are exact.
+    let twice = i64::from(data.counts.w0) * 7
+        + i64::from(data.counts.w1) * 6
+        + i64::from(data.counts.w2) * 4
+        + i64::from(data.counts.w3) * 2
+        + i64::from(data.holds_held) * 2
+        + i64::from(data.rolls_held) * 2
+        - i64::from(data.mines_hit.min(data.mines_total)) * 2;
+    twice as f64 * 0.5
 }
 
 #[inline(always)]
@@ -564,27 +563,20 @@ pub fn hard_ex_score_points(data: &ExScoreData) -> f64 {
     let w010 = data.counts_10ms.w0;
     let fantastic_total = data.counts.w0.saturating_add(data.counts.w1);
     let w110 = fantastic_total.saturating_sub(w010);
-    let mines_effective = data.mines_hit.min(data.mines_total);
-    f64::from(mines_effective).mul_add(
-        HARD_EX_WEIGHT_HIT_MINE,
-        f64::from(data.rolls_held).mul_add(
-            HARD_EX_WEIGHT_HELD,
-            f64::from(data.holds_held).mul_add(
-                HARD_EX_WEIGHT_HELD,
-                f64::from(data.counts.w2).mul_add(
-                    HARD_EX_WEIGHT_W2,
-                    f64::from(w110)
-                        .mul_add(HARD_EX_WEIGHT_W110, f64::from(w010) * HARD_EX_WEIGHT_W010),
-                ),
-            ),
-        ),
-    )
+    let twice = i64::from(w010) * 7
+        + i64::from(w110) * 6
+        + i64::from(data.counts.w2) * 2
+        + i64::from(data.holds_held) * 2
+        + i64::from(data.rolls_held) * 2
+        - i64::from(data.mines_hit.min(data.mines_total)) * 2;
+    twice as f64 * 0.5
 }
 
 #[inline(always)]
 fn ex_current_possible_points(data: &ExScoreData) -> f64 {
     let resolved = data.holds_resolved.saturating_add(data.rolls_resolved);
-    f64::from(window_counts_total_taps(data.counts)).mul_add(EX_WEIGHT_W0, f64::from(resolved))
+    let twice = u64::from(window_counts_total_taps(data.counts)) * 7 + u64::from(resolved) * 2;
+    twice as f64 * 0.5
 }
 
 #[inline(always)]

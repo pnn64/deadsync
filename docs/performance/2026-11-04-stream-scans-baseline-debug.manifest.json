@@ -1,0 +1,40 @@
+{
+  "stage": "baseline-debug",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=0",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "D:\\deadsync-stream-scans-20261104\\baseline-debug\\compiled.rs",
+    "-o",
+    "D:\\deadsync-stream-scans-20261104\\baseline-debug\\stream_scans.exe"
+  ],
+  "baseline_revision": "6ce445f9e4aad1d9d0d8f9828eb76c15667b90b9",
+  "sources": {
+    "crates/deadsync-rules/src/stream.rs": "d375bad94428f7c4f24fa8e8c047c432cf50fe5f247073e78f7f8c4e49ebbd76",
+    "crates/deadsync-rules/src/stream_scans_performance.rs": "7759a5366c64f1d3fe710f4dfe248ff68459a3d9ff9c3508d97143c8b4c57bf9",
+    "crates/deadsync-rules/src/stream_scans_original.rs": "013751240bf66f68c0aebdff461766a768f21dff3cb63a6ed5cf453abb191d9a",
+    "tests/perf/stream_alloc.rs": "be1049d7688e3e497190e554ee4fc9d01931bb399f7f5452806576f917dc0c38",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_stream_scans.py": "9e06819e699db7fc8b6d4ef1614c7804b7c7f32724e5be08fff6cfde322ffca8"
+  },
+  "fragments": {
+    "kernels": "f37edb199f494fef33c6b37f77001afdc34e6c6f2925fb3c561e768c66a50932"
+  },
+  "compiled_sha256": "06bd89b27db8160c741d757ddef3fe38f7164d0be557e1298860600c5033674a",
+  "binary_sha256": "82e9fda9ecb383c775d6caa04bc4f060936698585e874816b5af1b48bbfabea5",
+  "correctness_sha256": "6a2a69664deb4834025384bd75c1a8f3d423b6012684e8693a302bfbe78cd11f",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 4,
+  "runs": 3,
+  "trace_sha256": "98d1bd6c1d72372a9e4389a55c7f37caf19c2742c282e523f2f0494b6f1e0186",
+  "trace_bytes": 26202720,
+  "reference_trace": "D:\\deadsync-stream-scans-20261104\\baseline-debug\\stream_scans-trace.bin",
+  "reference_trace_sha256": "98d1bd6c1d72372a9e4389a55c7f37caf19c2742c282e523f2f0494b6f1e0186"
+}

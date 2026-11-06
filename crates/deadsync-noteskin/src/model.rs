@@ -515,53 +515,27 @@ pub fn itg_load_model_slots<T>(
         search_dirs: vec![search_dir.to_path_buf()],
     };
     let model_auto_rot = itg_parse_milkshape_model_auto_rot(bones_path);
-    let mut slots = Vec::new();
-
-    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, meshes_path, materials_path)
-    {
-        for layer in model_layers {
-            let Some(mut slot) = slot_from_texture_path(&layer.texture.texture_path) else {
-                continue;
-            };
-            apply_slot_plan(
-                &mut slot,
-                ItgModelSlotPlan::from_layer(
-                    layer,
-                    ModelDrawState::default(),
-                    Arc::from(Vec::<ModelTweenSegment>::new()),
-                    ModelEffectState::default(),
-                    model_auto_rot.as_ref(),
-                ),
-            );
-            slots.push(slot);
-        }
-    }
-
-    if slots.is_empty() {
-        let Some(model_texture) = itg_resolve_model_texture_path(&data, materials_path) else {
-            return Err(format!(
-                "model '{}' did not resolve a texture",
+    // LoadPieces never retries with materials embedded in the mesh file.
+    let model_layers = itg_parse_milkshape_model_layers(&data, meshes_path, materials_path)
+        .ok_or_else(|| {
+            format!(
+                "model '{}' could not load geometry with materials '{}'",
+                meshes_path.display(),
                 materials_path.display()
-            ));
-        };
-        let Some(mut slot) = slot_from_texture_path(&model_texture.texture_path) else {
+            )
+        })?;
+    let mut slots = Vec::with_capacity(model_layers.len());
+    for layer in model_layers {
+        let Some(mut slot) = slot_from_texture_path(&layer.texture.texture_path) else {
             return Err(format!(
                 "model texture '{}' did not load",
-                model_texture.texture_path.display()
+                layer.texture.texture_path.display()
             ));
         };
-        let model = itg_parse_milkshape_model(&data, meshes_path);
-        if model.is_none() {
-            return Err(format!(
-                "model '{}' did not produce any geometry",
-                meshes_path.display()
-            ));
-        }
         apply_slot_plan(
             &mut slot,
-            ItgModelSlotPlan::from_texture(
-                model,
-                model_texture,
+            ItgModelSlotPlan::from_layer(
+                layer,
                 ModelDrawState::default(),
                 Arc::from(Vec::<ModelTweenSegment>::new()),
                 ModelEffectState::default(),
@@ -730,7 +704,13 @@ fn itg_resolve_model_material_texture(
     if texture_ref.is_empty() {
         return None;
     }
-    let texture_path = itg_resolve_relative_or_noteskin_path(data, model_path, texture_ref)?;
+    // Model::LoadMaterialsFromMilkshapeAscii anchors both texture names to
+    // the materials file. Noteskin inheritance must not supply a substitute.
+    let texture_ref = itg_normalized_asset_ref(texture_ref)?;
+    let texture_path = data.override_path(itg_resolve_relative_file(
+        model_path.parent()?,
+        Path::new(&texture_ref),
+    )?);
     let ext = texture_path
         .extension()
         .and_then(|s| s.to_str())
@@ -971,7 +951,12 @@ pub fn itg_parse_milkshape_model_layers(
         });
     }
 
-    let fallback_texture = std::cell::OnceCell::new();
+    // Model::LoadPieces rejects references outside the declared material table.
+    if meshes.iter().any(|mesh| {
+        usize::try_from(mesh.material_index).is_ok_and(|index| index >= material_count)
+    }) {
+        return None;
+    }
     let shared_bounds = if model_bounds[0].is_finite()
         && model_bounds[1].is_finite()
         && model_bounds[2].is_finite()
@@ -983,36 +968,41 @@ pub fn itg_parse_milkshape_model_layers(
     } else {
         [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
     };
-    let animation_length = material_textures
-        .iter()
-        .filter_map(|material| {
-            material
-                .resolved_texture
-                .get_or_init(|| {
+    let mut animation_length = 0.0f32;
+    for material in &material_textures {
+        let texture = material
+            .resolved_texture
+            .get_or_init(|| {
+                if material.texture.trim().trim_matches('"').is_empty() {
+                    Some(ItgResolvedModelTexture::from_path(PathBuf::from(
+                        MODEL_WHITE_TEXTURE,
+                    )))
+                } else {
                     itg_resolve_model_material_texture(data, materials_path, material.texture)
-                })
-                .as_ref()
-        })
-        .map(|texture| texture.tex.uv_cycle_seconds.unwrap_or(1.0))
-        .fold(0.0f32, f32::max);
+                }
+            })
+            .as_ref()?;
+        animation_length = animation_length.max(texture.tex.uv_cycle_seconds.unwrap_or(1.0));
+        let additive = material.resolved_additive.get_or_init(|| {
+            itg_resolve_model_material_texture(data, materials_path, material.additive)
+        });
+        // Native loads every material's textures, even if no mesh uses it.
+        if !material.additive.trim().trim_matches('"').is_empty() && additive.is_none() {
+            return None;
+        }
+    }
     let mut layers = Vec::with_capacity(meshes.len());
     for mesh in meshes {
         let texture_with_flags = if mesh.material_index >= 0 {
             material_textures
                 .get(mesh.material_index as usize)
                 .and_then(|material| {
-                    (if material.texture.trim().trim_matches('"').is_empty() {
-                        Some(ItgResolvedModelTexture::from_path(PathBuf::from(
-                            MODEL_WHITE_TEXTURE,
-                        )))
-                    } else {
-                        material
-                            .resolved_texture
-                            .get()
-                            .and_then(Option::as_ref)
-                            .cloned()
-                    })
-                    .map(|resolved| (resolved, material.flags))
+                    material
+                        .resolved_texture
+                        .get()
+                        .and_then(Option::as_ref)
+                        .cloned()
+                        .map(|resolved| (resolved, material.flags))
                 })
         } else if mesh.material_index == -1 {
             Some((
@@ -1021,13 +1011,7 @@ pub fn itg_parse_milkshape_model_layers(
             ))
         } else {
             None
-        }
-        .or_else(|| {
-            fallback_texture
-                .get_or_init(|| itg_resolve_model_texture_path(data, materials_path))
-                .clone()
-                .map(|resolved| (resolved, ItgModelMaterialFlags::default()))
-        });
+        };
         let Some((texture, flags)) = texture_with_flags else {
             continue;
         };

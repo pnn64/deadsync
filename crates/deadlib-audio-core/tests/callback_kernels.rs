@@ -11,6 +11,8 @@ use deadlib_audio_core::{
     set_music_target_gain, snap_music_gain_generation, stop_music_track,
 };
 
+#[path = "support/audio_math_original.rs"]
+mod audio_math_original;
 #[path = "../../../tests/support/kernel_bench.rs"]
 mod bench;
 #[path = "../../../tests/support/perf.rs"]
@@ -166,6 +168,211 @@ mod render {
     mod kernels {
         use super::*;
         use std::hint::black_box;
+
+        #[test]
+        fn audio_math_preserves_rate_bits_and_exceptional_gain_steps() {
+            let mut seed = 0x9137_72a1u32;
+            for bits in [
+                0,
+                1,
+                0x007f_ffff,
+                0x0080_0000,
+                0x3f80_0000,
+                0x7f7f_ffff,
+                0x7f80_0000,
+                0x7f80_0001,
+                0x7fc0_1234,
+                0x8000_0000,
+                0xffff_ffff,
+            ]
+            .into_iter()
+            .chain((0..200_000).map(|_| {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                seed
+            })) {
+                let rate = f32::from_bits(bits);
+                assert_eq!(
+                    deadlib_audio_core::normalized_music_rate(rate).to_bits(),
+                    crate::audio_math_original::normalized_music_rate(rate).to_bits()
+                );
+            }
+            let values = [
+                0.0,
+                -0.0,
+                MUSIC_GAIN_MAX_STEP,
+                -MUSIC_GAIN_MAX_STEP,
+                f32::from_bits(MUSIC_GAIN_MAX_STEP.to_bits() - 1),
+                f32::from_bits(MUSIC_GAIN_MAX_STEP.to_bits() + 1),
+                f32::MIN_POSITIVE,
+                f32::from_bits(1),
+                f32::MAX,
+                f32::MIN,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::from_bits(0x7fc0_1234),
+                f32::from_bits(0xff80_5678),
+            ];
+            for initial in values {
+                for target in values {
+                    let mut a = black_box(initial);
+                    let mut b = a;
+                    for _ in 0..8 {
+                        let aa = advance_gain(&mut a, black_box(target));
+                        let bb =
+                            crate::audio_math_original::advance_gain(&mut b, black_box(target));
+                        assert_eq!(aa, bb);
+                        assert_eq!(a.to_bits(), b.to_bits(), "{initial:?}->{target:?}");
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn gain_setters_preserve_signed_zero_and_invalid_values() {
+            let controls = MixControls::new();
+            let mut seed = 0x1937_25a1u32;
+            for bits in [
+                0,
+                1,
+                0x7f7f_ffff,
+                0x7f80_0000,
+                0x7f80_1234,
+                0x7fc0_4321,
+                0x8000_0000,
+                0x8000_0001,
+                0xff80_0000,
+                0xffff_ffff,
+            ]
+            .into_iter()
+            .chain((0..200_000).map(|_| {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                seed
+            })) {
+                let gain = f32::from_bits(bits);
+                let expected = crate::audio_math_original::valid_gain(gain).to_bits();
+                controls.set_stream_gain(gain);
+                assert_eq!(controls.stream_gain().to_bits(), expected);
+                let bus = crate::MixBus::new((bits % 8) as u8);
+                controls.set_bus_gain(bus, gain);
+                assert_eq!(controls.bus_gain(bus).to_bits(), expected);
+            }
+        }
+
+        fn compare_audio(label: &str, iterations: usize, mut work: impl FnMut(bool)) {
+            for variant in [false, true] {
+                let (_, counts) = crate::perf::measure(|| work(variant));
+                assert_eq!(counts, crate::perf::Churn::default());
+                println!(
+                    "{label}/{}: allocation {counts:?}",
+                    if variant { "current" } else { "original" }
+                );
+            }
+            crate::bench::compare(label, iterations, work);
+        }
+
+        #[test]
+        #[ignore = "release paired audio math CPU/allocation benchmark"]
+        fn benchmark_audio_math() {
+            for (name, initial, target) in [
+                ("up", 0.0, 1.0),
+                ("down", 1.0, 0.0),
+                ("settling", 0.99, 1.0),
+                ("steady", 1.0, 1.0),
+            ] {
+                compare_audio(&format!("gain/{name}/256"), 3000, |updated| {
+                    let step: fn(&mut f32, f32) -> bool = black_box(if updated {
+                        advance_gain
+                    } else {
+                        crate::audio_math_original::advance_gain
+                    });
+                    let mut gain = black_box(initial);
+                    for _ in 0..256 {
+                        black_box(step(&mut gain, black_box(target)));
+                    }
+                    black_box(gain);
+                });
+            }
+            let input: Vec<_> = (0..1024).map(|i| i as i16).collect();
+            let mut output = vec![0.0; 1024];
+            compare_audio("conversion/stereo_ramp/512", 500, |updated| {
+                let convert = black_box(if updated {
+                    convert_music_samples
+                } else {
+                    crate::audio_math_original::convert_music_samples
+                });
+                let mut gain = black_box(0.0);
+                convert(
+                    black_box(&input),
+                    black_box(&mut output),
+                    black_box(2),
+                    black_box(0.8),
+                    black_box(1.0),
+                    &mut gain,
+                );
+                black_box((&output, gain));
+            });
+            for kind in ["valid", "mixed"] {
+                let inputs: Vec<_> = (0..256)
+                    .map(|i| {
+                        if kind == "valid" {
+                            [0.5, 1.0, 1.5, 2.0][i % 4]
+                        } else {
+                            [
+                                0.0,
+                                -0.0,
+                                -1.0,
+                                f32::INFINITY,
+                                f32::NAN,
+                                f32::from_bits(1),
+                                1.25,
+                            ][i % 7]
+                        }
+                    })
+                    .collect();
+                compare_audio(&format!("rate/{kind}/256"), 3000, |updated| {
+                    let normalize: fn(f32) -> f32 = black_box(if updated {
+                        deadlib_audio_core::normalized_music_rate
+                    } else {
+                        crate::audio_math_original::normalized_music_rate
+                    });
+                    for &rate in black_box(&inputs) {
+                        black_box(normalize(black_box(rate)));
+                    }
+                });
+            }
+            for kind in ["valid", "mixed"] {
+                use std::sync::atomic::{AtomicU32, Ordering};
+                let controls = MixControls::new();
+                let reference = AtomicU32::new(1.0f32.to_bits());
+                let inputs: Vec<_> = (0..256)
+                    .map(|i| {
+                        if kind == "valid" {
+                            [0.0, -0.0, 0.5, 1.0, 2.0][i % 5]
+                        } else {
+                            [-1.0, f32::INFINITY, f32::NAN, -0.0, f32::MAX, 0.0, 0.125][i % 7]
+                        }
+                    })
+                    .collect();
+                compare_audio(&format!("gain_control/{kind}/256"), 3000, |updated| {
+                    if updated {
+                        let controls = black_box(&controls);
+                        for &gain in black_box(&inputs) {
+                            controls.set_stream_gain(black_box(gain));
+                            black_box(controls.stream_gain());
+                        }
+                    } else {
+                        let reference = black_box(&reference);
+                        for &gain in black_box(&inputs) {
+                            reference.store(
+                                crate::audio_math_original::valid_gain(black_box(gain)).to_bits(),
+                                Ordering::Release,
+                            );
+                            black_box(f32::from_bits(reference.load(Ordering::Acquire)));
+                        }
+                    }
+                });
+            }
+        }
 
         #[test]
         fn pcm_batches_preserve_samples_and_unmatched_output_tails() {

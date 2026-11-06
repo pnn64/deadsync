@@ -3,10 +3,10 @@ use std::hint::black_box;
 #[path = "resource_paths_original.rs"]
 mod original;
 #[path = "../../../tests/perf/resource_support.rs"]
-mod support;
+pub(crate) mod support;
 
 #[path = "text_codecs.rs"]
-mod text_codecs;
+pub(crate) mod text_codecs;
 
 fn fixture(root: &Path, count: usize) -> AssetPaths {
     let search_roots: Vec<_> = (0..count)

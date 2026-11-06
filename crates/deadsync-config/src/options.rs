@@ -498,9 +498,14 @@ fn parse_legacy_present_mode<P>(raw: &str, balanced_policy: P, unhinged_policy: 
 where
     P: Copy,
 {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "balanced" => Some(balanced_policy),
-        "unhinged" | "maxfps" | "max_fps" | "max-fps" => Some(unhinged_policy),
+    let raw = raw.trim();
+    match raw.len() {
+        8 if raw.eq_ignore_ascii_case("balanced") => Some(balanced_policy),
+        8 if raw.eq_ignore_ascii_case("unhinged") => Some(unhinged_policy),
+        6 if raw.eq_ignore_ascii_case("maxfps") => Some(unhinged_policy),
+        7 if raw.eq_ignore_ascii_case("max_fps") || raw.eq_ignore_ascii_case("max-fps") => {
+            Some(unhinged_policy)
+        }
         _ => None,
     }
 }
@@ -4301,4 +4306,9 @@ mod tests {
         assert_eq!(srpg_shop_folder_from_choice(2), SrpgShopFolder::Faction);
         assert_eq!(srpg_shop_folder_from_choice(99), SrpgShopFolder::Unlocks);
     }
+}
+
+#[cfg(test)]
+mod legacy_performance {
+    include!("legacy_performance.rs");
 }

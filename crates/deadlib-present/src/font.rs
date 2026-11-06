@@ -9,6 +9,10 @@
 //! - No `regex/glob/configparser/once_cell`; pure std + image + log
 //! - VERBOSE TRACE logging for troubleshooting: enable with `RUST_LOG=new_engine::core::font=trace`
 
+#[cfg(test)]
+#[path = "font_cache_checks.rs"]
+mod font_cache_checks;
+
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -600,6 +604,7 @@ pub fn refresh_chain_keys(fonts: &mut FontMap) {
     }
 }
 
+#[inline(always)]
 fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> [Option<Glyph>; 128] {
     let Some(start_font) = fonts.get(start_name) else {
         return std::array::from_fn(|_| None);
@@ -608,6 +613,60 @@ fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> [Option<Gl
     let fallback = start_font
         .fallback_font_name
         .and_then(|name| fonts.get(name));
+    // Short chains keep the original single-pass construction.
+    if fallback
+        .and_then(|font| font.fallback_font_name)
+        .and_then(|name| fonts.get(name))
+        .is_some()
+    {
+        let mut unresolved = 128;
+        let mut glyphs = std::array::from_fn(|code| {
+            start_font
+                .glyph_map
+                .get(&(code as u8 as char))
+                .map(|glyph| {
+                    unresolved -= 1;
+                    glyph.clone()
+                })
+        });
+        let mut current = fallback;
+        while unresolved != 0 {
+            let Some(font) = current else {
+                break;
+            };
+            // Iterate small authored maps; large Unicode maps probe ASCII only.
+            if font.glyph_map.len() <= 128 {
+                for (&code, glyph) in &font.glyph_map {
+                    if code.is_ascii() {
+                        let slot = &mut glyphs[code as usize];
+                        if slot.is_none() {
+                            *slot = Some(glyph.clone());
+                            unresolved -= 1;
+                        }
+                    }
+                }
+            } else {
+                for (code, slot) in glyphs.iter_mut().enumerate() {
+                    if slot.is_none()
+                        && let Some(glyph) = font.glyph_map.get(&(code as u8 as char))
+                    {
+                        *slot = Some(glyph.clone());
+                        unresolved -= 1;
+                    }
+                }
+            }
+            current = font.fallback_font_name.and_then(|name| fonts.get(name));
+        }
+        if unresolved == 0 {
+            return glyphs;
+        }
+        for glyph in &mut glyphs {
+            if glyph.is_none() {
+                *glyph = default_glyph.clone();
+            }
+        }
+        return glyphs;
+    }
     std::array::from_fn(|code| {
         let c = code as u8 as char;
         if let Some(glyph) = start_font.glyph_map.get(&c) {
@@ -1265,19 +1324,16 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
 #[inline(always)]
 #[must_use]
 fn round_half_to_even_i32(v: f32) -> i32 {
-    if !v.is_finite() {
+    let magnitude = v.to_bits() & 0x7fff_ffff;
+    if magnitude >= 0x7f80_0000 {
         return 0;
     }
-    let floor = v.floor();
-    let frac = v - floor;
-    if frac < 0.5 {
-        floor as i32
-    } else if frac > 0.5 {
-        (floor + 1.0) as i32
-    } else {
-        let f = floor as i32;
-        if (f & 1) == 0 { f } else { f + 1 }
+    if magnitude >= 0x4f00_0000 {
+        return v as i32;
     }
+    // At this f64 exponent, adding the bias rounds to an integer, ties to even.
+    // Its low 32 bits start at zero and encode the bounded signed result.
+    (f64::from(v) + 6_755_399_441_055_744.0).to_bits() as i32
 }
 
 /* ======================= RANGE APPLY ======================= */

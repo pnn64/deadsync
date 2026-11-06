@@ -162,42 +162,47 @@ struct BoardMap {
 #[derive(Clone, Copy)]
 struct MappedLight {
     output: usize,
-    source: Source,
-}
-
-#[derive(Clone, Copy)]
-enum Source {
-    Cabinet(CabinetLight),
-    Button(Player, ButtonLight),
-    MenuButton(Player, ButtonLight),
+    source_index: u8,
+    mask: u8,
 }
 
 const fn cabinet(output: usize, light: CabinetLight) -> MappedLight {
     MappedLight {
         output,
-        source: Source::Cabinet(light),
+        source_index: 0,
+        mask: light.bit(),
     }
 }
 
 const fn button(output: usize, player: Player, light: ButtonLight) -> MappedLight {
     MappedLight {
         output,
-        source: Source::Button(player, light),
+        source_index: 1 + player.ix() as u8,
+        mask: light.bit(),
     }
 }
 
 const fn menu_button(output: usize, player: Player, light: ButtonLight) -> MappedLight {
     MappedLight {
         output,
-        source: Source::MenuButton(player, light),
+        source_index: 3 + player.ix() as u8,
+        mask: light.bit(),
     }
 }
 
 fn build_outputs(map: &BoardMap, state: &State) -> [Option<bool>; OUTPUT_COUNT] {
+    let sources = [
+        state.cabinet,
+        state.buttons[0],
+        state.buttons[1],
+        state.menu_buttons[0],
+        state.menu_buttons[1],
+    ];
     let mut outputs = [None; OUTPUT_COUNT];
     for light in map.lights {
         debug_assert!(light.output < OUTPUT_COUNT);
-        set_output(&mut outputs, light.output, source_on(state, light.source));
+        let on = sources[usize::from(light.source_index)] & light.mask != 0;
+        set_output(&mut outputs, light.output, on);
     }
     outputs
 }
@@ -205,14 +210,6 @@ fn build_outputs(map: &BoardMap, state: &State) -> [Option<bool>; OUTPUT_COUNT] 
 fn set_output(outputs: &mut [Option<bool>; OUTPUT_COUNT], output: usize, on: bool) {
     let current = outputs[output].unwrap_or(false);
     outputs[output] = Some(current || on);
-}
-
-const fn source_on(state: &State, source: Source) -> bool {
-    match source {
-        Source::Cabinet(light) => state.cabinet(light),
-        Source::Button(player, button) => state.button(player, button),
-        Source::MenuButton(player, button) => state.menu_button(player, button),
-    }
 }
 
 #[cfg(test)]
@@ -253,4 +250,13 @@ mod tests {
         assert_eq!(outputs[7], Some(true));
         assert_eq!(outputs[4], Some(false));
     }
+}
+
+#[cfg(test)]
+pub(super) fn performance_outputs(state: &State, itgio: bool) -> [Option<bool>; OUTPUT_COUNT] {
+    build_outputs(if itgio { &ITGIO_MAP } else { &PIUIO_MAP }, state)
+}
+#[cfg(test)]
+pub(super) fn performance_entry_size() -> usize {
+    std::mem::size_of::<MappedLight>()
 }

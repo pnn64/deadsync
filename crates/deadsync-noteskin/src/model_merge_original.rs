@@ -245,7 +245,15 @@ pub(super) fn itg_parse_milkshape_model_layers(
             material
                 .resolved_texture
                 .get_or_init(|| {
-                    itg_resolve_model_material_texture(data, materials_path, material.texture)
+                    // Keep material semantics aligned while benchmarking the
+                    // original mesh expansion against the optimized version.
+                    if material.texture.trim().trim_matches('"').is_empty() {
+                        Some(ItgResolvedModelTexture::from_path(PathBuf::from(
+                            MODEL_WHITE_TEXTURE,
+                        )))
+                    } else {
+                        itg_resolve_model_material_texture(data, materials_path, material.texture)
+                    }
                 })
                 .as_ref()
         })

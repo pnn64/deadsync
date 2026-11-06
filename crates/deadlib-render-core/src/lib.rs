@@ -171,8 +171,9 @@ impl<V> DenseSlotMap<V> {
     #[inline(always)]
     #[must_use]
     pub fn get_slot(&self, buffer_key: u64) -> Option<&V> {
+        // Zero wraps to an invalid index and shares the ordinary bounds check.
         self.values
-            .get(usize::try_from(buffer_key.checked_sub(1)?).ok()?)
+            .get(usize::try_from(buffer_key.wrapping_sub(1)).ok()?)
     }
 
     /// # Panics
@@ -879,20 +880,51 @@ impl core::str::FromStr for BackendType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
+        match s.trim() {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan" => Ok(Self::Vulkan),
+            name if name.eq_ignore_ascii_case("vulkan") => Ok(Self::Vulkan),
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
+            name if name.eq_ignore_ascii_case("vulkan-wgpu")
+                || name.eq_ignore_ascii_case("vulkan_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-vulkan")
+                || name.eq_ignore_ascii_case("vulkan (wgpu)") =>
+            {
+                Ok(Self::VulkanWgpu)
+            }
             #[cfg(target_os = "macos")]
-            "metal" | "metal-native" | "metal_native" | "native-metal" => Ok(Self::Metal),
+            name if name.eq_ignore_ascii_case("metal")
+                || name.eq_ignore_ascii_case("metal-native")
+                || name.eq_ignore_ascii_case("metal_native")
+                || name.eq_ignore_ascii_case("native-metal") =>
+            {
+                Ok(Self::Metal)
+            }
             #[cfg(target_os = "macos")]
-            "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => Ok(Self::MetalWgpu),
-            "opengl" => Ok(Self::OpenGL),
-            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
-            "software" | "cpu" => Ok(Self::Software),
+            name if name.eq_ignore_ascii_case("metal-wgpu")
+                || name.eq_ignore_ascii_case("metal_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-metal")
+                || name.eq_ignore_ascii_case("metal (wgpu)") =>
+            {
+                Ok(Self::MetalWgpu)
+            }
+            name if name.eq_ignore_ascii_case("opengl") => Ok(Self::OpenGL),
+            name if name.eq_ignore_ascii_case("opengl-wgpu")
+                || name.eq_ignore_ascii_case("opengl_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-opengl")
+                || name.eq_ignore_ascii_case("opengl (wgpu)") =>
+            {
+                Ok(Self::OpenGLWgpu)
+            }
+            name if name.eq_ignore_ascii_case("software") || name.eq_ignore_ascii_case("cpu") => {
+                Ok(Self::Software)
+            }
             #[cfg(target_os = "windows")]
-            "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
+            name if name.eq_ignore_ascii_case("directx")
+                || name.eq_ignore_ascii_case("dx12")
+                || name.eq_ignore_ascii_case("directx (wgpu)") =>
+            {
+                Ok(Self::DirectX)
+            }
             _ => Err(format!("'{s}' is not a valid video renderer")),
         }
     }
@@ -1018,10 +1050,23 @@ impl core::str::FromStr for PresentModePolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "mailbox" | "balanced" => Ok(Self::Mailbox),
-            "immediate" | "unhinged" => Ok(Self::Immediate),
-            other => Err(format!("'{other}' is not a valid present mode policy")),
+        match s.trim() {
+            name if name.eq_ignore_ascii_case("mailbox")
+                || name.eq_ignore_ascii_case("balanced") =>
+            {
+                Ok(Self::Mailbox)
+            }
+            name if name.eq_ignore_ascii_case("immediate")
+                || name.eq_ignore_ascii_case("unhinged") =>
+            {
+                Ok(Self::Immediate)
+            }
+            other => {
+                let mut error = format!("'{other}' is not a valid present mode policy");
+                // The fixed message is already lowercase; fold the finished error in place.
+                error.make_ascii_lowercase();
+                Err(error)
+            }
         }
     }
 }

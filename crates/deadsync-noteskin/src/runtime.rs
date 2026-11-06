@@ -1334,10 +1334,13 @@ pub fn itg_apply_child_actor_commands<T>(
             apply_frame(&mut sprite.slot, frame);
         }
         if sprite.commands.contains_key(actor::ITG_ACTOR_FRAME_CHILD)
-            && itg_has_tap_explosion_command(&sprite.commands)
+            && (itg_has_tap_explosion_command(&sprite.commands)
+                || sprite.commands.contains_key("holdingoncommand")
+                || sprite.commands.contains_key("rolloncommand"))
         {
             // A wrapper on an ActorFrame changes the frame's commands, not
-            // the commands of its Sprite children. Both receive Judgment/Wn.
+            // its Sprite children's Init or event commands. GhostArrowRow
+            // sends judgments and Holding/Roll commands through both actors.
             let mut parents: Vec<HashMap<String, String>> = sprite
                 .commands
                 .get(actor::ITG_PARENT_COMMANDS)
@@ -1507,21 +1510,29 @@ pub fn itg_resolve_model_decl<T>(
     let Some(model_path) = model_path else {
         return Vec::new();
     };
-    let materials_path = model_decl
-        .materials_expr
-        .as_deref()
-        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
-    let materials_path = materials_path.as_deref().unwrap_or(&model_path);
-    let bones_path = model_decl
-        .bones_expr
-        .as_deref()
-        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
-    let bones_path = bones_path.as_deref().unwrap_or(&model_path);
+    let resolve_piece = |name, expr: Option<&str>| match expr {
+        None => Some(model_path.clone()),
+        Some(expr) => {
+            let path = itg::resolve_texture_expr(data, expr, arg0_path);
+            if path.is_none() {
+                log::warn!("noteskin model '{button} {element}' could not resolve {name}={expr}");
+            }
+            path
+        }
+    };
+    // An explicitly declared piece is authoritative, including when it fails
+    // to resolve. Never substitute the mesh file for missing materials/bones.
+    let Some(materials_path) = resolve_piece("Materials", model_decl.materials_expr.as_deref()) else {
+        return Vec::new();
+    };
+    let Some(bones_path) = resolve_piece("Bones", model_decl.bones_expr.as_deref()) else {
+        return Vec::new();
+    };
 
     let (draw, timeline, effect) = model_draw_program(&model_decl.commands);
-    let model_auto_rot = model::itg_parse_milkshape_model_auto_rot(bones_path);
+    let model_auto_rot = model::itg_parse_milkshape_model_auto_rot(&bones_path);
     if let Some(model_layers) =
-        model::itg_parse_milkshape_model_layers(data, &model_path, materials_path)
+        model::itg_parse_milkshape_model_layers(data, &model_path, &materials_path)
     {
         let mut out = Vec::new();
         for layer in model_layers {
@@ -1549,12 +1560,21 @@ pub fn itg_resolve_model_decl<T>(
                 commands: model_decl.commands.clone(),
             });
         }
-        if !out.is_empty() {
-            return out;
-        }
+        return out;
     }
 
-    let Some(model_texture) = model::itg_resolve_model_texture_path(data, materials_path) else {
+    if model_decl.meshes_expr.is_some() || model_decl.materials_expr.is_some() {
+        log::warn!(
+            "noteskin model '{}' for '{button} {element}' could not load declared materials '{}'",
+            model_path.display(),
+            materials_path.display()
+        );
+        return Vec::new();
+    }
+
+    // Retain the legacy Texture-only sprite declaration, without reopening a
+    // failed mesh/material pair through the single-file model loader.
+    let Some(model_texture) = model::itg_resolve_model_texture_path(data, &materials_path) else {
         log::warn!(
             "noteskin model '{}' for '{button} {element}' did not resolve a texture fallback",
             model_path.display()
@@ -1569,7 +1589,7 @@ pub fn itg_resolve_model_decl<T>(
     apply_model(
         &mut slot,
         model::ItgModelSlotPlan::from_texture(
-            model::itg_parse_milkshape_model(data, &model_path),
+            None,
             model_texture,
             draw,
             timeline,

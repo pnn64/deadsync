@@ -26,21 +26,36 @@ struct NormalizedAsciiKey {
 
 impl NormalizedAsciiKey {
     fn parse(raw: &str) -> Option<Self> {
+        const MAP: [u8; 256] = {
+            let mut map = [0u8; 256];
+            let mut byte = 0usize;
+            while byte < 256 {
+                let value = byte as u8;
+                if value.is_ascii_alphanumeric() {
+                    map[byte] = value.to_ascii_lowercase();
+                }
+                byte += 1;
+            }
+            map
+        };
         let mut key = Self {
             bytes: [0; NORMALIZED_KEY_CAPACITY],
             len: 0,
         };
-        for byte in raw.trim().bytes() {
-            if !byte.is_ascii_alphanumeric() {
+        let mut len = 0usize;
+        for byte in raw.bytes() {
+            let byte = MAP[usize::from(byte)];
+            if byte == 0 {
                 continue;
             }
-            let index = usize::from(key.len);
+            let index = len;
             if index == NORMALIZED_KEY_CAPACITY {
                 return None;
             }
-            key.bytes[index] = byte.to_ascii_lowercase();
-            key.len += 1;
+            key.bytes[index] = byte;
+            len += 1;
         }
+        key.len = len as u8;
         Some(key)
     }
 
@@ -69,9 +84,9 @@ impl FromStr for BreakdownStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "sl" => Ok(Self::Sl),
-            "sn" => Ok(Self::Sn),
+        match s.trim().as_bytes() {
+            [b's' | b'S', b'l' | b'L'] => Ok(Self::Sl),
+            [b's' | b'S', b'n' | b'N'] => Ok(Self::Sn),
             _ => Err(()),
         }
     }
@@ -303,9 +318,11 @@ impl FromStr for DefaultSyncOffset {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "null" | "none" | "off" => Ok(Self::Null),
-            "itg" => Ok(Self::Itg),
+        let s = s.trim();
+        match s.len() {
+            3 if s.eq_ignore_ascii_case("itg") => Ok(Self::Itg),
+            3 if s.eq_ignore_ascii_case("off") => Ok(Self::Null),
+            4 if s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("none") => Ok(Self::Null),
             _ => Err(()),
         }
     }
@@ -335,9 +352,17 @@ impl FromStr for VersionOverlaySide {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "left" | "l" | "lhs" => Ok(Self::Left),
-            "right" | "r" | "rhs" => Ok(Self::Right),
+        let s = s.trim();
+        match s.len() {
+            1 => match s.as_bytes()[0] | 0x20 {
+                b'l' => Ok(Self::Left),
+                b'r' => Ok(Self::Right),
+                _ => Err(()),
+            },
+            3 if s.eq_ignore_ascii_case("lhs") => Ok(Self::Left),
+            3 if s.eq_ignore_ascii_case("rhs") => Ok(Self::Right),
+            4 if s.eq_ignore_ascii_case("left") => Ok(Self::Left),
+            5 if s.eq_ignore_ascii_case("right") => Ok(Self::Right),
             _ => Err(()),
         }
     }
@@ -365,10 +390,11 @@ impl FromStr for SelectMusicPatternInfoMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "tech" => Ok(Self::Tech),
-            "stamina" => Ok(Self::Stamina),
-            "auto" => Ok(Self::Auto),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("tech") => Ok(Self::Tech),
+            4 if s.eq_ignore_ascii_case("auto") => Ok(Self::Auto),
+            7 if s.eq_ignore_ascii_case("stamina") => Ok(Self::Stamina),
             _ => Err(()),
         }
     }
@@ -634,9 +660,15 @@ impl FromStr for SelectMusicSeriesSource {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "packini" | "pack.ini" | "metadata" => Ok(Self::PackIni),
-            "folder" | "folders" | "directory" | "filesystem" => Ok(Self::Folder),
+        let value = value.trim();
+        match value.len() {
+            6 if value.eq_ignore_ascii_case("folder") => Ok(Self::Folder),
+            7 if value.eq_ignore_ascii_case("packini") => Ok(Self::PackIni),
+            7 if value.eq_ignore_ascii_case("folders") => Ok(Self::Folder),
+            8 if value.eq_ignore_ascii_case("pack.ini") => Ok(Self::PackIni),
+            8 if value.eq_ignore_ascii_case("metadata") => Ok(Self::PackIni),
+            9 if value.eq_ignore_ascii_case("directory") => Ok(Self::Folder),
+            10 if value.eq_ignore_ascii_case("filesystem") => Ok(Self::Folder),
             _ => Err(()),
         }
     }
@@ -1128,9 +1160,10 @@ impl FromStr for MachinePreferredPlayMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "regular" => Ok(Self::Regular),
-            "marathon" => Ok(Self::Marathon),
+        let s = s.trim();
+        match s.len() {
+            7 if s.eq_ignore_ascii_case("regular") => Ok(Self::Regular),
+            8 if s.eq_ignore_ascii_case("marathon") => Ok(Self::Marathon),
             _ => Err(()),
         }
     }
@@ -1247,10 +1280,15 @@ impl FromStr for SrpgShopFolder {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "unlocks" | "srpg10 unlocks" => Ok(Self::Unlocks),
-            "shops" | "srpg10 - shops" => Ok(Self::Shops),
-            "faction" | "factions" | "by faction" => Ok(Self::Faction),
+        let value = value.trim();
+        match value.len() {
+            5 if value.eq_ignore_ascii_case("shops") => Ok(Self::Shops),
+            7 if value.eq_ignore_ascii_case("unlocks") => Ok(Self::Unlocks),
+            7 if value.eq_ignore_ascii_case("faction") => Ok(Self::Faction),
+            8 if value.eq_ignore_ascii_case("factions") => Ok(Self::Faction),
+            10 if value.eq_ignore_ascii_case("by faction") => Ok(Self::Faction),
+            14 if value.eq_ignore_ascii_case("srpg10 unlocks") => Ok(Self::Unlocks),
+            14 if value.eq_ignore_ascii_case("srpg10 - shops") => Ok(Self::Shops),
             _ => Err(()),
         }
     }
@@ -1288,12 +1326,13 @@ impl MachineFont {
 
 impl FromStr for MachineFont {
     type Err = ();
-
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "common" | "wendy" => Ok(Self::Wendy),
-            "mega" => Ok(Self::Mega),
-            "unprofessional" => Ok(Self::Unprofessional),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("mega") => Ok(Self::Mega),
+            5 if s.eq_ignore_ascii_case("wendy") => Ok(Self::Wendy),
+            6 if s.eq_ignore_ascii_case("common") => Ok(Self::Wendy),
+            14 if s.eq_ignore_ascii_case("unprofessional") => Ok(Self::Unprofessional),
             _ => Err(()),
         }
     }
@@ -1414,9 +1453,10 @@ impl FromStr for GameFlag {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "dance" => Ok(Self::Dance),
-            "pump" => Ok(Self::Pump),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("pump") => Ok(Self::Pump),
+            5 if s.eq_ignore_ascii_case("dance") => Ok(Self::Dance),
             _ => Err(()),
         }
     }
@@ -1517,27 +1557,37 @@ impl LanguageFlag {
 /// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
 #[must_use]
 pub fn normalize_locale(raw: &str) -> String {
-    let mut lower = raw
+    let base = raw
         .trim()
         .split('.')
         .next()
         .unwrap_or(raw)
         .split('@')
         .next()
-        .unwrap_or(raw)
-        .replace('_', "-");
+        .unwrap_or(raw);
+    if base.len() <= 64
+        && base
+            .as_bytes()
+            .get(..2)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"zh"))
+    {
+        let mut bytes = [0u8; 64];
+        let lower = &mut bytes[..base.len()];
+        lower.copy_from_slice(base.as_bytes());
+        lower.make_ascii_lowercase();
+        // Underscore replacement cannot change these letter-only matches.
+        let traditional = lower.windows(4).any(|part| part == b"hant")
+            || lower.windows(2).any(|part| part == b"tw" || part == b"hk");
+        return if traditional { "zh-Hant" } else { "zh-Hans" }.to_string();
+    }
+    let mut lower = base.replace('_', "-");
     lower.make_ascii_lowercase();
-
     if lower.starts_with("zh") {
         if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
             return "zh-Hant".to_string();
         }
-        if lower.contains("hans") || lower.contains("cn") || lower.contains("sg") {
-            return "zh-Hans".to_string();
-        }
         return "zh-Hans".to_string();
     }
-
     lower
 }
 
@@ -1697,9 +1747,9 @@ impl FromStr for TournamentScoringSystem {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "ex" => Ok(Self::Ex),
-            "itg" => Ok(Self::Itg),
+        match value.trim().as_bytes() {
+            [b'e' | b'E', b'x' | b'X'] => Ok(Self::Ex),
+            [b'i' | b'I', b't' | b'T', b'g' | b'G'] => Ok(Self::Itg),
             _ => Err(()),
         }
     }
@@ -1825,9 +1875,9 @@ pub fn load_theme_presentation_options(
                 .unwrap_or(default.tournament.scoring_system),
             show_step_stats: conf
                 .get("Theme", "StepStats")
-                .and_then(|value| match value.trim().to_ascii_lowercase().as_str() {
-                    "show" => Some(true),
-                    "hide" => Some(false),
+                .and_then(|value| match value.trim() {
+                    v if v.eq_ignore_ascii_case("show") => Some(true),
+                    v if v.eq_ignore_ascii_case("hide") => Some(false),
                     _ => parse_loose_bool_str(value),
                 })
                 .unwrap_or(default.tournament.show_step_stats),
@@ -3305,4 +3355,34 @@ MachineEvaluationStyle=Default\n\
             "en"
         );
     }
+}
+
+#[cfg(test)]
+mod preference_performance {
+    include!("preference_performance.rs");
+}
+
+#[cfg(test)]
+mod alias_performance {
+    include!("alias_performance.rs");
+}
+
+#[cfg(test)]
+mod choice_performance {
+    include!("choice_performance.rs");
+}
+
+#[cfg(test)]
+mod mode_performance {
+    include!("mode_performance.rs");
+}
+
+#[cfg(test)]
+mod key_performance {
+    include!("key_performance.rs");
+}
+
+#[cfg(test)]
+mod field_performance {
+    include!("field_performance.rs");
 }

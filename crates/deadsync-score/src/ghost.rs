@@ -30,7 +30,7 @@ impl GhostData {
         {
             if !new.is_empty()
                 && (old.len() != new.len() || old.last() < new.last())
-                && new.iter().all(|point| point.is_finite())
+                && all_points_finite(new)
             {
                 old.clone_from(new);
                 changed = true;
@@ -40,6 +40,19 @@ impl GhostData {
     }
 }
 
+fn all_points_finite(points: &[f64]) -> bool {
+    if points.first().is_some_and(|point| !point.is_finite()) {
+        return false;
+    }
+    let (blocks, tail) = points.as_chunks::<8>();
+    blocks.iter().all(|block| {
+        // Evaluate independent lanes together, then short-circuit by block.
+        block
+            .iter()
+            .fold(true, |finite, point| finite & point.is_finite())
+    }) && tail.iter().all(|point| point.is_finite())
+}
+
 fn chart_path(profile_dir: &Path, chart_hash: &str) -> io::Result<PathBuf> {
     if chart_hash.is_empty() || !chart_hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(io::Error::new(
@@ -47,13 +60,25 @@ fn chart_path(profile_dir: &Path, chart_hash: &str) -> io::Result<PathBuf> {
             "invalid ghost chart hash",
         ));
     }
-    Ok(profile_dir
-        .join("GhostData")
-        .join(format!("{chart_hash}.json")))
+    // GhostData, two separators and the extension need at most 16 bytes.
+    let capacity = profile_dir
+        .as_os_str()
+        .len()
+        .saturating_add(chart_hash.len())
+        .saturating_add(16);
+    let mut path = PathBuf::with_capacity(capacity);
+    path.push(profile_dir);
+    path.push("GhostData");
+    path.push(chart_hash);
+    path.set_extension("json");
+    Ok(path)
 }
 
 pub fn load(profile_dir: &Path, chart_hash: &str) -> io::Result<GhostData> {
-    let file = fs::File::open(chart_path(profile_dir, chart_hash)?)?;
+    load_file(fs::File::open(chart_path(profile_dir, chart_hash)?)?)
+}
+
+fn load_file(file: fs::File) -> io::Result<GhostData> {
     let mut bytes = Vec::new();
     file.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_FILE_BYTES {
@@ -66,8 +91,7 @@ pub fn load(profile_dir: &Path, chart_hash: &str) -> io::Result<GhostData> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if [&data.itg, &data.ex, &data.hard_ex]
         .into_iter()
-        .flatten()
-        .any(|p| !p.is_finite())
+        .any(|points| !all_points_finite(points))
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -84,7 +108,7 @@ pub fn save_best(
 ) -> io::Result<bool> {
     let path = chart_path(profile_dir, chart_hash)?;
     // A corrupt history must not prevent the next valid play from repairing it.
-    let mut data = match load(profile_dir, chart_hash) {
+    let mut data = match fs::File::open(&path).and_then(load_file) {
         Ok(data) => data,
         Err(error)
             if matches!(
@@ -222,3 +246,7 @@ mod tests {
         assert_eq!(load(&dir.0, "abc").unwrap().into_histories(), valid);
     }
 }
+
+#[cfg(test)]
+#[path = "ghost_performance.rs"]
+mod ghost_performance;

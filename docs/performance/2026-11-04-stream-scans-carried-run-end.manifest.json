@@ -1,0 +1,42 @@
+{
+  "stage": "carried-run-end",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-stream-scans-20261104\\carried-run-end\\compiled.rs",
+    "-o",
+    "D:\\deadsync-stream-scans-20261104\\carried-run-end\\stream_scans.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-rules/src/stream.rs": "b43ff42652cc5d3e83e5b729ddb43c3726f99ccdb1db4fe57335dc4f1d2ab0f3",
+    "crates/deadsync-rules/src/stream_scans_performance.rs": "13a3c906573850b3b1fbd0278fd67000856bbf542d21fcc1a3608d0b5c67b3f3",
+    "crates/deadsync-rules/src/stream_scans_original.rs": "85a34a432ce69dcd6447561ebf030bf9b319d0b88788607bb8aed59fba554c27",
+    "tests/perf/stream_alloc.rs": "be1049d7688e3e497190e554ee4fc9d01931bb399f7f5452806576f917dc0c38",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_stream_scans.py": "d63fb0368664b8546c894a6be7019ff323b0625f5ba88fa0a32fa0429c93f760"
+  },
+  "fragments": {
+    "kernels": "2bf73c7c6ed83ea22f53dc09d5ac3ca9ed053c9049090bb37ef2feca7baac947"
+  },
+  "compiled_sha256": "a2772984881635edaa0cafd999e945f19ae7e33dd32774936ddabcc07c584b75",
+  "binary_sha256": "6c9bde6c66d2edc204036fa579124ef717684fe1fccbc177e36306c401adda9c",
+  "correctness_sha256": "b24c45d6616b943e35c0e53276fa599155fdab430d3218530428703eca8d1fe8",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 4,
+  "runs": 3,
+  "trace_sha256": "1d57c7fd5b31d7c8476212ea4c8963a2879ab0fb611fa8d6ed5d7d5d87ef2ee2",
+  "trace_bytes": 26201120,
+  "reference_trace": "D:\\deadsync-stream-scans-20261104\\baseline\\stream_scans-trace.bin",
+  "reference_trace_sha256": "1d57c7fd5b31d7c8476212ea4c8963a2879ab0fb611fa8d6ed5d7d5d87ef2ee2"
+}

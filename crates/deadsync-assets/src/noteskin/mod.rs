@@ -444,12 +444,17 @@ fn itg_slot_with_active_cmd(
     commands: &HashMap<String, String>,
     active_key: &str,
 ) -> SpriteSlot {
-    deadsync_noteskin::itg_slot_with_active_model_draw(
+    let mut out = deadsync_noteskin::itg_slot_with_active_model_draw(
         slot,
         commands,
         active_key,
         itg_apply_model_draw,
-    )
+    );
+    if matches!(active_key, "holdingoncommand" | "rolloncommand") {
+        out.actor_frame_programs =
+            noteskin_script::itg_active_parent_model_programs(commands, active_key);
+    }
+    out
 }
 
 fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSlot> {

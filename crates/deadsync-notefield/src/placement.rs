@@ -426,7 +426,8 @@ fn menu_camera(
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {
-    if !mini.is_finite() || mini <= 0.0 {
+    // Positive finite, nonzero encodings form one unsigned interval.
+    if mini.to_bits().wrapping_sub(1) >= f32::INFINITY.to_bits() - 1 {
         1.0
     } else {
         0.5_f32.powf(mini)
@@ -449,7 +450,12 @@ pub(crate) fn effective_mini_value(
     mini_percent / 100.0
 }
 
+#[inline(always)]
 pub(crate) fn average_error_bar_mini_scale(mini: f32) -> f32 {
+    // Both signs of zero produce exactly 1.1 through the fused expression.
+    if mini.to_bits() & 0x7fff_ffff == 0 {
+        return 1.1;
+    }
     0.545f32.mul_add(-mini, 1.1).max(0.0)
 }
 

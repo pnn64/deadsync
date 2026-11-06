@@ -30,10 +30,8 @@ pub struct BannerCacheOptions {
 }
 
 fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write_u8(1);
-    hasher.write_u8(u8::from(opts.enabled));
-    hasher.finish()
+    // XXHash64(seed 0) after write_u8(1), write_u8(enabled), for both options.
+    [0xdd8f_621d_bf7f_57f1, 0x52fc_4823_a13c_997a][usize::from(opts.enabled)]
 }
 
 const BANNER_CACHE_MAGIC: [u8; 8] = *b"DSBNR02\0";
@@ -1111,3 +1109,7 @@ mod tests {
         assert!(!stale_path.exists());
     }
 }
+
+#[cfg(test)]
+#[path = "cache_options_performance.rs"]
+mod cache_options_performance;

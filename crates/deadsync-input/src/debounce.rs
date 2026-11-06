@@ -168,32 +168,56 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    fn swap_due_slots(&mut self, lhs: usize, rhs: usize) {
-        self.due_slots.swap(lhs, rhs);
-        self.slots[self.due_slots[lhs]].scheduled_ix = lhs as u32;
-        self.slots[self.due_slots[rhs]].scheduled_ix = rhs as u32;
-    }
-
-    #[inline(always)]
     fn sift_up(&mut self, mut ix: usize) -> usize {
+        if ix == 0 {
+            return ix;
+        }
+        let start = ix;
+        let slot = self.due_slots[ix];
+        let key = (
+            self.slots[slot]
+                .due_at
+                .expect("scheduled debounce slot must have a deadline"),
+            slot,
+        );
         while ix != 0 {
             let parent = (ix - 1) / 2;
-            if !self.due_slot_lt(self.due_slots[ix], self.due_slots[parent]) {
+            let parent_slot = self.due_slots[parent];
+            let parent_key = (
+                self.slots[parent_slot]
+                    .due_at
+                    .expect("scheduled debounce slot must have a deadline"),
+                parent_slot,
+            );
+            if key >= parent_key {
                 break;
             }
-            self.swap_due_slots(ix, parent);
+            self.due_slots[ix] = parent_slot;
+            self.slots[parent_slot].scheduled_ix = ix as u32;
             ix = parent;
+        }
+        if ix != start {
+            self.due_slots[ix] = slot;
+            self.slots[slot].scheduled_ix = ix as u32;
         }
         ix
     }
 
     #[inline(always)]
     fn sift_down(&mut self, mut ix: usize) {
+        let mut left = ix.saturating_mul(2).saturating_add(1);
+        if left >= self.due_slots.len() {
+            return;
+        }
+        let start = ix;
+        let slot = self.due_slots[ix];
+        let key = (
+            self.slots[slot]
+                .due_at
+                .expect("scheduled debounce slot must have a deadline"),
+            slot,
+        );
         loop {
-            let left = ix.saturating_mul(2).saturating_add(1);
-            if left >= self.due_slots.len() {
-                return;
-            }
             let right = left + 1;
             let child = if right < self.due_slots.len()
                 && self.due_slot_lt(self.due_slots[right], self.due_slots[left])
@@ -202,11 +226,27 @@ impl DebounceStore {
             } else {
                 left
             };
-            if !self.due_slot_lt(self.due_slots[child], self.due_slots[ix]) {
-                return;
+            let child_slot = self.due_slots[child];
+            let child_key = (
+                self.slots[child_slot]
+                    .due_at
+                    .expect("scheduled debounce slot must have a deadline"),
+                child_slot,
+            );
+            if child_key >= key {
+                break;
             }
-            self.swap_due_slots(ix, child);
+            self.due_slots[ix] = child_slot;
+            self.slots[child_slot].scheduled_ix = ix as u32;
             ix = child;
+            left = ix.saturating_mul(2).saturating_add(1);
+            if left >= self.due_slots.len() {
+                break;
+            }
+        }
+        if ix != start {
+            self.due_slots[ix] = slot;
+            self.slots[slot].scheduled_ix = ix as u32;
         }
     }
 
@@ -1381,4 +1421,9 @@ mod tests {
         ));
         assert!(emitted.is_empty());
     }
+}
+
+#[cfg(test)]
+mod heap_performance {
+    include!("heap_performance.rs");
 }

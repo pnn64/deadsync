@@ -146,10 +146,11 @@ impl ScrollSpeedSetting {
         music_rate: f32,
     ) -> f32 {
         let bpm = self.effective_bpm(current_chart_bpm, reference_bpm, music_rate);
-        if !bpm.is_finite() || bpm <= 0.0 {
-            0.0
-        } else {
+        // Positive finite f32 patterns occupy 1..0x7f80_0000.
+        if bpm.to_bits().wrapping_sub(1) < 0x7f7f_ffff {
             (bpm / 60.0) * Self::ARROW_SPACING
+        } else {
+            0.0
         }
     }
 

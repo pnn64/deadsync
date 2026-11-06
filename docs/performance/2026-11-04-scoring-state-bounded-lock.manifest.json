@@ -1,0 +1,48 @@
+{
+  "stage": "bounded-lock",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-scoring-state-20261104\\bounded-lock\\compiled.rs",
+    "-o",
+    "D:\\deadsync-scoring-state-20261104\\bounded-lock\\scoring_state.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-rules/src/life.rs": "88a6ce1f27159c8cacfbcebc24ebcbeaff2bbe62d969a20cc8ecd84de4850663",
+    "crates/deadsync-rules/src/combo.rs": "878d52a4099c2b3abe9c28070bd1c503ce98b1d262e7a727cc4c617c92977519",
+    "crates/deadsync-rules/src/golf.rs": "bd3619a57f99b9fd9391b1b90e16f6c3d16acccc1c340cf03af746d4fc84cd16",
+    "crates/deadsync-rules/src/judgment.rs": "b6551b9ee1c4cc9231244f45269963f0d87ffe989dda95e28b7e367575bcb272",
+    "crates/deadsync-rules/src/scoring_state_performance.rs": "00673e623a918dd9387016acc8c0749ccbc1af796e67e5fa462431989fe731b5",
+    "crates/deadsync-rules/src/scoring_state_original.rs": "e969bea7c118f29624c7fa4dc3473cf0654b2194e6e4330f8dfabc7e5f44b318",
+    "tests/perf/stream_alloc.rs": "be1049d7688e3e497190e554ee4fc9d01931bb399f7f5452806576f917dc0c38",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_scoring_state.py": "957d5c7b86f5b21f9244d25a6675012a7a10b0fbd9a7d62423ad6fe61aee7aae"
+  },
+  "fragments": {
+    "life.rs": "444506f4dddc6367b9de11c56fd2a0e931686f4eb4929e154f22fe562765b924",
+    "combo.rs": "3fabb4a7a921bc0862b2ccdcdffbdf30a6f2bb2c1b8172407df3dc6ff70d5a57",
+    "golf.rs": "817bd83794084a0925fc43153fe37342ad4f50af9956b24533aac4ce3d9895b3",
+    "grade": "8b528a77669123ba258ae29562c41b1f4223ffc78237720256f85adb32c7462b"
+  },
+  "compiled_sha256": "72847694bb03e999f398503a26294180c779b1283506c2ef7ec435fc48d617fb",
+  "binary_sha256": "c0ce9d26ff924c969e8b63b22a7bef2a3a6244c1f45e53ba2b09f8791f3313b7",
+  "correctness_sha256": "d05cafa8448347b32501730cb667287bb6f567f0de4b6b1ed19b0842db50d96d",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 3,
+  "runs": 3,
+  "trace_sha256": "99040c63f69bda3a652a608e6dae4427a262e062ca68a005c511aa3444758884",
+  "trace_bytes": 62593808,
+  "reference_trace": "D:\\deadsync-scoring-state-20261104\\baseline\\scoring_state-trace.bin",
+  "reference_trace_sha256": "99040c63f69bda3a652a608e6dae4427a262e062ca68a005c511aa3444758884"
+}

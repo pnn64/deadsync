@@ -113,7 +113,9 @@ pub enum SfxPan {
 
 #[inline(always)]
 fn valid_gain(gain: f32) -> f32 {
-    if gain.is_finite() && gain >= 0.0 {
+    let bits = gain.to_bits();
+    // Nonnegative finite values include both signs of zero.
+    if bits < 0x7f80_0000 || bits == 0x8000_0000 {
         gain
     } else {
         1.0

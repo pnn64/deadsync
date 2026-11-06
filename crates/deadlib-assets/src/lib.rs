@@ -662,7 +662,13 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
         let word = u32::from_le_bytes(*pixel);
-        let lum = ((word & 255) * 30 + ((word >> 8) & 255) * 59 + ((word >> 16) & 255) * 11) / 100;
+        // The weighted sum is at most 25,500, so use narrower SIMD lanes.
+        let lum = u32::from(
+            ((word & 255) as u16 * 30
+                + ((word >> 8) & 255) as u16 * 59
+                + ((word >> 16) & 255) as u16 * 11)
+                / 100,
+        );
         let output = if hints.alphamap {
             0x00ff_ffff | (lum << 24)
         } else {
