@@ -20,10 +20,10 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-use export_support::{CaptureTextures, PRESETS};
+use export_support::{CaptureTextures, PRESETS, ScreenshotBackendTimings, ScreenshotTimer};
 
 pub(super) type Result<T> = export_support::Result<T>;
 const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
@@ -195,11 +195,7 @@ fn export(
         export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
     }
     for size in &options.sizes {
-        let resolution_started = Instant::now();
-        let mut resize_elapsed = Duration::ZERO;
-        let mut prepare_elapsed = Duration::ZERO;
-        let mut render_readback_elapsed = Duration::ZERO;
-        let mut png_write_elapsed = Duration::ZERO;
+        let mut timer = ScreenshotTimer::new();
         let mut acquire_us = 0u64;
         let mut gpu_wait_us = 0u64;
         let mut present_us = 0u64;
@@ -211,7 +207,7 @@ fn export(
         space::set_current_window_px(size.width, size.height);
         let resize_started = Instant::now();
         backend.resize(size.width, size.height);
-        resize_elapsed += resize_started.elapsed();
+        timer.record_resize(resize_started.elapsed());
         backend.set_default_projection(metrics.projection());
         let mut captures = export_support::CaptureBatch::default();
         for &layout in LAYOUTS {
@@ -257,7 +253,7 @@ fn export(
                         if options.reverse { "-reverse" } else { "" }
                     );
                     let output = folder.join(&filename);
-                    prepare_elapsed += prepare_started.elapsed();
+                    timer.record_prepare(prepare_started.elapsed());
                     let stats = captures.draw(&mut backend, &frame, assets.textures(), output)?;
                     acquire_us += u64::from(stats.acquire_us);
                     gpu_wait_us += u64::from(stats.gpu_wait_us);
@@ -266,27 +262,16 @@ fn export(
                 }
             }
         }
-        let capture_timings = captures.finish(&mut backend, size)?;
-        render_readback_elapsed += capture_timings.render + capture_timings.readback;
-        png_write_elapsed += capture_timings.png_write;
-        eprintln!(
-            "gameplay resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s acquire={:.2}s gpu_wait={:.2}s present={:.2}s suboptimal={}",
-            size.name(),
-            resolution_started.elapsed().as_secs_f64(),
-            resize_elapsed.as_secs_f64(),
-            prepare_elapsed.as_secs_f64(),
-            render_readback_elapsed.as_secs_f64(),
-            png_write_elapsed.as_secs_f64(),
-            resolution_started
-                .elapsed()
-                .saturating_sub(
-                    resize_elapsed + prepare_elapsed + render_readback_elapsed + png_write_elapsed,
-                )
-                .as_secs_f64(),
-            acquire_us as f64 / 1_000_000.0,
-            gpu_wait_us as f64 / 1_000_000.0,
-            present_us as f64 / 1_000_000.0,
-            suboptimal_frames,
+        timer.record_captures(captures.finish(&mut backend, size)?);
+        timer.report(
+            "gameplay",
+            size,
+            Some(ScreenshotBackendTimings {
+                acquire_us,
+                gpu_wait_us,
+                present_us,
+                suboptimal_frames,
+            }),
         );
     }
     backend.dispose_textures(&mut assets.take_textures());

@@ -48,6 +48,78 @@ pub struct CaptureTimings {
     pub png_write: Duration,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct ScreenshotBackendTimings {
+    pub acquire_us: u64,
+    pub gpu_wait_us: u64,
+    pub present_us: u64,
+    pub suboptimal_frames: u32,
+}
+
+pub struct ScreenshotTimer {
+    started: Instant,
+    resize: Duration,
+    prepare: Duration,
+    render_readback: Duration,
+    png_write: Duration,
+}
+
+impl ScreenshotTimer {
+    pub fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            resize: Duration::ZERO,
+            prepare: Duration::ZERO,
+            render_readback: Duration::ZERO,
+            png_write: Duration::ZERO,
+        }
+    }
+
+    pub fn record_resize(&mut self, elapsed: Duration) {
+        self.resize += elapsed;
+    }
+
+    pub fn record_prepare(&mut self, elapsed: Duration) {
+        self.prepare += elapsed;
+    }
+
+    pub fn record_png_write(&mut self, elapsed: Duration) {
+        self.png_write += elapsed;
+    }
+
+    pub fn record_captures(&mut self, captures: CaptureTimings) {
+        self.render_readback += captures.render + captures.readback;
+        self.png_write += captures.png_write;
+    }
+
+    pub fn report(&self, exporter: &str, size: &Size, backend: Option<ScreenshotBackendTimings>) {
+        let elapsed = self.started.elapsed();
+        let other = elapsed
+            .saturating_sub(self.resize + self.prepare + self.render_readback + self.png_write);
+        let summary = format!(
+            "{exporter} resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s",
+            size.name(),
+            elapsed.as_secs_f64(),
+            self.resize.as_secs_f64(),
+            self.prepare.as_secs_f64(),
+            self.render_readback.as_secs_f64(),
+            self.png_write.as_secs_f64(),
+            other.as_secs_f64(),
+        );
+        if let Some(backend) = backend {
+            eprintln!(
+                "{summary} acquire={:.2}s gpu_wait={:.2}s present={:.2}s suboptimal={}",
+                backend.acquire_us as f64 / 1_000_000.0,
+                backend.gpu_wait_us as f64 / 1_000_000.0,
+                backend.present_us as f64 / 1_000_000.0,
+                backend.suboptimal_frames,
+            );
+        } else {
+            eprintln!("{summary}");
+        }
+    }
+}
+
 impl CaptureBatch {
     pub fn draw(
         &mut self,
