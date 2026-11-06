@@ -1,7 +1,6 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
 mod export_gameplay_viewer;
-#[path = "../export_support.rs"]
-mod export_support;
+use crate::export_support;
 pub use export_support::Size;
 
 use deadlib_assets::AssetManager;
@@ -214,7 +213,7 @@ fn export(
         backend.resize(size.width, size.height);
         resize_elapsed += resize_started.elapsed();
         backend.set_default_projection(metrics.projection());
-        let mut pending_capture: Option<PathBuf> = None;
+        let mut captures = export_support::CaptureBatch::default();
         for &layout in LAYOUTS {
             let mut variants = vec![(layout.to_owned(), false)];
             if matches!(layout, "p1" | "p2") {
@@ -259,30 +258,17 @@ fn export(
                     );
                     let output = folder.join(&filename);
                     prepare_elapsed += prepare_started.elapsed();
-                    backend.request_screenshot();
-                    let render_started = Instant::now();
-                    let stats = backend.draw(&frame, assets.textures(), false)?;
+                    let stats = captures.draw(&mut backend, &frame, assets.textures(), output)?;
                     acquire_us += u64::from(stats.acquire_us);
                     gpu_wait_us += u64::from(stats.gpu_wait_us);
                     present_us += u64::from(stats.present_us);
                     suboptimal_frames += u32::from(stats.present_stats.suboptimal);
-                    render_readback_elapsed += render_started.elapsed();
-                    if let Some(previous_output) = pending_capture.replace(output) {
-                        let (readback_elapsed, write_elapsed) =
-                            save_capture(&mut backend, size, &previous_output)?;
-                        render_readback_elapsed += readback_elapsed;
-                        png_write_elapsed += write_elapsed;
-                        println!("{}", previous_output.display());
-                    }
                 }
             }
         }
-        if let Some(output) = pending_capture.take() {
-            let (readback_elapsed, write_elapsed) = save_capture(&mut backend, size, &output)?;
-            render_readback_elapsed += readback_elapsed;
-            png_write_elapsed += write_elapsed;
-            println!("{}", output.display());
-        }
+        let capture_timings = captures.finish(&mut backend, size)?;
+        render_readback_elapsed += capture_timings.render + capture_timings.readback;
+        png_write_elapsed += capture_timings.png_write;
         eprintln!(
             "gameplay resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s acquire={:.2}s gpu_wait={:.2}s present={:.2}s suboptimal={}",
             size.name(),
@@ -315,24 +301,6 @@ fn export(
         output.join("index.html").display()
     );
     Ok(())
-}
-
-fn save_capture(backend: &mut Backend, size: &Size, path: &Path) -> Result<(Duration, Duration)> {
-    let readback_started = Instant::now();
-    let image = backend.capture_frame()?;
-    if image.dimensions() != (size.width, size.height) {
-        return Err(format!(
-            "capture returned {:?}, expected {}x{}",
-            image.dimensions(),
-            size.width,
-            size.height
-        )
-        .into());
-    }
-    let readback_elapsed = readback_started.elapsed();
-    let write_started = Instant::now();
-    image.save(path)?;
-    Ok((readback_elapsed, write_started.elapsed()))
 }
 
 fn sample_song(directory: &Path) -> Result<(PathBuf, PathBuf, String)> {

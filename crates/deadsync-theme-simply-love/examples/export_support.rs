@@ -1,12 +1,16 @@
 use deadlib_assets::AssetManager;
 use deadlib_present::{compose::TextureContext, space::Metrics, texture::TextureMeta};
-use deadlib_render::{Backend, BackendType, PresentModePolicy, TextureHandle};
+use deadlib_render::{
+    Backend, BackendType, DrawStats, PresentModePolicy, RenderFrame, Texture, TextureHandle,
+    TextureHandleMap,
+};
 use std::{
     cell::RefCell,
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     error::Error,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -30,6 +34,62 @@ pub struct Size {
     pub width: u32,
     pub height: u32,
     pub aspect: (u32, u32),
+}
+
+#[derive(Default)]
+pub struct CaptureBatch {
+    pending: VecDeque<PathBuf>,
+    render_elapsed: Duration,
+}
+
+pub struct CaptureTimings {
+    pub render: Duration,
+    pub readback: Duration,
+    pub png_write: Duration,
+}
+
+impl CaptureBatch {
+    pub fn draw(
+        &mut self,
+        backend: &mut Backend,
+        frame: &RenderFrame,
+        textures: &TextureHandleMap<Texture>,
+        path: PathBuf,
+    ) -> Result<DrawStats> {
+        backend.request_screenshot();
+        let started = Instant::now();
+        let stats = backend.draw(frame, textures, false)?;
+        self.render_elapsed += started.elapsed();
+        self.pending.push_back(path);
+        Ok(stats)
+    }
+
+    pub fn finish(mut self, backend: &mut Backend, size: &Size) -> Result<CaptureTimings> {
+        let mut timings = CaptureTimings {
+            render: self.render_elapsed,
+            readback: Duration::ZERO,
+            png_write: Duration::ZERO,
+        };
+        while let Some(path) = self.pending.pop_front() {
+            let started = Instant::now();
+            let image = backend.capture_frame()?;
+            timings.readback += started.elapsed();
+            if image.dimensions() != (size.width, size.height) {
+                return Err(format!(
+                    "capture returned {:?}, expected {}x{}",
+                    image.dimensions(),
+                    size.width,
+                    size.height
+                )
+                .into());
+            }
+            let started = Instant::now();
+            image.save(&path)?;
+            timings.png_write += started.elapsed();
+            println!("{}", path.display());
+        }
+        Ok(timings)
+    }
 }
 
 impl Size {

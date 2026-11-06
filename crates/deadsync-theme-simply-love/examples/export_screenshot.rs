@@ -3,7 +3,6 @@
 mod export_gameplay;
 #[path = "menus/export_menus.rs"]
 mod export_menus;
-#[allow(dead_code)]
 #[path = "export_support.rs"]
 mod export_support;
 

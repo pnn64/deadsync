@@ -1,7 +1,6 @@
 //! Export the Simply Love menu screens for the available display presets.
 mod export_menus_viewer;
-#[path = "../export_support.rs"]
-mod export_support;
+use crate::export_support;
 
 use deadlib_assets::AssetManager;
 use deadlib_present::{
@@ -9,11 +8,10 @@ use deadlib_present::{
     compose,
     space::{self, Metrics},
 };
-use deadlib_render::{Backend, RenderFrame};
 use deadsync_theme_simply_love::{self as theme, screens, views};
 use export_support::{PRESETS, Size};
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -198,7 +196,7 @@ fn export(
         backend.resize(size.width, size.height);
         resize_elapsed += resize_started.elapsed();
         backend.set_default_projection(metrics.projection());
-        let mut pending_capture: Option<PathBuf> = None;
+        let mut captures = export_support::CaptureBatch::default();
 
         for &(name, _) in MENUS {
             let folder = output.join(size.name());
@@ -242,24 +240,12 @@ fn export(
                 assets.texture_context(),
             );
             prepare_elapsed += prepare_started.elapsed();
-            let (render_readback, png_write) = draw_capture(
-                &mut backend,
-                &assets,
-                frame,
-                size,
-                &path,
-                &mut pending_capture,
-            )?;
-            render_readback_elapsed += render_readback;
-            png_write_elapsed += png_write;
+            captures.draw(&mut backend, &frame, assets.textures(), path)?;
             actors.clear();
         }
-        if let Some(path) = pending_capture.take() {
-            let (readback_elapsed, write_elapsed) = save_capture(&mut backend, size, &path)?;
-            render_readback_elapsed += readback_elapsed;
-            png_write_elapsed += write_elapsed;
-            println!("{}", path.display());
-        }
+        let capture_timings = captures.finish(&mut backend, size)?;
+        render_readback_elapsed += capture_timings.render + capture_timings.readback;
+        png_write_elapsed += capture_timings.png_write;
         eprintln!(
             "menu resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s",
             size.name(),
@@ -378,47 +364,6 @@ fn menu_actors(
         _ => return Err(format!("unknown menu {name}").into()),
     };
     Ok(actors)
-}
-
-fn draw_capture(
-    backend: &mut Backend,
-    assets: &AssetManager,
-    frame: RenderFrame,
-    size: &Size,
-    path: &PathBuf,
-    pending_capture: &mut Option<PathBuf>,
-) -> Result<(Duration, Duration)> {
-    backend.request_screenshot();
-    let render_started = Instant::now();
-    backend.draw(&frame, assets.textures(), false)?;
-    let render_readback = render_started.elapsed();
-    let mut png_write = Duration::ZERO;
-    if let Some(previous_path) = pending_capture.replace(path.clone()) {
-        let (readback_elapsed, write_elapsed) = save_capture(backend, size, &previous_path)?;
-        let render_readback = render_readback + readback_elapsed;
-        png_write += write_elapsed;
-        println!("{}", previous_path.display());
-        return Ok((render_readback, png_write));
-    }
-    Ok((render_readback, png_write))
-}
-
-fn save_capture(backend: &mut Backend, size: &Size, path: &Path) -> Result<(Duration, Duration)> {
-    let readback_started = Instant::now();
-    let image = backend.capture_frame()?;
-    if image.dimensions() != (size.width, size.height) {
-        return Err(format!(
-            "capture returned {:?}, expected {}x{}",
-            image.dimensions(),
-            size.width,
-            size.height
-        )
-        .into());
-    }
-    let readback_elapsed = readback_started.elapsed();
-    let save_started = Instant::now();
-    image.save(path)?;
-    Ok((readback_elapsed, save_started.elapsed()))
 }
 
 fn sample_song(directory: &Path) -> Result<deadsync_chart::SongPack> {
