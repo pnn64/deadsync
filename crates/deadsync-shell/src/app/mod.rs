@@ -5293,7 +5293,7 @@ impl App {
             backend: None,
             backend_type,
             _idle_inhibitor: deadlib_platform::idle_inhibit::IdleInhibitor::acquire(),
-            fsr_monitor: fsr_input::Monitor::new(),
+            fsr_monitor: fsr_input::Monitor::with_data_dir(&dirs.data_dir),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(
@@ -8704,9 +8704,10 @@ impl App {
             }
             RawKeyScreenRoute::ConfigurePads => {
                 // `0` tares the focused threshold(s) to the live reading.
-                if screens::pad_config::handle_raw_key_event(
+                if screens::pad_config::handle_raw_key_event_with_modifiers(
                     &mut self.state.screens.pad_config_state,
                     &raw_key,
+                    shift_held,
                 ) {
                     return true;
                 }

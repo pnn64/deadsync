@@ -208,6 +208,7 @@ fn emit_u64(w: &mut impl std::io::Write, n: usize) {
 fn emit_button(w: &mut impl std::io::Write, b: &ButtonView) {
     match b.label {
         ButtonLabel::Hid(n) => w.write_all(&[0, n]).unwrap(),
+        ButtonLabel::Sensor(_) | ButtonLabel::Group(_) => panic!("unexpected serial label"),
         ButtonLabel::Named(s) => {
             w.write_all(&[1]).unwrap();
             emit_u64(w, s.len());

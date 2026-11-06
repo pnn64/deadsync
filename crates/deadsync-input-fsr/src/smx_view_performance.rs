@@ -123,7 +123,7 @@ fn emit_button(w: &mut impl std::io::Write, b: &ButtonView) {
             emit_u64(w, s.len());
             w.write_all(s.as_bytes()).unwrap();
         }
-        ButtonLabel::Hid(_) => panic!("unexpected HID label"),
+        ButtonLabel::Hid(_) | ButtonLabel::Sensor(_) | ButtonLabel::Group(_) => panic!("unexpected numbered label"),
     }
     for n in [
         b.min_raw_threshold,

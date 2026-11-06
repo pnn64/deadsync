@@ -63,6 +63,7 @@ impl App {
     #[inline(always)]
     pub(super) fn sync_pad_config_fsr(&mut self, policy: SmxFramePolicy) {
         use screens::pad_config;
+        self.fsr_monitor.set_enabled(policy.use_fsrs);
         let screen = self.state.screens.current_screen;
         pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, policy.use_fsrs);
         pad_config::set_fsr_enabled(

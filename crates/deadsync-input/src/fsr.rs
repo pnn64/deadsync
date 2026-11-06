@@ -1,18 +1,16 @@
-use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 use std::sync::Arc;
 
-/// Maximum logical button groups exposed by one controller. Analog Dance Pad
-/// firmware reports up to sixteen HID buttons; SMX uses four named panels.
-pub const MAX_PAD_BUTTONS: usize = 16;
-/// Maximum hardware sensors exposed by one button. FSRIO owns twelve sensors
-/// total and may legally map all of them to one button.
-pub const MAX_BUTTON_SENSORS: usize = 12;
+/// Common controllers fit inline; custom serial firmware can expose more.
+pub const INLINE_PAD_BUTTONS: usize = 16;
+pub const INLINE_BUTTON_SENSORS: usize = 12;
 
 /// Which FSR backend owns a given pad, so edits can be routed back to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackendKind {
     Fsrio,
     Smx,
+    Teejusb,
 }
 
 /// Backend-defined transform from raw sensor units to a displayed bar height.
@@ -103,9 +101,8 @@ pub struct SensorView {
     pub enabled: bool,
 }
 
-/// Bounded inline sensor storage. SMX always uses four entries; FSRIO uses at
-/// most twelve, so live pad snapshots never need a per-button heap allocation.
-pub type SensorViews = ArrayVec<SensorView, MAX_BUTTON_SENSORS>;
+/// Common pads stay inline; larger custom groups spill without truncation.
+pub type SensorViews = SmallVec<[SensorView; INLINE_BUTTON_SENSORS]>;
 
 /// Label shown for a logical controller button group.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +111,10 @@ pub enum ButtonLabel {
     Named(&'static str),
     /// A one-based HID button number from Analog Dance Pad firmware.
     Hid(u8),
+    /// Serial firmware exposes sensor indices, not HID button mappings.
+    Sensor(u16),
+    /// A user-configured group of serial sensors (not a claimed HID mapping).
+    Group(u16),
 }
 
 /// One logical controller button and the sensors that drive it.
@@ -140,9 +141,8 @@ pub struct ButtonView {
     pub release_threshold: Option<u16>,
 }
 
-/// Bounded inline button storage. SMX uses four entries; Analog Dance Pad
-/// firmware can expose up to sixteen logical HID button groups.
-pub type ButtonViews = ArrayVec<ButtonView, MAX_PAD_BUTTONS>;
+/// Inline for SMX/FSRio, with room to grow for custom serial controllers.
+pub type ButtonViews = SmallVec<[ButtonView; INLINE_PAD_BUTTONS]>;
 
 /// A single connected FSR pad, exposed to the config screen.
 #[derive(Clone, Debug)]
@@ -152,9 +152,13 @@ pub struct PadView {
     /// this only when device identity changes, so cloning a frame never copies
     /// or reallocates the label text.
     pub device_name: Arc<str>,
+    /// A connected device may need an explicit protocol choice before writes.
+    pub thresholds_editable: bool,
+    /// Connection/configuration feedback, displayed by the shared editor.
+    pub status: Option<Arc<str>>,
     /// Player side for SMX play-style filtering, taken from the device slot
-    /// (slot 1 = P2), not the hardware jumper. FSRio has no side assignment;
-    /// its placeholder value is ignored when filtering.
+    /// (slot 1 = P2), not the hardware jumper. FSRio and serial controllers have
+    /// no side assignment; their placeholder value is ignored when filtering.
     pub is_p2_side: bool,
     pub buttons: ButtonViews,
     /// Whether the Advanced view is available for this pad. Load-cell pads are

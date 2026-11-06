@@ -123,6 +123,8 @@ impl Monitor {
                     index: pad,
                 },
                 device_name,
+                thresholds_editable: true,
+                status: None,
                 is_p2_side: pad == 1,
                 buttons,
                 supports_advanced: fsr,

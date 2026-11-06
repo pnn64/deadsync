@@ -9,6 +9,15 @@ arrayvec = "0.7.8"
 deadsync-input = { path = "../deadsync-input" }
 deadsync-smx = { path = "../deadsync-smx" }
 log = "0.4.34"
+deadlib-platform = { path = "../deadlib-platform" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[target.'cfg(any(windows, target_os = "linux", target_os = "freebsd", target_os = "macos"))'.dependencies]
+serialport = { version = "4.10.1", default-features = false }
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [target.'cfg(windows)'.dependencies]
 hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }

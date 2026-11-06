@@ -307,6 +307,8 @@ mod imp {
                 index: device.id,
             },
             device_name: Arc::clone(&device.name),
+            thresholds_editable: true,
+            status: None,
             is_p2_side: false,
             buttons: button_views(&device.config.report, &device.input),
             supports_advanced: true,

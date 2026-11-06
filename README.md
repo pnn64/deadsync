@@ -371,6 +371,7 @@ DeadSync can communicate directly with dance pad hardware over USB, bypassing th
 |-----|--------|------|
 | **StepManiaX** | ✅ Supported | [Documentation](docs/stepmaniax.md) |
 | **FSRio** | ✅ Supported | |
+| **Teejusb FSR firmware** | Serial threshold configuration; hardware validation pending | [Documentation](docs/teejusb-fsr.md) |
 
 ## Data Directories
 
