@@ -5,6 +5,7 @@
 /songs/*
 !/songs/instructions.txt
 /target
+/dist
 /crates/deadsync-song-lua/target/
 deadsync.ini
 prompt.txt
