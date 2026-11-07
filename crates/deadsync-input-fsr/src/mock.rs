@@ -114,6 +114,7 @@ impl Monitor {
                 .collect();
             let fsr = pad.kind == MockKind::Fsr;
             PadView {
+                host_controls: None,
                 device_id: PadDeviceId {
                     backend: BackendKind::Smx,
                     index: i,

@@ -9,7 +9,10 @@ pub use winit::keyboard::KeyCode;
 
 /// Number of supported native pad slots, including the shared overflow slot.
 /// Slots `0..64` identify devices without growing hot-path input state.
-pub const PAD_ID_COUNT_CAP: usize = 65;
+pub const NATIVE_PAD_ID_COUNT_CAP: usize = 65;
+/// Dedicated RE:Flex slots do not alias native gamepads or SMX slots.
+pub const REFLEX_PAD_ID_BASE: usize = NATIVE_PAD_ID_COUNT_CAP;
+pub const PAD_ID_COUNT_CAP: usize = NATIVE_PAD_ID_COUNT_CAP + 2;
 
 /// Physical key transition with its original capture timestamps.
 #[derive(Clone, Copy, Debug)]

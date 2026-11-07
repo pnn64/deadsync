@@ -15,6 +15,7 @@ mod input_routing;
 mod live_case;
 mod lobby_views;
 mod option_previews;
+mod reflex_runtime;
 mod screen_nav;
 mod screenshot;
 mod select_music_views;
@@ -3195,7 +3196,7 @@ impl App {
             policy.driver,
             policy.smx_input,
             policy.smx_panel_lights,
-        );
+        ) || deadsync_reflex::connected();
         if !active {
             if self.lighting_active {
                 self.deactivate_lighting(policy.theme_index);
@@ -3204,6 +3205,7 @@ impl App {
             return;
         }
         self.lighting_active = true;
+        self.sync_reflex_mappings();
         self.lights
             .set_gameplay_pad_lights(policy.gameplay_pad_lights);
         let plan = lighting_frame_plan(
@@ -3259,6 +3261,7 @@ impl App {
                 ));
         }
         self.lights.tick(delta_time, elapsed_seconds);
+        self.sync_reflex_lights(session.player_side);
     }
 
     fn deactivate_lighting(&mut self, theme_index: i32) {
@@ -9255,7 +9258,7 @@ impl App {
         } else if target == CurrentScreen::ConfigurePads {
             screens::pad_config::set_fsr_enabled(
                 &mut self.state.screens.pad_config_state,
-                config::runtime::get().use_fsrs,
+                config::runtime::get().use_fsrs || deadsync_reflex::connected(),
             );
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
@@ -10869,6 +10872,15 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::GamepadSystem(ev) => {
+                if matches!(
+                    &ev,
+                    deadlib_input_native::GpSystemEvent::Connected {
+                        backend: deadlib_input_native::PadBackend::Reflex,
+                        ..
+                    }
+                ) {
+                    self.sync_reflex_mappings();
+                }
                 let plan = gamepad_system_event_plan(self.state.screens.current_screen, &ev);
                 if plan.forward_to_sandbox {
                     let view = gamepad_system_view(&ev);
@@ -11133,6 +11145,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.apply_pending_pad_config_commands();
         self.fsr_monitor.flush_pending_saves();
+        deadsync_reflex::shutdown();
         if let Err(error) = self.state.shell.fullscreen_state.restore() {
             warn!("Failed to restore desktop on exit: {error}");
         }
@@ -11218,6 +11231,7 @@ pub fn run(
         launch_input_backends(
             proxy,
             InputBackendConfig {
+                data_dir: app.dirs.data_dir.clone(),
                 #[cfg(target_os = "windows")]
                 windows_pad_backend: config.windows_gamepad_backend,
                 smx_input: config.smx_input,

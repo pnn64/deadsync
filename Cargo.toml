@@ -38,6 +38,7 @@ members = [
     "crates/deadsync-import",
     "crates/deadsync-input",
     "crates/deadsync-input-fsr",
+    "crates/deadsync-reflex",
     "crates/deadlib-input-native",
     "crates/deadsync-assets",
     "crates/deadsync-lights",

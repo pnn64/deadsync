@@ -11,6 +11,7 @@ pub enum BackendKind {
     Fsrio,
     Smx,
     Teejusb,
+    Reflex,
 }
 
 /// Backend-defined transform from raw sensor units to a displayed bar height.
@@ -86,6 +87,10 @@ pub struct PadDeviceId {
 /// enable edits target.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorView {
+    /// Independently editable release threshold, in the same units as press.
+    pub release_threshold: Option<u16>,
+    /// Host-calibrated zero point; raw_value is pressure above this baseline.
+    pub baseline: Option<u16>,
     /// Index used when addressing this sensor for edits (`set_threshold` /
     /// `set_sensor_enabled`). May differ from the display position.
     pub firmware_index: usize,
@@ -144,9 +149,27 @@ pub struct ButtonView {
 /// Inline for SMX/FSRio, with room to grow for custom serial controllers.
 pub type ButtonViews = SmallVec<[ButtonView; INLINE_PAD_BUTTONS]>;
 
+/// Controls for pads whose input detection and settings live on the computer.
+#[derive(Clone, Copy, Debug)]
+pub struct HostPadControls {
+    pub player: usize,
+    pub brightness: u8,
+    pub lights: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostPadAction {
+    Calibrate,
+    SwitchPlayer,
+    CycleLights,
+    Brightness(i16),
+    TestLights,
+}
+
 /// A single connected FSR pad, exposed to the config screen.
 #[derive(Clone, Debug)]
 pub struct PadView {
+    pub host_controls: Option<HostPadControls>,
     pub device_id: PadDeviceId,
     /// Immutable hardware label shared across live snapshots. Backends update
     /// this only when device identity changes, so cloning a frame never copies

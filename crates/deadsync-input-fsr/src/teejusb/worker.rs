@@ -226,6 +226,8 @@ fn pad_view<T>(device: &mut Device<T>) -> PadView {
                         device.session.values[index].clamp(0, MAX_THRESHOLD as i16) as u16;
                     let raw_threshold = device.session.thresholds[index];
                     SensorView {
+                        release_threshold: None,
+                        baseline: None,
                         firmware_index: index,
                         label: None,
                         raw_value,
@@ -268,6 +270,7 @@ fn pad_view<T>(device: &mut Device<T>) -> PadView {
         .collect();
     let editable = device.session.protocol != Protocol::Auto;
     PadView {
+        host_controls: None,
         device_id: PadDeviceId {
             backend: BackendKind::Teejusb,
             index: device.id,

@@ -64,15 +64,16 @@ impl App {
     pub(super) fn sync_pad_config_fsr(&mut self, policy: SmxFramePolicy) {
         use screens::pad_config;
         self.fsr_monitor.set_enabled(policy.use_fsrs);
+        let editor_enabled = policy.use_fsrs || deadsync_reflex::connected();
         let screen = self.state.screens.current_screen;
-        pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, policy.use_fsrs);
+        pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, editor_enabled);
         pad_config::set_fsr_enabled(
             &mut self.state.screens.select_music_state.pad_config_overlay,
-            policy.use_fsrs,
+            editor_enabled,
         );
         let Some(plan) = pad_config_fsr_plan(
             screen,
-            policy.use_fsrs,
+            editor_enabled,
             self.state
                 .screens
                 .select_music_state

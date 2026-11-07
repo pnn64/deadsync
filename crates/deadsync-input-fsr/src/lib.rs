@@ -96,6 +96,8 @@ impl Monitor {
         out.push_str("\n\n");
         out.push_str(&self.teejusb.debug_dump());
         out.push_str("\n\n");
+        out.push_str(&deadsync_reflex::debug_dump());
+        out.push_str("\n\n");
         match &mut self.mock {
             Some(m) => out.push_str(&m.debug_dump()),
             None => out.push_str(&self.smx.debug_dump()),
@@ -116,6 +118,9 @@ impl Monitor {
         pads.clear();
         self.fsrio.poll_pads_into(pads);
         self.teejusb.poll_pads_into(pads);
+        if self.mock.is_none() {
+            deadsync_reflex::poll_pads_into(pads);
+        }
         match &mut self.mock {
             Some(m) => m.poll_pads_into(pads),
             None => self.smx.poll_pads_into(pads),
@@ -134,6 +139,7 @@ impl Monitor {
         value: u16,
     ) -> bool {
         match device.backend {
+            BackendKind::Reflex => deadsync_reflex::set_threshold(device, button, sensor, value),
             BackendKind::Fsrio => self.fsrio.set_threshold(device, button, sensor, value),
             BackendKind::Teejusb => self.teejusb.set_threshold(device, button, sensor, value),
             BackendKind::Smx => match &mut self.mock {
@@ -154,7 +160,7 @@ impl Monitor {
         release: u16,
     ) -> bool {
         match device.backend {
-            BackendKind::Fsrio | BackendKind::Teejusb => false,
+            BackendKind::Fsrio | BackendKind::Teejusb | BackendKind::Reflex => false,
             BackendKind::Smx => match &mut self.mock {
                 Some(m) => m.set_threshold_pair(device, button, press, release),
                 None => self.smx.set_threshold_pair(device, button, press, release),
@@ -172,6 +178,9 @@ impl Monitor {
     ) -> bool {
         match device.backend {
             BackendKind::Teejusb => false,
+            BackendKind::Reflex => {
+                deadsync_reflex::set_sensor_enabled(device, button, sensor, enabled)
+            }
             BackendKind::Fsrio => self
                 .fsrio
                 .set_sensor_enabled(device, button, sensor, enabled),
@@ -185,7 +194,7 @@ impl Monitor {
     /// Turn auto-recalibration on/off for a whole pad (Extra Advanced).
     pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
         match device.backend {
-            BackendKind::Teejusb => false,
+            BackendKind::Teejusb | BackendKind::Reflex => false,
             BackendKind::Fsrio => self.fsrio.set_auto_recalibration(device, enabled),
             BackendKind::Smx => match &mut self.mock {
                 Some(m) => m.set_auto_recalibration(device, enabled),
@@ -197,7 +206,7 @@ impl Monitor {
     /// Set the per-panel debounce (microseconds) for a whole pad (Extra Advanced).
     pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
         match device.backend {
-            BackendKind::Teejusb => false,
+            BackendKind::Teejusb | BackendKind::Reflex => false,
             BackendKind::Fsrio => self.fsrio.set_debounce_micros(device, micros),
             BackendKind::Smx => match &mut self.mock {
                 Some(m) => m.set_debounce_micros(device, micros),

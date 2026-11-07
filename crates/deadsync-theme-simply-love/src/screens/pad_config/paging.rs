@@ -59,7 +59,7 @@ pub(super) fn advanced_page(
                 pages.push(Groups::new());
                 width = 0.0;
             }
-            if focused.is_some_and(|focus| matches!(focus, AdvTarget::Sensor { button, sensor } if button == button_index && (start..end).contains(&sensor))) {
+            if focused.is_some_and(|focus| matches!(focus, AdvTarget::Sensor { button, sensor } | AdvTarget::SensorRelease { button, sensor } if button == button_index && (start..end).contains(&sensor))) {
                 selected_page = pages.len() - 1;
             }
             let page = pages.last_mut().unwrap();

@@ -1800,6 +1800,7 @@ dependencies = [
  "arrayvec",
  "deadlib-platform",
  "deadsync-input",
+ "deadsync-reflex",
  "deadsync-smx",
  "hidapi",
  "log",
@@ -1928,6 +1929,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-reflex"
+version = "0.1.0"
+dependencies = [
+ "deadlib-input-native",
+ "deadlib-platform",
+ "deadsync-input",
+ "hidapi",
+ "log",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "deadsync-rules"
 version = "0.1.0"
 dependencies = [
@@ -1983,6 +1998,7 @@ dependencies = [
  "deadsync-online",
  "deadsync-profile",
  "deadsync-profile-gameplay",
+ "deadsync-reflex",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
