@@ -12,6 +12,7 @@ pub use resources::SFX_PATHS;
 pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;
+pub mod ui_layout;
 pub mod views;
 pub mod visual_styles;
 

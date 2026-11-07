@@ -9,7 +9,7 @@ pub enum StepArtistBarLayout {
 }
 
 pub struct StepArtistBarParams {
-    pub x0: f32,
+    pub left_x: f32,
     pub center_y: f32,
     pub layout: StepArtistBarLayout,
     pub expanded_line_count: usize,
@@ -30,7 +30,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
             let comp_h = screen_height() / 28.0;
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.x0 + 113.0, p.center_y):
+                xy(p.left_x + 87.5, p.center_y):
                 setsize(175.0, comp_h):
                 z(p.z_base):
                 diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
@@ -39,7 +39,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.label_text):
                 align(0.0, 0.5):
-                xy(p.x0 + 30.0, p.center_y):
+                xy(p.left_x + 4.5, p.center_y):
                 maxwidth(p.label_max_width):
                 zoom(0.8):
                 z(z_text):
@@ -49,7 +49,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.artist_text):
                 align(0.0, 0.5):
-                xy(p.x0 + p.artist_x_offset, p.center_y):
+                xy(p.left_x + p.artist_x_offset, p.center_y):
                 maxwidth(p.artist_max_width):
                 zoom(0.8):
                 z(z_text):
@@ -70,7 +70,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
             };
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.x0 + 120.0, p.center_y + 18.0):
+                xy(p.left_x + 95.0, p.center_y + 18.0):
                 setsize(190.0, comp_h):
                 fadebottom(fade_bottom):
                 z(p.z_base):
@@ -80,7 +80,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.label_text):
                 align(0.0, 0.5):
-                xy(p.x0 + 30.0, p.center_y):
+                xy(p.left_x + 5.0, p.center_y):
                 maxwidth(p.label_max_width):
                 zoom(0.8):
                 z(z_text):
@@ -90,7 +90,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.artist_text):
                 align(0.0, 0.0):
-                xy(p.x0 + 70.0, p.center_y - 6.0):
+                xy(p.left_x + 45.0, p.center_y - 6.0):
                 maxwidth(175.0):
                 zoom(0.8):
                 z(z_text):
@@ -107,7 +107,7 @@ mod tests {
 
     fn params(layout: StepArtistBarLayout) -> StepArtistBarParams {
         StepArtistBarParams {
-            x0: 0.0,
+            left_x: 32.0,
             center_y: 0.0,
             layout,
             expanded_line_count: 3,
@@ -116,7 +116,7 @@ mod tests {
             label_text: TextContent::Static("STEPS"),
             label_max_width: 40.0,
             artist_text: TextContent::Static("a very long chart description"),
-            artist_x_offset: 75.0,
+            artist_x_offset: 49.5,
             artist_max_width: 124.0,
             artist_color: [0.0, 0.0, 0.0, 1.0],
         }
@@ -160,5 +160,26 @@ mod tests {
             text_width_flags(&actors),
             vec![(Some(40.0), true), (Some(175.0), true)]
         );
+    }
+
+    #[test]
+    fn step_header_background_starts_at_its_layout_left_edge() {
+        for (layout, expected_width, expected_center_offset) in [
+            (StepArtistBarLayout::Legacy, 175.0, 87.5),
+            (StepArtistBarLayout::Expanded, 190.0, 95.0),
+        ] {
+            let mut actors = Vec::new();
+            push(&mut actors, params(layout));
+            let Actor::Sprite { offset, size, .. } = &actors[0] else {
+                panic!("step header background should be a sprite");
+            };
+            let deadlib_present::actors::SizeSpec::Px(width) = size[0] else {
+                panic!("step header background should have a fixed width");
+            };
+
+            assert_eq!(width, expected_width);
+            assert_eq!(offset[0], 32.0 + expected_center_offset);
+            assert_eq!(offset[0] - width * 0.5, 32.0);
+        }
     }
 }
