@@ -2356,7 +2356,7 @@ pub fn push_actors(
             meter: Some(meter_text),
         },
     );
-    let pane_layout = select_pane::layout();
+    let pane_layout = select_pane::layout(pane_cx);
     let lines = [
         (
             Arc::clone(&state.score_text.machine_name),
@@ -2368,8 +2368,8 @@ pub fn push_actors(
         ),
     ];
     for (i, (name, pct)) in lines.into_iter().enumerate() {
-        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.top() + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.top() + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
     }
 
     let (box_w, frame_x, frame_y) = if is_wide() {

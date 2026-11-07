@@ -13570,8 +13570,8 @@ pub fn push_actors(
     }
 
     // Pane Display
-    let pane_layout = select_pane::layout();
-    let pane_top = pane_layout.pane_top;
+    let pane_layout = select_pane::layout(screen_width().mul_add(0.25, -5.0));
+    let pane_top = pane_layout.top();
     let tz = pane_layout.text_zoom;
     let cols = pane_layout.cols;
     let rows = pane_layout.rows;
@@ -14009,6 +14009,8 @@ pub fn push_actors(
             let tech_row_step = if step_artist_expanded { 17.0 } else { 19.0 };
             let tech_value_zoom = if step_artist_expanded { 0.7 } else { 0.78 };
             let tech_label_zoom = if step_artist_expanded { 0.8 } else { 0.78 };
+            let tech_stream_max_width =
+                ((tech_col_spacing - 56.0) / tech_value_zoom).clamp(58.0, 100.0);
             let items: [(Arc<str>, &Arc<str>, u8, u8, Option<f32>); 6] = [
                 (cross, &labels.crossovers, 0_u8, 0_u8, None),
                 (foot, &labels.footswitches, 1_u8, 0_u8, None),
@@ -14023,7 +14025,7 @@ pub fn push_actors(
                 let vx = f32::from(c).mul_add(tech_col_spacing, p_v_x);
                 let lx = f32::from(c).mul_add(tech_col_spacing, p_l_x);
                 match mw {
-                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    Some(_) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(tech_stream_max_width): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                     None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                 }
                 actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(tech_label_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
@@ -14193,9 +14195,9 @@ pub fn push_actors(
         let footer_top = screen_height() - 32.0;
         let scorebox_center_y_p1_single = footer_top - 44.0;
         let tech_box_bottom_y = screen_center_y() + 111.0 + 32.0;
-        let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
+        let pane_to_tech_gap = pane_layout.top() - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
-            40.0f32.mul_add(-scorebox_zoom, pane_layout.pane_top) - pane_to_tech_gap;
+            40.0f32.mul_add(-scorebox_zoom, pane_layout.top()) - pane_to_tech_gap;
         let p1_online = state.scoreboxes
             [profile_data::player_side_index(profile_data::PlayerSide::P1)]
         .online_active;
@@ -14249,11 +14251,11 @@ pub fn push_actors(
         };
         let pane_scorebox_zoom = widescale(0.60, 0.64);
         let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
-        let pane_scorebox_center_y = pane_layout.pane_height.mul_add(0.5, pane_layout.pane_top);
+        let pane_scorebox_center_y = pane_layout.center_y;
         let pane_right_inset = 4.0;
         let pane_box_center_x = |pane_cx: f32| {
             fit_scorebox_x(
-                pane_layout.pane_width.mul_add(0.5, pane_cx)
+                pane_layout.with_center_x(pane_cx).right()
                     - pane_scorebox_width * 0.5
                     - pane_right_inset,
                 pane_scorebox_zoom,
