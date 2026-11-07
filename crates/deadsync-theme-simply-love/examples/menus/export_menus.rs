@@ -319,7 +319,7 @@ fn menu_actors(
         "style-select" => Ok(style_select_actors()),
         "mode-select" => Ok(mode_select_actors(assets)),
         "song-select" => Ok(preview.song_select_actors(assets, CAPTURE_TIME)),
-        "course-select" => Ok(course_select_actors(assets)),
+        "course-select" => Ok(preview.course_select_actors(assets, CAPTURE_TIME)),
         "key-bindings" => Ok(key_bindings_actors(assets)),
         "options" => Ok(options_actors(assets)),
         "player-options" => Ok(player_options_actors(song, assets)),
@@ -346,11 +346,6 @@ fn style_select_actors() -> Vec<Actor> {
 fn mode_select_actors(assets: &AssetManager) -> Vec<Actor> {
     let state = screens::select_mode::init(views::SelectFlowRuntimeView::default());
     screens::select_mode::get_actors(&state, assets)
-}
-
-fn course_select_actors(assets: &AssetManager) -> Vec<Actor> {
-    let state = screens::select_course::init(views::SelectCourseInitView::default());
-    screens::select_course::get_actors(&state, assets)
 }
 
 fn key_bindings_actors(assets: &AssetManager) -> Vec<Actor> {

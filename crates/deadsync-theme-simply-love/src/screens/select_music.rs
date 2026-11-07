@@ -15,12 +15,12 @@ use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        layout::{SongDetailsLayout, SongSelectLayout}, lobby_overlay, music_wheel, screen_bars,
-        select_music_menu, select_pane, step_artist_bar,
+        layout::{SongDetailsLayout, SongSelectLayout},
+        lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
         banner as shared_banner, gs_scorebox, heart_rate, lobby_hud, mode_pads, profile_boxes,
-        test_input, timers, transitions, visual_style_bg,
+        selection_flash, test_input, timers, transitions, visual_style_bg,
     },
 };
 use crate::screens::pad_config;
@@ -137,11 +137,6 @@ const STEP_ARTIST_CYCLE_SECONDS: f32 = 2.0;
 
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
-
-// Simply Love BGAnimations/ScreenSelectMusic background.lua white flash overlay.
-const SL_BG_FLASH_SLEEP_SECONDS: f32 = 0.6;
-const SL_BG_FLASH_FADE_SECONDS: f32 = 0.5;
-const SL_BG_FLASH_TOTAL_SECONDS: f32 = SL_BG_FLASH_SLEEP_SECONDS + SL_BG_FLASH_FADE_SECONDS;
 
 // Simply Love BGAnimations/ScreenSelectMusic overlay/MusicWheelAnimation.lua
 const SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS: usize = 15;
@@ -1653,10 +1648,7 @@ impl InfoBoxActorCache {
     }
 }
 
-fn build_info_box_children(
-    key: &InfoBoxActorKey,
-    layout: SongDetailsLayout,
-) -> Vec<Actor> {
+fn build_info_box_children(key: &InfoBoxActorKey, layout: SongDetailsLayout) -> Vec<Actor> {
     let bounds = layout.widget.bounds;
     let artist_label = layout.artist_label.bounds;
     let artist_value = layout.artist_value.bounds;
@@ -7377,7 +7369,8 @@ const fn steps_index_for_side(
 ) -> usize {
     match (play_style, side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
             | profile_data::PlayStyle::PumpCouple
             | profile_data::PlayStyle::Routine
@@ -7397,7 +7390,8 @@ const fn set_steps_index_for_side(
     if matches!(
         (play_style, side),
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            profile_data::PlayStyle::Versus
+                | profile_data::PlayStyle::PumpVersus
                 | profile_data::PlayStyle::Couple
                 | profile_data::PlayStyle::PumpCouple
                 | profile_data::PlayStyle::Routine
@@ -7618,7 +7612,8 @@ fn hide_sync_overlay(state: &mut State) {
 const fn selected_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
             | profile_data::PlayStyle::PumpCouple
             | profile_data::PlayStyle::Routine
@@ -7633,7 +7628,8 @@ const fn selected_steps_index_for_sync(state: &State) -> usize {
 const fn preferred_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
             | profile_data::PlayStyle::PumpCouple
             | profile_data::PlayStyle::Routine
@@ -7648,7 +7644,8 @@ const fn preferred_steps_index_for_sync(state: &State) -> usize {
 const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
             | profile_data::PlayStyle::PumpCouple
             | profile_data::PlayStyle::Routine
@@ -11789,7 +11786,8 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         wheel_moving && !state.entries.is_empty(),
         state.policy.interaction.wheel_switch_speed,
         dt,
-    ) || selection_changed && !wheel_change_handled {
+    ) || selection_changed && !wheel_change_handled
+    {
         queue_sfx(state, "assets/sounds/change.ogg");
     }
     if selection_changed {
@@ -12409,22 +12407,6 @@ fn step_artist_expanded_text(chart: &ChartData) -> (Arc<str>, usize) {
         text.push('\n');
     }
     (cached_str_ref(&text), count)
-}
-
-fn push_sl_select_music_bg_flash(actors: &mut Vec<Actor>, selection_animation_timer: f32) {
-    if selection_animation_timer > SL_BG_FLASH_TOTAL_SECONDS {
-        return;
-    }
-    actors.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(-98):
-        sleep(SL_BG_FLASH_SLEEP_SECONDS):
-        linear(SL_BG_FLASH_FADE_SECONDS): alpha(0.0):
-        linear(0.0): visible(false)
-    ));
 }
 
 fn push_sl_select_music_wheel_cascade_mask(
@@ -13065,11 +13047,8 @@ pub fn push_actors(
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    let song_select_layout = SongSelectLayout::new(
-        screen_width(),
-        screen_height(),
-        UILayoutType::current(),
-    );
+    let song_select_layout =
+        SongSelectLayout::new(screen_width(), screen_height(), UILayoutType::current());
     let left_panel_scale = song_select_layout.zoom;
     actors.reserve(256);
     state.labels.borrow_mut().sync();
@@ -13099,7 +13078,7 @@ pub fn push_actors(
             visual_policy: visual_policy.music_selection_background(),
         },
     );
-    push_sl_select_music_bg_flash(actors, state.selection_animation_timer);
+    selection_flash::push(actors, state.selection_animation_timer);
 
     screen_bars::push(
         actors,
@@ -13290,10 +13269,13 @@ pub fn push_actors(
         None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
     };
 
-    let info_box_children = state
-        .info_box_actor_cache
-        .borrow_mut()
-        .resolve(song_details_layout, &labels, artist, bpm, len_text);
+    let info_box_children = state.info_box_actor_cache.borrow_mut().resolve(
+        song_details_layout,
+        &labels,
+        artist,
+        bpm,
+        len_text,
+    );
     actors.extend(info_box_children.iter().cloned());
 
     // Chart Stats & Graph
@@ -14206,8 +14188,7 @@ pub fn push_actors(
         .online_active;
         let both_online_versus = is_versus && p1_online && p2_online;
         let force_step_pane = presentation.scorebox_in_step_pane;
-        let use_pane_scorebox =
-            both_online_versus || force_step_pane || (is_versus && !is_wide());
+        let use_pane_scorebox = both_online_versus || force_step_pane || (is_versus && !is_wide());
         let mut push_scorebox = |side: profile_data::PlayerSide,
                                  center_x: f32,
                                  center_y: f32,
@@ -15007,7 +14988,12 @@ mod tests {
 
         // Per-item and discrete sounds are generated at the selection event.
         assert!(!super::wheel_change_sound_due(&mut elapsed, true, 10, 0.05));
-        assert!(!super::wheel_change_sound_due(&mut elapsed, false, 30, 0.01));
+        assert!(!super::wheel_change_sound_due(
+            &mut elapsed,
+            false,
+            30,
+            0.01
+        ));
     }
 
     #[test]
@@ -15020,7 +15006,11 @@ mod tests {
         super::music_wheel_change(&mut state, 1, super::WheelChangeSound::Immediate);
         super::music_wheel_change(&mut state, -1, super::WheelChangeSound::Immediate);
         assert_eq!(state.selected_index, 1);
-        assert_eq!(state.pending_audio.len(), 2, "both taps must click before update");
+        assert_eq!(
+            state.pending_audio.len(),
+            2,
+            "both taps must click before update"
+        );
         assert!(state.wheel_change_sound_handled);
 
         // A one-entry wheel still registers a directional click.
@@ -15509,12 +15499,12 @@ mod tests {
         deadlib_present::runtime::clear_all();
         let mut actors = Vec::new();
 
-        super::push_sl_select_music_bg_flash(&mut actors, 0.0);
+        super::selection_flash::push(&mut actors, 0.0);
         super::push_sl_select_music_wheel_cascade_mask(&mut actors, 0.0);
         assert_eq!(actors.len(), 27);
 
         actors.clear();
-        super::push_sl_select_music_bg_flash(&mut actors, super::SL_WHEEL_CASCADE_TOTAL_SECONDS);
+        super::selection_flash::push(&mut actors, super::SL_WHEEL_CASCADE_TOTAL_SECONDS);
         super::push_sl_select_music_wheel_cascade_mask(
             &mut actors,
             super::SL_WHEEL_CASCADE_TOTAL_SECONDS,
@@ -15522,7 +15512,7 @@ mod tests {
         assert_eq!(actors.len(), 27);
 
         actors.clear();
-        super::push_sl_select_music_bg_flash(
+        super::selection_flash::push(
             &mut actors,
             super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001,
         );
@@ -15533,18 +15523,21 @@ mod tests {
         assert_eq!(actors.len(), 1);
 
         actors.clear();
-        super::push_sl_select_music_bg_flash(&mut actors, super::SL_BG_FLASH_TOTAL_SECONDS);
+        super::selection_flash::push(&mut actors, super::selection_flash::TOTAL_SECONDS);
         super::push_sl_select_music_wheel_cascade_mask(
             &mut actors,
-            super::SL_BG_FLASH_TOTAL_SECONDS,
+            super::selection_flash::TOTAL_SECONDS,
         );
         assert_eq!(actors.len(), 1);
 
         actors.clear();
-        super::push_sl_select_music_bg_flash(&mut actors, super::SL_BG_FLASH_TOTAL_SECONDS + 0.001);
+        super::selection_flash::push(
+            &mut actors,
+            super::selection_flash::TOTAL_SECONDS + 0.001,
+        );
         super::push_sl_select_music_wheel_cascade_mask(
             &mut actors,
-            super::SL_BG_FLASH_TOTAL_SECONDS + 0.001,
+            super::selection_flash::TOTAL_SECONDS + 0.001,
         );
         assert!(actors.is_empty());
         deadlib_present::runtime::clear_all();
@@ -15572,12 +15565,9 @@ mod tests {
     fn info_box_cache_preserves_children_and_refreshes_changed_content() {
         let mut cache = super::InfoBoxActorCache::default();
         let labels = super::SelectMusicLabels::load();
-        let layout = super::SongSelectLayout::new(
-            853.0,
-            480.0,
-            crate::ui_layout::UILayoutType::Wide,
-        )
-        .song_details;
+        let layout =
+            super::SongSelectLayout::new(853.0, 480.0, crate::ui_layout::UILayoutType::Wide)
+                .song_details;
         let first = cache.resolve(
             layout,
             &labels,
@@ -15612,12 +15602,9 @@ mod tests {
         );
         assert!(!Arc::ptr_eq(&first, &changed));
 
-        let square_layout = super::SongSelectLayout::new(
-            480.0,
-            480.0,
-            crate::ui_layout::UILayoutType::Squareish,
-        )
-        .song_details;
+        let square_layout =
+            super::SongSelectLayout::new(480.0, 480.0, crate::ui_layout::UILayoutType::Squareish)
+                .song_details;
         let resized = cache.resolve(
             square_layout,
             &labels,
@@ -15632,7 +15619,9 @@ mod tests {
                 panic!("Song Details layout should produce text actors");
             };
             assert!((widget_bounds.x..=widget_bounds.right()).contains(&offset[0]));
-            assert!((widget_bounds.y..=widget_bounds.y + widget_bounds.height).contains(&offset[1]));
+            assert!(
+                (widget_bounds.y..=widget_bounds.y + widget_bounds.height).contains(&offset[1])
+            );
         }
     }
 
