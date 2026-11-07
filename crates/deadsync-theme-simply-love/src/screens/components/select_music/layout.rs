@@ -107,7 +107,8 @@ pub(crate) struct SongSelectLayout {
 
 impl SongSelectLayout {
     pub fn new(screen_width: f32, screen_height: f32, layout_type: UILayoutType) -> Self {
-        let is_wide = layout_type != UILayoutType::Squareish;
+        let is_ultra_wide = layout_type == UILayoutType::UltraWide;
+        let use_full_left_pane = !is_ultra_wide;
         let zoom = if layout_type == UILayoutType::Squareish {
             (screen_width / LEFT_PANEL_REFERENCE_WIDTH).clamp(0.0, 1.0)
         } else {
@@ -116,14 +117,14 @@ impl SongSelectLayout {
         let center_x = screen_width * 0.5;
         let center_y = screen_height * 0.5;
         let transform_x = |x: f32| center_x + (x - center_x) * zoom;
+        let left_pane_width = screen_width * 0.5 - 10.0;
 
-        let (banner_zoom, banner_offset_x) = if is_wide {
-            (0.7655, -170.0)
+        let (banner_zoom, banner_center_x) = if use_full_left_pane {
+            (left_pane_width / 418.0, left_pane_width * 0.5)
         } else {
-            (0.75, -166.0)
+            let (zoom, offset_x) = (0.7655, -170.0);
+            (zoom, transform_x(center_x + offset_x))
         };
-        let banner_zoom = banner_zoom * zoom;
-        let banner_center_x = transform_x(center_x + banner_offset_x);
         let banner = WidgetLayout::from_center(
             banner_center_x,
             96.0,
@@ -132,29 +133,29 @@ impl SongSelectLayout {
             banner_zoom,
         );
 
-        let (details_width, details_offset_x) = if is_wide {
-            (320.0, -170.0)
+        let (details_design_width, details_center_x) = if use_full_left_pane {
+            (left_pane_width / zoom, left_pane_width * 0.5)
         } else {
-            (310.0, -165.0)
+            (320.0, transform_x(center_x - 170.0))
         };
+        let details_width = details_design_width * zoom;
         let details_widget = WidgetLayout {
             bounds: WidgetBounds::new(
-                transform_x(center_x + details_offset_x) - details_width * zoom * 0.5,
+                details_center_x - details_width * 0.5,
                 center_y - 55.0 - SONG_DETAILS_HEIGHT * 0.5,
-                details_width * zoom,
+                details_width,
                 SONG_DETAILS_HEIGHT,
             ),
             zoom,
         };
-        let song_details = SongDetailsLayout::new(details_widget, details_width);
+        let song_details = SongDetailsLayout::new(details_widget, details_design_width);
 
-        let (chart_width, chart_offset_x) = if is_wide {
-            (286.0, -187.0)
+        let (chart_width, chart_center_x) = if use_full_left_pane {
+            // Reserve the Steps Display List column at the right edge of the stats pane.
+            (left_pane_width - 32.0, (left_pane_width - 32.0) * 0.5)
         } else {
-            (276.0, -182.0)
+            (286.0, transform_x(center_x - 187.0))
         };
-        let chart_width = chart_width * zoom;
-        let chart_center_x = transform_x(center_x + chart_offset_x);
         let chart_panel = WidgetLayout {
             bounds: WidgetBounds::new(chart_center_x - chart_width * 0.5, 0.0, chart_width, 64.0),
             zoom,
@@ -201,38 +202,64 @@ mod tests {
         let layout = SongSelectLayout::new(853.0, 480.0, UILayoutType::Wide);
 
         assert_eq!(layout.zoom, 1.0);
-        assert_eq!(layout.banner.zoom, 0.7655);
-        assert_eq!(layout.song_details.design_width, 320.0);
+        assert_eq!(layout.banner.zoom, 416.5 / 418.0);
+        assert_eq!(
+            layout.banner.bounds,
+            WidgetBounds::new(
+                0.0,
+                96.0 - 82.0 * (416.5 / 418.0),
+                416.5,
+                164.0 * (416.5 / 418.0)
+            )
+        );
+        assert_eq!(layout.song_details.design_width, 416.5);
         assert_eq!(
             layout.song_details.widget.bounds,
-            WidgetBounds::new(96.5, 160.0, 320.0, 50.0)
+            WidgetBounds::new(0.0, 160.0, 416.5, 50.0)
         );
         assert_eq!(
             layout.chart_panel.bounds,
-            WidgetBounds::new(96.5, 0.0, 286.0, 64.0)
+            WidgetBounds::new(0.0, 0.0, 384.5, 64.0)
         );
     }
 
     #[test]
-    fn song_details_background_stays_centered_on_legacy_anchor_across_aspect_ratios() {
-        for (screen_width, screen_height, layout_type, offset_x, design_width) in [
-            (640.0, 480.0, UILayoutType::Squareish, -165.0, 310.0),
-            (600.0, 480.0, UILayoutType::Squareish, -165.0, 310.0),
-            (853.0, 480.0, UILayoutType::Wide, -170.0, 320.0),
-            (960.0, 540.0, UILayoutType::Wide, -170.0, 320.0),
-            (1147.0, 480.0, UILayoutType::UltraWide, -170.0, 320.0),
+    fn non_ultra_wide_left_widgets_share_the_stats_pane_bounds() {
+        for (screen_width, screen_height, layout_type) in [
+            (640.0, 480.0, UILayoutType::Squareish),
+            (600.0, 480.0, UILayoutType::Squareish),
+            (853.0, 480.0, UILayoutType::Wide),
+            (960.0, 540.0, UILayoutType::Wide),
         ] {
-            let details =
-                SongSelectLayout::new(screen_width, screen_height, layout_type).song_details;
-            let zoom = details.widget.zoom;
-            let expected_center_x = screen_width.mul_add(0.5, offset_x * zoom);
-            let expected_center_y = screen_height * 0.5 - 55.0;
-            let bounds = details.widget.bounds;
+            let layout = SongSelectLayout::new(screen_width, screen_height, layout_type);
+            let expected_width = screen_width * 0.5 - 10.0;
 
-            assert!((bounds.center_x() - expected_center_x).abs() < 0.001);
-            assert!((bounds.center_y() - expected_center_y).abs() < 0.001);
-            assert_eq!(details.design_width, design_width);
+            assert_eq!(layout.banner.bounds.x, 0.0);
+            assert_eq!(layout.banner.bounds.width, expected_width);
+            assert_eq!(layout.song_details.widget.bounds.x, 0.0);
+            assert_eq!(layout.song_details.widget.bounds.width, expected_width);
+            assert_eq!(layout.chart_panel.bounds.x, 0.0);
+            assert_eq!(layout.chart_panel.bounds.width, expected_width - 32.0);
         }
+    }
+
+    #[test]
+    fn ultra_wide_song_select_keeps_its_inset_left_panel() {
+        let layout = SongSelectLayout::new(1147.0, 480.0, UILayoutType::UltraWide);
+
+        assert!((layout.banner.bounds.x - 243.5).abs() < 0.02);
+        assert_eq!(layout.song_details.widget.bounds.x, 243.5);
+        assert_eq!(layout.chart_panel.bounds.x, 243.5);
+    }
+
+    #[test]
+    fn ultra_wide_song_details_background_stays_centered_on_legacy_anchor() {
+        let details = SongSelectLayout::new(1147.0, 480.0, UILayoutType::UltraWide).song_details;
+        let bounds = details.widget.bounds;
+
+        assert_eq!(bounds.center_x(), 403.5);
+        assert_eq!(bounds.center_y(), 185.0);
+        assert_eq!(details.design_width, 320.0);
     }
 
     #[test]
@@ -244,10 +271,16 @@ mod tests {
         assert_eq!(details.artist_value.bounds.x, 55.0);
         assert_eq!(details.bpm_label.bounds.right(), 50.0);
         assert_eq!(details.bpm_value.bounds.x, 55.0);
-        assert_eq!(details.length_label.bounds.right(), 240.0);
-        assert_eq!(details.length_value.bounds.x, 245.0);
-        assert_eq!(bounds.x + details.artist_label.bounds.right(), 146.5);
-        assert_eq!(bounds.x + details.length_label.bounds.right(), 336.5);
+        assert_eq!(
+            details.length_label.bounds.right(),
+            details.design_width - 80.0
+        );
+        assert_eq!(details.length_value.bounds.x, details.design_width - 75.0);
+        assert_eq!(bounds.x + details.artist_label.bounds.right(), 50.0);
+        assert_eq!(
+            bounds.x + details.length_label.bounds.right(),
+            details.design_width - 80.0
+        );
     }
 
     #[test]
