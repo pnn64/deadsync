@@ -43,7 +43,7 @@ Windows backend requires Windows 10 or later.
 ### Linux build dependencies (Ubuntu/Debian)
 ```bash
 sudo apt update
-sudo apt install --no-install-recommends build-essential clang cmake pkg-config libclang-dev libdbus-1-dev libudev-dev libasound2-dev libpipewire-0.3-dev libvulkan-dev libgl1-mesa-dev
+sudo apt install --no-install-recommends build-essential clang cmake pkg-config libclang-dev libdbus-1-dev libudev-dev libasound2-dev libpipewire-0.3-dev libvulkan-dev libgl1-mesa-dev libshaderc-dev
 ```
 
 ### macOS build dependencies (Homebrew)
