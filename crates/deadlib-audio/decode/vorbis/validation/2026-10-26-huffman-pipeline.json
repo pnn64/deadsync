@@ -1,0 +1,222 @@
+{
+  "started_utc": "2026-10-26T22:21:08.983121+00:00",
+  "git_head": "2936d0bf1e0f2b156a09ead110daf9f5874de42a",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cmake": "cmake version 4.2.1",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_cpus": 44,
+  "reference_pins": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "seed": 1337,
+  "repeats": 7,
+  "min_seconds": 0.15,
+  "binary_sha256": {
+    "rust": "8a47ee287990d6907cb03a432cccb802eebc749f550ad7ac9ea5e4483a1d764e",
+    "libvorbis": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  },
+  "cargo_artifact_profile": {
+    "opt_level": "3",
+    "debuginfo": 1,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "cargo_profiles": {
+    "release": {
+      "opt-level": 3,
+      "overflow-checks": false,
+      "debug-assertions": false,
+      "lto": true,
+      "debug": false,
+      "panic": "abort"
+    },
+    "dev": {
+      "package": {
+        "png": {
+          "opt-level": 3
+        },
+        "fdeflate": {
+          "opt-level": 3
+        },
+        "deadlib-audio": {
+          "opt-level": 3
+        },
+        "deadlib-audio-decode": {
+          "opt-level": 3
+        },
+        "rubato": {
+          "opt-level": 3
+        },
+        "symphonia-core": {
+          "opt-level": 3
+        },
+        "symphonia-codec-vorbis": {
+          "opt-level": 3
+        },
+        "sha2": {
+          "opt-level": 3
+        },
+        "deadsync-song-lua": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy-sys": {
+          "opt-level": 3
+        }
+      }
+    },
+    "local": {
+      "inherits": "release",
+      "lto": "thin"
+    },
+    "profiling": {
+      "inherits": "release",
+      "debug": 1
+    },
+    "bench": {
+      "debug": 1
+    }
+  },
+  "cargo_lock_sha256": "3c0749be15998357c6528b36f25f3c350b7f018bd9341840f1d33df12246b857",
+  "rustflags_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null
+  },
+  "cmake_release_flags": [
+    "CMAKE_CXX_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_C_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=/INCREMENTAL:NO"
+  ],
+  "input_sha256": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg": "4fcf854ba1c654b4581e5d98f6df570dd940d716d4f7411712e62491c08cc943",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483"
+  },
+  "workload": "container_pipeline",
+  "huffman_corpora": {},
+  "baseline": {
+    "revision": "6c5c948ed8643773c6bc1a156420b00795bc3113",
+    "binary_sha256": "9b51229e2aaa3ed46dcc5f68cebf3d4db6c561b31d06e76741bf3bdcff3cc10c",
+    "source_archive_sha256": "e16644a53c3d0c1a63bc6ee210ee41a1d8a4b412e7265779442e5fc60dc0149c",
+    "cargo_artifact_profile": {
+      "opt_level": "3",
+      "debuginfo": 1,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    },
+    "source_sha256": {
+      "ogg/src/capture.rs": "5caa364495c561452de45ab91fca266fcddff5a7cbd9a3fc185a92ae0366f4b6",
+      "ogg/src/crc.rs": "bfdb1969bf72b34faa574cbf18609c5ecdd495c6b400336a01191a220b7ac025",
+      "ogg/src/demux.rs": "9753382176b2cafafbc840ce725933a823b7007e68686b4874f98f957bedab8a",
+      "ogg/src/index.rs": "b71a4dae43a9be86f598fd4e95ffd0a1cd3028a78b4ef4113e2fe98a7fcb16b8",
+      "ogg/src/lib.rs": "e2ea57e45d52af24bfa7af4e9d464a0c12a57a5d80121491483aa31b7dbac0db",
+      "ogg/src/page.rs": "f52442e5c035c7fd19d482f2d71ce157c09ed9c816be296b248bd5556239d8fa",
+      "ogg/src/reader.rs": "7a06b6b39b4b81e1c86ca15b1cd657ceb898a31de34819f678963d7f40643755",
+      "ogg/src/validation.rs": "3f25aa60413042c31e5c2638ef3e51e1a2e89bf7e9235e6acde3f2de638dc9f8",
+      "ogg/src/writer.rs": "5ac7a05828eee09a7ec2645885eee08899856c2f29996b9954401f2117fb0021",
+      "vorbis/src/bitpack.rs": "8a74f52bad4ae59f58e2989de7a7a9d77e1aa1b89ee264c0322f444e3e6b72f9",
+      "vorbis/src/codebook.rs": "6ced121a275307c3bafa1a568814dd4a79834ed762561ce1c4c8efa69fc97b11",
+      "vorbis/src/decoder.rs": "6c7bd6398afbeedec6c562d79e95a02066cb028df5249e06bdc799382fccf67a",
+      "vorbis/src/floor.rs": "00884bed4f2ae27c81175884697659eb1e595dab9e725af743a0cd31dc811b2a",
+      "vorbis/src/floor_table.rs": "ebed0d6ae037a1288a96197a202c151e96b58a431c901c4b60efe13428c1cfdc",
+      "vorbis/src/headers.rs": "fbfe7142a7446dd4b8ff9f1d43abab19daa39871c5a4db9455c2d71dc738949f",
+      "vorbis/src/lib.rs": "1ba79bce96722676a4ec89fddaa5e7909ba64c26e7847f936c65162ae8a6a1e3",
+      "vorbis/src/ogg.rs": "96c2341161f16a42d7169d5e1299e6b6422735e62e864197bb8ddefd63b52ea8",
+      "vorbis/src/residue.rs": "e2bfea1ed6367542aaec54a04a3b63b30cc54dee18b6bc87b08fff51b932b7d6",
+      "vorbis/src/seek.rs": "18c35ef528a636c9fbcf7bb9be4d90bd7d52676c6d204ff29bf4b3e46bfe2142",
+      "vorbis/src/setup.rs": "58390adf7f4e30248cccce3cb142c53d14f980977ec58bb56cc09da07a0c02a6",
+      "vorbis/src/transform.rs": "da21daa675ab60e291ce770218db8b7a9fe0d0d0b143e6faf60fab2170ccf1e6"
+    }
+  },
+  "unit": "channel_samples",
+  "source_sha256": {
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "6c7302ec167e713b412464fda7b40970a4b4097e73683eb88665575b27f78eef",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "2481396cedcc2b56b4c9e0c5b81050285ea63302250c11cef4e28c9e1b66f822",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "a294f7b7851fd63b67cc18e3cf7aae0b0a45162ced5139f07623d3ee25c20993",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "da628fc86c7f66240045e0807de1ceb61eee9f1b58426feb63ec0464dec6cd38",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "2ea169ccb23a57ed15f676c5c1d9dacf84cd5c6dcc69711560f1b54ec7d7669e",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "2f316bd0102940d77666fd770eaba0a675332af78369a8eb538082675133016a",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "637f9a2e7dc064f57b12e91a1963c57fd338efa166b69e2018f3da209f9dba6b",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "a88f97d7effb1439db90455c2617ce5f2730a56feeea8ff51b1bdb2c5beb9fcd",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "90f270c7627c5944e171d8ef2325f6f9b8f1cc6a42bfa120e123123872b420f0",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "3e6a9a1c2046d71f7f7d9d195febdb7a59b8d49dc06a6001092194420fb7a1db",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "1780d259a1a73c883eaf5c53dec8dc4d7f66b8a7fd82a54beaa521ae942e81b3",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "5d479af544338dadb1ab99627b4fe1c2581c40e0cb41bc491c7b3ee1b1ab6c77",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "0b6bfd852a4c019d3e6755dc599c29a074eee2095f886dd4340dea079b8c3678",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "cf9d97a231095e94ccc789772ce0660c964ebef4c67de1ca3c2d75ee23750515",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "6e3a7dcc5e8d46e004bd73c7a36e326ccc42f5ca1bdb739737eb9455624b5c1f",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "0fe5153bc37e1f8eaced24447f3c66638fb95fe64c31e367638db719d2758574",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "a95e56f8c4110623a9fad2c4618c28f8f8d12d684f4ae87b59bd02112c01bd78",
+    "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "9c062fa9995065c2cd9f41acef5a519a10f36147b8013fc877e7a1675a0aa27f",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "0b2d0e2e36d2203b42f4e54afcfdb6389a2326f9a6153959e86465721dd7b749",
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "crates/deadlib-audio/decode/vorbis/Cargo.toml": "bab1d2433d82582c7a83eff52bf3eb3e774ddea5908e17aebb7ab970d907d510",
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "5a74a0204c5095a1d67a6133c8dec2eca742c4106feb00b5eb58dc62107a2b31",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "timer": "Rust Instant / C++ steady_clock; resident input; no process/file-load time",
+  "io": "forward-only Read callbacks; full and startup uncapped, stream4096 capped at 4096 bytes/read",
+  "cargo_config": {
+    "target": {
+      "cfg(target_os = \"macos\")": {
+        "rustflags": [
+          "-L",
+          "native=/opt/homebrew/lib",
+          "-L",
+          "native=/opt/homebrew/opt/vulkan-loader/lib",
+          "-L",
+          "native=/usr/local/lib",
+          "-L",
+          "native=/usr/local/opt/vulkan-loader/lib"
+        ]
+      },
+      "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+        "rustflags": [
+          "-C",
+          "target-feature=+crt-static"
+        ]
+      }
+    },
+    "env": {
+      "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+    }
+  },
+  "post_timing_checks": {
+    "registry_artifact_sets_match": true,
+    "registry_packages": [
+      "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2",
+      "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+      "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+      "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34",
+      "registry+https://github.com/rust-lang/crates.io-index#num-complex@0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+      "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2",
+      "registry+https://github.com/rust-lang/crates.io-index#regex-lite@0.1.9",
+      "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.3",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-codec-vorbis@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-common@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-core@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-format-ogg@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-metadata@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia@0.6.1"
+    ],
+    "note": "Reconstructed from retained build logs after timing; subsequent runner versions enforce this before timing."
+  }
+}

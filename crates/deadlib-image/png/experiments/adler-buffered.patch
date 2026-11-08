@@ -1,0 +1,157 @@
+diff --git a/crates/deadlib-image/png/src/checksum.rs b/crates/deadlib-image/png/src/checksum.rs
+index b6b27d7e8..3da57f033 100644
+--- a/crates/deadlib-image/png/src/checksum.rs
++++ b/crates/deadlib-image/png/src/checksum.rs
+@@ -72,7 +72,7 @@ impl Crc32 {
+ 
+ pub(crate) fn adler32(input: &[u8]) -> u32 {
+     let mut checksum = Adler32::new();
+-    checksum.update(input);
++    checksum.update_bulk(input);
+     checksum.finish()
+ }
+ 
+@@ -94,6 +94,40 @@ impl Adler32 {
+             self.b %= 65521;
+         }
+     }
++    fn update_bulk(&mut self, input: &[u8]) {
++        for block in input.chunks(5552) {
++            let tail = if block.len() >= 64 {
++                let (groups, tail) = block.as_chunks::<16>();
++                let mut sums = [0u32; 16];
++                let mut prefixes = [0u32; 16];
++                for bytes in groups {
++                    for lane in 0..16 {
++                        sums[lane] += u32::from(bytes[lane]);
++                        prefixes[lane] += sums[lane];
++                    }
++                }
++                // Each lane advances independently, allowing compiler SIMD.
++                // For M groups, byte (g, i) contributes 16*(M-g)-i to b.
++                // Reduce each nonnegative lane contribution before adding it:
++                // Adding the full prefix total before subtracting lane offsets
++                // can overflow the initial-state bound at 5552 bytes.
++                self.b += self.a * (groups.len() * 16) as u32;
++                for lane in 0..16 {
++                    self.a += sums[lane];
++                    self.b += 16 * prefixes[lane] - lane as u32 * sums[lane];
++                }
++                tail
++            } else {
++                block
++            };
++            for &byte in tail {
++                self.a += u32::from(byte);
++                self.b += self.a;
++            }
++            self.a %= 65521;
++            self.b %= 65521;
++        }
++    }
+     pub(crate) fn finish(&self) -> u32 {
+         (self.b << 16) | self.a
+     }
+@@ -159,4 +193,102 @@ mod tests {
+             }
+         }
+     }
++
++    #[test]
++    fn adler_fragmentation_and_tail_lengths_match_scalar_oracle() {
++        fn oracle(input: &[u8], initial: (u32, u32)) -> u32 {
++            let (mut a, mut b) = (u64::from(initial.0), u64::from(initial.1));
++            for &byte in input {
++                a = (a + u64::from(byte)) % 65521;
++                b = (b + a) % 65521;
++            }
++            ((b << 16) | a) as u32
++        }
++        let lengths = (0..=129).chain([
++            255, 256, 257, 511, 512, 513, 5551, 5552, 5553, 11103, 11104, 11105, 16656,
++        ]);
++        for len in lengths {
++            for pattern in 0..4 {
++                let mut random = 0x517c_c1b7u32;
++                let bytes: Vec<_> = (0..len)
++                    .map(|index| match pattern {
++                        0 => 255,
++                        1 => index as u8,
++                        2 => {
++                            if index % 2 == 0 {
++                                0
++                            } else {
++                                255
++                            }
++                        }
++                        _ => {
++                            random ^= random << 13;
++                            random ^= random >> 17;
++                            random ^= random << 5;
++                            random as u8
++                        }
++                    })
++                    .collect();
++                for initial in [(1, 0), (65520, 65520)] {
++                    let expected = oracle(&bytes, initial);
++                    for fragment in [
++                        1, 7, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 5551, 5552, 5553,
++                    ] {
++                        let mut actual = Adler32 {
++                            a: initial.0,
++                            b: initial.1,
++                        };
++                        let mut bulk = Adler32 {
++                            a: initial.0,
++                            b: initial.1,
++                        };
++                        actual.update(&[]);
++                        bulk.update_bulk(&[]);
++                        for part in bytes.chunks(fragment) {
++                            actual.update(part);
++                            actual.update(&[]);
++                            bulk.update_bulk(part);
++                            bulk.update_bulk(&[]);
++                        }
++                        assert_eq!(
++                            actual.finish(),
++                            expected,
++                            "len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
++                        );
++                        assert_eq!(
++                            bulk.finish(),
++                            expected,
++                            "bulk len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
++                        );
++                    }
++                    if len <= 129 {
++                        for split in 0..=len {
++                            let mut actual = Adler32 {
++                                a: initial.0,
++                                b: initial.1,
++                            };
++                            let mut bulk = Adler32 {
++                                a: initial.0,
++                                b: initial.1,
++                            };
++                            actual.update(&bytes[..split]);
++                            actual.update(&bytes[split..]);
++                            bulk.update_bulk(&bytes[..split]);
++                            bulk.update_bulk(&bytes[split..]);
++                            assert_eq!(
++                                actual.finish(),
++                                expected,
++                                "len={len} pattern={pattern} split={split}"
++                            );
++                            assert_eq!(
++                                bulk.finish(),
++                                expected,
++                                "bulk len={len} pattern={pattern} split={split}"
++                            );
++                        }
++                    }
++                }
++            }
++        }
++    }
+ }

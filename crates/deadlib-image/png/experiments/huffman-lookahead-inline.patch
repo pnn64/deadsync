@@ -1,0 +1,54 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..77dd3f4db 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -45,7 +45,7 @@ impl<'a> Bits<'a> {
+             self.count += 8;
+         }
+     }
+-    fn fill_huffman(&mut self, n: u8) {
++    fn fill_huffman(&mut self, n: u8) -> bool {
+         // Only Huffman lookahead may refill this widely. Fast lookahead starts
+         // with at most 8 bits; a slow miss starts with at most 14 and consumes
+         // at least 10. After EOB and alignment, at most four bytes remain: the
+@@ -57,10 +57,12 @@ impl<'a> Bits<'a> {
+                 self.word |= u64::from(u32::from_le_bytes(bytes)) << self.count;
+                 self.pos += 4;
+                 self.count += 32;
++                return true;
+             } else {
+                 self.fill(n);
+             }
+         }
++        self.count >= n
+     }
+     fn read(&mut self, n: u8) -> Result<u32, Error> {
+         self.fill(n);
+@@ -155,9 +157,25 @@ impl Huffman {
+     }
+     // A small primary lookup can inline at symbol call sites; keep the
+     // canonical long-code and error paths in a separate function.
+-    #[inline]
++    #[inline(always)]
+     fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+-        bits.fill_huffman(9);
++        if !bits.fill_huffman(9) {
++            return self.decode_partial(bits);
++        }
++        let entry = self.fast[(bits.word & 511) as usize];
++        if entry != 0 {
++            let n = (entry & 15) as u8;
++            bits.word >>= n;
++            bits.count -= n;
++            return Ok((entry >> 4) as usize);
++        }
++        self.decode_slow(bits)
++    }
++
++    // A partial input slice can still hold a complete short code. Keep its
++    // length check off the full-lookahead path without requiring more input.
++    #[inline(never)]
++    fn decode_partial(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+         let entry = self.fast[(bits.word & 511) as usize];
+         let n = (entry & 15) as u8;
+         if n != 0 && n <= bits.count {

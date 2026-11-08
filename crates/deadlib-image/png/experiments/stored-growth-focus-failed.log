@@ -1,0 +1,13 @@
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\stored-growth-focus-baseline-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-row-reuse-trial\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-a", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-focus-before-a", "-Iterations", "4096", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-stored-growth-focus-before-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-stored-growth-focus-before-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-stored-growth-focus-before-a-run3.tsv
+Add-Member : Cannot add a member with the name "control_of" because a member with that name already exists. To 
+overwrite the member anyway, add the Force parameter to your command.
+At C:\GitHub\deadsync\crates\deadlib-image\png\scripts\benchmark_saved.ps1:77 char:13
++ $evidence | Add-Member -NotePropertyName control_of -NotePropertyValu ...
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (@{target=decode...ived template.}:PSObject) [Add-Member], InvalidOper 
+   ationException
+    + FullyQualifiedErrorId : MemberAlreadyExists,Microsoft.PowerShell.Commands.AddMemberCommand
+ 

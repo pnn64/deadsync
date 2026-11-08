@@ -1,0 +1,19 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 14.38s
+     Running tests\residue_tails.rs (target\release\deps\residue_tails-7823a9be53edf029.exe)
+
+running 1 test
+
+thread 'reference_accepts_partial_partitions_and_inverted_ranges' (40704) panicked at crates\deadlib-audio\decode\vorbis\tests\residue_tails.rs:56:5:
+reference accepted but native rejected: [(0, (1, 60, 5), Invalid("residue partition is not a codebook dimension multiple")), (0, (7, 3, 12), Invalid("residue range")), (1, (1, 60, 5), Invalid("residue partition is not a codebook dimension multiple")), (1, (7, 3, 12), Invalid("residue range")), (2, (1, 60, 5), Invalid("residue partition is not a codebook dimension multiple")), (2, (7, 3, 12), Invalid("residue range"))]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test reference_accepts_partial_partitions_and_inverted_ranges ... FAILED
+
+failures:
+
+failures:
+    reference_accepts_partial_partitions_and_inverted_ranges
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test residue_tails`

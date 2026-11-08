@@ -152,12 +152,15 @@ pub const fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive
 /// results@{diff}` (then `results -> default`).
 #[must_use]
 pub fn results_role_candidates(grade: Grade, difficulty: Option<&str>) -> Vec<String> {
-    let mut suffixes = vec![grade.gif_suffix()];
-    if let Some(base) = grade.gif_base() {
-        suffixes.push(base.gif_suffix());
-    }
-    let mut out = Vec::with_capacity(2 * suffixes.len() + 1);
-    for suffix in suffixes {
+    let base = grade.gif_base();
+    let mut out = Vec::with_capacity(if base.is_some() { 5 } else { 3 });
+    for suffix in [
+        Some(grade.gif_suffix()),
+        base.map(|grade| grade.gif_suffix()),
+    ]
+    .into_iter()
+    .flatten()
+    {
         if let Some(diff) = difficulty {
             out.push(format!("results@{diff}@{suffix}"));
         }

@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "+nightly",
+    "miri",
+    "test",
+    "--manifest-path",
+    "target\\audio-sola\\miri-compact\\Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "pcm_transition_and_rejection_boundaries",
+    "--",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\miri-compact-target",
+    "MIRIFLAGS": "-Zmiri-tree-borrows"
+  },
+  "exit_code": 0,
+  "stdout": "\nrunning 1 test\ntest stretch::compact_miri::pcm_transition_and_rejection_boundaries ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 10.06s\n\n",
+  "stderr": "   Compiling sola-compact-safety v0.0.0 (C:\\GitHub\\deadsync\\target\\audio-sola\\miri-compact)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.59s\n     Running unittests harness.rs (target\\audio-sola\\miri-compact-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-compact-safety/5615dd04c137e426\\out\\sola_compact_safety-5615dd04c137e426)\n",
+  "elapsed_seconds": 28.50193130003754,
+  "source_sha256": "229b4826d200e143114c86b7366d04163377e0f2b544d47e70597e37e814ac9a",
+  "test_source": "\n#[cfg(test)]\nmod compact_miri {\n    use super::*;\n    #[test]\n    fn pcm_transition_and_rejection_boundaries() {\n        for len in [0usize, 1, 7, 8, 9, 255, 256, 257, 264, 265, 272, 273] {\n            let mut frames = vec![i16::MAX; len];\n            let pattern = vec![i16::MIN; len];\n            frames[..len.min(256)].fill(30_720);\n            for best in [0.0, I16_SCALE, 496.0 - I16_SCALE, 496.0, 496.0 + I16_SCALE, 512.0, 512.0 + 2.0 * I16_SCALE, f32::INFINITY] {\n                let mut expected=0.0f32;\n                for (index, (&a,&b)) in frames.iter().zip(&pattern).enumerate() {\n                    expected += (f32::from(a) * I16_SCALE - f32::from(b) * I16_SCALE).abs();\n                    if (index + 1) % 8 == 0 && expected >= best { break; }\n                }\n                assert_eq!(correlation_score(&frames,&pattern,best).to_bits(),expected.to_bits(),\"len={len} best={best}\");\n            }\n        }\n    }\n}\n",
+  "relocation": "Only the test-module path is made absolute; compact test is appended after the byte-for-byte decoded source.",
+  "interpreted_source_sha256": "92e348adcd6ae3fce291255c348074f64febd04ebdd896fc835ed70a786a194c"
+}

@@ -6,8 +6,10 @@ pub mod cache;
 pub mod changes;
 pub mod course;
 pub mod event_intro;
+pub mod golf;
 pub mod matrix;
 pub mod media;
+mod partner_charts;
 pub mod playlist;
 pub mod runtime;
 pub mod runtime_cache;
@@ -21,10 +23,11 @@ pub mod tags;
 pub mod timing;
 
 #[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
+mod metadata_perf;
 
 #[cfg(test)]
-#[path = "../tests/perf/processing.rs"]
-mod processing_perf;
+use metadata_perf as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;

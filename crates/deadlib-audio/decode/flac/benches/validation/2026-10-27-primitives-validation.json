@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-27",
+  "integration_and_external_gates": 41,
+  "doctests": 3,
+  "failures": 0,
+  "clippy": "passed --all-targets -- -D warnings",
+  "ASan_executions": 54689,
+  "ASan_targets": 4,
+  "command": "cargo test -p deadlib-audio-decode-flac --target-dir target/deadlib-flac --release -- --include-ignored --test-threads=1",
+  "source_and_report_sha256": {
+    "src\\bitstream.rs": "80e78a1529827105af8d9e589b9ec6f3ea7b0de649d353dec416f1851f0642ed",
+    "src\\checksum.rs": "637a38e891604ba0057eda6fb6c86d26d93ccee702ec509d2af6658085c5192b",
+    "src\\encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src\\encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src\\frame.rs": "2f57e300e8e61e7d57cb89a0587263c08153977258793714202f388e18119be6",
+    "src\\lib.rs": "7ce54346d29f7646d35dbe6e4fbe2050bfc402020ae037534ece0607836d71a5",
+    "src\\metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src\\native.rs": "31ba12718a3e997ea08629f1d8e66b4b1dfeff7fb16864649a4d336672b86b59",
+    "src\\ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src\\ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src\\ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "tests\\primitives.rs": "2484a0ee0cf28086d33da9fb6cbb84d5f641f0809c93e518628593fb40fd82e3",
+    "validation\\native-corpus.tsv": "31c4455882665732451a09f86114762531cc00c5daa7cbf571d94c5adf3d8621",
+    "validation\\native-seeking.tsv": "714daf191488ffe585da6a92d05bfd74c5c7af8de6e6c0430a262013383a92df",
+    "validation\\ogg-corpus.tsv": "5704b9bfef0c7d7b31ff55aa827d8282add4cfe3719dad3da857150d8ea2d70b",
+    "validation\\encoding-matrix.tsv": "1854f9436a790e41eec3afd871def268900e360f0f326fe063795fcd415880d8",
+    "validation\\ogg-matrix.tsv": "b74830ae1262224049bff6d77a280801d2c3aae6e2094b878843f484f260c76e",
+    "validation\\ffmpeg-corpus.tsv": "a77abfb93be9337a1c72965d54466ed7d588fa4459daa3b6d0595a9593442a6b",
+    "validation\\wire-parity.tsv": "5378f109adf366e0edae1ffd42ead3e51c2cb4bf455d6ad94b74c2de57c58195",
+    "validation\\fuzz-frame-parity.tsv": "37c13094de6cfb2bab216d95c8ea3bd5b690835cfe3e89eefa6db537168bdbbb"
+  }
+}

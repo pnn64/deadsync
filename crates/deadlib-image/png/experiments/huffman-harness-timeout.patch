@@ -1,0 +1,50 @@
+diff --git a/crates/deadlib-image/png/fuzz/fuzz_targets/huffman.rs b/crates/deadlib-image/png/fuzz/fuzz_targets/huffman.rs
+index 508ef134c..eaa65f03f 100644
+--- a/crates/deadlib-image/png/fuzz/fuzz_targets/huffman.rs
++++ b/crates/deadlib-image/png/fuzz/fuzz_targets/huffman.rs
+@@ -33,7 +33,7 @@ fuzz_target!(|data: &[u8]| {
+         bytes.extend_from_slice(b"unused suffix");
+     }
+     let limit = if control & 8 == 0 {
+-        case.output.as_ref().map_or(4096, |v| v.len().max(4096))
++        1 << 20
+     } else {
+         case.output
+             .as_ref()
+@@ -67,17 +67,12 @@ fuzz_target!(|data: &[u8]| {
+     assert!(memory < 40 * 1024);
+     let mut offset = 0;
+     let mut actual = Vec::new();
+-    let mut output = [0xa5; 4097];
+-    let mut previous_written = 0;
++    let mut output = [0xa5; 4096];
+     // Every nonterminal call must advance an input or output byte. The extra
+     // allowance covers a terminal call and explicit zero-progress assertions.
+     for _ in 0..bytes.len() + limit + 2 {
+         let end = bytes.len().min(offset + input_chunk);
+-        // Reset only bytes the last call wrote. Scanning a full 4 KiB buffer
+-        // for every one-byte input fragment made the harness itself time out.
+-        // Full untouched-tail checks remain in deterministic streaming tests;
+-        // this target checks both tail edges and the byte beyond the slice.
+-        output[..previous_written].fill(0xa5);
++        output.fill(0xa5);
+         let progress = match inflater.process(&bytes[offset..end], &mut output[..output_chunk]) {
+             Ok(p) => p,
+             Err(error) => {
+@@ -89,15 +84,7 @@ fuzz_target!(|data: &[u8]| {
+         };
+         assert_eq!(inflater.working_memory_bytes(), memory);
+         assert!(progress.consumed <= end - offset && progress.written <= output_chunk);
+-        let tail_end = (progress.written + 16).min(output_chunk + 1);
+-        assert!(
+-            output[progress.written..tail_end]
+-                .iter()
+-                .all(|&b| b == 0xa5)
+-        );
+-        let tail_start = progress.written.max(output_chunk.saturating_sub(16));
+-        assert!(output[tail_start..=output_chunk].iter().all(|&b| b == 0xa5));
+-        previous_written = progress.written;
++        assert!(output[progress.written..].iter().all(|&b| b == 0xa5));
+         offset += progress.consumed;
+         actual.extend_from_slice(&output[..progress.written]);
+         assert!(actual.len() <= limit);

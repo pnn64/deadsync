@@ -20,15 +20,6 @@ const CAB_P1_START: u8 = 4;
 const CAB_P2_START: u8 = 5;
 const CAB_BASS: u8 = 6;
 
-const PAD_P1_UP: u8 = 0;
-const PAD_P1_DOWN: u8 = 1;
-const PAD_P1_LEFT: u8 = 2;
-const PAD_P1_RIGHT: u8 = 3;
-const PAD_P2_UP: u8 = 4;
-const PAD_P2_DOWN: u8 = 5;
-const PAD_P2_LEFT: u8 = 6;
-const PAD_P2_RIGHT: u8 = 7;
-
 pub struct Driver {
     api: Option<HidApi>,
     device: Option<HidDevice>,
@@ -176,48 +167,10 @@ const fn build_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
 }
 
 const fn build_pad_report(state: &State) -> [u8; REPORT_SIZE] {
-    let mut bits = 0u8;
-    set_bit(
-        &mut bits,
-        PAD_P1_UP,
-        state.button(Player::P1, ButtonLight::Up),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P1_DOWN,
-        state.button(Player::P1, ButtonLight::Down),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P1_LEFT,
-        state.button(Player::P1, ButtonLight::Left),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P1_RIGHT,
-        state.button(Player::P1, ButtonLight::Right),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P2_UP,
-        state.button(Player::P2, ButtonLight::Up),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P2_DOWN,
-        state.button(Player::P2, ButtonLight::Down),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P2_LEFT,
-        state.button(Player::P2, ButtonLight::Left),
-    );
-    set_bit(
-        &mut bits,
-        PAD_P2_RIGHT,
-        state.button(Player::P2, ButtonLight::Right),
-    );
-    [REPORT_ID, PAD_REPORT, bits]
+    // Both player bytes change L,D,U,R into U,D,L,R; only four bits participate.
+    let pads = u16::from_le_bytes(state.buttons);
+    let pads = (pads & 0x0a0a) | ((pads & 0x0101) << 2) | ((pads & 0x0404) >> 2);
+    [REPORT_ID, PAD_REPORT, (pads | (pads >> 4)) as u8]
 }
 
 const fn set_bit(bits: &mut u8, bit: u8, on: bool) {
@@ -229,6 +182,9 @@ const fn set_bit(bits: &mut u8, bit: u8, on: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const PAD_P1_LEFT: u8 = 2;
+    const PAD_P2_DOWN: u8 = 5;
 
     #[test]
     fn reports_use_hid_blue_dot_bit_order() {
@@ -256,4 +212,18 @@ mod tests {
             ]
         );
     }
+}
+
+#[cfg(test)]
+pub(super) const fn performance_reports(state: &State) -> [[u8; REPORT_SIZE]; 2] {
+    [build_cabinet_report(state), build_pad_report(state)]
+}
+
+#[cfg(test)]
+pub(super) const fn performance_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
+    build_cabinet_report(state)
+}
+#[cfg(test)]
+pub(super) const fn performance_pad_report(state: &State) -> [u8; REPORT_SIZE] {
+    build_pad_report(state)
 }

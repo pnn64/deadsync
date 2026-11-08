@@ -1,0 +1,61 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 29.87s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 10 tests
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test checksum::tests::known_checksums ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\deflate_prefix.rs (target\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+
+     Running tests\huffman.rs (target\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.91s
+
+     Running tests\inflate_stream.rs (target\release\deps\inflate_stream-728da3b48ec71039.exe)
+
+running 3 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 5 tests
+test c_zlib_header_and_history_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.77s

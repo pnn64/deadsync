@@ -366,8 +366,8 @@ impl InstalledPack {
                 overrides.push((target, self.root.join(&swap.source).canonicalize()?));
             }
         }
-        metrics.merge_missing_from(
-            &IniData::parse_file(&base.join("metrics.ini")).map_err(Error::Invalid)?,
+        metrics.merge_missing_owned(
+            IniData::parse_file(&base.join("metrics.ini")).map_err(Error::Invalid)?,
         );
         let fallback = metrics
             .get("global", "fallbacknoteskin")
@@ -479,7 +479,3 @@ pub fn discover(roots: &[PathBuf]) -> Vec<InstalledPack> {
     }
     found
 }
-
-#[cfg(test)]
-#[path = "../tests/pack_preparation/mod.rs"]
-mod pack_preparation;

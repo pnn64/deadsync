@@ -1,0 +1,29 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..b91391d94 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -306,6 +306,24 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                             reserve(&mut output, 1)?;
+                         }
+                         output.push(literal as u8);
++                        let mut room = (limit - output.len()).min(output.capacity() - output.len());
++                        let mut word = bits.word;
++                        let mut count = bits.count;
++                        // Append complete primary literals from prefetched
++                        // bits, without a refill or capacity growth here.
++                        while room != 0 && count >= 9 {
++                            let entry = lit.fast[(word & 511) as usize];
++                            if !(1..4096).contains(&entry) {
++                                break;
++                            }
++                            let n = (entry & 15) as u8;
++                            output.push((entry >> 4) as u8);
++                            word >>= n;
++                            count -= n;
++                            room -= 1;
++                        }
++                        bits.word = word;
++                        bits.count = count;
+                     }
+                     256 => break,
+                     symbol @ 257..=285 => {

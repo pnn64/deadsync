@@ -9,6 +9,7 @@ fn geometry(x: f32, count: usize, cache_key: u64) -> TexturedMeshGeometry {
     TexturedMeshGeometry {
         vertices: TexturedMeshVertices::Shared(Arc::from(vec![
             TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [x, 0.0, 0.0],
                 ..TexturedMeshVertex::default()
             };

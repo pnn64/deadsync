@@ -1,0 +1,20 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 0dfa6fe2e..d71cfa56c 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -373,7 +373,14 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             if len > limit.saturating_sub(output.len()) {
+                 return Err(Error::LimitExceeded);
+             }
+-            reserve_output(&mut output, len, limit)?;
++            // A nonfinal stored block can amortize the next payload's growth.
++            let additional = if last {
++                len
++            } else {
++                len.saturating_mul(2)
++                    .min(limit.saturating_sub(output.len()))
++            };
++            reserve_output(&mut output, additional, limit)?;
+             // Drain bytes prefetched by a preceding Huffman block, then copy
+             // the byte-aligned payload directly without bit-reader dispatch.
+             let mut left = len;

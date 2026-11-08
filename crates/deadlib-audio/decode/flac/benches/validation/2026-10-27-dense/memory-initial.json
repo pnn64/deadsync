@@ -1,0 +1,958 @@
+[
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "frames",
+    "phases": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        652229
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        652549
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        652549
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "frames",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "stream",
+    "phases": [
+      [
+        0,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652229
+      ],
+      [
+        1,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652549
+      ],
+      [
+        2,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652549
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "stream",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "stream-md5",
+    "phases": [
+      [
+        0,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652233
+      ],
+      [
+        1,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652553
+      ],
+      [
+        2,
+        10,
+        5,
+        5,
+        131578,
+        122992,
+        0,
+        652553
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "stream-md5",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "symphonia-new-crc",
+    "phases": [
+      [
+        0,
+        211,
+        119,
+        89,
+        1749266,
+        119004,
+        2900,
+        652240
+      ],
+      [
+        1,
+        208,
+        119,
+        89,
+        1746366,
+        116104,
+        0,
+        655460
+      ],
+      [
+        2,
+        208,
+        119,
+        89,
+        1746366,
+        116104,
+        0,
+        655460
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "symphonia-new-crc",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "ogg-stream",
+    "phases": [
+      [
+        0,
+        19,
+        9,
+        10,
+        156733,
+        138698,
+        0,
+        1205545
+      ],
+      [
+        1,
+        19,
+        9,
+        10,
+        156733,
+        138698,
+        0,
+        1205865
+      ],
+      [
+        2,
+        19,
+        9,
+        10,
+        156733,
+        138698,
+        0,
+        1205865
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "ogg-stream",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "symphonia-new-ogg-crc",
+    "phases": [
+      [
+        0,
+        107,
+        1,
+        103,
+        812386,
+        203660,
+        2900,
+        1205556
+      ],
+      [
+        1,
+        104,
+        1,
+        103,
+        809486,
+        200760,
+        0,
+        1208776
+      ],
+      [
+        2,
+        104,
+        1,
+        103,
+        809486,
+        200760,
+        0,
+        1208776
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "symphonia-new-ogg-crc",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "libflac-frames",
+    "phases": [
+      [
+        0,
+        8,
+        4,
+        0,
+        66592,
+        66592,
+        66592,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-frames",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "/tmp/deadlib-flac-memory-pilot/01.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "libflac-new",
+    "phases": [
+      [
+        0,
+        15,
+        5,
+        15,
+        84600,
+        84600,
+        0,
+        0
+      ],
+      [
+        1,
+        15,
+        5,
+        15,
+        84600,
+        84600,
+        0,
+        0
+      ],
+      [
+        2,
+        15,
+        5,
+        15,
+        84600,
+        84600,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "/tmp/deadlib-flac-memory-pilot/01.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "libflac-new-md5",
+    "phases": [
+      [
+        0,
+        16,
+        6,
+        16,
+        100984,
+        100984,
+        0,
+        0
+      ],
+      [
+        1,
+        16,
+        6,
+        16,
+        100984,
+        100984,
+        0,
+        0
+      ],
+      [
+        2,
+        16,
+        6,
+        16,
+        100984,
+        100984,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new-md5",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "/tmp/deadlib-flac-memory-pilot/01.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "ffmpeg",
+    "phases": [
+      [
+        0,
+        238,
+        0,
+        234,
+        34752,
+        17024,
+        6368,
+        0
+      ],
+      [
+        1,
+        238,
+        0,
+        234,
+        34752,
+        17024,
+        6368,
+        0
+      ],
+      [
+        2,
+        238,
+        0,
+        234,
+        34752,
+        17024,
+        6368,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "ffmpeg",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+      "/tmp/deadlib-flac-memory-pilot/01.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "01 - blocksize 4096.flac",
+    "mode": "libflac-new-ogg",
+    "phases": [
+      [
+        0,
+        22,
+        7,
+        20,
+        171903,
+        139214,
+        0,
+        0
+      ],
+      [
+        1,
+        22,
+        7,
+        20,
+        171903,
+        139214,
+        0,
+        0
+      ],
+      [
+        2,
+        22,
+        7,
+        20,
+        171903,
+        139214,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new-ogg",
+      "/tmp/deadlib-flac-memory-pilot/01.oga",
+      "/tmp/deadlib-flac-memory-pilot/01.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "frames",
+    "phases": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        630743
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        631063
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        631063
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "frames",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "stream",
+    "phases": [
+      [
+        0,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        630743
+      ],
+      [
+        1,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        631063
+      ],
+      [
+        2,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        631063
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "stream",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "stream-md5",
+    "phases": [
+      [
+        0,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        630747
+      ],
+      [
+        1,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        631067
+      ],
+      [
+        2,
+        7,
+        2,
+        5,
+        401636,
+        401494,
+        0,
+        631067
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "stream-md5",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "symphonia-new-crc",
+    "phases": [
+      [
+        0,
+        298,
+        168,
+        127,
+        949408,
+        209692,
+        2900,
+        630754
+      ],
+      [
+        1,
+        295,
+        168,
+        127,
+        946508,
+        206792,
+        0,
+        633974
+      ],
+      [
+        2,
+        295,
+        168,
+        127,
+        946508,
+        206792,
+        0,
+        633974
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "symphonia-new-crc",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "ogg-stream",
+    "phases": [
+      [
+        0,
+        18,
+        8,
+        10,
+        453736,
+        420312,
+        0,
+        866019
+      ],
+      [
+        1,
+        18,
+        8,
+        10,
+        453736,
+        420312,
+        0,
+        866339
+      ],
+      [
+        2,
+        18,
+        8,
+        10,
+        453736,
+        420312,
+        0,
+        866339
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "ogg-stream",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "symphonia-new-ogg-crc",
+    "phases": [
+      [
+        0,
+        148,
+        5,
+        140,
+        596072,
+        298424,
+        2900,
+        866030
+      ],
+      [
+        1,
+        145,
+        5,
+        140,
+        593172,
+        295524,
+        0,
+        869250
+      ],
+      [
+        2,
+        145,
+        5,
+        140,
+        593172,
+        295524,
+        0,
+        869250
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-rust/release/deadlib-flac-allocation-probe",
+      "symphonia-new-ogg-crc",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "2"
+    ],
+    "binary_sha256": "104b2f7146f016179b43451b27e6285b776e8c47ba611f34d4722e746437296f"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "libflac-frames",
+    "phases": [
+      [
+        0,
+        32,
+        16,
+        0,
+        266368,
+        266368,
+        266368,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-frames",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "/tmp/deadlib-flac-memory-pilot/43.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "libflac-new",
+    "phases": [
+      [
+        0,
+        38,
+        16,
+        38,
+        284352,
+        284352,
+        0,
+        0
+      ],
+      [
+        1,
+        38,
+        16,
+        38,
+        284352,
+        284352,
+        0,
+        0
+      ],
+      [
+        2,
+        38,
+        16,
+        38,
+        284352,
+        284352,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "/tmp/deadlib-flac-memory-pilot/43.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "libflac-new-md5",
+    "phases": [
+      [
+        0,
+        39,
+        17,
+        39,
+        349888,
+        349888,
+        0,
+        0
+      ],
+      [
+        1,
+        39,
+        17,
+        39,
+        349888,
+        349888,
+        0,
+        0
+      ],
+      [
+        2,
+        39,
+        17,
+        39,
+        349888,
+        349888,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new-md5",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "/tmp/deadlib-flac-memory-pilot/43.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "ffmpeg",
+    "phases": [
+      [
+        0,
+        334,
+        0,
+        330,
+        87360,
+        66176,
+        4960,
+        0
+      ],
+      [
+        1,
+        334,
+        0,
+        330,
+        87360,
+        66176,
+        4960,
+        0
+      ],
+      [
+        2,
+        334,
+        0,
+        330,
+        87360,
+        66176,
+        4960,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "ffmpeg",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+      "/tmp/deadlib-flac-memory-pilot/43.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  },
+  {
+    "case": "43 - 8 channels (7.1).flac",
+    "mode": "libflac-new-ogg",
+    "phases": [
+      [
+        0,
+        44,
+        17,
+        43,
+        345865,
+        333577,
+        0,
+        0
+      ],
+      [
+        1,
+        44,
+        17,
+        43,
+        345865,
+        333577,
+        0,
+        0
+      ],
+      [
+        2,
+        44,
+        17,
+        43,
+        345865,
+        333577,
+        0,
+        0
+      ]
+    ],
+    "command": [
+      "/tmp/deadlib-flac-memory-cpp/flac_decode_allocations",
+      "libflac-new-ogg",
+      "/tmp/deadlib-flac-memory-pilot/43.oga",
+      "/tmp/deadlib-flac-memory-pilot/43.index",
+      "2"
+    ],
+    "binary_sha256": "8b89743426cc8506101928eb58c5af0af74eaa8558cda412d6a1c0b615145f6d"
+  }
+]

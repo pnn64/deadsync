@@ -1,0 +1,118 @@
+{
+  "started_utc": "2026-10-27T06:44:35.701283+00:00",
+  "git_head": "fe97c04b87f49bfd4d6d9d42e2f317ac665d79e0",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "source_sha256": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "aea47b432fbffc4f7e3716c9591c23f48b4753d393079a9c06c67ab876aef869",
+    "crates/deadlib-audio/decode/scripts/profile_codebooks.py": "e5a48a69db36d93f2f81561bbc3bf01b4feb441d04e5eea36e99875eb1e7595f",
+    "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "c3dc7aa93c6dbdd9b7ac3949a07d51329e3fadfa5881f296191c10fffeef3970",
+    "crates/deadlib-audio/decode/vorbis/Cargo.toml": "f43d8776a2408c8a6ac0bff98fac4e9141b2bcccf499ff9f0fa845c918337a9e",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "931e5a657aea91557fe87eda15f86970655374fefde091c92acbdedba2e8b9c3",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "2481396cedcc2b56b4c9e0c5b81050285ea63302250c11cef4e28c9e1b66f822",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "9b8fa6a26d4c05f462e0c20ccbadc2ce0a66be32ab18c57ddef9f5f8b33baa13",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "10e94d22ad6f48dff0e98d831056f805766789243447ab566d8c04cbfff4c203",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "344116e5da5dfeae02bad7ebe003681daef5573d068d94c95e7315a5891dba24",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "eb174f67a8c9de51d044b7709ea819bf10e3d8bddd731c307bc43a3fdfe39b90",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "47be6567edf7a2a324c29cde8eb5cd6afca6680fa79f390caeacdc479929a6a4"
+  },
+  "input_sha256": {
+    "target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0"
+  },
+  "binary_path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/target/release/deadlib-vorbis-codebook-probe.exe",
+  "binary_sha256": "f93fbc684707234d94d77764f1d85b4a6d7758bef3f3dcf22de70caf86400818",
+  "generated_sha256": {
+    "Cargo.toml": "073201a4c25f53a653c749aa54486872e75958671b4b1f5d5d53a906635d4331",
+    "profiled/Cargo.toml": "ef71cc5ce0a4379ef72a9c8c799602e15b3c23c1eb51409fd81b7738cdf5d174",
+    "src/main.rs": "c3dc7aa93c6dbdd9b7ac3949a07d51329e3fadfa5881f296191c10fffeef3970",
+    "profiled/src/bitpack.rs": "78317c5437373a5846975e5ee9064f4b0c8d0195013556ff3ca691742bd7bd5e",
+    "profiled/src/codebook.rs": "8af9494597a11a32b7da73247609f09643d12a9247f5f9af24c51af33aea2e36",
+    "profiled/src/decoder.rs": "9b8fa6a26d4c05f462e0c20ccbadc2ce0a66be32ab18c57ddef9f5f8b33baa13",
+    "profiled/src/encoder.rs": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "profiled/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "profiled/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "profiled/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "profiled/src/lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+    "profiled/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "profiled/src/residue.rs": "10e94d22ad6f48dff0e98d831056f805766789243447ab566d8c04cbfff4c203",
+    "profiled/src/seek.rs": "344116e5da5dfeae02bad7ebe003681daef5573d068d94c95e7315a5891dba24",
+    "profiled/src/setup.rs": "eb174f67a8c9de51d044b7709ea819bf10e3d8bddd731c307bc43a3fdfe39b90",
+    "profiled/src/transform.rs": "47be6567edf7a2a324c29cde8eb5cd6afca6680fa79f390caeacdc479929a6a4"
+  },
+  "profile_release": {
+    "opt-level": 3,
+    "overflow-checks": false,
+    "debug-assertions": false,
+    "lto": true,
+    "debug": 1,
+    "panic": "abort"
+  },
+  "cargo_artifact_profile": {
+    "opt_level": "3",
+    "debuginfo": 1,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": false
+  },
+  "allow_zero_span_granules": true,
+  "huffman_counter_order": [
+    "calls",
+    "singleton",
+    "prefix_leaf",
+    "prefix_continuation",
+    "short_lookahead",
+    "no_table",
+    "tree_edges",
+    "missing_prefix"
+  ],
+  "scope": "Counts only from a PCM-bit-checked instrumented full-crate copy. RefCell/Cell counters and frequency allocations perturb code layout, cost and memory; no timing or memory comparison. Setup role masks describe possible references, not per-call contexts. Hypothetical prefix coverage ignores packet-tail lookahead and table-size tradeoffs.",
+  "files": [
+    {
+      "path": "target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg",
+      "bit_exact": true,
+      "instrumentation_self_tests_passed": true,
+      "raw_channel_samples": 12525696,
+      "audio_packets": 6856,
+      "discarded_packets": 0,
+      "truncated_packets": 0,
+      "zero_span_granules": 1,
+      "books": 20,
+      "pcm_bits_fnv1a64": "9b338cf8edb03795"
+    }
+  ],
+  "completed_utc": "2026-10-27T06:44:37.791054+00:00",
+  "book_rows": 20,
+  "symbol_rows": 5729,
+  "source_input_binary_hashes_rechecked": true,
+  "role_bits": {
+    "floor_scalar": 1,
+    "floor_vector": 2,
+    "residue_classword": 4,
+    "residue_vector": 8
+  },
+  "worker_log_sha256": {
+    "worker-0.log": "af93c07edb6726f2c51150b0c29bd683bfcf7ad297627f24d09a84999a7f9e57"
+  },
+  "table_sha256": {
+    "books.tsv": "2035581df348f0420f97b1c87e8d4842bc928a0d5fe724e89aa999354e61aabb",
+    "symbols.tsv": "b641d4ce91924dacc9ff5f631243ab665bacbc2d7637ffdbca2e4890c6c11d1e",
+    "summary.tsv": "cd5238dc1ebdf02d4567f6cda7a8c22c46dd86bc577675d39002274193c283f9"
+  }
+}

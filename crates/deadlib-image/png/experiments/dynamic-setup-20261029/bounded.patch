@@ -1,0 +1,15 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index eb2fe440d..977ec851e 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -135,7 +135,9 @@ impl Huffman {
+         let mut code = 0;
+         let mut offset = 0;
+         let mut n = 1;
+-        while n < 16 {
++        // Beyond the longest code, unused slots only double `left`. Its sign
++        // and whether the tree is complete are already determined here.
++        while n <= h.max as usize {
+             left = left * 2 - h.counts[n] as i32;
+             if left < 0 {
+                 return Err("oversubscribed Huffman tree");

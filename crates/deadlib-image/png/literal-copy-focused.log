@@ -1,0 +1,84 @@
+COMMAND: ["rustfmt", "--edition", "2024", "--check", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\src\\zlib.rs"]
+COMMAND: ["cargo", "clippy", "-p", "deadlib-image", "-p", "deadlib-image-png", "--all-targets", "--", "-D", "warnings"]
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.41s
+COMMAND: ["cargo", "test", "-p", "deadlib-image-png", "--release", "--lib", "--test", "primary_pairs", "--test", "huffman", "--test", "inflate_stream", "--test", "deflate_prefix", "--test", "png_stream", "--test", "stream_literals", "--", "--nocapture"]
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 40.75s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 11 tests
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test checksum::tests::known_checksums ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\deflate_prefix.rs (target\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.23s
+
+     Running tests\huffman.rs (target\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.61s
+
+     Running tests\inflate_stream.rs (target\release\deps\inflate_stream-728da3b48ec71039.exe)
+
+running 3 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests\png_stream.rs (target\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\primary_pairs.rs (target\release\deps\primary_pairs-94e2582b21b93e9e.exe)
+
+running 2 tests
+test c_zlib_literal_pair_values_and_widths ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Primary literal audit: 65536 byte pairs plus 132 width/padding/long-code fixtures; independent flate2 and fragmented native samples, exact EOF/suffix consumption, output limits 0/1 and four trailer truncations
+test every_two_byte_value_and_short_code_width_keeps_samples_prefixes_and_limits ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.64s
+
+     Running tests\stream_literals.rs (target\release\deps\stream_literals-5ff2483d4ae64c6a.exe)
+
+running 2 tests
+test c_zlib_literal_runs_and_history_wraps ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Streaming literal audit: 172 independent fixed/dynamic streams; exact flate2/native bytes and prefixes; alternating zero-output calls, input/output 1/1, 7/31 and whole/257, history wraps, limits and four trailer truncations
+test literal_runs_history_wrap_pending_output_limits_and_trailer_fragments ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.61s

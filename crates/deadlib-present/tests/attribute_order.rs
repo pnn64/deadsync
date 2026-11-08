@@ -5,9 +5,6 @@ pub mod actors;
 pub mod anim;
 #[path = "../src/font.rs"]
 pub mod font;
-#[path = "../../../tests/support/perf.rs"]
-#[allow(dead_code)]
-mod perf;
 #[path = "../src/space.rs"]
 pub mod space;
 #[path = "../src/texture.rs"]
@@ -18,9 +15,5 @@ pub mod compose {
 
     mod attribute_order {
         include!("attribute_order/cases.rs");
-    }
-
-    mod attribute_expiry {
-        include!("attribute_expiry/cases.rs");
     }
 }

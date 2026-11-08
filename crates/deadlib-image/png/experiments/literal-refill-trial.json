@@ -1,0 +1,518 @@
+{
+  "baseline_png_commit": "b2b3a74583250f6a60ee220e689570f9521fafaf",
+  "driver_sha256": "1f2e897d3746d84340c7ccdacd329ca1c33f3e3959130865280d2f4fc4a13171",
+  "commands": [
+    {
+      "label": "Focused raw and PNG correctness",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build",
+        "--lib",
+        "--test",
+        "compression",
+        "--test",
+        "huffman",
+        "--test",
+        "huffman_permutations",
+        "--test",
+        "primary_pairs",
+        "--test",
+        "deflate_prefix",
+        "--test",
+        "deflate_stream",
+        "--test",
+        "zlib_headers",
+        "--test",
+        "stream_literals",
+        "--test",
+        "static_png",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 71.738
+    },
+    {
+      "label": "Strict candidate lint",
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 8.213
+    },
+    {
+      "label": "Scoped formatting",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\src\\zlib.rs"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.148
+    },
+    {
+      "label": "Timed before photos",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-photos-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 68.027
+    },
+    {
+      "label": "Timed before formats",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-formats-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-formats-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.82
+    },
+    {
+      "label": "Timed trial photos",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-photos-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-photos-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 69.702
+    },
+    {
+      "label": "Timed trial formats",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-formats-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-formats-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.765
+    },
+    {
+      "label": "Timed repeat photos",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-photos-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-photos-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 74.379
+    },
+    {
+      "label": "Timed repeat formats",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-formats-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-formats-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.675
+    },
+    {
+      "label": "Timed control photos",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-photos-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-photos-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 66.413
+    },
+    {
+      "label": "Timed control formats",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-formats-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-formats-a",
+        "-Iterations",
+        "12",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.749
+    },
+    {
+      "label": "Summarize photos",
+      "command": [
+        "python",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\summarize_decoder.py",
+        "--before",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-photos-a",
+        "--after",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-photos-a",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-photos-a",
+        "--output",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-photos-summary.json"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.264
+    },
+    {
+      "label": "Summarize formats",
+      "command": [
+        "python",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\summarize_decoder.py",
+        "--before",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-formats-a",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-formats-a",
+        "--after",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-formats-a",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-formats-a",
+        "--output",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-formats-summary.json"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.196
+    }
+  ],
+  "builds": [
+    {
+      "variant": "baseline",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--profile",
+        "bench",
+        "--example",
+        "decode_bench",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build",
+        "--message-format",
+        "json"
+      ],
+      "exit_code": 0,
+      "executable": "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+      "executable_sha256": "b38a7c5c4e8a980c843b31e9205972048dff63bfd76ca9ad8f8e88602a95d4d2",
+      "source_sha256": [
+        {
+          "path": "src/apng.rs",
+          "sha256": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+        },
+        {
+          "path": "src/checksum.rs",
+          "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+        },
+        {
+          "path": "src/codec.rs",
+          "sha256": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+        },
+        {
+          "path": "src/composite.rs",
+          "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+        },
+        {
+          "path": "src/metadata/language/registry.rs",
+          "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+        },
+        {
+          "path": "src/metadata/language.rs",
+          "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+        },
+        {
+          "path": "src/metadata/profile.rs",
+          "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+        },
+        {
+          "path": "src/metadata.rs",
+          "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+        },
+        {
+          "path": "src/reference.rs",
+          "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+        },
+        {
+          "path": "src/scanline.rs",
+          "sha256": "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+        },
+        {
+          "path": "src/stream/decode.rs",
+          "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+        },
+        {
+          "path": "src/stream/encode_rows.rs",
+          "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+        },
+        {
+          "path": "src/stream/mod.rs",
+          "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+        },
+        {
+          "path": "src/stream/read.rs",
+          "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+        },
+        {
+          "path": "src/stream/rows.rs",
+          "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+        },
+        {
+          "path": "src/stream/write.rs",
+          "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+        },
+        {
+          "path": "src/zlib/deflate.rs",
+          "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+        },
+        {
+          "path": "src/zlib/inflate.rs",
+          "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+        },
+        {
+          "path": "src/zlib/matcher.rs",
+          "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+        },
+        {
+          "path": "src/zlib.rs",
+          "sha256": "6f3f7d4a2f6406c7852f1b57a1f3d7c2983b2aa20da1a7c2fba5e37a18e2e315"
+        }
+      ],
+      "build_log": "experiments/literal-refill-baseline-build.log",
+      "build_log_sha256": "b70bfbc09589896a13789fccea17f9fa3f46f41f8a5f6bf207acdc5e5707cf34"
+    },
+    {
+      "variant": "candidate",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--profile",
+        "bench",
+        "--example",
+        "decode_bench",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build",
+        "--message-format",
+        "json"
+      ],
+      "exit_code": 0,
+      "executable": "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe",
+      "executable_sha256": "22d694f77a542170f8109a5459e0e5698e1819baa03e875cf6874fbc190006b9",
+      "source_sha256": [
+        {
+          "path": "src/apng.rs",
+          "sha256": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+        },
+        {
+          "path": "src/checksum.rs",
+          "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+        },
+        {
+          "path": "src/codec.rs",
+          "sha256": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+        },
+        {
+          "path": "src/composite.rs",
+          "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+        },
+        {
+          "path": "src/metadata/language/registry.rs",
+          "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+        },
+        {
+          "path": "src/metadata/language.rs",
+          "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+        },
+        {
+          "path": "src/metadata/profile.rs",
+          "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+        },
+        {
+          "path": "src/metadata.rs",
+          "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+        },
+        {
+          "path": "src/reference.rs",
+          "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+        },
+        {
+          "path": "src/scanline.rs",
+          "sha256": "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+        },
+        {
+          "path": "src/stream/decode.rs",
+          "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+        },
+        {
+          "path": "src/stream/encode_rows.rs",
+          "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+        },
+        {
+          "path": "src/stream/mod.rs",
+          "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+        },
+        {
+          "path": "src/stream/read.rs",
+          "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+        },
+        {
+          "path": "src/stream/rows.rs",
+          "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+        },
+        {
+          "path": "src/stream/write.rs",
+          "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+        },
+        {
+          "path": "src/zlib/deflate.rs",
+          "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+        },
+        {
+          "path": "src/zlib/inflate.rs",
+          "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+        },
+        {
+          "path": "src/zlib/matcher.rs",
+          "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+        },
+        {
+          "path": "src/zlib.rs",
+          "sha256": "3f5e4d3a120f560cff5dd6bafc055bb27b4aefd65675d694d9afca842073927f"
+        }
+      ],
+      "build_log": "experiments/literal-refill-candidate-build.log",
+      "build_log_sha256": "3ac895a33b2c978c13ac98271e0b1c8a8864f7d194833179aa82fbebc7ee3c01"
+    }
+  ],
+  "shared_source_sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3",
+  "workspace_manifest_sha256": "54a15b07883361bdea786c42c5922396b29954897372928296bdeeab980fbc05",
+  "workspace_lock_sha256": "dcad7d454dbd6fa8e46faae59141eac371ac219a5df9770372ae8197b2e13373",
+  "scope": "Buffered decoder literal-run refill experiment. All task builds and correctness checks finish before timed processes. External workload and frequency remain uncontrolled.",
+  "patch": "experiments/literal-refill.patch",
+  "patch_sha256": "e392ed9865d1af26a0905a29107bf9c007b25f99cde14aaa2e3500f874a9971d",
+  "all_production_source_restored": true,
+  "completed": true
+}

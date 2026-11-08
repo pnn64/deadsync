@@ -1,0 +1,42 @@
+{
+  "stage": "baseline",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-notefield-text-20261104\\baseline\\compiled.rs",
+    "-o",
+    "D:\\deadsync-notefield-text-20261104\\baseline\\text.exe"
+  ],
+  "baseline_revision": "d07a93399b50b163365fd957d4294b557603a529",
+  "sources": {
+    "crates/deadsync-notefield/src/display_mods.rs": "0dd5c7ea7d994dbed9fe578ad3c14c6b8cd20578119d9e9f5bb593d1995b45ab",
+    "crates/deadsync-notefield/src/text_performance.rs": "90bf4ad8f9cd996cd7ab3473cd1a78cf36abeecf2587b37c495c83e96d838822",
+    "crates/deadsync-notefield/src/text_original.rs": "19594ecccd775e7569b8d20847a920c3c7e25863b2f9133981da36d51288580e",
+    "crates/deadsync-rules/src/scroll.rs": "7c88f5ad1a5e3b84702d729867da3bbb4ad8bf2a788d0ef4979561425a5eda65",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_notefield_text.py": "c9bbcaa7e5f1eea1732e1e4dc3bd706b4bc6ef3d25b4940ba03d128e05b21bea"
+  },
+  "fragments": {
+    "module": "0dd5c7ea7d994dbed9fe578ad3c14c6b8cd20578119d9e9f5bb593d1995b45ab",
+    "speed": "94ef4c120e6548258a872f87370103e7caf94a2401b6bc50745331d7f4a2ee44"
+  },
+  "compiled_sha256": "9bbb188caf8dce54e3598f8d33a892a164c19e02d445ee252203749e635b9bd3",
+  "binary_sha256": "c8d54857a075a2d78bed60131cfceead1a999ce6c50a8e39ac0023273cd530c1",
+  "correctness_sha256": "67c4011ca0b19eba98b64e5657eb92fc39ba98f4e5017ac5fc81314007d7baa2",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 4,
+  "runs": 3,
+  "trace_sha256": "08c701711e35a4b741729e87ff1a46ad5850bd6aed46affca5387fa7a635cb02",
+  "trace_bytes": 4893111
+}

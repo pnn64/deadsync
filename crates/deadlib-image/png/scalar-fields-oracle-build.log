@@ -1,0 +1,89 @@
+-- Building for: Visual Studio 17 2022
+-- The C compiler identification is MSVC 19.44.35229.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of off64_t
+-- Check size of off64_t - failed
+-- Looking for fseeko
+-- Looking for fseeko - not found
+-- Looking for unistd.h
+-- Looking for unistd.h - not found
+-- The ASM compiler identification is MSVC
+CMake Warning (dev) at C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineASMCompiler.cmake:234 (message):
+  Policy CMP194 is not set: MSVC is not an assembler for language ASM.  Run
+  "cmake --help-policy CMP194" for policy details.  Use the cmake_policy
+  command to set the policy and suppress this warning.
+Call Stack (most recent call first):
+  C:/GitHub/deadsync/target/deadlib-image-reference/libpng/CMakeLists.txt:28 (project)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Found assembler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe
+CMake Deprecation Warning at C:/GitHub/deadsync/target/deadlib-image-reference/libpng/CMakeLists.txt:101 (message):
+  The option PNG_EXECUTABLES has been deprecated in favour of PNG_TOOLS
+
+
+-- Building for target architecture: amd64
+-- Found ZLIB: zlibstatic
+-- Performing Test HAVE_LD_VERSION_SCRIPT
+-- Performing Test HAVE_LD_VERSION_SCRIPT - Failed
+-- Performing Test HAVE_SOLARIS_LD_VERSION_SCRIPT
+-- Performing Test HAVE_SOLARIS_LD_VERSION_SCRIPT - Failed
+-- Could not find an AWK-compatible program
+-- Using standard libconf header: C:/GitHub/deadsync/target/deadlib-image-reference/libpng/scripts/pnglibconf.h.prebuilt
+-- Configuring done (14.8s)
+-- Generating done (0.3s)
+-- Build files have been written to: C:/GitHub/deadsync/target/deadlib-image-reference/oracle-scalar-fields-build
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-image-reference/libpng/CMakeLists.txt
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-image-reference/zlib/CMakeLists.txt
+  adler32.c
+  compress.c
+  crc32.c
+  deflate.c
+  gzclose.c
+  gzlib.c
+  gzread.c
+  gzwrite.c
+  inflate.c
+  infback.c
+  inftrees.c
+  inffast.c
+  trees.c
+  uncompr.c
+  zutil.c
+  Generating Code...
+  zlibstatic.vcxproj -> C:\GitHub\deadsync\target\deadlib-image-reference\oracle-scalar-fields-build\zlib\Release\zlibstatic.lib
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-image-reference/libpng/CMakeLists.txt
+  png.c
+  pngerror.c
+  pngget.c
+  pngmem.c
+  pngpread.c
+  pngread.c
+  pngrio.c
+  pngrtran.c
+  pngrutil.c
+  pngset.c
+  pngtrans.c
+  pngwio.c
+  pngwrite.c
+  pngwtran.c
+  pngwutil.c
+  intel_init.c
+  filter_sse2_intrinsics.c
+  Generating Code...
+  png_static.vcxproj -> C:\GitHub\deadsync\target\deadlib-image-reference\oracle-scalar-fields-build\libpng\Release\libpng16_static.lib
+  Building Custom Rule C:/GitHub/deadsync/crates/deadlib-image/png/tests/oracle/CMakeLists.txt
+  oracle.c
+  deadlib_png_oracle.vcxproj -> C:\GitHub\deadsync\target\deadlib-image-reference\oracle-scalar-fields-build\Release\deadlib_png_oracle.exe

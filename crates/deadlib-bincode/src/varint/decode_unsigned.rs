@@ -197,6 +197,7 @@ const fn invalid_varint_discriminant<T>(
     Err(DecodeError::InvalidIntegerType { expected, found })
 }
 
+#[inline]
 pub fn varint_decode_u16<R: Reader>(read: &mut R, endian: Endianness) -> Result<u16, DecodeError> {
     if let Some(bytes) = read.peek_read(3) {
         let (discriminant, bytes) = bytes.split_at(1);
@@ -223,6 +224,7 @@ pub fn varint_decode_u16<R: Reader>(read: &mut R, endian: Endianness) -> Result<
     }
 }
 
+#[inline]
 pub fn varint_decode_u32<R: Reader>(read: &mut R, endian: Endianness) -> Result<u32, DecodeError> {
     if let Some(bytes) = read.peek_read(5) {
         let (discriminant, bytes) = bytes.split_at(1);

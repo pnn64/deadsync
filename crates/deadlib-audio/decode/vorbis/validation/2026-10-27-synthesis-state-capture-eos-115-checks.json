@@ -1,0 +1,17 @@
+{
+  "scope": "Reference file output is byte-identical under tracing. Every direct-synthesis clock/queue transition matches its actual vorbisfile trace. All returned PCM chunks are byte-identical. Single logical stream only.",
+  "input_sha256": "2a8f35dfa8747a5c74e68688a61dda89107a3cac0bd9d0e4f2f992beeb6ba8c8",
+  "requests_sha256": "7f4496f8e070a8c6cdf33f4b7bafe09e556faae3993c798ae4f3379962fd6566",
+  "file_response_sha256": "89009d21a2052aafc3b4dade84f618afc704256cedd4445bb75f2ff95fd697e4",
+  "trace_sha256": "4b2ee99e0664a05bc126d1449842acdb89ed5b19c8f230ba2c336d7d98f74af3",
+  "synthesis_request_sha256": "37e81a7aec27e3fd3ff74555868debb2544937d405f77e465e88ad96864ff56d",
+  "synthesis_response_sha256": "2aad4ce034ccb03da9d369c822cbf8f9c9448b087f626245051d500567ba7400",
+  "reference_binary_sha256": "cf2b3f18dee1456ff741600f7cd3c7fc55b00635ae32d9dbac788aa610b15088",
+  "trace_binary_sha256": "7ffcb1d031431ac68bda1a101c4ce4ba0ef0253360070719a6a0b9271b31f991",
+  "operations": 8,
+  "accepted_packets": 3,
+  "busy": 0,
+  "read_chunks": 1,
+  "requests": 2,
+  "floor0": false
+}

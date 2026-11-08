@@ -1,0 +1,9 @@
+{
+  "report_sha256": "e4c9388ca54aa37f8c4a56dd0ee5d000e71a78f443d9b372294d54fd37804275",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "checked_reference_enabled": true,
+  "observations": 1063,
+  "pointer_bits": 32,
+  "wide_budget_baseline_preserved": true
+}

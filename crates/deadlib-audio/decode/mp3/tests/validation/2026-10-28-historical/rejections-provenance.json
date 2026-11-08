@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "files": 2,
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode": "508aff847d3b9c20f325ce62b2c007e395002fb58904a37035ebe26262a8e428",
+    "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final": "621c5342e2d0ec404f97c84623933c19492fee37ba15cbf363f153c2c542c8a7",
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/stream": "b4343b7ca6aa7e1058b8bd968e7903ca237f2fa6a7086f9388957d94344e2c3a"
+  },
+  "script_sha256": "76cb6b682042c0d35813afd13d38f276550c424b5c2383b33c37b0473866b9be",
+  "manifest_sha256": "38ee1705d4130087e75e65eff8af03ff1d9fb06487ad9e805e1208f76ddfb733"
+}

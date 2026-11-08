@@ -1,0 +1,165 @@
+{
+  "started_utc": "2026-10-27T06:46:25.606595+00:00",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-profile-checked-20261027\\Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "main-clippy.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-profile-floor0-checked-20261027\\Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "floor0-clippy.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "rustfmt",
+        "--check",
+        "--edition",
+        "2024",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\vorbis\\benches\\support\\codebook_profile.rs"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "syntax_and_unique_anchor_failure_checks": true,
+  "runs": [
+    {
+      "name": "main",
+      "folder": "codebook-profile-checked-20261027",
+      "manifest_sha256": "830f6d009a74a14dec7eed1321c058dde5cfecaad8ed24a95c8cb7323c19c350",
+      "source_input_generated_worker_table_binary_hashes_rechecked": true,
+      "instrumented_source_reconstructs_exactly": true
+    },
+    {
+      "name": "floor0",
+      "folder": "codebook-profile-floor0-checked-20261027",
+      "manifest_sha256": "f611a8222728a9133c2ceba4a1c9bb1abc597502d925b689338463bd9a92f197",
+      "source_input_generated_worker_table_binary_hashes_rechecked": true,
+      "instrumented_source_reconstructs_exactly": true
+    }
+  ],
+  "raw_channel_samples_bit_compared": 42738816,
+  "strict_original_floor0_rejected": {
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-profile-floor0-checked-20261027\\target\\release\\deadlib-vorbis-codebook-probe.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\corpus\\floor0\\vorbis_floor_type_0.ogg",
+      "0"
+    ],
+    "exit_code": 3221226505
+  },
+  "six_prior_synthesis_pcm_digests_and_counts_match": true,
+  "production_sources_unchanged_from_head": true,
+  "completed_utc": "2026-10-27T06:46:33.249703+00:00",
+  "scope": "Counts-only real-packet codebook profile; production source unchanged; no new production performance or sanitizer claim.",
+  "artifacts_sha256": {
+    "2026-10-27-codebooks-main-manifest.json": "830f6d009a74a14dec7eed1321c058dde5cfecaad8ed24a95c8cb7323c19c350",
+    "2026-10-27-codebooks-main-books.tsv": "327a567351b32943a04b069af80f29834310c4cb912ba8ecfffb9dfbd605b907",
+    "2026-10-27-codebooks-main-symbols.tsv": "ec200c478cc994cbe0e3e45da5ee50a0fecda2fcb669b58ebf397f8257bbb7c7",
+    "2026-10-27-codebooks-main-summary.tsv": "3fa12d48ba9040c70f30d5eae0ad534e340ed8813854d9a3b787a45619d9036d",
+    "2026-10-27-codebooks-main-build.log": "c3858d3ee3460ebc76d36c20656e2d01fbdc71385d28334a07b04d08315dc7dc",
+    "2026-10-27-codebooks-floor0-manifest.json": "f611a8222728a9133c2ceba4a1c9bb1abc597502d925b689338463bd9a92f197",
+    "2026-10-27-codebooks-floor0-books.tsv": "2035581df348f0420f97b1c87e8d4842bc928a0d5fe724e89aa999354e61aabb",
+    "2026-10-27-codebooks-floor0-symbols.tsv": "b641d4ce91924dacc9ff5f631243ab665bacbc2d7637ffdbca2e4890c6c11d1e",
+    "2026-10-27-codebooks-floor0-summary.tsv": "cd5238dc1ebdf02d4567f6cda7a8c22c46dd86bc577675d39002274193c283f9",
+    "2026-10-27-codebooks-floor0-build.log": "43dc9d4639c72d6011d012bc31ebebce796d051e9ae1212ccdd5f85b239640b8",
+    "2026-10-27-codebooks-main-clippy.log": "b4f4527284e54f476975ff9f68a214f7b93a49c2de96d499396f4a6f42d865b5",
+    "2026-10-27-codebooks-floor0-clippy.log": "7a10534296df1ec0de4d67427a0c74c3b08bed4581ea5e7fe8a8dea16c5af760",
+    "2026-10-27-codebooks-floor0-strict.log": "a684250255669a8250f81646b0bbad0ebdbbf4038d33465f08424bdf7fac48ef",
+    "2026-10-27-codebooks-validation-probe.py": "3f8385abca9ffd9077c6c035b9f3b4c274adb736dabfab85c0ff148cefe6c3cd"
+  },
+  "original_artifacts_before_normalization": {
+    "2026-10-27-codebooks-main-manifest.json": {
+      "path": "target/deadlib-audio-reference/codebook-profile-checked-20261027/manifest.json",
+      "sha256": "830f6d009a74a14dec7eed1321c058dde5cfecaad8ed24a95c8cb7323c19c350"
+    },
+    "2026-10-27-codebooks-main-books.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-checked-20261027/books.tsv",
+      "sha256": "327a567351b32943a04b069af80f29834310c4cb912ba8ecfffb9dfbd605b907"
+    },
+    "2026-10-27-codebooks-main-symbols.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-checked-20261027/symbols.tsv",
+      "sha256": "ec200c478cc994cbe0e3e45da5ee50a0fecda2fcb669b58ebf397f8257bbb7c7"
+    },
+    "2026-10-27-codebooks-main-summary.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-checked-20261027/summary.tsv",
+      "sha256": "3fa12d48ba9040c70f30d5eae0ad534e340ed8813854d9a3b787a45619d9036d"
+    },
+    "2026-10-27-codebooks-main-build.log": {
+      "path": "target/deadlib-audio-reference/codebook-profile-checked-20261027/build.log",
+      "sha256": "c3858d3ee3460ebc76d36c20656e2d01fbdc71385d28334a07b04d08315dc7dc"
+    },
+    "2026-10-27-codebooks-floor0-manifest.json": {
+      "path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/manifest.json",
+      "sha256": "f611a8222728a9133c2ceba4a1c9bb1abc597502d925b689338463bd9a92f197"
+    },
+    "2026-10-27-codebooks-floor0-books.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/books.tsv",
+      "sha256": "2035581df348f0420f97b1c87e8d4842bc928a0d5fe724e89aa999354e61aabb"
+    },
+    "2026-10-27-codebooks-floor0-symbols.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/symbols.tsv",
+      "sha256": "b641d4ce91924dacc9ff5f631243ab665bacbc2d7637ffdbca2e4890c6c11d1e"
+    },
+    "2026-10-27-codebooks-floor0-summary.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/summary.tsv",
+      "sha256": "cd5238dc1ebdf02d4567f6cda7a8c22c46dd86bc577675d39002274193c283f9"
+    },
+    "2026-10-27-codebooks-floor0-build.log": {
+      "path": "target/deadlib-audio-reference/codebook-profile-floor0-checked-20261027/build.log",
+      "sha256": "43dc9d4639c72d6011d012bc31ebebce796d051e9ae1212ccdd5f85b239640b8"
+    },
+    "2026-10-27-codebooks-main-clippy.log": {
+      "path": "target/deadlib-audio-reference/codebook-profile-validation-20261027/main-clippy.log",
+      "sha256": "b4f4527284e54f476975ff9f68a214f7b93a49c2de96d499396f4a6f42d865b5"
+    },
+    "2026-10-27-codebooks-floor0-clippy.log": {
+      "path": "target/deadlib-audio-reference/codebook-profile-validation-20261027/floor0-clippy.log",
+      "sha256": "7a10534296df1ec0de4d67427a0c74c3b08bed4581ea5e7fe8a8dea16c5af760"
+    },
+    "2026-10-27-codebooks-floor0-strict.log": {
+      "path": "target/deadlib-audio-reference/codebook-profile-validation-20261027/floor0-strict.log",
+      "sha256": "a684250255669a8250f81646b0bbad0ebdbbf4038d33465f08424bdf7fac48ef"
+    },
+    "2026-10-27-codebooks-validation-probe.py": {
+      "path": "target/deadlib-audio-reference/validate_codebook_profile.py",
+      "sha256": "3f8385abca9ffd9077c6c035b9f3b4c274adb736dabfab85c0ff148cefe6c3cd"
+    }
+  },
+  "retained_utc": "2026-10-27T06:51:00.833647+00:00"
+}

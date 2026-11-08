@@ -12,6 +12,23 @@ use deadsync_gameplay::{
 use deadsync_rules::note::HoldResult;
 use deadsync_theme::JudgmentFeedbackStyle;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TapJudgmentAnimation {
+    #[default]
+    Default,
+    Still,
+    Itg,
+}
+
+impl TapJudgmentAnimation {
+    const fn duration(self) -> f32 {
+        match self {
+            Self::Default | Self::Still => 0.9,
+            Self::Itg => 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TapJudgmentSprite {
     pub source: SpriteSource,
@@ -54,6 +71,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub tap_xy: [f32; 2],
     pub judgment_back: bool,
     pub judgment_zoom: f32,
+    pub judgment_animation: TapJudgmentAnimation,
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
     pub held_miss_sprite: Option<&'a IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
@@ -92,7 +110,8 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
-    let Some(zoom) = tap_judgment_zoom(elapsed, request.judgment_zoom) else {
+    let Some(zoom) = tap_judgment_zoom(elapsed, request.judgment_zoom, request.judgment_animation)
+    else {
         return;
     };
     let columns = sprite.frame_cols.max(1);
@@ -127,26 +146,33 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
     }
 }
 
-const TAP_JUDGMENT_DURATION_S: f32 = 0.9;
-
 /// Whether the most recent tap judgment is still inside its actor lifetime.
 #[inline]
-pub(crate) fn tap_judgment_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
-    (elapsed_screen - render.started_at_screen_s).max(0.0) < TAP_JUDGMENT_DURATION_S
+pub(crate) fn tap_judgment_active(
+    render: &JudgmentRenderInfo,
+    elapsed_screen: f32,
+    animation: TapJudgmentAnimation,
+) -> bool {
+    (elapsed_screen - render.started_at_screen_s).max(0.0) < animation.duration()
 }
 
-fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32) -> Option<f32> {
-    if elapsed >= TAP_JUDGMENT_DURATION_S {
+fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32, animation: TapJudgmentAnimation) -> Option<f32> {
+    if elapsed >= animation.duration() {
         return None;
     }
-    let zoom = if elapsed < 0.1 {
-        let t = elapsed / 0.1;
+    let (start_zoom, settle_duration, shrink_start) = match animation {
+        TapJudgmentAnimation::Default => (0.8, 0.1, 0.7),
+        TapJudgmentAnimation::Still => return Some(0.75 * zoom_mod),
+        TapJudgmentAnimation::Itg => (1.0, 0.2, 0.8),
+    };
+    let zoom = if elapsed < settle_duration {
+        let t = elapsed / settle_duration;
         let ease = (1.0 - t).mul_add(-(1.0 - t), 1.0);
-        (0.75_f32 - 0.8).mul_add(ease, 0.8)
-    } else if elapsed < 0.7 {
+        (0.75_f32 - start_zoom).mul_add(ease, start_zoom)
+    } else if elapsed < shrink_start {
         0.75
     } else {
-        let t = (elapsed - 0.7) / 0.2;
+        let t = (elapsed - shrink_start) / 0.2;
         0.75 * t.mul_add(-t, 1.0)
     };
     Some(zoom * zoom_mod)
@@ -183,6 +209,13 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
         .num_cols
         .min(MAX_COLS)
         .min(request.column_reverse_percent.len());
+    if (request.held_miss_sprite.is_none()
+        || !request.held_misses.iter().take(num_cols).any(Option::is_some))
+        && (request.hold_sprite.is_none()
+            || !request.hold_judgments.iter().take(num_cols).any(Option::is_some))
+    {
+        return;
+    }
     let mut fallback_offsets;
     let mut fallback_invert;
     let mut fallback_tornado;
@@ -216,7 +249,11 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 &fallback_offsets[..num_cols],
                 &fallback_invert[..num_cols],
                 &fallback_tornado[..num_cols],
-                beat_factor(request.current_beat),
+                beat_factor(
+                    request.current_beat,
+                    request.visual.beat_offset,
+                    request.visual.beat_mult,
+                ),
             )
         };
 
@@ -303,10 +340,42 @@ fn indicator_x(
         NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
+            drunk_offset: request.visual.drunk_offset,
+            drunk_speed: request.visual.drunk_speed,
+            drunk_period: request.visual.drunk_period,
+            cosecant: request.visual.cosecant,
+            bumpy_x: request.visual.bumpy_x,
+            bumpy_x_offset: request.visual.bumpy_x_offset,
+            bumpy_x_period: request.visual.bumpy_x_period,
+            tan_bumpy_x: request.visual.tan_bumpy_x,
+            tan_bumpy_x_offset: request.visual.tan_bumpy_x_offset,
+            tan_bumpy_x_period: request.visual.tan_bumpy_x_period,
+            tan_drunk: request.visual.tan_drunk,
+            tan_drunk_offset: request.visual.tan_drunk_offset,
+            tan_drunk_speed: request.visual.tan_drunk_speed,
+            tan_drunk_period: request.visual.tan_drunk_period,
             flip: request.visual.flip,
             invert: request.visual.invert,
             beat: request.visual.beat,
+            beat_period: request.visual.beat_period,
+            parabola_x: request.visual.parabola_x,
+            square: request.visual.square,
+            digital: request.visual.digital,
+            zigzag: request.visual.zigzag,
+            zigzag_offset: request.visual.zigzag_offset,
+            zigzag_period: request.visual.zigzag_period,
+            square_offset: request.visual.square_offset,
+            digital_offset: request.visual.digital_offset,
+            digital_steps: request.visual.digital_steps,
+            square_period: request.visual.square_period,
+            digital_period: request.visual.digital_period,
+            ..NoteXParams::default()
         },
         request.visual.tiny,
     )
@@ -357,15 +426,29 @@ fn append_sprite(
         flip_y: false,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg,
         z,
     }));
 }
 
+#[inline(always)]
 fn frame_uv(frame_index: u32, frame_cols: usize, frame_rows: usize) -> [f32; 4] {
     let cols = frame_cols.max(1) as u32;
     let rows = frame_rows.max(1) as u32;
+    if cols <= 2 && cols != 0 {
+        let (col, row, cell_width) = if cols == 1 {
+            (0, frame_index, 1.0)
+        } else {
+            (frame_index & 1, frame_index >> 1, 0.5)
+        };
+        let row = row.min(rows - 1);
+        let height = 1.0 / rows as f32;
+        let left = col as f32 * cell_width;
+        let top = row as f32 * height;
+        return [left, top, left + cell_width, top + height];
+    }
     let col = frame_index % cols;
     let row = (frame_index / cols).min(rows - 1);
     let cell = [1.0 / cols as f32, 1.0 / rows as f32];
@@ -465,6 +548,7 @@ mod tests {
             tap_xy: [320.0, 150.0],
             judgment_back: false,
             judgment_zoom: 1.0,
+            judgment_animation: TapJudgmentAnimation::Default,
             held_misses,
             held_miss_sprite: None,
             hold_judgments,
@@ -533,10 +617,106 @@ mod tests {
     #[test]
     fn tap_judgment_activity_matches_actor_lifetime_boundary() {
         let info = judgment_info(2.0);
-        assert!(tap_judgment_active(&info, 1.5));
-        assert!(tap_judgment_active(&info, 2.899));
-        assert!(!tap_judgment_active(&info, 2.9));
-        assert!(!tap_judgment_active(&info, 3.5));
+        for (animation, end) in [
+            (TapJudgmentAnimation::Default, 2.9),
+            (TapJudgmentAnimation::Still, 2.9),
+            (TapJudgmentAnimation::Itg, 3.0),
+        ] {
+            assert!(tap_judgment_active(&info, 1.5, animation));
+            assert!(tap_judgment_active(&info, end - 0.001, animation));
+            assert!(!tap_judgment_active(&info, end, animation));
+            assert!(!tap_judgment_active(&info, 3.5, animation));
+        }
+    }
+
+    #[test]
+    fn tap_judgment_animation_matches_arrow_cloud_tweens() {
+        for (animation, samples) in [
+            (
+                TapJudgmentAnimation::Default,
+                [
+                    (0.0, 0.8),
+                    (0.05, 0.7625),
+                    (0.1, 0.75),
+                    (0.7, 0.75),
+                    (0.8, 0.5625),
+                ],
+            ),
+            (
+                TapJudgmentAnimation::Still,
+                [
+                    (0.0, 0.75),
+                    (0.05, 0.75),
+                    (0.1, 0.75),
+                    (0.7, 0.75),
+                    (0.899, 0.75),
+                ],
+            ),
+            (
+                TapJudgmentAnimation::Itg,
+                [
+                    (0.0, 1.0),
+                    (0.1, 0.8125),
+                    (0.2, 0.75),
+                    (0.8, 0.75),
+                    (0.9, 0.5625),
+                ],
+            ),
+        ] {
+            for (elapsed, expected) in samples {
+                let zoom = tap_judgment_zoom(elapsed, 1.5, animation).unwrap();
+                assert!(
+                    (zoom - expected * 1.5).abs() < 0.00001,
+                    "{animation:?} at {elapsed}"
+                );
+            }
+            assert_eq!(
+                tap_judgment_zoom(animation.duration(), 1.5, animation),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn still_judgment_and_split_overlay_keep_their_size_until_hidden() {
+        let info = judgment_info(0.0);
+        let sprite = TapJudgmentSprite {
+            source: source("judgment"),
+            frame_size: [200.0, 28.0],
+            frame_cols: 2,
+            frame_rows: 7,
+        };
+        for elapsed in [0.0, 0.05, 0.7, 0.899, 0.9] {
+            let mut request = empty_request(&[], &[]);
+            request.elapsed_screen = elapsed;
+            request.judgment_animation = TapJudgmentAnimation::Still;
+            request.tap = Some(TapJudgmentFeedback {
+                render: &info,
+                frame_row: 3,
+                overlay_row: Some(1),
+                rotation_deg: 0.0,
+            });
+            request.tap_sprite = Some(&sprite);
+            let mut draws = Vec::new();
+            compose_judgment_feedback(&mut draws, request);
+            if elapsed >= 0.9 {
+                assert!(draws.is_empty());
+            } else {
+                assert_eq!(draws.len(), 2);
+                for (index, row, alpha) in [(0, 3.0, 1.0), (1, 1.0, 0.5)] {
+                    assert_sprite(
+                        &draws[index],
+                        "judgment",
+                        [320.0, 150.0],
+                        [150.0, 21.0],
+                        [1.0, 1.0, 1.0, alpha],
+                        [0.0, row / 7.0, 0.5, (row + 1.0) / 7.0],
+                        0.0,
+                        200,
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -787,7 +967,11 @@ mod tests {
                             col_offsets: &offsets[..num_cols],
                             invert: &invert[..num_cols],
                             tornado: &tornado[..num_cols],
-                            beat_factor: beat_factor(request.current_beat),
+                            beat_factor: beat_factor(
+                                request.current_beat,
+                                request.visual.beat_offset,
+                                request.visual.beat_mult,
+                            ),
                         });
                         // Prepared geometry must bypass all fallback calculations.
                         request.spacing_multiplier = f32::NAN;
@@ -823,6 +1007,12 @@ mod tests {
         request.arrow_effect_time = 0.37;
         request.visual.beat = 1.0;
         request.visual.drunk = 1.0;
+        request.visual.bumpy_x = 0.75;
+        request.visual.bumpy_x_offset = 0.5;
+        request.visual.bumpy_x_period = 0.25;
+        request.visual.tan_bumpy_x = -0.125;
+        request.visual.tan_bumpy_x_offset = 0.25;
+        request.visual.tan_bumpy_x_period = 1.0;
         let col_offsets = [-96.0, -32.0, 32.0, 96.0];
         let invert = [0.0; 4];
         let tornado = [TornadoBounds::default(); 4];
@@ -832,10 +1022,39 @@ mod tests {
         let params = NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
+            drunk_offset: request.visual.drunk_offset,
+            drunk_speed: request.visual.drunk_speed,
+            drunk_period: request.visual.drunk_period,
+            cosecant: request.visual.cosecant,
+            bumpy_x: request.visual.bumpy_x,
+            bumpy_x_offset: request.visual.bumpy_x_offset,
+            bumpy_x_period: request.visual.bumpy_x_period,
+            tan_bumpy_x: request.visual.tan_bumpy_x,
+            tan_bumpy_x_offset: request.visual.tan_bumpy_x_offset,
+            tan_bumpy_x_period: request.visual.tan_bumpy_x_period,
+            tan_drunk: request.visual.tan_drunk,
+            tan_drunk_offset: request.visual.tan_drunk_offset,
+            tan_drunk_speed: request.visual.tan_drunk_speed,
+            tan_drunk_period: request.visual.tan_drunk_period,
             flip: request.visual.flip,
             invert: request.visual.invert,
             beat: request.visual.beat,
+            beat_period: request.visual.beat_period,
+            parabola_x: request.visual.parabola_x,
+            square: request.visual.square,
+            digital: request.visual.digital,
+            square_offset: request.visual.square_offset,
+            digital_offset: request.visual.digital_offset,
+            digital_steps: request.visual.digital_steps,
+            square_period: request.visual.square_period,
+            digital_period: request.visual.digital_period,
+            ..NoteXParams::default()
         };
         let expected = hold_indicator_column_x(
             request.playfield_center_x,
@@ -865,4 +1084,14 @@ mod tests {
         assert!((actual - expected).abs() <= 1e-6);
         assert!((actual - swapped).abs() > 1e-3);
     }
+}
+
+#[cfg(test)]
+mod atlas_kernel_perf {
+    include!("atlas_kernel_perf.rs");
+}
+
+#[cfg(test)]
+mod hold_guard_perf {
+    include!("hold_guard_perf.rs");
 }

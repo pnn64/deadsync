@@ -1,0 +1,22 @@
+{
+  "unaligned": {
+    "setups": 30,
+    "batches": 2858,
+    "cases": 80646,
+    "packets": 403230,
+    "discarded": 900,
+    "samples": 166905184,
+    "maximum_peak_error": 7.629394531e-06,
+    "maximum_batch_rms": 4.53739837e-07
+  },
+  "geometry": {
+    "setups": 120,
+    "batches": 9251,
+    "cases": 252186,
+    "packets": 1260930,
+    "discarded": 3600,
+    "samples": 1669153936,
+    "maximum_peak_error": 1.525878906e-05,
+    "maximum_batch_rms": 7.613677524e-07
+  }
+}

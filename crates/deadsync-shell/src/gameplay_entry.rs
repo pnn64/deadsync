@@ -1,11 +1,11 @@
 use crate::Command;
-use deadsync_chart::{ChartData, SongData};
+use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use log::warn;
 use std::sync::Arc;
 
-pub struct GameplayChartEntryPlan {
+pub(crate) struct GameplayChartEntryPlan {
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub chart_indices: [usize; MAX_PLAYERS],
     pub resolved_steps_index: [usize; MAX_PLAYERS],
@@ -52,7 +52,7 @@ fn resolve_chart(
     (requested_steps, chart_index)
 }
 
-pub fn gameplay_chart_entry_plan(
+pub(crate) fn gameplay_chart_entry_plan(
     song: &Arc<SongData>,
     requested_steps: [usize; MAX_PLAYERS],
     preferred_steps: [usize; MAX_PLAYERS],
@@ -62,6 +62,12 @@ pub fn gameplay_chart_entry_plan(
     let chart_type = play_style.chart_type();
     let mut resolved_steps_index = requested_steps;
     let chart_indices = match play_style {
+        // Partner styles play one authored chart split between both participants.
+        PlayStyle::Couple | PlayStyle::PumpCouple | PlayStyle::Routine | PlayStyle::PumpRoutine => {
+            let resolved = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
+            resolved_steps_index = [resolved.0; MAX_PLAYERS];
+            [resolved.1; MAX_PLAYERS]
+        }
         PlayStyle::Versus | PlayStyle::PumpVersus => {
             let p1 = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
             let p2 = resolve_chart(song, chart_type, requested_steps[1], preferred_steps[1]);
@@ -94,7 +100,20 @@ pub fn gameplay_chart_entry_plan(
     }
 }
 
-pub fn gameplay_last_played_commands(
+pub(crate) fn take_player_charts(
+    loaded: Vec<GameplayChartData>,
+) -> [Arc<GameplayChartData>; MAX_PLAYERS] {
+    let mut loaded = loaded.into_iter();
+    std::array::from_fn(|_| {
+        Arc::new(
+            loaded
+                .next()
+                .expect("loaded payload contains both player charts"),
+        )
+    })
+}
+
+pub(crate) fn gameplay_last_played_commands(
     song: &SongData,
     plan: &GameplayChartEntryPlan,
     preferred_steps: [usize; MAX_PLAYERS],
@@ -103,7 +122,12 @@ pub fn gameplay_last_played_commands(
 ) -> Vec<Command> {
     let mut commands = Vec::with_capacity(MAX_PLAYERS);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                 commands.push(Command::UpdateLastPlayed {
                     side,
@@ -128,9 +152,83 @@ pub fn gameplay_last_played_commands(
     commands
 }
 
-pub(crate) type PreparedGameplaySongLua =
+pub type PreparedGameplaySongLua =
     deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
-pub(crate) fn prepare_song_lua(
+
+fn reload_chart_indices(
+    song: &SongData,
+    steps: [Option<usize>; MAX_PLAYERS],
+    session: &deadsync_gameplay::GameplaySession,
+) -> Result<[usize; MAX_PLAYERS], String> {
+    let mut indices = [0; MAX_PLAYERS];
+    for player in 0..session.play_style.player_count() {
+        let index = steps[player].ok_or_else(|| format!("Lua reload has no chart for player {}", player + 1))?;
+        let chart = song.charts.get(index)
+            .ok_or_else(|| format!("Lua reload selected missing chart {index}"))?;
+        let prefix = if session.play_style.is_pump() { "pump" } else { "dance" };
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        let suffix = match session.play_style {
+            Style::Couple | Style::PumpCouple => "couple",
+            Style::Routine | Style::PumpRoutine => "routine",
+            style if style.is_double() => "double",
+            _ => "single",
+        };
+        if chart.chart_type != format!("{prefix}-{suffix}") {
+            return Err(format!("Lua reload selected incompatible chart type {}", chart.chart_type));
+        }
+        indices[player] = index;
+    }
+    if !session.play_style.is_versus() {
+        // Lua P1 is the sole runtime player, including a cabinet P2 session.
+        indices[1] = indices[0];
+    }
+    Ok(indices)
+}
+
+/// Replace metadata and note payloads together before gameplay owns them.
+pub fn apply_song_lua_reload(
+    song: &SongData,
+    charts: &mut [Arc<ChartData>; MAX_PLAYERS],
+    payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
+    prepared: &PreparedGameplaySongLua,
+    session: &mut deadsync_gameplay::GameplaySession,
+    global_offset_seconds: f32,
+) -> Result<bool, String> {
+    let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
+    let mut selected_session = session.clone();
+    if let Some(style) = prepared.loaded_style() {
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        selected_session.play_style = match (session.play_style.is_pump(), style) {
+            (false, "single") => Style::Single,
+            (false, "double") => Style::Double,
+            (false, "versus") => Style::Versus,
+            (false, "couple") => Style::Couple,
+            (false, "routine") => Style::Routine,
+            (true, "single") => Style::PumpSingle,
+            (true, "double") => Style::PumpDouble,
+            (true, "versus") => Style::PumpVersus,
+            (true, "couple") => Style::PumpCouple,
+            (true, "routine") => Style::PumpRoutine,
+            _ => return Err(format!("Lua reload selected unsupported style {style}")),
+        };
+        // GameState::SetCurrentStyle preserves joined sides and rejects styles
+        // that require a different number of them.
+        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+            return Err(format!("Lua reload style {style} is incompatible with joined sides"));
+        }
+    }
+    let indices = reload_chart_indices(song, steps, &selected_session)?;
+    let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
+    // Update only after both players loaded successfully. ChartData carries
+    // the selected chart's music path, which gameplay uses to start audio.
+    *payloads = take_player_charts(loaded);
+    *charts = std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
+    *session = selected_session;
+    Ok(true)
+}
+
+/// Build production Lua host inputs, chart timings and initial resources.
+pub fn song_lua_context(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
@@ -139,14 +237,15 @@ pub(crate) fn prepare_song_lua(
     music_rate: f32,
     viewport: deadsync_gameplay::GameplayViewport,
     display_size: (u32, u32),
+    display_aspect_ratio: f32,
+    autoplay: f32,
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
-    video_renderer: deadlib_render_core::BackendType,
-) -> PreparedGameplaySongLua {
-    if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
-        return PreparedGameplaySongLua::default();
-    }
-    let context = deadsync_profile_gameplay::song_lua_play_context(
+    video_renderer: &str,
+    random_seed: u32,
+    live: bool,
+) -> Result<deadsync_song_lua::SongLuaCompileContext, String> {
+    let mut context = deadsync_profile_gameplay::song_lua_play_context(
         song,
         charts,
         timing,
@@ -155,14 +254,127 @@ pub(crate) fn prepare_song_lua(
         music_rate,
         viewport,
         display_size,
+        display_aspect_ratio,
+        autoplay,
         session,
         config,
-        &video_renderer.to_string(),
+        video_renderer,
     );
-    deadsync_song_lua::playback::prepare_song_lua(
+    context.random_seed = random_seed;
+    context.live = live;
+    // The screen owns the first clocked Update(0), after audio is initialized.
+    context.defer_initial_live_update = live;
+    context.screen_loading = live;
+    let inputs = deadsync_simfile::app_runtime::load_chart_timing_and_notes(
         song,
-        &context,
-        deadsync_assets::song_lua::compile_song_lua,
+        config.global_offset_seconds,
+    )?;
+    let sync_offset = if config.machine_pack_ini_offsets {
+        deadsync_chart::song::sync_pref_offset(
+            deadsync_profile_gameplay::gameplay_pack_data(song, None, None).sync_pref,
+            config.machine_default_sync_pref,
+        )
+    } else {
+        0.0
+    };
+    for (mut timing, notes, row_beats) in inputs {
+        timing.shift_group_offset_seconds(sync_offset);
+        context.song_step_timing.push(timing);
+        context.song_step_notes.push(notes.into());
+        context.song_step_row_beats.push(row_beats.into());
+    }
+    let catalog = deadsync_simfile::song::load_native_step_metadata(song)?;
+    let playable_steps = std::mem::take(&mut context.song_steps);
+    let playable_timing = std::mem::take(&mut context.song_step_timing);
+    let playable_notes = std::mem::take(&mut context.song_step_notes);
+    let playable_rows = std::mem::take(&mut context.song_step_row_beats);
+    context.song_step_chart_indices = catalog.iter().map(|step| step.playable_index).collect();
+    context.player_step_indices = context.player_step_indices.map(|selected|
+        selected.and_then(|index| context.song_step_chart_indices.iter().position(|value| *value == Some(index))));
+    for step in catalog {
+        if let Some(index) = step.playable_index {
+            context.song_steps.push(playable_steps[index].clone());
+            context.song_step_timing.push(playable_timing[index].clone());
+            context.song_step_notes.push(playable_notes[index].clone());
+            context.song_step_row_beats.push(playable_rows[index].clone());
+        } else {
+            use deadsync_song_lua::SongLuaDifficulty as Difficulty;
+            let difficulty = match step.difficulty.to_ascii_lowercase().as_str() {
+                "beginner" => Difficulty::Beginner, "easy" | "basic" | "light" => Difficulty::Easy,
+                "medium" | "another" | "standard" => Difficulty::Medium,
+                "hard" | "difficult" | "heavy" => Difficulty::Hard,
+                "challenge" | "expert" | "oni" => Difficulty::Challenge, _ => Difficulty::Edit,
+            };
+            let steps_type = step.chart_type.split('-').map(|part| {
+                let mut chars = part.chars();
+                chars.next().map_or_else(String::new, |first| format!("{}{}", first.to_ascii_uppercase(), chars.as_str()))
+            }).collect::<Vec<_>>().join("_");
+            context.song_steps.push(deadsync_song_lua::SongLuaStep {
+                steps_type: format!("StepsType_{steps_type}"), difficulty,
+                description: step.description, chart_name: step.chart_name,
+                credit: step.credit, meter: step.meter, music_file: step.music_file,
+                possible_grade_points: 0,
+            });
+            context.song_step_timing.push(context.song_timing.clone().unwrap_or_else(|| playable_timing[0].clone()));
+            context.song_step_notes.push(Default::default());
+            context.song_step_row_beats.push(Default::default());
+        }
+    }
+    for (player, profile) in context.players.iter_mut().zip(player_profiles) {
+        let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
+            profile.judgment_graphic.texture_key(),
+            deadsync_assets::textures::judgment_texture_choices(),
+        ) else {
+            continue;
+        };
+        let path = deadsync_assets::textures::texture_key_source_path(
+            &choice.key,
+            &choice.key,
+            deadsync_assets::resolve_asset_path,
+        );
+        match std::fs::canonicalize(&path) {
+            Ok(path) => player.judgment_texture = Some(path),
+            Err(error) => warn!(
+                "Cannot load initial Lua judgment {}: {error}",
+                path.display()
+            ),
+        }
+    }
+    Ok(context)
+}
+
+/// Prepare compiled song playback on the load worker, retaining authored Lua
+/// when input callbacks require runtime execution.
+pub fn prepare_song_lua(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
+    player_profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
+    scroll_speed: &[deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    viewport: deadsync_gameplay::GameplayViewport,
+    display_size: (u32, u32),
+    display_aspect_ratio: f32,
+    autoplay: f32,
+    session: &deadsync_gameplay::GameplaySession,
+    config: &deadsync_gameplay::GameplayConfig,
+    video_renderer: &str,
+    random_seed: u32,
+) -> PreparedGameplaySongLua {
+    if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
+        return PreparedGameplaySongLua::default();
+    }
+    let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
+        music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
+        config, video_renderer, random_seed, false) {
+        Ok(context) => context,
+        Err(error) => {
+            warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
+            return PreparedGameplaySongLua::default();
+        }
+    };
+    deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
+        song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     )
 }
@@ -181,6 +393,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats::default(),
@@ -240,13 +453,40 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
             normalized_bpms: "120.000".to_string(),
+            song_timing: None,
             music_length_seconds: 60.0,
             first_second: 0.0,
             total_length_seconds: 60,
             precise_last_second_seconds: 60.0,
+            precise_note_last_second_seconds: Some(60.0),
             last_second_hint: 0.0,
             charts: vec![chart("Hard", "hard"), chart("Challenge", "challenge")],
         })
+    }
+
+    #[test]
+    fn reload_maps_lua_p1_to_single_p2_payloads() {
+        let session = deadsync_gameplay::GameplaySession {
+            player_side: deadsync_gameplay::GameplayInputPlayerSide::P2,
+            joined_sides: [false, true],
+            ..Default::default()
+        };
+        assert_eq!(reload_chart_indices(&song(), [Some(1), None], &session), Ok([1, 1]));
+    }
+
+    #[test]
+    fn reload_keeps_versus_selections_and_rejects_missing_steps() {
+        let session = deadsync_gameplay::GameplaySession {
+            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            joined_sides: [true, true],
+            ..Default::default()
+        };
+        assert_eq!(reload_chart_indices(&song(), [Some(1), Some(0)], &session), Ok([1, 0]));
+        assert!(reload_chart_indices(&song(), [Some(1), None], &session).is_err());
+        assert!(reload_chart_indices(&song(), [Some(1), Some(7)], &session).is_err());
+        let mut incompatible = song().as_ref().clone();
+        incompatible.charts[1].chart_type = "dance-double".into();
+        assert!(reload_chart_indices(&incompatible, [Some(1), Some(0)], &session).is_err());
     }
 
     #[test]
@@ -305,3 +545,7 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_charts.rs"]
+mod owned_pipeline_tests;

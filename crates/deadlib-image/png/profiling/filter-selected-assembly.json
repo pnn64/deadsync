@@ -1,0 +1,26 @@
+{
+  "scope": "Static Linux machine code inspection, not a timing measurement. Packed unsigned byte minima/maxima and word subtraction in unfilter demonstrate compiler-generated SIMD for the regional Paeth arithmetic; other branches can use SIMD too. No explicit intrinsics or unsafe Rust added.",
+  "binary_sha256": "29fba60b1274d3e233a864a63cca2158b17d5ded236987960375b9fc3e39ffcd",
+  "command": [
+    "objdump",
+    "-d",
+    "-l",
+    "-M",
+    "intel",
+    "--disassemble=_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter",
+    "/tmp/deadlib-image-profile-target/release/examples/decode_profile"
+  ],
+  "objdump": "GNU objdump (GNU Binutils for Debian) 2.44",
+  "symbol": "_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter",
+  "assembly_sha256": "3a3480bb050ad3dbe01b873bfd4e1f79854bfaa0fe3bdd114e498bc03b2cbb7c",
+  "packed_instruction_counts": {
+    "punpcklbw": 27,
+    "pminub": 5,
+    "pmaxub": 5,
+    "paddw": 9,
+    "psubw": 5,
+    "pcmpgtw": 10,
+    "packuswb": 14,
+    "psrlw": 4
+  }
+}

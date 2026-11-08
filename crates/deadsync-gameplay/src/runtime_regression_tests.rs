@@ -13,7 +13,7 @@ mod runtime_regression_tests {
     use std::time::Instant;
 
     #[derive(Clone)]
-    struct TestProfile {
+    pub(super) struct TestProfile {
         remove_mask_bits: u8,
         turn_option: GameplayTurnOption,
         attack_mode: GameplayAttackMode,
@@ -24,9 +24,11 @@ mod runtime_regression_tests {
         fantastic_feedback_options: FantasticFeedbackOptions,
         noteskin_name: &'static str,
         mini_percent: f32,
+        pub(super) global_offset_shift_ms: i32,
         mini_indicator_options: GameplayMiniIndicatorOptions,
         target_score: GameplayTargetScoreSetting,
         density_graph: bool,
+        golf_enabled: bool,
         combo_milestones_enabled: bool,
     }
 
@@ -47,9 +49,11 @@ mod runtime_regression_tests {
                 fantastic_feedback_options: FantasticFeedbackOptions::default(),
                 noteskin_name: DEFAULT_NOTESKIN_NAME,
                 mini_percent: 0.0,
+                global_offset_shift_ms: 0,
                 mini_indicator_options: GameplayMiniIndicatorOptions::default(),
                 target_score: GameplayTargetScoreSetting::default(),
                 density_graph: false,
+                golf_enabled: false,
                 combo_milestones_enabled: true,
             }
         }
@@ -76,6 +80,7 @@ mod runtime_regression_tests {
     }
 
     impl GameplayProfileData for TestProfile {
+        fn golf_scoring_enabled(&self) -> bool { self.golf_enabled }
         fn insert_mask_bits(&self) -> u8 {
             0
         }
@@ -89,6 +94,10 @@ mod runtime_regression_tests {
         }
 
         fn appearance_mask_bits(&self) -> u8 {
+            0
+        }
+
+        fn accel_mask_bits(&self) -> u8 {
             0
         }
 
@@ -168,7 +177,7 @@ mod runtime_regression_tests {
         }
 
         fn global_offset_shift_ms(&self) -> i32 {
-            0
+            self.global_offset_shift_ms
         }
 
         fn visual_delay_ms(&self) -> i32 {
@@ -240,7 +249,7 @@ mod runtime_regression_tests {
         }
     }
 
-    struct NoSongLuaRuntime;
+    pub(super) struct NoSongLuaRuntime;
 
     impl SongLuaRuntimeBuilder<(), (), ()> for NoSongLuaRuntime {
         fn build_song_lua_runtime(
@@ -252,6 +261,7 @@ mod runtime_regression_tests {
                 std::array::from_fn(|_| Vec::new()),
                 build_song_lua_runtime_visuals(
                     Vec::new(),
+                    None,
                     Vec::new(),
                     Vec::new(),
                     Vec::new(),
@@ -264,8 +274,10 @@ mod runtime_regression_tests {
                     (),
                     Vec::new(),
                     [false; MAX_PLAYERS],
-                    [false; 2],
+                    [(); 4],
+                    std::array::from_fn(|_| Vec::new()),
                     std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
+                    std::array::from_fn(|_| Vec::new()),
                     std::array::from_fn(|_| Vec::new()),
                     params.screen_width,
                     params.screen_height,
@@ -274,7 +286,7 @@ mod runtime_regression_tests {
         }
     }
 
-    type State = GameplayRuntimeState<TestProfile, (), (), ()>;
+    pub(super) type State = GameplayRuntimeState<TestProfile, (), (), ()>;
 
     fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_sec: f32) {
         debug_assert!(
@@ -574,6 +586,7 @@ mod runtime_regression_tests {
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32 / ROWS_PER_BEAT as f32,
             quantization_idx: 0,
             column,
@@ -745,6 +758,7 @@ mod runtime_regression_tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "gameplay-regression".to_string(),
             stats: ArrowStats {
@@ -800,6 +814,7 @@ mod runtime_regression_tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "score-validity-test".to_string(),
             stats,
@@ -832,7 +847,7 @@ mod runtime_regression_tests {
         }
     }
 
-    fn regression_song() -> SongData {
+    pub(super) fn regression_song() -> SongData {
         SongData {
             simfile_path: PathBuf::from("songs/Tests/gameplay-regression.ssc"),
             title: "Gameplay Regression".to_string(),
@@ -859,16 +874,18 @@ mod runtime_regression_tests {
             min_bpm: 150.0,
             max_bpm: 150.0,
             normalized_bpms: "0.000=150.000".to_string(),
+            song_timing: None,
             music_length_seconds: 60.0,
             first_second: 0.0,
             total_length_seconds: 60,
             precise_last_second_seconds: 60.0,
+            precise_note_last_second_seconds: Some(60.0),
             last_second_hint: 0.0,
             charts: vec![regression_chart()],
         }
     }
 
-    fn regression_payload_with_segments(
+    pub(super) fn regression_payload_with_segments(
         timing_segments: TimingSegments,
         last_row: usize,
     ) -> GameplayChartData {
@@ -878,12 +895,14 @@ mod runtime_regression_tests {
             notes: Vec::new(),
             parsed_notes: vec![
                 ParsedNote {
+                    player: 0,
                     row_index: 48,
                     column: 0,
                     note_type: NoteType::Tap,
                     tail_row_index: None,
                 },
                 ParsedNote {
+                    player: 0,
                     row_index: 96,
                     column: 1,
                     note_type: NoteType::Tap,
@@ -894,6 +913,95 @@ mod runtime_regression_tests {
             timing_segments,
             timing,
             chart_attacks: None,
+        }
+    }
+
+    #[test]
+    fn player_timing_preserves_chart_offsets_and_copy_on_write_isolation() {
+        for play_style in [
+            GameplayInputPlayStyle::Single,
+            GameplayInputPlayStyle::Versus,
+        ] {
+            for separate_charts in [false, true] {
+                for shifts in [[0, 0], [15, 15], [-15, -15], [0, 20], [15, -10]] {
+                    let song = Arc::new(regression_song());
+                    let chart = Arc::new(song.charts[0].clone());
+                    let first = Arc::new(regression_payload_with_segments(
+                        TimingSegments::default(),
+                        96,
+                    ));
+                    let second = if separate_charts {
+                        let mut data = (*first).clone();
+                        data.timing.shift_song_offset_seconds(0.075);
+                        Arc::new(data)
+                    } else {
+                        Arc::clone(&first)
+                    };
+                    let source = [first, second];
+                    let config = GameplayConfig {
+                        global_offset_seconds: -0.025,
+                        machine_allow_per_player_global_offsets: true,
+                        ..Default::default()
+                    };
+                    let mut state = init_gameplay_runtime(
+                        song,
+                        [Arc::clone(&chart), chart],
+                        source.clone(),
+                        GameplayViewport::default(),
+                        GameplaySession {
+                            play_style,
+                            ..Default::default()
+                        },
+                        config,
+                        SyncPref::Default,
+                        GameplayMiniIndicatorData::default(),
+                        GameplayNoteskinData::default(),
+                        NoSongLuaRuntime,
+                        empty_crossover_annotations,
+                        5,
+                        1.0,
+                        [ScrollSpeedSetting::default(); MAX_PLAYERS],
+                        std::array::from_fn(|p| TestProfile {
+                            global_offset_shift_ms: shifts[p],
+                            ..Default::default()
+                        }),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        [CourseLifeConfig::Bar; MAX_PLAYERS],
+                        false,
+                        [0; MAX_PLAYERS],
+                    );
+                    for player in 0..MAX_PLAYERS {
+                        let active = if play_style.player_count() == 1 {
+                            0
+                        } else {
+                            player
+                        };
+                        let mut expected = source[active].timing.clone();
+                        expected.set_global_offset_seconds(-0.025 + shifts[active] as f32 / 1000.0);
+                        for beat in [-4.0, 0.0, 1.0, 2.0, 16.0] {
+                            assert_eq!(
+                                state.timing_runtime.timing_players[player]
+                                    .get_time_for_beat_ns(beat),
+                                expected.get_time_for_beat_ns(beat)
+                            );
+                        }
+                    }
+                    let p2_before =
+                        state.timing_runtime.timing_players[1].get_time_for_beat_ns(1.0);
+                    Arc::make_mut(&mut state.timing_runtime.timing_players[0])
+                        .shift_song_offset_seconds(0.125);
+                    assert_eq!(
+                        state.timing_runtime.timing_players[1].get_time_for_beat_ns(1.0),
+                        p2_before
+                    );
+                }
+            }
         }
     }
 
@@ -1039,6 +1147,7 @@ mod runtime_regression_tests {
         let mut gameplay_chart =
             regression_payload_with_segments(timing_segments, tail_row.max(96));
         gameplay_chart.parsed_notes = vec![ParsedNote {
+            player: 0,
             row_index: 48,
             column: 0,
             note_type: NoteType::Hold,
@@ -1125,6 +1234,10 @@ mod runtime_regression_tests {
                     [GameplayTargetScoreSetting::MachineBest; MAX_PLAYERS],
                     [99.5, 98.75],
                 ),
+                (
+                    [GameplayTargetScoreSetting::GhostData; MAX_PLAYERS],
+                    [6.0 / 7.0 * 100.0, 100.0],
+                ),
             ] {
                 let state = init_gameplay_runtime(
                     song.clone(),
@@ -1138,6 +1251,16 @@ mod runtime_regression_tests {
                     GameplayConfig::default(),
                     SyncPref::Default,
                     GameplayMiniIndicatorData {
+                        ghost_targets: [
+                            GameplayGhostTarget {
+                                score_type: GhostScoreType::Ex,
+                                points: vec![3.0, 6.0],
+                            },
+                            GameplayGhostTarget {
+                                score_type: GhostScoreType::HardEx,
+                                points: vec![3.5, 7.0],
+                            },
+                        ],
                         specified_target_percent: [97.0, 96.0],
                         personal_best_percent: [Some(95.25), Some(93.5)],
                         machine_best_percent: [Some(99.5), Some(98.75)],
@@ -1181,6 +1304,213 @@ mod runtime_regression_tests {
         }
     }
 
+    fn finalize_ghost_test_tap(state: &mut State, note_index: usize, offset_ms: f32) {
+        let player = state.player_for_col(state.chart_runtime.notes[note_index].column);
+        let row = state.chart_runtime.notes[note_index].row_index;
+        let entry = row_entry_index_for_note(
+            &state.chart_runtime.row_indices.note_row_entry_indices,
+            note_index,
+        )
+        .unwrap();
+        state.set_final_note_result(
+            note_index,
+            Judgment {
+                time_error_ms: offset_ms,
+                time_error_music_ns: song_time_ns_from_seconds(offset_ms / 1000.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+        );
+        state.finalize_row_judgment(player, row, entry, false);
+    }
+
+    #[test]
+    fn ghost_history_records_players_independently_and_only_saves_valid_passes() {
+        let mut state = regression_state_with_session(GameplaySession {
+            play_style: GameplayInputPlayStyle::Versus,
+            ..GameplaySession::default()
+        });
+        for player in 0..2 {
+            let (first, end) = state.note_range_for_player(player);
+            finalize_ghost_test_tap(&mut state, first, if player == 0 { 0.0 } else { 20.0 });
+            finalize_ghost_test_tap(&mut state, end - 1, 0.0);
+        }
+        assert_eq!(state.players()[0].ghost.recorded[0], [5.0, 10.0]);
+        assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 7.0]);
+        assert_eq!(state.players()[1].ghost.recorded[1], [3.0, 6.5]);
+        assert_eq!(state.players()[1].ghost.recorded[2], [3.0, 6.5]);
+        assert!(state.ghost_history_for_save(0).is_none(), "unfinished run");
+        state.progress.stage.song_completed_naturally = true;
+        assert!(state.ghost_history_for_save(0).is_some());
+        state.players_runtime.players[0].stage_failed = true;
+        assert!(state.ghost_history_for_save(0).is_none());
+        assert!(state.ghost_history_for_save(1).is_some());
+        state.progress.stage.score_valid[1] = false;
+        assert!(state.ghost_history_for_save(1).is_none());
+        state.progress.stage.score_valid[1] = true;
+        state.mark_autoplay_used();
+        assert!(state.ghost_history_for_save(1).is_none());
+    }
+
+    #[test]
+    fn ghost_history_includes_held_dropped_and_missed_hold_results() {
+        for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+            let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+            finalize_ghost_test_tap(&mut state, 0, 0.0);
+            match result {
+                HoldResult::Held => state.handle_hold_success(0, 0),
+                HoldResult::LetGo => state.handle_hold_let_go(0, 0, 500_000_000),
+                HoldResult::Missed => state.handle_hold_missed(0, 0),
+            }
+            let histories = &state.players()[0].ghost.recorded;
+            assert_eq!(
+                histories[0],
+                [
+                    5.0,
+                    if result == HoldResult::Held {
+                        10.0
+                    } else {
+                        5.0
+                    }
+                ]
+            );
+            assert_eq!(
+                histories[1],
+                [3.5, if result == HoldResult::Held { 4.5 } else { 3.5 }]
+            );
+        }
+    }
+
+    #[test]
+    fn ghost_history_counts_avoided_mines_without_lua_and_finalizes_last_mine() {
+        for finalize_at_end in [false, true] {
+            let mut state = regression_state_with_segments(
+                TimingSegments {
+                    bpms: vec![(0.0, 60.0)],
+                    ..TimingSegments::default()
+                },
+                192,
+            );
+            set_regression_mine(&mut state, 1, 1, 96, 2_000_000_000);
+            state.progress.chart_totals.mines_total[0] = 1;
+            finalize_ghost_test_tap(&mut state, 0, 0.0);
+            if finalize_at_end {
+                state.finalize_completed_mines();
+            } else {
+                state.apply_time_based_mine_avoidance(3_000_000_000);
+                state.dispatch_avoided_mine_judgments();
+            }
+            assert_eq!(state.players()[0].ghost.recorded[0], [5.0, 5.0]);
+            assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 3.5]);
+            state.finalize_completed_mines();
+            assert_eq!(
+                state.players()[0].ghost.recorded[0].len(),
+                2,
+                "do not count the same mine twice"
+            );
+        }
+    }
+
+    #[test]
+    fn ghost_history_includes_mine_penalties_and_skips_autoplay() {
+        let mut state = regression_state();
+        set_regression_mine(&mut state, 1, 1, 96, 2_000_000_000);
+        state.progress.chart_totals.mines_total[0] = 1;
+        finalize_ghost_test_tap(&mut state, 0, 0.0);
+        state.chart_runtime.notes[1].mine_result = Some(MineResult::Hit);
+        state
+            .chart_runtime
+            .mine_scan
+            .pending_mine_hit_indices
+            .push(ChartNoteIndex(1));
+        state.apply_pending_mine_hits();
+        assert_eq!(state.players()[0].ghost.recorded[0], [5.0, -1.0]);
+        assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 2.5]);
+        assert_eq!(state.players()[0].ghost.recorded[2], [3.5, 2.5]);
+
+        let mut autoplay = regression_state();
+        autoplay.set_live_autoplay_enabled(true);
+        finalize_ghost_test_tap(&mut autoplay, 0, 0.0);
+        assert!(
+            autoplay.players()[0]
+                .ghost
+                .recorded
+                .iter()
+                .all(Vec::is_empty)
+        );
+    }
+
+    #[test]
+    fn attack_flags_use_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(
+                0.0,
+                1000.0,
+                "*1.25 75% NoAttacks,*0.5 -50% RandomAttacks",
+            )
+            .expect("native attack flags"),
+        );
+        // Native PlayerOptions Current probes at 0, .25, .5 and .75 seconds.
+        // Keep music time fixed to exercise the actual gameplay wall-delta path.
+        for (delta, no_attack, rand_attack) in [
+            (0.0, 0.0, 0.0),
+            (0.25, 0.3125, -0.125),
+            (0.25, 0.625, -0.25),
+            (0.25, 0.75, -0.375),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            let flags = state.mods.attacks.attack_flags[0];
+            assert!((flags.no_attack.expect("Current NoAttack") - no_attack).abs() < 0.0001);
+            assert!((flags.rand_attack.expect("Current RandAttack") - rand_attack).abs() < 0.0001);
+        }
+    }
+
+    #[test]
+    fn attack_flags_approach_from_profile_base() {
+        let mut state = regression_state();
+        state.profiles_runtime.profiles[0].attack_mode = GameplayAttackMode::Off;
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*0.5 no NoAttacks")
+                .expect("clear profile NoAttack gradually"),
+        );
+        state.run_pre_notes_phase(0, 0, 0, 0.25, 1.0, 0, "unused");
+        assert_eq!(state.mods.attacks.attack_flags[0].no_attack, Some(0.875));
+    }
+
+    #[test]
+    fn expand_phase_uses_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*9999 50% ExpandPeriod")
+                .expect("native period modifier"),
+        );
+        // Expected phases come from unchanged native ArrowEffects::Update.
+        // Song time remains fixed while wall delta crosses multiple wraps.
+        for (delta, expected) in [
+            (0_f32, 0_f32),
+            (0.0166666675_f32, 0.0166666675_f32),
+            (0.25_f32, 0.266666681_f32),
+            (1_f32, 1.26666665_f32),
+            (7_f32, 4.07787609_f32),
+            (2_f32, 1.88908577_f32),
+            (0.0500000007_f32, 1.93908572_f32),
+            (0.0166666675_f32, 1.95575237_f32),
+            (0.125_f32, 2.08075237_f32),
+            (8_f32, 1.70317173_f32),
+            (0.25_f32, 1.95317173_f32),
+            (0_f32, 1.95317173_f32),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            assert!(
+                (state.mods.expand_seconds[0] - expected).abs() < 0.00001,
+                "delta={delta}, actual={}",
+                state.mods.expand_seconds[0]
+            );
+        }
+    }
+
     #[test]
     fn regression_state_passes_hot_state_audit() {
         let state = regression_state();
@@ -1212,8 +1542,6 @@ mod runtime_regression_tests {
         );
         assert!((state.field_zoom_for_player(0) - 0.75).abs() <= f32::EPSILON);
         assert!(state.display.notefield_motion.scroll_pixels_per_second(0) > 0.0);
-        assert!(state.notefield_draw_distance_before_targets(0) > 0.0);
-        assert!(state.notefield_draw_distance_after_targets(0) > 0.0);
     }
 
     #[test]
@@ -1609,6 +1937,54 @@ mod runtime_regression_tests {
         assert!(state.progress.stage.autoplay_used);
     }
 
+    #[test]
+    fn autoplay_judgment_tracks_player_and_survives_controller_changes() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 60.0)], ..TimingSegments::default()
+        }, 96);
+        assert!(!state.players_runtime.players[0].autoplay_judged);
+        state.set_live_autoplay_enabled(true);
+        assert!(!state.players_runtime.players[0].autoplay_judged, "controller selection is not a judgment");
+        let note_time = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, note_time, 1.0, 1.0);
+        // Native float row crossing cannot distinguish a one-nanosecond lead.
+        state.run_autoplay(note_time - 1_000_000);
+        assert!(!state.players_runtime.players[0].autoplay_judged, "the note is still in the future");
+        state.run_autoplay(note_time);
+        state.update_judged_rows();
+        assert!(state.players_runtime.players[0].autoplay_judged);
+        assert!(!state.players_runtime.players[1].autoplay_judged);
+        state.set_live_autoplay_enabled(false);
+        state.set_last_mine_judgment(1, 4, MineResult::Avoided);
+        assert!(state.players_runtime.players[0].autoplay_judged);
+        assert!(!state.players_runtime.players[1].autoplay_judged);
+    }
+
+    #[test]
+    fn replay_judgments_do_not_use_autoplay_controller() {
+        let mut state = regression_state();
+        state.progress.stage.autoplay_enabled = true;
+        state.progress.replay.mode = true;
+        state.set_last_mine_judgment(0, 0, MineResult::Hit);
+        assert!(!state.players_runtime.players[0].autoplay_judged);
+    }
+
+    #[test]
+    fn stage_failure_keeps_healthy_life_and_blocks_score() {
+        let mut state = regression_state();
+        state.players_runtime.players[0].stage_failed = true;
+        for include in [false, true] {
+            state.setup.include_post_fail_passes = include;
+            assert!(state.player_score_is_blocked(0));
+            assert!(!state.player_is_dead(0));
+            assert_eq!(player_health_state(&state.players_runtime.players[0]), HealthState::Alive);
+            assert!(state.individual_song_outcome(0).is_failing);
+            assert_eq!(state.individual_song_outcome(0).life, 0.5);
+            assert_eq!(state.individual_song_outcome(0).fail_time, None);
+            assert!(state.all_joined_players_failed());
+        }
+    }
+
     fn set_state_timing(state: &mut State, timing: Arc<TimingData>) {
         state.timing_runtime.timing = Arc::clone(&timing);
         state.timing_runtime.timing_players[0] = Arc::clone(&timing);
@@ -1842,6 +2218,104 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn fail_off_keeps_score() {
+        let mut state = regression_state();
+        state.setup.config.default_fail_type = GameplayFailType::Immediate;
+        state.mods.attacks.mask_windows[0] = vec![
+            build_course_modifier_mask_window("failoff").expect("fail mode window")
+        ];
+        state.refresh_player_attacks(0, 0.0, 0.0);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::Off);
+        let rows = [0, 48];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Fantastic, 4.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0), song_time_ns_from_seconds(1.5),
+        ];
+        state.chart_runtime.row_entries = rows.iter().enumerate().map(|(index, &row)| {
+            test_row_entry_with_times(&state.chart_runtime.notes,
+                &state.chart_runtime.note_time_cache_ns, row, vec![index])
+        }).collect();
+        state.players_runtime.players[0].life = 0.001;
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        assert_eq!(state.players_runtime.players[0].life, 0.0);
+        assert!(!state.player_score_is_blocked(0));
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.scoring_counts.iter().sum::<u32>(), 2);
+        assert_eq!(player.fail_time, None);
+        assert!(player.failed_ex_score_inputs.is_none());
+        assert!(state.force_fail_player(0));
+        assert!(state.player_score_is_blocked(0));
+    }
+
+    #[test]
+    fn easy_failure_keeps_playing() {
+        let mut state = regression_state();
+        Arc::make_mut(&mut state.source.charts[0]).difficulty = "Easy".into();
+        state.setup.config.default_fail_type = GameplayFailType::Immediate;
+        state.refresh_player_attacks(0, 0.0, 0.0);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::ImmediateContinue);
+        state.players_runtime.players[0].life = 0.0;
+        state.refresh_player_attacks(0, 0.1, 0.1);
+        assert!(state.players_runtime.players[0].is_failing);
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.mods.attacks.mask_windows[0] = vec![
+            build_course_modifier_mask_window("failimmediate").expect("fail mode window")
+        ];
+        state.refresh_player_attacks(0, 0.2, 0.1);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::ImmediateContinue);
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        Arc::make_mut(&mut state.source.charts[0]).difficulty = "Hard".into();
+        state.refresh_player_attacks(0, 0.3, 0.1);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::Immediate);
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))));
+    }
+
+    #[test]
+    fn fail_modes_finish_song() {
+        for (modifiers, should_fail) in [("failoff", false), ("failatend", true)] {
+            let mut state = regression_state();
+            state.mods.attacks.mask_windows[0] = vec![
+                build_course_modifier_mask_window(modifiers).expect("fail mode window")
+            ];
+            state.refresh_player_attacks(0, 0.0, 0.0);
+            state.players_runtime.players[0].life = 0.0;
+            assert!(!state.player_is_dead(0));
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+            state.clock.song_position.current_music_time_ns = state.music_end_time_ns();
+            assert!(matches!(state.finish_gameplay_if_ready(false),
+                Some(GameplayAction::Navigate(GameplayExit::Complete))));
+            assert_eq!(state.players_runtime.players[0].is_failing, should_fail);
+            assert_eq!(state.individual_song_outcome(0).is_failing, should_fail);
+        }
+    }
+
+    #[test]
+    fn fail_exit_needs_all() {
+        let mut state = regression_state();
+        state.setup.num_players = 2;
+        for player in &mut state.players_runtime.players {
+            player.life = 0.0;
+            player.is_failing = true;
+            player.fail_type = GameplayFailType::Immediate;
+        }
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong,
+            GameplayFailType::ImmediateContinue]
+        {
+            state.players_runtime.players[1].fail_type = mode;
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+        }
+        state.players_runtime.players[1].fail_type = GameplayFailType::Immediate;
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))));
+    }
+
+    #[test]
     fn column_judgments_include_fatal_frame_then_stop() {
         let mut state = regression_state();
         let rows = [0, 48, 96];
@@ -1989,7 +2463,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn scored_missed_hold_resolves_let_go_at_hold_end() {
+    fn missed_hold_resolves_at_rounded_tail_row() {
         let mut state = regression_state();
         let note_time_ns = song_time_ns_from_seconds(1.0);
         let hold_end_ns = song_time_ns_from_seconds(2.0);
@@ -2024,7 +2498,9 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
         assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
-        state.resolve_pending_missed_holds(hold_end_ns.saturating_sub(1));
+        let before = song_time_ns_from_seconds(state.timing_runtime.timing_players[0]
+            .get_time_for_beat_exact(2.0 - 0.51 / 48.0));
+        state.resolve_pending_missed_holds(before);
         assert_eq!(
             state.chart_runtime.notes[0]
                 .hold
@@ -2035,7 +2511,10 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
         assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
-        state.resolve_pending_missed_holds(hold_end_ns);
+        let rounded = song_time_ns_from_seconds(state.timing_runtime.timing_players[0]
+            .get_time_for_beat_exact(2.0 - 0.49 / 48.0));
+        assert!(rounded < hold_end_ns);
+        state.resolve_pending_missed_holds(rounded);
 
         assert_eq!(
             state.chart_runtime.notes[0]
@@ -2118,6 +2597,53 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn catalog_note_end_keeps_the_cabinet_offset_at_initial_load() {
+        let mut song = regression_song();
+        song.last_second_hint = 0.0;
+        song.precise_note_last_second_seconds = Some(75.25);
+        song.precise_last_second_seconds = 75.25;
+        song.total_length_seconds = 75;
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(regression_payload_with_segments(
+            TimingSegments::default(),
+            96,
+        ));
+        let mut state = init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: -0.008, machine_pack_ini_offsets: true,
+                machine_default_sync_pref: SyncPref::Itg, ..Default::default() },
+            SyncPref::Itg,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+        let native_last = (75.25_f32 - (-0.009)) - (-0.008);
+        assert_eq!(state.clock.end_timing.song_last_second_ns(), song_time_ns_from_seconds(native_last),
+            "native catalog note timing includes the cabinet offset before the late-step window");
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns() - 1;
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+    }
+
+    #[test]
     fn last_second_hint_survives_timing_changes() {
         let mut song = regression_song();
         song.last_second_hint = 75.25;
@@ -2178,12 +2704,19 @@ mod runtime_regression_tests {
 
     #[test]
     fn set_music_rate_rebuilds_judgment_and_end_times() {
-        let mut state = regression_state();
+        // Isolate rate scaling from cabinet calibration, covered separately above.
+        let mut state = regression_state_with_session_and_config(GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: 0.0, ..Default::default() });
         let baseline_great_ns = state.timing_runtime.player_judgment_timing[0]
             .profile_music_ns
             .windows_ns[2];
         let baseline_notes_end = state.notes_end_time_ns();
         let baseline_music_end = state.music_end_time_ns();
+        let song_last_second_ns = song_time_ns_from_seconds(state.source.song.precise_last_second());
+        assert_eq!(
+            baseline_music_end,
+            song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.0),
+        );
 
         assert!(state.set_music_rate(1.5));
         assert!((state.music_rate() - 1.5).abs() < 1e-6);
@@ -2206,7 +2739,11 @@ mod runtime_regression_tests {
             state.notes_end_time_ns(),
             baseline_notes_end,
         );
-        assert_eq!(state.music_end_time_ns(), baseline_music_end);
+        assert!(state.music_end_time_ns() > baseline_music_end);
+        assert_eq!(
+            state.music_end_time_ns(),
+            song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.5),
+        );
 
         assert!(!state.set_music_rate(1.5));
         assert!(state.set_music_rate(f32::NAN));
@@ -2342,6 +2879,9 @@ mod runtime_regression_tests {
                 );
                 state.chart_runtime.notes[0].note_type = NoteType::Roll;
                 state.progress.stage.autoplay_enabled = true;
+                // Isolate roll life from float row-crossing rounding at a
+                // calibrated head time (e.g. 0.516 s rounds below beat 1).
+                state.apply_global_offset_delta(-state.global_offset_seconds());
                 state.set_music_rate(rate);
                 state.display.noteskin_effects.set_receptor_step_behavior(
                     0,
@@ -2934,6 +3474,32 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn golf_scores_chords_once_and_leaves_disabled_player_untouched() {
+        for enabled in [false, true] {
+            let p1 = TestProfile { golf_enabled: enabled, ..TestProfile::default() };
+            let mut state = regression_state_with_profiles([p1, TestProfile::default()]);
+            let row = 48;
+            state.chart_runtime.notes = vec![test_note(0, row, NoteType::Hold), test_note(1, row, NoteType::Tap)];
+            state.chart_runtime.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0); 2];
+            state.chart_runtime.row_entries = vec![test_row_entry_with_times(&state.chart_runtime.notes, &state.chart_runtime.note_time_cache_ns, row, vec![0, 1])];
+            state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
+            state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+            for (note, error) in [(0, 23.0), (1, 50.0)] {
+                state.set_final_note_result(note, Judgment { time_error_ms: error, time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(error, 1.0), grade: JudgeGrade::Great, window: Some(TimingWindow::W3), miss_because_held: false });
+            }
+            state.finalize_row_judgment(0, row, 0, false);
+            let taps = state.players()[0].golf_taps;
+            assert_eq!(taps.judged_rows, u32::from(enabled));
+            assert_eq!(taps.raw_strokes, if enabled { 30 } else { 0 });
+            assert_eq!(state.players()[1].golf_taps.raw_strokes, 0);
+            // Resolving the hold tail adds no second head tap.
+            state.players_runtime.players[0].holds_resolved_for_score = 1;
+            assert_eq!(state.players()[0].golf_score().raw_strokes, taps.raw_strokes + 100);
+            assert_eq!(state.players()[0].golf_score().judged_rows, taps.judged_rows);
+        }
+    }
+
+    #[test]
     fn jump_row_finalization_uses_row_judgment_for_error_bar_hud() {
         let p1 = error_bar_profile(GameplayErrorBarOptions {
             mask_bits: GAMEPLAY_ERROR_BAR_TEXT,
@@ -3369,30 +3935,50 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn autosync_rate_correction() {
+    fn autosync_rate_correction_eliminates_the_measured_error() {
         for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
             for rate in [0.5, 1.0, 1.5, 2.0] {
                 for error_ms in [-10.0, 10.0] {
-                    let mut state = regression_state();
+                    let mut state = regression_state_with_segments(
+                        TimingSegments {
+                            bpms: vec![(0.0, 120.0)],
+                            ..TimingSegments::default()
+                        },
+                        96,
+                    );
+                    state.apply_global_offset_delta(-state.global_offset_seconds());
                     state.set_music_rate(rate);
                     state.set_autosync_mode(mode);
                     set_single_judged_tap(&mut state, 0, 48, JudgeGrade::Fantastic, error_ms);
+                    state.refresh_timing_after_offset_change();
                     let song_offset = state.song_offset_seconds();
                     let global_offset = state.global_offset_seconds();
                     let error_ns = judgment::judgment_time_error_music_ns_from_ms(error_ms, rate);
-                    let hit = state
-                        .note_hit_eval(0, 1_000_000_000, 1_000_000_000 + error_ns)
-                        .expect("10 ms hit is inside the judgment window");
-                    state.chart_runtime.notes[0].result =
-                        Some(state.build_final_note_hit_plan(0, hit, rate).judgment);
+                    let event_source_time_ns =
+                        state.chart_runtime.note_time_cache_ns[0] + error_ns;
 
-                    for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
-                        state.apply_autosync_for_row_hits(0);
+                    // Replay the same physical timing after correction, using the real
+                    // mapped-clock and note-cache paths rather than only inspecting
+                    // the offset setting. A second batch must remain centered.
+                    for batch in 0..2 {
+                        for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
+                            let judgment =
+                                autosync_judgment_at_source_time(&mut state, event_source_time_ns);
+                            state.chart_runtime.notes[0].result = Some(judgment);
+                            state.apply_autosync_for_row_hits(0);
+                        }
+                        let residual =
+                            autosync_judgment_at_source_time(&mut state, event_source_time_ns);
+                        assert!(
+                            residual.time_error_ms.abs() < 0.001,
+                            "mode={mode:?}, rate={rate}, error_ms={error_ms}, batch={batch}, residual_ms={}",
+                            residual.time_error_ms,
+                        );
                     }
 
                     let correction = -error_ms / 1000.0;
                     let (song_delta, global_delta) = match mode {
-                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Song => (correction * rate, 0.0),
                         AutosyncMode::Machine => (0.0, correction),
                         AutosyncMode::Off => unreachable!(),
                     };
@@ -3409,6 +3995,71 @@ mod runtime_regression_tests {
                     assert_eq!(state.autosync_standard_deviation(), 0.0);
                 }
             }
+        }
+    }
+
+    fn autosync_judgment_at_source_time(state: &mut State, source_time_ns: SongTimeNs) -> Judgment {
+        let rate = state.music_rate();
+        let now = Instant::now();
+        let clock = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos: source_time_ns,
+                    music_seconds_per_second: rate,
+                    has_music_mapping: true,
+                    valid_at: now,
+                    valid_at_host_nanos: 1,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+            rate,
+            0.0,
+        );
+        let event_time_ns = song_clock_music_time_ns(clock, now, 1);
+        let hit = state
+            .note_hit_eval(0, state.chart_runtime.note_time_cache_ns[0], event_time_ns)
+            .expect("autosync probe stays within the judgment window");
+        state.build_final_note_hit_plan(0, hit, rate).judgment
+    }
+
+    #[test]
+    fn autosync_discards_partial_samples_when_music_rate_changes() {
+        for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
+            let mut state = regression_state();
+            state.set_music_rate(0.5);
+            state.set_autosync_mode(mode);
+            for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT / 2 {
+                state.apply_autosync_offset_correction(song_time_ns_from_seconds(0.010));
+            }
+            assert_eq!(
+                state.autosync_sample_count(),
+                AUTOSYNC_OFFSET_SAMPLE_COUNT / 2
+            );
+            let song_offset = state.song_offset_seconds();
+            let global_offset = state.global_offset_seconds();
+            assert!(!state.set_music_rate(0.5));
+            assert_eq!(
+                state.autosync_sample_count(),
+                AUTOSYNC_OFFSET_SAMPLE_COUNT / 2
+            );
+
+            assert!(state.set_music_rate(2.0));
+            assert_eq!(state.autosync_sample_count(), 0);
+            for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT - 1 {
+                state.apply_autosync_offset_correction(song_time_ns_from_seconds(-0.010));
+            }
+            assert_eq!(state.song_offset_seconds(), song_offset);
+            assert_eq!(state.global_offset_seconds(), global_offset);
+            state.apply_autosync_offset_correction(song_time_ns_from_seconds(-0.010));
+
+            let (song_delta, global_delta) = match mode {
+                AutosyncMode::Song => (-0.020, 0.0),
+                AutosyncMode::Machine => (0.0, -0.010),
+                AutosyncMode::Off => unreachable!(),
+            };
+            assert!((state.song_offset_seconds() - song_offset - song_delta).abs() < 1e-6);
+            assert!((state.global_offset_seconds() - global_offset - global_delta).abs() < 1e-6);
         }
     }
 
@@ -3444,7 +4095,7 @@ mod runtime_regression_tests {
                     // ITGmania accepts only standard deviations strictly below 30 ms.
                     let correction = if spread_ms < 30.0 { 0.010 } else { 0.0 };
                     let (song_delta, global_delta) = match mode {
-                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Song => (correction * rate, 0.0),
                         AutosyncMode::Machine => (0.0, correction),
                         AutosyncMode::Off => unreachable!(),
                     };
@@ -3728,7 +4379,82 @@ mod runtime_regression_tests {
         let blue_window_ms = state.player_blue_window_ms(0);
         assert_eq!(state.display_ex_score_percent(0, blue_window_ms), 0.0);
         assert_eq!(state.display_itg_score_percent(0), 0.0);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 0);
         assert!(state.players_runtime.players[0].last_judgment.is_some());
+    }
+
+    #[test]
+    fn native_dance_progress() {
+        // ITGmania ScoreKeeperNormal counts score progress per row even after
+        // failure. Neither weighted judgments nor frozen score counts suffice.
+        let timing = TimingSegments {
+            combos: vec![ComboSegment { beat: 0.0, combo: 3, miss_combo: 2 }],
+            ..TimingSegments::default()
+        };
+        let mut state = regression_state_with_segments(timing, 144);
+        let rows = [0, 48, 96, 144];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[2], NoteType::Tap, JudgeGrade::Fantastic, 0.0),
+            note_with_judgment(1, rows[2], NoteType::Tap, JudgeGrade::Fantastic, 0.0),
+            note_with_judgment(0, rows[3], NoteType::Tap, JudgeGrade::Miss, 0.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = [1.0, 2.0, 3.0, 3.0, 4.0]
+            .map(song_time_ns_from_seconds).to_vec();
+        state.chart_runtime.row_entries = [vec![0], vec![1], vec![2, 3], vec![4]]
+            .into_iter().enumerate().map(|(ix, indices)| {
+                test_row_entry_with_times(&state.chart_runtime.notes,
+                    &state.chart_runtime.note_time_cache_ns, rows[ix], indices)
+            }).collect();
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 10);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, -24);
+        assert!(state.force_fail_player(0));
+        state.finalize_row_judgment(0, rows[2], 2, false);
+        state.finalize_row_judgment(0, rows[3], 3, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.current_possible_points, 20);
+        assert_eq!(player.earned_grade_points, -24);
+        assert_eq!(player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Miss)], 2);
+        assert_eq!(player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Miss)], 6);
+        assert_eq!(player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)], 3);
+        assert_eq!(state.stage_itg_score_inputs(0).expect("active player").current_possible_points, 20);
+        reset_player_runtime_for_practice(&mut state.players_runtime.players[0], 0.0);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 0);
+    }
+
+    #[test]
+    fn cancelled_failed_stage_is_not_finalized() {
+        let mut state = regression_state();
+        assert!(!state.should_finalize_stage_result());
+        state.force_fail_player(0);
+        assert!(state.all_joined_players_failed());
+        assert!(state.should_finalize_stage_result());
+
+        state.begin_exit_transition(ExitTransitionKind::Cancel);
+        assert!(!state.should_finalize_stage_result());
+        state.progress.stage.song_completed_naturally = true;
+        assert!(!state.should_finalize_stage_result());
+
+        state
+            .control
+            .exit_input
+            .exit_transition
+            .as_mut()
+            .unwrap()
+            .started_at = Instant::now() - std::time::Duration::from_secs(2);
+        assert_eq!(
+            state.update_exit_transition(0.0),
+            Some(GameplayAction::NavigateNoFade(GameplayExit::Cancel))
+        );
+        assert!(state.control.exit_input.exit_transition.is_none());
+        assert!(!state.should_finalize_stage_result());
+
+        let mut completed = regression_state();
+        completed.progress.stage.song_completed_naturally = true;
+        assert!(completed.should_finalize_stage_result());
     }
 
     #[test]
@@ -4055,6 +4781,96 @@ mod runtime_regression_tests {
             vec![GameplaySessionCommand::SetTimingTickMode(
                 GameplayTimingTickMode::Assist
             )]
+        );
+    }
+
+    #[test]
+    fn step_callback_reports_ghost_presses_without_release_or_explosion_messages() {
+        let mut state = regression_state();
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = Arc::clone(&calls);
+        state.step_callback = Some(Box::new(move |_, column| observed.lock().unwrap().push(column)));
+        assert!(!state.judge_a_tap(0, -10_000_000_000));
+        assert_eq!(*calls.lock().unwrap(), [0], "ghost presses are still Player::Step calls");
+        let _ = state.judge_a_lift(0, -10_000_000_000);
+        state.spawn_tap_explosion_for_grade(1, JudgeGrade::Great, false);
+        assert_eq!(*calls.lock().unwrap(), [0], "releases and feedback do not synthesize presses");
+    }
+
+    #[test]
+    fn note_field_tap_callback_runs_before_mask_and_each_ghost() {
+        let profile = TestProfile {
+            tap_explosion_options: TapExplosionOptions {
+                great: false,
+                ..all_tap_explosion_options()
+            },
+            ..TestProfile::default()
+        };
+        let mut state = regression_state_with_profiles(std::array::from_fn(|_| profile.clone()));
+        enable_tap_explosion_durations(&mut state);
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = Arc::clone(&calls);
+        state.note_field_tap_callback = Some(Box::new(move |game, tap| {
+            assert!(game.display.visual_feedback.tap_explosions[1].is_none());
+            observed.lock().unwrap().push((tap, game.boundary.total_elapsed_in_screen));
+            GameplayNoteFieldTap { column: 3, score: "W1", bright: true, ..tap }
+        }));
+        for seconds in [1.0, 1.01] {
+            state.boundary.total_elapsed_in_screen = seconds;
+            state.spawn_tap_explosion_for_grade(1, JudgeGrade::Great, false);
+            assert_eq!(calls.lock().unwrap().len(), if seconds == 1.0 { 1 } else { 2 });
+            let ghost = state.display.visual_feedback.tap_explosions[3].as_ref().unwrap();
+            assert_eq!(ghost.window, "W1");
+            assert!(ghost.bright);
+        }
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0], (GameplayNoteFieldTap { player: 0, column: 1, score: "W3", bright: false }, 1.0));
+        assert_eq!(calls[1].1, 1.01);
+    }
+
+    #[test]
+    fn note_field_mine_callback_changes_ghost_without_suppressing_hit_sound() {
+        let mut state = regression_state();
+        state.setup.config.mine_hit_sound = true;
+        state.drain_audio_commands().for_each(drop);
+        state.note_field_tap_callback = Some(Box::new(|_, tap| {
+            assert_eq!(tap.score, "HitMine");
+            assert_eq!(tap.column, 1);
+            GameplayNoteFieldTap { score: "None", ..tap }
+        }));
+        state.trigger_mine_explosion(1);
+        assert!(state.display.visual_feedback.mine_explosions[1].is_none());
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(),
+            vec![GameplayAudioCommand::PlayPreloadedMineSfx {
+                path: "assets/sounds/boom.ogg",
+                player: 0,
+                two_players: false,
+            }]);
+    }
+
+    #[test]
+    fn two_player_mine_audio_routes_to_each_players_panned_voice() {
+        let mut state = regression_state();
+        state.setup.num_players = 2;
+        state.setup.config.mine_hit_sound = true;
+        state.drain_audio_commands().for_each(drop);
+        state.trigger_mine_explosion(0);
+        state.trigger_mine_explosion(1);
+        state.trigger_mine_explosion(state.setup.cols_per_player);
+        assert_eq!(
+            state.drain_audio_commands().collect::<Vec<_>>(),
+            vec![
+                GameplayAudioCommand::PlayPreloadedMineSfx {
+                    path: "assets/sounds/boom.ogg",
+                    player: 0,
+                    two_players: true,
+                },
+                GameplayAudioCommand::PlayPreloadedMineSfx {
+                    path: "assets/sounds/boom.ogg",
+                    player: 1,
+                    two_players: true,
+                },
+            ],
         );
     }
 
@@ -4828,7 +5644,7 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 2.0;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 2.0);
 
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.confusion_offset - 3.14).abs() <= 0.000_1);
@@ -4871,7 +5687,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn song_lua_constant_mini_layers_on_profile_mini() {
+    fn song_lua_constant_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -4898,11 +5714,11 @@ mod runtime_regression_tests {
         state.clock.visible_timing.current_music_time[0] = 1.016;
         refresh_active_attack_masks(&mut state, 1.0);
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!((mini + 50.0).abs() <= 0.000_1);
+        assert!((mini + 100.0).abs() <= 0.000_1);
     }
 
     #[test]
-    fn song_lua_eased_mini_layers_on_profile_mini() {
+    fn song_lua_eased_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -4925,7 +5741,7 @@ mod runtime_regression_tests {
         refresh_active_attack_masks(&mut state, 0.0);
 
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!(mini.abs() <= 0.000_1);
+        assert!((mini + 50.0).abs() <= 0.000_1);
     }
 
     #[test]
@@ -4971,13 +5787,13 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 0.6;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.6);
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.flip - 1.0).abs() <= 0.000_1);
         assert!(visual.invert.abs() <= 0.000_1);
 
         state.clock.visible_timing.current_music_time[0] = 1.1;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.5);
         let reset = effective_visual_effects_for_player(&state, 0);
         assert!(reset.flip.abs() <= 0.000_1);
         assert!(reset.invert.abs() <= 0.000_1);
@@ -5010,5 +5826,338 @@ mod runtime_regression_tests {
         assert!(state.mods.attacks.visual[0].confusion_offset.is_none());
         assert!(state.mods.attacks.visual[0].tipsy.is_none());
         assert!((visibility.dark - 1.0).abs() <= 0.0001);
+    }
+
+    /// Routine notes owned by P1 at beats 1 and 2 (columns 0 and 1) and by P2
+    /// at beat 1 (column 7), so both participants have a note on one row.
+    fn routine_state() -> State {
+        routine_state_for_style(GameplayInputPlayStyle::Routine)
+    }
+
+    fn routine_state_for_style(style: GameplayInputPlayStyle) -> State {
+        assert!(style.is_routine());
+        let song = Arc::new(regression_song());
+        let mut chart = song.charts[0].clone();
+        chart.chart_type = if style.is_pump() {
+            "pump-routine"
+        } else {
+            "dance-routine"
+        }
+        .to_string();
+        let chart = Arc::new(chart);
+        let mut payload = regression_payload_with_segments(TimingSegments::default(), 96);
+        payload.parsed_notes = [(0, 48, 0), (1, 48, style.cols_per_player() - 1), (0, 96, 1)]
+            .into_iter()
+            .map(|(player, row_index, column)| ParsedNote {
+                player,
+                row_index,
+                column,
+                note_type: NoteType::Tap,
+                tail_row_index: None,
+            })
+            .collect();
+        let payload = Arc::new(payload);
+        init_gameplay_runtime(
+            song,
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession {
+                play_style: style,
+                joined_sides: [true, true],
+                ..Default::default()
+            },
+            GameplayConfig::default(),
+            SyncPref::Default,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        )
+    }
+
+    fn routine_note(state: &State, column: usize) -> usize {
+        state
+            .chart_runtime
+            .notes
+            .iter()
+            .position(|note| note.column == column)
+            .expect("routine note in column")
+    }
+
+    /// Step the shared pads as live input does, at `time_ns`.
+    fn routine_step(state: &mut State, lanes: &[Lane], time_ns: SongTimeNs) {
+        for &lane in lanes {
+            assert!(state.queue_pending_input_edge(lane.index(), test_input_edge_at(lane, true, time_ns)));
+        }
+        let clock = SongClockSnapshot {
+            song_time_ns: time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: std::time::Instant::now(),
+            valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+        let mut phase_timings = GameplayUpdatePhaseTimings::default();
+        process_input_edges(state, false, &mut phase_timings, clock);
+        let beat = state.timing_runtime.timing.get_beat_for_time_ns(time_ns);
+        let seconds = song_time_ns_to_seconds(time_ns);
+        state.set_song_position_for_test(beat, time_ns, beat, seconds);
+        state.update_judged_rows();
+    }
+
+    fn judged(counts: &judgment::JudgeCounts) -> u32 {
+        counts.iter().sum()
+    }
+
+    #[test]
+    fn routine_simultaneous_notes_of_different_participants_are_two_judged_rows() {
+        for style in [
+            GameplayInputPlayStyle::Routine,
+            GameplayInputPlayStyle::PumpRoutine,
+        ] {
+            let mut state = routine_state_for_style(style);
+            let width = style.cols_per_player();
+            assert_eq!(state.num_players(), 2);
+            assert_eq!(state.num_cols(), 2 * width);
+            let p1 = routine_note(&state, 0);
+            let p2 = routine_note(&state, 2 * width - 1);
+            assert_eq!(state.chart_runtime.notes[p1].participant, Some(0));
+            assert_eq!(state.chart_runtime.notes[p2].participant, Some(1));
+            assert_eq!(
+                state.chart_runtime.notes[p1].row_index,
+                state.chart_runtime.notes[p2].row_index
+            );
+            assert!(
+                !state
+                    .chart_runtime
+                    .notes
+                    .iter()
+                    .any(|note| note.column == width - 1 || note.column == width)
+            );
+
+            let time_ns = state.chart_runtime.note_time_cache_ns[p1];
+            // Use the actual physical input route: in Pump, P2Right maps to
+            // field column 9, then broadcasts to participant 2's column 19.
+            for physical in [Lane::Left, Lane::P2Right] {
+                assert!(state.queue_live_input_edge(physical, |lane, _, _, _| {
+                    test_input_edge_at(lane, true, time_ns)
+                }));
+            }
+            routine_step(&mut state, &[], time_ns);
+            assert!(state.lane_is_pressed(0) && state.lane_is_pressed(width));
+            assert!(state.lane_is_pressed(width - 1) && state.lane_is_pressed(2 * width - 1));
+            for note in [p1, p2] {
+                let result = state.chart_runtime.notes[note]
+                    .result
+                    .as_ref()
+                    .expect("note judged");
+                assert_eq!(result.grade, JudgeGrade::Fantastic);
+            }
+            for player in &state.players_runtime.players {
+                assert_eq!(judged(&player.judgment_counts), 1);
+                assert_eq!(player.combo, 1);
+            }
+            for physical in [Lane::Left, Lane::P2Right] {
+                assert!(state.queue_live_input_edge(physical, |lane, _, _, _| {
+                    test_input_edge_at(lane, false, time_ns + 1)
+                }));
+            }
+            routine_step(&mut state, &[], time_ns + 1);
+            for column in [0, width, width - 1, 2 * width - 1] {
+                assert!(
+                    !state.lane_is_pressed(column),
+                    "release missed column {column}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn routine_participants_judge_independently_into_one_shared_score() {
+        let mut state = routine_state();
+        let p1_first = routine_note(&state, 0);
+        let p1_second = routine_note(&state, 1);
+        let p2 = routine_note(&state, 15);
+        let first_time_ns = state.chart_runtime.note_time_cache_ns[p1_first];
+        // P2 is late by a Great/Decent amount while P1 is exact.
+        routine_step(&mut state, &[Lane::Left], first_time_ns);
+        routine_step(
+            &mut state,
+            &[Lane::P2Right],
+            first_time_ns.saturating_add(song_time_ns_from_seconds(0.12)),
+        );
+        let second_time_ns = state.chart_runtime.note_time_cache_ns[p1_second];
+        routine_step(&mut state, &[Lane::Down], second_time_ns);
+
+        let grade = |note: usize| state.chart_runtime.notes[note].result.as_ref().unwrap().grade;
+        assert_eq!(grade(p1_first), JudgeGrade::Fantastic);
+        assert_eq!(grade(p1_second), JudgeGrade::Fantastic);
+        assert!(!matches!(grade(p2), JudgeGrade::Fantastic | JudgeGrade::Miss));
+        let players = &state.players_runtime.players;
+        assert_eq!(players[0].judgment_counts[0], 2);
+        assert_eq!(judged(&players[0].judgment_counts), 2);
+        assert_eq!(players[1].judgment_counts[0], 0);
+        assert_eq!(judged(&players[1].judgment_counts), 1);
+
+        // ScoreKeeperShared: both parts' points over both parts' possible points.
+        let first = state.stage_itg_score_inputs(0).unwrap();
+        let second = state.stage_itg_score_inputs(1).unwrap();
+        assert_eq!(first.possible_grade_points, 2 * second.possible_grade_points);
+        let points = |inputs: ItgScoreInputs| {
+            judgment::itg_grade_points_with_checkpoints(
+                &inputs.scoring_counts,
+                inputs.holds_held_for_score,
+                inputs.rolls_held_for_score,
+                inputs.mines_hit_for_score,
+                inputs.checkpoints_hit,
+                inputs.checkpoints_missed,
+            )
+        };
+        let expected = judgment::calculate_itg_score_percent_from_points(
+            points(first) + points(second),
+            first.possible_grade_points + second.possible_grade_points,
+        );
+        let shared = state.routine_shared_itg_score_percent().unwrap();
+        assert!((shared - expected).abs() < 1e-12);
+        assert!(shared < state.stage_itg_score_percent(0));
+        assert!(shared > state.stage_itg_score_percent(1));
+        assert_ne!(
+            shared,
+            (state.stage_itg_score_percent(0) + state.stage_itg_score_percent(1)) / 2.0
+        );
+
+        // CombinedLifeMeterShared: one meter changed by both participants.
+        assert_eq!(players[0].life, players[1].life);
+        assert_eq!(players[0].life_history, players[1].life_history);
+    }
+
+    #[test]
+    fn routine_hud_shows_the_shared_score_for_both_participants() {
+        let mut state = routine_state();
+        let p1_first = routine_note(&state, 0);
+        let p1_second = routine_note(&state, 1);
+        let first_time_ns = state.chart_runtime.note_time_cache_ns[p1_first];
+        // P1 is exact while P2 is late, so their own scores differ.
+        routine_step(&mut state, &[Lane::Left], first_time_ns);
+        routine_step(
+            &mut state,
+            &[Lane::P2Right],
+            first_time_ns.saturating_add(song_time_ns_from_seconds(0.12)),
+        );
+        let second_time_ns = state.chart_runtime.note_time_cache_ns[p1_second];
+        routine_step(&mut state, &[Lane::Down], second_time_ns);
+
+        let shared = state.routine_shared_itg_score_inputs().unwrap();
+        let own = |player| state.participant_display_itg_score_inputs(player).unwrap();
+        assert!(itg_score_percent_from_inputs(own(0)) > itg_score_percent_from_inputs(shared));
+        assert!(itg_score_percent_from_inputs(own(1)) < itg_score_percent_from_inputs(shared));
+        // Simply Love's Score.lua shows the shared score in both HUD modes.
+        for player in 0..2 {
+            for mode in [
+                GameplayScoreDisplayMode::Normal,
+                GameplayScoreDisplayMode::Predictive,
+            ] {
+                assert_eq!(
+                    state.display_gameplay_itg_score_percent(player, mode),
+                    display_itg_score_percent_for_mode(shared, mode),
+                );
+            }
+            assert_eq!(
+                state.display_predictive_itg_score_percent(player),
+                predictive_itg_score_percent_from_inputs(shared),
+            );
+        }
+        assert_ne!(
+            predictive_itg_score_percent_from_inputs(own(0)),
+            predictive_itg_score_percent_from_inputs(shared),
+        );
+        // Judgments and EX scores stay with each participant.
+        assert_ne!(
+            state.display_ex_score_percent(0, state.player_blue_window_ms(0)),
+            state.display_ex_score_percent(1, state.player_blue_window_ms(1)),
+        );
+        assert_ne!(
+            state.players_runtime.players[0].judgment_counts,
+            state.players_runtime.players[1].judgment_counts,
+        );
+    }
+
+    #[test]
+    fn routine_shared_course_score_keeps_earlier_songs() {
+        let mut state = routine_state();
+        let stage_points = [
+            state.stage_totals_for_player(0).possible_grade_points,
+            state.stage_totals_for_player(1).possible_grade_points,
+        ];
+        let stage_steps = [
+            state.stage_totals_for_player(0).total_steps,
+            state.stage_totals_for_player(1).total_steps,
+        ];
+        // The previous song was all Greats, the current one all Fantastics.
+        let carry = |player: usize| CourseDisplayCarry {
+            scoring_counts: [0, 0, stage_steps[player], 0, 0, 0],
+            ..CourseDisplayCarry::default()
+        };
+        let totals = |player: usize| CourseDisplayTotals {
+            possible_grade_points: 2 * stage_points[player],
+            total_steps: 2 * stage_steps[player],
+            ..CourseDisplayTotals::default()
+        };
+        state.progress.course_display = GameplayCourseDisplayState::new(
+            Some([carry(0), carry(1)]),
+            Some([totals(0), totals(1)]),
+            None,
+        );
+        for player in 0..2 {
+            state.players_runtime.players[player].scoring_counts =
+                [stage_steps[player], 0, 0, 0, 0, 0];
+        }
+
+        // Individual-song saves keep the current song only.
+        assert_eq!(state.routine_shared_stage_itg_score_percent(), Some(1.0));
+        // Course display and evaluation score Greats (2) and Fantastics (5)
+        // over the whole course of both participants.
+        let course = state.routine_shared_itg_score_percent().unwrap();
+        assert!((course - 0.7).abs() < 1e-12, "{course}");
+        let hud = state.display_gameplay_itg_score_percent(1, GameplayScoreDisplayMode::Normal);
+        assert!((hud - 70.0).abs() < 1e-9, "{hud}");
+    }
+
+    #[test]
+    fn routine_failing_one_participant_fails_both() {
+        let mut state = routine_state();
+        assert!(state.force_fail_player(1));
+        assert!(state.player_is_dead(0) && state.player_is_dead(1));
+        assert_eq!(state.players_runtime.players[0].fail_time, state.players_runtime.players[1].fail_time);
+        // The partner's EX score freezes at the shared failure too.
+        assert!(state.players_runtime.players[0].failed_ex_score_inputs.is_some());
+        assert!(state.players_runtime.players[1].failed_ex_score_inputs.is_some());
+    }
+
+    #[test]
+    fn regular_versus_steps_are_not_shared() {
+        let mut state = regression_state_with_session(GameplaySession {
+            play_style: GameplayInputPlayStyle::Versus,
+            joined_sides: [true, true],
+            ..Default::default()
+        });
+        assert!(state.queue_pending_input_edge(0, test_input_edge_at(Lane::Left, true, 0)));
+        assert_eq!(state.pending_input_len(), 1);
     }
 }

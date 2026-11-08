@@ -84,6 +84,18 @@ pub fn apply_pad_commands(
     for command in commands {
         let device = command.device();
         match command {
+            PadCommand::SensorThresholdPair {
+                device,
+                button,
+                sensor,
+                press,
+                release,
+            } => {
+                let _ = deadsync_reflex::set_sensor_pair(device, button, sensor, press, release);
+            }
+            PadCommand::HostControl { device, action } => {
+                let _ = deadsync_reflex::host_action(device, action);
+            }
             PadCommand::Threshold {
                 device,
                 button,

@@ -1,0 +1,21 @@
+{
+  "source_base": "0afe68812",
+  "started_date": "2026-10-28",
+  "report_date": "2026-10-29",
+  "selected_checkpoint": "stored",
+  "benchmark_stage": "deflate-tables",
+  "pipeline_cases": 212,
+  "pipeline_comparisons": ["tables-paired", "crc16-paired", "crc-tail-paired", "stored-paired", "selected-paired"],
+  "pipeline_protocol": "Logical CPU 2; Windows thread cycles; three warmups; separate untimed allocation probe; seven batches; four alternating processes per version. Requested iterations are three, at least 64 for readers up to 65536 native bytes and 2048 for other outputs below 4096 bytes. Complete samples/palettes and independently modeled filtered bytes are checked outside timing. Fingerprints identify exact PNG input bytes.",
+  "checkpoint_scope_note": "Freeze-only checkpoint manifests inherit the shared driver's default 12-iteration scope text but contain no timed outputs. Every paired manifest and TSV records the actual three-iteration request and per-case minimum.",
+  "fixture_scope": "The previous 188 Stored-noise/native-fixed-gradient PNG API cases plus 24 independently framed reference-zlib controls at levels 1/9. Reference cases record their first block type in the case name; all 513x257 reference cases assert dynamic Huffman type 2.",
+  "in_process_protocol": "Git baseline and selected source link with shared native image types and copied optimized/LTO bench settings. Three processes each retain eleven alternating batches per variant after one warmup. All 212 API comparisons check samples/palettes before timing and black-box complete Png results. Small cases use 512 iterations, large cases three.",
+  "stored_in_process_protocol": "The crc-tail source checkpoint is reconstructed from Git plus its verified patch, normalized to recorded LF bytes and checked against every original source hash. It links with selected stored source. Three processes each cover 144 API case/operations with 128 iterations per batch, eleven retained alternating batches per variant after warmup. All inputs assert a final Stored first block and check complete native images; readers also check palettes. Shapes 33x9, 64x64 and 128x32 cover twelve native formats and plain/Adam7. Buffered APIs are controls for this streaming-only change.",
+  "retained_components": ["Compile fixed Huffman values using the same validated const builder as runtime dynamic trees", "Sixteen-byte CRC reduction with the original eight-byte tail kernel", "Skip private history writes for final Stored payloads while retaining total_out, checksum and progress accounting"],
+  "tradeoffs": "CRC lookup definitions grow from 8192 to 16384 bytes and fixed Huffman values add immutable table data. Runtime heap allocations/reallocations/requested bytes remain unchanged in every measured case. Some small/caller timings vary; no universal throughput claim is made.",
+  "trial_notes": "crc16 is an intermediate without the restored eight-byte tail. fixed-build.log preserves an initial Rust const-drop compilation rejection before any measurements. A focused-caller setup initially produced CRLF files through git apply; its strict hash guard rejected them before building. The successful stored-in-process-lf setup normalizes to exact recorded source bytes before compilation.",
+  "serialization": "Our builds, benchmark processes and correctness jobs are serialized. Other host activity, CPU frequency and preemption are uncontrolled. Both pipeline and supplemental raw results and control cases are retained.",
+  "source_line_endings": "PNG source matches recorded Git LF bytes. The unchanged shared deadlib-image/src/lib.rs checkout is CRLF while Git stores LF; audit checks that documented normalization. Report digest is of Git-normalized LF text; raw measurements and source/executable records retain exact bytes.",
+  "correctness": ["final-validation.json", "library-validation.json"],
+  "test_changes": "Integration tests, support generators and fixtures are unchanged. A new library CRC oracle checks every byte value at 32 offsets and ten update splits against independent bitwise CRC arithmetic, including sixteen-byte groups and eight-byte tails. The StreamDecoder history documentation is corrected to its existing at-most-32-KiB contract."
+}

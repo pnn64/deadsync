@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "original_commit": "450e07e7a",
+  "stages": [
+    "round4b-base",
+    "fields-b-final",
+    "region-zero-final"
+  ],
+  "profiles_identical": true,
+  "original_production_sources_match_commit": true,
+  "final_source_and_probes_match_working_tree": true,
+  "manifest_sha256": {
+    "round4b-base": "ebef6a912b180ef7ab36f21fd70557da7bd68aade27bbb7779045934ee028f53",
+    "fields-b-final": "e48b94c7def066bfbf42577001b4897b695745e64049ec1324a3c06dc3e83d9c",
+    "region-zero-final": "f33090a8ccc14cc0a99da08878582826a800fd7009afd34b49f21fa6ab0f36a5"
+  },
+  "verification_sha256": {
+    "round4b-base": "34b6061d85932611c75bced6e9c326674c4f3608504ea829fa1016d288e2e333",
+    "fields-b-final": "34b6061d85932611c75bced6e9c326674c4f3608504ea829fa1016d288e2e333",
+    "region-zero-final": "34b6061d85932611c75bced6e9c326674c4f3608504ea829fa1016d288e2e333"
+  },
+  "verification_bytes": {
+    "round4b-base": 290848960,
+    "fields-b-final": 290848960,
+    "region-zero-final": 290848960
+  },
+  "integration_test_sources": {
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\bits.rs": "d87a34ed4d7f7068c0e2a79739567f9f239d7e83dab00ede5f6cf691a7dd32ec",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\checksum.rs": "abc815af7df0b0e059970123a5029cfa7e3d74d544fda8ba939e1b02cc799d4b",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\decoder.rs": "51a50d08949b702a27505805547c3ea3c8a91815b3b74fa84adcae7e41875837",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\foundation.rs": "f08f2a8340d4e09bbdacfe28fe9c49cc69b10bbe6c828ffbe5e64de6aa728936",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\gapless.rs": "b44e366941b9aad4d40177c1cdd30287ae796c6d9ec2d503420e5c51930d28d7",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\huffman.rs": "cd7858fbb1dcb69967fd11a5b5f843ed5047609af1dccdcb5a350fd6a5fe2bff",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\indexed.rs": "596eee0371091f36dfd53cd0ca65718359e12e54be22b8718a43a4486bb01dc1",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\scalefactors.rs": "e4f2452030ced15a2bbf41ae61d2c1dc7c523d7e68a52d2f823f59e3769de98d",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\spectral.rs": "7c1e24fd32f6fe1d95f453b782d9ce329c350c6531f5f0de0821eb002cf5e7e2",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\stream.rs": "df5645619eeb394cde7382bcdbd8f0147ca794474cd49a3ae8de6de842249741",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\synthesis.rs": "5e5d2cecb1a54e87d4f55fb3176a54976832ee5843d7904ad524e5c6f50cff16"
+  },
+  "final_checks": {
+    "distinct_integration_tests": 56,
+    "full_suite_before_new_test": 55,
+    "expanded_spectral_suite": 10,
+    "all_target_clippy_warnings_denied": true,
+    "scoped_rustfmt": true,
+    "git_diff_check": true
+  }
+}

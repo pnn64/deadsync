@@ -1,0 +1,141 @@
+{
+  "decision": "reject",
+  "reason": "No photo decoding/inflation benefit after reference normalization; a local format-inflate gain does not establish an overall PNG benefit. Preserve the previously selected decoder.",
+  "baseline_png_commit": "b2b3a74583250f6a60ee220e689570f9521fafaf",
+  "production_changes": [],
+  "all_21_production_sources_restored": true,
+  "candidate_reconstruction_verified": true,
+  "reconstructed_source_directory": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-literal-refill-reconstruct-0uckk16s",
+  "focused_tests": {
+    "passed": 41,
+    "failed": 0,
+    "ignored": 5
+  },
+  "strict_all_target_clippy": true,
+  "scoped_rustfmt": true,
+  "benchmark_groups": [
+    {
+      "path": "benchmark-literal-refill-before-photos-a-manifest.json",
+      "sha256": "417efb064f6bf0405244ba06f95389b8009b970c5e135692048386e47af8ad77",
+      "variant": "baseline"
+    },
+    {
+      "path": "benchmark-literal-refill-trial-photos-a-manifest.json",
+      "sha256": "c47377eccea6435e2a9962e5de27586ce97b10d04b28990ae75534061a646119",
+      "variant": "candidate"
+    },
+    {
+      "path": "benchmark-literal-refill-repeat-photos-a-manifest.json",
+      "sha256": "21ff35fb6b3a9f5eeff48e15030026a8284c08cb803f6a210c04c6730333738f",
+      "variant": "candidate"
+    },
+    {
+      "path": "benchmark-literal-refill-control-photos-a-manifest.json",
+      "sha256": "8c15b0984390ebf222c4dbccd10955451ff9c20fceead9949f54e9eae64edad6",
+      "variant": "baseline"
+    },
+    {
+      "path": "benchmark-literal-refill-before-formats-a-manifest.json",
+      "sha256": "f7a831f5cbf8938c23d94523e757fe16007837582d3a76149cb618321904ab68",
+      "variant": "baseline"
+    },
+    {
+      "path": "benchmark-literal-refill-trial-formats-a-manifest.json",
+      "sha256": "e473240186a808ca36274ea5dc75c3c627a01b6a8289f5aab7ba4fe0c17f6b90",
+      "variant": "candidate"
+    },
+    {
+      "path": "benchmark-literal-refill-repeat-formats-a-manifest.json",
+      "sha256": "7b1569385f8a2cff527371affd6edc7d58cfa67f956d8ecf42d8948580a51abd",
+      "variant": "candidate"
+    },
+    {
+      "path": "benchmark-literal-refill-control-formats-a-manifest.json",
+      "sha256": "5c5551c050670c0377edc310ce10b9fe4613f7bfbfab8147e4a95ad6f1ed7317",
+      "variant": "baseline"
+    }
+  ],
+  "timed_processes": 24,
+  "summaries": [
+    {
+      "path": "benchmark-literal-refill-photos-summary.json",
+      "sha256": "5917d0729820fc849497f9c24051eff49a543e0af80a5e50dcbe0f0ef5bb7ac5",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 103.08955403495197,
+          "after_mib_s": 97.34287498529109,
+          "absolute_change_percent": -5.574453302720183,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.9150740758469231
+        },
+        "decode-reader": {
+          "before_mib_s": 92.91423388525122,
+          "after_mib_s": 88.81899338513638,
+          "absolute_change_percent": -4.407549122314725,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.7029475476035718
+        },
+        "inflate": {
+          "before_mib_s": 127.32538598912971,
+          "after_mib_s": 119.29525153607987,
+          "absolute_change_percent": -6.306781943496642,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -0.8900517778656969
+        },
+        "inflate-stream": {
+          "before_mib_s": 102.51714909108499,
+          "after_mib_s": 97.63188588284602,
+          "absolute_change_percent": -4.765313171066121,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 0.7405346550764635
+        }
+      }
+    },
+    {
+      "path": "benchmark-literal-refill-formats-summary.json",
+      "sha256": "b4dc44bca2e745fbbff5a827fbd5563370de8cd0d3106603ec65f482cf5c3064",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 265.67921296250086,
+          "after_mib_s": 268.3137314400612,
+          "absolute_change_percent": 0.9916163361761265,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 1.9376189323969006
+        },
+        "decode-reader": {
+          "before_mib_s": 245.68778098030424,
+          "after_mib_s": 245.22570417532967,
+          "absolute_change_percent": -0.18807480092452034,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 0.746877463408091
+        },
+        "inflate": {
+          "before_mib_s": 1040.5244100982163,
+          "after_mib_s": 1096.7277862557298,
+          "absolute_change_percent": 5.401447156074735,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 6.3645245409025275
+        },
+        "inflate-stream": {
+          "before_mib_s": 540.7108178074624,
+          "after_mib_s": 535.8162262932403,
+          "absolute_change_percent": -0.9052142759172432,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 0.0002376857043184799
+        }
+      }
+    }
+  ],
+  "unchanged_previous_validation": {
+    "path": "huffman-permutations-validation.json",
+    "sha256": "bdc39755e73099c22c682a91048b7797571581ccebb430a1ed80d98dac69879f",
+    "all_recorded_compiled_inputs_match": true
+  },
+  "scope": "Each timed process validates raw/native output on all 84 corpus files before measurement. Three warmups, twelve iterations, CPU 0. No task builds/tests/fuzzing/profiling overlap timing. External host work and frequency are uncontrolled; zero pipeline-byte columns do not measure allocation or peak memory.",
+  "no_new_sanitizer_executions": true,
+  "no_full_candidate_suite_claimed": true,
+  "trial_manifest_sha256": "4fa448623d7e231fde1922ff51601330a5a2bb93549f432020cf17b486f0ad1f",
+  "trial_log_sha256": "419cb66961b24f98c9f11b7baa20faaf69abdf1b99b20cfee839f264493397da",
+  "previous_goal_turn": "Progress: verified b2b3a745 conformance milestone. This turn tests a distinct decoder performance hypothesis.",
+  "audit_runner_sha256": "da3da060771be88adf956ac410f288f610958fc80d5d6d481cdb7d3cd80d99e4"
+}

@@ -18,6 +18,60 @@ pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplay
     }
 }
 
+/// Couple and Routine metadata describe both participants. Course
+/// denominators must use only the notes assigned to the participant, just as
+/// song gameplay does.
+#[must_use]
+pub fn course_display_totals_for_chart_side(
+    chart: &ChartData,
+    payload: &GameplayChartData,
+    style: GameplayInputPlayStyle,
+    player: usize,
+) -> CourseDisplayTotals {
+    if !matches!(
+        style,
+        GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
+    ) && !style.is_routine()
+    {
+        return course_display_totals_for_chart(chart);
+    }
+    let mut totals = CourseDisplayTotals::default();
+    let mut last_step = None;
+    for note in &payload.parsed_notes {
+        if style.runtime_column(note.column, player).is_none()
+            || (style.is_routine() && usize::from(note.player) != player)
+        {
+            continue;
+        }
+        let Some(beat) = payload.timing.get_beat_for_row(note.row_index) else {
+            continue;
+        };
+        if note.note_type == NoteType::Fake || !payload.timing.is_judgable_at_beat(beat) {
+            continue;
+        }
+        match note.note_type {
+            NoteType::Mine => {
+                totals.mines_total += 1;
+                continue;
+            }
+            NoteType::Hold => totals.holds_total += 1,
+            NoteType::Roll => totals.rolls_total += 1,
+            _ => {}
+        }
+        if last_step != Some(note.row_index) {
+            totals.total_steps += 1;
+            last_step = Some(note.row_index);
+        }
+    }
+    totals.possible_grade_points = judgment::max_grade_points(
+        totals.total_steps,
+        totals.holds_total,
+        totals.rolls_total,
+        0,
+    );
+    totals
+}
+
 #[must_use]
 pub fn course_display_totals_for_player(
     totals: Option<&[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -45,6 +99,7 @@ pub fn course_display_totals_for_player(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayCarry {
+    pub current_possible_points: i32,
     // ITGmania keeps the same lifemeter alive between nonstop course songs.
     pub life: f32,
     pub course_life: CourseLifeState,
@@ -327,6 +382,7 @@ pub enum GameplayScoreDisplayMode {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayStage {
+    pub current_possible_points: i32,
     pub life: f32,
     pub course_life: CourseLifeState,
     pub judgment_counts: judgment::JudgeCounts,
@@ -379,6 +435,8 @@ pub fn course_display_carry_for_stage(
 
     CourseDisplayCarry {
         life: stage.life.clamp(0.0, 1.0),
+        current_possible_points: previous.current_possible_points
+            .saturating_add(stage.current_possible_points),
         course_life: course_life_carry(stage.course_life),
         judgment_counts,
         scoring_counts,
@@ -461,6 +519,7 @@ pub const fn player_course_display_stage(
 ) -> CourseDisplayStage {
     CourseDisplayStage {
         life: player.life,
+        current_possible_points: player.current_possible_points,
         course_life: player.course_life,
         judgment_counts: player.judgment_counts,
         scoring_counts: player.scoring_counts,

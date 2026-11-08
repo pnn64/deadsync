@@ -23,17 +23,17 @@ pub mod workshop;
 
 pub use draw::{
     ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
-    ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType, glowshift_mix,
-    model_auto_rot_z_at, model_draw_at, model_draw_at_cursor, model_effect_clock_units,
-    model_effect_mix, model_glow_at, model_glow_with_draw, model_texture_uv_params,
-    model_texture_uv_params_cached,
+    ModelMaterial, ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType,
+    glowshift_mix, model_auto_rot_z_at, model_draw_at, model_draw_at_cursor,
+    model_effect_clock_units, model_effect_mix, model_glow_at, model_glow_with_draw,
+    model_texture_uv_params, model_texture_uv_params_cached, model_unlit_color,
 };
 pub use explosion::{
     ExplosionAngle, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
     GlowEffect, itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
     parse_explosion_animation,
 };
-pub use model::{ItgModelSlotPlan, itg_load_model_slots_from_path};
+pub use model::{ItgModelSlotPlan, itg_load_model_slots};
 pub use parts::{
     ITG_DANCE_COL_SPACING, NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType,
     NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, Quantization, Style,
@@ -83,11 +83,10 @@ pub use sprite::{
     neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
     sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
     sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing, sprite_scrolled_uv,
-    sprite_sheet_frame, sprite_state_properties_animation, sprite_uv_scroll_clock,
-    state_properties_source_plan,
+    sprite_sheet_frame, sprite_state_properties_animation, sprite_state_properties_animation_owned,
+    sprite_uv_scroll_clock, state_properties_source_plan,
 };
 
 #[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
+#[path = "../../../tests/perf/resource_support.rs"]
+mod resource_perf_support;

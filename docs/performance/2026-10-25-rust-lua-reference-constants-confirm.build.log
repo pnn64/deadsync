@@ -1,0 +1,3 @@
+    Blocking waiting for file lock on build directory
+    Finished `bench` profile [optimized + debuginfo] target(s) in 2m 04s
+     Running benches\baseline.rs (target\release\deps\baseline-13461f758967ef58.exe)

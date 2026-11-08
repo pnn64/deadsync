@@ -1,0 +1,13 @@
+    Checking deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+error: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-audio\decode\wav\tests\adpcm_wavl.rs:345:35
+    |
+345 |             for frame in out[..n].chunks_exact(2) {
+    |                                   ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<2>().0`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+    = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`
+
+error: could not compile `deadlib-audio-decode-wav` (test "adpcm_wavl") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

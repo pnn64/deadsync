@@ -1,0 +1,1128 @@
+{
+  "scope": "Compiled native PacketDecoder before/after the unwindowed-time extraction. Identical raw PCM bits, errors, discard decisions, truncation flags, sample counts and positions for every selected schedule. This does not claim vorbisfile seek parity.",
+  "before_commit": "921cf04428c6084deea0ab97c40560d0f75008ee",
+  "baseline_source_sha256": {
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "2913db0480dfb2159aa9cd68be62cfbd66a200d26bfa7ce1fe2adedab20bac26",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "crates/deadlib-audio/decode/vorbis/src/eos_reference.rs": "bdc9a19f6970f36e37fd92bec4988f18013d3982fe857bb75f04d4c92003937d",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4fbd31895e9b1123f4ace8050b223cf5bc3ee542243e412a4ef60ad45872becc",
+    "crates/deadlib-audio/decode/vorbis/src/floor1_reference.rs": "246e8b36feb636415a7a16fb5b4e795db5ed816820570a32984c76938aad040f",
+    "crates/deadlib-audio/decode/vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "e9a9a453c9de1e722e463921b11643bfaccb5b7338f0f304ecc0d47a883cb9f2",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "57db8ed9b05849abb612674576cc557fdfc733f8532241827d458a21aca0ba06",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "crates/deadlib-audio/decode/vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "066102a4133d6b7bf30d06d22ccde8beba36f72d37ac94cbdef464d8b08c1096",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda"
+  },
+  "after_source_sha256": {
+    "ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "ogg/src/validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+    "ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "vorbis/src/decoder.rs": "7bd3ed70addfbc94b4cdd94881389763377a25e60afa31fcd82daab0ccdbd55e",
+    "vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "vorbis/src/eos_reference.rs": "79739f0ac9acdf57bb76891fd0cb1100b75c57843a96a93c56d5473fdc2ed9bd",
+    "vorbis/src/floor.rs": "4fbd31895e9b1123f4ace8050b223cf5bc3ee542243e412a4ef60ad45872becc",
+    "vorbis/src/floor1_reference.rs": "2fc941566def1e43bae3f1e38c87f33d81f5941ce1c9c3927ef92053207c5763",
+    "vorbis/src/floor_reference.rs": "e0b6edcb41da0bc5c5d2a122084dffba371db63b2a446c8b596388b1bbfb5f70",
+    "vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "vorbis/src/lib.rs": "c0443b4c82953eef3c4cdf46f676fd47595e10346711e83daf69d8d772f37ae8",
+    "vorbis/src/ogg.rs": "57db8ed9b05849abb612674576cc557fdfc733f8532241827d458a21aca0ba06",
+    "vorbis/src/reference_vectors.rs": "4b9d1464d4021516458fc76e56bba08c96935ae21d2fb1803e3f0655beeef577",
+    "vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "vorbis/src/seek.rs": "066102a4133d6b7bf30d06d22ccde8beba36f72d37ac94cbdef464d8b08c1096",
+    "vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "vorbis/src/synthesis.rs": "7a6a4586db82c93027561ac2ce63a19c7f4b8cd34e84ff962bfc4fc62508e6a9",
+    "vorbis/src/synthesis_reference.rs": "eb0b6d376e68ba25937e3f795816144b51f336daebf7d9b568f8524e25316a9e",
+    "vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda"
+  },
+  "builds": [
+    {
+      "variant": "before",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\seek-reference-20261027\\raw-refactor\\before\\Cargo.toml"
+      ],
+      "binary_sha256": "bc7d04923e2b8a60986402d943d9470de3e54d32735e145ab7dea4ff6b7a4a6b",
+      "driver_sha256": "ac69537f01040bc1a2459bc4df1fa82822ebe91deed2e3ef5991b9fb4bb78050",
+      "manifest_sha256": "5aaa9f2dea0d7c0e3b70c4bed428b41603b4b4a512496051f58950a8cc37ba20"
+    },
+    {
+      "variant": "after",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\seek-reference-20261027\\raw-refactor\\after\\Cargo.toml"
+      ],
+      "binary_sha256": "ca363fae6e012dd6362a38b195e6bd2bd034acab17dffee225c31809a8dafdef",
+      "driver_sha256": "ac69537f01040bc1a2459bc4df1fa82822ebe91deed2e3ef5991b9fb4bb78050",
+      "manifest_sha256": "f45c38f03b7e886c5d8de1f3c2b3cd79cbbd8ff1f45f87a7ad74d34de3720733"
+    }
+  ],
+  "requests": [
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-counter-batch-0.bin",
+      "request_sha256": "bf58edd74fe0800684c4aef58f0ee582e08ce3181e1be9173a404155ff3cd04d",
+      "identical_output_sha256": "969300c1c9015bf04b45844a263b76016e1cb43c6327c78d8826964e68dd28a6",
+      "output_bytes": 37040
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-fixture-0-batch-0.bin",
+      "request_sha256": "5a3698ec8e390a5e76a3923cf341fbd8dd087a04b57ba344a81c9fe9a68b9189",
+      "identical_output_sha256": "57e6e6db74eb38705ba96434ae420faafbf29c6ec530e94b556832d6f9b85265",
+      "output_bytes": 301600
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-fixture-1-batch-0.bin",
+      "request_sha256": "f21268f19db6bacbecd4f077299a4cabf23cf2b74af6620779cfd1756aee8d24",
+      "identical_output_sha256": "031f9679dcc40423df8c1417b5f331c61ab82650cd315f7bf3bef217e235e8a7",
+      "output_bytes": 26304
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-fixture-2-batch-0.bin",
+      "request_sha256": "2755baf5e51625abf2093236e505d6949c09ae0fb5e480ed4f66807419a203b1",
+      "identical_output_sha256": "e0ca58b5c0546aaad3b47ba71a058d83018477e5752c9a1fefaac0d34414a70f",
+      "output_bytes": 117006
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-fixture-3-batch-0.bin",
+      "request_sha256": "5044b5f1723259098bc2607f4b73166eb2e45693ef57b046ddfdf87f5c81232c",
+      "identical_output_sha256": "aef041986522aabc120d23da0468602da0166e5fc5258345a1b3170a7af57ee0",
+      "output_bytes": 51362
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-1-width-0-batch-0.bin",
+      "request_sha256": "06e6f4dc4ecfb8be943885d8c5b6782b629b6047f6a114f0818c9c5de149dd29",
+      "identical_output_sha256": "38c1f82d17f9cc9363fe829b44864d103a479bcf568d0bbf6458f5e8b0dff8ed",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-1-width-32-batch-0.bin",
+      "request_sha256": "b781f0fbf4dcbbc1796cda8b00c28bd97ca94cfbdc191d900f049809704afd1c",
+      "identical_output_sha256": "7cb1c8d2c992a1b2ab142170e0995ee460d13d41d415ff31a8de6b9c8e0947ef",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-1-width-33-batch-0.bin",
+      "request_sha256": "2bded7dc041052d12f2836d12c5b7531f219256ee49bca234918816c8bd7af77",
+      "identical_output_sha256": "a5a6262091292c3a72c503b9e3d9cfdbb827933a7d301bb36c64ed1a01b983eb",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-1-width-6-batch-0.bin",
+      "request_sha256": "a8d1de5c9611b421d792baf0bceabed716449e0934b5f240ea4704bf8ab4c36f",
+      "identical_output_sha256": "a62a34011cf0161d005c70a1da17b391a102250d12857f9f219097294b928de0",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-2-width-0-batch-0.bin",
+      "request_sha256": "2573493b2ff95219e02ffa6aead28988089aeb60c0b51e9088838e74d57eafc7",
+      "identical_output_sha256": "9d39d17383f9c6a70c7daf30106e84b743291a79f8fe29da8bcdda9b473ff803",
+      "output_bytes": 34336
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-2-width-32-batch-0.bin",
+      "request_sha256": "72c14d07a07336b54139b252c3057b692c88af93056c7200c586c55c7d1677f0",
+      "identical_output_sha256": "72bc430cd07127cb752322e6244aaa119679b3895b5bfbc2e1b54a00c4388bc2",
+      "output_bytes": 34336
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-2-width-33-batch-0.bin",
+      "request_sha256": "d4b2bf78ba613256b8a3ab048979d907489f3ba4e58c82dcd165cc03703aa5cb",
+      "identical_output_sha256": "333e24cf892fa0b9502cee7e99dee079ce0fa98d1484210fafa0e245f98c6159",
+      "output_bytes": 34336
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-2-width-6-batch-0.bin",
+      "request_sha256": "b24070574f228830bf3a23e42471c4dc4a59372c767f0379cc2b9ccdd3e5e11f",
+      "identical_output_sha256": "be66050cb607da234d54b44789132056c353bd0e5a72c9b00a9244558d57ae86",
+      "output_bytes": 34336
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-8-width-0-batch-0.bin",
+      "request_sha256": "64992e3795ab7666c5da19cf44e7055b5b3c5bcfaf410449de536f00ee789919",
+      "identical_output_sha256": "3b86a36d081a4507a6973df9678533d26f53de62ead69617b097ffc44bc317c4",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-8-width-32-batch-0.bin",
+      "request_sha256": "c90e302449fc2202a08fcc9732a305e79ab3aed532d8df6d976e058b948f1739",
+      "identical_output_sha256": "5b8abb422dc91c466b716e7c4a28a66bcf3d8c219f4490d24533294d4e6d639d",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-8-width-33-batch-0.bin",
+      "request_sha256": "6178e740adaada31fd47491a77a6a2474e4822d45983adce6bd16819ae1febbb",
+      "identical_output_sha256": "d8f0f5c0265c52a9b49dafaf2ab5d45f6349251ca5cfb0f898a90c6c7578ec93",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor0-ch-8-width-6-batch-0.bin",
+      "request_sha256": "46a03564694857a8eede3144f9fa9cc3827febc2f8e6519f6ebb1a29582aabb1",
+      "identical_output_sha256": "0dd940cbebb750853cdbe9e5db03024c330a4433ba5aae5fc1da5d12f2cc9584",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-1-kind-0-batch-0.bin",
+      "request_sha256": "19a58964096a283609e049dd09031b859ff3f5fa0276390537ed1a63e71940e2",
+      "identical_output_sha256": "4f1588bca30fbc8f7324c70423f9c4a86c9a5efb05070250bcf9592e1aab3c67",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-1-kind-1-batch-0.bin",
+      "request_sha256": "cb7b570cefb3b2fb6bf6c40c507db09519a79fafd04511c5c455667edcb3af0c",
+      "identical_output_sha256": "4f1588bca30fbc8f7324c70423f9c4a86c9a5efb05070250bcf9592e1aab3c67",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-1-kind-2-batch-0.bin",
+      "request_sha256": "1e233c1a3c9bbcb119c216440e326bcc896990ab71047bb6c06eddfc3e807605",
+      "identical_output_sha256": "3734992d81b6d8fbae874db305efd435e77855001a308a4cf242639233f2d8e1",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-2-kind-0-batch-0.bin",
+      "request_sha256": "d2c783615b45cf43c25630d91aee97ffbb05b30655acc15f950f0c593a796e0d",
+      "identical_output_sha256": "ce6503f809efa698c9b9e26d1d54813bba6cca5a068622ebd9581fe6ccf8659e",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-2-kind-1-batch-0.bin",
+      "request_sha256": "5f0d26fd349590e8059695052ad986563bcca9ffa67568cf2ce4a607ccfbf3d3",
+      "identical_output_sha256": "ce6503f809efa698c9b9e26d1d54813bba6cca5a068622ebd9581fe6ccf8659e",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-2-kind-2-batch-0.bin",
+      "request_sha256": "c3842bda3aea5e13f3a914f752a96f2a8253a5901abd33a48dcf6baf5ab24668",
+      "identical_output_sha256": "67aa2da21c3202cbc63c3279f9d2520daa3f3b1c66c6e3f6d07e8513d6dfe472",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-3-kind-0-batch-0.bin",
+      "request_sha256": "36957384dc6ac850398a1b6f71cf39ae2ea8ba34a91de45e405a11af56a7ef84",
+      "identical_output_sha256": "613fc7403230ee4b9d753f780cd30bd9dcee6471d893b56651c52b387e45fbe8",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-3-kind-1-batch-0.bin",
+      "request_sha256": "9f3281683c9fc6731822076b099bb632d4027860cc54e4bd8a1ee41d194ee03a",
+      "identical_output_sha256": "613fc7403230ee4b9d753f780cd30bd9dcee6471d893b56651c52b387e45fbe8",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-3-kind-2-batch-0.bin",
+      "request_sha256": "d806f762a11a5d4e855279d1441994a6efcc96c56ca6fe1c6cb3300c30b668f3",
+      "identical_output_sha256": "148275b25b5cb8f2485f819eb290b379fe462cdccc0559e79aef028e231b8e3e",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-4-kind-0-batch-0.bin",
+      "request_sha256": "9112d9d7bd5530715033fc7c5e2825d76c5ff46d512f4a32f3476508c2420c42",
+      "identical_output_sha256": "3e100ac398d578c5bd3b95c72fde5c5f2e1af9e1a679bc841434302d41861e45",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-4-kind-1-batch-0.bin",
+      "request_sha256": "1933285272164fddc85ef2cba9cebbcf0bbff4ee46683976a921c22e300f14c3",
+      "identical_output_sha256": "3e100ac398d578c5bd3b95c72fde5c5f2e1af9e1a679bc841434302d41861e45",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-1-mult-4-kind-2-batch-0.bin",
+      "request_sha256": "cb81c0d53ce2c70312c6c58ac580bf946eab4523b721203d0af09a4fb2f54993",
+      "identical_output_sha256": "f6f9b2afd1156b1a2eae202a66f7b1e8dafa1998550e25bff3952c214227f573",
+      "output_bytes": 18464
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-1-kind-0-batch-0.bin",
+      "request_sha256": "56aa1d01269f00f6b4b26bca1728006480916a24cb15de44815cd59635302f4f",
+      "identical_output_sha256": "9df154486c3103a5bd6daebd9f8a7bd305464730b68c60bb625121b0daeb7577",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-1-kind-1-batch-0.bin",
+      "request_sha256": "ccaf1493ecf292efe69ef38bb28bace01b0a9acf50c373c8a63ea3c73d008fb3",
+      "identical_output_sha256": "b77c96fe4b1a983af54e61437597ef6dff2176a9aa1e7747cf186cd2a465dcf3",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-1-kind-2-batch-0.bin",
+      "request_sha256": "105a01004c2dc1e3dfab3f1d20efcd327ec1eeb25b9276c0a23ae2c6e04ffa81",
+      "identical_output_sha256": "89de2bfd2337b4803e0c02195a789ab33d9439a355c65d480d5a286798f6dd82",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-2-kind-0-batch-0.bin",
+      "request_sha256": "46e9c0e27d9a1d8f8d49413b27afa340f1440ac0df451d519c992cc92cf44df9",
+      "identical_output_sha256": "7cee2084a812db9535f0f4ba2d6de2b07296d2b3d430895ce9a2f8107596c57e",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-2-kind-1-batch-0.bin",
+      "request_sha256": "a8662b9ebb74353fe1003249e78edd279e1b20aca6d413c3e245e20ad6e42c95",
+      "identical_output_sha256": "8f8e8a91fe91b3a344ba5e5b65aae0a059d12dc28e9ec3747276a4c5f2097519",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-2-kind-2-batch-0.bin",
+      "request_sha256": "decb6ef7864b5e12fa6f66ecab19ce2623c5df516c46257beff318a550746ed0",
+      "identical_output_sha256": "0ea05222836ff89bb6171e0ec70d4d143bc8419fbf6924a44901996e64649109",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-3-kind-0-batch-0.bin",
+      "request_sha256": "d8efd011ff4ef5146ad09428cc0023542eb67365bddf2e89cd7f14a54ddfc97b",
+      "identical_output_sha256": "a709ad7f434b835e0ebb8fd9370dd9bacf59cb929c5720ed230a90bde74b6523",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-3-kind-1-batch-0.bin",
+      "request_sha256": "021dd294ae85aaf72cec27fca61e66ceed5c3c8a67717f3d7d98d1a3e73b0608",
+      "identical_output_sha256": "b3316520cc4a28a87010153c4ebc73faf0759a7b77bc8263c951b7480f133fd1",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-3-kind-2-batch-0.bin",
+      "request_sha256": "9666944d9dc8b91af7527e0c5c0c146f7d6f3f8e6097e2818e47611eb64713a8",
+      "identical_output_sha256": "766a58c9c439f59bd7de5d32b16214193b095ca620e6a6b0a24497255a4d7412",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-4-kind-0-batch-0.bin",
+      "request_sha256": "5896004cfde648b7b3b2e21ace0e8b9fff87ce4b3e644bccbd74f53171825957",
+      "identical_output_sha256": "dd3570d69bf8a1c07bd52cd7036c8fdfbbcb625b6d9287b8ff462f806f4ae012",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-4-kind-1-batch-0.bin",
+      "request_sha256": "a5452789ddd44fd7c40c4fa5c420df0b22a69d780ae7f2b7a7b4ab21f180cb22",
+      "identical_output_sha256": "25a4925b15af3d2adfb183e8b6d7a302baedcad5cb9fb9e1cffebe9f6e37dd9a",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-3-mult-4-kind-2-batch-0.bin",
+      "request_sha256": "c076a6ae17f780f2c7de001fcab59b6dd92f7109a79257c81ac3e62d279fb0f2",
+      "identical_output_sha256": "6bfc15810c45f9ffc635b817d34b252f5e2bbb14c917653c4f3a7cd7d01b245b",
+      "output_bytes": 50208
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-1-kind-0-batch-0.bin",
+      "request_sha256": "11189dd3f7770f3d0ebe8c7308e8ae7cf0b24b294c067929e39317c1c96a411d",
+      "identical_output_sha256": "73424daa227d5904f4842c6ed70f9391e64c6e1082097195b6f7d130de0f44e7",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-1-kind-1-batch-0.bin",
+      "request_sha256": "c9c26b857c85982bf0cab846c43e7d00ef6b5afdcc1d0cdf1672245fc9719d4a",
+      "identical_output_sha256": "2e535ca2a86fd5e9abbf909486fdc10b63b708000015c94f4a0cad8633349a47",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-1-kind-2-batch-0.bin",
+      "request_sha256": "a2b51130c2ba507e0229672df24b7667566efc799b385a10cbd46cadc55cab93",
+      "identical_output_sha256": "b6b49e1c798dc5642bbea72d2b0dc51cd6c92a11ce244a23e3e093899d0c3e9a",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-2-kind-0-batch-0.bin",
+      "request_sha256": "4a637561311d0d4405444d5260cdd4fb727e397907c3804553093c8a597dc776",
+      "identical_output_sha256": "6d40636603311da78bac0e21516560a2497def0ca8c6f67a7d5964c900d7389e",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-2-kind-1-batch-0.bin",
+      "request_sha256": "d01e9cc2db8c7f69d7a969647eafaa770ebc8b3207790e6bfd661a8f8de3d431",
+      "identical_output_sha256": "7182ddeb90081da6b70cc23e21286eda7d2422d54bc64dcbece1a92734a5f829",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-2-kind-2-batch-0.bin",
+      "request_sha256": "6ca54ad9e2ebf45c17ae41ded127e179e61608dbe8aca7ff36fab58d18910567",
+      "identical_output_sha256": "9960c605aa10386824d7e0d57c945cf9d25948ea1d71b7e8f52152c156d8552f",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-3-kind-0-batch-0.bin",
+      "request_sha256": "e139e4f6e697734f39cc6a4189dcef475dd4e4422f0306bd1cf58f5d626afbbb",
+      "identical_output_sha256": "d1108f380abea75bbdabb9ba5d5795dfbf35633cd5903eccf958e801f27b7f66",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-3-kind-1-batch-0.bin",
+      "request_sha256": "72e0b2a572efa2b91ff1584649152f9a50b9707fe31a69896e46bd62642835b7",
+      "identical_output_sha256": "c0598b24b7f3a32b95c2e791d97e1b615bc61ab134b42c51cc635a98db600e7d",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-3-kind-2-batch-0.bin",
+      "request_sha256": "7710560d70605f0ec082e401b38bd23f591cca55233f9dbfadd6fffb17695e92",
+      "identical_output_sha256": "f5a797fb5d08077a415e4f9f8874c3858aed12d0975814c97bc673f99e9c7af3",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-4-kind-0-batch-0.bin",
+      "request_sha256": "657d400a7ff447997f627221c8bd69f74fc2708944dac364b7bc40a04595f07c",
+      "identical_output_sha256": "fc2615ecd978799564982e60042c224beae431183c887d92ad04a03e667d52dc",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-4-kind-1-batch-0.bin",
+      "request_sha256": "4b9dc7bf41c80562992f277fddd6678f4ec9d858a0cfa9b5cfa9751a623e949d",
+      "identical_output_sha256": "e663ab047dbe3e1c63535fba88519640ec43b100595eab8b1c67ac9fbbff0687",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-floor1-ch-8-mult-4-kind-2-batch-0.bin",
+      "request_sha256": "270decb341df8f001f6df8fd410e92d0562c52446dedd64369ca64ad4eed34f8",
+      "identical_output_sha256": "165d5c1b1db9ee0930308ec17efb11fb7785aff6294f30a36c5fc6621373c9c2",
+      "output_bytes": 129568
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-1-long-false-batch-0.bin",
+      "request_sha256": "22339eed9aacf1287145a18a45033a191d657b832fc385610ee64e2f5606770e",
+      "identical_output_sha256": "d02aa2117857136df79aa2609bf86ef17125500e58ba6d76c55faf239b10d132",
+      "output_bytes": 13360
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-1-long-true-batch-0.bin",
+      "request_sha256": "653de4ad741c9818ad24dd662dce3026788804c26c62f847766b6e56ccb1bd51",
+      "identical_output_sha256": "52905926c99cfc95e41a1c19cd23bda88a71d0e4e6ea23c62595ce16685b74c1",
+      "output_bytes": 44080
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-16-long-false-batch-0.bin",
+      "request_sha256": "5e5479dc92baa4f06ef3918d9b5564283ad7757bfc7932c5d6eca05f8bdab378",
+      "identical_output_sha256": "b2dd64569c582d2272aa58e6e5314681355dc71277ce9df97ea999169a64bbf2",
+      "output_bytes": 31792
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-16-long-true-batch-0.bin",
+      "request_sha256": "2e30d493f03e7f92dd9bf091a297f233dde034a0590cb68f22193ee6dea483aa",
+      "identical_output_sha256": "b1077ea220e02a578edd8e751c32725727e8cdf1f86466de58774bc9a1435014",
+      "output_bytes": 25648
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-2-long-false-batch-0.bin",
+      "request_sha256": "0e2fc0fc9be5d5a6bf3ab81ca3a673c7baa2eac434f36222eca45eaf97acd2ff",
+      "identical_output_sha256": "9501d1af7efa95ed112e9a3ba8390f0045df27a5bb92e4cab58f571afb686462",
+      "output_bytes": 31792
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-2-long-true-batch-0.bin",
+      "request_sha256": "5c1c91030b50af40a701dc555dc501b3a2df2f2cea85acf49b9d5217ba03d493",
+      "identical_output_sha256": "b1077ea220e02a578edd8e751c32725727e8cdf1f86466de58774bc9a1435014",
+      "output_bytes": 25648
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-3-long-false-batch-0.bin",
+      "request_sha256": "8dac43cd70851e92147a93bea92242ed256322176097527a265d66b5b9c0c936",
+      "identical_output_sha256": "7da6a44e965f65f88efa85ea79153918be4fcb1d6b5c9024c97aca964e9e34c3",
+      "output_bytes": 17288
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-3-long-true-batch-0.bin",
+      "request_sha256": "62cc183db79a31a5fa6100edd46875011faaf96ef32f12bd348073c6e35522a0",
+      "identical_output_sha256": "e4a6291577fddf00b0175946ea7982f2ebe2341c67f13174c89b822fedad551f",
+      "output_bytes": 29576
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-33-long-false-batch-0.bin",
+      "request_sha256": "7853c3e7411259721293485a952edbb25f4d0751f1f7a1b0f4a458fff180710c",
+      "identical_output_sha256": "50511269383ab49b608228941650af3c1ffe616dbb2dd702c6622e8273e4206e",
+      "output_bytes": 23432
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-33-long-true-batch-0.bin",
+      "request_sha256": "03bef942e6fac75b45fc5a7c04fa989d12b0485bd66549b1f2337c57384ff725",
+      "identical_output_sha256": "c89a95450983370418fedfdd42c19a2b0d5043a0df9a43a4a9dcd8cd1e377ba9",
+      "output_bytes": 18144
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-64-long-false-batch-0.bin",
+      "request_sha256": "3447caee38326ae43b3e6f50a29f14e11683173f1ee3a0b92ed2f35d4cf4fd58",
+      "identical_output_sha256": "50511269383ab49b608228941650af3c1ffe616dbb2dd702c6622e8273e4206e",
+      "output_bytes": 23432
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-modes-64-long-true-batch-0.bin",
+      "request_sha256": "3fa58ced64e9804ade2988abfbb9faa7dfad2c1e8223a2290e5a2ec8ef4edacd",
+      "identical_output_sha256": "895e7ac89d668a9d71798991a160267954ecfeed55373b72d8956c0e59e2ef21",
+      "output_bytes": 20360
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-1-blocks-64-64-batch-0.bin",
+      "request_sha256": "e386abed670591e0c028a0a49df634b206b7c0b31bba10022b6e0e8413194315",
+      "identical_output_sha256": "a255de288c698b94fa8d817b889f079c990d3e5c40118131802e71148c85dd64",
+      "output_bytes": 1536
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-1-blocks-64-8192-batch-0.bin",
+      "request_sha256": "6ceb2b26580e2f86d1fc76caca96655a6e96421b29cd93d4dfac119a12d9eeb4",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-1-blocks-8192-8192-batch-0.bin",
+      "request_sha256": "a5879484817b9ab0a6981b701b1c054daa0a00261e25859f58df2bd4791f5b2b",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-2-blocks-64-256-batch-0.bin",
+      "request_sha256": "ceffcf8d1f31941afe980ab144b54a8c9123572906b6e69cbec3879475a38ff1",
+      "identical_output_sha256": "a255de288c698b94fa8d817b889f079c990d3e5c40118131802e71148c85dd64",
+      "output_bytes": 1536
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-2-blocks-64-64-batch-0.bin",
+      "request_sha256": "bd491bf30aa70cf763046795715c80f2865b0afce42e5f7a2729b46fbafc30e9",
+      "identical_output_sha256": "a255de288c698b94fa8d817b889f079c990d3e5c40118131802e71148c85dd64",
+      "output_bytes": 1536
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-2-blocks-64-8192-batch-0.bin",
+      "request_sha256": "e3fa160ed87d1169e63408e1c670851abdbefaaf4ecd80b0fb69fb3d667d908f",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-2-blocks-8192-8192-batch-0.bin",
+      "request_sha256": "825897f5416cc9181ed0659f29feab8eb0a3dae2b34530c306cdd8a187f72126",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-255-blocks-64-256-batch-0.bin",
+      "request_sha256": "ccad4c596ff379ab8a7a61bcbed8ed1309daf82d162198a2e7ca505d9f5dc98d",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-255-blocks-64-64-batch-0.bin",
+      "request_sha256": "921f81ae1acd061f7e8f3c6cd1519458e77d59a284d3b5f4b4192bbc51e96208",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-8-blocks-64-256-batch-0.bin",
+      "request_sha256": "c6b4fd449620bfc26e466cb290428212673e9aa97aac61a6afa88b10a655556e",
+      "identical_output_sha256": "a255de288c698b94fa8d817b889f079c990d3e5c40118131802e71148c85dd64",
+      "output_bytes": 1536
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-8-blocks-64-64-batch-0.bin",
+      "request_sha256": "2818739bf92f5a75e335cf59afefdb3c1a347cd4b42a5a4ff25248a26a995b80",
+      "identical_output_sha256": "a255de288c698b94fa8d817b889f079c990d3e5c40118131802e71148c85dd64",
+      "output_bytes": 1536
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-8-blocks-64-8192-batch-0.bin",
+      "request_sha256": "e59af7144ca4a499efc52aad54f68379d5f8a93bc7e2bb099ee742e4488da38b",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/component-inputs/synthesis-window-ch-8-blocks-8192-8192-batch-0.bin",
+      "request_sha256": "241672425001807d9a538de134c5099b79ba04c896fa72d40aa646a6d3224f23",
+      "identical_output_sha256": "99dfbc20020d2dc564a721bdb77bfd7b4c9761fcbe812c64b60c14ba6877850a",
+      "output_bytes": 192
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-0.bin",
+      "request_sha256": "1991be5ae83bfa90ab2f0ad5da9e6d856086549b07acc08e676b777a2b12623c",
+      "identical_output_sha256": "67b1c9129e83a7d01137e173a08885e88c869d4e2e82c2bfb2bb3e5ae68206b3",
+      "output_bytes": 112056
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-1.bin",
+      "request_sha256": "657ad76ab854b9d94f778c55319952642f3ef7431fe50080763dc208461b390a",
+      "identical_output_sha256": "a72c67a75f444767c4fe86dacf1cff1b39579dae084f18e9acef2efd9fc01dbb",
+      "output_bytes": 24504
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-2.bin",
+      "request_sha256": "d57c13922b40c67f04ba793bb79bb461cc4195a4d931acc9d456b27aa784bb61",
+      "identical_output_sha256": "df88c252842d95f62d4dd1014cf4e850ec2fa7d67065dedab1a03918a37a40a2",
+      "output_bytes": 16824
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-3.bin",
+      "request_sha256": "ee0a276fa4f961c18337dc5348d238316895d63178131376d4e646eb705b5244",
+      "identical_output_sha256": "79fc9a5a39d3f16d9de6610ddacd64043572d8e56ab94688989c280c723bfbb5",
+      "output_bytes": 14608
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-4.bin",
+      "request_sha256": "eac74b5693633d22fddc351049d83727eedce9c4b1b43c8bba585be4399ad285",
+      "identical_output_sha256": "bdd3c9c23720d4f39f0b26bf5cc0b79e18a2233cf5aabb097ac4fd911e04ccfa",
+      "output_bytes": 384
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/golden-inputs/synthesis-golden-5.bin",
+      "request_sha256": "37e81a7aec27e3fd3ff74555868debb2544937d405f77e465e88ad96864ff56d",
+      "identical_output_sha256": "8500957f137fa097d7636bd9ca1e1d6730db663413a7f7a704d88c68d61c35a1",
+      "output_bytes": 4738
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-0/schedule.bin",
+      "request_sha256": "3c7061a4f75b068fe24871349976d44f1ef8c99bf04043e7108e974c2847ef59",
+      "identical_output_sha256": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534",
+      "output_bytes": 8
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1059/schedule.bin",
+      "request_sha256": "d59b402a19e3769c5a9166872d27a4373481d295bb7933e34537e9c2745ade17",
+      "identical_output_sha256": "cefdde4f1db21c97b75c808ce107e5fa8c51180b2650dd47518df13db4808018",
+      "output_bytes": 18508
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1060/schedule.bin",
+      "request_sha256": "bef670e51c0002552af74ccff492f6669830dac0d47dc345c951baf10fe43a03",
+      "identical_output_sha256": "99e79708a536d917c2434dac128fa5f57cac41f5b24999af8b78d2743e3aebea",
+      "output_bytes": 18562
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1061/schedule.bin",
+      "request_sha256": "5184284039969dc5c16c016715e0d1865503842a347dae806aa1af704d704e3b",
+      "identical_output_sha256": "1b01f548f3053ce18755ae25b39a630e3a2563877dfcde80936311dfc9f6184d",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1062/schedule.bin",
+      "request_sha256": "03efe8ee97be9df7e20e26cdd7c250edbc29c1a6de58bb20e4227d5d28c92f4d",
+      "identical_output_sha256": "1b01f548f3053ce18755ae25b39a630e3a2563877dfcde80936311dfc9f6184d",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1063/schedule.bin",
+      "request_sha256": "48cc734c595d947fafdb609f644822fdd40dea77bd4c8a8bca9bd53de0466132",
+      "identical_output_sha256": "6a1b78a99c5cd95717be0a476493a78683c68cd76d6ac7ca5cccdf6b014f0b60",
+      "output_bytes": 18778
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1064/schedule.bin",
+      "request_sha256": "a2d3d47e4a3c6f1d3707006601ec8c43c5d3039e5f24a9fc7f15ceb7b0d788a2",
+      "identical_output_sha256": "2c3f4b79ef26126a5b480b4eb731c9cc42d35e751ed99006a6f205d10a3e034b",
+      "output_bytes": 18854
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1090/schedule.bin",
+      "request_sha256": "20d3cf374760dcd365854f347fea90440c827e302c15aac38ab81c5eeb65bc13",
+      "identical_output_sha256": "99e79708a536d917c2434dac128fa5f57cac41f5b24999af8b78d2743e3aebea",
+      "output_bytes": 18562
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1091/schedule.bin",
+      "request_sha256": "89d68535856065a8f12fa41956b9f1bed4ce31335a322bf94f21f15a38618e32",
+      "identical_output_sha256": "1b01f548f3053ce18755ae25b39a630e3a2563877dfcde80936311dfc9f6184d",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1092/schedule.bin",
+      "request_sha256": "4c88cf3f5f2d59f9495c081bbae70bf89dd2963ab6e4d321a9827cfa8726f5ae",
+      "identical_output_sha256": "1b01f548f3053ce18755ae25b39a630e3a2563877dfcde80936311dfc9f6184d",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1093/schedule.bin",
+      "request_sha256": "3d10a4e7ec0fd3003a196285c12bc85f42c34d8ad5bf11582c8922811ac54f27",
+      "identical_output_sha256": "6a1b78a99c5cd95717be0a476493a78683c68cd76d6ac7ca5cccdf6b014f0b60",
+      "output_bytes": 18778
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1094/schedule.bin",
+      "request_sha256": "9c4a433aadbd2fc6460c10b8a74c6e839ae4995ac3207ba2a7861086731a11fa",
+      "identical_output_sha256": "2c3f4b79ef26126a5b480b4eb731c9cc42d35e751ed99006a6f205d10a3e034b",
+      "output_bytes": 18854
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-115/schedule.bin",
+      "request_sha256": "37e81a7aec27e3fd3ff74555868debb2544937d405f77e465e88ad96864ff56d",
+      "identical_output_sha256": "8500957f137fa097d7636bd9ca1e1d6730db663413a7f7a704d88c68d61c35a1",
+      "output_bytes": 4738
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-116/schedule.bin",
+      "request_sha256": "65211b516bead8deaf762cf66185fd0e6c8d8d09149a59b8416e66f7527fe091",
+      "identical_output_sha256": "e56405f15e174c7e938fbc505b483f3972ff62d282151b440f54f073e345fd9c",
+      "output_bytes": 4900
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1165/schedule.bin",
+      "request_sha256": "277c0410052009a60d4a3db9064cb5de563a86da56643b45c6e72425e6a61464",
+      "identical_output_sha256": "8560936c06ec7b10057537caa3a04ab4468dd28ad408f008bffaca024d0439f2",
+      "output_bytes": 205374
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1166/schedule.bin",
+      "request_sha256": "e1b1c9a882ea9b7eb88d6974d66f3d7936b0ceb08ef8fb876c50a891b4affe05",
+      "identical_output_sha256": "7df3e738276796f6e6ce614ebe7eef427315096346ac82b0521fae6b0a075f60",
+      "output_bytes": 102814
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1167/schedule.bin",
+      "request_sha256": "764c69afa0b053686a1760e5dd582bbad81d78c18e848ef888ebd48c7ccc8b43",
+      "identical_output_sha256": "7df3e738276796f6e6ce614ebe7eef427315096346ac82b0521fae6b0a075f60",
+      "output_bytes": 102814
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1168/schedule.bin",
+      "request_sha256": "3a08c2f215fe09fc602189c559c281514a4ef27bef7067aa74aaa270e25fcd27",
+      "identical_output_sha256": "e402c6b9dbd2f89f63466e6f33789ba13f0f02137c445f0cf2b6c7b743e99a32",
+      "output_bytes": 102852
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1169/schedule.bin",
+      "request_sha256": "f046f94b9cafb0f4f34edf7bd1ff7b080fe5f30b69735c68e610a28c99059b5e",
+      "identical_output_sha256": "d7eae42dc94fbe1e915ec492236c8d4acd6b149f894e339c924a468f14bf3d19",
+      "output_bytes": 102928
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-117/schedule.bin",
+      "request_sha256": "10843f1494a19517cf1dd4ba70e4de95a06a2d45f518e6af363366219e39b0b7",
+      "identical_output_sha256": "e56405f15e174c7e938fbc505b483f3972ff62d282151b440f54f073e345fd9c",
+      "output_bytes": 4900
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-118/schedule.bin",
+      "request_sha256": "dfbd203da179f2a611d15b7afa50606252ad494aa2aa2bbf52dd0774ade5a41d",
+      "identical_output_sha256": "c9bb35836fe21de0ac77c5959fafde5efe5f70977f319ad9f4db374e23ac50b3",
+      "output_bytes": 4954
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-119/schedule.bin",
+      "request_sha256": "e4617c806bab5c2202c5326c4f946ae22439d97aa3a5b00bd906ed4433c9ecdb",
+      "identical_output_sha256": "0e129da85d9b91dd8552b1207280258c86d24e220dccebff438dd0b578b1f8b7",
+      "output_bytes": 5030
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-1259/schedule.bin",
+      "request_sha256": "5a8d5da57254558e8d920a3871b43fdb428fe8c84f34597154016ae186175d71",
+      "identical_output_sha256": "f6293e44f28f91068dfd3b4192fa0a9dd41bed0aef5a651779a65fd5c4d30b50",
+      "output_bytes": 256634
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-145/schedule.bin",
+      "request_sha256": "783770293cb1d54f03edc53b87fbaf7506a1a667a8ee18d0c21e6dbd08cf88dd",
+      "identical_output_sha256": "8500957f137fa097d7636bd9ca1e1d6730db663413a7f7a704d88c68d61c35a1",
+      "output_bytes": 4738
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-146/schedule.bin",
+      "request_sha256": "6a71a82808c1d01bc31ebe0d372b8e93e347ef481c503b4c9e317a471142a007",
+      "identical_output_sha256": "e56405f15e174c7e938fbc505b483f3972ff62d282151b440f54f073e345fd9c",
+      "output_bytes": 4900
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-147/schedule.bin",
+      "request_sha256": "dfc6cb32f5c27e26d8a37487e680bdb09dc38039d379145a2623aee1ddbee853",
+      "identical_output_sha256": "e56405f15e174c7e938fbc505b483f3972ff62d282151b440f54f073e345fd9c",
+      "output_bytes": 4900
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-148/schedule.bin",
+      "request_sha256": "0522f9c2784ff7fee24fe95c23f1c9dbad0b7cfbc2b3a377caff4334011842ec",
+      "identical_output_sha256": "c9bb35836fe21de0ac77c5959fafde5efe5f70977f319ad9f4db374e23ac50b3",
+      "output_bytes": 4954
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-149/schedule.bin",
+      "request_sha256": "af8c298b3b6ec92ecdffec6245bd4cb330b8a8d33977478c4044e369f67d4960",
+      "identical_output_sha256": "0e129da85d9b91dd8552b1207280258c86d24e220dccebff438dd0b578b1f8b7",
+      "output_bytes": 5030
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-180/schedule.bin",
+      "request_sha256": "74f2ee42f56f227318cbc82ef1e7ba6362df35daaff1fe5bcd39e2e43800a74d",
+      "identical_output_sha256": "55bc5b0d130c157bc5233cc00be8243aedb585c0ee14131307096e0330c49b39",
+      "output_bytes": 37596
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-181/schedule.bin",
+      "request_sha256": "f14eed4d4a358233e741df899b34d21893af9f8673293bf8bc1a8ee9138abee4",
+      "identical_output_sha256": "a5ea944ee17207aacdc2d287b4dcde52a783d0e8bc1e5a90e059c6fdda7db914",
+      "output_bytes": 75216
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-185/schedule.bin",
+      "request_sha256": "e1eed7164d954fd0f07a8dac0cf492356521cc2fdf0ed940eb1368a8e19c147e",
+      "identical_output_sha256": "01a83c2ab1aed248431e18aca20f54d661655403e20dabd10849e3984e5bd828",
+      "output_bytes": 116560
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-190/schedule.bin",
+      "request_sha256": "8dcbd05c3e57b10deb4c552d4e2be2090da8411c62660a4e5577b8e3375a24bc",
+      "identical_output_sha256": "fede8577ee2a1fe2d33df53c096e18421de7ed895ae46fbf7e9565974170c156",
+      "output_bytes": 75232
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-220/schedule.bin",
+      "request_sha256": "070c8fbe407f50675149dbf13ede4d5c40169115dbfa16297e477448b2407342",
+      "identical_output_sha256": "26b154d34d411b5862b48a4b0146332087a87d40e97511ab97c60a3b8d736b40",
+      "output_bytes": 116552
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-221/schedule.bin",
+      "request_sha256": "b51983aeab59f520ebfca6e25e601162eb8c399f71b697bf25f84e6d3e8e56e2",
+      "identical_output_sha256": "6355e9a06f7ea10d75a28e89b6936f623607f9bcccf4d7d88aaa8488e039fcd4",
+      "output_bytes": 100092
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-222/schedule.bin",
+      "request_sha256": "5379cc7baec5d1bb829537b8e2fa3697fd3f5605ef0f91eb061dd3c458242357",
+      "identical_output_sha256": "6355e9a06f7ea10d75a28e89b6936f623607f9bcccf4d7d88aaa8488e039fcd4",
+      "output_bytes": 100092
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-223/schedule.bin",
+      "request_sha256": "b17a16217f71a1cb9a274e195b33cdb034e2e7fb52b07535d730f2700bc6d38e",
+      "identical_output_sha256": "61ae3a47dfb84c8d2bf893d7984e3b799cd332540802a381ef3ef00b27ee3597",
+      "output_bytes": 100130
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-224/schedule.bin",
+      "request_sha256": "42bc438516b6fbe32a8870fb4a4f67f69c9e07dd06192eb3f7207c9fd59d294d",
+      "identical_output_sha256": "37ee27623ac52bfcfad7fd4a2835123d8e73b07d6c79f844b48f725a5c5691a0",
+      "output_bytes": 91976
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-225/schedule.bin",
+      "request_sha256": "c49662eb05374b87d8f3d10e4b0fe8a5eb6a71b61f1a86584aea3e5f1aecb670",
+      "identical_output_sha256": "55bc5b0d130c157bc5233cc00be8243aedb585c0ee14131307096e0330c49b39",
+      "output_bytes": 37596
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-265/schedule.bin",
+      "request_sha256": "6a08b18836c897314b01cd0f24b7072efb3ca6e225b43e7ee111c8536fe51f30",
+      "identical_output_sha256": "1261f1ec7f3da1ee1c770ad8d61088e3706e218b468849dc9faf89c03e04000a",
+      "output_bytes": 124774
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-266/schedule.bin",
+      "request_sha256": "4c61303842b813b3e93d135dca4bf28c8f1fd5d5771998a0515fc82e46b21adf",
+      "identical_output_sha256": "9611e27d0b7ad6d1dc37e1eb543674fb031045b81411d5193e5876633aefc219",
+      "output_bytes": 108314
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-267/schedule.bin",
+      "request_sha256": "61b07f4a654a32852851a5d2d395f2b23072b05491bd7e27d300b6c85b9460b9",
+      "identical_output_sha256": "9611e27d0b7ad6d1dc37e1eb543674fb031045b81411d5193e5876633aefc219",
+      "output_bytes": 108314
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-268/schedule.bin",
+      "request_sha256": "b60c064d344b15969f938dca37f951456be4b307827ec73ed41820c1ab341ea9",
+      "identical_output_sha256": "d439d0189988a5de425b18345ec727f434f6d89b8d9d09e292893d9a2ec14fb1",
+      "output_bytes": 108352
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-269/schedule.bin",
+      "request_sha256": "6dc8c2847a1f48729262522716c772d7272b6d50d426e43717bf9125348def7b",
+      "identical_output_sha256": "37ee27623ac52bfcfad7fd4a2835123d8e73b07d6c79f844b48f725a5c5691a0",
+      "output_bytes": 91976
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-270/schedule.bin",
+      "request_sha256": "fb41b1c2bc5335f86c4a7ef79844cec0c25991a37756f1aebddb7c47fe0157df",
+      "identical_output_sha256": "55bc5b0d130c157bc5233cc00be8243aedb585c0ee14131307096e0330c49b39",
+      "output_bytes": 37596
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-314/schedule.bin",
+      "request_sha256": "2bf5cea197d007f18913c26c00c9184391723e82a6864b73e7d977684db48924",
+      "identical_output_sha256": "11443f57031f1a4f4fb826acc4bc2093ced35ccaacf2c98f768c5ee4604977d8",
+      "output_bytes": 188028
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-315/schedule.bin",
+      "request_sha256": "1950e69d534fb158323d68dde9658f3494e147961e444c93e2305fc4ee36ba4d",
+      "identical_output_sha256": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534",
+      "output_bytes": 8
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-430/schedule.bin",
+      "request_sha256": "b3a56fc36c6218e7a87e3a05979d38a429cbc6bab90c9df525cc2f8f1e67e5cd",
+      "identical_output_sha256": "308e100d3cfab81b2699256a20f2489067419d1e72ff75b08f6fe95ecb91defd",
+      "output_bytes": 1154
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-431/schedule.bin",
+      "request_sha256": "187d9a2a2f8436263628e570c5cd03ad5d5d646578539b0c755e4c839786d53d",
+      "identical_output_sha256": "3236fd54af049c9a1d39435e1e2bface8c087391681c8309f70d8ed2e8a6eaf8",
+      "output_bytes": 1316
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-432/schedule.bin",
+      "request_sha256": "cec4f0add0bb1c1ea1469357a5053b9a48795d243b7dd4b4b2dcdb2023ce7b99",
+      "identical_output_sha256": "3236fd54af049c9a1d39435e1e2bface8c087391681c8309f70d8ed2e8a6eaf8",
+      "output_bytes": 1316
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-433/schedule.bin",
+      "request_sha256": "212010db4078418f808e4e2eb2e0b1bd0bda2c238bdc548ee038f40c2b2ace42",
+      "identical_output_sha256": "f1e711fdc7d7ff328990bbfc39d8983fa03a2157bab193fd8aea411c4ccece97",
+      "output_bytes": 1354
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-434/schedule.bin",
+      "request_sha256": "1afa4287a3d468ac8dcd865d0e3e0cb4606a3067aaed48960985fd0f7842d90d",
+      "identical_output_sha256": "8b4090d4bc6587202ca7879e108735fe837043c3bdd86a2d91490c77d04fc2cf",
+      "output_bytes": 1414
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-460/schedule.bin",
+      "request_sha256": "982631c35fe290379d41a3f17e4958f1fc96e7359c9a597c1db94551009c547b",
+      "identical_output_sha256": "308e100d3cfab81b2699256a20f2489067419d1e72ff75b08f6fe95ecb91defd",
+      "output_bytes": 1154
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-461/schedule.bin",
+      "request_sha256": "a69899c5c92f5aa3d7d52f8195dfaa2513b5fe665428b218ada5827bb5c660bc",
+      "identical_output_sha256": "3236fd54af049c9a1d39435e1e2bface8c087391681c8309f70d8ed2e8a6eaf8",
+      "output_bytes": 1316
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-462/schedule.bin",
+      "request_sha256": "953b5f6e9c26c8de604167ec638c5a22fe113f0a0d7f480e6b09739345380390",
+      "identical_output_sha256": "3236fd54af049c9a1d39435e1e2bface8c087391681c8309f70d8ed2e8a6eaf8",
+      "output_bytes": 1316
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-463/schedule.bin",
+      "request_sha256": "9dacb628f3144fcfee356f52195c58863d5a1035f010a9c207c97c6a6e79b293",
+      "identical_output_sha256": "f1e711fdc7d7ff328990bbfc39d8983fa03a2157bab193fd8aea411c4ccece97",
+      "output_bytes": 1354
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-464/schedule.bin",
+      "request_sha256": "6080c1438e59709113363c2cb7db14ee0a6e8973e3b42efcc767d03b5fe7b108",
+      "identical_output_sha256": "8b4090d4bc6587202ca7879e108735fe837043c3bdd86a2d91490c77d04fc2cf",
+      "output_bytes": 1414
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-535/schedule.bin",
+      "request_sha256": "92e2add58c7b6254b9de518d96d8978ce4e5946e5e844d9a9ce1571f78520258",
+      "identical_output_sha256": "0d7c94d6ae8007b9a53e62bf1c670c25281d96bf305e168bf8f7f6f4aeb5eab8",
+      "output_bytes": 11944
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-536/schedule.bin",
+      "request_sha256": "4f526665db1e43bed79935444f8363fd8d9f13936ed42b931ed3527b32330054",
+      "identical_output_sha256": "f3bc293d5ca65bc3f00ba5c823254661bd0971ecad9960a46b4fe5194eed1711",
+      "output_bytes": 8766
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-537/schedule.bin",
+      "request_sha256": "7d66a03d1625b75474ee30e9799ac04ebb7b37fa0a54b06fe57d3717963e21c1",
+      "identical_output_sha256": "f3bc293d5ca65bc3f00ba5c823254661bd0971ecad9960a46b4fe5194eed1711",
+      "output_bytes": 8766
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-538/schedule.bin",
+      "request_sha256": "be3352285db690ede3d175d8aa02ce0eff855216de896d69c258b7edc0eb23c5",
+      "identical_output_sha256": "87bdb5e842e2679f3499c12765e5fc7712623a8aa0b50cf2a522332ed81a35dd",
+      "output_bytes": 8804
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-539/schedule.bin",
+      "request_sha256": "f10f39453db03b63ae3ec6b2d41b39c6549a5e1b243a267954bb3a8480f3b9dd",
+      "identical_output_sha256": "11b4a91dc419c3fe2f780a406c827a4bd5fc5cb0d448e4ab58bfbbea11f22865",
+      "output_bytes": 6732
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-580/schedule.bin",
+      "request_sha256": "033898d2634a5980f0bb5dc03da04fab472b184c5665939a30d02f5b4eb0c2f1",
+      "identical_output_sha256": "0d7c94d6ae8007b9a53e62bf1c670c25281d96bf305e168bf8f7f6f4aeb5eab8",
+      "output_bytes": 11944
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-581/schedule.bin",
+      "request_sha256": "a3547f8ffe5b4cb319340baaeaf2246eba5bd05271f5b909c8e2f98410410b31",
+      "identical_output_sha256": "f3bc293d5ca65bc3f00ba5c823254661bd0971ecad9960a46b4fe5194eed1711",
+      "output_bytes": 8766
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-582/schedule.bin",
+      "request_sha256": "b47e98bd2ff6374ea38c209140b516654c1c72c58fa3b68f896ae04e4dbaae83",
+      "identical_output_sha256": "f3bc293d5ca65bc3f00ba5c823254661bd0971ecad9960a46b4fe5194eed1711",
+      "output_bytes": 8766
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-583/schedule.bin",
+      "request_sha256": "cd9d977121247a43188972924f89623cf020db3f73c650b767f948f6835683ec",
+      "identical_output_sha256": "87bdb5e842e2679f3499c12765e5fc7712623a8aa0b50cf2a522332ed81a35dd",
+      "output_bytes": 8804
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-584/schedule.bin",
+      "request_sha256": "1c2ef9b4b75174d906abad44a146f01377b76079c0688be0300af1ba6ea7c439",
+      "identical_output_sha256": "11b4a91dc419c3fe2f780a406c827a4bd5fc5cb0d448e4ab58bfbbea11f22865",
+      "output_bytes": 6732
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-630/schedule.bin",
+      "request_sha256": "b90dddd560f1ecc67f0c65731ff2121376fc5c905a8910233dfb896403b5da28",
+      "identical_output_sha256": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534",
+      "output_bytes": 8
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-745/schedule.bin",
+      "request_sha256": "c3a14e40fbbabafb218d97e819ff27bdd0b9ae9619157cbe7cc0030b38840456",
+      "identical_output_sha256": "6cd2ab94729222d20a74bde3bef9984b565ed4d80d53370847229b9ba037f7a8",
+      "output_bytes": 18562
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-746/schedule.bin",
+      "request_sha256": "16297cf898623f4904e5bfa84adeae4a155e67883f882763fba72aa9e2b390b7",
+      "identical_output_sha256": "7fd8bf2579d0602a6032a6bf476fb3a0b7fafa10e01b8b5a247d3f8c7c23677e",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-747/schedule.bin",
+      "request_sha256": "c51f651e7209a428f7931a5f65b546a8e50080b1e53cb71c3f73eff01981a4d3",
+      "identical_output_sha256": "7fd8bf2579d0602a6032a6bf476fb3a0b7fafa10e01b8b5a247d3f8c7c23677e",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-748/schedule.bin",
+      "request_sha256": "736fca2594b1ef516983dbcb8e89b867bf105d3c7de0288b662e2841e4328248",
+      "identical_output_sha256": "e9c22fc8935e2a6ae30a8678572bdccd7f082242873fb349fc70fa51d94435eb",
+      "output_bytes": 18778
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-749/schedule.bin",
+      "request_sha256": "0fa76921d1e8581799517f673050f744dedfd68f6d99b055aa191de98d104c20",
+      "identical_output_sha256": "d2e1bd99157ab647e78170ef532668203ef0225ed8af4171b79e25da51499551",
+      "output_bytes": 18854
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-775/schedule.bin",
+      "request_sha256": "4646789cf30c945dcf0ae8d43d11f3141ddbde8ca20868b44a44caa54c539950",
+      "identical_output_sha256": "6cd2ab94729222d20a74bde3bef9984b565ed4d80d53370847229b9ba037f7a8",
+      "output_bytes": 18562
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-776/schedule.bin",
+      "request_sha256": "cb6b7160e1e06b317c5af435f722d7ea41c3cada66639ecf296b7b9d9dc0c3b6",
+      "identical_output_sha256": "7fd8bf2579d0602a6032a6bf476fb3a0b7fafa10e01b8b5a247d3f8c7c23677e",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-777/schedule.bin",
+      "request_sha256": "d45b731c77e88873d1f6bfaabb3d146cb59a2976b73a04f806cebf3f55fa662f",
+      "identical_output_sha256": "7fd8bf2579d0602a6032a6bf476fb3a0b7fafa10e01b8b5a247d3f8c7c23677e",
+      "output_bytes": 18724
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-778/schedule.bin",
+      "request_sha256": "8d5bea03f137e2980fad945e8abd3677852fd94ce21a7af13f49e7c0a36a990d",
+      "identical_output_sha256": "e9c22fc8935e2a6ae30a8678572bdccd7f082242873fb349fc70fa51d94435eb",
+      "output_bytes": 18778
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-779/schedule.bin",
+      "request_sha256": "e095a204a3c162e7964557efd0bc343d27872335d929dc181e9a497f65ba27d2",
+      "identical_output_sha256": "d2e1bd99157ab647e78170ef532668203ef0225ed8af4171b79e25da51499551",
+      "output_bytes": 18854
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-850/schedule.bin",
+      "request_sha256": "122c707f732641e074d972d94e30a830f82e1cdea0b609c02d769d8c3bfa24c5",
+      "identical_output_sha256": "f424084a116f824d77bd120e3db33dca2df3093145fd22df7c863b2b654d64de",
+      "output_bytes": 398076
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-851/schedule.bin",
+      "request_sha256": "3319ab8d4a276489af0dd2c464e822ff7c3f409e0398fb00a62766bb3ca2585d",
+      "identical_output_sha256": "a278cfd7451bb514bb7713265d68e9721d9b55656ab7e0e052e39c4ccac393ce",
+      "output_bytes": 299658
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-852/schedule.bin",
+      "request_sha256": "31773e39f133bd5b55d70ffe3c67323d01422183f7ee1d44032044c2dac03bda",
+      "identical_output_sha256": "a278cfd7451bb514bb7713265d68e9721d9b55656ab7e0e052e39c4ccac393ce",
+      "output_bytes": 299658
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-853/schedule.bin",
+      "request_sha256": "bcec6e5e0e56b8a5e8ba7d6e40077598a85e08c214b307c4fbafbf1883e05d30",
+      "identical_output_sha256": "883d9d1c4730cf96e8e414364be4383232e897c061135cc44826dea7b675ab8d",
+      "output_bytes": 299696
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-854/schedule.bin",
+      "request_sha256": "44fd6901f4d799ec4304fc676c95ae40cb41611439c87cc07d2669d11b807d76",
+      "identical_output_sha256": "c9d5f483c22af8d7801eaf8a97830a97b09f6db800a981cf75cdba3b814a2c22",
+      "output_bytes": 299772
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-90/schedule.bin",
+      "request_sha256": "21c90714e9d84a9d0b5ea60a575d18f332184a6fc7f79076a8758a05e1ecfdd1",
+      "identical_output_sha256": "0dc828b2e8526455b4d203b8100407b48bc0bd6834ebadb0dc7ee96b2c72a1af",
+      "output_bytes": 4676
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/eos-945/schedule.bin",
+      "request_sha256": "428b5228bd145c49d5df1f72cb5b0e0c8d2b4e4db629d5d0c2e0e8539500aa89",
+      "identical_output_sha256": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534",
+      "output_bytes": 8
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/origin--37/schedule.bin",
+      "request_sha256": "7f3ebcfa29ebb48e597235fc39dabdd939f567313c15e205b3bef378ee7d8d83",
+      "identical_output_sha256": "5ec1d00c4cd9d9caaed89eda6264d57a98c43063a1c86e676810ee92badabd31",
+      "output_bytes": 81404
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/origin--576/schedule.bin",
+      "request_sha256": "aeb078fb04098c2cd3da9f52103e7a0040d159206869f981e9923812b2406e03",
+      "identical_output_sha256": "6d2d2c9c9b3395603c420c741b70800a14403184b1217e90b2be23ce6e10caca",
+      "output_bytes": 125060
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/origin-0/schedule.bin",
+      "request_sha256": "13a6589b85c68856dd049ab43b1617fc56d55b29d3fca2815e28d60f17c6dd3c",
+      "identical_output_sha256": "2bb4d8384b285a37bb024bcf1f46a4aceece12c8783eda08bf42249c392edf5d",
+      "output_bytes": 81412
+    },
+    {
+      "request": "target/deadlib-audio-reference/seek-reference-20261027/captured-final/origin-900/schedule.bin",
+      "request_sha256": "cc4c1fa40bc5dd1124acb63473a10f4303fb64cc665f51a0b3f6f1da142f26bb",
+      "identical_output_sha256": "8929c09569a025db7692ed785c351df052f8487bc1eec266fc9a58163fe197c8",
+      "output_bytes": 64848
+    }
+  ],
+  "identical_output_bytes": 9119902
+}

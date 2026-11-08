@@ -3,8 +3,6 @@ use rubato::{SincInterpolationParameters, SincInterpolationType, WindowFunction}
 pub const OUT_FRAMES_PER_CALL: usize = 256;
 pub const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
 
-const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
-
 pub struct PlanarAccum {
     pub channels: Vec<Vec<f32>>,
     pub start_frame: usize,
@@ -43,6 +41,21 @@ impl PlanarAccum {
             return;
         }
         debug_assert_eq!(channels, self.channels.len());
+        let frames = interleaved.len() / channels;
+        if self.start_frame > 0
+            && self
+                .channels
+                .iter()
+                .any(|channel| frames > channel.capacity() - channel.len())
+        {
+            // Reclaim the consumed prefix only when appending needs its space.
+            // Draining a packet can then advance the cursor without moving its tail.
+            for channel in &mut self.channels {
+                channel.copy_within(self.start_frame.., 0);
+                channel.truncate(channel.len() - self.start_frame);
+            }
+            self.start_frame = 0;
+        }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
                 channel.extend(
@@ -60,13 +73,23 @@ impl PlanarAccum {
             right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
         }
-        let frames = interleaved.len() / channels;
-        for channel in &mut self.channels {
+        let complete = &interleaved[..frames * channels];
+        for (index, channel) in self.channels.iter_mut().enumerate() {
             channel.reserve(frames);
-        }
-        for frame in interleaved.chunks_exact(channels) {
-            for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
-                channel.push(f32::from(*sample) / 32768.0);
+            if index < channels {
+                match channels {
+                    3 => push_planar_channel::<3>(complete, index, channel),
+                    4 => push_planar_channel::<4>(complete, index, channel),
+                    6 => push_planar_channel::<6>(complete, index, channel),
+                    8 => push_planar_channel::<8>(complete, index, channel),
+                    _ => channel.extend(
+                        complete
+                            .iter()
+                            .skip(index)
+                            .step_by(channels)
+                            .map(|&sample| f32::from(sample) / 32768.0),
+                    ),
+                }
             }
         }
     }
@@ -74,23 +97,9 @@ impl PlanarAccum {
     pub fn consume_frames(&mut self, frames: usize) {
         let total_frames = self.channels.first().map_or(0, Vec::len);
         self.start_frame = (self.start_frame + frames).min(total_frames);
-        if self.start_frame == 0 {
-            return;
-        }
-        let remaining_frames = total_frames - self.start_frame;
-        if remaining_frames == 0 {
+        if self.start_frame > 0 && self.start_frame == total_frames {
             self.clear();
-            return;
         }
-        if self.start_frame < PLANAR_COMPACT_THRESHOLD_FRAMES && self.start_frame * 2 < total_frames
-        {
-            return;
-        }
-        for channel in &mut self.channels {
-            channel.copy_within(self.start_frame.., 0);
-            channel.truncate(remaining_frames);
-        }
-        self.start_frame = 0;
     }
 
     pub fn clear(&mut self) {
@@ -99,6 +108,19 @@ impl PlanarAccum {
             channel.clear();
         }
     }
+}
+
+// Fixed strides expose packed loads/shuffles to the vectorizer. Other channel
+// counts retain the dynamic-stride loop without extra storage or conversion.
+#[inline]
+fn push_planar_channel<const CHANNELS: usize>(input: &[i16], index: usize, output: &mut Vec<f32>) {
+    output.extend(
+        input
+            .as_chunks::<CHANNELS>()
+            .0
+            .iter()
+            .map(|frame| f32::from(frame[index]) / 32768.0),
+    );
 }
 
 #[inline(always)]
@@ -124,8 +146,13 @@ pub fn write_resampler_output(
         out_tmp.clear();
         return 0;
     }
-    if out.len() == 2 && out_ch == 2 {
-        let produced_frames = produced_frames.min(out[0].len()).min(out[1].len());
+    if out.len() >= 2 && out_ch == 2 {
+        let produced_frames = if out.len() == 2 {
+            produced_frames.min(out[0].len()).min(out[1].len())
+        } else {
+            // Even an unused source channel still limits the complete frames.
+            produced_frames.min(out.iter().map(Vec::len).min().unwrap_or(0))
+        };
         let produced_samples = produced_frames * 2;
         resize_output(out_tmp, produced_samples);
         let (output_chunks, output_tail) = out_tmp.as_mut_slice().as_chunks_mut::<8>();
@@ -182,7 +209,10 @@ pub fn write_resampler_output(
     for (frame, output) in out_tmp.chunks_exact_mut(out_ch).enumerate() {
         let (converted, repeated) = output.split_at_mut(out.len().min(out_ch));
         for (dst, source) in converted.iter_mut().zip(out) {
-            *dst = sample_to_i16(source[frame]);
+            // Preserve the f32 product; widening prevents a half bias from
+            // rounding across an integer boundary prematurely.
+            let scaled = f64::from(source[frame] * 32767.0);
+            *dst = (scaled + 0.5f64.copysign(scaled)) as i16;
         }
         // Extra channels reuse this frame's PCM instead of converting it again.
         for (dst, &sample) in repeated.iter_mut().zip(converted.iter().cycle()) {
@@ -231,6 +261,10 @@ pub fn write_channel_mapped_i16(
         {
             *output = [input[0], input[1]];
         }
+    } else if out_ch == 1 {
+        copy_mono_channel(input, in_ch, out_tmp);
+    } else if in_ch <= 2 {
+        repeat_mono_stereo(input, in_ch, out_ch, out_tmp);
     } else {
         // Output channel `c` copies input channel `c % in_ch`.
         for (output, input) in out_tmp
@@ -243,6 +277,41 @@ pub fn write_channel_mapped_i16(
         }
     }
     frames
+}
+
+// Keep mono's strided loop out of the stereo and repeated-channel kernels.
+#[inline(never)]
+fn copy_mono_channel(input: &[i16], channels: usize, output: &mut [i16]) {
+    if channels == 2 {
+        for (frame, dst) in input.as_chunks::<2>().0.iter().zip(output) {
+            *dst = frame[0];
+        }
+        return;
+    }
+    for (frame, dst) in input.chunks_exact(channels).zip(output) {
+        *dst = frame[0];
+    }
+}
+
+// Keep the fixed-frame fill loops out of the generic channel mapper.
+#[inline(never)]
+fn repeat_mono_stereo(input: &[i16], in_ch: usize, out_ch: usize, output: &mut [i16]) {
+    if in_ch == 1 {
+        for (output, &sample) in output.chunks_exact_mut(out_ch).zip(input) {
+            output.fill(sample);
+        }
+    } else {
+        for (output, input) in output
+            .chunks_exact_mut(out_ch)
+            .zip(input.as_chunks::<2>().0)
+        {
+            let (pairs, tail) = output.as_chunks_mut::<2>();
+            pairs.fill(*input);
+            if let [last] = tail {
+                *last = input[0];
+            }
+        }
+    }
 }
 
 /// Append channel-mapped frames directly to an existing output allocation.
@@ -279,10 +348,27 @@ pub fn append_channel_mapped_i16(
         );
         return frames;
     }
-    for frame in input.chunks_exact(in_ch) {
-        for channel in 0..out_ch {
-            out.push(frame[channel % in_ch]);
+    if out_ch == 1 {
+        if in_ch == 2 {
+            out.extend(input.as_chunks::<2>().0.iter().map(|frame| frame[0]));
+        } else {
+            out.extend(input.chunks_exact(in_ch).map(|frame| frame[0]));
         }
+        return frames;
+    }
+    if in_ch <= 2 {
+        let start = out.len();
+        out.resize(start + produced_samples, 0);
+        repeat_mono_stereo(input, in_ch, out_ch, &mut out[start..]);
+        return frames;
+    }
+    let repeats = out_ch / in_ch;
+    let tail = out_ch % in_ch;
+    for frame in input.chunks_exact(in_ch) {
+        for _ in 0..repeats {
+            out.extend_from_slice(frame);
+        }
+        out.extend_from_slice(&frame[..tail]);
     }
     frames
 }
@@ -344,8 +430,10 @@ pub fn apply_fade_envelope(
             continue;
         }
         for sample in samples {
-            let scaled = f32::from(*sample) * volume;
-            *sample = scaled.round() as i16;
+            // Widen the original f32 product before adding the half bias so
+            // values just below a rounding boundary cannot cross it early.
+            let scaled = f64::from(f32::from(*sample) * volume);
+            *sample = (scaled + 0.5f64.copysign(scaled)) as i16;
         }
     }
 }
@@ -383,8 +471,15 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 
 #[inline(always)]
 fn sample_to_i16(sample: f32) -> i16 {
-    // Rust float-to-integer casts already saturate and map NaN to zero.
-    (sample * 32767.0).round() as i16
+    let scaled = sample * 32767.0;
+    // Truncation leaves an exact fraction in (-1, 1) for in-range values.
+    // Correct half ties away from zero without calling round per sample.
+    // Saturated values can only move outward; NaN casts to zero and neither
+    // comparison succeeds. The final clamp therefore preserves both cases.
+    let whole = scaled as i16;
+    let fraction = scaled - f32::from(whole);
+    (i32::from(whole) + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5))
+        .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
 }
 
 #[cfg(test)]
@@ -408,15 +503,29 @@ mod tests {
     }
 
     #[test]
-    fn planar_accum_compacts_consumed_frames() {
+    fn planar_accum_reclaims_consumed_frames_before_growing() {
         let mut planar = PlanarAccum::new(1, 4);
         planar.push_i16_interleaved(&[1; 5000], 1);
 
         planar.consume_frames(3000);
 
-        assert_eq!(planar.start_frame, 0);
+        assert_eq!(planar.start_frame, 3000);
         assert_eq!(planar.available_frames(), 2000);
-        assert_eq!(planar.channels[0].len(), 2000);
+        let capacity = planar.channels[0].capacity();
+        planar.push_i16_interleaved(&[2; 1000], 1);
+        assert_eq!(planar.start_frame, 0);
+        assert_eq!(planar.available_frames(), 3000);
+        assert_eq!(planar.channels[0].capacity(), capacity);
+        assert!(
+            planar.channels[0][..2000]
+                .iter()
+                .all(|&sample| sample == 1.0 / 32768.0)
+        );
+        assert!(
+            planar.channels[0][2000..]
+                .iter()
+                .all(|&sample| sample == 2.0 / 32768.0)
+        );
     }
 
     #[test]
@@ -540,3 +649,7 @@ mod tests {
         assert_eq!(samples[47], 0);
     }
 }
+
+#[cfg(test)]
+#[path = "resample_perf_tests.rs"]
+mod perf_tests;

@@ -1,0 +1,5 @@
+cargo clippy --locked -p deadlib-audio-decode-flac --all-targets -- -D warnings
+    Checking deadlib-audio-decode-flac v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\flac)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.53s
+
+exit_code=0

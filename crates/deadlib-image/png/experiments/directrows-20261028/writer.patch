@@ -1,0 +1,97 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index d5717f2b0..adcfb7758 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -513,13 +513,17 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+     let channels = image.color_type.channels();
+     let depth = image.bit_depth;
+     let bpp = (channels * depth as usize).div_ceil(8);
+-    let width = passes(interlaced)
+-        .iter()
+-        .filter(|&&(_, y, _, _)| y < image.height)
+-        .map(|&(x, _, dx, _)| extent(image.width, x, dx))
+-        .max()
+-        .unwrap_or(0);
+-    let capacity = row_bytes(width, channels, depth)?;
++    let capacity = if filter == Filter::None {
++        0
++    } else {
++        let width = passes(interlaced)
++            .iter()
++            .filter(|&&(_, y, _, _)| y < image.height)
++            .map(|&(x, _, dx, _)| extent(image.width, x, dx))
++            .max()
++            .unwrap_or(0);
++        row_bytes(width, channels, depth)?
++    };
+     let mut row = vec![0; capacity];
+     let mut previous = vec![0; capacity];
+     let mut candidate = if filter == Filter::Adaptive {
+@@ -535,6 +539,24 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+             continue;
+         }
+         let stride = row_bytes(w, channels, depth)?;
++        if filter == Filter::None {
++            for row_index in 0..h {
++                let src_y = y as usize + row_index * dy as usize;
++                out.push(0);
++                match &image.samples {
++                    Samples::U8(samples) if depth == 8 && dx == 1 => {
++                        let start = (src_y * image.width as usize + x as usize) * channels;
++                        out.extend_from_slice(&samples[start..start + w * channels]);
++                    }
++                    _ => {
++                        let start = out.len();
++                        out.resize(start + stride, 0);
++                        pack_row(image, src_y, x as usize, dx as usize, w, &mut out[start..]);
++                    }
++                }
++            }
++            continue;
++        }
+         row.resize(stride, 0);
+         previous.resize(stride, 0);
+         previous.fill(0);
+diff --git a/crates/deadlib-image/png/src/stream/encode_rows.rs b/crates/deadlib-image/png/src/stream/encode_rows.rs
+index 8deb88e59..2be10114a 100644
+--- a/crates/deadlib-image/png/src/stream/encode_rows.rs
++++ b/crates/deadlib-image/png/src/stream/encode_rows.rs
+@@ -70,11 +70,13 @@ impl<'a> Rows<'a> {
+                     self.image.color_type.channels(),
+                     self.image.bit_depth,
+                 )?;
+-                resize(&mut self.row, bytes)?;
+-                resize(&mut self.previous, bytes)?;
+-                self.previous.fill(0);
+-                if self.filter == Filter::Adaptive {
+-                    resize(&mut self.candidate, bytes + 1)?;
++                if self.filter != Filter::None {
++                    resize(&mut self.row, bytes)?;
++                    resize(&mut self.previous, bytes)?;
++                    self.previous.fill(0);
++                    if self.filter == Filter::Adaptive {
++                        resize(&mut self.candidate, bytes + 1)?;
++                    }
+                 }
+                 resize(&mut self.output, bytes + 1)?;
+                 return Ok(true);
+@@ -92,6 +94,19 @@ impl<'a> Rows<'a> {
+             return Ok(None);
+         }
+         let y = self.y as usize + self.index * self.dy as usize;
++        if self.filter == Filter::None {
++            scanline::pack_row(
++                self.image,
++                y,
++                self.x as usize,
++                self.dx as usize,
++                self.width,
++                &mut self.output[1..],
++            );
++            self.output[0] = 0;
++            self.index += 1;
++            return Ok(Some(&self.output));
++        }
+         scanline::pack_row(
+             self.image,
+             y,

@@ -66,28 +66,36 @@ pub const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
 pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
     "Underlay",
     "Overlay",
-    "BPMDisplay",
-    "LifeFrame",
-    "ScoreFrame",
-    "Lyrics",
     "SongBackground",
     "SongForeground",
-    "StageDisplay",
-    "SongTitle",
+    "In",
+    "Debug",
     "ScoreP1",
     "ScoreP2",
-    "SongMeterDisplayP1",
-    "SongMeterDisplayP2",
     "StepsDisplayP1",
     "StepsDisplayP2",
-    "LifeMeterBarP1",
-    "LifeMeterBarP2",
+    "StepsDescriptionP1",
+    "StepsDescriptionP2",
+    "PlayerOptionsP1",
+    "PlayerOptionsP2",
+    "SongOptions",
+    "ActiveAttackListP1",
+    "ActiveAttackListP2",
+    "LyricDisplay",
+    "OniGameOverP1",
+    "OniGameOverP2",
+    "Header",
+    "Footer",
+    "Out",
+    "Cancel",
 ];
 
 pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
     "Header",
     "StepStatsPaneP1",
     "StepStatsPaneP2",
+    "NoteFieldContainerP1",
+    "NoteFieldContainerP2",
     "DangerP1",
     "DangerP2",
     "P1Score",
@@ -123,15 +131,19 @@ pub fn top_screen_option_row_name_at(index: i32) -> Option<&'static str> {
 
 #[must_use]
 pub fn option_row_default_text(name: &str) -> String {
-    let lower = name.to_ascii_lowercase();
-    match lower.as_str() {
-        "speedmodtype" => "X".to_string(),
-        "speedmod" => "1".to_string(),
-        "mini" => "0%".to_string(),
-        "perspective" => "Overhead".to_string(),
-        "noteskin" | "noteskinvariant" => "default".to_string(),
-        "musicrate" => "1".to_string(),
-        _ => custom_option_default_text(name).unwrap_or_default(),
+    if name.eq_ignore_ascii_case("speedmodtype") {
+        "X".to_string()
+    } else if name.eq_ignore_ascii_case("speedmod") || name.eq_ignore_ascii_case("musicrate") {
+        "1".to_string()
+    } else if name.eq_ignore_ascii_case("mini") {
+        "0%".to_string()
+    } else if name.eq_ignore_ascii_case("perspective") {
+        "Overhead".to_string()
+    } else if name.eq_ignore_ascii_case("noteskin") || name.eq_ignore_ascii_case("noteskinvariant")
+    {
+        "default".to_string()
+    } else {
+        custom_option_default_text(name).unwrap_or_default()
     }
 }
 
@@ -214,24 +226,6 @@ pub fn top_screen_steps_display_index(name: &str) -> Option<usize> {
     match name {
         "StepsDisplayP1" => Some(0),
         "StepsDisplayP2" => Some(1),
-        _ => None,
-    }
-}
-
-#[must_use]
-pub fn top_screen_song_meter_display_index(name: &str) -> Option<usize> {
-    match name {
-        "SongMeterDisplayP1" => Some(0),
-        "SongMeterDisplayP2" => Some(1),
-        _ => None,
-    }
-}
-
-#[must_use]
-pub fn top_screen_life_meter_bar_index(name: &str) -> Option<usize> {
-    match name {
-        "LifeMeterBarP1" => Some(0),
-        "LifeMeterBarP2" => Some(1),
         _ => None,
     }
 }

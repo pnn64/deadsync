@@ -1,0 +1,19 @@
+{
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\bitpack.rs": "a76099022e3733090566beac9992fa2f5f049773be3d1e6360b3ee2fe4b3de0e",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\codebook.rs": "ad61b3fa2ae163e607565c4620437f8a581cfb313b1bfb09d38245f486f9a9fc",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\decoder.rs": "a51c5cca255d27608de2775725c1f591adb1fa2f219a6566ce62849b3a4b33a1",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\floor.rs": "d20864a0f4c73c51ae5f98390d5230130c95c9619fb42be0eb051dd50f1025ec",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\residue.rs": "278ac38ebd3551eeeff74dbf00e67c56d2932a6b14ec5921ea86bdfbe8d69ed9",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\seek.rs": "ae51dcef2601264ec8d517dd213ec01b57be090bce4eeda3cb4872523b6b8b21",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\setup.rs": "eb174f67a8c9de51d044b7709ea819bf10e3d8bddd731c307bc43a3fdfe39b90",
+  "crates\\deadlib-audio\\decode\\vorbis\\src\\transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+  "crates\\deadlib-audio\\decode\\vorbis\\tests\\configuration_parity.rs": "78d3fad99e846e16d5e7739a4cb170d207f722a5b3e66432b9b9036fb1baa3b7",
+  "crates\\deadlib-audio\\decode\\vorbis\\tests\\residue_geometry.rs": "eb7bc270d0aa0376f17c6cadedb4d96f7f0b73bb442f1b297f1be6d0b18d32ab",
+  "crates\\deadlib-audio\\decode\\vorbis\\tests\\support\\raw_cases.rs": "aca699e49c63957264f5c14ca988b73244bff8575d8bf725b5412cb4cad4f15c",
+  "crates\\deadlib-audio\\decode\\vorbis\\tests\\support\\residue_vectors.rs": "576afd75cead9602a6e04e866c819e3e2e948e76d8fe19529c1949fa74cc9cb7"
+}

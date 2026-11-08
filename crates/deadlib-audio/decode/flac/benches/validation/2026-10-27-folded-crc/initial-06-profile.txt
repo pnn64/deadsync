@@ -1,0 +1,48 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cycles:Pu'
+# Event count (approx.): 18862417487
+#
+# Overhead  Command          Shared Object                            Symbol
+# ........  ...............  .......................................  .......................................................................................
+#
+    37.83%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+
+    23.19%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+            |
+             --23.13%--_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+
+    15.50%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RNvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac8checksum3x866folded
+            |
+            ---_RNvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac8checksum3x866folded
+
+    10.23%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+
+     3.91%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+
+     2.56%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+            |
+             --2.50%--_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+
+     1.13%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+
+     1.09%  deadlib-flac-de  deadlib-flac-decode-folded-crc-verified  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8subframelEB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8subframelEB4_
+
+
+
+#
+# (Tip: Save output of perf stat using: perf stat record <target workload>)
+#

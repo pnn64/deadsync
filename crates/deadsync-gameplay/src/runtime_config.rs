@@ -1,9 +1,57 @@
 ﻿#[derive(Clone, Copy, Debug, PartialEq)]
 #[derive(Default)]
+#[repr(u8)]
 pub enum GameplayFailType {
     Immediate,
     #[default]
     ImmediateContinue,
+    EndOfSong,
+    Off,
+}
+
+impl GameplayFailType {
+    pub const fn from_value(value: f32) -> Option<Self> {
+        match value {
+            0.0 => Some(Self::Immediate),
+            1.0 => Some(Self::ImmediateContinue),
+            2.0 => Some(Self::EndOfSong),
+            3.0 => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    pub fn from_mod(key: &str) -> Option<Self> {
+        match key {
+            "failarcade" | "failimmediate" => Some(Self::Immediate),
+            "failendofsong" | "failimmediatecontinue" => Some(Self::ImmediateContinue),
+            "failatend" => Some(Self::EndOfSong),
+            "failoff" => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    pub const fn lua_name(self) -> &'static str {
+        match self {
+            Self::Immediate => "FailType_Immediate",
+            Self::ImmediateContinue => "FailType_ImmediateContinue",
+            Self::EndOfSong => "FailType_EndOfSong",
+            Self::Off => "FailType_Off",
+        }
+    }
+
+    pub const fn fails_during_play(self) -> bool {
+        matches!(self, Self::Immediate | Self::ImmediateContinue)
+    }
+}
+
+pub(crate) fn song_fail_type(fail_type: GameplayFailType, difficulty: &str, in_course: bool) -> GameplayFailType {
+    // GameState::GetPlayerFailType clamps regular Easy charts to at least
+    // ImmediateContinue. Preferred options and attacks retain their raw value.
+    if !in_course && difficulty.eq_ignore_ascii_case("Easy") && fail_type == GameplayFailType::Immediate {
+        GameplayFailType::ImmediateContinue
+    } else {
+        fail_type
+    }
 }
 
 
@@ -442,6 +490,7 @@ pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOpti
 
 #[derive(Clone, Debug)]
 pub struct GameplayMiniIndicatorData {
+    pub ghost_targets: [GameplayGhostTarget; MAX_PLAYERS],
     pub specified_target_percent: [f64; MAX_PLAYERS],
     pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
     pub machine_best_percent: [Option<f64>; MAX_PLAYERS],
@@ -451,6 +500,7 @@ pub struct GameplayMiniIndicatorData {
 impl Default for GameplayMiniIndicatorData {
     fn default() -> Self {
         Self {
+            ghost_targets: std::array::from_fn(|_| GameplayGhostTarget::default()),
             specified_target_percent: [100.0; MAX_PLAYERS],
             personal_best_percent: [None; MAX_PLAYERS],
             machine_best_percent: [None; MAX_PLAYERS],
@@ -809,7 +859,6 @@ pub fn current_song_clock_snapshot(
     audio_snapshot: GameplayAudioSnapshot,
     music_rate: f32,
     audio_lead_in_seconds: f32,
-    global_offset_seconds: f32,
 ) -> SongClockSnapshot {
     let stream_clock = audio_snapshot.stream_clock;
     if stream_clock.has_music_mapping {
@@ -834,7 +883,6 @@ pub fn current_song_clock_snapshot(
     let song_time = music_time_from_stream_position(
         stream_clock.stream_seconds,
         audio_lead_in_seconds,
-        global_offset_seconds,
         fallback_rate,
     );
     SongClockSnapshot {
@@ -937,7 +985,7 @@ pub enum GameplayAudioCommand {
         looping: bool,
         rate: f32,
     },
-    PlayPreloadedSfx(&'static str),
+    PlayPreloadedMineSfx { path: &'static str, player: u8, two_players: bool },
     PlayPreloadedAssistTick(&'static str),
     PlayAssistTickAtMusicTime {
         path: &'static str,
@@ -968,6 +1016,22 @@ impl GameplayCommandQueue {
 
     #[inline(always)]
     pub fn push_audio(&mut self, command: GameplayAudioCommand) {
+        // Player::UpdateJudgedRows collects distinct mine sound pointers
+        // before Stop/Play, even when several mines hit on the same frame.
+        if let GameplayAudioCommand::PlayPreloadedMineSfx { path, player, .. } = &command
+            && self.audio.iter().any(|queued| {
+                matches!(
+                    queued,
+                    GameplayAudioCommand::PlayPreloadedMineSfx {
+                        path: queued_path,
+                        player: queued_player,
+                        ..
+                    } if queued_path == path && queued_player == player
+                )
+            })
+        {
+            return;
+        }
         self.audio.push(command);
     }
 

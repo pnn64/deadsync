@@ -1,0 +1,35 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:296
++ ... .ogg).Path; cargo test -p deadlib-audio-decode-vorbis --release --tes ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 16.04s
+     Running tests\concealment.rs (target\release\deps\concealment-f44ed7dd8165cb02.exe)
+
+running 1 test
+historical independently selected packets: [0, 1, 2, 3, 4, 5, 25, 26, 27, 28, 29, 30, 31, 32]
+floor-zero-bits/packet-0/bits-0-24: 24 cases, 72 packets, 1 discarded, 21 truncated, 76544 samples, peak 0, RMS 0
+floor-zero-bits/packet-1/bits-0-32: 32 cases, 128 packets, 1 discarded, 25 truncated, 164096 samples, peak 0, RMS 0
+floor-zero-bits/packet-2/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 229632 samples, peak 0, RMS 0
+floor-zero-bits/packet-3/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-4/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-5/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-25/bit-1/step-2: 1152 samples, peak error 2.448000000e4, RMS 9.352012336e3, signal peak
+401340672.000000
+
+thread 'historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis' (40012) panicked at
+crates\deadlib-audio\decode\vorbis\tests\support\mod.rs:128:9:
+floor-zero-bits/packet-25/bit-1/step-2: PCM peak tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis ... FAILED
+
+failures:
+
+failures:
+    historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.81s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test concealment`

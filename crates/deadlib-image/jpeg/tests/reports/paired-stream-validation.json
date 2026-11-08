@@ -1,0 +1,120 @@
+{
+  "scope": "Bounded paired encoded output to separate logical writers. Sources remain in memory; no single-channel table-first transport, incremental input, full memory accounting, exhaustive conformance or speed claim.",
+  "rust_checks": {
+    "release": {
+      "unit_and_integration_passed": 162,
+      "doctests_passed": 2,
+      "total_passed": 164,
+      "failed": 0,
+      "log_sha256": "eb73728c2cbe0c95b370cf1bcdade0519c99fe457494b1797cf4dd513a4a779e"
+    },
+    "isolated_debug": {
+      "unit_and_integration_passed": 162,
+      "doctests_passed": 2,
+      "total_passed": 164,
+      "failed": 0,
+      "log_sha256": "3b10a4926899aaf3f015f133ff15a0021daad20ccdbab8fef3fc5bd719ed207d"
+    }
+  },
+  "other_checks": {
+    "rustfmt": "pass",
+    "Clippy_all_targets_warnings_denied": "pass",
+    "rustdoc_warnings_denied": "pass",
+    "Python_drivers_py_compile": "pass",
+    "fixture_and_reference_identity_audits": "pass"
+  },
+  "native_paired_checks": {
+    "added_integration_tests": 4,
+    "process_precision_buffer_repeat_comparisons": 520,
+    "many_component_metadata_comparisons": 24,
+    "image_buffer_sizes": [
+      0,
+      1,
+      7,
+      17,
+      31,
+      64,
+      8192
+    ],
+    "table_staging_bytes": 0,
+    "every_small_model_table_and_image_IO_failure_offset": true,
+    "every_small_model_total_and_table_byte_ceiling": true,
+    "original_IO_payload_and_destination_preserved": true,
+    "cache_cleared_on_every_failure": true,
+    "retry_exact": true,
+    "all_source_conveniences_and_cache_parts": true,
+    "dense_digest_only_image_staging_bytes": 64
+  },
+  "fresh_main_C_checks": {
+    "sessions": 180,
+    "image_outputs": 10368,
+    "genuine_Turbo_B5_image_outputs": 4572,
+    "JPEG_XT_equivalent_interchange_image_outputs": 5796,
+    "JPEG_XT_DCT_blocks": 29952,
+    "JPEG_XT_sample_values": 3874716,
+    "JPEG_XT_EXP00_copies": 288
+  },
+  "supplementary_DNL_checks": {
+    "sessions": 148,
+    "images": 296,
+    "processes": [
+      192,
+      193,
+      194,
+      195,
+      197,
+      198,
+      199,
+      201,
+      202,
+      203,
+      205,
+      206,
+      207
+    ],
+    "IJG_exact_images": 56,
+    "JPEG_XT_exact_images": 280,
+    "JPEG_XT_DCT_blocks": 106944,
+    "JPEG_XT_sample_values": 974284,
+    "C_external_table_and_known_height_copies": 296,
+    "C_EXP00_copies": 0
+  },
+  "supplementary_JPEG_XT_fractional_exclusions": 16,
+  "prior_paired_stream_hashes_unchanged": true,
+  "final_adapter_replay": {
+    "sessions": 180,
+    "image_outputs": 10368,
+    "exact_prior_C_bytes": true,
+    "C_decoding_rerun": false,
+    "native_sha256": "cd44a67211f5eb9a151185510f0270d8466aa044200692074bb545bb3a21b96d"
+  },
+  "provenance_note": "Main C gates use the frozen adapter before source preparation was moved outside its repeat loop; all of their sources are self-contained. The final adapter replays all prior paired hashes exactly. The abbreviated-input/DNL supplement uses the final adapter directly. Production encoding and both error paths are identical in both binaries.",
+  "Turbo_provenance": {
+    "version": "3.2.1",
+    "API": "Public persistent-object B.5 client; MAX_COMPONENTS=10; <=4 components in this gate",
+    "helper_source_sha256": "a7451ae8401e2ec8cad3fb4f9cbbece5d0a71372fef1c435b925d49b180e73ba",
+    "helper_binary_sha256": "b8ce2fa9d85909dd4d44e9f673656bd8851caedf20f1cdd6f376d51216b8dc4e",
+    "linked_static_library_sha256": "ac1b894e1b971ec61e9eb23e6c125636d5d4250239a7512a295e1f823d9e75f7",
+    "source_version_CMake_sha256": "066ec13df2aa82442771b755f202dba5d2f826515ad801f6ed451d63672730a4",
+    "configured_jconfig_sha256": "fda939e9b1af10d3234109a7a0838cc94a44b1f384f6f9a922dbc2da7f277b59",
+    "configured_jmorecfg_sha256": "b86b4abf452d39b737cb45503591e04e9ca38c5fd0e90d429387d0464005a28b",
+    "CMakeCache_sha256": "027b3208e7556e1dc29a2ddf160ef3a7cf74d2324505b78c388077e6b9b0f3b6"
+  },
+  "reports": {
+    "paired-stream-sessions.json": "32cedd2c55105ba81a213ea9cf8116c86622150e82e7395c353178992c1621bb",
+    "paired-stream-dnl.json": "a1a013bb06ec2b9d65a1dca0b6503e30f5c2b5667ceff925332a1f8d97910745",
+    "paired-stream-replay.json": "2f005c0df2ab53474ff8ca968a45f3cec0dde820fcfae6c028fd9e8dc9e1c97e"
+  },
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "application_integration": false,
+  "remaining": [
+    "Incremental input",
+    "Single-channel table-first paired transmission",
+    "Full allocator/stack/cache/peak memory accounting",
+    "Broader conformance and rare/reference combinations",
+    "Coverage-guided fuzzing",
+    "Measured performance and optimization"
+  ]
+}

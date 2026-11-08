@@ -1,0 +1,24 @@
+# state_bytes: WavlWriter=112
+# resident PCM16 stereo; caller_output_bytes=4202496; batch_samples=4096; silence_is_virtual; all decode verification outside measurement
+operation	trial	iters	ns_per_op	thread_cycles_per_op	MiB_per_s	alloc_calls	requested_bytes	peak_requested_live_bytes
+wavl/new_empty	0	1000000	131.073	285.490	0.000	0	0	0
+wavl/new_empty	1	1000000	130.999	284.837	0.000	0	0	0
+wavl/new_empty	2	1000000	136.238	295.969	0.000	0	0	0
+wavl/known_empty	0	1000000	116.475	253.470	0.000	0	0	0
+wavl/known_empty	1	1000000	116.455	253.949	0.000	0	0	0
+wavl/known_empty	2	1000000	112.660	245.460	0.000	0	0	0
+wavl/new_metadata16	0	100000	317.326	690.960	0.000	0	0	0
+wavl/new_metadata16	1	100000	328.732	716.931	0.000	0	0	0
+wavl/new_metadata16	2	100000	302.527	660.085	0.000	0	0	0
+wavl/known_metadata16	0	100000	291.003	633.264	0.000	0	0	0
+wavl/known_metadata16	1	100000	287.845	627.032	0.000	0	0	0
+wavl/known_metadata16	2	100000	294.964	641.250	0.000	0	0	0
+wavl/segmented_i16	0	128	334920.312	724115.078	11943.139	0	0	0
+wavl/segmented_i16	1	128	334614.844	726488.398	11954.042	0	0	0
+wavl/segmented_i16	2	128	337325.781	731327.734	11857.973	0	0	0
+wavl/segmented_i16_known	0	128	324828.906	706284.109	12314.175	0	0	0
+wavl/segmented_i16_known	1	128	327171.875	712135.172	12225.990	0	0	0
+wavl/segmented_i16_known	2	128	330558.594	719246.578	12100.729	0	0	0
+wavl/u64_silence	0	100000	193.876	422.597	0.000	0	0	0
+wavl/u64_silence	1	100000	193.211	421.644	0.000	0	0	0
+wavl/u64_silence	2	100000	199.862	431.282	0.000	0	0	0

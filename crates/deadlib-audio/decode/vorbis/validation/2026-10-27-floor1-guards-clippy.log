@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on build directory
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 15s

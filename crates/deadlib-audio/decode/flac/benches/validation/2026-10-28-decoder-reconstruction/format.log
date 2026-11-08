@@ -1,0 +1,3 @@
+cargo fmt -p deadlib-audio-decode-flac -- --check
+
+exit_code=0

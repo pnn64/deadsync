@@ -88,6 +88,14 @@ impl DebounceStore {
         !self.due_slots.is_empty()
     }
 
+    pub(crate) fn is_down(&self, slot: usize) -> bool {
+        self.slots
+            .get(slot)
+            .filter(|slot| slot.epoch == self.epoch)
+            .and_then(|slot| slot.state)
+            .is_some_and(|state| state.held_reported)
+    }
+
     #[inline(always)]
     fn ensure_slot(&mut self, slot: usize) {
         if slot >= self.slots.len() {
@@ -160,32 +168,56 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    fn swap_due_slots(&mut self, lhs: usize, rhs: usize) {
-        self.due_slots.swap(lhs, rhs);
-        self.slots[self.due_slots[lhs]].scheduled_ix = lhs as u32;
-        self.slots[self.due_slots[rhs]].scheduled_ix = rhs as u32;
-    }
-
-    #[inline(always)]
     fn sift_up(&mut self, mut ix: usize) -> usize {
+        if ix == 0 {
+            return ix;
+        }
+        let start = ix;
+        let slot = self.due_slots[ix];
+        let key = (
+            self.slots[slot]
+                .due_at
+                .expect("scheduled debounce slot must have a deadline"),
+            slot,
+        );
         while ix != 0 {
             let parent = (ix - 1) / 2;
-            if !self.due_slot_lt(self.due_slots[ix], self.due_slots[parent]) {
+            let parent_slot = self.due_slots[parent];
+            let parent_key = (
+                self.slots[parent_slot]
+                    .due_at
+                    .expect("scheduled debounce slot must have a deadline"),
+                parent_slot,
+            );
+            if key >= parent_key {
                 break;
             }
-            self.swap_due_slots(ix, parent);
+            self.due_slots[ix] = parent_slot;
+            self.slots[parent_slot].scheduled_ix = ix as u32;
             ix = parent;
+        }
+        if ix != start {
+            self.due_slots[ix] = slot;
+            self.slots[slot].scheduled_ix = ix as u32;
         }
         ix
     }
 
     #[inline(always)]
     fn sift_down(&mut self, mut ix: usize) {
+        let mut left = ix.saturating_mul(2).saturating_add(1);
+        if left >= self.due_slots.len() {
+            return;
+        }
+        let start = ix;
+        let slot = self.due_slots[ix];
+        let key = (
+            self.slots[slot]
+                .due_at
+                .expect("scheduled debounce slot must have a deadline"),
+            slot,
+        );
         loop {
-            let left = ix.saturating_mul(2).saturating_add(1);
-            if left >= self.due_slots.len() {
-                return;
-            }
             let right = left + 1;
             let child = if right < self.due_slots.len()
                 && self.due_slot_lt(self.due_slots[right], self.due_slots[left])
@@ -194,11 +226,27 @@ impl DebounceStore {
             } else {
                 left
             };
-            if !self.due_slot_lt(self.due_slots[child], self.due_slots[ix]) {
-                return;
+            let child_slot = self.due_slots[child];
+            let child_key = (
+                self.slots[child_slot]
+                    .due_at
+                    .expect("scheduled debounce slot must have a deadline"),
+                child_slot,
+            );
+            if child_key >= key {
+                break;
             }
-            self.swap_due_slots(ix, child);
+            self.due_slots[ix] = child_slot;
+            self.slots[child_slot].scheduled_ix = ix as u32;
             ix = child;
+            left = ix.saturating_mul(2).saturating_add(1);
+            if left >= self.due_slots.len() {
+                break;
+            }
+        }
+        if ix != start {
+            self.due_slots[ix] = slot;
+            self.slots[slot].scheduled_ix = ix as u32;
         }
     }
 
@@ -547,7 +595,7 @@ pub fn debounce_input_edge_in_store_mut(
 
     let (edges, prune, new_due_at) = {
         let slot_state = &mut states.slots[slot];
-        let mut state = slot_state.state.unwrap_or_else(|| DebounceState {
+        let state = slot_state.state.get_or_insert_with(|| DebounceState {
             action_mask,
             source,
             held_raw: false,
@@ -558,7 +606,7 @@ pub fn debounce_input_edge_in_store_mut(
             last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
         });
         let edges = debounce_step(
-            &mut state,
+            state,
             action_mask,
             source,
             pressed,
@@ -568,13 +616,12 @@ pub fn debounce_input_edge_in_store_mut(
             input_slot,
             windows,
         );
-        let prune = should_prune_debounce_state(state, now, windows);
+        let prune = should_prune_debounce_state(*state, now, windows);
         let new_due_at = if prune {
             slot_state.state = None;
             None
         } else {
-            slot_state.state = Some(state);
-            debounce_due_at(state, windows)
+            debounce_due_at(*state, windows)
         };
         (edges, prune, new_due_at)
     };
@@ -661,6 +708,10 @@ pub(crate) fn next_due_edge(
     }
     None
 }
+
+#[cfg(test)]
+#[path = "debounce_moves_perf.rs"]
+mod moves_perf;
 
 #[cfg(test)]
 mod tests {
@@ -1370,4 +1421,9 @@ mod tests {
         ));
         assert!(emitted.is_empty());
     }
+}
+
+#[cfg(test)]
+mod heap_performance {
+    include!("heap_performance.rs");
 }

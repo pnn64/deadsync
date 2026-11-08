@@ -103,9 +103,9 @@ struct PlayerEntry {
 }
 
 #[derive(Clone, Debug)]
-struct ChartScoreCache {
-    chart_hash: String,
-    entries: Vec<score_data::LeaderboardEntry>,
+struct ChartScoreCache<'a> {
+    chart_hash: &'a str,
+    entries: &'a [score_data::LeaderboardEntry],
     used: Vec<bool>,
 }
 
@@ -444,11 +444,11 @@ const fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
     (lower, upper)
 }
 
-fn find_chart_score_cache<'a>(
-    chart_caches: &'a mut Vec<ChartScoreCache>,
-    chart_hash: &str,
-    leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
-) -> &'a mut ChartScoreCache {
+fn find_chart_score_cache<'cache, 'data>(
+    chart_caches: &'cache mut Vec<ChartScoreCache<'data>>,
+    chart_hash: &'data str,
+    leaderboards: &'data HashMap<String, Vec<score_data::LeaderboardEntry>>,
+) -> &'cache mut ChartScoreCache<'data> {
     if let Some(idx) = chart_caches
         .iter()
         .position(|cache| cache.chart_hash == chart_hash)
@@ -456,9 +456,12 @@ fn find_chart_score_cache<'a>(
         return &mut chart_caches[idx];
     }
 
-    let entries = leaderboards.get(chart_hash).cloned().unwrap_or_default();
+    let entries = leaderboards
+        .get(chart_hash)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     chart_caches.push(ChartScoreCache {
-        chart_hash: chart_hash.to_string(),
+        chart_hash,
         used: vec![false; entries.len()],
         entries,
     });
@@ -543,7 +546,7 @@ fn build_side_highscore_lists(
     leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
 ) -> Vec<Option<StageHighScores>> {
     let mut out = vec![None; stages.len()];
-    let mut chart_caches: Vec<ChartScoreCache> = Vec::with_capacity(stages.len());
+    let mut chart_caches: Vec<ChartScoreCache<'_>> = Vec::with_capacity(stages.len());
     let side_idx = profile_data::player_side_index(side);
 
     for stage_idx in (0..stages.len()).rev() {
@@ -561,13 +564,13 @@ fn build_side_highscore_lists(
             leaderboards,
         );
         let highlight = consume_highlight_rank(
-            cache.entries.as_slice(),
+            cache.entries,
             cache.used.as_mut_slice(),
             initials,
             stage_score_10000(player_stage.score_percent),
         );
 
-        out[stage_idx] = Some(build_stage_highscores(cache.entries.as_slice(), highlight));
+        out[stage_idx] = Some(build_stage_highscores(cache.entries, highlight));
     }
 
     out
@@ -600,7 +603,7 @@ pub fn set_highscore_lists(state: &mut State, stages: &[stage_stats::StageSummar
 fn player_entry_for(player: &PostSongPlayerView) -> PlayerEntry {
     let joined = player.joined;
     let persistent = joined && !player.guest;
-    let can_enter = persistent;
+    let can_enter = persistent && player.name_entry_eligible;
 
     let name = if persistent {
         sanitize_name(&player.player_initials)
@@ -746,6 +749,9 @@ fn start_finish(state: &mut State) -> ThemeEffect {
 
 pub fn update(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.elapsed = (state.elapsed + dt).max(0.0);
+    if all_done(state) && state.finish_hold_elapsed.is_none() {
+        effects.push(start_finish(state));
+    }
 
     for p in &mut state.players {
         if state.finish_hold_elapsed.is_none() && update_hold_scroll(p) {
@@ -1001,7 +1007,7 @@ fn build_wheel(
     let headline_font = machine_font_key(machine_font, FontRole::Headline);
     // zmod's AlphabetCharacterMT.lua compensates for Mega's smaller authored glyphs.
     let zoom = match machine_font {
-        MachineFont::Wendy => 0.5,
+        MachineFont::Wendy | MachineFont::Unprofessional => 0.5,
         MachineFont::Mega => 0.812,
     };
 
@@ -1182,7 +1188,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
     // zmod's PlayerNameAndDecorations.lua uses a separate zoom for the entered name.
     let name_zoom = match state.runtime.machine_font {
-        MachineFont::Wendy => 0.75,
+        MachineFont::Wendy | MachineFont::Unprofessional => 0.75,
         MachineFont::Mega => 1.22,
     };
 
@@ -1377,6 +1383,7 @@ mod tests {
 
         let mut runtime = PostSongRuntimeView::default();
         runtime.players[0].joined = true;
+        runtime.players[0].name_entry_eligible = true;
         let state = init(runtime);
         let metrics = Metrics::centered(854.0, 480.0);
 
@@ -1459,6 +1466,31 @@ mod tests {
     }
 
     #[test]
+    fn initials_require_an_eligible_record_and_skip_when_neither_player_qualifies() {
+        let mut runtime = PostSongRuntimeView::default();
+        runtime.players[0].joined = true;
+        runtime.players[0].player_initials = "LIS".into();
+        let mut state = init(runtime.clone());
+        assert!(!state.players[0].can_enter);
+        assert!(state.players[0].done);
+        let mut effects = Vec::new();
+        update(&mut state, WHEEL_HIDE_FADE_SECONDS, &mut effects);
+        assert!(
+            effects
+                .iter()
+                .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::GameOver)))
+        );
+
+        runtime.players[0].name_entry_eligible = true;
+        let state = init(runtime.clone());
+        assert!(state.players[0].can_enter);
+        assert!(!state.players[0].done);
+
+        runtime.players[0].guest = true;
+        assert!(!init(runtime).players[0].can_enter);
+    }
+
+    #[test]
     fn player_entry_sanitizes_initials_for_inline_actor_text() {
         let mut player = PostSongPlayerView {
             joined: true,
@@ -1490,6 +1522,7 @@ mod tests {
     fn finishing_name_entry_requests_audio_before_profile_persistence() {
         let mut runtime = PostSongRuntimeView::default();
         runtime.players[0].joined = true;
+        runtime.players[0].name_entry_eligible = true;
         runtime.players[0].player_initials = "ABC".to_owned();
         let mut state = init(runtime);
         let now = Instant::now();
@@ -1524,3 +1557,10 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "initials_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "initials_pipelines_perf.rs"]
+mod pipelines_perf;

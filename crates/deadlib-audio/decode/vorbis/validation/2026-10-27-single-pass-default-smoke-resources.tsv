@@ -1,0 +1,25 @@
+path	engine	phase	instrumented	operations	requested_bytes	peak_extra_bytes	retained_delta_bytes	process_peak_working_set_bytes	reads	bytes_read	seeks	tells	api_exposed_samples	trial
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	full	False					4014080	10	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	full	True	205	151301	98744	0		10	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	full	False					5926912	3	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	full	True	1347	2734565	1355014	0		3	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	full	False					4435968	3	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	full	True	314	148150	128610	0		3	2729	0	0	640	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	True	205	151301	98744	98744		9	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	startup	True	314	148150	128610	128562		2	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	False					4014080	9	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	startup	False					4435968	2	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	startup	False					5931008	2	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	startup	True	1347	2734565	1355014	1354996		2	2729	0	0	256	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_open	False					5836800	4	2917	3	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_open	True	79	81453	81349	52677		5	5552	4	1	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_open	True	398	287025	97015	97015		10	2729	2	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_open	True	1351	2735146	1355006	1355003		4	2917	3	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_open	False					4046848	10	2729	2	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_open	False					4308992	5	5552	4	1	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_batch	True	0	0	0	0		6	564	6	0	1281	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_batch	False					4075520	18	564	6	0	1730	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_batch	True	24	378	63	0		6	564	6	0	2816	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_batch	True	0	0	0	0		18	564	6	0	1730	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_batch	False					5943296	6	564	6	0	2816	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_batch	False					4448256	6	564	6	0	1281	0

@@ -1,0 +1,265 @@
+{
+  "command": [
+    "taskset",
+    "-c",
+    "0",
+    "perf",
+    "record",
+    "-F",
+    "499",
+    "-e",
+    "cycles:u",
+    "-g",
+    "--call-graph",
+    "dwarf,4096",
+    "-o",
+    "/tmp/deadlib-image-decode-packed-split.data",
+    "--",
+    "/tmp/deadlib-image-profile-target/release/examples/decode_profile"
+  ],
+  "build": [
+    "cargo",
+    "build",
+    "--manifest-path",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/Cargo.toml",
+    "-p",
+    "deadlib-image-png",
+    "--release",
+    "--offline",
+    "--example",
+    "decode_profile",
+    "--target-dir",
+    "/tmp/deadlib-image-profile-target"
+  ],
+  "report_command": [
+    "perf",
+    "report",
+    "-i",
+    "/tmp/deadlib-image-decode-packed-split.data",
+    "--stdio",
+    "--no-children",
+    "--sort",
+    "symbol",
+    "--percent-limit",
+    "0.5"
+  ],
+  "wall_seconds": 13.269396326970309,
+  "environment": {
+    "CARGO_PROFILE_RELEASE_DEBUG": "1",
+    "CARGO_BUILD_JOBS": "4",
+    "DEADLIB_PNG_CORPUS": "/mnt/c/GitHub/deadsync/target/deadlib-image-reference/kodak",
+    "DEADLIB_PNG_BENCH_ITERS": "60",
+    "DEADLIB_PNG_PROFILE": "inflate"
+  },
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "perf": "perf version 6.12.113",
+  "binary": "/tmp/deadlib-image-profile-target/release/examples/decode_profile",
+  "binary_sha256": "81a43a22faf9d92cc99aebbd3a524ce7c58637eedc91129e8249b7fefc037353",
+  "raw_profile": "/tmp/deadlib-image-decode-packed-split.data",
+  "raw_profile_sha256": "2ba0d2e6006b3379ea8c5eb00c6e6c2415c1b008baa2d6f4481e3005aca8eeb3",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "b882e6281b829ba204f2d75cc98ad05ed090b0a61abc3930fb6f4b02798b2b2d"
+    },
+    {
+      "path": "../src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "ba683ac0c28f96f73dc41c95f77b6fe00ea63920ff60602c00ef4585d20b6ffd"
+    },
+    {
+      "path": "../Cargo.toml",
+      "sha256": "7c9f0d36db9d4a157c96ae2323369e09b3667d2445c30ae0500fb49112046bd4"
+    },
+    {
+      "path": "examples/decode_profile.rs",
+      "sha256": "bc0766b89c2fc30cb40b84092b4c9444306d89eaa434be396b8441d1f1405f71"
+    },
+    {
+      "path": "scripts/profile_decode.py",
+      "sha256": "c3e871137f1f933a4dc75d369912f5e6760d82802c0d566cdc21417a9ee127b0"
+    }
+  ],
+  "corpus_sha256": [
+    {
+      "file": "kodim01.png",
+      "sha256": "a56e27cbf5f843c048b6af1d6e090760e9c92fadba88b7dee0205918a37523bd"
+    },
+    {
+      "file": "kodim02.png",
+      "sha256": "4f4b74a79237e311d72cad958237b5f7088d8bce1c82305ebefe1a70e3022dfd"
+    },
+    {
+      "file": "kodim03.png",
+      "sha256": "e25ca1ff2f0c0cb5fdfd5f9b0a0bb21ac4c3de3c84a67f35b09a85d3306249db"
+    },
+    {
+      "file": "kodim04.png",
+      "sha256": "e3b946107c5d3441c022f678d0c3caf1e224d81b1604ba840a4f88e562de61aa"
+    },
+    {
+      "file": "kodim05.png",
+      "sha256": "10349e963c5c813d327852f82c1795fa4148d69fedffc4c589bee458e3ac3d53"
+    },
+    {
+      "file": "kodim06.png",
+      "sha256": "363510303b715d4cbc384e1ce227e466b613a09e1b71ae985882bf8e7fbd9b18"
+    },
+    {
+      "file": "kodim07.png",
+      "sha256": "b77d3f006f42414bb242222e0482e750c0fb9e5ee8d4bed2f6f11c5605fe54a4"
+    },
+    {
+      "file": "kodim08.png",
+      "sha256": "ba23983c76b4832ee0e8af0592664756841a16779acd69f792e268fb6d13d6e7"
+    },
+    {
+      "file": "kodim09.png",
+      "sha256": "6a4361c2fc194feb4edaa9f9a4a0620fb9943e460ac7fdf037fb0f6dd6607a7d"
+    },
+    {
+      "file": "kodim10.png",
+      "sha256": "9dfb70f5867c29ff9ed6313683f19b3d867849e40fbc0c4c54a4a89df341cf23"
+    },
+    {
+      "file": "kodim11.png",
+      "sha256": "7936814b58b5387fce2e4e2488b4ec830dadd95fa9520f358ddb30990b50f2b6"
+    },
+    {
+      "file": "kodim12.png",
+      "sha256": "d78c37c2f04f23761ed2367dd77e2db584ddd4c3950833fecf89f199a8126980"
+    },
+    {
+      "file": "kodim13.png",
+      "sha256": "bc34a3ce58dea09dce1704c997171602de90cb34d0c8503a988b77f473d39b08"
+    },
+    {
+      "file": "kodim14.png",
+      "sha256": "55a94550ff18f3246c4074fd32b77b0c74447c26b6ad274d564d999c0450ba6e"
+    },
+    {
+      "file": "kodim15.png",
+      "sha256": "7538cbb80cb9103606c48b806eae57d56c885c7f90b9b3be70a41160f9cbb683"
+    },
+    {
+      "file": "kodim16.png",
+      "sha256": "a89c7268ccd4718ba424a99fc4643c572cf692ca6eae887185ceb4e9f11d2e54"
+    },
+    {
+      "file": "kodim17.png",
+      "sha256": "37afcc89fbdcb76d9518e04b2fc011027e2f4cd14b3b2f83cefd721641a47c5b"
+    },
+    {
+      "file": "kodim18.png",
+      "sha256": "1a9258c365988961d87a0598725b609139c303ad48a5aad6c503c3b1a87849aa"
+    },
+    {
+      "file": "kodim19.png",
+      "sha256": "b7450b264b1b0a411390d8931b112c27905a992520fc90569dc4b920aa32bbdc"
+    },
+    {
+      "file": "kodim20.png",
+      "sha256": "3b46c71e3b92a563820ba32936be8330c586c41f938efd94be938386aae4328a"
+    },
+    {
+      "file": "kodim21.png",
+      "sha256": "ac958597c82073f6bb65129c68f72b651db5b9efd82e11547d07350214bc268b"
+    },
+    {
+      "file": "kodim22.png",
+      "sha256": "1cee58eb1f2d9c7ebb254d208a03c783ce6cf2c4d8c2cf45e235dd23b4ce1b29"
+    },
+    {
+      "file": "kodim23.png",
+      "sha256": "e3111a2fd4da24af15d6459ef9eacfe54106b38e27b4a21821b75c3f5d2d5baf"
+    },
+    {
+      "file": "kodim24.png",
+      "sha256": "1071c68372cc5a01435c2c225a5cf7d4bb803846ec08bb6b3d6721b156d7cb96"
+    }
+  ],
+  "scope": "Linux cycle sampling on a shared host. Includes one corpus validation pass and the repeated sampling loop. Attribution only; use the independent benchmarks for timing comparisons."
+}

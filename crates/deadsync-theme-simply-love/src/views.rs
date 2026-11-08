@@ -89,6 +89,25 @@ pub enum VisualBackgroundView {
     Tiled,
     Technique,
     Srpg,
+    Ecs15,
+}
+
+impl SimplyLoveVisualPolicyView {
+    /// ECS15 replaces menu backdrops but retains Technique on music selection.
+    #[must_use]
+    pub fn music_selection_background(self) -> Self {
+        if self.background == VisualBackgroundView::Ecs15 {
+            Self {
+                background: VisualBackgroundView::Technique,
+                assets: crate::visual_styles::for_style(
+                    deadsync_config::theme::VisualStyle::Technique,
+                ),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -277,6 +296,7 @@ pub struct PlayerOptionsPolicyView {
     pub smx_input: bool,
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
+    pub golf_enabled: bool,
     pub keyboard_features: bool,
     pub tournament_mode: bool,
 }
@@ -292,6 +312,7 @@ impl Default for PlayerOptionsPolicyView {
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: false,
+            golf_enabled: config.enable_golf,
             keyboard_features: config.keyboard_features,
             tournament_mode: config.tournament.enabled,
         }
@@ -404,6 +425,7 @@ pub struct SelectFlowRuntimeView {
 pub struct PostSongPlayerView {
     pub joined: bool,
     pub guest: bool,
+    pub name_entry_eligible: bool,
     pub display_name: String,
     pub player_initials: String,
     pub avatar_texture_key: Option<String>,
@@ -418,6 +440,7 @@ impl Default for PostSongPlayerView {
         Self {
             joined: false,
             guest: false,
+            name_entry_eligible: false,
             display_name: String::new(),
             player_initials: String::new(),
             avatar_texture_key: None,
@@ -485,7 +508,9 @@ impl Default for EvaluationPolicyView {
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             translated_titles: config.translated_titles,
             transparent_panels: matches!(
-                config.machine_evaluation_style.resolve(config.visual_style),
+                config
+                    .machine_evaluation_style
+                    .resolve(config.visual_style.presentation_style(config.srpg_variant)),
                 deadsync_config::theme::MachineEvaluationStyle::Transparent
             ),
             srpg10_visuals: config.visual_style.is_srpg()
@@ -555,6 +580,8 @@ impl Default for EvaluationContextView {
 #[derive(Clone, Default)]
 pub struct EvaluationInitView {
     pub score_info: [Option<ScoreInfo>; 2],
+    /// ScoreKeeperShared's Routine score, shown beside each participant's own.
+    pub routine_shared_score_percent: Option<f64>,
     pub stage_duration_seconds: f32,
     pub fail_stream_progress: [Option<(u32, u32)>; 2],
     pub context: EvaluationContextView,
@@ -580,7 +607,9 @@ pub struct ScoreboxMachineView {
 pub struct ScoreboxSideView {
     pub joined: bool,
     pub chart_hash: Option<String>,
-    pub groovestats_active: bool,
+    /// Any online leaderboard service (GrooveStats, BoogieStats, or ArrowCloud)
+    /// can serve this side.
+    pub online_active: bool,
     pub show_ex_score: bool,
     pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
     pub display_name: Arc<str>,
@@ -649,6 +678,7 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
     Song {
         song: &'a Arc<deadsync_chart::SongData>,
         chart_hashes: [Option<&'a str>; 2],
+        golf_pars: [Option<f64>; 2],
         lua_submit_allowed: [bool; 2],
         has_edit: bool,
         is_srpg_event: bool,
@@ -702,6 +732,7 @@ pub struct MusicWheelSideRuntimeView {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MusicWheelSlotRuntimeView {
+    pub golf_pars: [Option<f64>; 2],
     pub sides: [MusicWheelSideRuntimeView; 2],
     pub lua_submit_allowed: [bool; 2],
     pub has_edit: bool,
@@ -713,6 +744,7 @@ impl Default for MusicWheelSlotRuntimeView {
     fn default() -> Self {
         Self {
             sides: Default::default(),
+            golf_pars: [None; 2],
             lua_submit_allowed: [false; 2],
             has_edit: false,
             is_srpg_event: false,
@@ -1357,6 +1389,7 @@ impl Default for SelectMusicInteractionPolicyView {
 /// Shell-prepared visibility and layout policy for Select Music composition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicPresentationPolicyView {
+    pub show_golf_pars: bool,
     pub show_scorebox: bool,
     pub scorebox_cycle_enabled: bool,
     pub scorebox_in_step_pane: bool,
@@ -1377,6 +1410,7 @@ pub struct SelectMusicPresentationPolicyView {
 impl Default for SelectMusicPresentationPolicyView {
     fn default() -> Self {
         Self {
+            show_golf_pars: false,
             show_scorebox: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
             scorebox_cycle_enabled:
                 deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG

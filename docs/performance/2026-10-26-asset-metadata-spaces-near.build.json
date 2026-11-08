@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=1",
+    "-C",
+    "target-feature=+crt-static",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata-spaces\\near.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata-spaces\\near.exe",
+    "--extern",
+    "memchr=C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps"
+  ],
+  "dependencies": {
+    "memchr": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+      "sha256": "71361e971a86cf1a84d8d4a4107f3510ffa6b7868b1f60ea5e9eb1adf7f56b2a",
+      "mtime_ns": 1792663484659130400
+    }
+  },
+  "source_sha256": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode.rs": "6b724846e92242fd2f46babdfec2ba9654d722a2d535e1f81098d2ea47209aa8",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "ec80039e134be209953f8f5ea29220ba53a5a0fefd1e2d2a25abf5d9b4a6575a",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode\\metadata_perf.rs": "69d40d0f8311875442505d02d9dfc3f6dc6ee9a1be20f57b90346d849bda96e9",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode\\metadata_original.rs": "9e8a8a2ca985af8171a742bfb9105e2d65fc9a1461f511173dbd2f2764932c37",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\perf_fixture.rs": "8fa29e2ceb52b9eb65d64ca0230f3885a1877bcde244c1e08d04a6d05c78f8be",
+    "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "C:\\GitHub\\deadsync\\scripts\\benchmark_asset_metadata.py": "9b98d668c3ff4b08d21db179691e008e0e9fe55e699831faa450ef46bb6ef55a"
+  },
+  "body_sha256": {
+    "texture_filename_has_multiframe_hint": "f1df117a44da03070f7e4d70b0604cfbd42b0fbf4e79094f845ea02d7c5b03c8"
+  },
+  "binary_sha256": "0378c5a964fabdc7db4dfd0dc6150014938cb6b40e01958a0d2b06d36511d8dc"
+}

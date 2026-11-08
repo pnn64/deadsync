@@ -1,0 +1,19 @@
+#TITLE:Recurring Follow;
+#BPMS:0=60;
+#BGCHANGES:0=recurring-follow.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+;

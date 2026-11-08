@@ -1,0 +1,42 @@
+{
+  "stage": "row-swar",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-stream-scans-20261104\\row-swar\\compiled.rs",
+    "-o",
+    "D:\\deadsync-stream-scans-20261104\\row-swar\\stream_scans.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-rules/src/stream.rs": "ba48535616e5f11d4d8936cc04f163d6377dfcd8a85e96eb478ceca2fdf05b59",
+    "crates/deadsync-rules/src/stream_scans_performance.rs": "13a3c906573850b3b1fbd0278fd67000856bbf542d21fcc1a3608d0b5c67b3f3",
+    "crates/deadsync-rules/src/stream_scans_original.rs": "85a34a432ce69dcd6447561ebf030bf9b319d0b88788607bb8aed59fba554c27",
+    "tests/perf/stream_alloc.rs": "be1049d7688e3e497190e554ee4fc9d01931bb399f7f5452806576f917dc0c38",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_stream_scans.py": "d63fb0368664b8546c894a6be7019ff323b0625f5ba88fa0a32fa0429c93f760"
+  },
+  "fragments": {
+    "kernels": "e559cef36e89f2e67e62e72ed9708f61c940d71b5a31a255bbf5c04a089d0fc1"
+  },
+  "compiled_sha256": "974c4a88b7f6e28e8369ef31fb30009f35a24170b2a56debe74756b93fd9fa07",
+  "binary_sha256": "bd8e9e37a16953ae6e6615e3f44389e87813b5745ae3839da49a5fdbf61c53fa",
+  "correctness_sha256": "b24c45d6616b943e35c0e53276fa599155fdab430d3218530428703eca8d1fe8",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 4,
+  "runs": 3,
+  "trace_sha256": "1d57c7fd5b31d7c8476212ea4c8963a2879ab0fb611fa8d6ed5d7d5d87ef2ee2",
+  "trace_bytes": 26201120,
+  "reference_trace": "D:\\deadsync-stream-scans-20261104\\baseline\\stream_scans-trace.bin",
+  "reference_trace_sha256": "1d57c7fd5b31d7c8476212ea4c8963a2879ab0fb611fa8d6ed5d7d5d87ef2ee2"
+}

@@ -1,0 +1,21 @@
+{
+  "reason": "Direct WSL Python launch could not find rustup; terminal exec session 10840 exited 1 in rustc-version discovery before manifest creation or compilation. Retry through the established login-shell environment.",
+  "failed_output": "/tmp/deadlib-image-huffman-permutations-asan-20261028-a",
+  "failed_target": "/tmp/deadlib-image-huffman-permutations-asan-target-20261028-a",
+  "failed_exec_session": 10840,
+  "failed_exit_code": 1,
+  "compiled_artifacts": 0,
+  "fuzz_targets_run": 0,
+  "all_extracted_seed_bytes_verified": true,
+  "seed_files": 76582,
+  "seed_archive": "/tmp/deadlib-image-huffman-permutations-seeds-20261028-a.zip",
+  "seed_archive_sha256": "6082e2e9257d310f17b535192ebe8061427c1bf1cbaf753ed523c78488d3e879",
+  "wrapper_sha256": "b62cfd0994e88fc214ac061fbee3ed1f36fb241b3b012436327bb6f21877c9f3",
+  "retained_artifacts": [
+    "native_rustc.py"
+  ],
+  "recovery_runner_sha256": "dabfafa3a44779a70485b7f395bd905a3afe45b2303a53628ddbd47bb393bec2",
+  "before_free_inodes": 59346,
+  "duplicate_seed_extraction_removed_after_verification": true,
+  "after_free_inodes": 135931
+}

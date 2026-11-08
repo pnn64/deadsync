@@ -1,0 +1,13 @@
+case	codec	operation	iterations	encoded_bytes	sample_bytes	ns_per_image	MiB_per_second	image_pipeline_bytes
+color-0-depth-08-adam7-1-noise-1	deadlib-image-png	decode	4096	33499	33153	183216	172.568	0
+color-0-depth-08-adam7-1-noise-1	deadlib-image-png	decode-reader	4096	33499	33153	200991	157.306	0
+color-0-depth-08-adam7-1-noise-1	png-0.18.1	decode	4096	33499	33153	126290	250.354	0
+color-0-depth-08-adam7-1-noise-1	deadlib-image-png	inflate	4096	33418	33397	6912	4607.908	0
+color-0-depth-08-adam7-1-noise-1	deadlib-image-png	inflate-stream	4096	33418	33397	20378	1562.953	0
+color-0-depth-08-adam7-1-noise-1	flate2-1.1.10	inflate	4096	33418	33397	17800	1789.318	0
+color-3-depth-08-adam7-0-noise-1	deadlib-image-png	decode	4096	34164	33153	38492	821.396	0
+color-3-depth-08-adam7-0-noise-1	deadlib-image-png	decode-reader	4096	34164	33153	53193	594.386	0
+color-3-depth-08-adam7-0-noise-1	png-0.18.1	decode	4096	34164	33153	14738	2145.282	0
+color-3-depth-08-adam7-0-noise-1	deadlib-image-png	inflate	4096	33303	33282	8424	3767.829	0
+color-3-depth-08-adam7-0-noise-1	deadlib-image-png	inflate-stream	4096	33303	33282	22598	1404.557	0
+color-3-depth-08-adam7-0-noise-1	flate2-1.1.10	inflate	4096	33303	33282	17347	1829.722	0

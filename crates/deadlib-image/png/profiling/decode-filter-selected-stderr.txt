@@ -1,0 +1,3 @@
+Profiling decode: 24 files, 40 corpus passes
+[ perf record: Woken up 92 times to write data ]
+[ perf record: Captured and wrote 22.852 MB /tmp/deadlib-png-decode-filter-selected.data (5433 samples) ]

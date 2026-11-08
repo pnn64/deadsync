@@ -1,0 +1,12 @@
+diff --git a/control/hierarchicalbitmaprequester.cpp b/control/hierarchicalbitmaprequester.cpp
+--- a/control/hierarchicalbitmaprequester.cpp
++++ b/control/hierarchicalbitmaprequester.cpp
+@@ -85,7 +85,7 @@
+ {
+ #if ACCUSOFT_CODE
+   class LineAdapter *la;
+-  UBYTE i;
++  int i;
+   
+   if (m_ppEncodingMCU) {
+     assert(m_pLargestScale);

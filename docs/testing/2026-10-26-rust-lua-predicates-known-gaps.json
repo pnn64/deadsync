@@ -1,0 +1,36 @@
+{
+  "fixture": {
+    "path": "docs/testing/lua51-predicate-known-gaps.lua",
+    "sha256": "a1e96a36246ff88e7dcd6fba63a41c33f23d0427fb8c6e964e25d8d4b5a97a8c"
+  },
+  "cli_audit": {
+    "path": "docs/testing/2026-10-26-rust-lua-predicates-audit.json",
+    "sha256": "810d352be3bf88e39779cf1fff43e85fd3a8852846b6b74c874c71641966f42d"
+  },
+  "engines": {
+    "rust": {
+      "binary": {
+        "path": "C:\\GitHub\\deadsync\\target\\lua-predicates-isolated-1793030623793178300\\target\\cargo-final-1793032147637113000\\release\\deadlua.exe",
+        "sha256": "f96ce2a052f24fed7d52bdce8d85e0cce7b64acccf05b52f3fa742e0e7543a0a"
+      },
+      "returncode": 0,
+      "stdout": "source\t2\t13\r\nexported\t2\t19\r\nslots\t42\tnil:nil:nil|nil:nil:nil|nil:nil:nil|nil:nil:nil\r\n",
+      "stderr": ""
+    },
+    "reference": {
+      "binary": {
+        "path": "C:\\GitHub\\deadsync\\target\\lua-predicates-isolated-1793030623793178300\\target\\lua-cli-reference\\lua.exe",
+        "sha256": "893849368cb1e24e727edd75a179f62e1be23d4f8b22f322fcea930570c9c0ed"
+      },
+      "returncode": 0,
+      "stdout": "source\t2\t13\r\nexported\t2\t13\r\nslots\t42\t(*temporary):nil:nil|(*temporary):boolean:false|(*temporary):boolean:false|(*temporary):number:42\r\n",
+      "stderr": ""
+    }
+  },
+  "observations": {
+    "source_predicate_count_matches": true,
+    "exported_loop_count_matches": false,
+    "unnamed_source_hook_slots_match": false
+  },
+  "limitations": "These two known gaps remain open; this is retained failing evidence outside the passing selected CLI corpus. Process counters are not timed here."
+}

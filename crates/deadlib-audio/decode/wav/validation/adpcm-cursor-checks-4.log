@@ -1,0 +1,4 @@
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.18s
+     Running benches\native.rs (target/wav\debug\deps\native-2f49f37dfb7d0758.exe)
+native benchmark fixtures: run benches/run_native.py

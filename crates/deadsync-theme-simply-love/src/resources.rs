@@ -26,7 +26,7 @@ pub struct EffectAssets {
     pub combo_1000milestone_swoosh: &'static str,
 }
 
-pub const FONT_ASSETS: [FontAssetSpec; 20] = [
+pub const FONT_ASSETS: [FontAssetSpec; 27] = [
     FontAssetSpec {
         name: "wendy",
         ini_path: "assets/fonts/wendy/_wendy small.ini",
@@ -127,10 +127,50 @@ pub const FONT_ASSETS: [FontAssetSpec; 20] = [
         ini_path: "assets/fonts/Mega/_game chars 36px 4x1.ini",
         fallback_font_name: None,
     },
+    FontAssetSpec {
+        name: "miso_unprofessional",
+        ini_path: "assets/fonts/miso/_miso unprof.ini",
+        fallback_font_name: Some("game"),
+    },
+    FontAssetSpec {
+        name: "unprofessional_small",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional small.ini",
+        fallback_font_name: Some("miso_unprofessional"),
+    },
+    FontAssetSpec {
+        name: "unprofessional_monospace_numbers",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional monospace numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_screenevaluation",
+        ini_path: "assets/fonts/Unprofessional/_ScreenEvaluation numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_game",
+        ini_path: "assets/fonts/Unprofessional/_game chars 36px 4x1.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_white",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional white.ini",
+        fallback_font_name: Some("miso_unprofessional"),
+    },
+    FontAssetSpec {
+        name: "combo_unprofessional",
+        ini_path: "assets/fonts/_combo/Unprofessional/Unprofessional.ini",
+        fallback_font_name: None,
+    },
 ];
+
+/// In The Golf course pattern, tiled behind the golf leaderboard pane.
+pub const GOLF_PANE_PATTERN_TEXTURE: &str = "golf/arrowpattern.png";
+pub const GOLF_PANE_PATTERN_TEXTURE_SIZE: [u32; 2] = [1000, 800];
 
 pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("logo.png"),
+    texture_asset(GOLF_PANE_PATTERN_TEXTURE),
     texture_asset("init_arrow.png"),
     texture_asset("dance.png"),
     texture_asset("pump.png"),
@@ -164,7 +204,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("swoosh.png"),
     texture_asset("heart.png"),
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/arrow_tex.png",
+        key: "graphics/menu_bg_technique/arrow_tex.png#itg-model",
         path: "menu_bg_technique/arrow_tex.png",
     },
     TextureAssetSpec {
@@ -172,7 +212,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
         path: "menu_bg_technique/square.png",
     },
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/white_tex.png",
+        key: "graphics/menu_bg_technique/white_tex.png#itg-model",
         path: "menu_bg_technique/white_tex.png",
     },
     texture_asset("fave-icon.png"),
@@ -268,6 +308,36 @@ pub const GRADE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("grades/goldstar (stretch).png"),
 ];
 
+/// The Content Browser's tab icons and its placeholder graphics.
+///
+/// One per tab, in the tab strip's own order, plus the download arrow the
+/// detail page's button carries, the site's stand-in for a song with no
+/// jacket, and the page dot under the featured grid. All 96x96 and drawn far
+/// smaller -- together they are under ten kilobytes.
+///
+/// Then what the Rip Packs stage is drawn with: a soft round glow for the
+/// pack's halo, the tear's flash and the gold card's light; a disc for the
+/// meter's badge; and DeadSync's own arrow where the original puts its
+/// game's logo -- on the pack, the button and every card's back.
+pub const CONTENT_BROWSER_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("content_browser/search.png"),
+    texture_asset("content_browser/pad.png"),
+    texture_asset("content_browser/keyboard.png"),
+    texture_asset("content_browser/beginner.png"),
+    texture_asset("content_browser/doubles.png"),
+    texture_asset("content_browser/stamina.png"),
+    texture_asset("content_browser/tech.png"),
+    texture_asset("content_browser/year.png"),
+    texture_asset("content_browser/rip.png"),
+    texture_asset("content_browser/installed.png"),
+    texture_asset("content_browser/download.png"),
+    texture_asset("content_browser/nobanner.png"),
+    texture_asset("content_browser/dot.png"),
+    texture_asset("content_browser/glow.png"),
+    texture_asset("content_browser/disc.png"),
+    texture_asset("content_browser/deadsync_logo.png"),
+];
+
 pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("submit/LoadingSpinner_10x3.png"),
     texture_asset("submit/Hourglass_10x3.png"),
@@ -281,20 +351,21 @@ pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
 ///
 /// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
 ///
-/// | Role         | Wendy (default)             | Mega                     |
-/// | ------------ | --------------------------- | ------------------------ |
-/// | `Normal`     | `miso`                      | `miso`                   |
-/// | `Bold`       | `wendy`                     | `mega_alpha`             |
-/// | `Header`     | `wendy`                     | `mega_alpha`             |
-/// | `Footer`     | `wendy`                     | `mega_alpha`             |
-/// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers` |
-/// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`  |
-/// | `Headline`   | `wendy_white`               | `mega_alpha`             |
+/// | Role         | Wendy (default)            | Mega                     | Unprofessional                     |
+/// | ------------ | -------------------------- | ------------------------ | ---------------------------------- |
+/// | `Normal`     | `miso`                     | `miso`                   | `miso_unprofessional`              |
+/// | `Bold`       | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Header`     | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Footer`     | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Numbers`    | `wendy_monospace_numbers`  | `mega_monospace_numbers` | `unprofessional_monospace_numbers` |
+/// | `ScreenEval` | `wendy_screenevaluation`   | `mega_screenevaluation`  | `unprofessional_screenevaluation`  |
+/// | `Headline`   | `wendy_white`              | `mega_alpha`             | `unprofessional_white`             |
 #[must_use]
 pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
-    use MachineFont::{Mega, Wendy};
+    use MachineFont::{Mega, Unprofessional, Wendy};
     match (machine_font, role) {
-        (_, FontRole::Normal) => "miso",
+        (Wendy | Mega, FontRole::Normal) => "miso",
+        (Unprofessional, FontRole::Normal) => "miso_unprofessional",
         (Wendy, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
         (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer) => "mega_alpha",
         (Wendy, FontRole::Numbers) => "wendy_monospace_numbers",
@@ -303,6 +374,12 @@ pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'st
         (Mega, FontRole::ScreenEval) => "mega_screenevaluation",
         (Wendy, FontRole::Headline) => "wendy_white",
         (Mega, FontRole::Headline) => "mega_alpha",
+        (Unprofessional, FontRole::Bold | FontRole::Header | FontRole::Footer) => {
+            "unprofessional_small"
+        }
+        (Unprofessional, FontRole::Numbers) => "unprofessional_monospace_numbers",
+        (Unprofessional, FontRole::ScreenEval) => "unprofessional_screenevaluation",
+        (Unprofessional, FontRole::Headline) => "unprofessional_white",
     }
 }
 
@@ -551,6 +628,27 @@ pub const SRPG10_ASSETS: Assets = Assets {
     shared_background_size: [2581, 1452],
 };
 
+pub const ECS15_ASSETS: Assets = Assets {
+    select_color: "visual_styles/ecs15/select_color.png",
+    shared_background: "visual_styles/ecs15/shared_background.png",
+    effects: effect_assets!(
+        "ecs15",
+        " (doubleres)",
+        " (doubleres)",
+        " (doubleres)",
+        " (doubleres)"
+    ),
+    shared_background_video: None,
+    menu_music: "assets/music/ECS15 (loop).ogg",
+    select_color_size: [668, 566],
+    shared_background_size: [1920, 1080],
+};
+
+pub const ECS15_TITLE_LOGO: &str = "visual_styles/ecs15/title_logo.png";
+pub const ECS15_EVAL_FAILED_SFX: &str = "assets/sounds/ecs15_eval_failed.ogg";
+pub const ECS15_EVAL_PASSED_SFX: &str = "assets/sounds/ecs15_eval_passed.ogg";
+pub const ECS15_GAMEOVER_MUSIC: &str = "assets/music/ECS15-GameOver.ogg";
+
 /// Fixed UI cues prepared before the first screen accepts input.
 pub const SFX_PATHS: &[&str] = &[
     "assets/sounds/boom.ogg",
@@ -568,9 +666,17 @@ pub const SFX_PATHS: &[&str] = &[
     "assets/sounds/screenshot.ogg",
     SRPG10_EVAL_FAILED_SFX,
     SRPG10_EVAL_PASSED_SFX,
+    ECS15_EVAL_FAILED_SFX,
+    ECS15_EVAL_PASSED_SFX,
     "assets/sounds/start.ogg",
+    CONTENT_BROWSER_TEAR_SFX,
     "assets/sounds/unjoin.ogg",
 ];
+
+/// The booster pack tearing open on the Rip Packs stage. The original's own
+/// recording, kept as the WAV it ships as: the effect decoder reads WAV, and
+/// it is under a second long.
+pub const CONTENT_BROWSER_TEAR_SFX: &str = "assets/sounds/tear.wav";
 
 pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
 pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
@@ -601,17 +707,41 @@ pub const fn for_style(style: VisualStyle) -> &'static Assets {
 #[inline(always)]
 #[must_use]
 pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'static Assets {
-    if style.is_srpg() && variant == SrpgVariant::Srpg10 {
-        &SRPG10_ASSETS
-    } else {
-        for_style(style)
+    if style.is_srpg() {
+        match variant {
+            SrpgVariant::Srpg10 => return &SRPG10_ASSETS,
+            SrpgVariant::Ecs15 => return &ECS15_ASSETS,
+            SrpgVariant::Srpg9 => {}
+        }
     }
+    for_style(style)
 }
 
 #[inline(always)]
 #[must_use]
 pub const fn srpg10_active(style: VisualStyle, variant: SrpgVariant) -> bool {
     style.is_srpg() && matches!(variant, SrpgVariant::Srpg10)
+}
+
+#[inline(always)]
+#[must_use]
+pub const fn ecs15_active(style: VisualStyle, variant: SrpgVariant) -> bool {
+    style.is_srpg() && matches!(variant, SrpgVariant::Ecs15)
+}
+
+/// Only the themed variants with a dedicated Game Over track start music there.
+#[must_use]
+pub const fn gameover_music_asset_path(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> Option<&'static str> {
+    if ecs15_active(style, variant) {
+        Some(ECS15_GAMEOVER_MUSIC)
+    } else if srpg10_active(style, variant) {
+        Some(SRPG10_GAMEOVER_MUSIC)
+    } else {
+        None
+    }
 }
 
 #[inline(always)]
@@ -647,7 +777,7 @@ pub fn resolve_menu_music_path(
 }
 
 pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
-    ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
+    ASSETS.iter().chain([&SRPG10_ASSETS, &ECS15_ASSETS])
 }
 
 pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
@@ -670,8 +800,10 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
             .into_iter()
         }))
         .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
+        .chain(std::iter::once(texture_asset(ECS15_TITLE_LOGO)))
         .chain(GRADE_TEXTURE_ASSETS.iter().copied())
         .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
+        .chain(CONTENT_BROWSER_TEXTURE_ASSETS.iter().copied())
 }
 
 #[inline(always)]
@@ -705,8 +837,13 @@ pub fn is_shared_background_texture(key: &str) -> bool {
 pub fn texture_needs_repeat_sampler(key: &str) -> bool {
     matches!(
         key,
-        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
-    ) || is_shared_background_texture(key)
+        "swoosh.png"
+            | "graphics/menu_bg_technique/square.png"
+            | "graphics/menu_bg_technique/arrow_tex.png#itg-model"
+            | "graphics/menu_bg_technique/white_tex.png#itg-model"
+            | "grades/goldstar (stretch).png"
+    ) || key == GOLF_PANE_PATTERN_TEXTURE
+        || is_shared_background_texture(key)
 }
 
 pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
@@ -714,6 +851,7 @@ pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
         "assets/music/select_course (loop).ogg",
         "assets/music/credits.ogg",
         SRPG10_GAMEOVER_MUSIC,
+        ECS15_GAMEOVER_MUSIC,
     ]
     .into_iter()
     .chain(all_assets().map(|assets| assets.menu_music))
@@ -740,7 +878,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn machine_font_key_normal_is_always_miso() {
+    fn machine_font_key_normal_matches_the_selected_family() {
         assert_eq!(
             machine_font_key(MachineFont::Wendy, FontRole::Normal),
             "miso"
@@ -749,6 +887,47 @@ mod tests {
             machine_font_key(MachineFont::Mega, FontRole::Normal),
             "miso"
         );
+        assert_eq!(
+            machine_font_key(MachineFont::Unprofessional, FontRole::Normal),
+            "miso_unprofessional"
+        );
+    }
+
+    #[test]
+    fn unprofessional_roles_load_the_original_font_pages() {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_roots = [project_root.join("assets")];
+        let specs = FONT_ASSETS
+            .iter()
+            .copied()
+            .filter(|spec| spec.name.contains("unprofessional"));
+        let parsed = deadlib_assets::parse_font_asset_specs(specs, &asset_roots, |path| {
+            project_root.join(path)
+        })
+        .expect("parse original Unprofessional font assets and imports");
+        assert_eq!(parsed.len(), 7);
+        for role in [
+            FontRole::Normal,
+            FontRole::Bold,
+            FontRole::Header,
+            FontRole::Footer,
+            FontRole::Numbers,
+            FontRole::ScreenEval,
+            FontRole::Headline,
+        ] {
+            let key = machine_font_key(MachineFont::Unprofessional, role);
+            let font = parsed
+                .iter()
+                .find(|font| font.name == key)
+                .expect("registered role");
+            let glyph = font.font.glyph_map.get(&'1').expect("authored digit");
+            assert!(
+                glyph.texture_key.contains("Unprofessional/")
+                    || glyph.texture_key.contains("miso/_miso unprof"),
+                "{role:?} must use the original Unprofessional sheet"
+            );
+            assert!(font.required_textures.iter().all(|path| path.is_file()));
+        }
     }
 
     #[test]
@@ -904,6 +1083,57 @@ mod tests {
     }
 
     #[test]
+    fn ecs15_variant_selects_only_its_theme_and_bundled_media() {
+        assert_eq!(
+            for_style_and_variant(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            &ECS15_ASSETS
+        );
+        for style in VisualStyle::ALL {
+            assert_eq!(ecs15_active(style, SrpgVariant::Ecs15), style.is_srpg());
+            if !style.is_srpg() {
+                assert_eq!(
+                    for_style_and_variant(style, SrpgVariant::Ecs15),
+                    for_style(style)
+                );
+                assert_eq!(gameover_music_asset_path(style, SrpgVariant::Ecs15), None);
+            }
+        }
+        assert!(!srpg10_active(VisualStyle::Srpg9, SrpgVariant::Ecs15));
+        assert_eq!(
+            gameover_music_asset_path(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(ECS15_GAMEOVER_MUSIC)
+        );
+        assert_eq!(
+            menu_music_override_dir(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            "assets/music/menu/ecs15"
+        );
+        assert!(ECS15_ASSETS.shared_background_video.is_none());
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for asset in
+            initial_texture_assets().filter(|asset| asset.key.starts_with("visual_styles/ecs15/"))
+        {
+            assert!(
+                root.join("assets/graphics").join(asset.key).is_file(),
+                "{}",
+                asset.key
+            );
+        }
+        assert!(initial_texture_assets().any(|asset| asset.key == ECS15_TITLE_LOGO));
+        for path in [
+            ECS15_ASSETS.menu_music,
+            ECS15_GAMEOVER_MUSIC,
+            ECS15_EVAL_PASSED_SFX,
+            ECS15_EVAL_FAILED_SFX,
+        ] {
+            assert!(root.join(path).is_file(), "{path}");
+        }
+        assert!(bundled_music_asset_paths().any(|path| path == ECS15_GAMEOVER_MUSIC));
+        assert!(SFX_PATHS.contains(&ECS15_EVAL_PASSED_SFX));
+        assert!(SFX_PATHS.contains(&ECS15_EVAL_FAILED_SFX));
+    }
+
+    #[test]
     fn srpg10_selectors_only_enable_for_srpg_style_and_variant() {
         assert!(srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg10));
         assert!(!srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg9));
@@ -992,6 +1222,11 @@ mod tests {
         assert_eq!(fallback("game"), Some("cjk"));
         assert_eq!(fallback("cjk"), Some("emoji"));
         assert_eq!(fallback("mega_alpha"), Some("miso"));
+        assert_eq!(fallback("miso_unprofessional"), Some("game"));
+        assert_eq!(
+            fallback("unprofessional_small"),
+            Some("miso_unprofessional")
+        );
     }
 
     #[test]
@@ -1078,6 +1313,12 @@ mod tests {
             "grades/goldstar (stretch).png"
         ));
         assert!(texture_needs_repeat_sampler(ASSETS[0].shared_background));
+        assert!(texture_needs_repeat_sampler(GOLF_PANE_PATTERN_TEXTURE));
         assert!(!texture_needs_repeat_sampler("logo.png"));
+    }
+
+    #[test]
+    fn golf_pane_pattern_is_preloaded() {
+        assert!(initial_texture_assets().any(|asset| asset.key == GOLF_PANE_PATTERN_TEXTURE));
     }
 }

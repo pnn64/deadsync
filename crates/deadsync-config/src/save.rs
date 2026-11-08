@@ -254,7 +254,7 @@ pub fn build_saved_app_config_file(
     let load_songs = keycode_to_token(cfg.music_select_shortcut_load_songs);
     let test_input = keycode_to_token(cfg.music_select_shortcut_test_input);
 
-    build_saved_config_file(
+    let mut content = build_saved_config_file(
         SavedConfigFile {
             options: SavedOptionSection {
                 audio: audio_options(cfg),
@@ -307,7 +307,9 @@ pub fn build_saved_app_config_file(
             },
         },
         deadsync_input::write_keymap_ini_section,
-    )
+    );
+    crate::streaming::push_options(&mut content, cfg.twitch);
+    content
 }
 
 #[must_use]
@@ -320,7 +322,7 @@ pub fn build_default_app_config_file() -> String {
     let load_songs = keycode_to_token(default.music_select_shortcut_load_songs);
     let test_input = keycode_to_token(default.music_select_shortcut_test_input);
 
-    build_default_config_file(
+    let mut content = build_default_config_file(
         DefaultConfigFile {
             options: DefaultOptionSection {
                 audio: audio_options(&default),
@@ -363,7 +365,9 @@ pub fn build_default_app_config_file() -> String {
             },
         },
         |content, ()| deadsync_input::write_default_keymap_ini_section(content),
-    )
+    );
+    crate::streaming::push_options(&mut content, default.twitch);
+    content
 }
 
 const fn runtime_state_ids<'a>(
@@ -455,12 +459,14 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         show_srpg_shop: cfg.show_srpg_shop,
         srpg_shop_folder: cfg.srpg_shop_folder,
         enable_arrowcloud: cfg.enable_arrowcloud,
+        enable_golf: cfg.enable_golf,
         enable_boogiestats: cfg.enable_boogiestats,
         submit_arrowcloud_fails: cfg.submit_arrowcloud_fails,
         show_arrowcloud_result_dialogs: cfg.show_arrowcloud_result_dialogs,
         arrowcloud_qr_login_when: cfg.arrowcloud_qr_login_when,
         groovestats_qr_login_when: cfg.groovestats_qr_login_when,
         separate_unlocks_by_player: cfg.separate_unlocks_by_player,
+        share_rips: cfg.share_rips,
         mine_hit_sound: cfg.mine_hit_sound,
         show_stats_mode: cfg.show_stats_mode,
         frame_stats_overlay_anchor: cfg.frame_stats_overlay_anchor,
@@ -647,6 +653,9 @@ const fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         scorebox_cycle_ex: cfg.select_music_scorebox_cycle_ex,
         scorebox_cycle_hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
         scorebox_cycle_tournaments: cfg.select_music_scorebox_cycle_tournaments,
+        scorebox_cycle_golf: cfg.select_music_scorebox_cycle_golf,
+        scorebox_events_first: cfg.select_music_scorebox_events_first,
+        show_golf_pars: cfg.select_music_show_golf_pars,
         chart_info_peak_nps: cfg.select_music_chart_info_peak_nps,
         chart_info_effective_bpm: cfg.select_music_chart_info_effective_bpm,
         chart_info_matrix_rating: cfg.select_music_chart_info_matrix_rating,

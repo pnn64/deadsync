@@ -1,0 +1,1100 @@
+{
+  "decode": {
+    "case_count": 60,
+    "median_reference_relative_percent": -0.11344649265299656,
+    "median_control_relative_percent": 0.4174769313394,
+    "both_comparisons_below_minus_5_percent": [
+      {
+        "case": "color-2-depth-08-adam7-1-noise-1",
+        "sample_bytes": 99459,
+        "before_ns": 448087.0,
+        "after_ns": 467512.0,
+        "reference_relative_percent": -5.258088841925678,
+        "unchanged_control_relative_percent": -13.32793129972395
+      },
+      {
+        "case": "color-6-depth-16-adam7-1-noise-1",
+        "sample_bytes": 265224,
+        "before_ns": 731087.0,
+        "after_ns": 790295.5,
+        "reference_relative_percent": -19.10152894867415,
+        "unchanged_control_relative_percent": -10.827275075077536
+      },
+      {
+        "case": "color-3-depth-04-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 105587.5,
+        "after_ns": 112204.0,
+        "reference_relative_percent": -11.604381517089813,
+        "unchanged_control_relative_percent": -10.690546794133038
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-0",
+        "sample_bytes": 132612,
+        "before_ns": 282449.5,
+        "after_ns": 288700.0,
+        "reference_relative_percent": -7.571602919822595,
+        "unchanged_control_relative_percent": -10.187995942817219
+      },
+      {
+        "case": "color-0-depth-08-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 186091.0,
+        "after_ns": 187670.5,
+        "reference_relative_percent": -5.631956163054874,
+        "unchanged_control_relative_percent": -9.498099925717597
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 162733.0,
+        "after_ns": 162200.0,
+        "reference_relative_percent": -9.879025076991166,
+        "unchanged_control_relative_percent": -6.429817194624121
+      },
+      {
+        "case": "color-0-depth-08-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 237804.0,
+        "after_ns": 250962.0,
+        "reference_relative_percent": -6.767046239983399,
+        "unchanged_control_relative_percent": -5.900426724581287
+      },
+      {
+        "case": "color-2-depth-08-adam7-0-noise-1",
+        "sample_bytes": 99459,
+        "before_ns": 336812.5,
+        "after_ns": 340445.5,
+        "reference_relative_percent": -12.001356271463004,
+        "unchanged_control_relative_percent": -5.623770071456724
+      }
+    ],
+    "cases": [
+      {
+        "case": "color-0-depth-02-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 124100.0,
+        "after_ns": 112633.0,
+        "reference_relative_percent": 6.63760443871757,
+        "unchanged_control_relative_percent": -24.040529380328756
+      },
+      {
+        "case": "color-0-depth-16-adam7-1-noise-1",
+        "sample_bytes": 66306,
+        "before_ns": 272420.5,
+        "after_ns": 261066.0,
+        "reference_relative_percent": 15.149838540488547,
+        "unchanged_control_relative_percent": -16.243157519254503
+      },
+      {
+        "case": "color-2-depth-08-adam7-1-noise-1",
+        "sample_bytes": 99459,
+        "before_ns": 448087.0,
+        "after_ns": 467512.0,
+        "reference_relative_percent": -5.258088841925678,
+        "unchanged_control_relative_percent": -13.32793129972395
+      },
+      {
+        "case": "color-6-depth-16-adam7-1-noise-1",
+        "sample_bytes": 265224,
+        "before_ns": 731087.0,
+        "after_ns": 790295.5,
+        "reference_relative_percent": -19.10152894867415,
+        "unchanged_control_relative_percent": -10.827275075077536
+      },
+      {
+        "case": "color-3-depth-04-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 105587.5,
+        "after_ns": 112204.0,
+        "reference_relative_percent": -11.604381517089813,
+        "unchanged_control_relative_percent": -10.690546794133038
+      },
+      {
+        "case": "color-0-depth-04-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 106349.5,
+        "after_ns": 100295.5,
+        "reference_relative_percent": 2.6397741578613187,
+        "unchanged_control_relative_percent": -10.194841119654019
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-0",
+        "sample_bytes": 132612,
+        "before_ns": 282449.5,
+        "after_ns": 288700.0,
+        "reference_relative_percent": -7.571602919822595,
+        "unchanged_control_relative_percent": -10.187995942817219
+      },
+      {
+        "case": "color-0-depth-08-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 186091.0,
+        "after_ns": 187670.5,
+        "reference_relative_percent": -5.631956163054874,
+        "unchanged_control_relative_percent": -9.498099925717597
+      },
+      {
+        "case": "color-0-depth-02-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 146616.5,
+        "after_ns": 139741.5,
+        "reference_relative_percent": 2.9695816971404776,
+        "unchanged_control_relative_percent": -6.57707283158262
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 162733.0,
+        "after_ns": 162200.0,
+        "reference_relative_percent": -9.879025076991166,
+        "unchanged_control_relative_percent": -6.429817194624121
+      },
+      {
+        "case": "color-4-depth-08-adam7-1-noise-1",
+        "sample_bytes": 66306,
+        "before_ns": 166362.5,
+        "after_ns": 169333.0,
+        "reference_relative_percent": -3.2523233292350295,
+        "unchanged_control_relative_percent": -6.389891816611215
+      },
+      {
+        "case": "color-0-depth-16-adam7-0-noise-1",
+        "sample_bytes": 66306,
+        "before_ns": 475654.0,
+        "after_ns": 483587.5,
+        "reference_relative_percent": -2.714835537954363,
+        "unchanged_control_relative_percent": -6.297250398272247
+      },
+      {
+        "case": "color-0-depth-08-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 237804.0,
+        "after_ns": 250962.0,
+        "reference_relative_percent": -6.767046239983399,
+        "unchanged_control_relative_percent": -5.900426724581287
+      },
+      {
+        "case": "color-2-depth-08-adam7-0-noise-1",
+        "sample_bytes": 99459,
+        "before_ns": 336812.5,
+        "after_ns": 340445.5,
+        "reference_relative_percent": -12.001356271463004,
+        "unchanged_control_relative_percent": -5.623770071456724
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 150516.5,
+        "after_ns": 151041.5,
+        "reference_relative_percent": 2.976715723589818,
+        "unchanged_control_relative_percent": -4.947933771604163
+      },
+      {
+        "case": "color-2-depth-08-adam7-1-noise-0",
+        "sample_bytes": 99459,
+        "before_ns": 408212.0,
+        "after_ns": 397045.5,
+        "reference_relative_percent": -8.277886375944664,
+        "unchanged_control_relative_percent": -4.722677064315695
+      },
+      {
+        "case": "color-3-depth-08-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 44154.0,
+        "after_ns": 42329.0,
+        "reference_relative_percent": 11.345048446684958,
+        "unchanged_control_relative_percent": -4.712314966740394
+      },
+      {
+        "case": "color-2-depth-16-adam7-1-noise-0",
+        "sample_bytes": 198918,
+        "before_ns": 535116.5,
+        "after_ns": 506512.0,
+        "reference_relative_percent": -2.8028811755049676,
+        "unchanged_control_relative_percent": -4.41836484559307
+      },
+      {
+        "case": "color-0-depth-04-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 122191.0,
+        "after_ns": 121791.0,
+        "reference_relative_percent": -5.861514289298498,
+        "unchanged_control_relative_percent": -4.263119291980166
+      },
+      {
+        "case": "color-0-depth-04-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 141853.5,
+        "after_ns": 150524.5,
+        "reference_relative_percent": -20.734083335534137,
+        "unchanged_control_relative_percent": -4.191228407918879
+      },
+      {
+        "case": "color-0-depth-02-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 101308.0,
+        "after_ns": 92687.0,
+        "reference_relative_percent": 4.059837523967147,
+        "unchanged_control_relative_percent": -3.1831816041935856
+      },
+      {
+        "case": "color-0-depth-02-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 116550.0,
+        "after_ns": 107174.5,
+        "reference_relative_percent": -5.963243821587372,
+        "unchanged_control_relative_percent": -2.9997303855403
+      },
+      {
+        "case": "color-4-depth-08-adam7-1-noise-0",
+        "sample_bytes": 66306,
+        "before_ns": 103970.5,
+        "after_ns": 105253.5,
+        "reference_relative_percent": -2.117685783296941,
+        "unchanged_control_relative_percent": -2.8859683171205353
+      },
+      {
+        "case": "color-3-depth-08-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 128387.5,
+        "after_ns": 121833.0,
+        "reference_relative_percent": -5.830029376260104,
+        "unchanged_control_relative_percent": -2.7712447599946066
+      },
+      {
+        "case": "color-2-depth-08-adam7-0-noise-0",
+        "sample_bytes": 99459,
+        "before_ns": 283983.0,
+        "after_ns": 256112.0,
+        "reference_relative_percent": 12.617382176910175,
+        "unchanged_control_relative_percent": -1.8240385209179255
+      },
+      {
+        "case": "color-3-depth-01-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 97553.5,
+        "after_ns": 91695.5,
+        "reference_relative_percent": -3.0783926920058047,
+        "unchanged_control_relative_percent": -1.018777745965116
+      },
+      {
+        "case": "color-3-depth-02-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 107420.5,
+        "after_ns": 104349.5,
+        "reference_relative_percent": -2.5124695600569846,
+        "unchanged_control_relative_percent": -0.8047726202062622
+      },
+      {
+        "case": "color-6-depth-08-adam7-1-noise-1",
+        "sample_bytes": 132612,
+        "before_ns": 457316.0,
+        "after_ns": 436895.5,
+        "reference_relative_percent": -1.2989605642512059,
+        "unchanged_control_relative_percent": -0.544228194464047
+      },
+      {
+        "case": "color-6-depth-16-adam7-0-noise-1",
+        "sample_bytes": 265224,
+        "before_ns": 1202970.5,
+        "after_ns": 1176754.0,
+        "reference_relative_percent": -5.964818751682744,
+        "unchanged_control_relative_percent": -0.14184522690642298
+      },
+      {
+        "case": "color-3-depth-02-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 126637.0,
+        "after_ns": 115253.5,
+        "reference_relative_percent": 10.502548141539236,
+        "unchanged_control_relative_percent": 0.02881280116759921
+      },
+      {
+        "case": "color-4-depth-16-adam7-1-noise-0",
+        "sample_bytes": 132612,
+        "before_ns": 407441.0,
+        "after_ns": 375100.0,
+        "reference_relative_percent": 1.455644864040062,
+        "unchanged_control_relative_percent": 0.8061410615112008
+      },
+      {
+        "case": "color-2-depth-16-adam7-0-noise-0",
+        "sample_bytes": 198918,
+        "before_ns": 504937.0,
+        "after_ns": 453104.0,
+        "reference_relative_percent": -20.74689334276024,
+        "unchanged_control_relative_percent": 1.3519186580136289
+      },
+      {
+        "case": "color-3-depth-08-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 58516.5,
+        "after_ns": 51845.5,
+        "reference_relative_percent": 2.0413491981778886,
+        "unchanged_control_relative_percent": 1.8913919621334818
+      },
+      {
+        "case": "color-4-depth-08-adam7-0-noise-0",
+        "sample_bytes": 66306,
+        "before_ns": 121508.0,
+        "after_ns": 112070.5,
+        "reference_relative_percent": -0.3196696160560619,
+        "unchanged_control_relative_percent": 2.036539946867655
+      },
+      {
+        "case": "color-2-depth-16-adam7-0-noise-1",
+        "sample_bytes": 198918,
+        "before_ns": 853870.5,
+        "after_ns": 748079.0,
+        "reference_relative_percent": 16.190760805041492,
+        "unchanged_control_relative_percent": 2.924895132015215
+      },
+      {
+        "case": "color-0-depth-08-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 123379.0,
+        "after_ns": 122766.0,
+        "reference_relative_percent": 3.6122243358325257,
+        "unchanged_control_relative_percent": 3.2285063375537604
+      },
+      {
+        "case": "color-0-depth-01-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 135283.0,
+        "after_ns": 128937.0,
+        "reference_relative_percent": -2.132098066356536,
+        "unchanged_control_relative_percent": 3.532501024445067
+      },
+      {
+        "case": "color-4-depth-16-adam7-0-noise-0",
+        "sample_bytes": 132612,
+        "before_ns": 161650.0,
+        "after_ns": 153216.5,
+        "reference_relative_percent": -1.1300751264087694,
+        "unchanged_control_relative_percent": 3.5954737547238214
+      },
+      {
+        "case": "color-6-depth-16-adam7-0-noise-0",
+        "sample_bytes": 265224,
+        "before_ns": 701774.5,
+        "after_ns": 647737.5,
+        "reference_relative_percent": 9.180331573893042,
+        "unchanged_control_relative_percent": 3.7809127293453093
+      },
+      {
+        "case": "color-4-depth-16-adam7-1-noise-1",
+        "sample_bytes": 132612,
+        "before_ns": 484503.5,
+        "after_ns": 471812.0,
+        "reference_relative_percent": -1.6249145630688355,
+        "unchanged_control_relative_percent": 3.968467758150873
+      },
+      {
+        "case": "color-3-depth-04-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 207125.0,
+        "after_ns": 179604.0,
+        "reference_relative_percent": 7.3023011638110535,
+        "unchanged_control_relative_percent": 3.987563009885986
+      },
+      {
+        "case": "color-3-depth-02-adam7-0-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 113758.0,
+        "after_ns": 101908.0,
+        "reference_relative_percent": 0.09277663075006881,
+        "unchanged_control_relative_percent": 4.407369159071739
+      },
+      {
+        "case": "color-3-depth-01-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 128778.5,
+        "after_ns": 111641.0,
+        "reference_relative_percent": 5.555473810772571,
+        "unchanged_control_relative_percent": 4.498239396263282
+      },
+      {
+        "case": "color-0-depth-08-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 189966.5,
+        "after_ns": 184916.5,
+        "reference_relative_percent": 1.3428394363742102,
+        "unchanged_control_relative_percent": 5.223279236867007
+      },
+      {
+        "case": "color-0-depth-01-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 128366.0,
+        "after_ns": 121195.5,
+        "reference_relative_percent": 6.549161102164369,
+        "unchanged_control_relative_percent": 5.6452563161483615
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-1",
+        "sample_bytes": 132612,
+        "before_ns": 410075.0,
+        "after_ns": 401279.0,
+        "reference_relative_percent": 2.1234320288526787,
+        "unchanged_control_relative_percent": 5.6824503003531035
+      },
+      {
+        "case": "color-6-depth-16-adam7-1-noise-0",
+        "sample_bytes": 265224,
+        "before_ns": 1920295.5,
+        "after_ns": 1687662.0,
+        "reference_relative_percent": 10.696002321468058,
+        "unchanged_control_relative_percent": 6.168039928064362
+      },
+      {
+        "case": "color-3-depth-02-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 174445.5,
+        "after_ns": 149874.5,
+        "reference_relative_percent": 5.83373858105205,
+        "unchanged_control_relative_percent": 6.195814391777454
+      },
+      {
+        "case": "color-0-depth-16-adam7-0-noise-0",
+        "sample_bytes": 66306,
+        "before_ns": 329312.0,
+        "after_ns": 306120.5,
+        "reference_relative_percent": -3.277836909004317,
+        "unchanged_control_relative_percent": 6.771009310751075
+      },
+      {
+        "case": "color-6-depth-08-adam7-1-noise-0",
+        "sample_bytes": 132612,
+        "before_ns": 338074.5,
+        "after_ns": 331170.5,
+        "reference_relative_percent": 3.7027172717476464,
+        "unchanged_control_relative_percent": 7.107231259185798
+      },
+      {
+        "case": "color-3-depth-08-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 141612.0,
+        "after_ns": 135908.0,
+        "reference_relative_percent": -11.557756082640813,
+        "unchanged_control_relative_percent": 8.633876269097286
+      },
+      {
+        "case": "color-0-depth-16-adam7-1-noise-0",
+        "sample_bytes": 66306,
+        "before_ns": 576862.0,
+        "after_ns": 506779.0,
+        "reference_relative_percent": -8.080023118950063,
+        "unchanged_control_relative_percent": 10.168374616881582
+      },
+      {
+        "case": "color-2-depth-16-adam7-1-noise-1",
+        "sample_bytes": 198918,
+        "before_ns": 777653.5,
+        "after_ns": 667987.0,
+        "reference_relative_percent": -2.7433118374343923,
+        "unchanged_control_relative_percent": 10.532834179838858
+      },
+      {
+        "case": "color-3-depth-01-adam7-1-noise-0",
+        "sample_bytes": 33153,
+        "before_ns": 108791.5,
+        "after_ns": 95437.0,
+        "reference_relative_percent": 9.329260258896067,
+        "unchanged_control_relative_percent": 10.634771220148686
+      },
+      {
+        "case": "color-3-depth-01-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 138245.5,
+        "after_ns": 112558.0,
+        "reference_relative_percent": 4.553334160199762,
+        "unchanged_control_relative_percent": 11.047837953176876
+      },
+      {
+        "case": "color-0-depth-04-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 179079.0,
+        "after_ns": 154120.5,
+        "reference_relative_percent": 30.28039860400069,
+        "unchanged_control_relative_percent": 12.449986350062714
+      },
+      {
+        "case": "color-4-depth-16-adam7-0-noise-1",
+        "sample_bytes": 132612,
+        "before_ns": 305791.5,
+        "after_ns": 258849.5,
+        "reference_relative_percent": 16.533121971880593,
+        "unchanged_control_relative_percent": 15.512936179312309
+      },
+      {
+        "case": "color-0-depth-01-adam7-1-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 159758.0,
+        "after_ns": 153333.0,
+        "reference_relative_percent": 6.010831810949568,
+        "unchanged_control_relative_percent": 15.919046974732542
+      },
+      {
+        "case": "color-0-depth-01-adam7-0-noise-1",
+        "sample_bytes": 33153,
+        "before_ns": 163470.5,
+        "after_ns": 153479.0,
+        "reference_relative_percent": 1.7245254544601352,
+        "unchanged_control_relative_percent": 16.78108291163465
+      },
+      {
+        "case": "color-4-depth-08-adam7-0-noise-1",
+        "sample_bytes": 66306,
+        "before_ns": 213291.5,
+        "after_ns": 184637.5,
+        "reference_relative_percent": 15.875803446743642,
+        "unchanged_control_relative_percent": 22.687291272117307
+      }
+    ]
+  },
+  "inflate": {
+    "case_count": 60,
+    "median_reference_relative_percent": 6.683377537423441,
+    "median_control_relative_percent": 5.27055349369947,
+    "both_comparisons_below_minus_5_percent": [
+      {
+        "case": "color-2-depth-08-adam7-0-noise-0",
+        "sample_bytes": 99588,
+        "before_ns": 75916.5,
+        "after_ns": 76687.5,
+        "reference_relative_percent": -12.359234738981794,
+        "unchanged_control_relative_percent": -24.818755619364186
+      },
+      {
+        "case": "color-0-depth-02-adam7-0-noise-0",
+        "sample_bytes": 8514,
+        "before_ns": 7328.5,
+        "after_ns": 7674.5,
+        "reference_relative_percent": -19.348771408590625,
+        "unchanged_control_relative_percent": -10.615480668559318
+      },
+      {
+        "case": "color-3-depth-01-adam7-0-noise-0",
+        "sample_bytes": 4386,
+        "before_ns": 6045.5,
+        "after_ns": 5987.0,
+        "reference_relative_percent": -12.092368593734138,
+        "unchanged_control_relative_percent": -10.223727089017853
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-0",
+        "sample_bytes": 132741,
+        "before_ns": 111183.0,
+        "after_ns": 104503.5,
+        "reference_relative_percent": -18.517730910977214,
+        "unchanged_control_relative_percent": -9.034075532758479
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-1",
+        "sample_bytes": 16770,
+        "before_ns": 4362.5,
+        "after_ns": 4604.0,
+        "reference_relative_percent": -16.562175811266144,
+        "unchanged_control_relative_percent": -6.82322052737796
+      },
+      {
+        "case": "color-0-depth-04-adam7-1-noise-0",
+        "sample_bytes": 16885,
+        "before_ns": 22016.5,
+        "after_ns": 21174.5,
+        "reference_relative_percent": -43.25475178424756,
+        "unchanged_control_relative_percent": -6.4883691941967525
+      },
+      {
+        "case": "color-3-depth-08-adam7-0-noise-0",
+        "sample_bytes": 33282,
+        "before_ns": 32499.5,
+        "after_ns": 31103.5,
+        "reference_relative_percent": -5.006873696100378,
+        "unchanged_control_relative_percent": -5.061355634736209
+      }
+    ],
+    "cases": [
+      {
+        "case": "color-0-depth-08-adam7-1-noise-0",
+        "sample_bytes": 33397,
+        "before_ns": 41554.0,
+        "after_ns": 41066.5,
+        "reference_relative_percent": 4.718845108726666,
+        "unchanged_control_relative_percent": -30.788992590452125
+      },
+      {
+        "case": "color-0-depth-01-adam7-0-noise-0",
+        "sample_bytes": 4386,
+        "before_ns": 7153.5,
+        "after_ns": 5612.5,
+        "reference_relative_percent": 15.818138657591163,
+        "unchanged_control_relative_percent": -26.690413028923267
+      },
+      {
+        "case": "color-2-depth-08-adam7-0-noise-0",
+        "sample_bytes": 99588,
+        "before_ns": 75916.5,
+        "after_ns": 76687.5,
+        "reference_relative_percent": -12.359234738981794,
+        "unchanged_control_relative_percent": -24.818755619364186
+      },
+      {
+        "case": "color-0-depth-02-adam7-0-noise-0",
+        "sample_bytes": 8514,
+        "before_ns": 7328.5,
+        "after_ns": 7674.5,
+        "reference_relative_percent": -19.348771408590625,
+        "unchanged_control_relative_percent": -10.615480668559318
+      },
+      {
+        "case": "color-3-depth-01-adam7-0-noise-0",
+        "sample_bytes": 4386,
+        "before_ns": 6045.5,
+        "after_ns": 5987.0,
+        "reference_relative_percent": -12.092368593734138,
+        "unchanged_control_relative_percent": -10.223727089017853
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-0",
+        "sample_bytes": 132741,
+        "before_ns": 111183.0,
+        "after_ns": 104503.5,
+        "reference_relative_percent": -18.517730910977214,
+        "unchanged_control_relative_percent": -9.034075532758479
+      },
+      {
+        "case": "color-2-depth-16-adam7-0-noise-0",
+        "sample_bytes": 199047,
+        "before_ns": 129016.5,
+        "after_ns": 125408.0,
+        "reference_relative_percent": 1.351394958136365,
+        "unchanged_control_relative_percent": -7.949055367131019
+      },
+      {
+        "case": "color-4-depth-16-adam7-0-noise-0",
+        "sample_bytes": 132741,
+        "before_ns": 103079.0,
+        "after_ns": 105079.0,
+        "reference_relative_percent": 5.942019306486923,
+        "unchanged_control_relative_percent": -7.033116844331733
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-1",
+        "sample_bytes": 16770,
+        "before_ns": 4362.5,
+        "after_ns": 4604.0,
+        "reference_relative_percent": -16.562175811266144,
+        "unchanged_control_relative_percent": -6.82322052737796
+      },
+      {
+        "case": "color-0-depth-04-adam7-1-noise-0",
+        "sample_bytes": 16885,
+        "before_ns": 22016.5,
+        "after_ns": 21174.5,
+        "reference_relative_percent": -43.25475178424756,
+        "unchanged_control_relative_percent": -6.4883691941967525
+      },
+      {
+        "case": "color-3-depth-08-adam7-0-noise-0",
+        "sample_bytes": 33282,
+        "before_ns": 32499.5,
+        "after_ns": 31103.5,
+        "reference_relative_percent": -5.006873696100378,
+        "unchanged_control_relative_percent": -5.061355634736209
+      },
+      {
+        "case": "color-0-depth-04-adam7-1-noise-1",
+        "sample_bytes": 16885,
+        "before_ns": 3858.0,
+        "after_ns": 4320.5,
+        "reference_relative_percent": -9.386843072270757,
+        "unchanged_control_relative_percent": -4.948336480789184
+      },
+      {
+        "case": "color-3-depth-01-adam7-1-noise-0",
+        "sample_bytes": 4501,
+        "before_ns": 7962.0,
+        "after_ns": 7845.5,
+        "reference_relative_percent": -1.0348179699906535,
+        "unchanged_control_relative_percent": -3.55953590697603
+      },
+      {
+        "case": "color-2-depth-08-adam7-1-noise-1",
+        "sample_bytes": 99703,
+        "before_ns": 39483.0,
+        "after_ns": 31153.5,
+        "reference_relative_percent": 7.154996786578227,
+        "unchanged_control_relative_percent": -2.219929579485924
+      },
+      {
+        "case": "color-3-depth-02-adam7-1-noise-0",
+        "sample_bytes": 8629,
+        "before_ns": 9354.0,
+        "after_ns": 8283.0,
+        "reference_relative_percent": 3.815764755791551,
+        "unchanged_control_relative_percent": -2.0109506905511054
+      },
+      {
+        "case": "color-4-depth-08-adam7-0-noise-1",
+        "sample_bytes": 66435,
+        "before_ns": 18895.5,
+        "after_ns": 17353.5,
+        "reference_relative_percent": 17.835311995453118,
+        "unchanged_control_relative_percent": -1.072130413607797
+      },
+      {
+        "case": "color-0-depth-02-adam7-0-noise-1",
+        "sample_bytes": 8514,
+        "before_ns": 2012.0,
+        "after_ns": 1791.0,
+        "reference_relative_percent": 2.8886164647950574,
+        "unchanged_control_relative_percent": -0.6091041296725774
+      },
+      {
+        "case": "color-0-depth-16-adam7-1-noise-1",
+        "sample_bytes": 66550,
+        "before_ns": 19828.5,
+        "after_ns": 17304.0,
+        "reference_relative_percent": 14.284393422958107,
+        "unchanged_control_relative_percent": -0.5789999104034549
+      },
+      {
+        "case": "color-3-depth-08-adam7-0-noise-1",
+        "sample_bytes": 33282,
+        "before_ns": 9949.5,
+        "after_ns": 10070.5,
+        "reference_relative_percent": -2.411878005530288,
+        "unchanged_control_relative_percent": -0.39684626981413285
+      },
+      {
+        "case": "color-6-depth-08-adam7-1-noise-1",
+        "sample_bytes": 132856,
+        "before_ns": 44158.0,
+        "after_ns": 41099.5,
+        "reference_relative_percent": 9.996959584004017,
+        "unchanged_control_relative_percent": 1.2546703686326044
+      },
+      {
+        "case": "color-6-depth-16-adam7-0-noise-0",
+        "sample_bytes": 265353,
+        "before_ns": 133687.5,
+        "after_ns": 124608.0,
+        "reference_relative_percent": 15.872579911108375,
+        "unchanged_control_relative_percent": 1.4026139013583627
+      },
+      {
+        "case": "color-4-depth-16-adam7-1-noise-0",
+        "sample_bytes": 132856,
+        "before_ns": 134716.0,
+        "after_ns": 134458.0,
+        "reference_relative_percent": -9.20332548958166,
+        "unchanged_control_relative_percent": 1.40391938552884
+      },
+      {
+        "case": "color-0-depth-08-adam7-1-noise-1",
+        "sample_bytes": 33397,
+        "before_ns": 11779.0,
+        "after_ns": 10737.0,
+        "reference_relative_percent": -1.9586897608072529,
+        "unchanged_control_relative_percent": 1.7208278697850243
+      },
+      {
+        "case": "color-4-depth-08-adam7-0-noise-0",
+        "sample_bytes": 66435,
+        "before_ns": 35533.0,
+        "after_ns": 32820.5,
+        "reference_relative_percent": 5.231032616189313,
+        "unchanged_control_relative_percent": 1.9694917547333546
+      },
+      {
+        "case": "color-3-depth-02-adam7-0-noise-1",
+        "sample_bytes": 8514,
+        "before_ns": 2070.5,
+        "after_ns": 1875.0,
+        "reference_relative_percent": 6.373173518119657,
+        "unchanged_control_relative_percent": 2.176193732928988
+      },
+      {
+        "case": "color-6-depth-08-adam7-0-noise-1",
+        "sample_bytes": 132741,
+        "before_ns": 43916.5,
+        "after_ns": 38095.5,
+        "reference_relative_percent": 10.80026094327069,
+        "unchanged_control_relative_percent": 2.720074079245993
+      },
+      {
+        "case": "color-0-depth-01-adam7-1-noise-0",
+        "sample_bytes": 4501,
+        "before_ns": 8391.0,
+        "after_ns": 7370.5,
+        "reference_relative_percent": 2.4471100216935993,
+        "unchanged_control_relative_percent": 2.881376451519091
+      },
+      {
+        "case": "color-0-depth-08-adam7-0-noise-0",
+        "sample_bytes": 33282,
+        "before_ns": 39183.0,
+        "after_ns": 35883.0,
+        "reference_relative_percent": -1.5190709666261681,
+        "unchanged_control_relative_percent": 3.8168160624220127
+      },
+      {
+        "case": "color-0-depth-04-adam7-0-noise-0",
+        "sample_bytes": 16770,
+        "before_ns": 13583.0,
+        "after_ns": 12428.5,
+        "reference_relative_percent": 9.662273725940306,
+        "unchanged_control_relative_percent": 5.014851397424147
+      },
+      {
+        "case": "color-6-depth-16-adam7-0-noise-1",
+        "sample_bytes": 265353,
+        "before_ns": 148004.0,
+        "after_ns": 126237.5,
+        "reference_relative_percent": 25.627483098445538,
+        "unchanged_control_relative_percent": 5.151187270385638
+      },
+      {
+        "case": "color-4-depth-08-adam7-1-noise-0",
+        "sample_bytes": 66550,
+        "before_ns": 40112.0,
+        "after_ns": 34141.5,
+        "reference_relative_percent": -8.206660269080645,
+        "unchanged_control_relative_percent": 5.389919717013303
+      },
+      {
+        "case": "color-2-depth-16-adam7-1-noise-1",
+        "sample_bytes": 199162,
+        "before_ns": 63166.0,
+        "after_ns": 59337.0,
+        "reference_relative_percent": -5.186771535885947,
+        "unchanged_control_relative_percent": 6.443801067173349
+      },
+      {
+        "case": "color-4-depth-08-adam7-1-noise-1",
+        "sample_bytes": 66550,
+        "before_ns": 18612.0,
+        "after_ns": 16412.0,
+        "reference_relative_percent": 8.245963503924791,
+        "unchanged_control_relative_percent": 6.90896976665607
+      },
+      {
+        "case": "color-3-depth-04-adam7-1-noise-0",
+        "sample_bytes": 16885,
+        "before_ns": 20937.0,
+        "after_ns": 17395.5,
+        "reference_relative_percent": 17.27707887424095,
+        "unchanged_control_relative_percent": 7.933299390277293
+      },
+      {
+        "case": "color-3-depth-04-adam7-0-noise-0",
+        "sample_bytes": 16770,
+        "before_ns": 13308.0,
+        "after_ns": 13799.5,
+        "reference_relative_percent": -3.390104260403104,
+        "unchanged_control_relative_percent": 8.320101771661893
+      },
+      {
+        "case": "color-3-depth-01-adam7-0-noise-1",
+        "sample_bytes": 4386,
+        "before_ns": 32650.0,
+        "after_ns": 24620.5,
+        "reference_relative_percent": 6.993581556727224,
+        "unchanged_control_relative_percent": 9.048605375005803
+      },
+      {
+        "case": "color-3-depth-08-adam7-1-noise-0",
+        "sample_bytes": 33397,
+        "before_ns": 23512.0,
+        "after_ns": 21108.0,
+        "reference_relative_percent": 14.5042895220997,
+        "unchanged_control_relative_percent": 9.343154314280033
+      },
+      {
+        "case": "color-3-depth-08-adam7-1-noise-1",
+        "sample_bytes": 33397,
+        "before_ns": 9829.0,
+        "after_ns": 8345.5,
+        "reference_relative_percent": 8.004970424295553,
+        "unchanged_control_relative_percent": 10.403607837711416
+      },
+      {
+        "case": "color-0-depth-16-adam7-0-noise-0",
+        "sample_bytes": 66435,
+        "before_ns": 49862.0,
+        "after_ns": 42062.0,
+        "reference_relative_percent": 9.843037844698642,
+        "unchanged_control_relative_percent": 10.960675000563613
+      },
+      {
+        "case": "color-0-depth-02-adam7-1-noise-0",
+        "sample_bytes": 8629,
+        "before_ns": 9908.0,
+        "after_ns": 8762.0,
+        "reference_relative_percent": 8.965174686546806,
+        "unchanged_control_relative_percent": 11.553916463604397
+      },
+      {
+        "case": "color-2-depth-08-adam7-1-noise-0",
+        "sample_bytes": 99703,
+        "before_ns": 73095.5,
+        "after_ns": 60016.5,
+        "reference_relative_percent": 9.202794326657093,
+        "unchanged_control_relative_percent": 12.154408947251415
+      },
+      {
+        "case": "color-6-depth-16-adam7-1-noise-1",
+        "sample_bytes": 265468,
+        "before_ns": 107633.0,
+        "after_ns": 113370.5,
+        "reference_relative_percent": 5.54474190738381,
+        "unchanged_control_relative_percent": 12.36265954623217
+      },
+      {
+        "case": "color-2-depth-16-adam7-1-noise-0",
+        "sample_bytes": 199162,
+        "before_ns": 151575.0,
+        "after_ns": 124666.0,
+        "reference_relative_percent": 24.545299381748254,
+        "unchanged_control_relative_percent": 13.32191615606908
+      },
+      {
+        "case": "color-3-depth-02-adam7-0-noise-0",
+        "sample_bytes": 8514,
+        "before_ns": 8591.5,
+        "after_ns": 7308.0,
+        "reference_relative_percent": 7.759074174858371,
+        "unchanged_control_relative_percent": 13.565085558283908
+      },
+      {
+        "case": "color-0-depth-01-adam7-0-noise-1",
+        "sample_bytes": 4386,
+        "before_ns": 32691.5,
+        "after_ns": 24662.0,
+        "reference_relative_percent": 36.41176081962592,
+        "unchanged_control_relative_percent": 13.647841516282044
+      },
+      {
+        "case": "color-4-depth-16-adam7-0-noise-1",
+        "sample_bytes": 132741,
+        "before_ns": 45904.0,
+        "after_ns": 38116.5,
+        "reference_relative_percent": 24.489387811262485,
+        "unchanged_control_relative_percent": 14.789052943772617
+      },
+      {
+        "case": "color-0-depth-16-adam7-0-noise-1",
+        "sample_bytes": 66435,
+        "before_ns": 19979.0,
+        "after_ns": 20583.0,
+        "reference_relative_percent": 5.1739239953625615,
+        "unchanged_control_relative_percent": 15.219486180871368
+      },
+      {
+        "case": "color-6-depth-08-adam7-1-noise-0",
+        "sample_bytes": 132856,
+        "before_ns": 89120.5,
+        "after_ns": 77895.5,
+        "reference_relative_percent": -3.1351161672702688,
+        "unchanged_control_relative_percent": 15.391515944927159
+      },
+      {
+        "case": "color-4-depth-16-adam7-1-noise-1",
+        "sample_bytes": 132856,
+        "before_ns": 44979.0,
+        "after_ns": 41412.0,
+        "reference_relative_percent": 2.0173998051865816,
+        "unchanged_control_relative_percent": 17.045774380673006
+      },
+      {
+        "case": "color-6-depth-16-adam7-1-noise-0",
+        "sample_bytes": 265468,
+        "before_ns": 1509804.0,
+        "after_ns": 1260812.5,
+        "reference_relative_percent": 16.28286325034738,
+        "unchanged_control_relative_percent": 18.826586346968522
+      },
+      {
+        "case": "color-3-depth-04-adam7-1-noise-1",
+        "sample_bytes": 16885,
+        "before_ns": 94374.5,
+        "after_ns": 74087.0,
+        "reference_relative_percent": 29.401685349931462,
+        "unchanged_control_relative_percent": 20.272905656172703
+      },
+      {
+        "case": "color-0-depth-02-adam7-1-noise-1",
+        "sample_bytes": 8629,
+        "before_ns": 54824.5,
+        "after_ns": 40828.5,
+        "reference_relative_percent": 19.46772619103374,
+        "unchanged_control_relative_percent": 20.617314361719785
+      },
+      {
+        "case": "color-3-depth-01-adam7-1-noise-1",
+        "sample_bytes": 4501,
+        "before_ns": 33708.0,
+        "after_ns": 24450.0,
+        "reference_relative_percent": 21.491413103344836,
+        "unchanged_control_relative_percent": 21.08760221152186
+      },
+      {
+        "case": "color-2-depth-16-adam7-0-noise-1",
+        "sample_bytes": 199047,
+        "before_ns": 63729.0,
+        "after_ns": 53120.5,
+        "reference_relative_percent": 20.79142447195137,
+        "unchanged_control_relative_percent": 21.623482398230685
+      },
+      {
+        "case": "color-0-depth-16-adam7-1-noise-0",
+        "sample_bytes": 66550,
+        "before_ns": 363920.5,
+        "after_ns": 293424.5,
+        "reference_relative_percent": 20.14344509233763,
+        "unchanged_control_relative_percent": 22.583210180823144
+      },
+      {
+        "case": "color-0-depth-01-adam7-1-noise-1",
+        "sample_bytes": 4501,
+        "before_ns": 30891.0,
+        "after_ns": 24562.5,
+        "reference_relative_percent": 4.998300965689495,
+        "unchanged_control_relative_percent": 24.97433685068571
+      },
+      {
+        "case": "color-0-depth-08-adam7-0-noise-1",
+        "sample_bytes": 33282,
+        "before_ns": 11237.0,
+        "after_ns": 9033.0,
+        "reference_relative_percent": 18.094885123718353,
+        "unchanged_control_relative_percent": 32.442929792344884
+      },
+      {
+        "case": "color-3-depth-02-adam7-1-noise-1",
+        "sample_bytes": 8629,
+        "before_ns": 53816.5,
+        "after_ns": 40049.5,
+        "reference_relative_percent": 40.608898817689386,
+        "unchanged_control_relative_percent": 34.84133363348767
+      },
+      {
+        "case": "color-0-depth-04-adam7-0-noise-1",
+        "sample_bytes": 16770,
+        "before_ns": 5125.0,
+        "after_ns": 4858.0,
+        "reference_relative_percent": -9.625812778726338,
+        "unchanged_control_relative_percent": 36.088614142544294
+      },
+      {
+        "case": "color-2-depth-08-adam7-0-noise-1",
+        "sample_bytes": 99588,
+        "before_ns": 46349.5,
+        "after_ns": 34699.5,
+        "reference_relative_percent": 15.323917934559717,
+        "unchanged_control_relative_percent": 36.78049661612117
+      }
+    ]
+  }
+}

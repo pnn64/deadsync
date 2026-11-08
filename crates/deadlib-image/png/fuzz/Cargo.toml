@@ -1,0 +1,103 @@
+[package]
+name = "deadlib-image-png-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+deadlib-image-png = { path = ".." }
+png = "0.18.1"
+flate2 = "1.1.10"
+crc32fast = "1.5.3"
+libdeflater = "=1.26.1"
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "zlib"
+path = "fuzz_targets/zlib.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "png_stream"
+path = "fuzz_targets/png_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "inflate_stream"
+path = "fuzz_targets/inflate_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "encode_stream"
+path = "fuzz_targets/encode_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "profiles"
+path = "fuzz_targets/profiles.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deflate_stream"
+path = "fuzz_targets/deflate_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "huffman"
+path = "fuzz_targets/huffman.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text_body"
+path = "fuzz_targets/text_body.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "reference_samples"
+path = "fuzz_targets/reference_samples.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compositor"
+path = "fuzz_targets/compositor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decoder_limits"
+path = "fuzz_targets/decoder_limits.rs"
+test = false
+doc = false
+bench = false

@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::{KeyCode, PadDir};
 
 use crate::{
     ALL_VIRTUAL_ACTIONS, InputBinding, Keymap, VirtualAction, gamepad_code_binding_to_token,
@@ -9,65 +9,43 @@ use crate::{
 
 #[must_use]
 pub fn default_keymap() -> Keymap {
-    use VirtualAction as A;
     let mut km = Keymap::default();
-    // Player 1 defaults (Pump-standard QESZC + arrows, Enter/Escape).
-    km.bind(
-        A::p1_up,
-        &[
-            InputBinding::Key(KeyCode::ArrowUp),
-            InputBinding::Key(KeyCode::KeyE),
-        ],
-    );
-    km.bind(
-        A::p1_down,
-        &[
-            InputBinding::Key(KeyCode::ArrowDown),
-            InputBinding::Key(KeyCode::KeyQ),
-        ],
-    );
-    km.bind(
-        A::p1_left,
-        &[
-            InputBinding::Key(KeyCode::ArrowLeft),
-            InputBinding::Key(KeyCode::KeyZ),
-        ],
-    );
-    km.bind(
-        A::p1_right,
-        &[
-            InputBinding::Key(KeyCode::ArrowRight),
-            InputBinding::Key(KeyCode::KeyC),
-        ],
-    );
-    km.bind(
-        A::p1_center,
-        &[
-            InputBinding::Key(KeyCode::Space),
-            InputBinding::Key(KeyCode::KeyS),
-        ],
-    );
-    km.bind(A::p1_select, &[InputBinding::Key(KeyCode::Slash)]);
-    km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
-    km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
-    // Player 2 defaults (numpad directions + Start on NumpadEnter).
-    km.bind(A::p2_up, &[InputBinding::Key(KeyCode::Numpad8)]);
-    km.bind(A::p2_down, &[InputBinding::Key(KeyCode::Numpad2)]);
-    km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
-    km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
-    km.bind(A::p2_center, &[InputBinding::Key(KeyCode::Numpad5)]);
-    km.bind(A::p2_select, &[InputBinding::Key(KeyCode::NumpadDecimal)]);
-    km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
-    km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
-    km.bind(A::p1_operator, &[InputBinding::Key(KeyCode::ScrollLock)]);
-    km.bind(A::p1_coin, &[InputBinding::Key(KeyCode::F1)]);
-    km.bind(A::system_fast_forward, &[InputBinding::Key(KeyCode::Tab)]);
-    km.bind(
-        A::system_slow_down,
-        &[InputBinding::Key(KeyCode::Backquote)],
-    );
-    // Leave dedicated menu buttons, P2 operator/coin, and restart unbound by default for now.
+    for action in ALL_VIRTUAL_ACTIONS {
+        let bindings = default_bindings_for_action(action);
+        if !bindings.is_empty() {
+            km.bind(action, bindings);
+        }
+    }
     km
+}
+
+const fn default_bindings_for_action(action: VirtualAction) -> &'static [InputBinding] {
+    use InputBinding::Key;
+    use KeyCode::*;
+    use VirtualAction as A;
+    match action {
+        A::p1_up => &[Key(ArrowUp), Key(KeyE)],
+        A::p1_down => &[Key(ArrowDown), Key(KeyQ)],
+        A::p1_left => &[Key(ArrowLeft), Key(KeyZ)],
+        A::p1_right => &[Key(ArrowRight), Key(KeyC)],
+        A::p1_center => &[Key(Space), Key(KeyS)],
+        A::p1_select => &[Key(Slash)],
+        A::p1_start => &[Key(Enter)],
+        A::p1_back => &[Key(Escape)],
+        A::p1_operator => &[Key(ScrollLock)],
+        A::p1_coin => &[Key(F1)],
+        A::p2_up => &[Key(Numpad8)],
+        A::p2_down => &[Key(Numpad2)],
+        A::p2_left => &[Key(Numpad4)],
+        A::p2_right => &[Key(Numpad6)],
+        A::p2_center => &[Key(Numpad5)],
+        A::p2_select => &[Key(NumpadDecimal)],
+        A::p2_start => &[Key(NumpadEnter)],
+        A::p2_back => &[Key(Numpad0)],
+        A::system_fast_forward => &[Key(Tab)],
+        A::system_slow_down => &[Key(Backquote)],
+        _ => &[],
+    }
 }
 
 pub fn load_keymap_from_ini_entries<'a, I>(section: Option<I>) -> Keymap
@@ -92,24 +70,22 @@ where
                     bindings.push(binding);
                 }
             }
-            km.bind(action, &bindings);
+            if bindings.len() == bindings.capacity() {
+                km.bind_owned(action, bindings);
+            } else {
+                km.bind(action, &bindings);
+            }
             seen |= action.bit();
         }
     }
 
-    let defaults = default_keymap();
     for action in ALL_VIRTUAL_ACTIONS {
         if seen & action.bit() != 0 {
             continue;
         }
-        let mut bindings = Vec::new();
-        let mut i = 0;
-        while let Some(binding) = defaults.binding_at(action, i) {
-            bindings.push(binding);
-            i += 1;
-        }
+        let bindings = default_bindings_for_action(action);
         if !bindings.is_empty() {
-            km.bind(action, &bindings);
+            km.bind(action, bindings);
         }
     }
     restore_available_default_bindings(&mut km);
@@ -117,7 +93,17 @@ where
     km
 }
 
-pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
+// Keep the individual defaults and their serialized block in one declaration.
+macro_rules! default_keymap_ini {
+    ($(($key:literal, $value:literal),)*) => {
+        pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [$(($key, $value),)*];
+        const DEFAULT_KEYMAP_INI_SECTION: &str = concat!(
+            "[Keymaps]\n", $($key, "=", $value, "\n",)* "\n"
+        );
+    };
+}
+
+default_keymap_ini! {
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyZ"),
@@ -150,7 +136,7 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P2_Center", "KeyCode::Numpad5"),
     ("P1_Coin", "KeyCode::F1"),
     ("P2_Coin", ""),
-];
+}
 
 #[must_use]
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
@@ -171,9 +157,9 @@ fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
         }
         match binding {
             InputBinding::Key(code) => write!(content, "KeyCode::{code:?}").unwrap(),
-            InputBinding::PadDir(dir) => write!(content, "PadDir::{dir:?}").unwrap(),
+            InputBinding::PadDir(dir) => content.push_str(pad_dir_token(dir)),
             InputBinding::PadDirOn { device, dir } => {
-                write!(content, "Pad{device}::Dir::{dir:?}").unwrap()
+                append_pad_device_dir_token(content, device, dir);
             }
             InputBinding::GamepadCode(binding) => {
                 crate::write_gamepad_code_binding_token(content, binding)
@@ -183,11 +169,7 @@ fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
 }
 
 pub fn write_default_keymap_ini_section(content: &mut String) {
-    content.push_str("[Keymaps]\n");
-    for (key, value) in DEFAULT_KEYMAP_INI_LINES {
-        writeln!(content, "{key}={value}").expect("writing into String cannot fail");
-    }
-    content.push('\n');
+    content.push_str(DEFAULT_KEYMAP_INI_SECTION);
 }
 
 pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
@@ -204,29 +186,8 @@ pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
 #[inline(always)]
 #[must_use]
 pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
-    use VirtualAction as A;
-    match action {
-        A::p1_up => Some(KeyCode::ArrowUp),
-        A::p1_down => Some(KeyCode::ArrowDown),
-        A::p1_left => Some(KeyCode::ArrowLeft),
-        A::p1_right => Some(KeyCode::ArrowRight),
-        A::p1_center => Some(KeyCode::Space),
-        A::p1_select => Some(KeyCode::Slash),
-        A::p1_start => Some(KeyCode::Enter),
-        A::p1_back => Some(KeyCode::Escape),
-        A::p1_operator => Some(KeyCode::ScrollLock),
-        A::p1_coin => Some(KeyCode::F1),
-        A::p2_up => Some(KeyCode::Numpad8),
-        A::p2_down => Some(KeyCode::Numpad2),
-        A::p2_left => Some(KeyCode::Numpad4),
-        A::p2_right => Some(KeyCode::Numpad6),
-        A::p2_center => Some(KeyCode::Numpad5),
-        A::p2_select => Some(KeyCode::NumpadDecimal),
-        A::p2_start => Some(KeyCode::NumpadEnter),
-        A::p2_back => Some(KeyCode::Numpad0),
-        // System (non-player) tier: Tab acceleration fast-forward / slow-down.
-        A::system_fast_forward => Some(KeyCode::Tab),
-        A::system_slow_down => Some(KeyCode::Backquote),
+    match default_bindings_for_action(action) {
+        [InputBinding::Key(code), ..] => Some(*code),
         _ => None,
     }
 }
@@ -236,14 +197,50 @@ pub fn default_binding_for_action(action: VirtualAction) -> Option<InputBinding>
     default_key_for_action(action).map(InputBinding::Key)
 }
 
+const fn pad_dir_token(dir: PadDir) -> &'static str {
+    match dir {
+        PadDir::Up => "PadDir::Up",
+        PadDir::Down => "PadDir::Down",
+        PadDir::Left => "PadDir::Left",
+        PadDir::Right => "PadDir::Right",
+    }
+}
+
+fn append_pad_device_dir_token(out: &mut String, device: usize, dir: PadDir) {
+    const MAX_DIGITS: usize = usize::MAX.ilog10() as usize + 1;
+    let suffix = match dir {
+        PadDir::Up => "::Dir::Up",
+        PadDir::Down => "::Dir::Down",
+        PadDir::Left => "::Dir::Left",
+        PadDir::Right => "::Dir::Right",
+    };
+    // Room for "Pad", every decimal digit, and the longest suffix, "::Dir::Right".
+    let mut text = [0; 3 + MAX_DIGITS + 12];
+    let mut first = 3 + MAX_DIGITS;
+    let mut value = device;
+    while value >= 10 {
+        first -= 1;
+        text[first] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    first -= 1;
+    text[first] = b'0' + value as u8;
+    text[first - 3..first].copy_from_slice(b"Pad");
+    let end = 3 + MAX_DIGITS + suffix.len();
+    text[3 + MAX_DIGITS..end].copy_from_slice(suffix.as_bytes());
+    out.push_str(std::str::from_utf8(&text[first - 3..end]).expect("pad token bytes are ASCII"));
+}
+
 #[inline(always)]
 #[must_use]
 pub fn binding_to_token(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("KeyCode::{code:?}"),
-        InputBinding::PadDir(dir) => format!("PadDir::{dir:?}"),
+        InputBinding::PadDir(dir) => pad_dir_token(dir).to_owned(),
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad{device}::Dir::{dir:?}")
+            let mut out = String::new();
+            append_pad_device_dir_token(&mut out, device, dir);
+            out
         }
         InputBinding::GamepadCode(binding) => gamepad_code_binding_to_token(binding),
     }
@@ -571,13 +568,7 @@ pub fn protected_default_key_for_action(keymap: &Keymap, action: VirtualAction) 
 
 #[inline(always)]
 fn load_action_bindings(keymap: &Keymap, action: VirtualAction) -> Vec<InputBinding> {
-    let mut bindings = Vec::new();
-    let mut i = 0;
-    while let Some(binding) = keymap.binding_at(action, i) {
-        bindings.push(binding);
-        i += 1;
-    }
-    bindings
+    keymap.bindings_for_action(action).to_vec()
 }
 
 #[inline(always)]
@@ -640,6 +631,7 @@ pub fn restore_available_default_bindings(keymap: &mut Keymap) {
 fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, binding: InputBinding) {
     let slot_index = slot_index.min(bindings.len());
     if bindings.len() <= slot_index {
+        bindings.reserve_exact(1);
         bindings.push(binding);
     } else {
         bindings[slot_index] = binding;
@@ -683,7 +675,7 @@ pub fn updated_keymap_unique_keyboard(
             }
         }
 
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     restore_available_default_bindings(&mut new_map);
@@ -717,7 +709,7 @@ pub fn updated_keymap_unique_gamepad(
             set_binding_at_slot(&mut bindings, effective_index, binding);
         }
 
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     restore_available_default_bindings(&mut new_map);
@@ -739,7 +731,7 @@ pub fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> 
                 changed = true;
             }
         }
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     if changed {
@@ -1418,12 +1410,4 @@ mod tests {
         let token = binding_to_token(binding);
         assert_eq!(parse_binding_token(&token), Some(binding));
     }
-}
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/keymap_preparation.rs"
-    ));
 }

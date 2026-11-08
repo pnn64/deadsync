@@ -43,7 +43,6 @@ where
             audio_snapshot,
             music_rate,
             stream_lead_in,
-            self.clock.offsets.global_offset_seconds(),
         );
         let lead_in = self.clock.audio_clock.positive_lead_in_seconds();
         let previous_music_time_ns = self.clock.song_position.current_music_time_ns;
@@ -140,35 +139,54 @@ where
     }
 
     pub fn finish_gameplay_if_ready(&mut self, trace_enabled: bool) -> Option<GameplayAction> {
+        let now = self.total_elapsed_in_screen();
+        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            if !self.profiles_runtime.profiles[player].golf_scoring_enabled() { continue; }
+            let p = &mut self.players_runtime.players[player];
+            let current = p.golf_score();
+            if current != p.golf_feedback_total {
+                p.golf_feedback = Some((current.raw_strokes.saturating_sub(p.golf_feedback_total.raw_strokes).min(u64::from(u32::MAX)) as u32, now));
+                p.golf_feedback_total = current;
+            }
+        }
         // Match ITG's end-of-song ordering: resolve the frame's late taps, hold
         // ends, and misses before leaving gameplay, otherwise the last frame can
         // cut to evaluation before final judgments land.
-        if self.clock.song_position.current_music_time_ns >= self.music_end_time_ns() {
+        // ScreenGameplay delays NotesEnded by BeginFailedDelay when every
+        // enabled PlayerStageStats has already failed. Simply Love inherits
+        // _fallback's one song-second delay; it precedes LeaveGameplay/Off.
+        let player_count = self.setup.num_players.min(MAX_PLAYERS);
+        let all_failed = player_count > 0 && self.players_runtime.players[..player_count].iter()
+            .all(|player| player.stage_failed || player.fail_time.is_some());
+        let end = self.music_end_time_ns().saturating_add(if all_failed { 1_000_000_000 } else { 0 });
+        if self.clock.song_position.current_music_time_ns >= end {
             if !self.settle_completion_rows() && trace_enabled {
                 log::trace!("Music end time reached with pending score rows; completing gameplay.");
             }
             log::debug!("Music end time reached. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = true;
+            let now = self.current_music_time_seconds();
+            for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+                if update_player_failure(&mut self.players_runtime.players[player], now, true) {
+                    self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+                    self.display.density_graph.life_dirty[player] = true;
+                }
+            }
             self.begin_outro_attack_clear();
-            self.finalize_completed_mines();
+            // The screen still judges notes during its out transition. Final
+            // mine accounting belongs to the actual evaluation handoff.
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 
-        let battery_forces_immediate = self
-            .players_runtime
-            .players
-            .iter()
+        if self.setup.num_players > 0 && self.players_runtime.players.iter()
             .take(self.setup.num_players.min(MAX_PLAYERS))
-            .any(|player| matches!(player.course_life, CourseLifeState::Battery { .. }));
-        if (matches!(
-            self.setup.config.default_fail_type,
-            GameplayFailType::Immediate
-        ) || battery_forces_immediate)
-            && self.all_joined_players_failed()
+            .all(|player| player.fail_type == GameplayFailType::Immediate
+                && player_runtime_is_dead(player))
         {
             log::debug!("All joined players failed. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = false;
             self.push_audio_command(GameplayAudioCommand::StopMusic);
+            self.begin_outro_attack_clear();
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 
@@ -181,6 +199,15 @@ where
         audio_snapshot: GameplayAudioSnapshot,
         assist_sfx_path: &'static str,
         fallback_host_nanos: impl FnOnce() -> u64,
+    ) -> GameplayAction {
+        self.update_gameplay_frame_with_pre_player(delta_time, audio_snapshot, assist_sfx_path, fallback_host_nanos, |_| {})
+    }
+
+    /// Run screen-owned preparation after sampling audio, before Player logic.
+    pub fn update_gameplay_frame_with_pre_player(
+        &mut self, delta_time: f32, audio_snapshot: GameplayAudioSnapshot,
+        assist_sfx_path: &'static str, fallback_host_nanos: impl FnOnce() -> u64,
+        before_players: impl FnOnce(&mut Self),
     ) -> GameplayAction {
         if let Some(action) = self.update_exit_transition(delta_time) {
             return action;
@@ -215,6 +242,8 @@ where
             );
             return GameplayAction::None;
         }
+
+        before_players(self);
 
         let pre_notes_started = if trace_enabled {
             Some(Instant::now())
@@ -382,7 +411,7 @@ where
 
         let future_row = self.timing_runtime.time_to_beat_caches.assist_future_row(
             &self.timing_runtime.timing,
-            self.clock.offsets.global_offset_seconds(),
+            self.clock.offsets.global_offset_seconds() * self.music_rate(),
             self.clock.audio_clock.output_delay_seconds(),
             music_time_ns,
             slope,
@@ -400,6 +429,7 @@ where
 
     #[inline(always)]
     pub const fn set_last_judgment(&mut self, player_idx: usize, judgment: Judgment) {
+        self.mark_autoplay_judged(player_idx);
         set_player_last_judgment(
             &mut self.players_runtime.players[player_idx],
             judgment,
@@ -408,7 +438,13 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_last_mine_judgment(&mut self, player_idx: usize, column: usize, result: MineResult) {
+    pub const fn set_last_mine_judgment(
+        &mut self,
+        player_idx: usize,
+        column: usize,
+        result: MineResult,
+    ) {
+        self.mark_autoplay_judged(player_idx);
         set_player_last_mine_judgment(
             &mut self.players_runtime.players[player_idx],
             result,
@@ -581,7 +617,10 @@ where
             None
         };
         let rate = self.display.density_graph.life_update_rate;
-        self.display.density_graph.life_next_update_elapsed = rate.mul_add(catch_up_steps as f32, self.display.density_graph.life_next_update_elapsed);
+        self.display.density_graph.life_next_update_elapsed = rate.mul_add(
+            catch_up_steps as f32,
+            self.display.density_graph.life_next_update_elapsed,
+        );
 
         if let Some(x) = density_graph_life_sample_x(
             current_music_time,
@@ -677,7 +716,6 @@ where
                 audio_snapshot,
                 music_rate,
                 stream_lead_in,
-                self.clock.offsets.global_offset_seconds(),
             )
             .song_time_ns,
         )
@@ -827,10 +865,34 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_end_times(&mut self, notes_end_time_ns: SongTimeNs, music_end_time_ns: SongTimeNs) {
+    pub const fn set_end_times(
+        &mut self,
+        notes_end_time_ns: SongTimeNs,
+        music_end_time_ns: SongTimeNs,
+    ) {
         self.clock
             .end_timing
             .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+    }
+
+    pub fn set_music_end_fade_timing(&mut self, fade_seconds: f32, transition_seconds: f32) {
+        self.clock.end_timing.set_music_fade_timing_ns(
+            song_time_ns_from_seconds(fade_seconds), song_time_ns_from_seconds(transition_seconds));
+        self.recompute_end_times();
+    }
+
+    fn recompute_end_times(&mut self) {
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.chart_runtime.hold_end_time_cache_ns,
+            self.music_rate(),
+            self.clock.end_timing.audio_end_time_ns(),
+            self.clock.end_timing.song_last_second_ns(),
+        );
+        let music_end_time_ns = self.clock.end_timing.apply_music_fade_timing(
+            music_end_time_ns, self.source.song.music_length_seconds);
+        self.clock.end_timing.set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
     }
 
     pub fn set_music_rate_with_player_judgment_timing(
@@ -846,17 +908,21 @@ where
         let normalized = self.music_rate();
         self.timing_runtime.step_resolution_distance_ns =
             max_step_distance_ns(&self.timing_runtime.timing_profile, normalized);
-        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.chart_runtime.hold_end_time_cache_ns,
-            normalized,
-            self.clock.end_timing.audio_end_time_ns(),
-            song_time_ns_from_seconds(self.source.song.last_second_hint),
-        );
-        self.clock
-            .end_timing
-            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+        let global_offset = self.clock.offsets.global_offset_seconds();
+        mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
+            timing.set_global_offset_seconds_with_rate(global_offset, normalized);
+        });
+        for (player, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
+            let offset = self.clock.offsets.effective_player_global_offset_seconds(player);
+            mutate_timing_arc(timing, |timing| {
+                timing.set_global_offset_seconds_with_rate(offset, normalized);
+            });
+        }
+        self.refresh_timing_after_offset_change();
+        // Song corrections convert real-time samples with the active rate.
+        // Do not combine samples taken on different playback timelines.
+        self.control.autosync.offset_sample_count = 0;
+        self.control.autosync.standard_deviation = 0.0;
         true
     }
 
@@ -898,17 +964,7 @@ where
                 );
         }
 
-        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.chart_runtime.hold_end_time_cache_ns,
-            self.music_rate(),
-            self.clock.end_timing.audio_end_time_ns(),
-            song_time_ns_from_seconds(self.source.song.last_second_hint),
-        );
-        self.clock
-            .end_timing
-            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+        self.recompute_end_times();
     }
 
     #[inline(always)]
@@ -918,8 +974,9 @@ where
         else {
             return false;
         };
+        let rate = self.music_rate();
         mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
-            timing.set_global_offset_seconds(new_offset);
+            timing.set_global_offset_seconds_with_rate(new_offset, rate);
         });
         for (player_idx, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
             let effective_offset = new_offset
@@ -928,7 +985,7 @@ where
                     .offsets
                     .player_global_offset_shift_seconds(player_idx);
             mutate_timing_arc(timing, |timing| {
-                timing.set_global_offset_seconds(effective_offset);
+                timing.set_global_offset_seconds_with_rate(effective_offset, rate);
             });
         }
         self.refresh_timing_after_offset_change();
@@ -960,7 +1017,7 @@ where
         let result = self.apply_autosync_offset_sample(note_off_by_ns);
         match result.correction {
             Some(AutosyncOffsetCorrection::Song(mean)) => {
-                let _ = self.apply_song_offset_delta(mean);
+                let _ = self.apply_song_offset_delta(mean * self.music_rate());
             }
             Some(AutosyncOffsetCorrection::Machine(mean)) => {
                 let _ = self.apply_global_offset_delta(mean);
@@ -1049,6 +1106,8 @@ where
             delta_time,
             base_appearance_effects(profile),
             || AttackBaseEffects {
+                accel: AccelEffects::from_mask_bits(profile.accel_mask_bits()),
+                attack_flags: AttackFlags::from_mode(profile.attack_mode()),
                 visual: base_visual_effects(profile),
                 scroll: profile.scroll_effects(),
                 mini_percent: profile.mini_percent(),
@@ -1056,6 +1115,17 @@ where
             player_transform,
         ) {
             self.mods.song_lua_player_transforms[player] = transform;
+        }
+        // Routine participants share the master player's life meter.
+        let life_source = if self.setup.session.play_style.is_routine() { 0 } else { player };
+        let fail_type = self.mods.song_lua_fail_types[life_source].or(self.mods.attacks.fail_type[life_source])
+            .unwrap_or(self.setup.config.default_fail_type);
+        let fail_type = song_fail_type(fail_type, &self.source.charts[life_source].difficulty, self.course_display_is_course_stage());
+        let runtime = &mut self.players_runtime.players[player];
+        runtime.fail_type = fail_type;
+        if update_player_failure(runtime, now, false) {
+            self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+            self.display.density_graph.life_dirty[player] = true;
         }
     }
 
@@ -1563,20 +1633,6 @@ where
     }
 
     #[inline(always)]
-    pub fn notefield_draw_distance_before_targets(&self, player_idx: usize) -> f32 {
-        self.display
-            .notefield_motion
-            .draw_distance_before_targets(player_idx)
-    }
-
-    #[inline(always)]
-    pub fn notefield_draw_distance_after_targets(&self, player_idx: usize) -> f32 {
-        self.display
-            .notefield_motion
-            .draw_distance_after_targets(player_idx)
-    }
-
-    #[inline(always)]
     pub fn notefield_column_scroll_dir(&self, col: usize) -> f32 {
         self.display.notefield_motion.column_scroll_dir(col)
     }
@@ -1721,7 +1777,21 @@ where
         )
     }
 
+    /// The ITG score the gameplay HUD shows. Routine participants share one
+    /// score, so both of their displays show it.
     pub fn display_itg_score_inputs(&self, player_idx: usize) -> Option<ItgScoreInputs> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        self.routine_shared_itg_score_inputs()
+            .or_else(|| self.participant_display_itg_score_inputs(player_idx))
+    }
+
+    /// One participant's own ITG score, including course carry-over.
+    pub fn participant_display_itg_score_inputs(
+        &self,
+        player_idx: usize,
+    ) -> Option<ItgScoreInputs> {
         if player_idx >= self.setup.num_players {
             return None;
         }
@@ -1743,8 +1813,46 @@ where
         ))
     }
 
+    /// The Routine score both participants earn together, including both
+    /// participants' earlier course songs and full-course totals.
+    pub fn routine_shared_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
+        if !self.setup.session.play_style.is_routine() {
+            return None;
+        }
+        Some(shared_itg_score_inputs(
+            self.participant_display_itg_score_inputs(0)?,
+            self.participant_display_itg_score_inputs(1)?,
+        ))
+    }
+
+    /// The Routine score both participants earn in the current song only.
+    pub fn routine_shared_stage_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
+        if !self.setup.session.play_style.is_routine() {
+            return None;
+        }
+        Some(shared_itg_score_inputs(
+            self.stage_itg_score_inputs(0)?,
+            self.stage_itg_score_inputs(1)?,
+        ))
+    }
+
+    pub fn routine_shared_itg_score_percent(&self) -> Option<f64> {
+        self.routine_shared_itg_score_inputs()
+            .map(itg_score_percent_from_inputs)
+    }
+
+    pub fn routine_shared_stage_itg_score_percent(&self) -> Option<f64> {
+        self.routine_shared_stage_itg_score_inputs()
+            .map(itg_score_percent_from_inputs)
+    }
+
     pub fn display_itg_score_percent(&self, player_idx: usize) -> f64 {
         self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, itg_score_percent_from_inputs)
+    }
+
+    pub fn participant_display_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.participant_display_itg_score_inputs(player_idx)
             .map_or(0.0, itg_score_percent_from_inputs)
     }
 
@@ -1793,8 +1901,13 @@ where
             -1.0,
             CourseLifeEvent::ForceFail,
         );
+        // Explicit give-up is a stage failure even when FailSetting is Off.
+        let player = &mut self.players_runtime.players[player_idx];
+        player.is_failing = true;
+        player.fail_time.get_or_insert(current_music_time);
         self.capture_failed_ex_score_inputs(player_idx, self.player_blue_window_ms(player_idx));
         self.display.density_graph.life_dirty[player_idx] = true;
+        self.share_routine_life(player_idx);
         true
     }
 
@@ -1806,10 +1919,7 @@ where
         if player_idx >= self.setup.num_players {
             return judgment::ExScoreData::default();
         }
-        self.ex_score_data_from_inputs(
-            player_idx,
-            self.live_ex_score_inputs(player_idx),
-        )
+        self.ex_score_data_from_inputs(player_idx, self.live_ex_score_inputs(player_idx))
     }
 
     pub fn display_scored_ex_score_data(
@@ -1877,7 +1987,8 @@ where
 
     #[inline(always)]
     pub const fn player_score_is_blocked(&self, player: usize) -> bool {
-        self.player_is_dead(player) && !self.setup.include_post_fail_passes
+        self.players_runtime.players[player].stage_failed
+            || (self.player_is_dead(player) && !self.setup.include_post_fail_passes)
     }
 
     #[inline(always)]
@@ -2047,7 +2158,7 @@ where
             .time_to_beat_caches
             .assist_row_no_offset(
                 &self.timing_runtime.timing,
-                self.clock.offsets.global_offset_seconds(),
+                self.clock.offsets.global_offset_seconds() * self.music_rate(),
                 music_time_ns,
             )
     }
@@ -2317,7 +2428,11 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+    pub const fn set_receptor_glow_timers(
+        &mut self,
+        col: usize,
+        timers: GameplayReceptorGlowTimers,
+    ) {
         self.display.receptor_feedback.set_glow_timers(col, timers);
     }
 
@@ -2485,6 +2600,19 @@ where
             return false;
         }
         self.push_pending_input_edge(edge);
+        // ScreenGameplay sends a Routine step to both Players, and each judges
+        // only the notes it owns. Replays record the step once.
+        let width = self.setup.cols_per_player;
+        if self.setup.session.play_style.is_routine()
+            && lane_idx < width
+            && let Some(lane) = lane_from_column(lane_idx + width)
+        {
+            self.push_pending_input_edge(GameplayInputEdge {
+                lane,
+                record_replay: false,
+                ..edge
+            });
+        }
         if log::log_enabled!(log::Level::Debug) {
             let pending_len = self.pending_input_len();
             if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
@@ -2522,6 +2650,13 @@ where
     #[inline(always)]
     pub const fn exit_transition_active(&self) -> bool {
         self.control.exit_input.exit_transition.is_some()
+    }
+
+    pub fn should_finalize_stage_result(&self) -> bool {
+        // ScreenGameplay::StageFinished cancels a backed-out stage before
+        // finalizing scores, even when every player had already failed.
+        !self.progress.stage.cancelled
+            && (self.song_completed_naturally() || self.all_joined_players_failed())
     }
 
     #[inline(always)]
@@ -2950,6 +3085,12 @@ where
         self.progress.stage.autoplay_used = true;
     }
 
+    pub const fn mark_autoplay_judged(&mut self, player: usize) {
+        if self.live_autoplay_enabled() {
+            self.players_runtime.players[player].autoplay_judged = true;
+        }
+    }
+
     #[inline(always)]
     pub const fn set_raw_modifier_state(&mut self, shift_held: bool, ctrl_held: bool) {
         self.control.exit_input.shift_held = shift_held;
@@ -3196,6 +3337,11 @@ where
     pub fn begin_exit_transition(&mut self, kind: ExitTransitionKind) -> bool {
         if !self.control.exit_input.begin_exit(kind, Instant::now()) {
             return false;
+        }
+        if kind == ExitTransitionKind::Cancel {
+            // The animation state is cleared before navigation reaches the
+            // shell; retain cancellation as part of the stage outcome.
+            self.progress.stage.cancelled = true;
         }
         self.push_audio_command(GameplayAudioCommand::StopMusic);
         true

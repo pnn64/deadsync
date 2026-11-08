@@ -69,7 +69,7 @@ struct CachedResult {
     applied: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub(crate) struct CachedPlot {
     #[serde(default)]
     pub(crate) freq_rows: usize,
@@ -198,6 +198,10 @@ impl TargetPreparation {
 
     pub(crate) const fn cached_analysis(&self) -> Option<&CachedAnalysis> {
         self.cached.as_ref()
+    }
+
+    pub(crate) fn take_cached_analysis(&mut self) -> Option<CachedAnalysis> {
+        self.cached.take()
     }
 
     pub(crate) fn into_prepared(self) -> Option<PreparedTarget> {
@@ -409,7 +413,12 @@ impl Cache {
             let Some(entry) = state.entries.get_mut(&path) else {
                 continue;
             };
-            if (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1 {
+            // Its fix is already in the file, so any further change means the
+            // measurement no longer describes it -- even a change of the same
+            // size, which would otherwise hide a fix applied twice.
+            if entry.result.applied
+                || (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1
+            {
                 state.entries.remove(&path);
                 clear_plot(&mut state, &path);
                 mark_changed(&mut state);
@@ -655,7 +664,8 @@ fn write_cache_file(path: &Path, mut payload: CacheFile) -> Result<(), String> {
             "Null-or-die cached visuals exceeded {} MiB; dropping the oldest plot.",
             MAX_CACHE_BYTES / (1024 * 1024)
         );
-        bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+        bytes.clear();
+        serde_json::to_writer(&mut bytes, &payload).map_err(|error| error.to_string())?;
     }
     if bytes.len() as u64 > MAX_CACHE_BYTES {
         return Err(format!(
@@ -945,4 +955,34 @@ mod tests {
         );
         let _ = fs::remove_dir_all(root);
     }
+
+    /// Once a measured fix is in the file, any further change -- even one of
+    /// the same size -- means the measurement no longer describes it, rather
+    /// than a fix applied twice being taken for the fix applied once.
+    #[test]
+    fn a_change_on_top_of_an_applied_fix_forgets_the_measurement() {
+        let root = temp_dir("applied-twice");
+        fs::create_dir_all(&root).expect("create temp dir");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        fs::write(&simfile, b"#OFFSET:0.000;").expect("write simfile");
+        fs::write(&music, b"audio").expect("write music");
+        let cache = Cache::load(root.join("cache.json"));
+        complete(&cache, &simfile, &music);
+
+        fs::write(&simfile, b"#OFFSET:0.003;").expect("apply offset");
+        cache.refresh_applied([(simfile.as_path(), 0.003)]);
+        fs::write(&simfile, b"#OFFSET:0.006;").expect("apply it again");
+        cache.refresh_applied([(simfile.as_path(), 0.003)]);
+        assert!(
+            !cache
+                .prepare(&simfile, &music, 2, options(), false)
+                .is_cached()
+        );
+        let _ = fs::remove_dir_all(root);
+    }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_cache.rs"]
+mod owned_pipeline_tests;

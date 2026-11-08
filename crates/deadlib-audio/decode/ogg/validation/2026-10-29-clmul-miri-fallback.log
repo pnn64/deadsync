@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src\lib.rs (target\ogg-clmul-20261029\miri-fallback\miri\x86_64-unknown-linux-gnu\debug\build\ogg-crc-fallback-miri/ac7dd8a44b33885b\out\ogg_crc_fallback_miri-ac7dd8a44b33885b)
+
+running 1 test
+test unavailable_cpu_features_select_scalar ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.29s
+
+   Doc-tests ogg_crc_fallback_miri
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

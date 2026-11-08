@@ -1,0 +1,54 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt
+  bitwise.c
+  framing.c
+  Generating Code...
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\references\ogg\Release\ogg.lib
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/CMakeLists.txt
+  bitmath.c
+  bitreader.c
+  bitwriter.c
+  cpu.c
+  crc.c
+  fixed.c
+  fixed_intrin_sse2.c
+  fixed_intrin_ssse3.c
+  fixed_intrin_sse42.c
+  float.c
+  format.c
+  lpc.c
+  lpc_intrin_neon.c
+  lpc_intrin_sse2.c
+  lpc_intrin_sse41.c
+  md5.c
+  memory.c
+  metadata_iterators.c
+  metadata_object.c
+  stream_decoder.c
+  Compiling...
+  stream_encoder.c
+  stream_encoder_intrin_sse2.c
+  stream_encoder_intrin_ssse3.c
+  stream_encoder_framing.c
+  window.c
+  win_utf8_io.c
+  ogg_decoder_aspect.c
+  ogg_encoder_aspect.c
+  ogg_helper.c
+  ogg_mapping.c
+  fixed_intrin_avx2.c
+  lpc_intrin_avx2.c
+  lpc_intrin_fma.c
+  stream_encoder_intrin_avx2.c
+  FLAC.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\references\flac\src\libFLAC\Release\FLAC.lib
+  Building Custom Rule C:/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/CMakeLists.txt
+  benchmark.cpp
+cl : command line  warning D9025: overriding '/GL' with '/GL-' [C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\flac_latency_benchmark.vcxproj]
+  opaque.c
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 622 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  flac_latency_benchmark.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\Release\flac_latency_benchmark.exe

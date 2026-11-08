@@ -108,6 +108,23 @@ impl AppDirs {
         self.cache_dir.join("null-or-die-sync.json")
     }
 
+    /// Which packs the Content Browser has decided are beginner-friendly.
+    ///
+    /// Deciding one costs reading its page, and a verdict is about a pack's
+    /// charts -- which do not change. So these are kept with no expiry.
+    #[must_use]
+    pub fn beginner_verdict_cache_file(&self) -> PathBuf {
+        self.cache_dir.join("beginner-packs.json")
+    }
+
+
+    /// How many booster packs this machine has kept, which numbers the next.
+    /// Save data rather than cache: clearing it would reuse pack numbers.
+    #[must_use]
+    pub fn rip_history_file(&self) -> PathBuf {
+        self.data_dir.join("save").join("content-boosters.txt")
+    }
+
     #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")
@@ -294,7 +311,12 @@ impl AppDirs {
             Some(self.data_dir.join(dirname)),
             Some(self.exe_dir.join(dirname)),
             cwd.map(|path| path.join(dirname)),
-            cwd.map(|path| path.join("deadsync").join(dirname)),
+            cwd.map(|path| {
+                let mut root = path.join("deadsync");
+                root.reserve_exact(dirname.len() + 1);
+                root.push(dirname);
+                root
+            }),
         ];
         for root in candidates.into_iter().flatten() {
             if !roots.contains(&root) {
@@ -306,24 +328,33 @@ impl AppDirs {
 
     /// Locate Workshop content inside the game assets, including portable installs.
     pub fn workshop_dir(&self, cwd: Option<&Path>) -> PathBuf {
-        let roots = cwd
-            .into_iter()
-            .flat_map(|cwd| [cwd.to_path_buf(), cwd.join("deadsync")])
-            .chain(std::iter::once(self.exe_dir.clone()));
-        roots
-            .map(|root| root.join("assets/noteskins"))
+        let mut root = self.workshop_pack_root(cwd);
+        root.reserve_exact(5);
+        root.push("hurg");
+        root
+    }
+
+    fn workshop_pack_root(&self, cwd: Option<&Path>) -> PathBuf {
+        cwd.into_iter()
+            .map(|cwd| cwd.join("assets/noteskins"))
+            .chain(cwd.into_iter().map(|cwd| {
+                let mut nested = cwd.join("deadsync");
+                nested.reserve_exact("assets/noteskins".len() + 1);
+                nested.push("assets/noteskins");
+                nested
+            }))
+            .chain(std::iter::once_with(|| {
+                self.exe_dir.join("assets/noteskins")
+            }))
             .find(|root| root.is_dir())
             .unwrap_or_else(|| self.exe_dir.join("assets/noteskins"))
-            .join("hurg")
     }
 
     /// Prepare the asset subsystem's overlay and cache paths at startup.
     pub fn asset_paths(&self, cwd: Option<&Path>) -> AssetPaths {
         // The install destination wins over older copies (including cargo's
         // copied assets), so a successful download activates that exact pack.
-        let mut pack_root = self.workshop_dir(cwd);
-        pack_root.pop();
-        let mut noteskin_pack_roots = vec![pack_root];
+        let mut noteskin_pack_roots = vec![self.workshop_pack_root(cwd)];
         for root in self.media_roots("assets/noteskins", cwd) {
             if !noteskin_pack_roots.contains(&root) {
                 noteskin_pack_roots.push(root);
@@ -377,17 +408,19 @@ pub struct AssetPaths {
 impl AssetPaths {
     /// Resolve an asset against the startup overlay order; absolute paths pass through.
     pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
-        let original = PathBuf::from(path);
-        if original.is_absolute() {
-            return original;
+        if Path::new(path).is_absolute() {
+            return PathBuf::from(path);
         }
+        let mut candidate = PathBuf::new();
         for root in &self.search_roots {
-            let candidate = root.join(path);
+            candidate.clear();
+            candidate.push(root);
+            candidate.push(path);
             if candidate.exists() {
                 return candidate;
             }
         }
-        original
+        PathBuf::from(path)
     }
 
     pub fn strip_asset_prefix<'a>(&self, path: &'a Path) -> Option<&'a Path> {
@@ -619,3 +652,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "resource_paths_perf.rs"]
+pub(crate) mod resource_perf;

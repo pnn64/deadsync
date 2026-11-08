@@ -284,7 +284,7 @@ fn push_apply_replaygain_overlay_actors_unreserved(
     if !ui.line2.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(ui.line2.clone()):
+            settext(inline_or_owned_text(ui.line2.as_str())):
             align(0.5, 0.5):
             xy(screen_width() * 0.5, bar_cy - 74.0):
             zoom(0.95):
@@ -296,7 +296,7 @@ fn push_apply_replaygain_overlay_actors_unreserved(
     if !ui.line3.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(ui.line3.clone()):
+            settext(inline_or_owned_text(ui.line3.as_str())):
             align(0.5, 0.5):
             xy(screen_width() * 0.5, bar_cy - 50.0):
             zoom(0.95):
@@ -375,3 +375,10 @@ fn push_apply_replaygain_overlay_actors_unreserved(
         z(301)
     ));
 }
+
+#[cfg(test)]
+#[path = "apply_replaygain_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "apply_replaygain_buffers_perf.rs"]
+mod buffers_perf;

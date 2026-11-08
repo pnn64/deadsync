@@ -1,0 +1,18 @@
+{
+  "binary_paths/rust": {
+    "path": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\scalar-evaluation-20261027\\binaries\\binary_paths-rust.exe",
+    "sha256": "c8090e5a00f084bef49afff3b9b8f27514ef5280af699d91c22edf447de6567b"
+  },
+  "binary_paths/libvorbis": {
+    "path": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\scalar-evaluation-20261027\\binaries\\binary_paths-libvorbis.exe",
+    "sha256": "240126675c2f731a366a11dd30f9d464b547156b56718cfff02335b2708dd942"
+  },
+  "decode_binary_paths/rust": {
+    "path": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\scalar-evaluation-20261027\\binaries\\decode_binary_paths-rust.exe",
+    "sha256": "729ac4d4da4114f6238c257f39b79efa4ad3bf110728ce84d3d4b1ebf47d7779"
+  },
+  "decode_binary_paths/libvorbis": {
+    "path": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\scalar-evaluation-20261027\\binaries\\decode_binary_paths-libvorbis.exe",
+    "sha256": "af7d4fec00322d78d17e0b0f83628f8ae8ee921fa57d95080773e666712307c6"
+  }
+}

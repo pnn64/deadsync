@@ -589,16 +589,23 @@ pub(super) fn refresh_score_import_profile_options(state: &mut State) {
     }
 }
 
-pub(super) fn refresh_score_import_pack_options(state: &mut State) {
-    state.score_import_pack_options = score_import_pack_options(state);
-    let valid_groups: HashSet<String> = state
+pub(super) fn retain_score_import_pack_selection(state: &mut State) {
+    if state.score_import_pack_selected.is_empty() {
+        return;
+    }
+    let valid_groups: HashSet<&str> = state
         .score_import_pack_options
         .iter()
-        .map(|opt| opt.group_key.to_string())
+        .map(|opt| opt.group_key.as_ref())
         .collect();
     state
         .score_import_pack_selected
-        .retain(|group| valid_groups.contains(group));
+        .retain(|group| valid_groups.contains(group.as_str()));
+}
+
+pub(super) fn refresh_score_import_pack_options(state: &mut State) {
+    state.score_import_pack_options = score_import_pack_options(state);
+    retain_score_import_pack_selection(state);
     if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
         state.score_import_pack_selected.clear();
     }
@@ -859,7 +866,7 @@ pub(super) fn push_score_import_pack_picker_actors(
             font("miso"):
             zoom(0.9):
             maxwidth(list_w):
-            settext("No packs installed"):
+            settext(crate::i18n::tr("OptionsScoreImport", "NoPacksInstalled")):
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(692):
             horizalign(center)

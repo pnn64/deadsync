@@ -1,0 +1,11 @@
+
+running 3 tests
+test decode::open_seek::pipe_writer ... ignored, child-process pipe fixture
+test decode::open_seek::source_reader_rewinds_without_reopening_the_path ... ok
+test decode::open_seek::source_reader_reopens_if_the_handle_cannot_seek ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 120 filtered out; finished in 0.23s
+
+   Compiling deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.25s
+     Running unittests src\lib.rs (target\debug\deps\deadlib_assets-f0fc847b926fc0d9.exe)

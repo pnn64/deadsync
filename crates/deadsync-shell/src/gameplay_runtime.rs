@@ -91,6 +91,8 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
             ex: config.select_music_scorebox_cycle_ex,
             hard_ex: config.select_music_scorebox_cycle_hard_ex,
             tournaments: config.select_music_scorebox_cycle_tournaments,
+            golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
+            events_first: config.select_music_scorebox_events_first,
         },
         smx_profile_enabled: smx_profile_enabled(),
     }
@@ -235,6 +237,31 @@ fn mini_indicator_view(
         let side = profile_side_from_gameplay(session.runtime_player_side(player));
         let chart_hash = charts[player].short_hash.as_str();
         let score_type = profiles[player].mini_indicator_score_type;
+        if profiles[player].target_score == profile_data::TargetScoreSetting::GhostData {
+            let ghost_type = match score_type {
+                profile_data::MiniIndicatorScoreType::Itg => deadsync_gameplay::GhostScoreType::Itg,
+                profile_data::MiniIndicatorScoreType::Ex => deadsync_gameplay::GhostScoreType::Ex,
+                profile_data::MiniIndicatorScoreType::HardEx => {
+                    deadsync_gameplay::GhostScoreType::HardEx
+                }
+            };
+            if let Some(profile_id) = profile_data::runtime_active_local_profile_id_for_side(side) {
+                let dir = profile_data::app_runtime::local_profile_dir(&profile_id);
+                match deadsync_score::ghost::load(&dir, chart_hash) {
+                    Ok(data) => {
+                        let mut histories = data.into_histories();
+                        view.ghost_targets[player] = deadsync_gameplay::GameplayGhostTarget {
+                            score_type: ghost_type,
+                            points: std::mem::take(&mut histories[ghost_type.index()]),
+                        };
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        log::warn!("Could not load ghost history for {chart_hash}: {error}")
+                    }
+                }
+            }
+        }
         view.specified_target_percent[player] =
             f64::from(profiles[player].target_score_percent.min(100));
         view.personal_best_percent[player] =
@@ -284,7 +311,9 @@ fn score_init_view(
             runtime_profiles[player].mini_indicator == profile_data::MiniIndicator::RivalScoring;
         rival_score_types[side_idx] =
             wants_rival.then_some(runtime_profiles[player].mini_indicator_score_type);
-        if (profile.display_scorebox || wants_rival) && profile.gs_active && !chart_hash.is_empty()
+        if (profile.display_scorebox || wants_rival)
+            && profile.online_active()
+            && !chart_hash.is_empty()
         {
             scorebox_snapshots[side_idx] = scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
@@ -335,6 +364,19 @@ pub(crate) fn init_view(
     }
 }
 
+pub(crate) fn refresh_chart_view(
+    view: &mut GameplayInitView,
+    config: &config::app_config::Config,
+    song: &SongData,
+    charts: &[Arc<ChartData>; 2],
+    gameplay_charts: &[Arc<GameplayChartData>; 2],
+    profiles: &[profile_data::Profile; 2],
+    session: &GameplaySession,
+) {
+    view.scores = score_init_view(charts, profiles, session);
+    view.background_changes = background_changes(config, song, gameplay_charts, session);
+}
+
 pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntimeView {
     let mut scorebox_updates = std::array::from_fn(|_| None);
     let mut rival_score_updates = [None; 2];
@@ -344,7 +386,7 @@ pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntim
         let profile = gameplay::scorebox_profile_for_side(state, side);
         let rival_score_type = gameplay::rival_score_type_for_side(state, side);
         if (!profile.display_scorebox && rival_score_type.is_none())
-            || !profile.gs_active
+            || !profile.online_active()
             || !gameplay::scorebox_snapshot_for_side(state, side)
                 .is_some_and(|snapshot| snapshot.loading)
         {
@@ -549,9 +591,9 @@ pub(crate) fn drain_core(
                 looping,
                 rate,
             } => audio.play_music(path, audio_cut(cut), looping, rate),
-            GameplayAudioCommand::PlayPreloadedSfx(path) => {
+            GameplayAudioCommand::PlayPreloadedMineSfx { path, player, two_players } => {
                 if let Some(sound) = sounds.resolve(path) {
-                    audio.play_sfx(sound);
+                    audio.play_mine_sfx(sound, player, two_players);
                 }
             }
             GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
@@ -607,7 +649,7 @@ pub(crate) fn enter(
     drain(state, audio, sounds, music_clock);
 }
 
-pub(crate) const MAX_UPDATE_EFFECTS: usize = 4;
+pub(crate) const MAX_UPDATE_EFFECTS: usize = 6;
 const MAX_INPUT_EFFECTS: usize = 1;
 
 pub(crate) fn update(
@@ -641,6 +683,40 @@ pub(crate) fn update(
         deadlib_platform::host_time::now_nanos,
         effects,
     );
+    let output = state.take_song_lua_output();
+    for command in output.actor_sounds {
+        use deadsync_song_lua::SongLuaActorSound;
+        match command {
+            SongLuaActorSound::Play { owner, path } => {
+                // Most assets are prewarmed. A callback may also author a new
+                // path at runtime; do not silently discard that valid sound.
+                let sound = sounds.resolve_path(&path).cloned().or_else(|| audio.prepare_sfx(&path));
+                if let Some(sound) = sound { audio.play_actor_sfx(owner, &sound); }
+            }
+            SongLuaActorSound::Stop { owner } => audio.stop_actor_sfx(owner),
+            SongLuaActorSound::Pause { owner, paused } => audio.pause_actor_sfx(owner, paused),
+        }
+    }
+    for error in output.errors { log::warn!("Song Lua: {error}"); }
+    for event in output.sounds {
+        if let Some(sound) = sounds.resolve_path(&event.path) {
+            audio.play_sfx(sound);
+        } else {
+            if let Some(sound) = audio.prepare_sfx(&event.path) { audio.play_sfx(&sound); }
+        }
+    }
+    if let Some(request) = output.request {
+        match request {
+            deadsync_song_lua::SongLuaLiveRequest::Transition(message) if message == "SM_DoNextScreen" => {
+                // The owning theme screen advances the native SL out tween,
+                // dispatches End and navigates after its completion frame.
+            }
+            deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen) if screen == "ScreenGameplay" => {
+                // The owning theme emitted ReloadSongLua at the frame boundary.
+            }
+            request => log::warn!("Unsupported live song Lua screen request: {request:?}"),
+        }
+    }
     score_cursor.sync_if_dirty(state);
     drain(state, audio, sounds, music_clock);
     let current_song_lua_time = state.current_music_time_display();
@@ -659,13 +735,14 @@ pub(crate) fn update(
 pub(crate) fn handle_input(
     state: &mut gameplay::State,
     ev: &InputEvent,
+    physical: Option<deadsync_input::PhysicalInput>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
     let start_len = effects.len();
-    gameplay::handle_input(state, ev, effects);
+    gameplay::handle_input_with_device(state, ev, physical, effects);
     drain(state, audio, sounds, music_clock);
     debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
 }
@@ -742,7 +819,7 @@ pub(crate) fn push_actors(
     state: &mut deadsync_theme_simply_love::screens::gameplay::State,
     assets: &deadlib_assets::AssetManager,
     view: deadsync_theme_simply_love::screens::gameplay::ActorViewOverride,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
     use deadsync_theme_simply_love::screens::gameplay;
@@ -790,6 +867,7 @@ pub(crate) fn push_actors(
     );
     state.song_scratch = Some(song);
     state.frame_scratch = Some(hud);
+    gameplay::push_song_lua_out(actors, state);
     segments
 }
 
@@ -797,7 +875,7 @@ pub(crate) fn push_practice_actors(
     actors: &mut Vec<deadlib_present::actors::Actor>,
     state: &mut deadsync_theme_simply_love::screens::practice::State,
     assets: &deadlib_assets::AssetManager,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
     use deadsync_theme_simply_love::screens::practice;

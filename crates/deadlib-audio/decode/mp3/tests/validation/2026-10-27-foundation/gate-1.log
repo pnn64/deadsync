@@ -1,0 +1,28 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+test reservoir_cross_frame_history_and_recovery ... ok
+test id3_frames_unsynchronization_footers_and_bounds ... ok
+test free_format_inference_padding_false_sync_and_limits ... ok
+test xing_gapless_and_vbri_optional_tables ... ok
+test all_header_configurations_and_reserved_fields ... ok
+test bit_fields_and_atomic_boundaries ... ok
+test side_information_fields_switched_and_long ... ok
+test frame_truncation_crc_coverage_and_synchronization ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-mp3 v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\mp3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s
+     Running unittests src\lib.rs (target/deadlib-mp3\debug\deps\deadlib_audio_decode_mp3-f30527800e5bdfa8.exe)
+     Running tests\foundation.rs (target/deadlib-mp3\debug\deps\foundation-597188a7d15eb13e.exe)
+   Doc-tests deadlib_audio_decode_mp3

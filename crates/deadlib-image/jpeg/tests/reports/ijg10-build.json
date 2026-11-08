@@ -1,0 +1,10 @@
+{
+  "reference": "IJG libjpeg 10",
+  "source": "https://www.ijg.org/files/jpegsrc.v10.tar.gz",
+  "archive_sha256": "8b9eaa13242690ebd03e1728ab1edf97a81a78ed6e83624d493655f31ac95ab5",
+  "configuration": "jconfig.vc; jmorecfg.h MAX_COMPONENTS raised from 10 to 255; all codec algorithms unchanged; coefficient API only",
+  "configured_header_sha256": "9223a429161a12cd3332e7260c0a00a4115426bc371f4c58c9fc7ba53621f231",
+  "coefficient_only_tool_sha256": "b57bdb5b0301ec424de9719f2aa758add4575125a5121568154fe71e50d7b38f",
+  "table_and_image_tool_sha256": "aaeb9b39be7ee5d9536fc973273a1c87572b17fd20cde139bc42a59303c73207",
+  "public_adapter_update": "Optional table-only input is read by jpeg_read_header(FALSE) on the same object before reading the image. Library/configuration unchanged."
+}

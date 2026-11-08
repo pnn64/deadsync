@@ -1,0 +1,546 @@
+{
+  "baseline_png_commit": "b19a1d1b339f0ae77a1c0d0a6e6869198ec36954",
+  "production_source_sha256": [
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "png/examples/decode_profile.rs",
+      "sha256": "bc0766b89c2fc30cb40b84092b4c9444306d89eaa434be396b8441d1f1405f71"
+    }
+  ],
+  "corpus_sha256": [
+    {
+      "file": "kodim01.png",
+      "bytes": 736501,
+      "sha256": "a56e27cbf5f843c048b6af1d6e090760e9c92fadba88b7dee0205918a37523bd"
+    },
+    {
+      "file": "kodim02.png",
+      "bytes": 617995,
+      "sha256": "4f4b74a79237e311d72cad958237b5f7088d8bce1c82305ebefe1a70e3022dfd"
+    },
+    {
+      "file": "kodim03.png",
+      "bytes": 502888,
+      "sha256": "e25ca1ff2f0c0cb5fdfd5f9b0a0bb21ac4c3de3c84a67f35b09a85d3306249db"
+    },
+    {
+      "file": "kodim04.png",
+      "bytes": 637432,
+      "sha256": "e3b946107c5d3441c022f678d0c3caf1e224d81b1604ba840a4f88e562de61aa"
+    },
+    {
+      "file": "kodim05.png",
+      "bytes": 785610,
+      "sha256": "10349e963c5c813d327852f82c1795fa4148d69fedffc4c589bee458e3ac3d53"
+    },
+    {
+      "file": "kodim06.png",
+      "bytes": 618959,
+      "sha256": "363510303b715d4cbc384e1ce227e466b613a09e1b71ae985882bf8e7fbd9b18"
+    },
+    {
+      "file": "kodim07.png",
+      "bytes": 566322,
+      "sha256": "b77d3f006f42414bb242222e0482e750c0fb9e5ee8d4bed2f6f11c5605fe54a4"
+    },
+    {
+      "file": "kodim08.png",
+      "bytes": 788470,
+      "sha256": "ba23983c76b4832ee0e8af0592664756841a16779acd69f792e268fb6d13d6e7"
+    },
+    {
+      "file": "kodim09.png",
+      "bytes": 582899,
+      "sha256": "6a4361c2fc194feb4edaa9f9a4a0620fb9943e460ac7fdf037fb0f6dd6607a7d"
+    },
+    {
+      "file": "kodim10.png",
+      "bytes": 593463,
+      "sha256": "9dfb70f5867c29ff9ed6313683f19b3d867849e40fbc0c4c54a4a89df341cf23"
+    },
+    {
+      "file": "kodim11.png",
+      "bytes": 621023,
+      "sha256": "7936814b58b5387fce2e4e2488b4ec830dadd95fa9520f358ddb30990b50f2b6"
+    },
+    {
+      "file": "kodim12.png",
+      "bytes": 531024,
+      "sha256": "d78c37c2f04f23761ed2367dd77e2db584ddd4c3950833fecf89f199a8126980"
+    },
+    {
+      "file": "kodim13.png",
+      "bytes": 822712,
+      "sha256": "bc34a3ce58dea09dce1704c997171602de90cb34d0c8503a988b77f473d39b08"
+    },
+    {
+      "file": "kodim14.png",
+      "bytes": 692201,
+      "sha256": "55a94550ff18f3246c4074fd32b77b0c74447c26b6ad274d564d999c0450ba6e"
+    },
+    {
+      "file": "kodim15.png",
+      "bytes": 612582,
+      "sha256": "7538cbb80cb9103606c48b806eae57d56c885c7f90b9b3be70a41160f9cbb683"
+    },
+    {
+      "file": "kodim16.png",
+      "bytes": 534247,
+      "sha256": "a89c7268ccd4718ba424a99fc4643c572cf692ca6eae887185ceb4e9f11d2e54"
+    },
+    {
+      "file": "kodim17.png",
+      "bytes": 602078,
+      "sha256": "37afcc89fbdcb76d9518e04b2fc011027e2f4cd14b3b2f83cefd721641a47c5b"
+    },
+    {
+      "file": "kodim18.png",
+      "bytes": 780947,
+      "sha256": "1a9258c365988961d87a0598725b609139c303ad48a5aad6c503c3b1a87849aa"
+    },
+    {
+      "file": "kodim19.png",
+      "bytes": 671476,
+      "sha256": "b7450b264b1b0a411390d8931b112c27905a992520fc90569dc4b920aa32bbdc"
+    },
+    {
+      "file": "kodim20.png",
+      "bytes": 492462,
+      "sha256": "3b46c71e3b92a563820ba32936be8330c586c41f938efd94be938386aae4328a"
+    },
+    {
+      "file": "kodim21.png",
+      "bytes": 637051,
+      "sha256": "ac958597c82073f6bb65129c68f72b651db5b9efd82e11547d07350214bc268b"
+    },
+    {
+      "file": "kodim22.png",
+      "bytes": 701970,
+      "sha256": "1cee58eb1f2d9c7ebb254d208a03c783ce6cf2c4d8c2cf45e235dd23b4ce1b29"
+    },
+    {
+      "file": "kodim23.png",
+      "bytes": 557596,
+      "sha256": "e3111a2fd4da24af15d6459ef9eacfe54106b38e27b4a21821b75c3f5d2d5baf"
+    },
+    {
+      "file": "kodim24.png",
+      "bytes": 706397,
+      "sha256": "1071c68372cc5a01435c2c225a5cf7d4bb803846ec08bb6b3d6721b156d7cb96"
+    }
+  ],
+  "build": [
+    "cargo",
+    "build",
+    "--manifest-path",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/Cargo.toml",
+    "-p",
+    "deadlib-image-png",
+    "--release",
+    "--offline",
+    "--example",
+    "decode_profile",
+    "--target-dir",
+    "/tmp/deadlib-image-buffered-b19a1d1b3-profile-target-20261027-a"
+  ],
+  "command": [
+    "taskset",
+    "-c",
+    "0",
+    "perf",
+    "record",
+    "-F",
+    "499",
+    "-e",
+    "cycles:u",
+    "-g",
+    "--call-graph",
+    "dwarf,4096",
+    "-o",
+    "/tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data",
+    "--",
+    "/tmp/deadlib-image-buffered-b19a1d1b3-profile-target-20261027-a/release/examples/decode_profile"
+  ],
+  "report_command": [
+    "perf",
+    "report",
+    "-i",
+    "/tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data",
+    "--stdio",
+    "--no-children",
+    "--sort",
+    "symbol",
+    "--percent-limit",
+    "0.5"
+  ],
+  "environment": {
+    "CARGO_PROFILE_RELEASE_DEBUG": "1",
+    "CARGO_BUILD_JOBS": "4",
+    "DEADLIB_PNG_CORPUS": "/mnt/c/GitHub/deadsync/target/deadlib-image-reference/kodak",
+    "DEADLIB_PNG_BENCH_ITERS": "80",
+    "DEADLIB_PNG_PROFILE": "inflate"
+  },
+  "wall_seconds": 17.045,
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "perf": "perf version 6.12.113",
+  "kernel_sample_rate_limit": "250",
+  "binary": "/tmp/deadlib-image-buffered-b19a1d1b3-profile-target-20261027-a/release/examples/decode_profile",
+  "binary_sha256": "aafde56307bea4a4b9da5785e8ae7e88b672c241019b1ab34b75dce05b7bf020",
+  "raw_profile": "/tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data",
+  "raw_profile_sha256": "4c7843294fc941c2c07e5b3a9de548636232c48c262dcb1de3474b0d0a32e7b3",
+  "build_log": "profiling/buffered-b19a1d1b3-build.txt",
+  "build_log_sha256": "1eca37c2c284d31a5a6564654a82268c3d66b9ca6446680cf5404b3a57c01917",
+  "stderr": "profiling/inflate-b19a1d1b3-stderr.txt",
+  "stderr_sha256": "196f7e832fe8a249bf5ef666d9a0d444a4fb82a1938e6c6ecf3799c0241a86bb",
+  "report": "profiling/inflate-b19a1d1b3.txt",
+  "report_sha256": "a983d814b32e3277a8aae3702c660b884fb0460323b347cd823236619988746b",
+  "runner_sha256": "4c4eb525f7a9debcd4c86a79dd5373f425ee3722b034e444bed7dabe93f2ef06",
+  "final_source_hashes_verified": true,
+  "scope": "Linux user-cycle attribution of the exact selected source. Setup validates/decodes each image once; 80 corpus passes run in the sample loop. Shared host, frequency and kernel sampling limit are uncontrolled. Shares are diagnostic, not isolated kernel timings or cross-platform speedup evidence.",
+  "sample_address_mapping": {
+    "command": [
+      "perf",
+      "script",
+      "-i",
+      "/tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data",
+      "-G",
+      "-F",
+      "period,ip,sym,symoff"
+    ],
+    "stderr": "",
+    "samples": "profiling/inflate-b19a1d1b3-sample-ip.txt",
+    "samples_sha256": "702da443c33b9d33d52eecf6bcad3d4f468b98b857da906304c9116da5cd512f",
+    "disassemble_command": [
+      "objdump",
+      "-d",
+      "--no-show-raw-insn",
+      "--disassemble=_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix",
+      "/tmp/deadlib-image-buffered-b19a1d1b3-profile-target-20261027-a/release/examples/decode_profile"
+    ],
+    "assembly": "profiling/inflate-b19a1d1b3-assembly.txt",
+    "assembly_sha256": "8e3f385f2f19064fadfa06ad93a849f57802fc610526be5df679ab558848be45",
+    "symbol_address": "0x3cdc0",
+    "decompressor_samples": 3131,
+    "hot_instructions": [
+      {
+        "offset": "0x3da",
+        "samples": 347,
+        "period": 3686468079,
+        "percent_of_decompressor_period": 11.087593266819871,
+        "instruction": "mov    %r12d,%ecx"
+      },
+      {
+        "offset": "0x3ea",
+        "samples": 204,
+        "period": 2167764497,
+        "percent_of_decompressor_period": 6.5198695678136005,
+        "instruction": "mov    %r8,0x20(%rsp)"
+      },
+      {
+        "offset": "0x3c3",
+        "samples": 111,
+        "period": 1183107132,
+        "percent_of_decompressor_period": 3.5583681696351857,
+        "instruction": "mov    0x20(%rsp),%r8"
+      },
+      {
+        "offset": "0x3e3",
+        "samples": 109,
+        "period": 1150896616,
+        "percent_of_decompressor_period": 3.4614903199782665,
+        "instruction": "cmp    %al,%dl"
+      },
+      {
+        "offset": "0x3e7",
+        "samples": 105,
+        "period": 1117003506,
+        "percent_of_decompressor_period": 3.3595518221601806,
+        "instruction": "shr    %cl,%r8"
+      },
+      {
+        "offset": "0x3f9",
+        "samples": 89,
+        "period": 949663522,
+        "percent_of_decompressor_period": 2.8562522844705867,
+        "instruction": "jmp    3d1ef <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x42f>"
+      },
+      {
+        "offset": "0x359",
+        "samples": 81,
+        "period": 859922854,
+        "percent_of_decompressor_period": 2.5863440674579965,
+        "instruction": "inc    %rsi"
+      },
+      {
+        "offset": "0x3e0",
+        "samples": 80,
+        "period": 847992643,
+        "percent_of_decompressor_period": 2.550462208637936,
+        "instruction": "lea    -0x1(%rcx),%edx"
+      },
+      {
+        "offset": "0x371",
+        "samples": 77,
+        "period": 820162629,
+        "percent_of_decompressor_period": 2.466759361026244,
+        "instruction": "mov    0x18(%rsp),%rdi"
+      },
+      {
+        "offset": "0x44a",
+        "samples": 72,
+        "period": 764703000,
+        "percent_of_decompressor_period": 2.2999563951783664,
+        "instruction": "cmp    0x38(%rsp),%rsi"
+      },
+      {
+        "offset": "0x519",
+        "samples": 67,
+        "period": 704729776,
+        "percent_of_decompressor_period": 2.1195781305733306,
+        "instruction": "je     3d83f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa7f>"
+      },
+      {
+        "offset": "0x35c",
+        "samples": 64,
+        "period": 684226420,
+        "percent_of_decompressor_period": 2.0579112811496736,
+        "instruction": "mov    %rsi,0x48(%rsp)"
+      },
+      {
+        "offset": "0x51f",
+        "samples": 64,
+        "period": 679621195,
+        "percent_of_decompressor_period": 2.044060391732494,
+        "instruction": "cmp    $0x11e,%r12"
+      },
+      {
+        "offset": "0x53b",
+        "samples": 62,
+        "period": 659165251,
+        "percent_of_decompressor_period": 1.9825361408505038,
+        "instruction": "lea    -0x3195a(%rip),%rax        # b9a8 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x9b0>"
+      },
+      {
+        "offset": "0x441",
+        "samples": 57,
+        "period": 607943033,
+        "percent_of_decompressor_period": 1.8284778098849912,
+        "instruction": "cmp    %rbp,%rsi"
+      },
+      {
+        "offset": "0x36c",
+        "samples": 56,
+        "period": 596551074,
+        "percent_of_decompressor_period": 1.794214822874793,
+        "instruction": "mov    0x10(%rsp),%rdx"
+      },
+      {
+        "offset": "0x6a3",
+        "samples": 54,
+        "period": 577406832,
+        "percent_of_decompressor_period": 1.736635708082851,
+        "instruction": "mov    %r8,0x20(%rsp)"
+      },
+      {
+        "offset": "0x5b2",
+        "samples": 53,
+        "period": 563612426,
+        "percent_of_decompressor_period": 1.6951470094673273,
+        "instruction": "mov    %rsi,0x50(%rsp)"
+      },
+      {
+        "offset": "0x3a6",
+        "samples": 50,
+        "period": 533009445,
+        "percent_of_decompressor_period": 1.6031040570237354,
+        "instruction": "mov    %eax,%ecx"
+      },
+      {
+        "offset": "0x3c8",
+        "samples": 50,
+        "period": 532037089,
+        "percent_of_decompressor_period": 1.6001795537844519,
+        "instruction": "mov    %r8d,%ecx"
+      },
+      {
+        "offset": "0x693",
+        "samples": 48,
+        "period": 511959674,
+        "percent_of_decompressor_period": 1.5397937843708362,
+        "instruction": "mov    %edx,%ecx"
+      },
+      {
+        "offset": "0x5bd",
+        "samples": 47,
+        "period": 499604437,
+        "percent_of_decompressor_period": 1.502633597537393,
+        "instruction": "mov    %r8,0x20(%rsp)"
+      },
+      {
+        "offset": "0x43c",
+        "samples": 46,
+        "period": 486243437,
+        "percent_of_decompressor_period": 1.4624484310139478,
+        "instruction": "mov    0x48(%rsp),%rsi"
+      },
+      {
+        "offset": "0x775",
+        "samples": 38,
+        "period": 399995514,
+        "percent_of_decompressor_period": 1.20304515670392,
+        "instruction": "not    %edi"
+      },
+      {
+        "offset": "0x702",
+        "samples": 36,
+        "period": 381982334,
+        "percent_of_decompressor_period": 1.148867876716135,
+        "instruction": "lea    -0x31a11(%rip),%rax        # bab8 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0xac0>"
+      },
+      {
+        "offset": "0x712",
+        "samples": 33,
+        "period": 350535053,
+        "percent_of_decompressor_period": 1.0542855682291523,
+        "instruction": "cmp    %al,%dl"
+      },
+      {
+        "offset": "0x6b1",
+        "samples": 32,
+        "period": 334501960,
+        "percent_of_decompressor_period": 1.0060636902192066,
+        "instruction": "jmp    3d4ad <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x6ed>"
+      },
+      {
+        "offset": "0x889",
+        "samples": 31,
+        "period": 324170893,
+        "percent_of_decompressor_period": 0.9749914914496634,
+        "instruction": "sub    %rbp,%r14"
+      },
+      {
+        "offset": "0x878",
+        "samples": 27,
+        "period": 288539726,
+        "percent_of_decompressor_period": 0.8678255323657859,
+        "instruction": "mov    %rbp,%rdx"
+      },
+      {
+        "offset": "0x682",
+        "samples": 27,
+        "period": 287486277,
+        "percent_of_decompressor_period": 0.8646571300389422,
+        "instruction": "mov    %r8d,%ecx"
+      }
+    ],
+    "failed_perf_annotate": {
+      "command": [
+        "perf",
+        "annotate",
+        "-i",
+        "/tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data",
+        "--stdio",
+        "--no-source",
+        "--symbol",
+        "_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix"
+      ],
+      "exit_code": -11
+    },
+    "scope": "Original sampled symbol offsets mapped to static disassembly after perf annotate SIGSEGV. Period shares and sample skid are diagnostic; they are not per-instruction latency measurements. Counts use records with an explicit hexadecimal symbol offset."
+  },
+  "verified_sampling_summary": {
+    "captured_samples": 4016,
+    "lost_samples": 0,
+    "requested_hz": 499,
+    "kernel_limit_hz": 250,
+    "all_23_source_shared_entrypoint_hashes_match_baseline": true,
+    "diagnostic_only": true
+  }
+}

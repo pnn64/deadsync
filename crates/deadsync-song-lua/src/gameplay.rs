@@ -1,4 +1,28 @@
 //! Translate compiled Lua commands into deterministic gameplay windows.
+
+pub fn song_lua_column_spline_tracks<OverlayActor>(
+    compiled: &crate::CompiledSongLua<OverlayActor>,
+    player: usize,
+    timing: &deadsync_rules::timing::TimingData,
+) -> Vec<deadsync_gameplay::SongLuaColumnSplineTrack> {
+    // Both origins are already raw music timestamps: TimingData's inverse
+    // lookup includes the global offset. Subtracting it again puts captured
+    // controls on a different clock from the notes sampling them.
+    let time_offset = compiled
+        .column_spline_origin
+        .unwrap_or_else(|| timing.get_time_for_beat_exact(0.0));
+    compiled
+        .column_splines
+        .iter()
+        .filter(|track| track.player == player)
+        .map(|track| {
+            let mut track = track.clone();
+            track.time_offset = time_offset;
+            track
+        })
+        .collect()
+}
+
 pub type SongLuaRuntimeOverlayStateDelta =
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<crate::SongLuaOverlayStateDelta>;
 
@@ -9,6 +33,7 @@ pub const fn song_lua_runtime_time_unit(
     match unit {
         crate::SongLuaTimeUnit::Beat => deadsync_gameplay::SongLuaRuntimeTimeUnit::Beat,
         crate::SongLuaTimeUnit::Second => deadsync_gameplay::SongLuaRuntimeTimeUnit::Second,
+        crate::SongLuaTimeUnit::BeatClock => deadsync_gameplay::SongLuaRuntimeTimeUnit::BeatClock,
     }
 }
 
@@ -178,6 +203,21 @@ const fn song_lua_runtime_column_transform_target(
         }
         crate::SongLuaColumnTransformTarget::RotationZ => {
             deadsync_gameplay::SongLuaColumnTransformTarget::RotationZ
+        }
+        crate::SongLuaColumnTransformTarget::PositionPoint { point, axis } => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionPoint { point, axis }
+        }
+        crate::SongLuaColumnTransformTarget::PositionEnabled => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionEnabled
+        }
+        crate::SongLuaColumnTransformTarget::PositionBeatsPerT => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionBeatsPerT
+        }
+        crate::SongLuaColumnTransformTarget::PositionReceptorT => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionReceptorT
+        }
+        crate::SongLuaColumnTransformTarget::PositionSubtractBeat => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionSubtractBeat
         }
     }
 }
@@ -455,6 +495,8 @@ pub const fn song_lua_overlay_delta_mask(
     field!(z_bias);
     field!(draw_order);
     field!(draw_by_z_position);
+    field!(aft_created);
+    field!(aft_preserve);
     field!(halign);
     field!(valign);
     field!(text_align);
@@ -478,6 +520,8 @@ pub const fn song_lua_overlay_delta_mask(
     field!(mask_source);
     field!(mask_dest);
     field!(depth_test);
+    field!(depth_write);
+    field!(depth_test_on_fail);
     field!(zoom);
     field!(zoom_x);
     field!(zoom_y);
@@ -637,14 +681,33 @@ pub fn build_song_lua_overlay_message_events_with_seconds<Kind>(
     compiled: &crate::CompiledSongLua<crate::SongLuaOverlayActor<Kind>>,
     message_seconds: &[Option<f32>],
 ) -> Vec<Vec<deadsync_gameplay::SongLuaOverlayMessageRuntime>> {
+    // Runtime broadcasts have already baked their conditional writes and
+    // tween queues into update tracks. A static probe can take a branch that
+    // the actual receiver never takes (Bank Account's first Spawn proxy).
+    let messages = compiled
+        .messages
+        .iter()
+        .enumerate()
+        .filter(|(_, message)| {
+            !compiled
+                .stateful_message_captures
+                .iter()
+                .any(|capture| capture.message == message.message)
+        })
+        .map(|(index, message)| (index, message.message.as_str()))
+        .collect::<Vec<_>>();
     compiled
         .overlays
         .iter()
         .map(|overlay| {
-            build_song_lua_actor_message_events_for_commands(
-                &compiled.messages,
+            deadsync_gameplay::build_song_lua_actor_message_events_with_seconds(
+                messages.iter().copied(),
                 message_seconds,
-                &overlay.message_commands,
+                overlay
+                    .message_commands
+                    .iter()
+                    .enumerate()
+                    .map(|(index, command)| (index, command.message.as_str())),
             )
         })
         .collect()
@@ -745,15 +808,18 @@ pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
             .samples
             .iter()
             .filter_map(|sample| {
-                deadsync_gameplay::song_lua_message_second(
-                    sample.beat,
+                let second = deadsync_gameplay::song_lua_time_to_second(
+                    song_lua_runtime_time_unit(compiled.overlay_update_unit),
+                    sample.time,
                     timing_player,
                     global_offset_seconds,
-                )
-                .map(|second| crate::SongLuaOverlayRuntimeUpdateSample {
-                    second,
-                    value: sample.value.clone(),
-                })
+                );
+                second
+                    .is_finite()
+                    .then(|| crate::SongLuaOverlayRuntimeUpdateSample {
+                        second,
+                        value: sample.value.clone(),
+                    })
             })
             .collect::<Vec<_>>();
         if samples.is_empty() {

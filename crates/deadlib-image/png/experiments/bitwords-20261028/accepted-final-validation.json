@@ -1,0 +1,137 @@
+{
+  "source_sha256": {
+    "src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+    "src/checksum.rs": "c7a46ee84737047eb30e6ce30f6bd2e02c08ec243434ba8f9bc040173b853048",
+    "src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+    "src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+    "src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "src/scanline.rs": "392a09748b60ca7f97ec6ba2238ba3afba3694826c47e679e6cafdfbfaa4ed6e",
+    "src/stream/decode.rs": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30",
+    "src/stream/encode_rows.rs": "88a952cb782991574fd070b8d0b71949f66c3ac67d1320790b6b15b71d036af9",
+    "src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "src/stream/read.rs": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d",
+    "src/stream/rows.rs": "b0da075660c3ad7927c259d665db768aa87c29b5a2bd1443b4ddc29a98e34b6c",
+    "src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "src/zlib/inflate.rs": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97",
+    "src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+    "src/zlib.rs": "6f3f7d4a2f6406c7852f1b57a1f3d7c2983b2aa20da1a7c2fba5e37a18e2e315"
+  },
+  "tests_sha256": {
+    "encoder_filter_bytes": "1781beaf01b08c8da67747982c7c4de112edf5cf0fb913cdfd799e7bbf5febac",
+    "encoder_reference": "1d78ea35c02d9209da05da408edae833402ffca55280eb6cf8cb9bfcebedba60",
+    "encoder_boundaries": "58a2a9f684a51616ded79a2273d919fae889768cae9edce371dfc184776b5a33",
+    "deflate_stream": "8858b445b48996e7f90a51ea90da10deb2b7370c40b2290aada623b6004fe121",
+    "inflate_stream": "a44545c1528c6c4064311e7d96820f2ea0b9eba904edc95a74001e4bb7a57178",
+    "png_stream": "dee94e79a175c77bf9f9f0f72b1499e34b1a4f205c16ec4f66e28f28bd4f417f",
+    "static_png": "5a6c261e7b9c8ed04bbf5cf720e6a1305204f7e535928903b496f70cf07f01ba"
+  },
+  "oracle": {
+    "path": "C:\\GitHub\\deadsync\\target\\png-encoder-reference\\Release\\deadlib_png_oracle.exe",
+    "sha256": "61a627011c7a76036d7b81e85fb84ef5b5b32d5f36a4480727f76ae94170ff85"
+  },
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--target-dir",
+        "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-bitwords-20261028\\build",
+        "--test",
+        "encoder_filter_bytes",
+        "--test",
+        "encoder_reference",
+        "--test",
+        "encoder_boundaries",
+        "--test",
+        "deflate_stream",
+        "--test",
+        "inflate_stream",
+        "--test",
+        "png_stream",
+        "--test",
+        "static_png",
+        "--",
+        "--include-ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "accepted-final-tests.log",
+      "sha256": "d1697f8b4ec523140198f40fef5975b121f161f11504f070e726cbb9b3fdf477"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--target-dir",
+        "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-bitwords-20261028\\build",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "accepted-final-clippy.log",
+      "sha256": "9a782f44e0b2d3367dafc6f65ededf35e58b7c59bbf2ca6480e932f4435c44b9"
+    },
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-image-png",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "accepted-final-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-bitwords-20261028\\build",
+        "--test",
+        "encoder_filter_bytes",
+        "--test",
+        "encoder_reference",
+        "--test",
+        "encoder_boundaries",
+        "--test",
+        "deflate_stream",
+        "--test",
+        "inflate_stream",
+        "--test",
+        "png_stream",
+        "--test",
+        "static_png",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "accepted-final-debug.log",
+      "sha256": "9d4961907aaefe88713fb5ce2f1f803a67500f66856278b7aa7bfa38c46c9925"
+    }
+  ],
+  "encoder_oracle": {
+    "path": "C:\\GitHub\\deadsync\\target\\png-encoder-reference\\Release\\deadlib_png_encoder.exe",
+    "sha256": "b6363ce8d377ac35b2f7d4e1677a26b05c00cf08a78293493c4c922b75c6672e"
+  }
+}

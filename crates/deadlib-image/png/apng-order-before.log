@@ -1,0 +1,30 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-ba2c70b3b0f94d6a8442a24c6b1b2c56)
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-ba2c70b3b0f94d6a8442a24c6b1b2c56\png)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 5.38s
+     Running tests\apng_rendered.rs (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-ba2c70b3b0f94d6a8442a24c6b1b2c56\target\release\deps\apng_rendered-484882de27f9a87b.exe)
+
+running 1 test
+
+thread 'external_wpt_all_rendered_rgba16_frames_and_both_writers' (19380) panicked at png\tests\apng_rendered.rs:158:38:
+called `Result::unwrap()` on an `Err` value: Invalid("fcTL without acTL")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test external_wpt_all_rendered_rgba16_frames_and_both_writers ... FAILED
+
+failures:
+
+failures:
+    external_wpt_all_rendered_rgba16_frames_and_both_writers
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.54s
+
+error: test failed, to rerun pass `-p deadlib-image-png --test apng_rendered`

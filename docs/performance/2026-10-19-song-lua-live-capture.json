@@ -1,0 +1,533 @@
+{
+  "change": "Discard compiler capture history after scene construction; live setters and commands retain native tween queues and immediate actor properties. Remove both per-frame registry cleanup sweeps and the registry vector they retained.",
+  "baseline_commit": "4091e4e6e731d5b085e4a77f9f886e2d3d8eea7a",
+  "baseline_method": "Reuse the instrumented after binary from the native-poses stage, whose SHA256 and initial source hashes match HEAD 4091e4e6e. Both binaries use the same benchmark source and build profile. Run all timing measurements afresh in alternating serial pairs.",
+  "baseline_evidence": "docs/performance/2026-10-19-song-lua-native-poses.json",
+  "frames_per_run": 481,
+  "warmup_frames": 60,
+  "paired_runs": 3,
+  "build": "dev; song-lua/mlua optimized at level 3; other crates retain dev settings",
+  "build_command": "cargo build --locked --offline -j 2 -p deadsync-shell --bin song_lua_execution",
+  "cpu": {
+    "Name": "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+    "NumberOfCores": 22,
+    "NumberOfLogicalProcessors": 44
+  },
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-pc-windows-msvc\nrelease: 1.98.1\nLLVM version: 22.1.8",
+  "system": "Windows-11-10.0.26100-SP0",
+  "binaries": {
+    "before": {
+      "path": "C:\\GitHub\\deadsync\\target\\live-capture-bench\\before.exe",
+      "sha256": "0f62a6dd8fca7ae58e885011763d88a7551c501789d9bb21c1ff9eb061cd7ffb"
+    },
+    "after": {
+      "path": "C:\\GitHub\\deadsync\\target\\live-capture-bench\\after.exe",
+      "sha256": "a217e4f2df13467a1c806b90b9e497045fe0372e5a8834fb36a30cbda589bc6d"
+    }
+  },
+  "workloads": {
+    "synthetic": {
+      "song": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\tests\\perf\\live_actors.sm",
+      "medians": {
+        "before": {
+          "cpu_cycles_per_update": 30056729.32304038,
+          "updates_per_second": 72.69797753017754,
+          "allocations_per_update": 7103.693586698338,
+          "reallocations_per_update": 0.07838479809976247,
+          "allocated_bytes_per_update": 334518.10451306414
+        },
+        "after": {
+          "cpu_cycles_per_update": 24966153.13064133,
+          "updates_per_second": 87.54611585229124,
+          "allocations_per_update": 5188.836104513064,
+          "reallocations_per_update": 0.07838479809976247,
+          "allocated_bytes_per_update": 253805.32066508313
+        }
+      },
+      "percent_change": {
+        "cpu_cycles_per_update": -16.936560653979083,
+        "updates_per_second": 20.42441733121132,
+        "allocations_per_update": -26.955800652365458,
+        "reallocations_per_update": 0.0,
+        "allocated_bytes_per_update": -24.128076405750676
+      },
+      "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+      "runs": {
+        "before": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 59.10562934087678,
+            "cpu_cycles_per_update": 36904376.04513064,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7103.6959619952495,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 334518.1757719715,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/0-before-1.json",
+            "report_sha256": "112e76855fae39e2d66d6437b05e84486a69a500caa4b546ce53415ee45a8b28"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 84.97505235401783,
+            "cpu_cycles_per_update": 25733602.256532066,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7103.684085510688,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 334517.9524940618,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/0-before-2.json",
+            "report_sha256": "fb7ef31054e284370c1eced91d05a6fb4fc2e964ed6b61584ed0a4953b768b88"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 72.69797753017754,
+            "cpu_cycles_per_update": 30056729.32304038,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7103.693586698338,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 334518.10451306414,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/0-before-3.json",
+            "report_sha256": "07f911eab70cb62700332318d63d31d47f8b5f69f79c90552887e90bdb73fed6"
+          }
+        ],
+        "after": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 80.77059832038977,
+            "cpu_cycles_per_update": 27042225.339667458,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 5188.833729216152,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 253804.9406175772,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/0-after-1.json",
+            "report_sha256": "6be90ffc6e6e8494274ac31297dffe61e315f411a5df7a28cc69a47ed3919941"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 94.05061920492643,
+            "cpu_cycles_per_update": 23237168.871733967,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 5188.838479809976,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 253805.4536817102,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/0-after-2.json",
+            "report_sha256": "6a0b1dc9f85164047ed9b42daa33825d40fbe8fd5d5b865201dff9c8e059fc95"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 87.54611585229124,
+            "cpu_cycles_per_update": 24966153.13064133,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 5188.836104513064,
+            "reallocations_per_update": 0.07838479809976247,
+            "allocated_bytes_per_update": 253805.32066508313,
+            "visual_sha256": "1dcd5e05fc4f59e8640d5191ed921304faca2880c12858e2daa63e991e72e04d",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/0-after-3.json",
+            "report_sha256": "dd175eea045d93a46bfb8763e1bf364566885885cc1df15228a2350e87331b4c"
+          }
+        ]
+      },
+      "all_visual_fingerprints_equal": true,
+      "paired_cycle_percent_changes": [
+        -26.723526482069992,
+        -9.701064623257006,
+        -16.936560653979083
+      ]
+    },
+    "fof": {
+      "song": "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\fof_guys\\fof.ssc",
+      "medians": {
+        "before": {
+          "cpu_cycles_per_update": 37236365.79809976,
+          "updates_per_second": 58.68450608743024,
+          "allocations_per_update": 7566.643705463183,
+          "reallocations_per_update": 8.014251781472684,
+          "allocated_bytes_per_update": 732159.3372921615
+        },
+        "after": {
+          "cpu_cycles_per_update": 28657205.648456056,
+          "updates_per_second": 76.26033103323604,
+          "allocations_per_update": 3397.5296912114013,
+          "reallocations_per_update": 8.021377672209026,
+          "allocated_bytes_per_update": 531367.3087885986
+        }
+      },
+      "percent_change": {
+        "cpu_cycles_per_update": -23.03973539244133,
+        "updates_per_second": 29.949685389906342,
+        "allocations_per_update": -55.098590293628405,
+        "reallocations_per_update": 0.0889152341434496,
+        "allocated_bytes_per_update": -27.424635359589587
+      },
+      "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+      "runs": {
+        "before": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 58.68450608743024,
+            "cpu_cycles_per_update": 37236365.79809976,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7566.643705463183,
+            "reallocations_per_update": 8.014251781472684,
+            "allocated_bytes_per_update": 732159.3372921615,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/1-before-1.json",
+            "report_sha256": "26a55a64fa6725cfeefd05eab0e17c22db1656ab9958d39854e5ebca055c63ad"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 59.95871792423999,
+            "cpu_cycles_per_update": 36440866.52019002,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7566.646080760095,
+            "reallocations_per_update": 8.014251781472684,
+            "allocated_bytes_per_update": 732159.4798099763,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/1-before-2.json",
+            "report_sha256": "223ade502f0a7ae7ac6297f30742cb93ed58b000cfa9adb93ab81c43bdc22aeb"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 57.12079111183122,
+            "cpu_cycles_per_update": 38256408.33966746,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7566.634204275534,
+            "reallocations_per_update": 8.014251781472684,
+            "allocated_bytes_per_update": 732159.1971496437,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/1-before-3.json",
+            "report_sha256": "67acb543947032da60969f98be4c3d5895e8ea724ef92a77de510e24b963b7d8"
+          }
+        ],
+        "after": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 76.2493561140329,
+            "cpu_cycles_per_update": 28661338.095011875,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 3397.5296912114013,
+            "reallocations_per_update": 8.021377672209026,
+            "allocated_bytes_per_update": 531367.3087885986,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/1-after-1.json",
+            "report_sha256": "88a8f13b35028341c7447c1549397e5710db0a7cc1babb3e92ad9b3914568d73"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 80.444709052124,
+            "cpu_cycles_per_update": 27163799.12351544,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 3397.536817102138,
+            "reallocations_per_update": 8.021377672209026,
+            "allocated_bytes_per_update": 531367.6270783847,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/1-after-2.json",
+            "report_sha256": "a1860b10aea729c3f57ebbdae37e0a8f4eb859ba90d8e3ac7b93f01cd93f81dd"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 76.26033103323604,
+            "cpu_cycles_per_update": 28657205.648456056,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 3397.524940617577,
+            "reallocations_per_update": 8.021377672209026,
+            "allocated_bytes_per_update": 531367.0973871734,
+            "visual_sha256": "ca149e47a066fd7d15635b7762069f42d4065e6fdde4e3a19d954d11605f79e8",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/1-after-3.json",
+            "report_sha256": "dafb22c6c78940c228680d977fe9f436e7c6245f0a28e9166ea4f0e03696595d"
+          }
+        ]
+      },
+      "all_visual_fingerprints_equal": true,
+      "paired_cycle_percent_changes": [
+        -23.02863751415152,
+        -25.457867176497118,
+        -25.09175091917384
+      ]
+    },
+    "mawaru": {
+      "song": "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\mawaru7\\mawaru7.sm",
+      "medians": {
+        "before": {
+          "cpu_cycles_per_update": 124740929.33016627,
+          "updates_per_second": 17.518480519736784,
+          "allocations_per_update": 9547.311163895487,
+          "reallocations_per_update": 553.6294536817102,
+          "allocated_bytes_per_update": 503254.2945368171
+        },
+        "after": {
+          "cpu_cycles_per_update": 112950846.42755345,
+          "updates_per_second": 19.346640957845292,
+          "allocations_per_update": 7333.774346793349,
+          "reallocations_per_update": 553.6294536817102,
+          "allocated_bytes_per_update": 411975.59144893114
+        }
+      },
+      "percent_change": {
+        "cpu_cycles_per_update": -9.45165549585304,
+        "updates_per_second": 10.435610760013425,
+        "allocations_per_update": -23.18492378747371,
+        "reallocations_per_update": 0.0,
+        "allocated_bytes_per_update": -18.13768984761405
+      },
+      "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+      "runs": {
+        "before": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 17.886314711151847,
+            "cpu_cycles_per_update": 122205597.50356294,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 9547.304038004751,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 503253.973871734,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/2-before-1.json",
+            "report_sha256": "389451a94e6eed1d17571f3076dae7fb12baac16ce0cbd9111b12fbb9dd2ab5e"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 17.518480519736784,
+            "cpu_cycles_per_update": 124740929.33016627,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 9547.311163895487,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 503254.2945368171,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/2-before-2.json",
+            "report_sha256": "99d870f08275143b0da45aeda13e176c3c686fbb60364004ba602e5cd315d6c3"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 17.318399519738158,
+            "cpu_cycles_per_update": 126068121.02375297,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 9547.311163895487,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 503254.2945368171,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/2-before-3.json",
+            "report_sha256": "c81be3335e6ec0489267e7ad6271099d278eadc2eca767a32782da92add604ea"
+          }
+        ],
+        "after": [
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 19.46648297951527,
+            "cpu_cycles_per_update": 112276996.66033255,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7333.771971496437,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 411975.47980997624,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 1,
+            "report": "target/live-capture-bench/pairs/2-after-1.json",
+            "report_sha256": "070c3b4c70993b724faafdf7a0158c7072005298eb8f8030df5cee426a879ee8"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 19.346640957845292,
+            "cpu_cycles_per_update": 112950846.42755345,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7333.774346793349,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 411975.59144893114,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 2,
+            "report": "target/live-capture-bench/pairs/2-after-2.json",
+            "report_sha256": "7aea6158175e2033018211c6b49cf61972eb973326e08449e85ff6de89b59a61"
+          },
+          {
+            "warmup_frames": 60,
+            "updates_per_second": 18.481855278345858,
+            "cpu_cycles_per_update": 118180750.54869358,
+            "cpu_cycle_source": "QueryThreadCycleTime, pinned update thread",
+            "debug_assertions": true,
+            "allocations_per_update": 7333.774346793349,
+            "reallocations_per_update": 553.6294536817102,
+            "allocated_bytes_per_update": 411975.59144893114,
+            "visual_sha256": "207832d7490bcc9c82f21c2376a302657cdac7fe630ac0beadc273e1b2864271",
+            "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded",
+            "trial": 3,
+            "report": "target/live-capture-bench/pairs/2-after-3.json",
+            "report_sha256": "f947d8454104251810f8df0dfe4674d35476f8e152b209a24b914e7b436fd280"
+          }
+        ]
+      },
+      "all_visual_fingerprints_equal": true,
+      "paired_cycle_percent_changes": [
+        -8.124505788649273,
+        -9.45165549585304,
+        -6.256435339092025
+      ]
+    }
+  },
+  "measurement_scope": "gameplay::update including live Lua and visual publication; 481 updates at 60 Hz from song time 0 through 8 seconds; first 60 updates excluded from timing; no injected inputs. Preparation, observation hashing, report serialization, GPU and audio devices excluded.",
+  "cycle_scope": "QueryThreadCycleTime: scheduled current-thread CPU cycles including kernel execution; not a user-only PMU counter. Thread pinned to the second permitted logical CPU. This task serialized benchmark jobs and ran no builds or tests during the paired measurements.",
+  "allocation_scope": "Current-process Rust GlobalAlloc, all threads, including mlua. Direct native malloc excluded. Requested bytes include allocations and reallocations; they are allocation traffic, not RSS.",
+  "interpretation": "Changes are percentages of the median before/after per-update metrics across three pairs. Raw runs and paired cycle changes are retained. Synthetic timing is variable (paired cycle reductions about 9.7% to 26.7%). Allocation reductions are consistent. Development-profile CPU update throughput does not measure GPU rendering or game FPS.",
+  "remaining_work": "Destination compatibility fields, immediate actor properties, snapshot extraction and final gameplay visual copying remain. This stage removes live compiler history and its frame-boundary sweeps; it does not complete the native actor-slot migration.",
+  "reproduce_pairs": "python scripts/benchmark_live_song_lua.py --before target/live-capture-bench/before.exe --after target/live-capture-bench/after.exe --song crates/deadsync-song-lua/tests/perf/live_actors.sm --song target/debug/Songs/lua-songs/fof_guys/fof.ssc --song target/debug/Songs/lua-songs/mawaru7/mawaru7.sm --out target/live-capture-bench/pairs --pairs 3 --frames 481",
+  "baseline_source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "468fb6c01416e0dc0ff19e47e426f8d3fbbc6981323e75d5df1eccd884c68024",
+    "crates/deadsync-song-lua/src/lua_util.rs": "753e2f71de1b63bc823803761a6dbdc0364eb6a5fa7cc4b642e068121208a6ef",
+    "crates/deadsync-song-lua/tests/perf/live_actors.lua": "0a7c77b710e8ada2dc7cafbce4e50e8c2965d079e2eafe469d9f663b387ddfbd",
+    "crates/deadsync-song-lua/tests/perf/live_actors.sm": "0c9c5b35accb9b49e54c64c31290ac3c710b7dd6c700d433dc5a010d0b3de1c8",
+    "crates/deadsync-shell/src/bin/song_lua_execution.rs": "22aeda58f8689b511d1450e214dd2181e1cd07ab4ddcf982e76ddf9704491a31",
+    "tests/support/song_lua_metrics.rs": "2b6333874df66fb3114df6ffdaf3ca571bc50566caa1c52a24d3eecb194e3c4b",
+    "scripts/benchmark_live_song_lua.py": "bf1005b5dcf4806241d3af96da31298754bac26c35136539753d2e84095c231b",
+    "Cargo.lock": "7bdf4f9f35fd570efb74c12e66f1f336e57bc21b25a1cd58cd62792268111218",
+    "Cargo.toml": "605048d1b7213e8ef0d763d15a73772680f954f1e42614a548f72068fa237a93"
+  },
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "28b69611d60e226c0149a2a0016645888d799ed6736448c8398cec2efad23187",
+    "crates/deadsync-song-lua/src/lua_util.rs": "193540fd0db21aec279e2033153be079db403d00dd4eeff4cf2aa919257995fd",
+    "crates/deadsync-song-lua/tests/perf/live_actors.lua": "0a7c77b710e8ada2dc7cafbce4e50e8c2965d079e2eafe469d9f663b387ddfbd",
+    "crates/deadsync-song-lua/tests/perf/live_actors.sm": "0c9c5b35accb9b49e54c64c31290ac3c710b7dd6c700d433dc5a010d0b3de1c8",
+    "crates/deadsync-shell/src/bin/song_lua_execution.rs": "22aeda58f8689b511d1450e214dd2181e1cd07ab4ddcf982e76ddf9704491a31",
+    "tests/support/song_lua_metrics.rs": "2b6333874df66fb3114df6ffdaf3ca571bc50566caa1c52a24d3eecb194e3c4b",
+    "scripts/benchmark_live_song_lua.py": "bf1005b5dcf4806241d3af96da31298754bac26c35136539753d2e84095c231b",
+    "Cargo.lock": "7bdf4f9f35fd570efb74c12e66f1f336e57bc21b25a1cd58cd62792268111218",
+    "Cargo.toml": "605048d1b7213e8ef0d763d15a73772680f954f1e42614a548f72068fa237a93"
+  },
+  "validation": {
+    "focused_unit_tests_passed": 60,
+    "focused_unit_tests": [
+      "live::tests::interactive_runtime_stops_only_the_authored_sound_actor",
+      "live::tests::interactive_runtime_uses_authored_controls_motion_timers_sounds_and_reload",
+      "live::tests::live_background_sprite_keeps_declared_texture_for_upper_left",
+      "live::tests::live_background_start_time_uses_native_note_row",
+      "live::tests::live_background_starts_at_change_beat",
+      "live::tests::live_content_reaches_visual_slots_after_input_and_updates",
+      "live::tests::live_draw_follows_owned_update_and_replaces_automatic_children",
+      "live::tests::live_failed_actor_load_keeps_vm_and_rebuilds_on_reload",
+      "live::tests::live_foreground_clock",
+      "live::tests::live_foreground_directory_uses_requested_default_chunk_name",
+      "live::tests::live_foreground_finishes",
+      "live::tests::live_foreground_late_start",
+      "live::tests::live_foreground_observes_transition_before_current_frame_update",
+      "live::tests::live_foreground_on_observes_updated_underlay",
+      "live::tests::live_foreground_proxy_targets_reach_prepared_visuals",
+      "live::tests::live_foreground_start_time_uses_native_note_row",
+      "live::tests::live_infinite_sleep_keeps_foreground_sibling_reload_queue_active",
+      "live::tests::live_large_scene_preserves_actor_identity_and_update_order",
+      "live::tests::live_loadactor_collapses_paths_before_loading_and_naming_chunks",
+      "live::tests::live_loadactor_uses_helper_source_during_actor_callbacks",
+      "live::tests::live_native_broadcast_snapshot_preserves_explicit_nil_argument",
+      "live::tests::live_native_float_foreground_activation_clock",
+      "live::tests::live_native_float_scale_operation_order",
+      "live::tests::live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z",
+      "live::tests::live_native_nonfinite_actor_scalar_write_and_immediate_read",
+      "live::tests::live_native_pose_getters_preserve_queue_and_sibling_order",
+      "live::tests::live_native_queues_preserve_behavior_without_capture_history",
+      "live::tests::live_native_sound_pitch_preserves_identity_and_parameters",
+      "live::tests::live_native_tween_argument_and_hurry_contract",
+      "live::tests::live_native_tween_curves_match_native_probes",
+      "live::tests::live_queue",
+      "live::tests::live_queued_broadcast_origin",
+      "live::tests::live_reload",
+      "live::tests::live_reload_resets_constructor_song_position",
+      "live::tests::live_reload_updates",
+      "live::tests::live_scalar_writes_and_idle_frames_preserve_owned_getter_state",
+      "live::tests::live_scheduled_reload",
+      "live::tests::live_screen_direct_and_queued_commands_reach_song_children",
+      "live::tests::live_sprite_linear_frames_builds_native_authored_states",
+      "lua_util::actor_state_read_tests::capture_reset_preserves_compiler_snapshots_and_reuses_live_blocks",
+      "lua_util::actor_state_read_tests::color_batches_preserve_nested_failures_aliases_and_stack",
+      "lua_util::actor_state_read_tests::compile_update_slots_preserve_alias_visits_and_plan_rebuilds",
+      "lua_util::actor_state_read_tests::live_scalar_read_preserves_defaults_coercions_and_errors",
+      "lua_util::actor_state_read_tests::short_class_fields_keep_string_coercions_spills_and_errors",
+      "lua_util::actor_state_read_tests::state_class_and_texture_reads_match_frozen_decoder",
+      "lua_util::actor_state_read_tests::vector_batches_preserve_bits_coercions_holes_and_raw_lookup",
+      "tests::compile_song_lua_captures_actor_queued_messages",
+      "tests::compile_song_lua_captures_queued_startup_sound_once",
+      "tests::compile_song_lua_captures_runtime_message_sounds_once",
+      "tests::compile_song_lua_finishtweening_collapses_queued_tweens",
+      "tests::compile_song_lua_hurrytweening_scales_capture_timeline",
+      "tests::compile_song_lua_initializes_capture_before_startup_tweens",
+      "tests::compile_song_lua_stoptweening_clears_queued_tweens",
+      "tests::compile_song_lua_supports_hibernate_chain_method",
+      "tests::compile_song_lua_tracks_tween_time_left_during_capture",
+      "tests::hibernate_active_tween",
+      "tests::hibernate_keeps_visible",
+      "tests::hibernate_startup_tweens",
+      "tests::hibernate_tree_callbacks",
+      "tests::hibernate_wake_replace"
+    ],
+    "unit_build_command": "cargo test --locked --offline -j 2 --config 'profile.dev.package.deadsync-song-lua.opt-level=0' -p deadsync-song-lua --lib live_native_queues_preserve_behavior_without_capture_history -- --nocapture",
+    "native_fixture": "tests/fixtures/interactive_song_lua/fof-single.trace.json.zst",
+    "native_fixture_sha256": "0d7895242bd19b26d50368507888ed6ea360728ed6cf06975b6eea69e14bb682",
+    "native_baseline_report": "target/live-capture-bench/fof-native-before.json",
+    "native_report": "target/live-capture-bench/fof-native-after.json",
+    "native_baseline_report_sha256": "60f2cc35d6828a3b0beb2fc87b8071089b610ab2de764f2f45ef997a81d113fc",
+    "native_report_sha256": "60f2cc35d6828a3b0beb2fc87b8071089b610ab2de764f2f45ef997a81d113fc",
+    "native_baseline_and_after_reports_exactly_equal": true,
+    "native_production_gameplay_checks_passed": false,
+    "existing_native_failure": {
+      "draw_mismatches_in_each_variant": 12519,
+      "first_mismatch_frame": 226,
+      "replayed_frames": 448,
+      "replayed_inputs": 59,
+      "compared_draws": 15387,
+      "compared_vertices": 699774,
+      "compared_stage_fields": 209,
+      "errors": [],
+      "status": "Unresolved existing baseline failure, identical to the previous native-poses stage. This optimization does not fix or certify native parity."
+    },
+    "all_measured_visual_fingerprints_equal": true,
+    "pixel_parity_proven": false,
+    "normal_application_build": "cargo build --locked --offline -j 2 --bin deadsync; passed after all measurements, restoring the normal development profile with the changed source"
+  }
+}

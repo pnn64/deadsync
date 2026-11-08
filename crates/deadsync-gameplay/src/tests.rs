@@ -2,33 +2,6 @@
 mod tests {
     use super::*;
 
-    mod chart_modifier_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/chart_modifiers.rs"
-        ));
-    }
-
-    mod tap_insertion_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/tap_insertion.rs"
-        ));
-    }
-
-    mod preparation_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/preparation.rs"
-        ));
-    }
-
-    mod chart_transform_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/chart_transforms.rs"
-        ));
-    }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::song_time::{
         INVALID_SONG_TIME_NS, song_time_ns_from_seconds, song_time_ns_to_seconds,
@@ -67,45 +40,53 @@ mod tests {
     }
 
     #[test]
-    fn player_life_dead_policy_uses_failing_or_empty_life() {
-        assert!(player_life_is_dead(1.0, true));
-        assert!(player_life_is_dead(0.0, false));
-        assert!(player_life_is_dead(-0.1, false));
-        assert!(!player_life_is_dead(0.1, false));
+    fn fail_modes_stage_rules() {
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+            player.fail_type = mode;
+            player.life = 0.1;
+            let update = apply_player_runtime_life_delta(&mut player, 1.0, -0.2);
+            assert!(!update.failed_now);
+            assert!(!player_runtime_is_dead(&player));
+            assert_eq!(player.fail_time, None);
+            // LifeMeterBar's regeneration lock still applies at zero life.
+            player.combo_after_miss = 1;
+            apply_player_runtime_life_delta(&mut player, 2.0, 0.1);
+            assert!(player.life > 0.0);
+            assert!(!update_player_failure(&mut player, 3.0, true));
+            player.life = 0.0;
+            assert_eq!(update_player_failure(&mut player, 4.0, true),
+                mode == GameplayFailType::EndOfSong);
+            assert_eq!(player.is_failing, mode == GameplayFailType::EndOfSong);
+        }
+        let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+        player.fail_type = GameplayFailType::Off;
+        player.life = 0.0;
+        player.fail_type = GameplayFailType::ImmediateContinue;
+        assert!(update_player_failure(&mut player, 5.0, false));
+        assert_eq!(player.fail_time, Some(5.0));
+        player.fail_type = GameplayFailType::Off;
+        assert!(!update_player_failure(&mut player, 6.0, false));
+        assert!(player_runtime_is_dead(&player));
+        assert_eq!(player.fail_time, Some(5.0));
     }
 
     #[test]
-    fn joined_players_failed_requires_active_dead_players() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 1.0,
-                is_failing: true,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 0));
-        assert!(all_joined_players_failed(&players, 1));
-        assert!(all_joined_players_failed(&players, 2));
-    }
-
-    #[test]
-    fn joined_players_failed_rejects_any_alive_player() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 0.25,
-                is_failing: false,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 2));
+    fn joined_fail_modes() {
+        let mut players = std::array::from_fn(|_| init_player_runtime());
+        players[0].life = 0.0;
+        players[1].is_failing = true;
+        assert!(!all_joined_player_runtimes_failed(&players, 0));
+        assert!(all_joined_player_runtimes_failed(&players, 1));
+        assert!(all_joined_player_runtimes_failed(&players, 2));
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            players[0].fail_type = mode;
+            assert!(!all_joined_player_runtimes_failed(&players, 2));
+        }
+        players[0].fail_type = GameplayFailType::Immediate;
+        players[1].is_failing = false;
+        players[1].life = 0.25;
+        assert!(!all_joined_player_runtimes_failed(&players, 2));
     }
 
     #[test]
@@ -780,6 +761,7 @@ mod tests {
             None,
             12.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert_eq!(update, GameplayLifeDeltaUpdate::default());
@@ -809,6 +791,7 @@ mod tests {
             Some(&mut course_submit_life),
             12.0,
             -0.6,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -832,6 +815,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_MISS,
+            true,
         );
 
         assert!(update.failed_now);
@@ -868,6 +852,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -895,6 +880,7 @@ mod tests {
             Some(&mut course_submit_life),
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(update.was_dead);
@@ -1000,6 +986,7 @@ mod tests {
         assert_eq!(layer.overlay_eases[0].to, 2);
 
         let visuals = SongLuaRuntimeVisuals {
+            screen_overlay_index: None,
             overlays: vec![3_u8],
             overlay_eases: layer.overlay_eases.clone(),
             overlay_ease_ranges: vec![0..1],
@@ -1013,9 +1000,11 @@ mod tests {
             song_foreground: 11_u16,
             song_foreground_events: vec![build_song_lua_overlay_message_runtime(5.0, 4)],
             hidden_players: [false; MAX_PLAYERS],
-            hidden_screen_layers: [false; 2],
+            screen_layers: [0; 4],
+            screen_layer_events: std::array::from_fn(|_| Vec::new()),
             note_hides: std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
             column_offsets: std::array::from_fn(|_| Vec::new()),
+            column_splines: std::array::from_fn(|_| Vec::new()),
             screen_width: 800.0,
             screen_height: 600.0,
         };
@@ -1288,12 +1277,36 @@ mod tests {
                 StepStatsPlayStyle::Single,
                 4,
                 1,
+                640.0,
+                480.0,
+                false,
+                true,
+            ),
+            192.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
                 854.0,
                 480.0,
                 true,
                 true,
             ),
             299.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                640.0,
+                640.0,
+                false,
+                true,
+            ),
+            192.0,
         );
         assert_near(
             step_stats_density_graph_width(
@@ -1556,6 +1569,21 @@ mod tests {
             ),
             viewport.center_x(),
         );
+        // Routine reaches song Lua as two Double players sharing the center.
+        for player in 0..2 {
+            assert_near(
+                song_lua_compile_player_screen_x(
+                    2,
+                    player,
+                    viewport,
+                    GameplayInputPlayStyle::Routine.as_song_lua_compile_play_style(),
+                    false,
+                    20.0,
+                    false,
+                ),
+                viewport.center_x(),
+            );
+        }
     }
 
     #[test]
@@ -1674,11 +1702,17 @@ mod tests {
         let visibility = merge_attack_visibility_effects(
             VisibilityEffects {
                 dark: 0.1,
+                dark_cols: [0.25; MAX_COLS],
                 blind: 0.2,
                 cover: 0.3,
             },
             VisibilityOverrides {
                 dark: Some(1.0),
+                dark_cols: std::array::from_fn(|col| match col {
+                    0 => Some(-0.5),
+                    1 => Some(f32::NAN),
+                    _ => None,
+                }),
                 blind: Some(f32::NAN),
                 cover: None,
             },
@@ -1686,6 +1720,8 @@ mod tests {
         assert_near(visibility.dark, 1.0);
         assert_near(visibility.blind, 0.2);
         assert_near(visibility.cover, 0.3);
+        assert_near(visibility.dark_cols[0], -0.5);
+        assert_eq!(&visibility.dark_cols[1..], &[0.25; MAX_COLS - 1]);
     }
 
     #[test]
@@ -2478,6 +2514,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 0.5,
                 attacks_cleared_for_outro: false,
@@ -2489,6 +2527,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2531,6 +2571,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 1.0,
                 attacks_cleared_for_outro: true,
@@ -2542,6 +2584,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: visibility,
@@ -2571,6 +2615,9 @@ mod tests {
             sudden: 0.35,
             sudden_offset: 0.15,
             stealth: 0.1,
+            stealth_cols: [0.2; MAX_COLS],
+            stealth_type: true,
+            stealth_past_receptors: true,
             blink: 0.05,
             random_vanish: 0.4,
         };
@@ -2582,6 +2629,8 @@ mod tests {
         active_visual.move_y_cols[7] = Some(0.25);
         let states = [
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2590,6 +2639,8 @@ mod tests {
                 outro_attack_visual: VisualOverrides::default(),
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects {
                     hidden: 0.9,
                     sudden: 0.8,
@@ -2602,6 +2653,7 @@ mod tests {
                     dark: Some(1.0),
                     blind: Some(0.5),
                     cover: Some(0.25),
+                    ..VisibilityOverrides::default()
                 },
                 active_attack_scroll: ScrollOverrides {
                     reverse: Some(1.0),
@@ -2616,6 +2668,8 @@ mod tests {
         for state in states {
             for delta_time in [0.0, 1.0 / 120.0, 0.25, 2.0] {
                 let input = ActiveAttackRefreshInput {
+                    base_accel: AccelEffects::default(),
+                    base_attack_flags: AttackFlags::default(),
                     now: 42.0,
                     delta_time,
                     attacks_cleared_for_outro: false,
@@ -2636,7 +2690,7 @@ mod tests {
                 };
                 assert_eq!(
                     refresh_active_attack_player(input, state),
-                    refresh_active_attack_player_full(input, state, None, None),
+                    refresh_active_attack_player_full(input, state, None, None, (input.now, None)),
                 );
             }
         }
@@ -2703,7 +2757,7 @@ mod tests {
         assert_eq!(window.chart, ChartAttackEffects::default());
         assert_eq!(window.visual.drunk, Some(0.5));
         assert_eq!(window.mini_percent, Some(25.0));
-        assert_eq!(window.mini_mode, MiniAttackMode::Delta);
+        assert_eq!(window.mini_mode, MiniAttackMode::Absolute);
         assert_eq!(window.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
     }
 
@@ -3332,6 +3386,835 @@ mod tests {
     }
 
     #[test]
+    fn motion_suboptions_keep_approach_speed_and_return_to_base() {
+        let mods = parse_attack_mods(
+            "*2 250% drunkoffset, *4 -50% drunkspeed, *3 -99% drunkperiod, \
+             *5 250% tipsyoffset, *6 -50% tipsyspeed",
+        );
+        assert_eq!(mods.visual.drunk_offset, Some(2.5));
+        assert_eq!(mods.visual.drunk_speed, Some(-0.5));
+        assert_eq!(mods.visual.drunk_period, Some(-0.99));
+        assert_eq!(mods.visual.tipsy_offset, Some(2.5));
+        assert_eq!(mods.visual.tipsy_speed, Some(-0.5));
+        assert_eq!(mods.visual_speed.drunk_offset, Some(2.0));
+        assert_eq!(mods.visual_speed.drunk_speed, Some(4.0));
+        assert_eq!(mods.visual_speed.drunk_period, Some(3.0));
+        assert_eq!(mods.visual_speed.tipsy_offset, Some(5.0));
+        assert_eq!(mods.visual_speed.tipsy_speed, Some(6.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.1,
+        );
+        assert_near(current.drunk_offset.unwrap(), 0.2);
+        assert_near(current.drunk_speed.unwrap(), -0.4);
+        assert_near(current.drunk_period.unwrap(), -0.3);
+        assert_near(current.tipsy_offset.unwrap(), 0.5);
+        assert_near(current.tipsy_speed.unwrap(), -0.5);
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_near(merged.drunk_offset, 0.2);
+        assert_near(merged.drunk_speed, -0.4);
+        assert_near(merged.drunk_period, -0.3);
+        assert_near(merged.tipsy_offset, 0.5);
+        assert_near(merged.tipsy_speed, -0.5);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+    }
+
+    #[test]
+    fn stealth_type_uses_boolean_threshold_and_immediate_copy() {
+        for (text, expected) in [
+            ("*0 stealthtype", true),
+            ("*0 50% stealthtype", false),
+            ("*0 51% stealthtype", true),
+            ("no stealthtype", false),
+        ] {
+            let mods = parse_attack_mods(text);
+            assert_eq!(mods.appearance.stealth_type, Some(expected));
+            assert!(mods.appearance.any());
+            let mut target = AppearanceEffects::default();
+            let mut speed = AppearanceEffects::approach_speeds();
+            apply_appearance_target(
+                &mut target,
+                &mut speed,
+                mods.appearance,
+                mods.appearance_speed,
+            );
+            let mut current = AppearanceEffects {
+                stealth_type: !expected,
+                ..Default::default()
+            };
+            approach_appearance_effects(&mut current, target, speed, 0.0);
+            assert_eq!(current.stealth_type, expected, "{text}");
+            approach_appearance_effects(&mut current, AppearanceEffects::default(), speed, 0.0);
+            assert!(!current.stealth_type, "return to base is immediate");
+        }
+    }
+
+    #[test]
+    fn lane_stealth_approaches_independently_and_boolean_switches_immediately() {
+        let mods = parse_attack_mods("*2 75% stealth1, *4 -25% stealth4, *0 stealthpastreceptors");
+        assert_eq!(mods.appearance.stealth_cols[0], Some(0.75));
+        assert_eq!(mods.appearance.stealth_cols[3], Some(-0.25));
+        assert_eq!(mods.appearance.stealth_past_receptors, Some(true));
+        assert!(mods.appearance.any());
+        let mut target = AppearanceEffects::default();
+        let mut speed = AppearanceEffects::approach_speeds();
+        apply_appearance_target(
+            &mut target,
+            &mut speed,
+            mods.appearance,
+            mods.appearance_speed,
+        );
+        let mut current = AppearanceEffects::default();
+        approach_appearance_effects(&mut current, target, speed, 0.1);
+        assert_near(current.stealth_cols[0], 0.2);
+        assert_near(current.stealth_cols[3], -0.25);
+        assert_eq!(current.stealth_cols[1], 0.0);
+        assert!(current.stealth_past_receptors);
+        approach_appearance_effects(
+            &mut current,
+            AppearanceEffects::default(),
+            AppearanceEffects::approach_speeds(),
+            1.0,
+        );
+        assert_eq!(current, AppearanceEffects::default());
+        assert_eq!(
+            parse_attack_mods("50% stealthpastreceptors")
+                .appearance
+                .stealth_past_receptors,
+            Some(false)
+        );
+        assert_eq!(
+            parse_attack_mods("51% stealthpastreceptors")
+                .appearance
+                .stealth_past_receptors,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn draw_size_keeps_signed_units_independent_speeds_and_reset() {
+        let mods = parse_attack_mods("*2 300% drawsize,*4 -150% drawsizeback");
+        assert_eq!(
+            [mods.visual.draw_size, mods.visual.draw_size_back],
+            [Some(3.0), Some(-1.5)]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.draw_size,
+                mods.visual_speed.draw_size_back
+            ],
+            [Some(2.0), Some(4.0)]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!([merged.draw_size, merged.draw_size_back], [0.5, -1.0]);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods("no drawsize,no drawsizeback");
+        assert_eq!(
+            [cleared.visual.draw_size, cleared.visual.draw_size_back],
+            [Some(0.0); 2]
+        );
+    }
+
+    #[test]
+    fn bumpy_variants_keep_native_units_speeds_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 -25% bumpyx,*4 -50% bumpyxoffset,*6 -75% bumpyxperiod,*8 -100% tanbumpy,*10 -125% tanbumpyoffset,*12 -150% tanbumpyperiod,*14 -175% tanbumpyx,*16 -200% tanbumpyxoffset,*18 -225% tanbumpyxperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.bumpy_x,
+                mods.visual.bumpy_x_offset,
+                mods.visual.bumpy_x_period,
+                mods.visual.tan_bumpy,
+                mods.visual.tan_bumpy_offset,
+                mods.visual.tan_bumpy_period,
+                mods.visual.tan_bumpy_x,
+                mods.visual.tan_bumpy_x_offset,
+                mods.visual.tan_bumpy_x_period
+            ],
+            [
+                Some(-1.0 / 4.0),
+                Some(-2.0 / 4.0),
+                Some(-3.0 / 4.0),
+                Some(-4.0 / 4.0),
+                Some(-5.0 / 4.0),
+                Some(-6.0 / 4.0),
+                Some(-7.0 / 4.0),
+                Some(-8.0 / 4.0),
+                Some(-9.0 / 4.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.bumpy_x,
+                mods.visual_speed.bumpy_x_offset,
+                mods.visual_speed.bumpy_x_period,
+                mods.visual_speed.tan_bumpy,
+                mods.visual_speed.tan_bumpy_offset,
+                mods.visual_speed.tan_bumpy_period,
+                mods.visual_speed.tan_bumpy_x,
+                mods.visual_speed.tan_bumpy_x_offset,
+                mods.visual_speed.tan_bumpy_x_period
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0),
+                Some(14.0),
+                Some(16.0),
+                Some(18.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.0625,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.bumpy_x,
+                merged.bumpy_x_offset,
+                merged.bumpy_x_period,
+                merged.tan_bumpy,
+                merged.tan_bumpy_offset,
+                merged.tan_bumpy_period,
+                merged.tan_bumpy_x,
+                merged.tan_bumpy_x_offset,
+                merged.tan_bumpy_x_period
+            ],
+            [
+                -1.0 / 8.0,
+                -2.0 / 8.0,
+                -3.0 / 8.0,
+                -4.0 / 8.0,
+                -5.0 / 8.0,
+                -6.0 / 8.0,
+                -7.0 / 8.0,
+                -8.0 / 8.0,
+                -9.0 / 8.0
+            ]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no bumpyx,no bumpyxoffset,no bumpyxperiod,no tanbumpy,no tanbumpyoffset,no tanbumpyperiod,no tanbumpyx,no tanbumpyxoffset,no tanbumpyxperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.bumpy_x,
+                cleared.visual.bumpy_x_offset,
+                cleared.visual.bumpy_x_period,
+                cleared.visual.tan_bumpy,
+                cleared.visual.tan_bumpy_offset,
+                cleared.visual.tan_bumpy_period,
+                cleared.visual.tan_bumpy_x,
+                cleared.visual.tan_bumpy_x_offset,
+                cleared.visual.tan_bumpy_x_period
+            ],
+            [Some(0.0); 9]
+        );
+    }
+
+    #[test]
+    fn drunk_variants_keep_native_units_speeds_and_boolean_reset() {
+        let mods = parse_attack_mods(
+            "*2 -25% drunkz,*4 -50% drunkzoffset,*6 -75% drunkzspeed,*8 -100% drunkzperiod,*10 -125% tandrunk,*12 -150% tandrunkoffset,*14 -175% tandrunkspeed,*16 -200% tandrunkperiod,*18 -225% tandrunkz,*20 -250% tandrunkzoffset,*22 -275% tandrunkzspeed,*24 -300% tandrunkzperiod,cosecant",
+        );
+        assert_eq!(
+            [
+                mods.visual.drunk_z,
+                mods.visual.drunk_z_offset,
+                mods.visual.drunk_z_speed,
+                mods.visual.drunk_z_period,
+                mods.visual.tan_drunk,
+                mods.visual.tan_drunk_offset,
+                mods.visual.tan_drunk_speed,
+                mods.visual.tan_drunk_period,
+                mods.visual.tan_drunk_z,
+                mods.visual.tan_drunk_z_offset,
+                mods.visual.tan_drunk_z_speed,
+                mods.visual.tan_drunk_z_period
+            ],
+            [
+                Some(-1.0 / 4.0),
+                Some(-2.0 / 4.0),
+                Some(-3.0 / 4.0),
+                Some(-4.0 / 4.0),
+                Some(-5.0 / 4.0),
+                Some(-6.0 / 4.0),
+                Some(-7.0 / 4.0),
+                Some(-8.0 / 4.0),
+                Some(-9.0 / 4.0),
+                Some(-10.0 / 4.0),
+                Some(-11.0 / 4.0),
+                Some(-12.0 / 4.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.drunk_z,
+                mods.visual_speed.drunk_z_offset,
+                mods.visual_speed.drunk_z_speed,
+                mods.visual_speed.drunk_z_period,
+                mods.visual_speed.tan_drunk,
+                mods.visual_speed.tan_drunk_offset,
+                mods.visual_speed.tan_drunk_speed,
+                mods.visual_speed.tan_drunk_period,
+                mods.visual_speed.tan_drunk_z,
+                mods.visual_speed.tan_drunk_z_offset,
+                mods.visual_speed.tan_drunk_z_speed,
+                mods.visual_speed.tan_drunk_z_period
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0),
+                Some(14.0),
+                Some(16.0),
+                Some(18.0),
+                Some(20.0),
+                Some(22.0),
+                Some(24.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.0625,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.drunk_z,
+                merged.drunk_z_offset,
+                merged.drunk_z_speed,
+                merged.drunk_z_period,
+                merged.tan_drunk,
+                merged.tan_drunk_offset,
+                merged.tan_drunk_speed,
+                merged.tan_drunk_period,
+                merged.tan_drunk_z,
+                merged.tan_drunk_z_offset,
+                merged.tan_drunk_z_speed,
+                merged.tan_drunk_z_period
+            ],
+            [
+                -1.0 / 8.0,
+                -2.0 / 8.0,
+                -3.0 / 8.0,
+                -4.0 / 8.0,
+                -5.0 / 8.0,
+                -6.0 / 8.0,
+                -7.0 / 8.0,
+                -8.0 / 8.0,
+                -9.0 / 8.0,
+                -10.0 / 8.0,
+                -11.0 / 8.0,
+                -12.0 / 8.0
+            ]
+        );
+        assert!(merged.cosecant);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no drunkz,no drunkzoffset,no drunkzspeed,no drunkzperiod,no tandrunk,no tandrunkoffset,no tandrunkspeed,no tandrunkperiod,no tandrunkz,no tandrunkzoffset,no tandrunkzspeed,no tandrunkzperiod,no cosecant",
+        );
+        assert_eq!(
+            [
+                cleared.visual.drunk_z,
+                cleared.visual.drunk_z_offset,
+                cleared.visual.drunk_z_speed,
+                cleared.visual.drunk_z_period,
+                cleared.visual.tan_drunk,
+                cleared.visual.tan_drunk_offset,
+                cleared.visual.tan_drunk_speed,
+                cleared.visual.tan_drunk_period,
+                cleared.visual.tan_drunk_z,
+                cleared.visual.tan_drunk_z_offset,
+                cleared.visual.tan_drunk_z_speed,
+                cleared.visual.tan_drunk_z_period
+            ],
+            [Some(0.0); 12]
+        );
+        assert_eq!(cleared.visual.cosecant, Some(false));
+        assert_eq!(
+            parse_attack_mods("50% cosecant").visual.cosecant,
+            Some(false)
+        );
+        assert_eq!(
+            parse_attack_mods("51% cosecant").visual.cosecant,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn digital_and_zigzag_keep_units_approaches_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 50% digital,*4 300% digitalsteps,\
+            *6 3200% digitaloffset,*8 -100% digitalperiod,*10 300% zigzagz,\
+            *12 -75% zigzagzoffset,*14 150% zigzagzperiod,\
+            *16 300% zigzag,*18 -75% zigzagoffset,*20 150% zigzagperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.digital,
+                mods.visual.digital_steps,
+                mods.visual.digital_offset,
+                mods.visual.digital_period,
+                mods.visual.zigzag_z,
+                mods.visual.zigzag_z_offset,
+                mods.visual.zigzag_z_period,
+                mods.visual.zigzag,
+                mods.visual.zigzag_offset,
+                mods.visual.zigzag_period
+            ],
+            [
+                Some(0.5),
+                Some(3.0),
+                Some(32.0),
+                Some(-1.0),
+                Some(3.0),
+                Some(-0.75),
+                Some(1.5),
+                Some(3.0),
+                Some(-0.75),
+                Some(1.5)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.digital,
+                merged.digital_steps,
+                merged.digital_offset,
+                merged.digital_period,
+                merged.zigzag_z,
+                merged.zigzag_z_offset,
+                merged.zigzag_z_period,
+                merged.zigzag,
+                merged.zigzag_offset,
+                merged.zigzag_period
+            ],
+            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5, 3.0, -0.75, 1.5]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no digital,no digitalsteps,no digitaloffset,\
+            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod,\
+            no zigzag,no zigzagoffset,no zigzagperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.digital,
+                cleared.visual.digital_steps,
+                cleared.visual.digital_offset,
+                cleared.visual.digital_period,
+                cleared.visual.zigzag_z,
+                cleared.visual.zigzag_z_offset,
+                cleared.visual.zigzag_z_period,
+                cleared.visual.zigzag,
+                cleared.visual.zigzag_offset,
+                cleared.visual.zigzag_period
+            ],
+            [Some(0.0); 10]
+        );
+    }
+
+    #[test]
+    fn square_family_keeps_native_units_speeds_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 -250% square,*4 3200% squareoffset,*6 -100% squareperiod,\
+             *8 600% squarez,*10 -6400% squarezoffset,*12 100% squarezperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.square,
+                mods.visual.square_offset,
+                mods.visual.square_period,
+                mods.visual.square_z,
+                mods.visual.square_z_offset,
+                mods.visual.square_z_period,
+            ],
+            [
+                Some(-2.5),
+                Some(32.0),
+                Some(-1.0),
+                Some(6.0),
+                Some(-64.0),
+                Some(1.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.square,
+                mods.visual_speed.square_offset,
+                mods.visual_speed.square_period,
+                mods.visual_speed.square_z,
+                mods.visual_speed.square_z_offset,
+                mods.visual_speed.square_z_period,
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.square,
+                merged.square_offset,
+                merged.square_period,
+                merged.square_z,
+                merged.square_z_offset,
+                merged.square_z_period,
+            ],
+            [-0.5, 1.0, -1.0, 2.0, -2.5, 1.0]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no square,no squareoffset,no squareperiod,no squarez,no squarezoffset,no squarezperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.square,
+                cleared.visual.square_offset,
+                cleared.visual.square_period,
+                cleared.visual.square_z,
+                cleared.visual.square_z_offset,
+                cleared.visual.square_z_period,
+            ],
+            [Some(0.0); 6]
+        );
+    }
+
+    #[test]
+    fn parabola_uses_signed_amounts_independent_speeds_and_reset() {
+        let mods = parse_attack_mods("*2 -250% parabolax,*4 600% parabolaz");
+        assert_eq!(mods.visual.parabola_x, Some(-2.5));
+        assert_eq!(mods.visual.parabola_z, Some(6.0));
+        assert_eq!(mods.visual_speed.parabola_x, Some(2.0));
+        assert_eq!(mods.visual_speed.parabola_z, Some(4.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_near(merged.parabola_x, -0.5);
+        assert_near(merged.parabola_z, 1.0);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods("no parabolax,no parabolaz");
+        assert_eq!(cleared.visual.parabola_x, Some(0.0));
+        assert_eq!(cleared.visual.parabola_z, Some(0.0));
+    }
+
+    #[test]
+    fn twirl_uses_native_amount_approach_and_reset() {
+        let mods = parse_attack_mods("*2 -250% twirl");
+        assert_eq!(mods.visual.twirl, Some(-2.5));
+        assert_eq!(mods.visual_speed.twirl, Some(2.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_near(current.twirl.expect("active Twirl"), -0.5);
+        assert_near(
+            merge_attack_visual_effects(VisualEffects::default(), current).twirl,
+            -0.5,
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(parse_attack_mods("no twirl").visual.twirl, Some(0.0));
+    }
+
+    #[test]
+    fn roll_uses_native_amount_approach_and_reset() {
+        let mods = parse_attack_mods("*2 -250% roll");
+        assert_eq!(mods.visual.roll, Some(-2.5));
+        assert_eq!(mods.visual_speed.roll, Some(2.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_near(current.roll.expect("active Roll"), -0.5);
+        assert_near(
+            merge_attack_visual_effects(VisualEffects::default(), current).roll,
+            -0.5,
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(parse_attack_mods("no roll").visual.roll, Some(0.0));
+    }
+
+    #[test]
+    fn xmode_uses_native_amount_approach_and_reset() {
+        let mods = parse_attack_mods("*2 -250% xmode");
+        assert_eq!(mods.visual.xmode, Some(-2.5));
+        assert_eq!(mods.visual_speed.xmode, Some(2.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_near(current.xmode.expect("active Xmode"), -0.5);
+        assert_near(
+            merge_attack_visual_effects(VisualEffects::default(), current).xmode,
+            -0.5,
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(parse_attack_mods("no xmode").visual.xmode, Some(0.0));
+    }
+
+    #[test]
+    fn beat_period_approaches_persists_and_resets() {
+        let mods = parse_attack_mods("*2 400% beatperiod");
+        assert_eq!(mods.visual.beat_period, Some(4.0));
+        assert_eq!(mods.visual_speed.beat_period, Some(2.0));
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_eq!(current.beat_period, Some(0.5));
+        assert_eq!(
+            merge_attack_visual_effects(VisualEffects::default(), current).beat_period,
+            0.5
+        );
+        let window = attack_mask_window(0.0, 1.0, mods);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &window, Default::default(), true, 0.0);
+        assert_eq!(values.visual.beat_period, Some(4.0));
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.beat_period, None);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(
+            parse_attack_mods("no beatperiod").visual.beat_period,
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn mod_timer_modes_are_immediate_and_floats_approach_independently() {
+        for (alias, expected) in [
+            ("game", ModTimerType::Game),
+            ("beat", ModTimerType::Beat),
+            ("song", ModTimerType::Song),
+            ("default", ModTimerType::Default),
+        ] {
+            let mods = parse_attack_mods(&format!(
+                "*0 no modtimer{alias}, *2 100% modtimermult, *4 -200% modtimeroffset"
+            ));
+            assert_eq!(mods.visual.mod_timer_type, Some(expected));
+            assert!(mods.visual.any());
+            assert_eq!(mods.visual_speed.mod_timer_type, None);
+            let mut current = VisualOverrides::default();
+            approach_visual_overrides_to_target(
+                &mut current,
+                mods.visual,
+                mods.visual_speed,
+                VisualEffects::default(),
+                0.25,
+            );
+            assert_eq!(current.mod_timer_type, Some(expected));
+            assert_eq!(current.mod_timer_mult, Some(0.5));
+            assert_eq!(current.mod_timer_offset, Some(-1.0));
+            assert_eq!(
+                merge_attack_visual_effects(VisualEffects::default(), current).mod_timer_type,
+                expected
+            );
+            approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+            assert!(!current.any());
+        }
+        let song = attack_mask_window(0.0, 1.0, parse_attack_mods("modtimersong"));
+        let game = attack_mask_window(1.0, 2.0, parse_attack_mods("modtimergame"));
+        let targets = collect_active_attack_targets(&[game.clone()], 1.5);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &game, targets, false, 0.0);
+        apply_active_attack_mask_window(&mut values, &song, targets, true, 0.0);
+        assert_eq!(values.visual.mod_timer_type, Some(ModTimerType::Game));
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.mod_timer_type, None);
+    }
+
+    #[test]
+    fn dizzy_holds_is_immediate_and_respects_resets_and_persisted_targets() {
+        assert!(!VisualEffects::default().dizzy_holds);
+        for (text, expected) in [
+            ("*0 dizzyholds", true),
+            ("50% dizzyholds", false),
+            ("51% dizzyholds", true),
+            ("-100% dizzyholds", false),
+            ("no dizzyholds", false),
+        ] {
+            let mods = parse_attack_mods(text);
+            assert_eq!(mods.visual.dizzy_holds, Some(expected), "{text}");
+            assert!(mods.visual.any());
+            assert_eq!(mods.visual_speed.dizzy_holds, None);
+            let mut current = VisualOverrides::default();
+            approach_visual_overrides_to_target(
+                &mut current,
+                mods.visual,
+                mods.visual_speed,
+                VisualEffects::default(),
+                0.0,
+            );
+            assert_eq!(current.dizzy_holds, Some(expected));
+            assert_eq!(
+                merge_attack_visual_effects(VisualEffects::default(), current).dizzy_holds,
+                expected
+            );
+            approach_visual_overrides_to_base(
+                &mut current,
+                VisualEffects {
+                    dizzy_holds: true,
+                    ..Default::default()
+                },
+                0.0,
+            );
+            assert!(!current.any());
+            assert!(
+                merge_attack_visual_effects(
+                    VisualEffects {
+                        dizzy_holds: true,
+                        ..Default::default()
+                    },
+                    current
+                )
+                .dizzy_holds
+            );
+        }
+        let on = attack_mask_window(0.0, 1.0, parse_attack_mods("dizzyholds"));
+        let off = attack_mask_window(1.0, 2.0, parse_attack_mods("no dizzyholds"));
+        let targets = collect_active_attack_targets(&[off.clone()], 1.5);
+        assert_eq!(targets.visual.dizzy_holds, Some(false));
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &off, targets, false, 0.0);
+        apply_active_attack_mask_window(&mut values, &on, targets, true, 0.0);
+        assert_eq!(
+            values.visual.dizzy_holds,
+            Some(false),
+            "persisted on cannot replace an active off"
+        );
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.dizzy_holds, None);
+    }
+
+    #[test]
+    fn dizzy_holds_eases_use_native_boolean_threshold() {
+        let mut windows = Vec::new();
+        assert_eq!(
+            append_song_lua_runtime_ease_window(
+                &mut windows,
+                1.0,
+                2.0,
+                3.0,
+                SongLuaRuntimeEaseTarget::Mod("dizzyholds"),
+                0.0,
+                100.0,
+                Some("linear"),
+                None,
+                None,
+            ),
+            SongLuaRuntimeEaseAppend::Appended
+        );
+        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::VisualDizzyHolds);
+        for (second, expected) in [
+            (1.0, false),
+            (1.5, false),
+            (1.51, true),
+            (2.0, true),
+            (2.5, true),
+        ] {
+            let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+            apply_song_lua_attack_eases(
+                &mut values,
+                &mut AppearanceEffects::default(),
+                &mut SongLuaPlayerTransformValues::default(),
+                &windows,
+                second,
+            );
+            assert_eq!(values.visual.dizzy_holds, Some(expected), "{second}");
+        }
+    }
+
+    #[test]
     fn course_modifier_window_persists_for_the_whole_song() {
         let window = build_course_modifier_mask_window("C650,30% reverse,25% mini")
             .expect("course modifier window");
@@ -3399,6 +4282,30 @@ mod tests {
     }
 
     #[test]
+    fn perspective_targets_use_native_canonical_fields() {
+        for (alias, tilt, skew) in [
+            ("incoming", -0.5, 0.5),
+            ("space", 0.5, 0.5),
+            ("hallway", -0.5, 0.0),
+            ("distant", 0.5, 0.0),
+            ("overhead", 0.0, 0.0),
+        ] {
+            let native = parse_song_lua_runtime_mods(&format!("50% {alias}"));
+            let canonical = parse_song_lua_runtime_mods(&format!(
+                "{}% tilt,{}% skew",
+                tilt * 100.0,
+                skew * 100.0
+            ));
+            assert_eq!(native.perspective, canonical.perspective);
+            assert_eq!(canonical.perspective.tilt, Some(tilt));
+            assert_eq!(canonical.perspective.skew, Some(skew));
+        }
+        let canonical = parse_song_lua_runtime_mods("-250% tilt,75% skew");
+        assert_eq!(canonical.perspective.tilt, Some(-2.5));
+        assert_eq!(canonical.perspective.skew, Some(0.75));
+    }
+
+    #[test]
     fn attack_mod_parser_accepts_scroll_perspective_and_approach_prefixes() {
         let mods = parse_attack_mods(
             "C600,*1000 sudden,*1000 -125% suddenoffset,*2.4 150% hiddenoffset,\
@@ -3443,6 +4350,99 @@ mod tests {
         assert_eq!(mods.visual.tiny_cols[1], Some(2.5));
         assert_eq!(mods.visual.bumpy_period, Some(-1.25));
         assert_eq!(mods.visual.pulse_outer, Some(1.0));
+    }
+
+    #[test]
+    fn dark_columns_preserve_signed_levels_and_validate_indices() {
+        let mods = parse_song_lua_runtime_mods(
+            "25 dark,*2 -50 dark1,150 dark4,*3 no dark10,100 dark0,100 dark11",
+        );
+        assert_eq!(mods.visibility.dark, Some(0.25));
+        assert_eq!(mods.visibility.dark_cols[0], Some(-0.5));
+        assert_eq!(mods.visibility.dark_cols[3], Some(1.5));
+        assert_eq!(mods.visibility.dark_cols[9], Some(0.0));
+        assert_eq!(mods.visibility.dark_cols[1], None);
+        assert_eq!(mods.dark_col_speed[0], Some(2.0));
+        assert_eq!(mods.dark_col_speed[3], Some(1.0));
+        assert_eq!(mods.dark_col_speed[9], Some(3.0));
+        assert!(!parse_song_lua_runtime_mods("dark0,dark11").has_runtime_mask_effect());
+        let mods = parse_attack_mods("dark1,clearall,*2 75% dark4");
+        assert_eq!(mods.visibility.dark_cols[0], None);
+        assert_eq!(mods.visibility.dark_cols[3], Some(0.75));
+        assert!(mods.has_runtime_mask_effect());
+        assert!(build_course_modifier_mask_window("dark4").is_some());
+    }
+
+    #[test]
+    fn dark_columns_approach_ease_and_reset_independently() {
+        let constants = vec![
+            attack_mask_window(
+                0.0,
+                1.0,
+                parse_song_lua_runtime_mods("25 dark,*2 100 dark1,*1 -50 dark2,*4 150 dark10"),
+            ),
+            attack_mask_window(
+                1.0,
+                2.0,
+                parse_song_lua_runtime_mods("no dark1,no dark2,no dark10"),
+            ),
+        ];
+        let mut eases = Vec::new();
+        assert!(append_song_lua_ease_targets(
+            &mut eases, 0.0, 1.0, 2.0, "Dark4", 0.0, 100.0, None, None, None,
+        ));
+        let mut runtime =
+            GameplayAttackRuntimeState::new([constants, Vec::new()], [eases, Vec::new()]);
+        for (now, expected) in [
+            (0.25, [0.5, -0.25, 0.25, 1.0]),
+            (0.5, [1.0, -0.5, 0.5, 1.5]),
+            (1.25, [0.75, -0.25, 1.0, 1.25]),
+        ] {
+            let _ = runtime.refresh_player(
+                0,
+                now,
+                0.25,
+                AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (col, expected) in [0, 1, 3, 9].into_iter().zip(expected) {
+                assert_near(runtime.visibility[0].dark_cols[col].unwrap(), expected);
+            }
+            assert_eq!(runtime.visibility[0].dark_cols[2], None);
+            assert!(!runtime.visibility[1].any(), "P1 dark must not affect P2");
+            assert_eq!(runtime.visibility[0].dark, (now < 1.0).then_some(0.25));
+        }
+        let _ = runtime.refresh_player(
+            0,
+            2.5,
+            0.25,
+            AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert!(!runtime.visibility[0].any(), "expired columns must reset");
+    }
+
+    #[test]
+    fn move_z_approach() {
+        // Verified by the native PlayerOptions control in move-z-provenance.json.
+        let target = parse_song_lua_runtime_mods("*2 150% movez1,*2 -50% movez4");
+        let mut current = VisualOverrides::default();
+        let base = VisualEffects::default();
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.0));
+        assert_eq!(current.move_z_cols[3], Some(-0.5));
+        assert_eq!(current.move_z_cols[2], None);
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.5));
+        assert_eq!(merge_attack_visual_effects(base, current).move_z_cols[3], -0.5);
+        approach_visual_overrides_to_base(&mut current, base, 10.0);
+        assert!(current.move_z_cols.iter().all(Option::is_none));
     }
 
     #[test]
@@ -5674,16 +6674,14 @@ mod tests {
     fn lane_input_mask_expands_only_active_gameplay_columns() {
         assert_eq!(input_lane_mask(0), 0);
         assert_eq!(input_lane_mask(4), 0b0000_1111);
-        assert_eq!(input_lane_mask(MAX_COLS), 0b11_1111_1111);
-        assert_eq!(input_lane_mask(MAX_COLS + 1), 0b11_1111_1111);
+        assert_eq!(input_lane_mask(MAX_COLS), 0b1111_1111_1111_1111_1111);
+        assert_eq!(input_lane_mask(MAX_COLS + 1), 0b1111_1111_1111_1111_1111);
 
         let inputs = lane_inputs_from_mask(0b1010_0101, 4);
-        assert_eq!(
-            inputs,
-            [
-                true, false, true, false, false, false, false, false, false, false,
-            ]
-        );
+        let mut expected = [false; MAX_COLS];
+        expected[0] = true;
+        expected[2] = true;
+        assert_eq!(inputs, expected);
     }
 
     #[test]
@@ -5893,7 +6891,7 @@ mod tests {
             decent,
             test_note_at(NoteType::Tap, None, false, 48, 1.0),
         ];
-        let mut note_indices = [usize::MAX; MAX_COLS];
+        let mut note_indices = [usize::MAX; MAX_COLS_PER_PLAYER];
         note_indices[0] = 0;
         note_indices[1] = 1;
         note_indices[2] = 2;
@@ -6837,6 +7835,34 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_window_units_share_rate_scaled_calibration() {
+        let mut timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        for rate in [0.5, 1.0, 1.5, 2.0] {
+            for offset in [-0.020, 0.020] {
+                timing.set_global_offset_seconds_with_rate(offset, rate);
+                for (unit, value) in [
+                    (SongLuaRuntimeTimeUnit::Beat, 4.0),
+                    (SongLuaRuntimeTimeUnit::Second, 2.0),
+                    (SongLuaRuntimeTimeUnit::BeatClock, 2.0),
+                ] {
+                    assert_near(
+                        song_lua_time_to_second(unit, value, &timing, offset),
+                        2.0 - offset * rate,
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_window_seconds_use_len_end_and_global_offset() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 4);
 
@@ -7192,7 +8218,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_ease_targets_convert_confusion_y_offset() {
+    fn song_lua_ease_targets_keep_confusion_y_radians() {
         let mut windows = Vec::new();
 
         assert!(append_song_lua_ease_targets(
@@ -7208,9 +8234,12 @@ mod tests {
             None,
         ));
 
-        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ConfusionYOffsetY);
-        assert_near(windows[0].from, 90.0);
-        assert_near(windows[0].to, 180.0);
+        assert_eq!(
+            windows[0].target,
+            SongLuaEaseMaskTarget::VisualConfusionYOffset
+        );
+        assert_near(windows[0].from, std::f32::consts::FRAC_PI_2);
+        assert_near(windows[0].to, std::f32::consts::PI);
     }
 
     #[test]
@@ -7549,6 +8578,24 @@ mod tests {
     }
 
     #[test]
+    fn dark_column_ease_tail_stops_only_at_same_column() {
+        let mut windows = [1, 2].map(|col| {
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::VisibilityDarkColumn(col),
+                0.0,
+                1.0,
+                1.0,
+                0.0,
+                1.0,
+            )
+        });
+        let constant = attack_mask_window(3.0, 6.0, parse_song_lua_runtime_mods("dark,dark2"));
+        song_lua_extend_ease_tails(&mut windows, &[constant]);
+        assert_near(windows[0].sustain_end_second, 3.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
+    }
+
+    #[test]
     fn song_lua_column_offset_tails_stop_at_next_same_column() {
         let mut windows = [
             song_lua_column_offset_window(2, 1.0, 2.0, 2.0),
@@ -7851,7 +8898,6 @@ mod tests {
             zoom_x: None,
             zoom_y: Some(1.5),
             zoom_z: Some(f32::NAN),
-            confusion_y_offset: Some(9.0),
         }
         .resolve();
 
@@ -7866,7 +8912,6 @@ mod tests {
         assert_near(resolved.zoom_x, 1.0);
         assert_near(resolved.zoom_y, 1.5);
         assert_near(resolved.zoom_z, 1.0);
-        assert_near(resolved.confusion_y_offset, 9.0);
     }
 
     #[test]
@@ -7885,7 +8930,6 @@ mod tests {
             assert_near(transform.zoom_x, 1.0);
             assert_near(transform.zoom_y, 1.0);
             assert_near(transform.zoom_z, 1.0);
-            assert_near(transform.confusion_y_offset, 0.0);
         }
     }
 
@@ -7905,6 +8949,8 @@ mod tests {
             SongLuaEaseMaskTarget::AccelBoost,
             0.75,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7918,6 +8964,8 @@ mod tests {
             SongLuaEaseMaskTarget::VisualBumpyColumn(2),
             1.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7931,6 +8979,8 @@ mod tests {
             SongLuaEaseMaskTarget::AppearanceStealth,
             0.25,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7944,6 +8994,8 @@ mod tests {
             SongLuaEaseMaskTarget::VisibilityDark,
             1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7957,6 +9009,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollReverse,
             0.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7970,6 +9024,8 @@ mod tests {
             SongLuaEaseMaskTarget::PerspectiveTilt,
             -1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -7983,6 +9039,8 @@ mod tests {
             SongLuaEaseMaskTarget::MiniPercent,
             30.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8018,6 +9076,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             -100.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8033,6 +9093,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             650.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8051,6 +9113,8 @@ mod tests {
             SongLuaEaseMaskTarget::PlayerRotationZ,
             45.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8081,7 +9145,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_attack_eases_apply_active_windows_and_mini_delta() {
+    fn song_lua_attack_eases_apply_active_windows_and_absolute_mini() {
         let windows = [
             song_lua_ease_mask_window(SongLuaEaseMaskTarget::AccelBoost, 1.0, 3.0, 3.0, 0.0, 1.0),
             song_lua_ease_mask_window(
@@ -8127,7 +9191,6 @@ mod tests {
             &mut player,
             &windows,
             2.0,
-            30.0,
         );
 
         assert_near(attack.accel.boost.unwrap(), 0.5);
@@ -8136,7 +9199,7 @@ mod tests {
             attack.scroll_speed,
             Some(ScrollSpeedSetting::CMod(v)) if (v - 450.0).abs() <= 0.000_001
         ));
-        assert_near(attack.mini_percent.unwrap(), 45.0);
+        assert_near(attack.mini_percent.unwrap(), 15.0);
         assert_near(player.rotation_z.unwrap(), 45.0);
     }
 
@@ -9429,6 +10492,7 @@ mod tests {
         beat: f32,
     ) -> Note {
         Note {
+            participant: None,
             beat,
             quantization_idx: 0,
             column: 0,
@@ -9481,6 +10545,7 @@ mod tests {
             chart_name: String::new(),
             meter: 0,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats,
@@ -10321,7 +11386,7 @@ mod tests {
 
         state.set_reverse_scroll(1, true);
         state.set_column_scroll_dir(2, -1.0);
-        state.set_player_motion(1, 420.0, 0.75, 1000.0, 240.0, 2.5);
+        state.set_player_motion(1, 420.0, 0.75, 2.5);
         state.set_reverse_scroll(MAX_PLAYERS, true);
         state.set_column_scroll_dir(MAX_COLS, -1.0);
 
@@ -10329,8 +11394,6 @@ mod tests {
         assert_near(state.column_scroll_dir(2), -1.0);
         assert_near(state.scroll_pixels_per_second(1), 420.0);
         assert_near(state.field_zoom(1), 0.75);
-        assert_near(state.draw_distance_before_targets(1), 1000.0);
-        assert_near(state.draw_distance_after_targets(1), 240.0);
         assert_near(state.scroll_travel_time(1), 2.5);
         assert!(!state.reverse_scroll(MAX_PLAYERS));
         assert_near(state.column_scroll_dir(MAX_COLS), 1.0);
@@ -10344,8 +11407,6 @@ mod tests {
             [0.5, 0.75],
             [420.0, 840.0],
             [1.25, 2.5],
-            [900.0, 1000.0],
-            [120.0, 240.0],
             [false, true],
             {
                 let mut dirs = [1.0; MAX_COLS];
@@ -10360,8 +11421,6 @@ mod tests {
         assert_near(configured.column_scroll_dir(2), -1.0);
         assert_near(configured.scroll_pixels_per_second(1), 840.0);
         assert_near(configured.field_zoom(1), 0.75);
-        assert_near(configured.draw_distance_before_targets(1), 1000.0);
-        assert_near(configured.draw_distance_after_targets(1), 240.0);
         assert_near(configured.scroll_travel_time(1), 2.5);
         assert!(!configured.reverse_scroll(MAX_PLAYERS));
         assert_near(configured.column_scroll_dir(MAX_COLS), 1.0);
@@ -11064,6 +12123,7 @@ mod tests {
             },
             ItgScoreStage {
                 scoring_counts: [1, 2, 3, 4, 5, 6],
+                current_possible_points: 275,
                 holds_held_for_score: 7,
                 holds_resolved_for_score: 15,
                 rolls_held_for_score: 9,
@@ -11152,6 +12212,7 @@ mod tests {
     fn itg_score_inputs_combine_stage_and_course_carry() {
         let inputs = itg_score_inputs_from_display(
             ItgScoreStage {
+                current_possible_points: 275,
                 scoring_counts: [1, 2, 3, 4, 5, 6],
                 holds_held_for_score: 7,
                 holds_resolved_for_score: 15,
@@ -11163,6 +12224,7 @@ mod tests {
             },
             CourseDisplayCarry {
                 scoring_counts: [10, 20, 30, 40, 50, 60],
+                current_possible_points: 1320,
                 holds_held_for_score: 12,
                 holds_resolved_for_score: 25,
                 rolls_held_for_score: 14,
@@ -11180,11 +12242,10 @@ mod tests {
 
         assert_eq!(inputs.scoring_counts, [11, 22, 33, 44, 55, 66]);
         assert_eq!(inputs.holds_held_for_score, 19);
-        assert_eq!(inputs.holds_resolved_for_score, 40);
+        assert_eq!(inputs.current_possible_points, 1595);
         assert_eq!(inputs.checkpoints_hit, 36);
         assert_eq!(inputs.checkpoints_missed, 38);
         assert_eq!(inputs.rolls_held_for_score, 23);
-        assert_eq!(inputs.rolls_resolved_for_score, 48);
         assert_eq!(inputs.mines_hit_for_score, 27);
         assert_eq!(inputs.possible_grade_points, 500);
     }
@@ -11193,6 +12254,7 @@ mod tests {
     fn itg_score_percent_helpers_preserve_display_units() {
         let inputs = ItgScoreInputs {
             scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 5,
             possible_grade_points: 10,
             ..ItgScoreInputs::default()
         };
@@ -11202,9 +12264,24 @@ mod tests {
     }
 
     #[test]
+    fn predictive_points_progress() {
+        // Earned points remain five while two additional rows are scored
+        // after failure. Native current possible points reach fifteen.
+        let inputs = ItgScoreInputs {
+            scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 15,
+            possible_grade_points: 20,
+            ..ItgScoreInputs::default()
+        };
+        assert_eq!(itg_score_percent_from_inputs(inputs), 0.25);
+        assert_eq!(predictive_itg_score_percent_from_inputs(inputs), 50.0);
+    }
+
+    #[test]
     fn score_display_mode_helpers_select_normal_or_predictive_percent() {
         let itg_inputs = ItgScoreInputs {
             scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 5,
             possible_grade_points: 10,
             ..ItgScoreInputs::default()
         };
@@ -11994,7 +13071,7 @@ mod tests {
         let note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
 
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 9, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&note), 47, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Wait,
         );
     }
@@ -12002,18 +13079,20 @@ mod tests {
     #[test]
     fn pending_missed_hold_resolution_step_removes_stale_entries() {
         assert_eq!(
-            pending_missed_hold_resolution_for_note(None, Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(None, 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
+        let mut no_hold = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+        no_hold.column = 0;
         assert_eq!(
-            pending_missed_hold_resolution_for_note(None, None, 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&no_hold), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
 
         let mut note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         note.column = MAX_COLS;
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&note), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
     }
@@ -12023,7 +13102,7 @@ mod tests {
         let mut missed = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         missed.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&missed), Some(10), 10, MAX_COLS, false),
+            pending_missed_hold_resolution_for_note(Some(&missed), 48, MAX_COLS, false),
             PendingMissedHoldResolutionStep::Resolve(
                 PendingMissedHoldResolution::ShowMissedFeedback
             ),
@@ -12032,7 +13111,7 @@ mod tests {
         let mut scored = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         scored.result = Some(test_judgment(JudgeGrade::Miss));
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&scored), Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&scored), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Resolve(PendingMissedHoldResolution::ScoreLetGo),
         );
     }
@@ -12049,7 +13128,6 @@ mod tests {
         waiting.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
         waiting.column = 2;
         let notes = vec![missed, scored, waiting];
-        let hold_end_times = [10, 10, 30];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let score_by_col = [true, true, true];
@@ -12057,10 +13135,10 @@ mod tests {
 
         let first = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48, 48, 47],
             &score_by_col,
             &mut events,
         );
@@ -12077,7 +13155,7 @@ mod tests {
             Some(PendingMissedHoldResolutionEvent {
                 note_index: 0,
                 column: 0,
-                end_time_ns: 10,
+                time_ns: 10,
                 resolution: PendingMissedHoldResolution::ShowMissedFeedback,
             })
         );
@@ -12086,10 +13164,10 @@ mod tests {
 
         let second = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48, 48, 47],
             &score_by_col,
             &mut events,
         );
@@ -12106,7 +13184,7 @@ mod tests {
             Some(PendingMissedHoldResolutionEvent {
                 note_index: 1,
                 column: 1,
-                end_time_ns: 10,
+                time_ns: 10,
                 resolution: PendingMissedHoldResolution::ScoreLetGo,
             })
         );
@@ -12119,17 +13197,16 @@ mod tests {
         let mut no_action = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         no_action.result = Some(test_judgment(JudgeGrade::Great));
         let notes = vec![no_action];
-        let hold_end_times = [10];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let mut events = [None; 2];
 
         let update = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48],
             &[true],
             &mut events,
         );
@@ -12187,6 +13264,7 @@ mod tests {
             hold,
             HoldResultStatsUpdate {
                 holds_resolved_for_score: 1,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -12194,6 +13272,7 @@ mod tests {
             roll,
             HoldResultStatsUpdate {
                 rolls_resolved_for_score: 1,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -12213,12 +13292,14 @@ mod tests {
             }
         );
         assert_eq!(dead_held.holds_held, 1);
+        assert_eq!(dead_held.current_possible_points, 5);
         assert_eq!(dead_held.holds_held_for_score, 0);
         assert!(!dead_held.update_grade_totals);
         assert_eq!(
             dead_let_go,
             HoldResultStatsUpdate {
                 decrement_hands_holding: true,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -12238,9 +13319,30 @@ mod tests {
     }
 
     #[test]
+    fn native_hold_progress() {
+        for note_type in [NoteType::Hold, NoteType::Roll] {
+            let mut player = init_player_runtime();
+            for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+                let mut stats = hold_result_stats_state(&player);
+                apply_hold_result_stats_update(&mut stats,
+                    hold_result_stats_update(note_type, result, false, true));
+                set_hold_result_stats_state(&mut player, stats);
+            }
+            assert_eq!(player.current_possible_points, 15);
+            assert_eq!(player.earned_grade_points, 0);
+            assert_eq!(player.holds_resolved_for_score + player.rolls_resolved_for_score, 0);
+            for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+                assert_eq!(hold_result_stats_update(note_type, result, true, false)
+                    .current_possible_points, 0);
+            }
+        }
+    }
+
+    #[test]
     fn hold_result_stats_application_decrements_hands_and_adds_counts() {
         let mut state = HoldResultStatsState {
             hands_holding_count_for_stats: 2,
+            current_possible_points: 20,
             holds_held: 10,
             holds_held_for_score: 20,
             holds_let_go_for_score: 30,
@@ -12256,6 +13358,7 @@ mod tests {
             HoldResultStatsUpdate {
                 decrement_hands_holding: true,
                 holds_held: 1,
+                current_possible_points: 7,
                 holds_held_for_score: 2,
                 holds_let_go_for_score: 3,
                 holds_resolved_for_score: 7,
@@ -12268,6 +13371,7 @@ mod tests {
         );
 
         assert_eq!(state.hands_holding_count_for_stats, 1);
+        assert_eq!(state.current_possible_points, 27);
         assert_eq!(state.holds_held, 11);
         assert_eq!(state.holds_held_for_score, 22);
         assert_eq!(state.holds_let_go_for_score, 33);
@@ -12670,6 +13774,32 @@ mod tests {
     }
 
     #[test]
+    fn active_hold_resolves_at_rounded_tail_row() {
+        let timing = test_timing(192); // The native empty BPM list defaults to 60.
+        for note_type in [NoteType::Hold, NoteType::Roll] {
+            let mut active = test_active_hold(note_type, true, false, MAX_HOLD_LIFE);
+            active.last_update_time_ns = song_time_ns_from_seconds(0.98);
+            let mut hold = test_hold();
+            let before = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+                0, 0.0, song_time_ns_from_seconds(0.9895), 1.0);
+            assert_eq!(before.resolution, None);
+            let reached = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+                0, 0.0, song_time_ns_from_seconds(0.9897), 1.0);
+            assert_eq!(reached.resolution, Some(ActiveHoldResolution::Success { note_index: 42 }));
+            assert!(reached.clear_active);
+            assert!(active.last_update_time_ns < active.end_time_ns,
+                "the rounded row resolves before the exact tail timestamp");
+        }
+        let mut active = test_active_hold(NoteType::Hold, false, false, 0.0);
+        active.last_update_time_ns = song_time_ns_from_seconds(0.9895);
+        let mut hold = test_hold();
+        let depleted = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+            0, 0.0, song_time_ns_from_seconds(0.9897), 1.0);
+        assert!(matches!(depleted.resolution, Some(ActiveHoldResolution::LetGo { .. })),
+            "life depletion still takes precedence at the rounded tail");
+    }
+
+    #[test]
     fn advance_active_hold_to_time_resolves_pre_exhausted_life_at_start() {
         let timing = test_timing(192);
         let mut active = test_active_hold(NoteType::Hold, false, false, 0.0);
@@ -12849,10 +13979,10 @@ mod tests {
         let timing_players = [&timing; MAX_PLAYERS];
         let mut first = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         first.note_index = 0;
-        first.end_time_ns = 100;
+        first.end_time_ns = song_time_ns_from_seconds(1.0);
         let mut second = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         second.note_index = 1;
-        second.end_time_ns = 100;
+        second.end_time_ns = song_time_ns_from_seconds(1.0);
         let mut active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|_| None);
         active_holds[1] = Some(first);
         active_holds[6] = Some(second);
@@ -12872,7 +14002,7 @@ mod tests {
             4,
             2,
             &timing_players,
-            100,
+            song_time_ns_from_seconds(1.0),
             1.0,
             false,
             &mut events,
@@ -12921,7 +14051,7 @@ mod tests {
         let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         active.note_index = 0;
         active.start_time_ns = 0;
-        active.end_time_ns = 100;
+        active.end_time_ns = song_time_ns_from_seconds(1.0);
         active.last_update_time_ns = 0;
         let mut active_holds = [Some(active)];
         let mut previous_hold = test_hold();
@@ -12937,7 +14067,7 @@ mod tests {
             &mut notes,
             0,
             1,
-            100,
+            song_time_ns_from_seconds(2.0),
             &timing,
             1.0,
         );
@@ -13036,10 +14166,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: audio_len,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: chart_end,
+            precise_note_last_second_seconds: Some(chart_end),
             last_second_hint: 0.0,
             charts: Vec::new(),
         }
@@ -13729,6 +14861,16 @@ mod tests {
     }
 
     #[test]
+    fn song_audio_end_time_keeps_fractional_native_note_endpoint() {
+        let mut song = test_song(135.0, 136.00887);
+        song.total_length_seconds = 135;
+        song.precise_note_last_second_seconds = Some(134.10841);
+        assert_eq!(song_audio_end_time_ns(&song), song_time_ns_from_seconds(134.10841));
+        song.last_second_hint = 135.25;
+        assert_eq!(song_audio_end_time_ns(&song), song_time_ns_from_seconds(135.25));
+    }
+
+    #[test]
     fn stage_music_cut_uses_negative_lead_in() {
         let cut = stage_music_cut(2.5);
         assert_eq!(cut.start_sec, -2.5);
@@ -13759,7 +14901,6 @@ mod tests {
             },
             0.75,
             2.0,
-            -0.1,
         );
 
         assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(4.25));
@@ -13782,7 +14923,6 @@ mod tests {
                 },
                 ..GameplayAudioSnapshot::default()
             },
-            f32::NAN,
             f32::NAN,
             f32::NAN,
         );
@@ -13953,7 +15093,6 @@ mod tests {
             },
             1.25,
             0.0,
-            0.0,
         );
 
         assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(2.0));
@@ -13974,10 +15113,9 @@ mod tests {
             },
             1.5,
             2.0,
-            -0.1,
         );
 
-        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.45));
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.5));
         assert_eq!(snapshot.seconds_per_second, 1.5);
         assert!(!snapshot.mapped_audio);
     }
@@ -14104,12 +15242,12 @@ mod tests {
     }
 
     #[test]
-    fn stream_position_to_music_time_applies_lead_in_rate_and_offset_anchor() {
-        assert_near(music_time_from_stream_position(3.0, 2.0, -0.100, 1.5), 1.45);
-        assert_near(music_time_from_stream_position(3.0, -2.0, 0.0, 1.0), 3.0);
-        assert_near(music_time_from_stream_position(3.0, 2.0, -0.100, 0.0), 1.0);
+    fn stream_position_to_music_time_applies_lead_in_and_rate() {
+        assert_near(music_time_from_stream_position(3.0, 2.0, 1.5), 1.5);
+        assert_near(music_time_from_stream_position(3.0, -2.0, 1.0), 3.0);
+        assert_near(music_time_from_stream_position(3.0, 2.0, 0.0), 1.0);
         assert_near(
-            music_time_from_stream_position(3.0, 2.0, -0.100, f32::NAN),
+            music_time_from_stream_position(3.0, 2.0, f32::NAN),
             1.0,
         );
     }
@@ -14420,6 +15558,48 @@ mod tests {
 
         assert!(notes_end_time_ns < note_times[1]);
         assert!(music_end_time_ns > note_times[1]);
+    }
+
+    #[test]
+    fn missed_note_cutoff_preserves_choices_float_stop_onset() {
+        // Native TimingData, sampled by harness pass355 at the three frames
+        // surrounding the failed pass207 point query. Easy has many short stops;
+        // integer accumulation reaches beat 189 one frame before native float.
+        let mut segments = TimingSegments::default();
+        for line in include_str!("../../../tests/fixtures/timing/choices-cutoff.txt").lines() {
+            if line.starts_with('#') { continue; }
+            let (kind, values) = line.split_once(':').expect("valid timing fixture");
+            for value in values.split(',') {
+                let (beat, value) = value.split_once('=').expect("valid timing pair");
+                let beat = beat.parse().expect("valid fixture beat");
+                let value = value.parse().expect("valid fixture value");
+                match kind {
+                    "BPMS" => segments.bpms.push((beat, value)),
+                    "STOPS" => segments.stops.push(StopSegment { beat, duration: value }),
+                    _ => panic!("unknown timing fixture segment"),
+                }
+            }
+        }
+        let mut timing = TimingData::from_segments(
+            0.0, -0.008, &segments, &[188.75, 189.0, 189.25],
+        );
+        timing.shift_song_offset_seconds(-0.009);
+        let players = [&timing; MAX_PLAYERS];
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let mut cache = GameplayTimeToBeatCaches::new(&timing, &players);
+        for (seconds, beat, freeze, cutoff) in [
+            (98.016_03f32, 188.996_84f32, false, 1),
+            (98.016_67, 188.999_53, false, 1),
+            (98.017_28, 189.0, true, 2),
+        ] {
+            let time_ns = song_time_ns_from_seconds(seconds);
+            let distance = max_step_distance_ns(&profile, 1.0);
+            let info = timing.get_song_position(seconds - song_time_ns_to_seconds(distance));
+            assert_eq!(info.beat.to_bits(), beat.to_bits());
+            assert_eq!(info.is_in_freeze, freeze);
+            assert_eq!(missed_note_cutoff_row_for_music_time(&profile, &timing, 1.0, time_ns), cutoff);
+            assert_eq!(cache.missed_note_cutoff_rows(&profile, &players, 1.0, time_ns, 1)[0], cutoff);
+        }
     }
 
     #[test]
@@ -15206,7 +16386,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15234,7 +16414,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15255,7 +16435,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15277,7 +16457,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15308,7 +16488,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15345,7 +16525,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15382,7 +16562,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15421,7 +16601,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15830,7 +17010,7 @@ mod tests {
         let mut judged = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         judged.result = Some(test_judgment(JudgeGrade::Great));
         let notes = [judged];
-        let mut note_indices = [usize::MAX; MAX_COLS];
+        let mut note_indices = [usize::MAX; MAX_COLS_PER_PLAYER];
         note_indices[0] = 0;
         note_indices[1] = 99;
         let row_entry = RowEntry {
@@ -16254,6 +17434,7 @@ mod tests {
         let ix = judgment::display_judge_ix(JudgeGrade::Miss);
         assert_eq!(state.judgment_counts[ix], 1);
         assert_eq!(state.scoring_counts[ix], 0);
+        assert_eq!(state.current_possible_points, 5);
         assert_eq!(state.current_combo_window_counts.miss, 1);
         assert_eq!(state.combo.combo, 0);
         assert_eq!(state.combo.miss_combo, 1);
@@ -18072,22 +19253,102 @@ mod tests {
 
         assert_eq!(note_index, 2);
     }
-    mod pump_checkpoint_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/pump_checkpoints.rs"
-        ));
-    }
-    mod pump_hold_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/pump_holds.rs"
-        ));
-    }
-    mod crossover_row_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/crossover_rows.rs"
-        ));
+
+    #[test]
+    fn two_point_position_spline_matches_native_samples() {
+        let spline = SongLuaPositionSpline {
+            enabled: true,
+            points: [[-12.0, 108.0, 0.0], [36.0, -108.0, 0.2]],
+            beats_per_t: 6.0,
+            receptor_t: 0.0,
+            subtract_song_beat: true,
+            ..SongLuaPositionSpline::default()
+        };
+        // ITGmania CubicSpline.cpp, MSVC /O2, including negative fractions
+        // and the final point's reversed derivative.
+        let cases = [
+            (
+                -2f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -1f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -0.999000013f32,
+                [-59.9519997f32, 323.783997f32, -0.1998f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -0.25f32,
+                [-24f32, 162f32, -0.0500000007f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.25f32,
+                [0f32, 54f32, 0.0500000007f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.5f32,
+                [12f32, 0f32, 0.100000001f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.999000013f32,
+                [35.9519997f32, -107.783997f32, 0.1998f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                1f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+            (
+                1.5f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+            (
+                3f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+        ];
+        for (t, expected, derivative) in cases {
+            let (actual, actual_derivative) = spline.sample(0.0, t * 6.0);
+            for axis in 0..3 {
+                assert!(
+                    (actual[axis] - expected[axis]).abs() < 0.0001,
+                    "t={t}, axis={axis}"
+                );
+                assert_eq!(actual_derivative[axis], derivative[axis]);
+            }
+        }
+        let relative = SongLuaPositionSpline {
+            receptor_t: 0.25,
+            ..spline
+        };
+        assert_eq!(relative.receptor(99.0), [0.0, 54.0, 0.05]);
+        assert_eq!(relative.sample(20.0, 24.5).0, [12.0, 0.0, 0.1]);
+        let absolute = SongLuaPositionSpline {
+            subtract_song_beat: false,
+            ..relative
+        };
+        assert_eq!(absolute.receptor(3.0), [12.0, 0.0, 0.1]);
+        assert_eq!(absolute.sample(99.0, 3.0).0, [12.0, 0.0, 0.1]);
+        let disabled = SongLuaPositionSpline {
+            enabled: false,
+            ..spline
+        };
+        assert_eq!(disabled.sample(0.0, 3.0), ([0.0; 3], [0.0; 3]));
     }
 }

@@ -736,6 +736,15 @@ where
     )
 }
 
+pub fn update_core_with_pre_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+    delta_time: f32, audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    before_players: impl FnOnce(&mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>),
+) -> GameplayAction where Profile: GameplayProfileData {
+    state.update_gameplay_frame_with_pre_player(delta_time, audio_snapshot, ASSIST_TICK_SFX_PATH, fallback_host_nanos, before_players)
+}
+
 #[inline(always)]
 const fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
     match action {
@@ -860,10 +869,8 @@ pub fn log_timing_hit_detail(
     }
     let note_time_s = song_time_ns_to_seconds(note_time_ns);
     let event_time_s = song_time_ns_to_seconds(event_time_ns);
-    let expected_stream_for_note_s =
-        note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-    let expected_stream_for_hit_s =
-        event_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+    let expected_stream_for_note_s = note_time_s / rate + lead_in_s;
+    let expected_stream_for_hit_s = event_time_s / rate + lead_in_s;
     let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
     let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
     log::debug!(

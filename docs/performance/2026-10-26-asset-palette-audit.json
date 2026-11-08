@@ -1,0 +1,43 @@
+{
+  "starting_commit": "f2dd892e7",
+  "retained_changes": [
+    "borrow GIF palettes",
+    "bulk BMP palettes and reuse scratch rows",
+    "stack cache filenames and reserve path"
+  ],
+  "allocation_deltas_verified_in_every_repeated_probe": true,
+  "patch_replay_matches_retained_working_source": true,
+  "upload_candidate_reverted": true,
+  "accepted_measurements": 432,
+  "rejected_measurements": 198,
+  "paired_rows": 12,
+  "validation": {
+    "final-cargo-tests": {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-assets",
+        "--locked"
+      ],
+      "exit_code": 0
+    },
+    "final-clippy": {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-assets",
+        "--locked",
+        "--lib",
+        "--tests",
+        "--no-deps"
+      ],
+      "exit_code": 0
+    }
+  },
+  "final_source_sha256": {
+    "crates\\deadlib-assets\\src\\decode.rs": "8bae4e6f2d209df729dc239e6ba222e42cd154337d2908b1bd947ac67a36be64",
+    "crates\\deadlib-assets\\src\\dynamic.rs": "ad6359bfe1c0c6f9e9846ed239820049b8bd3fe4cd7b99438bd7aae6802c5bef"
+  }
+}

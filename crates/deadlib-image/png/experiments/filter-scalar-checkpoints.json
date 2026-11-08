@@ -1,0 +1,12 @@
+{
+  "baseline_png_commit": "8c5713343",
+  "variant": "scalar",
+  "reverse_patch": "filter-scalar-before.patch",
+  "reverse_patch_sha256": "1a19b3d31ad92bba3f0750fefe7eb21b4a6ce1d9822968b8ab02284830f8fd7f",
+  "source": "src/scanline.rs",
+  "before_sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3",
+  "candidate_sha256": "1245d33337a22214d63067c555fca7677ac855ac9300e83d26f6a14de8f61d8e",
+  "reverse_patch_exact_reconstruction_verified": true,
+  "retained_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-filter-checkpoint-ialoca75",
+  "selection_role": "Exploratory regional predictor and separate scalar loops"
+}

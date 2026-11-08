@@ -11,7 +11,7 @@ use deadsync_theme::views::{
 };
 use std::time::{Duration, Instant};
 
-fn init() -> State {
+pub(super) fn init() -> State {
     init_with_audio(AudioOptionsView::default())
 }
 
@@ -312,21 +312,21 @@ fn visual_assets_follow_local_machine_choices() {
         .expect("machine options should contain theme variant");
     state.sub[SubmenuKind::Machine].choice_indices[style_row] =
         visual_style_choice_index(config::theme::VisualStyle::Srpg9);
-    state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
-        srpg_variant_choice_index(config::theme::SrpgVariant::Srpg10);
+    for variant in config::theme::SrpgVariant::ALL {
+        state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
+            srpg_variant_choice_index(variant);
 
-    let selected = selected_visual_assets(&state);
-    let expected = visual_styles::for_style_and_variant(
-        config::theme::VisualStyle::Srpg9,
-        config::theme::SrpgVariant::Srpg10,
-    );
-    assert_eq!(
-        selected.select_color,
-        expected.select_color,
-        "style_choice={} variant_choice={}",
-        state.sub[SubmenuKind::Machine].choice_indices[style_row],
-        state.sub[SubmenuKind::Machine].choice_indices[variant_row]
-    );
+        let selected = selected_visual_assets(&state);
+        let expected =
+            visual_styles::for_style_and_variant(config::theme::VisualStyle::Srpg9, variant);
+        assert_eq!(
+            selected.select_color,
+            expected.select_color,
+            "style_choice={} variant_choice={}",
+            state.sub[SubmenuKind::Machine].choice_indices[style_row],
+            state.sub[SubmenuKind::Machine].choice_indices[variant_row]
+        );
+    }
 }
 
 #[test]
@@ -1529,6 +1529,125 @@ fn online_enable_choice_persists_before_reinitializing_services() {
 }
 
 #[test]
+fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config {
+        select_music_show_golf_pars: true,
+        select_music_scorebox_cycle_golf: true,
+        ..Default::default()
+    });
+    let pars_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ShowGolfPars)
+        .unwrap();
+    let boards_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::GsBoxLeaderboards)
+        .unwrap();
+    let original_mask = state.scorebox_cycle_mask;
+    assert!(!golf_features_enabled(&state));
+    assert!(
+        !submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
+            .contains(&pars_row)
+    );
+    assert_eq!(
+        row_choices(
+            &state,
+            SubmenuKind::SelectMusic,
+            SELECT_MUSIC_OPTIONS_ROWS,
+            boards_row
+        )
+        .len(),
+        4
+    );
+    assert!(matches!(
+        toggle_select_music_scorebox_cycle_option(&mut state, 4),
+        ThemeEffect::None
+    ));
+    assert_eq!(state.scorebox_cycle_mask, original_mask);
+
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, 1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::EnableGolf(true)
+            )
+        ))
+    ));
+    assert!(golf_features_enabled(&state));
+    assert!(
+        submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
+            .contains(&pars_row)
+    );
+    assert_eq!(
+        row_choices(
+            &state,
+            SubmenuKind::SelectMusic,
+            SELECT_MUSIC_OPTIONS_ROWS,
+            boards_row
+        )
+        .len(),
+        5
+    );
+    state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row] = 4;
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(!golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row],
+        3
+    );
+    assert_eq!(state.scorebox_cycle_mask, original_mask);
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        1
+    );
+}
+
+#[test]
+fn enabling_golf_defaults_wheel_pars_on_and_disabling_keeps_the_choice() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config {
+        select_music_show_golf_pars: false,
+        ..Default::default()
+    });
+    let pars_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ShowGolfPars)
+        .unwrap();
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        0
+    );
+
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
+    apply_submenu_choice_delta(&mut state, &assets, 1, NavWrap::Clamp).unwrap();
+    assert!(golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        1,
+        "enabling golf turns the wheel par badges on"
+    );
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].cursor_indices[pars_row],
+        1
+    );
+
+    // A player who then turns the badges off keeps that choice when golf is disabled.
+    state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row] = 0;
+    state.sub[SubmenuKind::SelectMusic].cursor_indices[pars_row] = 0;
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(!golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        0
+    );
+}
+
+#[test]
 fn arrowcloud_enable_persists_before_reinitializing_services() {
     let asset_manager = AssetManager::new();
     let mut state = init();
@@ -1563,6 +1682,47 @@ fn arrowcloud_enable_persists_before_reinitializing_services() {
         ))
     ));
     assert!(!state.online_reinit_pending);
+}
+
+#[test]
+fn share_rips_starts_from_config_and_persists_through_shell() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::OnlineScoring);
+    let row = select_visible_row(&mut state, SubmenuKind::OnlineScoring, SubRowId::ShareRips);
+    assert_eq!(
+        ONLINE_SCORING_OPTIONS_ROWS.len() + 1,
+        ONLINE_SCORING_OPTIONS_ITEMS.len()
+    );
+    assert_eq!(ONLINE_SCORING_OPTIONS_ITEMS[row].id, ItemId::OsShareRips);
+    assert_eq!(
+        state.sub[SubmenuKind::OnlineScoring].choice_indices[row],
+        1,
+        "rips are shared unless turned off"
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Share Rips should emit shell work");
+    let mut effects = Vec::new();
+    append_pending_effects(&mut state, effect, &mut effects);
+
+    assert_eq!(state.sub[SubmenuKind::OnlineScoring].cursor_indices[row], 0);
+    assert_eq!(effects.len(), 2, "no service restart for a sharing switch");
+    assert!(is_change_value_sfx(&effects[0]));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ShareRips(false)
+            )
+        ))
+    ));
+
+    let state = init_with_config(config::app_config::Config {
+        share_rips: false,
+        ..config::app_config::Config::default()
+    });
+    assert_eq!(state.sub[SubmenuKind::OnlineScoring].choice_indices[row], 0);
 }
 
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
@@ -3116,8 +3276,9 @@ fn borrowed_row_layout_does_not_clone_shared_geometry() {
     let asset_manager = AssetManager::new();
     let row_idx = row_position(MACHINE_OPTIONS_ROWS, SubRowId::VisualStyle)
         .expect("machine options should contain visual style");
-    let owned = submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
-        .expect("visual style should have a row layout");
+    let owned = borrow_submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
+        .expect("visual style should have a row layout")
+        .clone();
     let strong_count = Arc::strong_count(&owned.texts);
 
     let borrowed = borrow_submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
@@ -3840,59 +4001,50 @@ fn graphics_refresh_change_emits_request_on_exit() {
     ));
 }
 
+#[path = "ui_pipelines_perf.rs"]
+mod pipelines_perf;
+
+mod data_paths_perf;
+
+mod enumeration {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/option_enumeration.rs"
+    ));
+}
+
 #[test]
-fn shared_option_labels_preserve_all_submenu_values_and_layout_geometry() {
-    fn compare(state: &State, assets: &AssetManager) {
-        for kind in SubmenuKind::ALL {
-            let rows = submenu_rows(kind);
-            // Include out-of-range lookups as well as every real row.
-            for index in 0..=rows.len() {
-                let old = layout::label_baseline::row_choices(state, kind, rows, index);
-                let new = row_choices(state, kind, rows, index);
-                assert_eq!(
-                    new.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
-                    old.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
-                    "{kind:?}/{index}"
-                );
-                let old =
-                    layout::label_baseline::submenu_display_choice_texts(state, kind, rows, index);
-                let new = submenu_display_choice_texts(state, kind, rows, index);
-                assert_eq!(
-                    new.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
-                    old.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
-                    "display {kind:?}/{index}"
-                );
-                let old =
-                    layout::label_baseline::build_submenu_row_layout(state, assets, kind, index);
-                let new = build_submenu_row_layout(state, assets, kind, index);
-                // Debug includes text, widths, positions, centers and all sizing/inline flags.
-                assert_eq!(
-                    format!("{new:?}"),
-                    format!("{old:?}"),
-                    "layout {kind:?}/{index}"
-                );
-            }
-        }
-    }
+fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {
+    let parsed = deadsync_simfile::song::parse_song_bytes(
+        b"#TITLE:Doubles only;#BPMS:0=120;#NOTES:dance-double::Hard:9:0,0,0,0,0:10000000\n;",
+        "sm",
+        std::path::Path::new("Songs/Doubles only/Song/song.sm"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        |_| 0.0,
+    )
+    .unwrap();
+    let song = Arc::new(deadsync_simfile::cache::build_song_meta(parsed, 0.0));
     let mut state = init();
-    let assets = AssetManager::new();
-    compare(&state, &assets);
-    state.system_noteskin_choices = vec![
-        "".into(),
-        "\u{65e5}\u{672c}\u{8a9e}".into(),
-        "Skin".repeat(100),
-    ];
-    state.software_thread_labels = vec!["Auto".into(), "128".into()];
-    state.display_mode_choices = vec!["Windowed".into(), "Full screen".into()];
-    state.resolution_choices = vec![(1, 1), (1920, 1080), (7680, 4320)];
-    state.smx_bg_pack_choices = vec!["Custom".into(), "".into()];
-    state.smx_judge_pack_choices = vec!["Judgments".into()];
-    state.score_import_profile_choices = vec!["Player 1".into(), "Player 2".into()];
-    state.sync_pack_choices = vec!["Pack A".into(), "Pack B".into()];
-    state.bookkeeping.stages_played = 123456;
-    compare(&state, &assets);
-    state.system_noteskin_choices.clear();
-    state.smx_bg_pack_choices.clear();
-    state.sync_pack_choices.clear();
-    compare(&state, &assets);
+    assert_eq!(state.pack_sync.target_chart_type, "dance-single");
+    state.song_packs = vec![crate::views::OptionsSongPackView {
+        group_name: "Doubles only".to_owned(),
+        display_name: "Doubles only".to_owned(),
+        songs: vec![Arc::clone(&song)],
+    }];
+    super::pack_sync::begin_pack_sync(
+        &mut state,
+        super::pack_sync::SyncPackSelection {
+            pack_group: Some("Doubles only".to_owned()),
+            pack_label: "Doubles only".to_owned(),
+        },
+    );
+    let Some(crate::SimplyLoveSyncRequest::StartAnalysis { owner, targets, .. }) =
+        state.pending_sync.pop()
+    else {
+        panic!("Options must queue a doubles-only pack in singles mode");
+    };
+    assert_eq!(owner, crate::SimplyLoveSyncOwner::OptionsPack);
+    assert_eq!(targets.len(), 1);
+    assert!(Arc::ptr_eq(&targets[0].song, &song));
+    assert_eq!(targets[0].chart_ix, 0);
 }

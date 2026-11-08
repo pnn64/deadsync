@@ -1,0 +1,8 @@
+{
+    "measured_benchmark_sha256":  "678d136492531ed09c2198fc0ea51d966b7bccbd9388935e5c0ae060229fb1e7",
+    "current_benchmark_sha256":  "55ddea1e33290a69ac8fb3a982cacd2eceef936e942f43379e8fcdebd96f1708",
+    "identical_cpu_helper_sha256":  "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "all_checkpoint_harness_hashes_verified":  true,
+    "final_production_hashes_verified":  true,
+    "change":  "Only the CPU helper module path moved into the PNG package; exact measured harness retained as measured-benchmark.rs."
+}

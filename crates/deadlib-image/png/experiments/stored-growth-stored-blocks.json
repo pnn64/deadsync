@@ -1,0 +1,129 @@
+{
+  "proofs": [
+    {
+      "file": "color-0-depth-08-adam7-1-noise-1.png",
+      "png_sha256": "7d977f92620c17d015fc52fdc31b85e9561c9f33a2e25358384aace2b48dd1d0",
+      "stored_payload_lengths": [
+        16397,
+        16391,
+        609
+      ],
+      "raw_bytes": 33397,
+      "raw_sha256": "0bcd6478c462a9f922b92619d86a0fc63a995afe75e324c2b6adb2177a8f52ec",
+      "capacity_requests": {
+        "baseline": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 16397
+          },
+          {
+            "output_bytes": 16397,
+            "capacity_requested": 32794
+          },
+          {
+            "output_bytes": 32788,
+            "capacity_requested": 33397
+          }
+        ],
+        "candidate": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 32794
+          },
+          {
+            "output_bytes": 16397,
+            "capacity_requested": 33397
+          }
+        ]
+      }
+    },
+    {
+      "file": "color-2-depth-08-adam7-0-noise-1.png",
+      "png_sha256": "c8517ca323f819e49a31065849947eb334b24e5132f1bc3251d7bbe571ddbe34",
+      "stored_payload_lengths": [
+        16387,
+        16385,
+        16389,
+        16389,
+        16391,
+        16387,
+        1260
+      ],
+      "raw_bytes": 99588,
+      "raw_sha256": "724c2b1c83b1226a7f5b146e9fe31c0598292220db78df04db3eaa21d3a2c0e9",
+      "capacity_requests": {
+        "baseline": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 16387
+          },
+          {
+            "output_bytes": 16387,
+            "capacity_requested": 32774
+          },
+          {
+            "output_bytes": 32772,
+            "capacity_requested": 65548
+          },
+          {
+            "output_bytes": 49161,
+            "capacity_requested": 99588
+          }
+        ],
+        "candidate": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 32774
+          },
+          {
+            "output_bytes": 16387,
+            "capacity_requested": 65548
+          },
+          {
+            "output_bytes": 32772,
+            "capacity_requested": 99588
+          }
+        ]
+      }
+    },
+    {
+      "file": "color-3-depth-08-adam7-0-noise-1.png",
+      "png_sha256": "3a77896ca4019b1e8ebba56a6d50365e93b2a788bc4564ba4159c791cf8fc08c",
+      "stored_payload_lengths": [
+        16387,
+        16385,
+        510
+      ],
+      "raw_bytes": 33282,
+      "raw_sha256": "8cb01e5c5dc0b294b0f5c304daa677dba0c566749edb98f04f201ae32193b033",
+      "capacity_requests": {
+        "baseline": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 16387
+          },
+          {
+            "output_bytes": 16387,
+            "capacity_requested": 32774
+          },
+          {
+            "output_bytes": 32772,
+            "capacity_requested": 33282
+          }
+        ],
+        "candidate": [
+          {
+            "output_bytes": 0,
+            "capacity_requested": 32774
+          },
+          {
+            "output_bytes": 16387,
+            "capacity_requested": 33282
+          }
+        ]
+      }
+    }
+  ],
+  "scope": "Independent stored-header/LEN/NLEN and raw-byte parsing, validated with Python zlib. Capacity requests simulate the recorded policies with the exact output size as limit; allocator instrumentation provides separate observed counts.",
+  "runner_sha256": "ce32322605b25cc11631b9a10c8f0d0be03e80f9bfb7e0c5aa25ef42687aa28e"
+}

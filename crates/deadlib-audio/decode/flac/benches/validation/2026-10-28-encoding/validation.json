@@ -1,0 +1,26 @@
+{
+  "baseline_revision": "9e8f72ac0",
+  "cpu": "12th Gen Intel Core i7-1250U, Windows x86_64 MSVC, affinity logical CPU 2",
+  "matrix_frames": 1044,
+  "matrix_dimensions": "29 depths (4..32), 3 channel counts (1,2,8), 4 levels (0,2,5,8), 3 block/pattern pairs (16 smooth,67 noise,257 smooth)",
+  "matrix_bytes": 635954,
+  "matrix_sha256": "c617f0aa343e11c9e1305b679e6f4657e22b94a6baa4e737c9646b2cd0b94eac",
+  "exact_byte_comparisons": [
+    "width",
+    "rice",
+    "window",
+    "final"
+  ],
+  "additional_frame_checks": "Eight performance cases verify exact native PCM and the baseline encoded-frame MD5 outside timing; includes 4096-sample LPC blocks.",
+  "exhaustive_rice_cases": 1920,
+  "local_tests": {
+    "unit": 14,
+    "integration": 35,
+    "documentation": 3,
+    "external_ignored": 8
+  },
+  "production_unsafe_added": 0,
+  "timing": "QueryThreadCycleTime current-thread cycles and Instant wall time; resident PCM, reused encoder; setup, verification and allocation accounting untimed.",
+  "heap": "Existing tests/support/perf.rs System allocator forwarding, cold first frame and warmed frame measured separately. Requested bytes include cumulative reallocation requests; not RSS or retained heap.",
+  "limits": "Synthetic resident single-frame encoding on one host; does not establish full music-file encoding or playback/decoder throughput. External libFLAC/FFmpeg corpus gates were not rerun."
+}

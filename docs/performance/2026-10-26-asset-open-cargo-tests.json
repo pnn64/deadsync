@@ -1,0 +1,1 @@
+{"argv": ["cargo", "test", "-p", "deadlib-assets", "--locked"], "exit_code": 0}

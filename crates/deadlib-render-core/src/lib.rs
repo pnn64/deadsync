@@ -20,6 +20,63 @@ pub type TextureHandle = u64;
 /// Engine cameras output OpenGL clip coordinates (-w <= z <= w). Backends
 /// whose clip depth is 0 <= z <= w must remap z to (z + w) / 2 before clipping.
 pub type ProjectionMatrix = Matrix4;
+
+/// Independent depth comparison and writing, as selected by the drawing actor.
+/// The six states index pipelines created before frame recording.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DepthMode {
+    #[default]
+    Off,
+    Write,
+    Test,
+    TestWrite,
+    TestFail,
+    TestFailWrite,
+}
+
+impl DepthMode {
+    pub const ALL: [Self; 6] = [
+        Self::Off,
+        Self::Write,
+        Self::Test,
+        Self::TestWrite,
+        Self::TestFail,
+        Self::TestFailWrite,
+    ];
+
+    pub const fn from_flags(test: bool, write: bool, on_fail: bool) -> Self {
+        match (test, write, on_fail) {
+            (false, false, _) => Self::Off,
+            (false, true, _) => Self::Write,
+            (true, false, false) => Self::Test,
+            (true, true, false) => Self::TestWrite,
+            (true, false, true) => Self::TestFail,
+            (true, true, true) => Self::TestFailWrite,
+        }
+    }
+
+    pub const fn tests(self) -> bool {
+        !matches!(self, Self::Off | Self::Write)
+    }
+
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::TestWrite | Self::TestFailWrite)
+    }
+
+    pub const fn on_fail(self) -> bool {
+        matches!(self, Self::TestFail | Self::TestFailWrite)
+    }
+}
+
+/// Clamp a target's pixel viewport to its backing allocation.
+pub fn render_target_viewport(frame: &RenderTargetFrame) -> [u32; 2] {
+    [
+        frame.viewport[0].clamp(1, frame.width.max(1)),
+        frame.viewport[1].clamp(1, frame.height.max(1)),
+    ]
+}
+
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 /// Render-target handles occupy a namespace that can never overlap asset-store
 /// handles. Backends resolve these from their render-thread-owned offscreen
@@ -114,8 +171,9 @@ impl<V> DenseSlotMap<V> {
     #[inline(always)]
     #[must_use]
     pub fn get_slot(&self, buffer_key: u64) -> Option<&V> {
+        // Zero wraps to an invalid index and shares the ordinary bounds check.
         self.values
-            .get(usize::try_from(buffer_key.checked_sub(1)?).ok()?)
+            .get(usize::try_from(buffer_key.wrapping_sub(1)).ok()?)
     }
 
     /// # Panics
@@ -263,6 +321,10 @@ pub struct MeshVertex {
     bytemuck::Zeroable,
 )]
 pub struct TexturedMeshVertex {
+    /// Object-space normal; w selects texgen (bit 0 primary, bit 1 additive).
+    /// Bit 2 enables the secondary additive texture stage.
+    #[serde(default)]
+    pub normal: [f32; 4],
     pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
@@ -273,12 +335,104 @@ impl Default for TexturedMeshVertex {
     #[inline(always)]
     fn default() -> Self {
         Self {
+            normal: [0.0; 4],
             pos: [0.0, 0.0, 0.0],
             uv: [0.0, 0.0],
             color: [0.0, 0.0, 0.0, 0.0],
             tex_matrix_scale: [1.0, 1.0],
         }
     }
+}
+
+/// Fixed-function GL_SPHERE_MAP, evaluated per vertex before interpolation.
+pub fn sphere_texture_uv(pos: [f32; 3], normal: [f32; 3], rows: [[f32; 4]; 3]) -> [f32; 2] {
+    sphere_texture_mapper(rows)(pos, normal)
+}
+
+fn sphere_texture_mapper(rows: [[f32; 4]; 3]) -> impl Fn([f32; 3], [f32; 3]) -> [f32; 2] {
+    let matrix = glam::Mat3::from_cols(
+        glam::Vec3::new(rows[0][0], rows[1][0], rows[2][0]),
+        glam::Vec3::new(rows[0][1], rows[1][1], rows[2][1]),
+        glam::Vec3::new(rows[0][2], rows[1][2], rows[2][2]),
+    );
+    let cofactor = glam::Mat3::from_cols(
+        matrix.y_axis.cross(matrix.z_axis),
+        matrix.z_axis.cross(matrix.x_axis),
+        matrix.x_axis.cross(matrix.y_axis),
+    );
+    let sign = matrix.determinant().signum();
+    move |pos, normal| {
+        let n = (cofactor * glam::Vec3::from(normal) * sign).normalize_or_zero();
+        let p = glam::Vec4::new(pos[0], pos[1], pos[2], 1.0);
+        let eye = glam::Vec3::new(
+            glam::Vec4::from(rows[0]).dot(p),
+            glam::Vec4::from(rows[1]).dot(p),
+            glam::Vec4::from(rows[2]).dot(p),
+        )
+        .normalize_or_zero();
+        let reflection = eye - 2.0 * n * eye.dot(n);
+        let denominator = (2.0 * (reflection + glam::Vec3::Z).length()).max(1e-20);
+        [
+            reflection.x / denominator + 0.5,
+            reflection.y / denominator + 0.5,
+        ]
+    }
+}
+
+/// The two independent coordinate-generation modes share the diffuse matrix.
+pub fn textured_mesh_uvs(
+    vertex: TexturedMeshVertex,
+    instance: TexturedMeshInstanceRaw,
+) -> [[f32; 2]; 2] {
+    textured_mesh_uvs_with_sphere(vertex, instance, || {
+        sphere_texture_uv(
+            vertex.pos,
+            [vertex.normal[0], vertex.normal[1], vertex.normal[2]],
+            instance.sphere_rows,
+        )
+    })
+}
+
+/// Prepares CPU texture-coordinate generation once for an instance's vertices.
+/// The cofactor matrix and determinant sign are shared by all sphere-map samples.
+pub fn textured_mesh_uv_mapper(
+    instance: TexturedMeshInstanceRaw,
+) -> impl Fn(TexturedMeshVertex) -> [[f32; 2]; 2] {
+    let sphere = sphere_texture_mapper(instance.sphere_rows);
+    move |vertex| {
+        textured_mesh_uvs_with_sphere(vertex, instance, || {
+            sphere(
+                vertex.pos,
+                [vertex.normal[0], vertex.normal[1], vertex.normal[2]],
+            )
+        })
+    }
+}
+
+#[inline]
+fn textured_mesh_uvs_with_sphere(
+    vertex: TexturedMeshVertex,
+    instance: TexturedMeshInstanceRaw,
+    sphere: impl FnOnce() -> [f32; 2],
+) -> [[f32; 2]; 2] {
+    let mode = if instance.texture_mask > 0.5 {
+        0
+    } else {
+        vertex.normal[3] as u8
+    };
+    let sphere = if mode & 3 != 0 { sphere() } else { vertex.uv };
+    let uv = if mode & 1 != 0 { sphere } else { vertex.uv };
+    let additive = if mode & 2 != 0 { sphere } else { vertex.uv };
+    [
+        std::array::from_fn(|axis| {
+            uv[axis] * instance.uv_scale[axis]
+                + instance.uv_offset[axis]
+                + instance.uv_tex_shift[axis] * (vertex.tex_matrix_scale[axis] - 1.0)
+        }),
+        std::array::from_fn(|axis| {
+            additive[axis] * instance.additive_uv[axis] + instance.additive_uv[axis + 2]
+        }),
+    ]
 }
 
 #[derive(Clone)]
@@ -332,6 +486,16 @@ pub struct SpriteInstanceRaw {
     pub texture_mask: f32,
 }
 
+/// Which winding to discard. Encoded identically in every mesh shader.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
+pub enum CullMode {
+    #[default]
+    None = 0,
+    Back = 1,
+    Front = 2,
+}
+
 #[repr(C)]
 #[derive(
     Clone,
@@ -353,6 +517,17 @@ pub struct TexturedMeshInstanceRaw {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub texture_mask: f32,
+    /// CullMode encoded as a float: none=0, back=1, front=2.
+    #[serde(default)]
+    pub cull_mode: f32,
+    /// Affine object-to-eye transform, stored as rows for vertex attributes.
+    #[serde(default)]
+    pub sphere_rows: [[f32; 4]; 3],
+    /// Secondary texture scale.xy / offset.zw (shares the primary translation).
+    #[serde(default)]
+    pub additive_uv: [f32; 4],
+    #[serde(default)]
+    pub additive_texture: TextureHandle,
 }
 
 impl TexturedMeshInstanceRaw {
@@ -396,6 +571,10 @@ impl TexturedMeshInstanceRaw {
             uv_offset,
             uv_tex_shift,
             texture_mask: f32::from(u8::from(texture_mask)),
+            cull_mode: 0.0,
+            sphere_rows: [[0.0; 4]; 3],
+            additive_uv: [1.0, 1.0, 0.0, 0.0],
+            additive_texture: 0,
         }
     }
 
@@ -468,6 +647,84 @@ pub struct SamplerDesc {
     pub filter: SamplerFilter,
     pub wrap: SamplerWrap,
     pub mipmaps: bool,
+}
+
+/// Per-draw filtering and addressing, independent of a texture's mip storage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MeshSampler {
+    pub filter: SamplerFilter,
+    pub wrap: SamplerWrap,
+}
+
+impl MeshSampler {
+    #[must_use]
+    pub const fn apply(self, texture: SamplerDesc) -> SamplerDesc {
+        SamplerDesc {
+            filter: self.filter,
+            wrap: self.wrap,
+            // ITGmania's nearest override samples the base image only.
+            mipmaps: texture.mipmaps && matches!(self.filter, SamplerFilter::Linear),
+        }
+    }
+}
+
+#[must_use]
+pub const fn texture_sampler_desc(
+    texture: SamplerDesc,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> SamplerDesc {
+    if let Some(sampler) = sampler {
+        return sampler.apply(texture);
+    }
+    SamplerDesc {
+        wrap: if repeat {
+            SamplerWrap::Repeat
+        } else {
+            texture.wrap
+        },
+        filter: if render_target_uses_nearest(handle) {
+            SamplerFilter::Nearest
+        } else {
+            texture.filter
+        },
+        mipmaps: texture.mipmaps && !render_target_uses_nearest(handle),
+    }
+}
+
+/// All default and per-draw choices are prepared at texture creation. There
+/// are at most six distinct descriptions in the fixed eight-slot domain;
+/// drawing only indexes retained resources and never allocates or evicts.
+#[must_use]
+pub const fn texture_sampler_variants(texture: SamplerDesc) -> [SamplerDesc; 6] {
+    [
+        texture,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..texture
+        },
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Repeat,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+        }
+        .apply(texture),
+    ]
 }
 
 impl Default for SamplerDesc {
@@ -578,6 +835,8 @@ pub enum BlendMode {
     Multiply,
     #[allow(dead_code)]
     Subtract,
+    /// Preserve destination color and alpha while still rasterizing depth.
+    NoEffect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -621,20 +880,51 @@ impl core::str::FromStr for BackendType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
+        match s.trim() {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan" => Ok(Self::Vulkan),
+            name if name.eq_ignore_ascii_case("vulkan") => Ok(Self::Vulkan),
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
+            name if name.eq_ignore_ascii_case("vulkan-wgpu")
+                || name.eq_ignore_ascii_case("vulkan_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-vulkan")
+                || name.eq_ignore_ascii_case("vulkan (wgpu)") =>
+            {
+                Ok(Self::VulkanWgpu)
+            }
             #[cfg(target_os = "macos")]
-            "metal" | "metal-native" | "metal_native" | "native-metal" => Ok(Self::Metal),
+            name if name.eq_ignore_ascii_case("metal")
+                || name.eq_ignore_ascii_case("metal-native")
+                || name.eq_ignore_ascii_case("metal_native")
+                || name.eq_ignore_ascii_case("native-metal") =>
+            {
+                Ok(Self::Metal)
+            }
             #[cfg(target_os = "macos")]
-            "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => Ok(Self::MetalWgpu),
-            "opengl" => Ok(Self::OpenGL),
-            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
-            "software" | "cpu" => Ok(Self::Software),
+            name if name.eq_ignore_ascii_case("metal-wgpu")
+                || name.eq_ignore_ascii_case("metal_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-metal")
+                || name.eq_ignore_ascii_case("metal (wgpu)") =>
+            {
+                Ok(Self::MetalWgpu)
+            }
+            name if name.eq_ignore_ascii_case("opengl") => Ok(Self::OpenGL),
+            name if name.eq_ignore_ascii_case("opengl-wgpu")
+                || name.eq_ignore_ascii_case("opengl_wgpu")
+                || name.eq_ignore_ascii_case("wgpu-opengl")
+                || name.eq_ignore_ascii_case("opengl (wgpu)") =>
+            {
+                Ok(Self::OpenGLWgpu)
+            }
+            name if name.eq_ignore_ascii_case("software") || name.eq_ignore_ascii_case("cpu") => {
+                Ok(Self::Software)
+            }
             #[cfg(target_os = "windows")]
-            "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
+            name if name.eq_ignore_ascii_case("directx")
+                || name.eq_ignore_ascii_case("dx12")
+                || name.eq_ignore_ascii_case("directx (wgpu)") =>
+            {
+                Ok(Self::DirectX)
+            }
             _ => Err(format!("'{s}' is not a valid video renderer")),
         }
     }
@@ -760,10 +1050,23 @@ impl core::str::FromStr for PresentModePolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "mailbox" | "balanced" => Ok(Self::Mailbox),
-            "immediate" | "unhinged" => Ok(Self::Immediate),
-            other => Err(format!("'{other}' is not a valid present mode policy")),
+        match s.trim() {
+            name if name.eq_ignore_ascii_case("mailbox")
+                || name.eq_ignore_ascii_case("balanced") =>
+            {
+                Ok(Self::Mailbox)
+            }
+            name if name.eq_ignore_ascii_case("immediate")
+                || name.eq_ignore_ascii_case("unhinged") =>
+            {
+                Ok(Self::Immediate)
+            }
+            other => {
+                let mut error = format!("'{other}' is not a valid present mode policy");
+                // The fixed message is already lowercase; fold the finished error in place.
+                error.make_ascii_lowercase();
+                Err(error)
+            }
         }
     }
 }
@@ -824,6 +1127,33 @@ mod tests {
             vec!["replacement", "second"]
         );
         assert!(values.is_empty());
+    }
+
+    #[test]
+    fn mesh_sampler_prewarms_cover_overrides_and_default_restore() {
+        for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+            for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                for mipmaps in [false, true] {
+                    let texture = SamplerDesc {
+                        filter,
+                        wrap,
+                        mipmaps,
+                    };
+                    let variants = texture_sampler_variants(texture);
+                    for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+                        for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                            let sampler = MeshSampler { filter, wrap };
+                            let wanted = texture_sampler_desc(texture, 1, true, Some(sampler));
+                            assert!(variants.contains(&wanted));
+                            assert_eq!(wanted.filter, filter);
+                            assert_eq!(wanted.wrap, wrap);
+                            assert_eq!(wanted.mipmaps, mipmaps && filter == SamplerFilter::Linear);
+                        }
+                    }
+                    assert_eq!(texture_sampler_desc(texture, 1, false, None), texture);
+                }
+            }
+        }
     }
 
     #[test]

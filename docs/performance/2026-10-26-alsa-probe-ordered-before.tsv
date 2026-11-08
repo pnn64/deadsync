@@ -1,0 +1,10 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	probe-log-ordered-baseline	enumerate_failed	100000	41912.09331	78721.18064	23273.6	26994.27894	25	9	2816
+0	probe-log-ordered-baseline	enumerate_warn	30000	50717.1919	93587.91886666666	27402.0	32547.815766666667	25	9	2816
+0	probe-log-ordered-baseline	enumerate	20000	294251.90375	446686.9589	169579.0	187690.79815	25	1	1824
+1	probe-log-ordered-baseline	enumerate_failed	100000	39964.04887	78721.1311	20780.6	20960.02502	25	9	2816
+1	probe-log-ordered-baseline	enumerate_warn	30000	46239.45903333333	93587.8564	23242.333333333332	23245.667166666666	25	9	2816
+1	probe-log-ordered-baseline	enumerate	20000	257232.52485	446686.76455	146474.0	148385.08285	25	1	1824
+2	probe-log-ordered-baseline	enumerate_failed	100000	39549.35667	78721.13455	20313.3	20521.98235	25	9	2816
+2	probe-log-ordered-baseline	enumerate_warn	30000	45551.64636666667	93587.85953333334	23123.333333333332	23149.3093	25	9	2816
+2	probe-log-ordered-baseline	enumerate	20000	258263.92795	446686.74015	149220.0	151204.1222	25	1	1824

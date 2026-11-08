@@ -11,6 +11,7 @@ use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_theme::FontRole;
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
@@ -213,53 +214,6 @@ fn build_itl_box_body(progress: &score_data::EventProgress) -> String {
 }
 
 #[inline(always)]
-fn srpg_stat_lines(progress: &score_data::EventProgress) -> (Vec<String>, Vec<String>) {
-    let srpg_stats = ["tp", "lp", "bb", "gold", "jp"];
-    let show_qualifier_pair = progress.stat_improvements.len() >= 5;
-    let mut qualifier = Vec::with_capacity(2);
-    let mut stats = Vec::with_capacity(progress.stat_improvements.len());
-    for improvement in &progress.stat_improvements {
-        if improvement.gained == 0
-            || !srpg_stats
-                .iter()
-                .any(|stat| improvement.name.eq_ignore_ascii_case(stat))
-        {
-            continue;
-        }
-        let line = format!(
-            "+{} {}",
-            improvement.gained,
-            improvement.name.to_uppercase()
-        );
-        if show_qualifier_pair
-            && (improvement.name.eq_ignore_ascii_case("tp")
-                || improvement.name.eq_ignore_ascii_case("lp"))
-        {
-            qualifier.push(line);
-        } else {
-            stats.push(line);
-        }
-    }
-    (qualifier, stats)
-}
-
-#[inline(always)]
-fn srpg_overlay_stat_lines(progress: &score_data::EventProgress) -> Vec<String> {
-    progress
-        .stat_improvements
-        .iter()
-        .filter(|improvement| improvement.gained > 0)
-        .map(|improvement| {
-            format!(
-                "+{} {}",
-                improvement.gained,
-                improvement.name.to_uppercase()
-            )
-        })
-        .collect()
-}
-
-#[inline(always)]
 fn build_srpg_box_body(progress: &score_data::EventProgress) -> String {
     let mut body = format!(
         "Score: {} {}\n\
@@ -269,19 +223,32 @@ fn build_srpg_box_body(progress: &score_data::EventProgress) -> String {
         format_rate_hundredths(progress.rate_hundredths.unwrap_or(100)),
         format_signed_rate_hundredths(progress.rate_delta_hundredths.unwrap_or(0)),
     );
-    let (qualifier, stats) = srpg_stat_lines(progress);
-    if !qualifier.is_empty() || !stats.is_empty() {
-        body.push('\n');
+    let stats = progress.stat_improvements.iter().filter_map(|improvement| {
+        let name = ["TP", "LP", "BB", "GOLD", "JP"]
+            .into_iter()
+            .find(|name| improvement.name.eq_ignore_ascii_case(name))?;
+        (improvement.gained != 0).then_some((improvement.gained, name))
+    });
+    let show_qualifier_pair = progress.stat_improvements.len() >= 5;
+    let mut separator = "\n";
+    if show_qualifier_pair {
+        for (gained, name) in stats
+            .clone()
+            .filter(|(_, name)| matches!(*name, "TP" | "LP"))
+        {
+            let _ = write!(body, "{separator}+{gained} {name}");
+            separator = " ";
+        }
+        separator = "\n";
     }
-    if !qualifier.is_empty() {
-        body.push_str(qualifier.join(" ").as_str());
-        body.push('\n');
+    for (gained, name) in
+        stats.filter(|(_, name)| !show_qualifier_pair || !matches!(*name, "TP" | "LP"))
+    {
+        let _ = write!(body, "{separator}+{gained} {name}");
+        separator = "\n";
     }
-    for line in stats {
-        body.push_str(line.as_str());
-        body.push('\n');
-    }
-    body.trim_end().to_string()
+    body.truncate(body.trim_end().len());
+    body
 }
 
 #[inline(always)]
@@ -349,16 +316,24 @@ fn build_srpg_overlay_body(progress: &score_data::EventProgress) -> String {
         format_rate_hundredths(progress.rate_hundredths.unwrap_or(100)),
         format_signed_rate_hundredths(progress.rate_delta_hundredths.unwrap_or(0)),
     );
-    let stats = srpg_overlay_stat_lines(progress);
-    if !stats.is_empty() {
-        text.push_str("\n\n");
-        text.push_str(stats.join("\n").as_str());
+    let mut separator = "\n\n";
+    for improvement in progress
+        .stat_improvements
+        .iter()
+        .filter(|item| item.gained > 0)
+    {
+        let _ = write!(text, "{separator}+{} ", improvement.gained);
+        text.extend(improvement.name.chars().flat_map(char::to_uppercase));
+        separator = "\n";
     }
-    if !progress.skill_improvements.is_empty() {
-        text.push_str("\n\n");
-        text.push_str(progress.skill_improvements.join("\n").as_str());
+    let mut separator = "\n\n";
+    for skill in &progress.skill_improvements {
+        text.push_str(separator);
+        text.push_str(skill);
+        separator = "\n";
     }
-    text.trim_end().to_string()
+    text.truncate(text.trim_end().len());
+    text
 }
 
 #[inline(always)]
@@ -1453,4 +1428,12 @@ mod tests {
         assert_eq!(layout.zoom, 0.5);
         assert_eq!(layout.text, "ITL 2026\nDoubles");
     }
+}
+
+#[cfg(test)]
+mod preview_dataflows {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/preview_progress.rs"
+    ));
 }

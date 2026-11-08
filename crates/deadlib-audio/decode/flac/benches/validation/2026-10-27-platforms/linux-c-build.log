@@ -1,0 +1,57 @@
+[  2%] Building C object references/ogg/CMakeFiles/ogg.dir/src/bitwise.c.o
+[  5%] Building C object references/ogg/CMakeFiles/ogg.dir/src/framing.c.o
+[  7%] Linking C static library libogg.a
+[  7%] Built target ogg
+[ 10%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/bitmath.c.o
+[ 12%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/bitreader.c.o
+[ 15%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/bitwriter.c.o
+[ 17%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/cpu.c.o
+[ 20%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/crc.c.o
+[ 22%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/fixed.c.o
+[ 25%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/fixed_intrin_sse2.c.o
+[ 27%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/fixed_intrin_ssse3.c.o
+[ 30%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/fixed_intrin_sse42.c.o
+[ 32%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/fixed_intrin_avx2.c.o
+[ 35%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/float.c.o
+[ 37%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/format.c.o
+[ 40%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc.c.o
+[ 42%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc_intrin_neon.c.o
+[ 45%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc_intrin_sse2.c.o
+[ 47%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc_intrin_sse41.c.o
+[ 50%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc_intrin_avx2.c.o
+[ 52%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/lpc_intrin_fma.c.o
+[ 55%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/md5.c.o
+[ 57%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/memory.c.o
+[ 60%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/metadata_iterators.c.o
+[ 62%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/metadata_object.c.o
+[ 65%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_decoder.c.o
+[ 67%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_encoder.c.o
+[ 70%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_encoder_intrin_sse2.c.o
+[ 72%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_encoder_intrin_ssse3.c.o
+[ 75%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_encoder_intrin_avx2.c.o
+[ 77%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/stream_encoder_framing.c.o
+[ 80%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/window.c.o
+[ 82%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/ogg_decoder_aspect.c.o
+[ 85%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/ogg_encoder_aspect.c.o
+[ 87%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/ogg_helper.c.o
+[ 90%] Building C object references/flac/src/libFLAC/CMakeFiles/FLAC.dir/ogg_mapping.c.o
+[ 92%] Linking C static library libFLAC.a
+[ 92%] Built target FLAC
+[ 95%] Building CXX object CMakeFiles/flac_latency_benchmark.dir/benchmark.cpp.o
+[ 97%] Building C object CMakeFiles/flac_latency_benchmark.dir/opaque.c.o
+[100%] Linking CXX executable flac_latency_benchmark
+In function ‘read_metadata_vorbiscomment_’,
+    inlined from ‘read_metadata_’ at /mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:1811:10:
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/bitreader.c:555:19: warning: inlining failed in call to ‘FLAC__bitreader_read_uint32_little_endian’: call is unlikely and code size would grow [-Winline]
+  555 | inline FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
+      |                   ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:2055:22: note: called from here
+ 2055 |                 if (!FLAC__bitreader_read_uint32_little_endian(decoder->private_->input, &obj->num_comments))
+      |                      ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/bitreader.c:555:19: warning: inlining failed in call to ‘FLAC__bitreader_read_uint32_little_endian’: call is unlikely and code size would grow [-Winline]
+  555 | inline FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
+      |                   ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:2082:38: note: called from here
+ 2082 |                                 if (!FLAC__bitreader_read_uint32_little_endian(decoder->private_->input, &obj->comments[i].length)) {
+      |                                      ^
+[100%] Built target flac_latency_benchmark

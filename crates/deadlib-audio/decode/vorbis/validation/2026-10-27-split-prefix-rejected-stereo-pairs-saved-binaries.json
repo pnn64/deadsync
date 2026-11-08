@@ -1,0 +1,14 @@
+{
+  "current": {
+    "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/binaries/current.exe",
+    "sha256": "cd2de967faeca2e445bc872462dcb8b7d216dee6221828e62a462edca15daf1b"
+  },
+  "baseline": {
+    "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/binaries/baseline.exe",
+    "sha256": "55ff12d5965a63b12f0b826a5fd2aa52bf1e556fb7f33dbaa21ac8d8d93d6c9e"
+  },
+  "libvorbis": {
+    "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/binaries/libvorbis.exe",
+    "sha256": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  }
+}

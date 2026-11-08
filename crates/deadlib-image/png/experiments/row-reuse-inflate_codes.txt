@@ -1,0 +1,1039 @@
+
+/mnt/c/GitHub/deadsync/target/png-row-reuse-trial/decode_bench.exe:	file format coff-x86-64
+
+Disassembly of section .text:
+
+0000000140001000 <.text>:
+140019630:     	pushq	%r15
+140019632:     	pushq	%r14
+140019634:     	pushq	%r13
+140019636:     	pushq	%r12
+140019638:     	pushq	%rsi
+140019639:     	pushq	%rdi
+14001963a:     	pushq	%rbp
+14001963b:     	pushq	%rbx
+14001963c:     	movl	$0x4488, %eax           # imm = 0x4488
+140019641:     	callq	0x14005ccd0 <.text+0x5bcd0>
+140019646:     	subq	%rax, %rsp
+140019649:     	movaps	%xmm6, 0x4470(%rsp)
+140019651:     	movq	%r8, %rdi
+140019654:     	movq	%rdx, %rbx
+140019657:     	movq	%rcx, 0x38(%rsp)
+14001965c:     	testb	%r9b, %r9b
+14001965f:     	je	0x140019dfd <.text+0x18dfd>
+140019665:     	leaq	0x163c(%rsp), %rcx
+14001966d:     	callq	0x14001a820 <.text+0x19820>
+140019672:     	movq	0x44f8(%rsp), %r12
+14001967a:     	leaq	0x2380(%rsp), %rcx
+140019682:     	leaq	0x163c(%rsp), %rdx
+14001968a:     	movl	$0x6a2, %r8d            # imm = 0x6A2
+140019690:     	callq	0x14006a1b0 <.text+0x691b0>
+140019695:     	leaq	0x1cde(%rsp), %rdx
+14001969d:     	leaq	0x3748(%rsp), %rcx
+1400196a5:     	movl	$0x6a2, %r8d            # imm = 0x6A2
+1400196ab:     	callq	0x14006a1b0 <.text+0x691b0>
+1400196b0:     	movq	%rax, 0x48(%rsp)
+1400196b5:     	movq	%rax, 0x40(%rsp)
+1400196ba:     	movzbl	0x20(%rbx), %r13d
+1400196bf:     	jmp	0x1400196d8 <.text+0x186d8>
+1400196c1:     	nopw	%cs:(%rax,%rax)
+1400196d0:     	movq	%rsi, 0x18(%rbx)
+1400196d4:     	movb	%r13b, 0x20(%rbx)
+1400196d8:     	cmpb	$0x9, %r13b
+1400196dc:     	jae	0x140019730 <.text+0x18730>
+1400196de:     	movq	0x8(%rbx), %r8
+1400196e2:     	movq	0x10(%rbx), %rax
+1400196e6:     	movq	%r8, %rcx
+1400196e9:     	subq	%rax, %rcx
+1400196ec:     	cmpq	$0x3, %rcx
+1400196f0:     	jbe	0x140019900 <.text+0x18900>
+1400196f6:     	leaq	0x4(%rax), %rdx
+1400196fa:     	cmpq	$-0x5, %rax
+1400196fe:     	ja	0x14001a78b <.text+0x1978b>
+140019704:     	cmpq	%r8, %rdx
+140019707:     	ja	0x14001a78b <.text+0x1978b>
+14001970d:     	movq	(%rbx), %rcx
+140019710:     	movl	(%rcx,%rax), %r9d
+140019714:     	movl	%r13d, %ecx
+140019717:     	shlq	%cl, %r9
+14001971a:     	orq	0x18(%rbx), %r9
+14001971e:     	movq	%r9, 0x18(%rbx)
+140019722:     	movq	%rdx, 0x10(%rbx)
+140019726:     	orb	$0x20, %r13b
+14001972a:     	movb	%r13b, 0x20(%rbx)
+14001972e:     	jmp	0x140019734 <.text+0x18734>
+140019730:     	movq	0x18(%rbx), %r9
+140019734:     	movl	%r9d, %eax
+140019737:     	andl	$0x1ff, %eax            # imm = 0x1FF
+14001973c:     	movzwl	0x2380(%rsp,%rax,2), %esi
+140019744:     	movl	%esi, %ecx
+140019746:     	andb	$0xf, %cl
+140019749:     	leal	-0x1(%rcx), %eax
+14001974c:     	cmpb	%r13b, %al
+14001974f:     	jae	0x140019770 <.text+0x18770>
+140019751:     	shrq	%cl, %r9
+140019754:     	movq	%r9, 0x18(%rbx)
+140019758:     	subb	%cl, %r13b
+14001975b:     	movb	%r13b, 0x20(%rbx)
+14001975f:     	shrl	$0x4, %esi
+140019762:     	jmp	0x1400197a2 <.text+0x187a2>
+140019764:     	nopw	%cs:(%rax,%rax)
+140019770:     	leaq	0x240(%rsp), %rcx
+140019778:     	leaq	0x163c(%rsp), %rdx
+140019780:     	movq	%rbx, %r8
+140019783:     	callq	0x140018620 <.text+0x17620>
+140019788:     	movq	0x240(%rsp), %rax
+140019790:     	movq	0x248(%rsp), %rsi
+140019798:     	cmpq	$-0x1, %rax
+14001979c:     	jne	0x14001a44a <.text+0x1944a>
+1400197a2:     	cmpq	$0x100, %rsi            # imm = 0x100
+1400197a9:     	jae	0x140019986 <.text+0x18986>
+1400197af:     	movq	0x10(%rdi), %r15
+1400197b3:     	cmpq	%r12, %r15
+1400197b6:     	je	0x14001a120 <.text+0x19120>
+1400197bc:     	movq	(%rdi), %rbp
+1400197bf:     	cmpq	%rbp, %r15
+1400197c2:     	jne	0x14001984d <.text+0x1884d>
+1400197c8:     	cmpq	%r12, %r15
+1400197cb:     	jae	0x14001a467 <.text+0x19467>
+1400197d1:     	leaq	(%r15,%r15), %rax
+1400197d5:     	cmpq	$0x9, %rax
+1400197d9:     	movl	$0x8, %ecx
+1400197de:     	cmovbq	%rcx, %rax
+1400197e2:     	cmpq	%rax, %r12
+1400197e5:     	movq	%rax, %rbp
+1400197e8:     	cmovbq	%r12, %rbp
+1400197ec:     	cmpq	%r15, %rax
+1400197ef:     	je	0x14001994e <.text+0x1894e>
+1400197f5:     	cmpq	%r15, %rbp
+1400197f8:     	jb	0x140019e32 <.text+0x18e32>
+1400197fe:     	movq	0x8(%rdi), %r8
+140019802:     	movq	$0x1, 0x28(%rsp)
+14001980b:     	movq	$0x1, 0x20(%rsp)
+140019814:     	leaq	0x240(%rsp), %rcx
+14001981c:     	movq	%r15, %rdx
+14001981f:     	movq	%rbp, %r9
+140019822:     	callq	0x14006c4d0 <.text+0x6b4d0>
+140019827:     	cmpl	$0x1, 0x240(%rsp)
+14001982f:     	je	0x140019e32 <.text+0x18e32>
+140019835:     	movq	0x248(%rsp), %rax
+14001983d:     	movq	%rax, 0x8(%rdi)
+140019841:     	movq	%rbp, (%rdi)
+140019844:     	cmpq	%rbp, %r15
+140019847:     	je	0x14001994e <.text+0x1894e>
+14001984d:     	movq	0x8(%rdi), %rax
+140019851:     	movb	%sil, (%rax,%r15)
+140019855:     	incq	%r15
+140019858:     	movq	%r12, %rcx
+14001985b:     	subq	%r15, %rcx
+14001985e:     	subq	%r15, %rbp
+140019861:     	cmpq	%rcx, %rbp
+140019864:     	cmovaeq	%rcx, %rbp
+140019868:     	movq	%r15, 0x10(%rdi)
+14001986c:     	movq	0x18(%rbx), %rsi
+140019870:     	movzbl	0x20(%rbx), %r13d
+140019875:     	testq	%rbp, %rbp
+140019878:     	sete	%cl
+14001987b:     	cmpb	$0x9, %r13b
+14001987f:     	setb	%dl
+140019882:     	orb	%cl, %dl
+140019884:     	jne	0x1400196d0 <.text+0x186d0>
+14001988a:     	decq	%rbp
+14001988d:     	nopl	(%rax)
+140019890:     	movl	%esi, %ecx
+140019892:     	andl	$0x1ff, %ecx            # imm = 0x1FF
+140019898:     	movzwl	0x2380(%rsp,%rcx,2), %r14d
+1400198a1:     	leal	-0x1(%r14), %ecx
+1400198a5:     	movzwl	%cx, %ecx
+1400198a8:     	cmpl	$0xffe, %ecx            # imm = 0xFFE
+1400198ae:     	ja	0x1400196d0 <.text+0x186d0>
+1400198b4:     	cmpq	(%rdi), %r15
+1400198b7:     	je	0x1400198e9 <.text+0x188e9>
+1400198b9:     	movl	%r14d, %ecx
+1400198bc:     	andb	$0xf, %cl
+1400198bf:     	shrl	$0x4, %r14d
+1400198c3:     	movb	%r14b, (%rax,%r15)
+1400198c7:     	shrq	%cl, %rsi
+1400198ca:     	incq	%r15
+1400198cd:     	movq	%r15, 0x10(%rdi)
+1400198d1:     	subb	%cl, %r13b
+1400198d4:     	addq	$-0x1, %rbp
+1400198d8:     	jae	0x1400196d0 <.text+0x186d0>
+1400198de:     	cmpb	$0x8, %r13b
+1400198e2:     	ja	0x140019890 <.text+0x18890>
+1400198e4:     	jmp	0x1400196d0 <.text+0x186d0>
+1400198e9:     	movq	%rdi, %rcx
+1400198ec:     	callq	0x14006ad30 <.text+0x69d30>
+1400198f1:     	movq	0x8(%rdi), %rax
+1400198f5:     	jmp	0x1400198b9 <.text+0x188b9>
+1400198f7:     	nopw	(%rax,%rax)
+140019900:     	movq	0x18(%rbx), %r11
+140019904:     	cmpq	%r8, %rax
+140019907:     	movq	%r8, %rdx
+14001990a:     	cmovaq	%rax, %rdx
+14001990e:     	jae	0x140019946 <.text+0x18946>
+140019910:     	movq	(%rbx), %r10
+140019913:     	movzbl	(%r10,%rax), %r9d
+140019918:     	movl	%r13d, %ecx
+14001991b:     	shlq	%cl, %r9
+14001991e:     	orq	%r11, %r9
+140019921:     	leaq	0x1(%rax), %r11
+140019925:     	leal	0x8(%r13), %ecx
+140019929:     	testb	%r13b, %r13b
+14001992c:     	jne	0x140019973 <.text+0x18973>
+14001992e:     	cmpq	%r11, %r8
+140019931:     	jne	0x14001995e <.text+0x1895e>
+140019933:     	movq	%r9, 0x18(%rbx)
+140019937:     	movq	%rdx, 0x10(%rbx)
+14001993b:     	movb	%cl, 0x20(%rbx)
+14001993e:     	movb	$0x8, %r13b
+140019941:     	jmp	0x140019734 <.text+0x18734>
+140019946:     	movq	%r11, %r9
+140019949:     	jmp	0x140019734 <.text+0x18734>
+14001994e:     	movq	%rdi, %rcx
+140019951:     	callq	0x14006ad30 <.text+0x69d30>
+140019956:     	movq	(%rdi), %rbp
+140019959:     	jmp	0x14001984d <.text+0x1884d>
+14001995e:     	movzbl	0x1(%r10,%rax), %ecx
+140019964:     	addq	$0x2, %rax
+140019968:     	shll	$0x8, %ecx
+14001996b:     	orq	%rcx, %r9
+14001996e:     	movb	$0x10, %cl
+140019970:     	movq	%rax, %r11
+140019973:     	movq	%r9, 0x18(%rbx)
+140019977:     	movq	%r11, 0x10(%rbx)
+14001997b:     	movb	%cl, 0x20(%rbx)
+14001997e:     	movl	%ecx, %r13d
+140019981:     	jmp	0x140019734 <.text+0x18734>
+140019986:     	je	0x14001a5fd <.text+0x195fd>
+14001998c:     	cmpq	$0x11e, %rsi            # imm = 0x11E
+140019993:     	jae	0x14001a60e <.text+0x1960e>
+140019999:     	leaq	0x76360(%rip), %rax     # 0x14008fd00
+1400199a0:     	movq	-0x808(%rax,%rsi,8), %r13
+1400199a8:     	leaq	0x76451(%rip), %rax     # 0x14008fe00
+1400199af:     	movzbl	-0x101(%rsi,%rax), %edx
+1400199b7:     	movzbl	0x20(%rbx), %eax
+1400199bb:     	cmpb	%dl, %al
+1400199bd:     	jae	0x140019a12 <.text+0x18a12>
+1400199bf:     	movq	0x8(%rbx), %r8
+1400199c3:     	movq	0x10(%rbx), %r9
+1400199c7:     	cmpq	%r8, %r9
+1400199ca:     	cmovaq	%r9, %r8
+1400199ce:     	movq	(%rbx), %r10
+1400199d1:     	movq	0x18(%rbx), %rsi
+1400199d5:     	incq	%r9
+1400199d8:     	negq	%r8
+1400199db:     	nopl	(%rax,%rax)
+1400199e0:     	leaq	(%r8,%r9), %rcx
+1400199e4:     	cmpq	$0x1, %rcx
+1400199e8:     	je	0x14001a476 <.text+0x19476>
+1400199ee:     	movzbl	-0x1(%r10,%r9), %r11d
+1400199f4:     	movl	%eax, %ecx
+1400199f6:     	shlq	%cl, %r11
+1400199f9:     	orq	%r11, %rsi
+1400199fc:     	movq	%rsi, 0x18(%rbx)
+140019a00:     	movq	%r9, 0x10(%rbx)
+140019a04:     	addb	$0x8, %al
+140019a06:     	movb	%al, 0x20(%rbx)
+140019a09:     	incq	%r9
+140019a0c:     	cmpb	%dl, %al
+140019a0e:     	jb	0x1400199e0 <.text+0x189e0>
+140019a10:     	jmp	0x140019a16 <.text+0x18a16>
+140019a12:     	movq	0x18(%rbx), %rsi
+140019a16:     	movzbl	%dl, %ecx
+140019a19:     	movq	$-0x1, %r8
+140019a20:     	shlq	%cl, %r8
+140019a23:     	movq	%r8, 0x40(%rsp)
+140019a28:     	movq	%rsi, %r9
+140019a2b:     	shrq	%cl, %r9
+140019a2e:     	movq	%r9, 0x18(%rbx)
+140019a32:     	subb	%dl, %al
+140019a34:     	movb	%al, 0x20(%rbx)
+140019a37:     	cmpb	$0x8, %al
+140019a39:     	ja	0x140019ae4 <.text+0x18ae4>
+140019a3f:     	movq	0x8(%rbx), %r8
+140019a43:     	movq	0x10(%rbx), %r10
+140019a47:     	movq	%r8, %rcx
+140019a4a:     	subq	%r10, %rcx
+140019a4d:     	cmpq	$0x3, %rcx
+140019a51:     	jbe	0x140019a87 <.text+0x18a87>
+140019a53:     	leaq	0x4(%r10), %rdx
+140019a57:     	cmpq	$-0x5, %r10
+140019a5b:     	ja	0x14001a7dd <.text+0x197dd>
+140019a61:     	cmpq	%r8, %rdx
+140019a64:     	ja	0x14001a7dd <.text+0x197dd>
+140019a6a:     	movq	(%rbx), %rcx
+140019a6d:     	movl	(%rcx,%r10), %r11d
+140019a71:     	movl	%eax, %ecx
+140019a73:     	shlq	%cl, %r11
+140019a76:     	orq	%r9, %r11
+140019a79:     	movq	%r11, 0x18(%rbx)
+140019a7d:     	movq	%rdx, 0x10(%rbx)
+140019a81:     	orb	$0x20, %al
+140019a83:     	movl	%eax, %ecx
+140019a85:     	jmp	0x140019ade <.text+0x18ade>
+140019a87:     	cmpq	%r8, %r10
+140019a8a:     	movq	%r8, %rdx
+140019a8d:     	cmovaq	%r10, %rdx
+140019a91:     	jae	0x140019ae4 <.text+0x18ae4>
+140019a93:     	movq	(%rbx), %r14
+140019a96:     	movzbl	(%r14,%r10), %r11d
+140019a9b:     	movl	%eax, %ecx
+140019a9d:     	shlq	%cl, %r11
+140019aa0:     	orq	%r9, %r11
+140019aa3:     	leaq	0x1(%r10), %r9
+140019aa7:     	leal	0x8(%rax), %ecx
+140019aaa:     	testb	%al, %al
+140019aac:     	jne	0x140019ad4 <.text+0x18ad4>
+140019aae:     	cmpq	%r9, %r8
+140019ab1:     	jne	0x140019abf <.text+0x18abf>
+140019ab3:     	movq	%r11, 0x18(%rbx)
+140019ab7:     	movq	%rdx, 0x10(%rbx)
+140019abb:     	movb	$0x8, %al
+140019abd:     	jmp	0x140019ade <.text+0x18ade>
+140019abf:     	movzbl	0x1(%r14,%r10), %eax
+140019ac5:     	addq	$0x2, %r10
+140019ac9:     	shll	$0x8, %eax
+140019acc:     	orq	%rax, %r11
+140019acf:     	movb	$0x10, %cl
+140019ad1:     	movq	%r10, %r9
+140019ad4:     	movq	%r11, 0x18(%rbx)
+140019ad8:     	movq	%r9, 0x10(%rbx)
+140019adc:     	movl	%ecx, %eax
+140019ade:     	movb	%cl, 0x20(%rbx)
+140019ae1:     	movq	%r11, %r9
+140019ae4:     	movl	%r9d, %ecx
+140019ae7:     	andl	$0x1ff, %ecx            # imm = 0x1FF
+140019aed:     	movzwl	0x3748(%rsp,%rcx,2), %edx
+140019af5:     	movl	%edx, %ecx
+140019af7:     	andb	$0xf, %cl
+140019afa:     	leal	-0x1(%rcx), %r8d
+140019afe:     	cmpb	%al, %r8b
+140019b01:     	jae	0x140019b14 <.text+0x18b14>
+140019b03:     	shrq	%cl, %r9
+140019b06:     	movq	%r9, 0x18(%rbx)
+140019b0a:     	subb	%cl, %al
+140019b0c:     	movb	%al, 0x20(%rbx)
+140019b0f:     	shrl	$0x4, %edx
+140019b12:     	jmp	0x140019b46 <.text+0x18b46>
+140019b14:     	leaq	0x240(%rsp), %rcx
+140019b1c:     	leaq	0x1cde(%rsp), %rdx
+140019b24:     	movq	%rbx, %r8
+140019b27:     	callq	0x140018620 <.text+0x17620>
+140019b2c:     	movq	0x240(%rsp), %rax
+140019b34:     	movq	0x248(%rsp), %rdx
+140019b3c:     	cmpq	$-0x1, %rax
+140019b40:     	jne	0x14001a76e <.text+0x1976e>
+140019b46:     	cmpq	$0x1d, %rdx
+140019b4a:     	ja	0x14001a6e3 <.text+0x196e3>
+140019b50:     	leaq	0x5d549(%rip), %rax     # 0x1400770a0
+140019b57:     	movq	(%rax,%rdx,8), %r15
+140019b5b:     	leaq	0x762d6(%rip), %rax     # 0x14008fe38
+140019b62:     	movzbl	(%rdx,%rax), %edx
+140019b66:     	movzbl	0x20(%rbx), %eax
+140019b6a:     	cmpb	%dl, %al
+140019b6c:     	jae	0x140019bc2 <.text+0x18bc2>
+140019b6e:     	movq	0x8(%rbx), %r9
+140019b72:     	movq	0x10(%rbx), %r10
+140019b76:     	cmpq	%r9, %r10
+140019b79:     	cmovaq	%r10, %r9
+140019b7d:     	movq	(%rbx), %r11
+140019b80:     	movq	0x18(%rbx), %r8
+140019b84:     	incq	%r10
+140019b87:     	negq	%r9
+140019b8a:     	nopw	(%rax,%rax)
+140019b90:     	leaq	(%r9,%r10), %rcx
+140019b94:     	cmpq	$0x1, %rcx
+140019b98:     	je	0x14001a495 <.text+0x19495>
+140019b9e:     	movzbl	-0x1(%r11,%r10), %r14d
+140019ba4:     	movl	%eax, %ecx
+140019ba6:     	shlq	%cl, %r14
+140019ba9:     	orq	%r14, %r8
+140019bac:     	movq	%r8, 0x18(%rbx)
+140019bb0:     	movq	%r10, 0x10(%rbx)
+140019bb4:     	addb	$0x8, %al
+140019bb6:     	movb	%al, 0x20(%rbx)
+140019bb9:     	incq	%r10
+140019bbc:     	cmpb	%dl, %al
+140019bbe:     	jb	0x140019b90 <.text+0x18b90>
+140019bc0:     	jmp	0x140019bc6 <.text+0x18bc6>
+140019bc2:     	movq	0x18(%rbx), %r8
+140019bc6:     	movzbl	%dl, %ecx
+140019bc9:     	movq	$-0x1, %r9
+140019bd0:     	shlq	%cl, %r9
+140019bd3:     	notl	%r9d
+140019bd6:     	andl	%r8d, %r9d
+140019bd9:     	shrq	%cl, %r8
+140019bdc:     	movq	%r8, 0x18(%rbx)
+140019be0:     	subb	%dl, %al
+140019be2:     	movb	%al, 0x20(%rbx)
+140019be5:     	movq	%r15, %r8
+140019be8:     	addq	%r9, %r8
+140019beb:     	movq	0x10(%rdi), %rbp
+140019bef:     	movq	%rbp, %r15
+140019bf2:     	subq	%r8, %r15
+140019bf5:     	jb	0x14001a70d <.text+0x1970d>
+140019bfb:     	cmpq	0x44f0(%rsp), %r8
+140019c03:     	ja	0x14001a70d <.text+0x1970d>
+140019c09:     	movq	%r9, 0x48(%rsp)
+140019c0e:     	movq	0x40(%rsp), %rdx
+140019c13:     	notl	%edx
+140019c15:     	andl	%esi, %edx
+140019c17:     	addq	%rdx, %r13
+140019c1a:     	movq	%r12, %rax
+140019c1d:     	subq	%rbp, %rax
+140019c20:     	movl	$0x0, %ecx
+140019c25:     	cmovbq	%rcx, %rax
+140019c29:     	cmpq	%rax, %r13
+140019c2c:     	ja	0x14001a120 <.text+0x19120>
+140019c32:     	movq	%rdx, 0x40(%rsp)
+140019c37:     	movq	(%rdi), %rdx
+140019c3a:     	movq	%rdx, %rax
+140019c3d:     	subq	%rbp, %rax
+140019c40:     	cmpq	%rax, %r13
+140019c43:     	jbe	0x140019cdf <.text+0x18cdf>
+140019c49:     	movq	%rbp, %r14
+140019c4c:     	addq	%r13, %r14
+140019c4f:     	cmpq	%rbp, %r14
+140019c52:     	jb	0x14001a467 <.text+0x19467>
+140019c58:     	cmpq	%r12, %r14
+140019c5b:     	ja	0x14001a467 <.text+0x19467>
+140019c61:     	leaq	(%rdx,%rdx), %rcx
+140019c65:     	cmpq	%r14, %rcx
+140019c68:     	cmovaq	%rcx, %r14
+140019c6c:     	cmpq	$0x9, %r14
+140019c70:     	movl	$0x8, %ecx
+140019c75:     	cmovbq	%rcx, %r14
+140019c79:     	cmpq	%r14, %r12
+140019c7c:     	cmovbq	%r12, %r14
+140019c80:     	movq	%r14, %rcx
+140019c83:     	subq	%rbp, %rcx
+140019c86:     	cmpq	%rax, %rcx
+140019c89:     	jbe	0x140019cdf <.text+0x18cdf>
+140019c8b:     	cmpq	%rbp, %r14
+140019c8e:     	jb	0x140019e32 <.text+0x18e32>
+140019c94:     	movq	%r8, %rsi
+140019c97:     	movq	0x8(%rdi), %r8
+140019c9b:     	movq	$0x1, 0x28(%rsp)
+140019ca4:     	movq	$0x1, 0x20(%rsp)
+140019cad:     	leaq	0x240(%rsp), %rcx
+140019cb5:     	movq	%r14, %r9
+140019cb8:     	callq	0x14006c4d0 <.text+0x6b4d0>
+140019cbd:     	cmpl	$0x1, 0x240(%rsp)
+140019cc5:     	je	0x140019e32 <.text+0x18e32>
+140019ccb:     	movq	0x248(%rsp), %rax
+140019cd3:     	movq	%rax, 0x8(%rdi)
+140019cd7:     	movq	%r14, (%rdi)
+140019cda:     	movq	%rsi, %r8
+140019cdd:     	jmp	0x140019ce2 <.text+0x18ce2>
+140019cdf:     	movq	%rdx, %r14
+140019ce2:     	cmpq	$0x1, %r8
+140019ce6:     	jne	0x140019d45 <.text+0x18d45>
+140019ce8:     	testq	%rbp, %rbp
+140019ceb:     	je	0x14001a804 <.text+0x19804>
+140019cf1:     	movq	%rbp, %rax
+140019cf4:     	addq	%r13, %rax
+140019cf7:     	cmpq	%rbp, %rax
+140019cfa:     	jbe	0x140019d3c <.text+0x18d3c>
+140019cfc:     	movq	0x8(%rdi), %rsi
+140019d00:     	movzbl	(%rsi,%r15), %r15d
+140019d05:     	subq	%rbp, %r14
+140019d08:     	cmpq	%r14, %r13
+140019d0b:     	ja	0x140019dc5 <.text+0x18dc5>
+140019d11:     	leaq	(%rsi,%rbp), %rcx
+140019d15:     	cmpq	$0x2, %r13
+140019d19:     	jb	0x140019d33 <.text+0x18d33>
+140019d1b:     	leaq	-0x1(%r13), %r8
+140019d1f:     	movl	%r15d, %edx
+140019d22:     	callq	0x140069df0 <.text+0x68df0>
+140019d27:     	addq	%r13, %rbp
+140019d2a:     	decq	%rbp
+140019d2d:     	addq	%rbp, %rsi
+140019d30:     	movq	%rsi, %rcx
+140019d33:     	movb	%r15b, (%rcx)
+140019d36:     	incq	%rbp
+140019d39:     	movq	%rbp, %rax
+140019d3c:     	movq	%rax, 0x10(%rdi)
+140019d40:     	jmp	0x1400196ba <.text+0x186ba>
+140019d45:     	testq	%r13, %r13
+140019d48:     	je	0x1400196ba <.text+0x186ba>
+140019d4e:     	nop
+140019d50:     	movq	%rbp, %r14
+140019d53:     	subq	%r15, %r14
+140019d56:     	cmpq	%r14, %r13
+140019d59:     	cmovbq	%r13, %r14
+140019d5d:     	leaq	(%r14,%r15), %rdx
+140019d61:     	cmpq	%rbp, %rdx
+140019d64:     	ja	0x14001a7b6 <.text+0x197b6>
+140019d6a:     	cmpq	%rdx, %r15
+140019d6d:     	ja	0x14001a7c9 <.text+0x197c9>
+140019d73:     	movq	(%rdi), %rax
+140019d76:     	subq	%rbp, %rax
+140019d79:     	cmpq	%rax, %r14
+140019d7c:     	ja	0x140019da2 <.text+0x18da2>
+140019d7e:     	movq	0x8(%rdi), %rdx
+140019d82:     	leaq	(%rdx,%rbp), %rcx
+140019d86:     	addq	%r15, %rdx
+140019d89:     	movq	%r14, %r8
+140019d8c:     	callq	0x14006a1b0 <.text+0x691b0>
+140019d91:     	addq	%r14, %rbp
+140019d94:     	movq	%rbp, 0x10(%rdi)
+140019d98:     	subq	%r14, %r13
+140019d9b:     	jne	0x140019d50 <.text+0x18d50>
+140019d9d:     	jmp	0x1400196ba <.text+0x186ba>
+140019da2:     	movq	$0x1, 0x20(%rsp)
+140019dab:     	movl	$0x1, %r9d
+140019db1:     	movq	%rdi, %rcx
+140019db4:     	movq	%rbp, %rdx
+140019db7:     	movq	%r14, %r8
+140019dba:     	callq	0x14006c440 <.text+0x6b440>
+140019dbf:     	movq	0x10(%rdi), %rbp
+140019dc3:     	jmp	0x140019d7e <.text+0x18d7e>
+140019dc5:     	movq	$0x1, 0x20(%rsp)
+140019dce:     	movl	$0x1, %r9d
+140019dd4:     	movq	%rdi, %rcx
+140019dd7:     	movq	%rbp, %rdx
+140019dda:     	movq	%r13, %r8
+140019ddd:     	callq	0x14006c440 <.text+0x6b440>
+140019de2:     	movq	0x8(%rdi), %rsi
+140019de6:     	movq	0x10(%rdi), %rbp
+140019dea:     	leaq	(%rsi,%rbp), %rcx
+140019dee:     	cmpq	$0x2, %r13
+140019df2:     	jae	0x140019d1b <.text+0x18d1b>
+140019df8:     	jmp	0x140019d33 <.text+0x18d33>
+140019dfd:     	movzbl	0x20(%rbx), %eax
+140019e01:     	cmpq	$0x5, %rax
+140019e05:     	jae	0x140019e49 <.text+0x18e49>
+140019e07:     	movq	0x10(%rbx), %rdx
+140019e0b:     	cmpq	0x8(%rbx), %rdx
+140019e0f:     	jae	0x140019f08 <.text+0x18f08>
+140019e15:     	movq	(%rbx), %rcx
+140019e18:     	movzbl	(%rcx,%rdx), %r14d
+140019e1d:     	movl	%eax, %ecx
+140019e1f:     	shlq	%cl, %r14
+140019e22:     	orq	0x18(%rbx), %r14
+140019e26:     	incq	%rdx
+140019e29:     	movq	%rdx, 0x10(%rbx)
+140019e2d:     	addl	$0x8, %eax
+140019e30:     	jmp	0x140019e4d <.text+0x18e4d>
+140019e32:     	movabsq	$-0x7ffffffffffffffc, %rcx # imm = 0x8000000000000004
+140019e3c:     	movq	0x38(%rsp), %rax
+140019e41:     	movq	%rcx, (%rax)
+140019e44:     	jmp	0x140019f2a <.text+0x18f2a>
+140019e49:     	movq	0x18(%rbx), %r14
+140019e4d:     	movq	%r14, %r15
+140019e50:     	shrq	$0x5, %r15
+140019e54:     	movq	%r15, 0x18(%rbx)
+140019e58:     	leal	-0x5(%rax), %edx
+140019e5b:     	movb	%dl, 0x20(%rbx)
+140019e5e:     	cmpb	$0x4, %dl
+140019e61:     	ja	0x140019e8c <.text+0x18e8c>
+140019e63:     	movq	0x10(%rbx), %r8
+140019e67:     	cmpq	0x8(%rbx), %r8
+140019e6b:     	jae	0x140019f08 <.text+0x18f08>
+140019e71:     	movq	(%rbx), %rcx
+140019e74:     	movzbl	(%rcx,%r8), %r9d
+140019e79:     	movl	%edx, %ecx
+140019e7b:     	shlq	%cl, %r9
+140019e7e:     	orq	%r9, %r15
+140019e81:     	incq	%r8
+140019e84:     	movq	%r8, 0x10(%rbx)
+140019e88:     	addb	$0x3, %al
+140019e8a:     	movl	%eax, %edx
+140019e8c:     	movq	%r15, %rax
+140019e8f:     	shrq	$0x5, %rax
+140019e93:     	movq	%rax, 0x18(%rbx)
+140019e97:     	leal	-0x5(%rdx), %ecx
+140019e9a:     	movb	%cl, 0x20(%rbx)
+140019e9d:     	cmpb	$0x3, %cl
+140019ea0:     	ja	0x140019ec6 <.text+0x18ec6>
+140019ea2:     	movq	0x10(%rbx), %r8
+140019ea6:     	cmpq	0x8(%rbx), %r8
+140019eaa:     	jae	0x140019f08 <.text+0x18f08>
+140019eac:     	movq	(%rbx), %r9
+140019eaf:     	movzbl	(%r9,%r8), %r9d
+140019eb4:     	shlq	%cl, %r9
+140019eb7:     	orq	%r9, %rax
+140019eba:     	incq	%r8
+140019ebd:     	movq	%r8, 0x10(%rbx)
+140019ec1:     	addb	$0x3, %dl
+140019ec4:     	movl	%edx, %ecx
+140019ec6:     	movq	%rax, %rdx
+140019ec9:     	shrq	$0x4, %rdx
+140019ecd:     	movq	%rdx, 0x18(%rbx)
+140019ed1:     	addb	$-0x4, %cl
+140019ed4:     	movb	%cl, 0x20(%rbx)
+140019ed7:     	movl	%r14d, %r8d
+140019eda:     	notl	%r8d
+140019edd:     	testb	$0x1e, %r8b
+140019ee1:     	jne	0x140019f46 <.text+0x18f46>
+140019ee3:     	leaq	0x5d036(%rip), %rsi     # 0x140076f20
+140019eea:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+140019ef4:     	andq	%rsi, %r12
+140019ef7:     	movabsq	$-0x7fffffffffffffff, %r8 # imm = 0x8000000000000001
+140019f01:     	movl	$0x16, %eax
+140019f06:     	jmp	0x140019f15 <.text+0x18f15>
+140019f08:     	movabsq	$-0x8000000000000000, %r8 # imm = 0x8000000000000000
+140019f12:     	xorl	%r12d, %r12d
+140019f15:     	movq	0x38(%rsp), %rdx
+140019f1a:     	movl	%esi, %ecx
+140019f1c:     	orq	%r12, %rcx
+140019f1f:     	movq	%r8, (%rdx)
+140019f22:     	movq	%rcx, 0x8(%rdx)
+140019f26:     	movq	%rax, 0x10(%rdx)
+140019f2a:     	movaps	0x4470(%rsp), %xmm6
+140019f32:     	addq	$0x4488, %rsp           # imm = 0x4488
+140019f39:     	popq	%rbx
+140019f3a:     	popq	%rbp
+140019f3b:     	popq	%rdi
+140019f3c:     	popq	%rsi
+140019f3d:     	popq	%r12
+140019f3f:     	popq	%r13
+140019f41:     	popq	%r14
+140019f43:     	popq	%r15
+140019f45:     	retq
+140019f46:     	andl	$0x1f, %r14d
+140019f4a:     	addq	$0x101, %r14            # imm = 0x101
+140019f51:     	andl	$0x1f, %r15d
+140019f55:     	incq	%r15
+140019f58:     	movq	$0x10, 0x68(%rsp)
+140019f61:     	movq	$0x11, 0x70(%rsp)
+140019f6a:     	movq	$0x12, 0x78(%rsp)
+140019f73:     	movq	$0x0, 0x80(%rsp)
+140019f7f:     	movq	$0x8, 0x88(%rsp)
+140019f8b:     	movq	$0x7, 0x90(%rsp)
+140019f97:     	movq	$0x9, 0x98(%rsp)
+140019fa3:     	movq	$0x6, 0xa0(%rsp)
+140019faf:     	movq	$0xa, 0xa8(%rsp)
+140019fbb:     	movq	$0x5, 0xb0(%rsp)
+140019fc7:     	movq	$0xb, 0xb8(%rsp)
+140019fd3:     	movq	$0x4, 0xc0(%rsp)
+140019fdf:     	movq	$0xc, 0xc8(%rsp)
+140019feb:     	movq	$0x3, 0xd0(%rsp)
+140019ff7:     	movq	$0xd, 0xd8(%rsp)
+14001a003:     	movq	$0x2, 0xe0(%rsp)
+14001a00f:     	movq	$0xe, 0xe8(%rsp)
+14001a01b:     	movq	$0x1, 0xf0(%rsp)
+14001a027:     	movq	$0xf, 0xf8(%rsp)
+14001a033:     	xorps	%xmm0, %xmm0
+14001a036:     	movaps	%xmm0, 0x50(%rsp)
+14001a03b:     	movl	$0x0, 0x5f(%rsp)
+14001a043:     	andl	$0xf, %eax
+14001a046:     	movq	(%rbx), %r9
+14001a049:     	movq	0x8(%rbx), %r10
+14001a04d:     	movq	0x10(%rbx), %r11
+14001a051:     	leaq	0x20(,%rax,8), %r13
+14001a059:     	xorl	%r12d, %r12d
+14001a05c:     	movabsq	$-0x8000000000000000, %r8 # imm = 0x8000000000000000
+14001a066:     	xorl	%ebp, %ebp
+14001a068:     	nopl	(%rax,%rax)
+14001a070:     	movq	0x68(%rsp,%rbp), %rax
+14001a075:     	cmpb	$0x2, %cl
+14001a078:     	ja	0x14001a0a0 <.text+0x190a0>
+14001a07a:     	cmpq	%r10, %r11
+14001a07d:     	jae	0x140019f15 <.text+0x18f15>
+14001a083:     	movzbl	(%r9,%r11), %esi
+14001a088:     	shlq	%cl, %rsi
+14001a08b:     	orq	%rdx, %rsi
+14001a08e:     	incq	%r11
+14001a091:     	movq	%r11, 0x10(%rbx)
+14001a095:     	orb	$0x8, %cl
+14001a098:     	movq	%rsi, %rdx
+14001a09b:     	jmp	0x14001a0a3 <.text+0x190a3>
+14001a09d:     	nopl	(%rax)
+14001a0a0:     	movq	%rdx, %rsi
+14001a0a3:     	shrq	$0x3, %rdx
+14001a0a7:     	movq	%rdx, 0x18(%rbx)
+14001a0ab:     	addb	$-0x3, %cl
+14001a0ae:     	movb	%cl, 0x20(%rbx)
+14001a0b1:     	cmpq	$0x12, %rax
+14001a0b5:     	ja	0x14001a7ee <.text+0x197ee>
+14001a0bb:     	andl	$0x7, %esi
+14001a0be:     	movb	%sil, 0x50(%rsp,%rax)
+14001a0c3:     	addq	$0x8, %rbp
+14001a0c7:     	cmpq	%rbp, %r13
+14001a0ca:     	jne	0x14001a070 <.text+0x19070>
+14001a0cc:     	movb	$0x0, 0x20(%rsp)
+14001a0d1:     	leaq	0xf90(%rsp), %rcx
+14001a0d9:     	leaq	0x50(%rsp), %rdx
+14001a0de:     	movl	$0x13, %r8d
+14001a0e4:     	movb	$0x1, %r9b
+14001a0e7:     	callq	0x140018950 <.text+0x17950>
+14001a0ec:     	cmpb	$0x0, 0xf90(%rsp)
+14001a0f4:     	je	0x14001a137 <.text+0x19137>
+14001a0f6:     	movq	0xf98(%rsp), %r8
+14001a0fe:     	movq	0xfa0(%rsp), %rsi
+14001a106:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a110:     	andq	%rsi, %r12
+14001a113:     	movq	0xfa8(%rsp), %rax
+14001a11b:     	jmp	0x140019f15 <.text+0x18f15>
+14001a120:     	movabsq	$-0x7ffffffffffffffd, %rax # imm = 0x8000000000000003
+14001a12a:     	movq	0x38(%rsp), %rcx
+14001a12f:     	movq	%rax, (%rcx)
+14001a132:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a137:     	leaq	0xf92(%rsp), %rdx
+14001a13f:     	leaq	0x30a6(%rsp), %rcx
+14001a147:     	movl	$0x6a2, %r8d            # imm = 0x6A2
+14001a14d:     	callq	0x14006a1b0 <.text+0x691b0>
+14001a152:     	xorl	%r12d, %r12d
+14001a155:     	leaq	0x102(%rsp), %rcx
+14001a15d:     	movl	$0x13e, %r8d            # imm = 0x13E
+14001a163:     	xorl	%edx, %edx
+14001a165:     	callq	0x140069df0 <.text+0x68df0>
+14001a16a:     	movq	%rax, 0x48(%rsp)
+14001a16f:     	movq	%rax, 0x40(%rsp)
+14001a174:     	xorl	%r13d, %r13d
+14001a177:     	nopw	(%rax,%rax)
+14001a180:     	movzbl	0x20(%rbx), %eax
+14001a184:     	cmpq	$0x9, %rax
+14001a188:     	jae	0x14001a1d9 <.text+0x191d9>
+14001a18a:     	movq	0x8(%rbx), %r8
+14001a18e:     	movq	0x10(%rbx), %r10
+14001a192:     	movq	%r8, %rcx
+14001a195:     	subq	%r10, %rcx
+14001a198:     	cmpq	$0x3, %rcx
+14001a19c:     	jbe	0x14001a2a3 <.text+0x192a3>
+14001a1a2:     	leaq	0x4(%r10), %rdx
+14001a1a6:     	cmpq	$-0x5, %r10
+14001a1aa:     	ja	0x14001a7dd <.text+0x197dd>
+14001a1b0:     	cmpq	%r8, %rdx
+14001a1b3:     	ja	0x14001a7dd <.text+0x197dd>
+14001a1b9:     	movq	(%rbx), %rcx
+14001a1bc:     	movl	(%rcx,%r10), %r9d
+14001a1c0:     	movl	%eax, %ecx
+14001a1c2:     	shlq	%cl, %r9
+14001a1c5:     	orq	0x18(%rbx), %r9
+14001a1c9:     	movq	%r9, 0x18(%rbx)
+14001a1cd:     	movq	%rdx, 0x10(%rbx)
+14001a1d1:     	addl	$0x20, %eax
+14001a1d4:     	movb	%al, 0x20(%rbx)
+14001a1d7:     	jmp	0x14001a1dd <.text+0x191dd>
+14001a1d9:     	movq	0x18(%rbx), %r9
+14001a1dd:     	movl	%r9d, %ecx
+14001a1e0:     	andl	$0x1ff, %ecx            # imm = 0x1FF
+14001a1e6:     	movzwl	0x30a6(%rsp,%rcx,2), %edx
+14001a1ee:     	movl	%edx, %ecx
+14001a1f0:     	andb	$0xf, %cl
+14001a1f3:     	leal	-0x1(%rcx), %r8d
+14001a1f7:     	cmpb	%al, %r8b
+14001a1fa:     	jae	0x14001a20d <.text+0x1920d>
+14001a1fc:     	shrq	%cl, %r9
+14001a1ff:     	movq	%r9, 0x18(%rbx)
+14001a203:     	subb	%cl, %al
+14001a205:     	movb	%al, 0x20(%rbx)
+14001a208:     	shrl	$0x4, %edx
+14001a20b:     	jmp	0x14001a23f <.text+0x1923f>
+14001a20d:     	leaq	0x2380(%rsp), %rcx
+14001a215:     	leaq	0xf92(%rsp), %rdx
+14001a21d:     	movq	%rbx, %r8
+14001a220:     	callq	0x140018620 <.text+0x17620>
+14001a225:     	movq	0x2380(%rsp), %r8
+14001a22d:     	movq	0x2388(%rsp), %rdx
+14001a235:     	cmpq	$-0x1, %r8
+14001a239:     	jne	0x14001a591 <.text+0x19591>
+14001a23f:     	cmpq	$0x10, %rdx
+14001a243:     	jae	0x14001a250 <.text+0x19250>
+14001a245:     	movl	$0x1, %r8d
+14001a24b:     	jmp	0x14001a3e0 <.text+0x193e0>
+14001a250:     	je	0x14001a323 <.text+0x19323>
+14001a256:     	cmpq	$0x11, %rdx
+14001a25a:     	je	0x14001a2f1 <.text+0x192f1>
+14001a260:     	cmpq	$0x12, %rdx
+14001a264:     	jne	0x14001a5d5 <.text+0x195d5>
+14001a26a:     	movzbl	0x20(%rbx), %ecx
+14001a26e:     	cmpq	$0x7, %rcx
+14001a272:     	jae	0x14001a38f <.text+0x1938f>
+14001a278:     	movq	0x10(%rbx), %rdx
+14001a27c:     	cmpq	0x8(%rbx), %rdx
+14001a280:     	jae	0x14001a746 <.text+0x19746>
+14001a286:     	movq	(%rbx), %rax
+14001a289:     	movzbl	(%rax,%rdx), %eax
+14001a28d:     	shlq	%cl, %rax
+14001a290:     	orq	0x18(%rbx), %rax
+14001a294:     	incq	%rdx
+14001a297:     	movq	%rdx, 0x10(%rbx)
+14001a29b:     	addl	$0x8, %ecx
+14001a29e:     	jmp	0x14001a393 <.text+0x19393>
+14001a2a3:     	movq	0x18(%rbx), %rbp
+14001a2a7:     	cmpq	%r8, %r10
+14001a2aa:     	movq	%r8, %rdx
+14001a2ad:     	cmovaq	%r10, %rdx
+14001a2b1:     	jae	0x14001a368 <.text+0x19368>
+14001a2b7:     	movq	(%rbx), %r11
+14001a2ba:     	movzbl	(%r11,%r10), %r9d
+14001a2bf:     	movl	%eax, %ecx
+14001a2c1:     	shlq	%cl, %r9
+14001a2c4:     	orq	%rbp, %r9
+14001a2c7:     	leaq	0x1(%r10), %rbp
+14001a2cb:     	leal	0x8(%rax), %ecx
+14001a2ce:     	testb	%al, %al
+14001a2d0:     	jne	0x14001a438 <.text+0x19438>
+14001a2d6:     	cmpq	%rbp, %r8
+14001a2d9:     	jne	0x14001a423 <.text+0x19423>
+14001a2df:     	movq	%r9, 0x18(%rbx)
+14001a2e3:     	movq	%rdx, 0x10(%rbx)
+14001a2e7:     	movb	%cl, 0x20(%rbx)
+14001a2ea:     	movb	$0x8, %al
+14001a2ec:     	jmp	0x14001a1dd <.text+0x191dd>
+14001a2f1:     	movzbl	0x20(%rbx), %ecx
+14001a2f5:     	cmpq	$0x3, %rcx
+14001a2f9:     	jae	0x14001a370 <.text+0x19370>
+14001a2fb:     	movq	0x10(%rbx), %rdx
+14001a2ff:     	cmpq	0x8(%rbx), %rdx
+14001a303:     	jae	0x14001a737 <.text+0x19737>
+14001a309:     	movq	(%rbx), %rax
+14001a30c:     	movzbl	(%rax,%rdx), %eax
+14001a310:     	shlq	%cl, %rax
+14001a313:     	orq	0x18(%rbx), %rax
+14001a317:     	incq	%rdx
+14001a31a:     	movq	%rdx, 0x10(%rbx)
+14001a31e:     	addl	$0x8, %ecx
+14001a321:     	jmp	0x14001a374 <.text+0x19374>
+14001a323:     	testq	%r13, %r13
+14001a326:     	je	0x14001a5d5 <.text+0x195d5>
+14001a32c:     	movzbl	0x101(%rsp,%r13), %edx
+14001a335:     	movzbl	0x20(%rbx), %ecx
+14001a339:     	cmpq	$0x2, %rcx
+14001a33d:     	jae	0x14001a3b3 <.text+0x193b3>
+14001a33f:     	movq	0x10(%rbx), %r8
+14001a343:     	cmpq	0x8(%rbx), %r8
+14001a347:     	jae	0x14001a75a <.text+0x1975a>
+14001a34d:     	movq	(%rbx), %rax
+14001a350:     	movzbl	(%rax,%r8), %eax
+14001a355:     	shlq	%cl, %rax
+14001a358:     	orq	0x18(%rbx), %rax
+14001a35c:     	incq	%r8
+14001a35f:     	movq	%r8, 0x10(%rbx)
+14001a363:     	addl	$0x8, %ecx
+14001a366:     	jmp	0x14001a3b7 <.text+0x193b7>
+14001a368:     	movq	%rbp, %r9
+14001a36b:     	jmp	0x14001a1dd <.text+0x191dd>
+14001a370:     	movq	0x18(%rbx), %rax
+14001a374:     	movl	%eax, %esi
+14001a376:     	andl	$0x7, %esi
+14001a379:     	shrq	$0x3, %rax
+14001a37d:     	movq	%rax, 0x18(%rbx)
+14001a381:     	addb	$-0x3, %cl
+14001a384:     	movb	%cl, 0x20(%rbx)
+14001a387:     	leaq	0x3(%rsi), %r8
+14001a38b:     	xorl	%edx, %edx
+14001a38d:     	jmp	0x14001a3e0 <.text+0x193e0>
+14001a38f:     	movq	0x18(%rbx), %rax
+14001a393:     	movl	%eax, %edx
+14001a395:     	andl	$0x7f, %edx
+14001a398:     	shrq	$0x7, %rax
+14001a39c:     	movq	%rax, 0x18(%rbx)
+14001a3a0:     	addb	$-0x7, %cl
+14001a3a3:     	movb	%cl, 0x20(%rbx)
+14001a3a6:     	movq	%rdx, 0x40(%rsp)
+14001a3ab:     	leaq	0xb(%rdx), %r8
+14001a3af:     	xorl	%edx, %edx
+14001a3b1:     	jmp	0x14001a3e0 <.text+0x193e0>
+14001a3b3:     	movq	0x18(%rbx), %rax
+14001a3b7:     	movl	%eax, %r8d
+14001a3ba:     	andl	$0x3, %r8d
+14001a3be:     	shrq	$0x2, %rax
+14001a3c2:     	movq	%rax, 0x18(%rbx)
+14001a3c6:     	addb	$-0x2, %cl
+14001a3c9:     	movb	%cl, 0x20(%rbx)
+14001a3cc:     	movq	%r8, 0x48(%rsp)
+14001a3d1:     	addq	$0x3, %r8
+14001a3d5:     	nopw	%cs:(%rax,%rax)
+14001a3e0:     	leaq	(%r8,%r13), %rbp
+14001a3e4:     	leaq	(%r15,%r14), %rax
+14001a3e8:     	cmpq	%rax, %rbp
+14001a3eb:     	ja	0x14001a4b4 <.text+0x194b4>
+14001a3f1:     	cmpq	$0x13f, %rbp            # imm = 0x13F
+14001a3f8:     	jae	0x14001a79c <.text+0x1979c>
+14001a3fe:     	leaq	(%rsp,%r13), %rcx
+14001a402:     	addq	$0x102, %rcx            # imm = 0x102
+14001a409:     	callq	0x140069df0 <.text+0x68df0>
+14001a40e:     	movq	%rbp, %r13
+14001a411:     	leaq	(%r15,%r14), %rax
+14001a415:     	cmpq	%rax, %rbp
+14001a418:     	jb	0x14001a180 <.text+0x19180>
+14001a41e:     	jmp	0x14001a4dc <.text+0x194dc>
+14001a423:     	movzbl	0x1(%r11,%r10), %eax
+14001a429:     	addq	$0x2, %r10
+14001a42d:     	shll	$0x8, %eax
+14001a430:     	orq	%rax, %r9
+14001a433:     	movb	$0x10, %cl
+14001a435:     	movq	%r10, %rbp
+14001a438:     	movq	%r9, 0x18(%rbx)
+14001a43c:     	movq	%rbp, 0x10(%rbx)
+14001a440:     	movb	%cl, 0x20(%rbx)
+14001a443:     	movl	%ecx, %eax
+14001a445:     	jmp	0x14001a1dd <.text+0x191dd>
+14001a44a:     	movq	0x250(%rsp), %rcx
+14001a452:     	movq	0x38(%rsp), %rdx
+14001a457:     	movq	%rax, (%rdx)
+14001a45a:     	movq	%rsi, 0x8(%rdx)
+14001a45e:     	movq	%rcx, 0x10(%rdx)
+14001a462:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a467:     	movabsq	$-0x7ffffffffffffffd, %rcx # imm = 0x8000000000000003
+14001a471:     	jmp	0x140019e3c <.text+0x18e3c>
+14001a476:     	movabsq	$-0x8000000000000000, %rax # imm = 0x8000000000000000
+14001a480:     	movq	0x38(%rsp), %rcx
+14001a485:     	movq	%rax, (%rcx)
+14001a488:     	movq	0x40(%rsp), %rax
+14001a48d:     	movl	%eax, 0x8(%rcx)
+14001a490:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a495:     	movabsq	$-0x8000000000000000, %rax # imm = 0x8000000000000000
+14001a49f:     	movq	0x38(%rsp), %rcx
+14001a4a4:     	movq	%rax, (%rcx)
+14001a4a7:     	movq	0x48(%rsp), %rax
+14001a4ac:     	movl	%eax, 0x8(%rcx)
+14001a4af:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a4b4:     	leaq	0x5cb95(%rip), %rsi     # 0x140077050
+14001a4bb:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a4c5:     	andq	%rsi, %r12
+14001a4c8:     	movabsq	$-0x7fffffffffffffff, %r8 # imm = 0x8000000000000001
+14001a4d2:     	movl	$0x1b, %eax
+14001a4d7:     	jmp	0x140019f15 <.text+0x18f15>
+14001a4dc:     	cmpb	$0x0, 0x202(%rsp)
+14001a4e4:     	je	0x14001a5ad <.text+0x195ad>
+14001a4ea:     	movb	$0x0, 0x20(%rsp)
+14001a4ef:     	leaq	0x8e8(%rsp), %rcx
+14001a4f7:     	leaq	0x102(%rsp), %rdx
+14001a4ff:     	movq	%r14, %r8
+14001a502:     	xorl	%r9d, %r9d
+14001a505:     	callq	0x140018950 <.text+0x17950>
+14001a50a:     	cmpb	$0x0, 0x8e8(%rsp)
+14001a512:     	leaq	0x8f0(%rsp), %rcx
+14001a51a:     	leaq	0x8f8(%rsp), %rdx
+14001a522:     	leaq	0x900(%rsp), %rax
+14001a52a:     	jne	0x14001a576 <.text+0x19576>
+14001a52c:     	leaq	(%rsp,%r14), %rdx
+14001a530:     	addq	$0x102, %rdx            # imm = 0x102
+14001a537:     	movb	$0x1, 0x20(%rsp)
+14001a53c:     	leaq	0x240(%rsp), %rcx
+14001a544:     	movq	%r15, %r8
+14001a547:     	xorl	%r9d, %r9d
+14001a54a:     	callq	0x140018950 <.text+0x17950>
+14001a54f:     	cmpw	$0x1, 0x240(%rsp)
+14001a558:     	leaq	0x248(%rsp), %rcx
+14001a560:     	leaq	0x250(%rsp), %rdx
+14001a568:     	leaq	0x258(%rsp), %rax
+14001a570:     	jne	0x14001a638 <.text+0x19638>
+14001a576:     	movq	(%rcx), %r8
+14001a579:     	movq	(%rdx), %rsi
+14001a57c:     	movq	(%rax), %rax
+14001a57f:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a589:     	andq	%rsi, %r12
+14001a58c:     	jmp	0x140019f15 <.text+0x18f15>
+14001a591:     	movq	0x2390(%rsp), %rax
+14001a599:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a5a3:     	andq	%rdx, %r12
+14001a5a6:     	movl	%edx, %esi
+14001a5a8:     	jmp	0x140019f15 <.text+0x18f15>
+14001a5ad:     	leaq	0x5ca34(%rip), %rsi     # 0x140076fe8
+14001a5b4:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a5be:     	andq	%rsi, %r12
+14001a5c1:     	movabsq	$-0x7fffffffffffffff, %r8 # imm = 0x8000000000000001
+14001a5cb:     	movl	$0x19, %eax
+14001a5d0:     	jmp	0x140019f15 <.text+0x18f15>
+14001a5d5:     	leaq	0x5c9bc(%rip), %rsi     # 0x140076f98
+14001a5dc:     	movabsq	$-0x100000000, %r12     # imm = 0xFFFFFFFF00000000
+14001a5e6:     	andq	%rsi, %r12
+14001a5e9:     	movabsq	$-0x7fffffffffffffff, %r8 # imm = 0x8000000000000001
+14001a5f3:     	movl	$0x1a, %eax
+14001a5f8:     	jmp	0x140019f15 <.text+0x18f15>
+14001a5fd:     	movq	0x38(%rsp), %rax
+14001a602:     	movq	$-0x1, (%rax)
+14001a609:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a60e:     	movabsq	$-0x7fffffffffffffff, %rax # imm = 0x8000000000000001
+14001a618:     	movq	0x38(%rsp), %rcx
+14001a61d:     	movq	%rax, (%rcx)
+14001a620:     	leaq	0x5ca61(%rip), %rax     # 0x140077088
+14001a627:     	movq	%rax, 0x8(%rcx)
+14001a62b:     	movq	$0x17, 0x10(%rcx)
+14001a633:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a638:     	leaq	0x242(%rsp), %rdx
+14001a640:     	leaq	0x2a04(%rsp), %rcx
+14001a648:     	movl	$0x6a2, %r8d            # imm = 0x6A2
+14001a64e:     	callq	0x14006a1b0 <.text+0x691b0>
+14001a653:     	movl	0x8ea(%rsp), %eax
+14001a65a:     	movl	%eax, 0x163c(%rsp)
+14001a661:     	movzwl	0x8ee(%rsp), %eax
+14001a669:     	movw	%ax, 0x1640(%rsp)
+14001a671:     	movq	0x900(%rsp), %rsi
+14001a679:     	leaq	0x908(%rsp), %rdx
+14001a681:     	leaq	0x2380(%rsp), %r14
+14001a689:     	movl	$0x684, %r8d            # imm = 0x684
+14001a68f:     	movq	%r14, %rcx
+14001a692:     	callq	0x14006a1b0 <.text+0x691b0>
+14001a697:     	leaq	0x3748(%rsp), %r15
+14001a69f:     	movl	$0xd26, %r8d            # imm = 0xD26
+14001a6a5:     	movq	%r15, %rcx
+14001a6a8:     	movq	%r14, %rdx
+14001a6ab:     	callq	0x14006a1b0 <.text+0x691b0>
+14001a6b0:     	leaq	0x165a(%rsp), %rcx
+14001a6b8:     	movups	0x8f0(%rsp), %xmm6
+14001a6c0:     	movl	$0xd26, %r8d            # imm = 0xD26
+14001a6c6:     	movq	%r15, %rdx
+14001a6c9:     	callq	0x14006a1b0 <.text+0x691b0>
+14001a6ce:     	movups	%xmm6, 0x1642(%rsp)
+14001a6d6:     	movq	%rsi, 0x1652(%rsp)
+14001a6de:     	jmp	0x140019672 <.text+0x18672>
+14001a6e3:     	movabsq	$-0x7fffffffffffffff, %rax # imm = 0x8000000000000001
+14001a6ed:     	movq	0x38(%rsp), %rcx
+14001a6f2:     	movq	%rax, (%rcx)
+14001a6f5:     	leaq	0x5cae4(%rip), %rax     # 0x1400771e0
+14001a6fc:     	movq	%rax, 0x8(%rcx)
+14001a700:     	movq	$0x18, 0x10(%rcx)
+14001a708:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a70d:     	movabsq	$-0x7fffffffffffffff, %rax # imm = 0x8000000000000001
+14001a717:     	movq	0x38(%rsp), %rcx
+14001a71c:     	movq	%rax, (%rcx)
+14001a71f:     	leaq	0x5ca82(%rip), %rax     # 0x1400771a8
+14001a726:     	movq	%rax, 0x8(%rcx)
+14001a72a:     	movq	$0x1f, 0x10(%rcx)
+14001a732:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a737:     	movabsq	$-0x8000000000000000, %r8 # imm = 0x8000000000000000
+14001a741:     	jmp	0x140019f15 <.text+0x18f15>
+14001a746:     	movq	0x40(%rsp), %rsi
+14001a74b:     	movabsq	$-0x8000000000000000, %r8 # imm = 0x8000000000000000
+14001a755:     	jmp	0x140019f15 <.text+0x18f15>
+14001a75a:     	movq	0x48(%rsp), %rsi
+14001a75f:     	movabsq	$-0x8000000000000000, %r8 # imm = 0x8000000000000000
+14001a769:     	jmp	0x140019f15 <.text+0x18f15>
+14001a76e:     	movq	0x250(%rsp), %rcx
+14001a776:     	movq	0x38(%rsp), %r8
+14001a77b:     	movq	%rax, (%r8)
+14001a77e:     	movq	%rdx, 0x8(%r8)
+14001a782:     	movq	%rcx, 0x10(%r8)
+14001a786:     	jmp	0x140019f2a <.text+0x18f2a>
+14001a78b:     	leaq	0x5c166(%rip), %r9      # 0x1400768f8
+14001a792:     	movq	%rax, %rcx
+14001a795:     	callq	0x14006aec0 <.text+0x69ec0>
+14001a79a:     	ud2
+14001a79c:     	leaq	0x5c30d(%rip), %r9      # 0x140076ab0
+14001a7a3:     	movl	$0x13e, %r8d            # imm = 0x13E
+14001a7a9:     	movq	%r13, %rcx
+14001a7ac:     	movq	%rbp, %rdx
+14001a7af:     	callq	0x14006aec0 <.text+0x69ec0>
+14001a7b4:     	ud2
+14001a7b6:     	leaq	0x77dab(%rip), %r9      # 0x140092568
+14001a7bd:     	xorl	%ecx, %ecx
+14001a7bf:     	movq	%rbp, %r8
+14001a7c2:     	callq	0x14006aec0 <.text+0x69ec0>
+14001a7c7:     	ud2
+14001a7c9:     	leaq	0x77db0(%rip), %r9      # 0x140092580
+14001a7d0:     	movq	%r15, %rcx
+14001a7d3:     	movq	%rbp, %r8
+14001a7d6:     	callq	0x14006aec0 <.text+0x69ec0>
+14001a7db:     	ud2
+14001a7dd:     	leaq	0x5c114(%rip), %r9      # 0x1400768f8
+14001a7e4:     	movq	%r10, %rcx
+14001a7e7:     	callq	0x14006aec0 <.text+0x69ec0>
+14001a7ec:     	ud2
+14001a7ee:     	leaq	0x5c2a3(%rip), %r8      # 0x140076a98
+14001a7f5:     	movl	$0x13, %edx
+14001a7fa:     	movq	%rax, %rcx
+14001a7fd:     	callq	0x14006afa9 <.text+0x69fa9>
+14001a802:     	ud2
+14001a804:     	leaq	0x5c225(%rip), %r8      # 0x140076a30
+14001a80b:     	movq	%r15, %rcx
+14001a80e:     	xorl	%edx, %edx
+14001a810:     	callq	0x14006afa9 <.text+0x69fa9>
+14001a815:     	ud2

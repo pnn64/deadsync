@@ -1,0 +1,63 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 42.07s
+     Running tests\encoder_boundaries.rs (target\png-encoding-20261028\build\release\deps\encoder_boundaries-c3afb39037cf89e0.exe)
+
+running 3 tests
+Encoder image/frame validation: 687 malformed native inputs, both writers reject before output
+test native_image_animation_and_frame_storage_errors_reject_before_output ... ok
+Encoder APNG rectangle audit: 450 valid / 2430 invalid inputs, both default roles and all native formats; both writers, plain/Adam7, independent CRC/control/zlib answers
+test frame_rectangles_and_integer_edges_have_literal_controls_and_exact_frame_streams ... ok
+Encoder writer audit: 2616 exact prefix/failure offsets with short and Interrupted writes; invalid byte counts rejected
+test every_output_byte_failure_short_writes_and_invalid_writer_counts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\encoder_fields.rs (target\png-encoding-20261028\build\release\deps\encoder_fields-f27c0042b87da372.exe)
+
+running 3 tests
+Encoder native boundary audit: 308033 invalid inputs rejected by both writers before any output
+test native_palette_transparency_and_option_boundaries_reject_before_writing ... ok
+Encoder ordering audit: 49419 independently modeled pairs, both writers, exact literal output or rejection before output
+test metadata_placement_multiplicity_and_pairs_follow_table_seven_when_writing ... ok
+Encoder scalar audit: 109376 exact literal files, 82396 rejected inputs, 15576 malformed wire lengths unrepresentable by the native API; each checked through both encoders
+test scalar_input_fields_and_exact_wire_values_for_both_encoders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s
+
+     Running tests\encoder_filter_bytes.rs (target\png-encoding-20261028\build\release\deps\encoder_filter_bytes-e19e8948db11a59a.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests\encoder_reference.rs (target\png-encoding-20261028\build\release\deps\encoder_reference-eeff3eb1f75b57da.exe)
+
+running 2 tests
+
+thread 'c_libpng_encoder_all_formats_filters_interlace_and_compression_levels' (12696) panicked at crates\deadlib-image\png\tests\encoder_reference.rs:379:52:
+DEADLIB_LIBPNG_ENCODER required
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... FAILED
+Cross-encoder APNG audit: 8640 native files, 2160 Rust png animations and 180 static reference encodings; exact native samples, palettes, transparency and controls
+test rust_encoder_and_both_native_writers_preserve_static_and_apng_semantics ... ok
+
+failures:
+
+failures:
+    c_libpng_encoder_all_formats_filters_interlace_and_compression_levels
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+
+error: test failed, to rerun pass `-p deadlib-image-png --test encoder_reference`

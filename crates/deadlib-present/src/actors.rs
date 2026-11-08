@@ -1,6 +1,6 @@
 use crate::anim;
 use deadlib_render_core::{
-    BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, CullMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::Mat4 as Matrix4;
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -214,6 +214,41 @@ pub enum SpriteSource {
     Solid,
 }
 
+/// Mesh sampling uses either a prewarmed asset key or an existing GPU target.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MeshTexture {
+    Key(Arc<str>),
+    Handle(TextureHandle),
+}
+
+impl MeshTexture {
+    pub fn texture_key(&self) -> Option<&str> {
+        match self {
+            Self::Key(key) => Some(key),
+            Self::Handle(_) => None,
+        }
+    }
+
+    pub const fn texture_handle(&self) -> Option<TextureHandle> {
+        match self {
+            Self::Handle(handle) => Some(*handle),
+            Self::Key(_) => None,
+        }
+    }
+}
+
+impl From<Arc<str>> for MeshTexture {
+    fn from(key: Arc<str>) -> Self {
+        Self::Key(key)
+    }
+}
+
+impl From<&str> for MeshTexture {
+    fn from(key: &str) -> Self {
+        Self::Key(Arc::from(key))
+    }
+}
+
 impl SpriteSource {
     #[inline(always)]
     #[must_use]
@@ -410,12 +445,13 @@ pub enum Actor {
 
     /// Textured mesh actor (model-style triangles with UVs)
     TexturedMesh {
+        environment: Option<MeshEnvironment>,
         align: [f32; 2],
         offset: [f32; 2],
         world_z: f32,
         size: [SizeSpec; 2],
         local_transform: Matrix4,
-        texture: Arc<str>,
+        texture: MeshTexture,
         tint: [f32; 4],
         glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
@@ -424,6 +460,13 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
+        /// Clear depth before this actor's first visible pass.
+        clear_depth: bool,
+        /// Clear depth after this actor's last visible pass.
+        clear_depth_after: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -432,12 +475,13 @@ pub enum Actor {
     /// Dynamic textured mesh backed by storage retained by its owner across frames.
     /// The owner must not mutate the buffer while any cloned actor is live.
     ReusableTexturedMesh {
+        environment: Option<MeshEnvironment>,
         align: [f32; 2],
         offset: [f32; 2],
         world_z: f32,
         size: [SizeSpec; 2],
         local_transform: Matrix4,
-        texture: Arc<str>,
+        texture: MeshTexture,
         tint: [f32; 4],
         glow: [f32; 4],
         vertices: Arc<Vec<TexturedMeshVertex>>,
@@ -446,6 +490,13 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
+        /// Clear depth before this actor's first visible pass.
+        clear_depth: bool,
+        /// Clear depth after this actor's last visible pass.
+        clear_depth_after: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -480,6 +531,9 @@ pub enum Actor {
         transform: Matrix4,
         source_view_proj: Matrix4,
         children: Arc<[Self]>,
+        /// Sort child layers locally, then keep them together at this actor's
+        /// layer. Explicit draw sequences must not interleave sibling sources.
+        isolate_order: bool,
         z: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
@@ -506,6 +560,13 @@ pub enum Actor {
         children: Vec<Self>,
     },
 
+    /// Replays a retained draw in its recorded absolute coordinate space.
+    /// Parent layout and camera remapping do not alter the recorded matrices.
+    SharedCamera {
+        view_proj: Matrix4,
+        children: Arc<[Self]>,
+    },
+
     /// Begin a flat camera scope for subsequent sibling actors.
     CameraPush { view_proj: Matrix4 },
 
@@ -530,8 +591,12 @@ pub struct RenderTarget {
     pub texture_handle: TextureHandle,
     /// Backing texture dimensions in render pixels.
     pub size: [u32; 2],
+    /// Drawing viewport at the texture's logical top left. Remaining backing
+    /// pixels are padding and still participate in attachment clears.
+    pub viewport: [u32; 2],
     /// Coordinate-space dimensions used while composing the children.
     pub logical_size: [f32; 2],
+    pub float_color: bool,
     pub alpha: bool,
     pub depth: bool,
     pub preserve: bool,
@@ -556,6 +621,7 @@ pub struct FlatSprite {
     pub flip_y: bool,
     pub fade: [f32; 4],
     pub blend: BlendMode,
+    pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
     pub z: i16,
@@ -568,12 +634,24 @@ pub enum FlatMeshVertices {
     Reusable(Arc<Vec<TexturedMeshVertex>>),
 }
 
+/// Material texture stages and an affine transform before model projection.
+#[derive(Clone, Debug)]
+pub struct MeshEnvironment {
+    pub sampler: Option<deadlib_render_core::MeshSampler>,
+    /// Matching world-to-clip and world-to-eye cameras, before model projection.
+    pub camera: Option<(Matrix4, Matrix4)>,
+    pub transform: Matrix4,
+    pub additive_texture: Option<Arc<str>>,
+    pub additive_uv: [f32; 4],
+}
+
 #[derive(Clone, Debug)]
 pub struct FlatTexturedMesh {
+    pub environment: Option<MeshEnvironment>,
     pub offset: [f32; 2],
     pub world_z: f32,
     pub local_transform: Matrix4,
-    pub texture: Arc<str>,
+    pub texture: MeshTexture,
     pub tint: [f32; 4],
     pub glow: [f32; 4],
     pub vertices: FlatMeshVertices,
@@ -582,6 +660,13 @@ pub struct FlatTexturedMesh {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
+    /// Clear depth before this draw to isolate a new model in painter order.
+    pub clear_depth: bool,
+    /// Clear depth after this draw so subsequent draws cannot inherit it.
+    pub clear_depth_after: bool,
+    pub cull_mode: CullMode,
     pub blend: BlendMode,
     pub z: i16,
 }
@@ -784,9 +869,8 @@ impl Actor {
             Self::Frame { children, .. } | Self::Camera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
-            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. } => {
-                children.iter().all(Self::retained_static)
-            }
+            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. }
+            | Self::SharedCamera { children, .. } => children.iter().all(Self::retained_static),
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
             | Self::ReusableMesh { .. }
@@ -849,6 +933,11 @@ impl Actor {
             Self::SharedTransform { tint, .. } => tint[3] *= alpha,
             Self::Camera { children, .. } => {
                 for child in children {
+                    child.mul_alpha(alpha);
+                }
+            }
+            Self::SharedCamera { children, .. } => {
+                for child in Arc::make_mut(children) {
                     child.mul_alpha(alpha);
                 }
             }
@@ -931,6 +1020,12 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
+                    visit(stats, child);
+                }
+            }
+            Actor::SharedCamera { children, .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children.iter() {
                     visit(stats, child);
                 }
             }
@@ -1088,6 +1183,9 @@ pub enum TextContent {
     Static(&'static str),
     Owned(String),
     Shared(Arc<str>),
+    /// Long changing text in a replaceable layout slot (0..8). Callers sharing
+    /// a slot must not display different values in the same frame.
+    Dynamic(Arc<DynamicText>),
     Inline(InlineText),
     /// Short changing text laid out through an independently reusable frame
     /// slot instead of the persistent whole-string layout cache.
@@ -1107,6 +1205,13 @@ pub enum TextContent {
         text: InlineU32Text,
         slot: u8,
     },
+}
+
+/// The changing text and slot share one allocation so `TextContent` stays compact.
+#[derive(Clone, Debug)]
+pub struct DynamicText {
+    pub text: String,
+    pub slot: u8,
 }
 
 /// Heap-free UTF-8 text for short, frame-local formatted values.
@@ -1424,6 +1529,7 @@ impl TextContent {
             Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
+            Self::Dynamic(text) => text.text.as_str(),
             Self::Inline(s) => s.as_str(),
             Self::FrameInline { text, .. } => text.as_str(),
             Self::InlineU16(s) => s.as_str(),

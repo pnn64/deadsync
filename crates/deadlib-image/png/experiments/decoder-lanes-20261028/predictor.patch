@@ -1,0 +1,65 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index dcca2dae9..12ba1cca7 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -122,11 +122,7 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
+ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
+     match filter {
+         0 => (),
+-        1 => {
+-            for n in bpp..row.len() {
+-                row[n] = row[n].wrapping_add(row[n - bpp]);
+-            }
+-        }
++        1 => unfilter_first_neighbors::<false>(row, bpp),
+         2 => {
+             for (v, &up) in row.iter_mut().zip(prev) {
+                 *v = v.wrapping_add(up);
+@@ -181,8 +177,7 @@ pub(crate) fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(
+     // With a zero row above, Paeth is Sub and Average uses half of the left byte.
+     match filter {
+         0 | 2 => (),
+-        1 => return unfilter(row, &[], bpp, 1),
+-        4 => unfilter_first_neighbors::<false>(row, bpp),
++        1 | 4 => unfilter_first_neighbors::<false>(row, bpp),
+         3 => unfilter_first_neighbors::<true>(row, bpp),
+         _ => return Err(Error::Invalid("scanline filter")),
+     }
+diff --git a/crates/deadlib-image/png/src/stream/rows.rs b/crates/deadlib-image/png/src/stream/rows.rs
+index a75c7c19c..d6bcda503 100644
+--- a/crates/deadlib-image/png/src/stream/rows.rs
++++ b/crates/deadlib-image/png/src/stream/rows.rs
+@@ -84,12 +84,14 @@ impl ImageRows {
+                     let additional = bytes - self.row.len();
+                     reserve(&mut self.row, additional)?;
+                 }
+-                if bytes > self.previous.len() {
+-                    let additional = bytes - self.previous.len();
+-                    reserve(&mut self.previous, additional)?;
+-                }
+                 self.row.resize(bytes, 0);
+-                self.previous.resize(bytes, 0);
++                if self.height > 1 {
++                    if bytes > self.previous.len() {
++                        let additional = bytes - self.previous.len();
++                        reserve(&mut self.previous, additional)?;
++                    }
++                    self.previous.resize(bytes, 0);
++                }
+                 return Ok(());
+             }
+             self.pass += 1;
+@@ -101,11 +103,12 @@ impl ImageRows {
+         if self.ready {
+             self.ready = false;
+             self.have = 0;
+-            core::mem::swap(&mut self.row, &mut self.previous);
+             self.row_index += 1;
+             if self.row_index == self.height {
+                 self.pass += 1;
+                 self.start_pass()?;
++            } else {
++                core::mem::swap(&mut self.row, &mut self.previous);
+             }
+         }
+         Ok(())

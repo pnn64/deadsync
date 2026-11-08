@@ -1,0 +1,73 @@
+{
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "case": "Silent_Light.mp3",
+      "sha256": "10793142947d5bdb77165b6c94bae67f077a7c39c1b9a6327d5906f370913bc3",
+      "frames": 10086,
+      "comparisons": {
+        "mad": {
+          "samples": 23238144,
+          "rms": 1.2049125429127106e-07,
+          "max": 1.3113021850585938e-06
+        },
+        "mpg123": {
+          "samples": 23238144,
+          "rms": 7.787333809067248e-08,
+          "max": 2.294778823852539e-06
+        },
+        "symphonia": {
+          "samples": 23238144,
+          "rms": 9.169801779498321e-08,
+          "max": 1.2367963790893555e-06
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-silent-initial/Silent_Light-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-silent-initial/Silent_Light-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-silent-initial/Silent_Light-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-silent-initial/Silent_Light-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    }
+  ]
+}

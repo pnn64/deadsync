@@ -1,0 +1,68 @@
+[
+  {
+    "stage": "layout-original",
+    "bytes": 12478424,
+    "sha256": "ee2fb635533d85a3baf45924f68a89d6eb5597a68b0bce5d9fdffdf0b23a4a4d",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-layout-original\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-layout-original\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "229b4826d200e143114c86b7366d04163377e0f2b544d47e70597e37e814ac9a",
+      "test_source_sha256": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+      "rate_source_sha256": "7120864f7eddbb5ae38d0ce720b82df654dfc2710406a8bd5a4cc3550567d665",
+      "support_sha256": {
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "allocations-source.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+      },
+      "binary_sha256": "784b92f2f013f61d350a17411fa31b2f146068a6a652888471c05f1580085b43"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.09s\n\n"
+  },
+  {
+    "stage": "layout-retained",
+    "bytes": 12478424,
+    "sha256": "ee2fb635533d85a3baf45924f68a89d6eb5597a68b0bce5d9fdffdf0b23a4a4d",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-layout-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-layout-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "31c25442cf5af7252f043b4d0573dc802106bb1b98a83633efdd3db8bd80319d",
+      "test_source_sha256": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+      "rate_source_sha256": "7120864f7eddbb5ae38d0ce720b82df654dfc2710406a8bd5a4cc3550567d665",
+      "support_sha256": {
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "allocations-source.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+      },
+      "binary_sha256": "347dd4eabc6cc57067532684ed1a287b2fee50a12234d860783f9c67fe1b81d5"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.09s\n\n"
+  }
+]

@@ -1,0 +1,889 @@
+// Native public method tables and instance lookup. Inventories come from the
+// bidirectional compiled ITGmania controls in actor-class-provenance.json.
+use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value};
+use crate::callback_args::{ForwardArgs, IgnoredArgs as ForwardResults};
+
+pub(crate) const METHODS_KEY: &str = "__songlua_bound_methods";
+
+const ACTOR: &[&str] = &[
+    "name",
+    "sleep",
+    "linear",
+    "accelerate",
+    "decelerate",
+    "spring",
+    "tween",
+    "stoptweening",
+    "finishtweening",
+    "hurrytweening",
+    "GetTweenTimeLeft",
+    "x",
+    "y",
+    "z",
+    "xy",
+    "addx",
+    "addy",
+    "addz",
+    "zoom",
+    "zoomx",
+    "zoomy",
+    "zoomz",
+    "zoomto",
+    "zoomtowidth",
+    "zoomtoheight",
+    "setsize",
+    "SetWidth",
+    "SetHeight",
+    "basealpha",
+    "basezoom",
+    "basezoomx",
+    "basezoomy",
+    "basezoomz",
+    "stretchto",
+    "cropleft",
+    "croptop",
+    "cropright",
+    "cropbottom",
+    "fadeleft",
+    "fadetop",
+    "faderight",
+    "fadebottom",
+    "diffuse",
+    "diffuseupperleft",
+    "diffuseupperright",
+    "diffuselowerleft",
+    "diffuselowerright",
+    "diffuseleftedge",
+    "diffuserightedge",
+    "diffusetopedge",
+    "diffusebottomedge",
+    "diffusealpha",
+    "diffusecolor",
+    "glow",
+    "aux",
+    "getaux",
+    "rotationx",
+    "rotationy",
+    "rotationz",
+    "addrotationx",
+    "addrotationy",
+    "addrotationz",
+    "getrotation",
+    "baserotationx",
+    "baserotationy",
+    "baserotationz",
+    "skewx",
+    "skewy",
+    "heading",
+    "pitch",
+    "roll",
+    "shadowlength",
+    "shadowlengthx",
+    "shadowlengthy",
+    "shadowcolor",
+    "horizalign",
+    "vertalign",
+    "halign",
+    "valign",
+    "diffuseblink",
+    "diffuseshift",
+    "diffuseramp",
+    "glowblink",
+    "glowshift",
+    "glowramp",
+    "rainbow",
+    "wag",
+    "bounce",
+    "bob",
+    "pulse",
+    "spin",
+    "vibrate",
+    "stopeffect",
+    "effectcolor1",
+    "effectcolor2",
+    "effectperiod",
+    "effecttiming",
+    "effect_hold_at_full",
+    "effectoffset",
+    "effectclock",
+    "effectmagnitude",
+    "geteffectmagnitude",
+    "scaletocover",
+    "scaletofit",
+    "animate",
+    "play",
+    "pause",
+    "setstate",
+    "GetNumStates",
+    "texturetranslate",
+    "texturewrapping",
+    "SetTextureFiltering",
+    "blend",
+    "zbuffer",
+    "ztest",
+    "ztestmode",
+    "zwrite",
+    "zbias",
+    "clearzbuffer",
+    "backfacecull",
+    "cullmode",
+    "visible",
+    "hibernate",
+    "draworder",
+    "playcommand",
+    "queuecommand",
+    "queuemessage",
+    "addcommand",
+    "GetCommand",
+    "RunCommandsRecursively",
+    "GetX",
+    "GetY",
+    "GetZ",
+    "GetDestX",
+    "GetDestY",
+    "GetDestZ",
+    "GetWidth",
+    "GetHeight",
+    "GetZoomedWidth",
+    "GetZoomedHeight",
+    "GetZoom",
+    "GetZoomX",
+    "GetZoomY",
+    "GetZoomZ",
+    "GetRotationX",
+    "GetRotationY",
+    "GetRotationZ",
+    "GetBaseZoomX",
+    "GetBaseZoomY",
+    "GetBaseZoomZ",
+    "GetSecsIntoEffect",
+    "GetEffectDelta",
+    "GetDiffuse",
+    "GetDiffuseAlpha",
+    "GetGlow",
+    "GetVisible",
+    "GetHAlign",
+    "GetVAlign",
+    "GetName",
+    "GetParent",
+    "GetFakeParent",
+    "SetFakeParent",
+    "AddWrapperState",
+    "RemoveWrapperState",
+    "GetNumWrapperStates",
+    "GetWrapperState",
+    "SetRateScalingEnabled",
+    "GetRateScalingEnabled",
+    "Draw",
+    "get_tween_uses_effect_delta",
+    "set_tween_uses_effect_delta",
+];
+
+const FRAME: &[&str] = &[
+    "playcommandonchildren",
+    "playcommandonleaves",
+    "runcommandsonleaves",
+    "RunCommandsOnChildren",
+    "propagate",
+    "fov",
+    "SetUpdateRate",
+    "GetUpdateRate",
+    "SetFOV",
+    "vanishpoint",
+    "GetChild",
+    "GetChildren",
+    "GetNumChildren",
+    "SetDrawByZPosition",
+    "SetDrawFunction",
+    "GetDrawFunction",
+    "SetUpdateFunction",
+    "SortByDrawOrder",
+    "SetAmbientLightColor",
+    "SetDiffuseLightColor",
+    "SetSpecularLightColor",
+    "SetLightDirection",
+    "AddChildFromPath",
+    "RemoveChild",
+    "RemoveAllChildren",
+];
+
+const SPRITE: &[&str] = &[
+    "Load",
+    "LoadBanner",
+    "LoadBackground",
+    "LoadFromCached",
+    "customtexturerect",
+    "SetCustomImageRect",
+    "SetCustomPosCoords",
+    "StopUsingCustomPosCoords",
+    "texcoordvelocity",
+    "get_use_effect_clock_for_texcoords",
+    "set_use_effect_clock_for_texcoords",
+    "scaletoclipped",
+    "CropTo",
+    "stretchtexcoords",
+    "addimagecoords",
+    "setstate",
+    "GetState",
+    "SetStateProperties",
+    "GetAnimationLengthSeconds",
+    "SetSecondsIntoAnimation",
+    "SetTexture",
+    "GetTexture",
+    "SetEffectMode",
+    "GetNumStates",
+    "SetAllStateDelays",
+    "GetDecodeMovie",
+    "SetDecodeMovie",
+];
+
+const AFT: &[&str] = &[
+    "Create",
+    "EnableDepthBuffer",
+    "EnableAlphaBuffer",
+    "EnableFloat",
+    "EnablePreserveTexture",
+    "SetTextureName",
+    "GetTexture",
+];
+
+const AMV: &[&str] = &[
+    "SetVertex",
+    "SetVertices",
+    "SetEffectMode",
+    "SetTextureMode",
+    "SetLineWidth",
+    "SetDrawState",
+    "SetNumVertices",
+    "GetNumVertices",
+    "GetDestDrawMode",
+    "GetDestFirstToDraw",
+    "GetDestNumToDraw",
+    "GetCurrDrawMode",
+    "GetCurrFirstToDraw",
+    "GetCurrNumToDraw",
+    "GetSpline",
+    "SetVertsFromSplines",
+    "GetUseAnimationState",
+    "SetUseAnimationState",
+    "GetNumStates",
+    "GetNumQuadStates",
+    "AddState",
+    "RemoveState",
+    "GetState",
+    "SetState",
+    "GetStateData",
+    "SetStateData",
+    "SetStateProperties",
+    "SetAllStateDelays",
+    "SetSecondsIntoAnimation",
+    "AddQuadState",
+    "RemoveQuadState",
+    "GetQuadState",
+    "SetQuadState",
+    "ForceStateUpdate",
+    "GetDecodeMovie",
+    "SetDecodeMovie",
+    "SetTexture",
+    "GetTexture",
+    "LoadTexture",
+];
+
+const BITMAP: &[&str] = &[
+    "wrapwidthpixels",
+    "maxwidth",
+    "maxheight",
+    "max_dimension_use_zoom",
+    "vertspacing",
+    "settext",
+    "rainbowscroll",
+    "jitter",
+    "distort",
+    "undistort",
+    "GetText",
+    "AddAttribute",
+    "ClearAttributes",
+    "strokecolor",
+    "getstrokecolor",
+    "uppercase",
+    "textglowmode",
+    "get_mult_attrs_with_diffuse",
+    "set_mult_attrs_with_diffuse",
+];
+
+pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    install_native(lua)?;
+    let globals = lua.globals();
+    // Banner is not linked into the compiled actor oracle. Its own methods and
+    // base class are declared by the checked-out src/Banner.cpp Luna binding.
+    let banner = lua.create_table()?;
+    for method in [
+        "scaletoclipped",
+        "ScaleToClipped",
+        "LoadFromSong",
+        "LoadFromCourse",
+        "LoadFromCachedBanner",
+        "LoadIconFromCharacter",
+        "LoadCardFromCharacter",
+        "LoadBannerFromUnlockEntry",
+        "LoadBackgroundFromUnlockEntry",
+        "LoadFromSongGroup",
+        "LoadFromSortOrder",
+        "GetScrolling",
+        "SetScrolling",
+        "GetPercentScrolling",
+    ] {
+        forward(lua, &banner, method)?;
+    }
+    let mt = lua.create_table()?;
+    mt.set("__index", globals.get::<Table>("Sprite")?)?;
+    banner.set_metatable(Some(mt))?;
+    globals.set("Banner", banner)?;
+    let class = globals.get::<Table>("Actor")?;
+    for method in [
+        "ease",
+        "bouncebegin",
+        "bounceend",
+        "smooth",
+        "compound",
+        "hide_if",
+        "player",
+        "align",
+        "FullScreen",
+        "scale_or_crop_background_no_move",
+        "scale_or_crop_background",
+        "CenterX",
+        "CenterY",
+        "Center",
+        "bezier",
+        "Real",
+        "RealInverse",
+        "MaskSource",
+        "MaskDest",
+        "thump",
+        "heartbeat",
+        "SetSize",
+    ] {
+        forward(lua, &class, method)?;
+    }
+    let class = globals.get::<Table>("ActorFrame")?;
+    for method in ["propagatecommand"] {
+        forward(lua, &class, method)?;
+    }
+    let class = globals.get::<Table>("Sprite")?;
+    for method in [
+        "LoadFromSongBanner",
+        "LoadFromSongBackground",
+        "LoadFromCurrentSongBackground",
+        "position",
+        "loop",
+        "rate",
+    ] {
+        forward(lua, &class, method)?;
+    }
+    // _fallback/Scripts/02 Sprite.lua:75 delegates through the current public
+    // method and returns its receiver, independently of CropTo's return value.
+    lua.load(format!("{}function Sprite:cropto(w,h) self:CropTo(w,h) return self end", "\n".repeat(74)))
+        .set_name("_fallback/Scripts/02 Sprite.lua")
+        .exec()?;
+    // _fallback/Scripts/02 Actor.lua defines these in native actor primitives.
+    lua.load(
+        r##"
+-- _fallback/Scripts/02 Actor.lua: the drop helper is a two-dimensional
+-- Bezier tween, using the same native tween queue and argument checks.
+function Actor:drop(t)
+    self:tween(t, "TweenType_Bezier", {0, 0, 1/3, 1, 2/3, 0.5, 1, 1})
+    return self
+end
+
+function Actor:hidden(bHide)
+    lua.ReportScriptError("hidden is deprecated, use visible instead. (used on " .. self:GetName() .. ")")
+    self:visible(not bHide)
+end
+
+function BitmapText:PixelFont()
+    self:SetTextureFiltering(false)
+    return self
+end
+function BitmapText:Stroke(c)
+    self:strokecolor(c)
+    return self
+end
+function BitmapText:NoStroke()
+    self:strokecolor(color("0,0,0,0"))
+    return self
+end
+function BitmapText:settextf(...)
+    self:settext(string.format(...))
+    return self
+end
+function BitmapText:DiffuseAndStroke(diffuseC, strokeC)
+    self:diffuse(diffuseC)
+    self:strokecolor(strokeC)
+    return self
+end
+
+-- _fallback/Scripts/02 Actor.lua owns this inherited lyric helper.
+function Actor:LyricCommand(side)
+	self:settext( Var "LyricText" )
+	self:draworder(102)
+
+	self:stoptweening()
+	self:shadowlengthx(0)
+	self:shadowlengthy(5)
+	self:strokecolor(color("#000000"))
+
+	local Zoom = SCREEN_WIDTH / (self:GetZoomedWidth()+1)
+	if( Zoom > 1 ) then
+		Zoom = 1
+	end
+	self:zoomx( Zoom )
+
+	local lyricColor = Var "LyricColor"
+	local Factor = 1
+	if side == "Back" then
+		Factor = 0.5
+	elseif side == "Front" then
+		Factor = 0.9
+	end
+	self:diffuse( {
+		lyricColor[1] * Factor,
+		lyricColor[2] * Factor,
+		lyricColor[3] * Factor,
+		lyricColor[4] * Factor } )
+
+	if side == "Front" then
+		self:cropright(1)
+	else
+		self:cropleft(0)
+	end
+
+	self:diffusealpha(0)
+	self:linear(0.2)
+	self:diffusealpha(0.75)
+	self:linear( Var "LyricDuration" * 0.75)
+	if side == "Front" then
+		self:cropright(0)
+	else
+		self:cropleft(1)
+	end
+	self:sleep( Var "LyricDuration" * 0.25 )
+	self:linear(0.2)
+	self:diffusealpha(0)
+	return self
+end
+"##,
+    )
+    .exec()?;
+    Ok(())
+}
+
+pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    for (name, base, methods) in [
+        ("Actor", None, ACTOR),
+        ("ActorFrame", Some("Actor"), FRAME),
+        ("Sprite", Some("Actor"), SPRITE),
+        ("ActorFrameTexture", Some("ActorFrame"), AFT),
+        ("ActorMultiVertex", Some("Actor"), AMV),
+        ("ActorProxy", Some("Actor"), &["SetTarget", "GetTarget"][..]),
+        ("BitmapText", Some("Actor"), BITMAP),
+    ] {
+        let class = lua.create_table_with_capacity(0, methods.len())?;
+        for method in methods {
+            forward(lua, &class, method)?;
+        }
+        if let Some(base) = base {
+            let mt = lua.create_table_with_capacity(0, 1)?;
+            mt.set("__index", globals.get::<Table>(base)?)?;
+            class.set_metatable(Some(mt))?;
+        }
+        globals.set(name, class)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Result<()> {
+    let function = lua.create_function(move |lua, args: ForwardArgs| {
+        let Some(Value::Table(actor)) = args.front() else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "actor method {name} requires an actor"
+            )));
+        };
+        let bound = actor.raw_get::<Option<Table>>(METHODS_KEY)?;
+        let method = match bound {
+            Some(bound) => bound.raw_get::<Value>(name)?,
+            None => actor.raw_get::<Value>(name)?,
+        };
+        let Value::Function(method) = method else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "native actor method {name} has no semantic implementation"
+            )));
+        };
+        let observed = matches!(name, "GetChild" | "GetName" | "GetParent" | "GetNumChildren"
+            | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude"
+            | "Center" | "FullScreen" | "animate" | "decelerate" | "diffuse" | "diffusealpha"
+            | "effectperiod" | "linear" | "queuemessage" | "rainbow" | "rotationz"
+            | "spin" | "visible" | "zoom" | "zoomto"
+            | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
+            && crate::live::active(lua)
+            && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
+        if observed {
+            // Trace reporting keeps the complete MultiValue path.
+            let args = args.into_lua_multi(lua)?;
+            let trace_args = args.clone();
+            crate::live::query_phase(lua, true);
+            let result = method.call::<MultiValue>(args);
+            crate::live::query_phase(lua, false);
+            crate::live::trace_bound_method(lua, name, &trace_args, &result);
+            result.map(ForwardResults::from)
+        } else {
+            method.call::<ForwardResults>(args)
+        }
+    })?;
+    if crate::live::active(lua)
+        && let Some(setter) = crate::actor_methods::Setter::ALL.into_iter().find(|setter| setter.name() == name)
+    {
+        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::Forward(setter))?;
+    }
+    class.set(name, function)
+}
+
+fn class_name(kind: &str) -> &'static str {
+    match kind {
+        "Sprite" | "Quad" => "Sprite",
+        "Banner" => "Banner",
+        "ActorFrameTexture" => "ActorFrameTexture",
+        "ActorMultiVertex" => "ActorMultiVertex",
+        "ActorProxy" => "ActorProxy",
+        "BitmapText" => "BitmapText",
+        "Player" => "Player",
+        // Player inherits ActorFrame in native Player.h; gameplay host actors
+        // use this internal kind before the complete Player inventory is linked.
+        "PlayerActor" => "ActorFrame",
+        "NoteField" => "NoteField",
+        kind if is_frame(kind) => "ActorFrame",
+        _ => "Actor",
+    }
+}
+
+fn is_frame(kind: &str) -> bool {
+    matches!(
+        kind,
+        "ActorFrame"
+            | "ActorFrameTexture"
+            | "TopScreen"
+            | "Player"
+            | "PlayerActor"
+            | "HoldJudgment"
+            | "NoteField"
+            | "GraphDisplay"
+            | "SongMeterDisplay"
+            | "MeterDisplay"
+            | "CourseContentsList"
+            | "StepsDisplay"
+            | "PercentageDisplay"
+            | "WrapperState"
+    )
+}
+
+fn is_core(kind: &str) -> bool {
+    matches!(
+        kind,
+        "Actor"
+            | "ActorFrame"
+            | "Sprite"
+            | "Quad"
+            | "Banner"
+            | "ActorFrameTexture"
+            | "ActorMultiVertex"
+            | "ActorProxy"
+            | "BitmapText"
+            | "WrapperState"
+    )
+}
+
+use crate::actor_method_name::flags as method_name_flags;
+
+// Lua 5.1 gives every Lua closure a table environment; C functions have none.
+pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let bound = match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
+        Some(bound) => bound,
+        None => lua.create_table()?,
+    };
+    let mut methods = Vec::new();
+    actor.for_each::<Value, Value>(|key, value| {
+        if let (Value::String(name), Value::Function(function)) = (key, value) {
+            let (native, _) = method_name_flags(lua, &name)?;
+            if native && function.environment().is_none() {
+                methods.push((name, function));
+            }
+        }
+        Ok(())
+    })?;
+    for (key, value) in methods {
+        let key = Value::String(key);
+        let value = Value::Function(value);
+        bound.raw_set(&key, value)?;
+        actor.raw_set(key, Value::Nil)?;
+    }
+    actor.raw_set(METHODS_KEY, bound)
+}
+
+pub(crate) fn lookup(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Value> {
+    let Value::String(name) = &key else {
+        return Ok(Value::Nil);
+    };
+    let (_, frame_callback) = method_name_flags(lua, name)?;
+    let kind = actor
+        .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_actor_type")?;
+    let kind = kind.as_ref().map_or("Actor", |kind| kind.as_str());
+    if let Some(class) = lua.globals().get::<Option<Table>>(class_name(kind))? {
+        let method = class.get::<Value>(&key)?;
+        if !method.is_nil() { return Ok(method); }
+        if is_core(kind) { return Ok(Value::Nil); }
+    }
+    // Unlinked classes retain their existing own adapters until their native
+    // inventories are audited. Frame callbacks are never inherited by Actor.
+    if !is_frame(kind) && frame_callback {
+        return Ok(Value::Nil);
+    }
+    match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
+        Some(methods) => methods.raw_get(key),
+        None => Ok(Value::Nil),
+    }
+}
+
+pub(crate) fn assign(lua: &Lua, (actor, key, value): (Table, Value, Value)) -> mlua::Result<()> {
+    if let (Value::String(name), Value::Function(function)) = (&key, &value) {
+        let (native, _) = method_name_flags(lua, name)?;
+        if native && function.environment().is_none()
+            && let Some(methods) = actor.raw_get::<Option<Table>>(METHODS_KEY)?
+        {
+            return methods.raw_set(key, value);
+        }
+    }
+    actor.raw_set(key, value)
+}
+
+/// Resolve authenticated scalar setters without running authored lookup
+/// code. Context/state ownership remains the compiler host's responsibility.
+pub(crate) fn setter_targets(
+    lua: &Lua,
+    actor: &Table,
+) -> mlua::Result<[Option<(crate::actor_methods::Setter, usize)>; 3]> {
+    use crate::actor_methods::{self, Method, Setter};
+    use mlua::InspectionValue as V;
+    let mut selected = [None; 3];
+    let mut inherit = [false; 3];
+    let mt = actor.metatable();
+    let lookup = if let Some(mt) = &mt {
+        match mt.raw_get::<V>("__newindex")? {
+            V::Nil => {}
+            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Assign) => {}
+            _ => return Ok([None; 3]),
+        }
+        match mt.raw_get::<V>("__index")? {
+            V::Nil => false,
+            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Lookup) => true,
+            _ => return Ok([None; 3]),
+        }
+    } else {
+        false
+    };
+    for (index, setter) in Setter::ALL.into_iter().enumerate() {
+        match actor.raw_get::<V>(setter.name())? {
+            V::Function(f) => selected[index] = actor_methods::identity(lua, &f)?,
+            V::Nil => inherit[index] = lookup,
+            _ => {}
+        }
+    }
+    if inherit.iter().any(|value| *value) {
+        let inherited = (|| -> mlua::Result<Option<[Option<Method>; 3]>> {
+            let kind = match actor.raw_get::<V>("__songlua_actor_type")? {
+                V::Nil => "Actor".to_owned(),
+                V::Bytes(kind) => match String::from_utf8(kind.into_vec()) {
+                    Ok(kind) => kind,
+                    Err(_) => return Ok(None),
+                },
+                _ => return Ok(None),
+            };
+            if !is_core(&kind) {
+                return Ok(None);
+            }
+            let V::Table(mut class) = lua.globals().raw_get::<V>(class_name(&kind))? else {
+                return Ok(None);
+            };
+            let mut seen = smallvec::SmallVec::<[usize; 8]>::new();
+            let mut found = [None; 3];
+            let mut pending = inherit;
+            loop {
+                let identity = class.to_pointer() as usize;
+                if seen.len() == 64 || seen.contains(&identity) {
+                    return Ok(None);
+                }
+                seen.push(identity);
+                for (index, setter) in Setter::ALL.into_iter().enumerate() {
+                    if !pending[index] {
+                        continue;
+                    }
+                    match class.raw_get::<V>(setter.name())? {
+                        V::Function(f) => {
+                            found[index] = actor_methods::identity(lua, &f)?;
+                            pending[index] = false;
+                        }
+                        V::Nil => {}
+                        _ => pending[index] = false,
+                    }
+                }
+                let Some(mt) = class.metatable() else {
+                    break;
+                };
+                match mt.raw_get::<V>("__index")? {
+                    V::Nil => break,
+                    V::Table(next) => class = next,
+                    _ => return Ok(None),
+                }
+            }
+            Ok(Some(found))
+        })()?;
+        if let Some(inherited) = inherited {
+            for index in 0..3 {
+                if inherit[index] {
+                    selected[index] = inherited[index];
+                }
+            }
+        }
+    }
+    let mut forwards = [None; 3];
+    if selected
+        .iter()
+        .any(|method| matches!(method, Some(Method::Forward(_))))
+        && let V::Table(methods) = actor.raw_get::<V>(METHODS_KEY)?
+    {
+        for setter in Setter::ALL {
+            if !selected.contains(&Some(Method::Forward(setter))) {
+                continue;
+            }
+            if let V::Function(bound) = methods.raw_get::<V>(setter.name())?
+                && let Some(Method::Bound(operation, target)) =
+                    actor_methods::identity(lua, &bound)?
+            {
+                forwards[setter as usize] = Some((operation, target));
+            }
+        }
+    }
+    Ok(selected.map(|method| match method {
+        Some(Method::Bound(setter, target)) => Some((setter, target)),
+        Some(Method::Forward(setter)) => forwards[setter as usize],
+        _ => None,
+    }))
+}
+
+#[cfg(test)]
+#[path = "../tests/perf/native_function.rs"]
+mod native_function_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/vm_reads_actor.rs"]
+mod vm_reads_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/method_storage.rs"]
+mod method_storage_perf;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn original(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Value> {
+        let Value::String(name) = &key else { return Ok(Value::Nil); };
+        let name = name.to_str()?;
+        let kind = actor.raw_get::<Option<String>>("__songlua_actor_type")?
+            .unwrap_or_else(|| "Actor".into());
+        if let Some(class) = lua.globals().get::<Option<Table>>(class_name(&kind))? {
+            let value = class.get::<Value>(key.clone())?;
+            if !value.is_nil() { return Ok(value); }
+            if is_core(&kind) { return Ok(Value::Nil); }
+        }
+        if !is_frame(&kind) && matches!(name.as_ref(), "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction") {
+            return Ok(Value::Nil);
+        }
+        match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
+            Some(methods) => methods.raw_get(key),
+            None => Ok(Value::Nil),
+        }
+    }
+
+    fn compare(lua: &Lua, actor: &Table, key: Value) {
+        let globals = lua.globals();
+        globals.raw_set("LOOKUPS", 0).unwrap();
+        let expected = original(lua, (actor.clone(), key.clone())).map_err(|e| e.to_string());
+        let calls = globals.raw_get::<usize>("LOOKUPS").unwrap();
+        globals.raw_set("LOOKUPS", 0).unwrap();
+        let actual = lookup(lua, (actor.clone(), key)).map_err(|e| e.to_string());
+        assert_eq!(actual, expected);
+        assert_eq!(globals.raw_get::<usize>("LOOKUPS").unwrap(), calls);
+    }
+
+    #[test]
+    fn class_name_reads_preserve_lookup_hooks_identity_and_errors() {
+        let lua = Lua::new();
+        let globals = lua.globals();
+        lua.load(r#"
+            LOOKUPS = 0
+            Actor = {base = 17, disabled = false}
+            ActorFrame = setmetatable({own = 42}, {__index = Actor})
+            Sprite = setmetatable({}, {__index = ActorFrame})
+        "#).exec().unwrap();
+        let actor = lua.create_table().unwrap();
+        let methods = lua.create_table().unwrap();
+        methods.raw_set("fallback", 91).unwrap();
+        methods.raw_set("SetUpdateFunction", 92).unwrap();
+        actor.raw_set(METHODS_KEY, methods).unwrap();
+        for kind in [Value::Nil, Value::String(lua.create_string("Actor").unwrap()),
+            Value::String(lua.create_string("ActorFrame").unwrap()),
+            Value::String(lua.create_string("Quad").unwrap()),
+            Value::String(lua.create_string("GraphDisplay").unwrap()),
+            Value::String(lua.create_string("custom".repeat(40)).unwrap()),
+            Value::String(lua.create_string([0xff]).unwrap()), Value::Integer(42), Value::Boolean(false)] {
+            actor.raw_set("__songlua_actor_type", kind).unwrap();
+            for key in ["base", "own", "disabled", "fallback", "missing", "SetUpdateFunction"] {
+                compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+            }
+            compare(&lua, &actor, Value::Integer(42));
+            compare(&lua, &actor, Value::String(lua.create_string([0xff]).unwrap()));
+        }
+        actor.raw_set("__songlua_actor_type", "ActorFrame").unwrap();
+        lua.load(r#"
+            setmetatable(Actor, {__index = function(_, name)
+                LOOKUPS = LOOKUPS + 1
+                if name == 'fault' then error('inherited method fault') end
+                if name == 'hook' then return false end
+            end})
+        "#).exec().unwrap();
+        for key in ["base", "own", "missing", "hook", "fault"] {
+            compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+        }
+        lua.load(r#"
+            CLASS = ActorFrame
+            ActorFrame = nil
+            setmetatable(_G, { __index = function(_, name)
+                LOOKUPS = LOOKUPS + 1
+                if name == 'ActorFrame' then return CLASS end
+            end })
+        "#).exec().unwrap();
+        for key in ["base", "own", "missing", "hook", "fault"] {
+            compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+        }
+        globals.set_metatable(None).unwrap();
+        for value in [Value::Nil, Value::Boolean(false)] {
+            globals.raw_set("ActorFrame", value).unwrap();
+            compare(&lua, &actor, Value::String(lua.create_string("fallback").unwrap()));
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/perf/forward_values.rs"]
+pub(crate) mod forward_values_perf;

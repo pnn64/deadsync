@@ -70,6 +70,7 @@ pub enum ScriptEffectMod {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Thump(f32),
     Spin,
@@ -101,6 +102,7 @@ pub enum ScriptCommand<'a> {
     SetTextureFiltering,
     SetSecondsIntoAnimation,
     Rate,
+    DrawOrder,
     ZTest,
     ZWrite,
     ClearZBuffer,
@@ -140,6 +142,7 @@ pub enum ScriptCommand<'a> {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Thump,
     Spin,
@@ -176,6 +179,7 @@ impl<'a> ScriptCommand<'a> {
             Self::SetTextureFiltering => "settexturefiltering",
             Self::SetSecondsIntoAnimation => "SetSecondsIntoAnimation",
             Self::Rate => "rate",
+            Self::DrawOrder => "draworder",
             Self::ZTest => "ztest",
             Self::ZWrite => "zwrite",
             Self::ClearZBuffer => "clearzbuffer",
@@ -215,6 +219,7 @@ impl<'a> ScriptCommand<'a> {
             Self::DiffuseRamp => "diffuseramp",
             Self::DiffuseShift => "diffuseshift",
             Self::GlowShift => "glowshift",
+            Self::Rainbow => "rainbow",
             Self::Pulse => "pulse",
             Self::Thump => "thump",
             Self::Spin => "spin",
@@ -281,6 +286,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("diffuse", Diffuse);
                 command!("fadetop", FadeTop);
                 command!("visible", Visible);
+                command!("rainbow", Rainbow);
             }
             8 => {
                 command!("basezoom", BaseZoom);
@@ -288,6 +294,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("fadeleft", FadeLeft);
             }
             9 => {
+                command!("draworder", DrawOrder);
                 command!("basezoomx", BaseZoomX);
                 command!("basezoomy", BaseZoomY);
                 command!("basezoomz", BaseZoomZ);
@@ -365,8 +372,23 @@ impl<'a> ScriptToken<'a> {
 }
 
 #[inline(always)]
-fn split_script_call_args(raw: &str) -> SmallVec<[&str; 6]> {
-    let mut out = SmallVec::new();
+#[must_use]
+pub fn split_script_token<'a>(token: &'a str) -> Option<ScriptToken<'a>> {
+    let raw = token.trim();
+    let mut command = None;
+    let mut args = SmallVec::new();
+    // Keep the command separate: arguments only need one buffer, and six
+    // arguments fit inline without spilling for the command itself.
+    let mut push_part = |part: &'a str| {
+        let part = part.trim();
+        if !part.is_empty() {
+            if command.is_none() {
+                command = Some(part);
+            } else {
+                args.push(part);
+            }
+        }
+    };
     let mut start = 0usize;
     let mut depth = 0usize;
     let mut quote = 0u8;
@@ -392,39 +414,79 @@ fn split_script_call_args(raw: &str) -> SmallVec<[&str; 6]> {
                 depth = depth.saturating_sub(1);
             }
             b',' if depth == 0 => {
-                let part = raw[start..idx].trim();
-                if !part.is_empty() {
-                    out.push(part);
-                }
+                push_part(&raw[start..idx]);
                 start = idx + 1;
             }
             _ => {}
         }
         idx += 1;
     }
-    let tail = raw[start..].trim();
-    if !tail.is_empty() {
-        out.push(tail);
-    }
-    out
-}
-
-#[inline(always)]
-#[must_use]
-pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
-    let parts = split_script_call_args(token.trim());
-    if parts.is_empty() {
-        return None;
-    }
-    let command = ScriptCommand::from(parts[0]);
-    let args = parts.into_iter().skip(1).collect();
-    Some(ScriptToken { command, args })
+    push_part(&raw[start..]);
+    Some(ScriptToken {
+        command: ScriptCommand::from(command?),
+        args,
+    })
 }
 
 #[inline(always)]
 #[must_use]
 pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
+}
+
+/// Bind logical screen globals when an actor is loaded. Compiled commands stay
+/// independent of the display, so the same cache can be used at another size.
+pub fn resolve_screen_args(commands: &mut HashMap<String, String>, width: f32, height: f32) {
+    // ScreenDimensions::ReloadScreenDimensions publishes integer Lua globals,
+    // including truncated centers when a logical dimension is odd.
+    let center_x = f64::from((width * 0.5) as i32);
+    let center_y = f64::from((height * 0.5) as i32);
+    let width = f64::from(width as i32);
+    let height = f64::from(height as i32);
+    for script in commands.values_mut() {
+        if !script.contains("SCREEN_") {
+            continue;
+        }
+        let normalized = normalized_script_command(script);
+        let mut out = String::with_capacity(normalized.len());
+        let mut changed = false;
+        for raw in normalized.split(';') {
+            if !out.is_empty() {
+                out.push(';');
+            }
+            let Some(token) = split_script_token(raw) else {
+                out.push_str(raw);
+                continue;
+            };
+            out.push_str(token.command().as_str());
+            for arg in token.args() {
+                out.push(',');
+                let value = arg
+                    .contains("SCREEN_")
+                    .then(|| {
+                        crate::lua::parse_float_expr(arg, &mut |name| match name {
+                            "SCREEN_WIDTH" | "SCREEN_RIGHT" => Some(width),
+                            "SCREEN_HEIGHT" | "SCREEN_BOTTOM" => Some(height),
+                            "SCREEN_CENTER_X" => Some(center_x),
+                            "SCREEN_CENTER_Y" => Some(center_y),
+                            "SCREEN_LEFT" | "SCREEN_TOP" => Some(0.0),
+                            _ => None,
+                        })
+                    })
+                    .flatten();
+                if let Some(value) = value {
+                    use std::fmt::Write;
+                    let _ = write!(out, "{value}");
+                    changed = true;
+                } else {
+                    out.push_str(arg);
+                }
+            }
+        }
+        if changed {
+            *script = out;
+        }
+    }
 }
 
 pub(crate) fn script_random(seed: u64, sample: u32) -> f32 {
@@ -630,6 +692,13 @@ fn append_sprite_animation_command_plans(
     script: &str,
     plans: &mut Vec<SpriteAnimationCommandPlan>,
 ) {
+    for_each_sprite_animation_command_plan(script, |plan| plans.push(plan));
+}
+
+fn for_each_sprite_animation_command_plan(
+    script: &str,
+    mut visit: impl FnMut(SpriteAnimationCommandPlan),
+) {
     let script = normalized_script_command(script);
     for raw_token in script.split(';') {
         let token = raw_token.trim();
@@ -643,7 +712,7 @@ fn append_sprite_animation_command_plans(
             ScriptCommand::SetStateProperties => {
                 let args = token.args();
                 if let Some((frame_count, frame_delays)) = parse_script_state_properties(args) {
-                    plans.push(SpriteAnimationCommandPlan::StateProperties(
+                    visit(SpriteAnimationCommandPlan::StateProperties(
                         SpriteStatePropertiesPlan {
                             frame_count,
                             frame_delays,
@@ -654,7 +723,7 @@ fn append_sprite_animation_command_plans(
             ScriptCommand::SetAllStateDelays => {
                 let args = token.args();
                 if let Some(delay) = args.first().and_then(|arg| parse_script_number(arg)) {
-                    plans.push(SpriteAnimationCommandPlan::AllStateDelays(delay.max(0.0)));
+                    visit(SpriteAnimationCommandPlan::AllStateDelays(delay.max(0.0)));
                 }
             }
             _ => {}
@@ -737,10 +806,17 @@ pub fn apply_sprite_animation_command_plans<T>(
     default_is_beat_based: bool,
     mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
 ) {
-    let (beat_based, plans) =
-        sprite_animation_command_plans_from_commands(commands, default_is_beat_based);
-    for plan in plans {
-        apply_plan(slot, plan, beat_based);
+    let sorted = sorted_sprite_animation_command_refs(commands);
+    // Resolve the final clock before applying any plan, preserving command
+    // name order and the same clock for every callback.
+    let mut beat_based = default_is_beat_based;
+    for (_, script) in sorted.iter().copied() {
+        if let Some(clock) = parse_script_effectclock_from_commands(script) {
+            beat_based = clock;
+        }
+    }
+    for (_, script) in sorted {
+        for_each_sprite_animation_command_plan(script, |plan| apply_plan(slot, plan, beat_based));
     }
 }
 
@@ -750,9 +826,7 @@ pub fn apply_sprite_animation_script_plans<T>(
     beat_based: bool,
     mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
 ) {
-    for plan in sprite_animation_command_plans(script) {
-        apply_plan(slot, plan, beat_based);
-    }
+    for_each_sprite_animation_command_plan(script, |plan| apply_plan(slot, plan, beat_based));
 }
 
 #[inline(always)]
@@ -1034,6 +1108,7 @@ pub fn parse_script_effect_mod<'a, A: AsRef<str>>(
         ScriptCommand::DiffuseRamp => Some(ScriptEffectMod::DiffuseRamp),
         ScriptCommand::DiffuseShift => Some(ScriptEffectMod::DiffuseShift),
         ScriptCommand::GlowShift => Some(ScriptEffectMod::GlowShift),
+        ScriptCommand::Rainbow => Some(ScriptEffectMod::Rainbow),
         ScriptCommand::Pulse => Some(ScriptEffectMod::Pulse),
         ScriptCommand::Thump => Some(ScriptEffectMod::Thump(
             args.first()
@@ -1419,8 +1494,39 @@ pub fn itg_active_model_commands(
     out
 }
 
+pub type ModelDrawProgram = (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState);
+
+pub fn itg_active_parent_model_programs(
+    commands: &HashMap<String, String>,
+    active_key: &str,
+) -> Option<Arc<[ModelDrawProgram]>> {
+    let parents: Vec<HashMap<String, String>> = commands
+        .get(crate::actor::ITG_PARENT_COMMANDS)
+        .and_then(|value| serde_json::from_str(value).ok())?;
+    (!parents.is_empty()).then(|| {
+        parents
+            .iter()
+            .map(|parent| {
+                model_draw_program_from_scripts([
+                    parent.get("initcommand").map(String::as_str),
+                    parent.get(active_key).map(String::as_str),
+                ])
+            })
+            .collect()
+    })
+}
+
 pub fn model_draw_program(
     commands: &HashMap<String, String>,
+) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
+    model_draw_program_from_scripts([
+        commands.get("initcommand").map(String::as_str),
+        commands.get("nonecommand").map(String::as_str),
+    ])
+}
+
+pub(crate) fn model_draw_program_from_scripts(
+    scripts: [Option<&str>; 2],
 ) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
     let mut state = ModelDrawState::default();
     let mut base_zoom = [1.0; 3];
@@ -1428,13 +1534,14 @@ pub fn model_draw_program(
     let mut timeline: Vec<ModelTweenSegment> = Vec::new();
     let mut cursor_time = 0.0f32;
     let mut pending_tween: Option<(f32, TweenType)> = None;
-    let mut grouped_mods: Vec<ItgActorMod> = Vec::new();
+    // Batch modifiers in inline storage; unusually large groups retain a heap fallback.
+    let mut grouped_mods: SmallVec<[ItgActorMod; 8]> = SmallVec::new();
 
     let flush_group = |state: &mut ModelDrawState,
                        timeline: &mut Vec<ModelTweenSegment>,
                        cursor_time: &mut f32,
                        pending_tween: &mut Option<(f32, TweenType)>,
-                       grouped_mods: &mut Vec<ItgActorMod>| {
+                       grouped_mods: &mut SmallVec<[ItgActorMod; 8]>| {
         if grouped_mods.is_empty() {
             return;
         }
@@ -1470,10 +1577,7 @@ pub fn model_draw_program(
         grouped_mods.clear();
     };
 
-    for key in ["initcommand", "nonecommand"] {
-        let Some(script) = commands.get(key) else {
-            continue;
-        };
+    for script in scripts.into_iter().flatten() {
         let script = normalized_script_command(script);
         for raw in script.split(';') {
             let token = raw.trim();
@@ -1489,9 +1593,8 @@ pub fn model_draw_program(
             if apply_base_zoom(&mut base_zoom, command, args) {
                 continue;
             }
-            // Sprite UV state and static depth masks are applied by the asset
-            // loader. They are not model transforms and must not split a tween
-            // group or be reported as unsupported on this second pass.
+            // Sprite state, depth masks, and actor draw order are handled
+            // outside the transform program and must not split a tween group.
             if matches!(
                 command,
                 ScriptCommand::ZTest
@@ -1501,6 +1604,7 @@ pub fn model_draw_program(
                     | ScriptCommand::TexCoordVelocity
                     | ScriptCommand::SetSecondsIntoAnimation
                     | ScriptCommand::Rate
+                    | ScriptCommand::DrawOrder
             ) {
                 continue;
             }
@@ -1580,6 +1684,12 @@ pub fn model_draw_program(
                         effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
                         effect.color1 = [1.0, 1.0, 1.0, 0.2];
                         effect.color2 = [1.0, 1.0, 1.0, 0.8];
+                    }
+                    ScriptEffectMod::Rainbow => {
+                        // Actor's Lua rainbow() binding starts a two-second cycle.
+                        effect.mode = ModelEffectMode::Rainbow;
+                        effect.period = 2.0;
+                        effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
                     }
                     ScriptEffectMod::Pulse => {
                         effect.mode = ModelEffectMode::Pulse;
@@ -1699,6 +1809,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn screen_global_transforms_match_native_actor_assertions() {
+        // These expected states are also asserted through ITGmania's native
+        // Lua Actor bindings by tests/fixtures/screen-globals/native-input.json.
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/screen-globals/cases.json"))
+                .unwrap();
+        for case in cases.as_array().unwrap() {
+            let mut commands = HashMap::from([(
+                "initcommand".to_owned(),
+                case["script"].as_str().unwrap().to_owned(),
+            )]);
+            resolve_screen_args(
+                &mut commands,
+                case["screen"][0].as_f64().unwrap() as f32,
+                case["screen"][1].as_f64().unwrap() as f32,
+            );
+            let (draw, timeline, _) = model_draw_program(&commands);
+            assert!(timeline.is_empty());
+            for (field, actual) in [
+                ("zoom", draw.zoom),
+                ("position", draw.pos),
+                ("rotation", draw.rot),
+            ] {
+                let expected: [f32; 3] =
+                    std::array::from_fn(|index| case[field][index].as_f64().unwrap() as f32);
+                assert_eq!(actual, expected, "{case}: {field}");
+            }
+            assert_eq!(draw.vert_align, case["vert_align"].as_f64().unwrap() as f32);
+        }
+    }
+
+    #[test]
+    fn screen_globals_preserve_tweens_and_leave_strings_and_unknowns_untouched() {
+        let mut commands: HashMap<String, String> = HashMap::from([
+            ("initcommand".into(), "zoomy,SCREEN_HEIGHT;linear,0.25;zoomy,SCREEN_HEIGHT / 2".into()),
+            ("presscommand".into(), "playcommand,'SCREEN_HEIGHT';zoomx,SCREEN_HEIGHT_SUFFIX;zoomz,unknown(SCREEN_WIDTH)".into()),
+        ]);
+        let untouched = commands["presscommand"].clone();
+        resolve_screen_args(&mut commands, 854.0, 480.0);
+        assert_eq!(commands["presscommand"], untouched);
+        let (draw, timeline, effect) = model_draw_program(&commands);
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline[0].from.zoom, [1.0, 480.0, 1.0]);
+        assert_eq!(timeline[0].to.zoom, [1.0, 240.0, 1.0]);
+        assert_eq!(timeline[0].duration, 0.25);
+        assert_eq!(
+            crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], 0.125, 0.0).zoom,
+            [1.0, 360.0, 1.0]
+        );
+    }
+
+    #[test]
     fn script_token_reuses_split_semantics() {
         let source = " SetStateProperties, 4, { 0.1, 0.2 }, nested(1, 2) ";
         let token = split_script_token(source).unwrap();
@@ -1722,6 +1884,10 @@ mod tests {
         assert_eq!(mixed.args(), ["0.1", "0.2", "0.3", "0.4", "0.5"]);
         assert_eq!(unknown.command(), ScriptCommand::Unknown("FutureCommand"));
         assert_eq!(unknown.command().as_str(), "FutureCommand");
+        assert_eq!(
+            split_script_token("dRaWoRdEr,90").unwrap().command(),
+            ScriptCommand::DrawOrder
+        );
     }
 
     #[test]
@@ -2024,6 +2190,49 @@ mod tests {
     }
 
     #[test]
+    fn rainbow_colors_match_native_actor_samples() {
+        use crate::draw::{ModelTweenCursor, model_draw_at, model_draw_at_cursor};
+        let input: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/rainbow-effect/native-input.json"
+        ))
+        .unwrap();
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/rainbow-effect/native-output.json"
+        ))
+        .unwrap();
+        for actor in input["root"]["children"].as_array().unwrap() {
+            let name = actor["name"].as_str().unwrap();
+            let script = actor["noteskin_command"].as_str().unwrap();
+            let commands = HashMap::from([("initcommand".into(), script.into())]);
+            let (draw, timeline, effect) = model_draw_program(&commands);
+            assert_eq!(effect.mode, ModelEffectMode::Rainbow);
+            let mut cursor = ModelTweenCursor::default();
+            for sample in native["samples"].as_array().unwrap() {
+                let time = sample["time"].as_f64().unwrap() as f32;
+                let beat = sample["beat"].as_f64().unwrap() as f32;
+                let expected = &sample["colors"][name];
+                for sampled in [
+                    model_draw_at(draw, &timeline, effect, 0.0, &[], time, beat),
+                    model_draw_at_cursor(draw, &timeline, effect, 0.0, &[], [time, beat], &mut cursor),
+                ] {
+                    for (channel, actual) in sampled.tint.into_iter().enumerate() {
+                        let expected = expected[channel].as_f64().unwrap() as f32;
+                        assert!(
+                            (actual - expected).abs() <= 1e-6,
+                            "{name} at {time}, channel {channel}: {actual} != {expected}"
+                        );
+                    }
+                }
+            }
+            let commands = HashMap::from([("initcommand".into(), format!("{script};stopeffect"))]);
+            let (draw, timeline, effect) = model_draw_program(&commands);
+            assert_eq!(effect.mode, ModelEffectMode::None);
+            let sampled = model_draw_at(draw, &timeline, effect, 0.0, &[], 0.0, 0.0);
+            assert_eq!(sampled.tint, [0.2, 0.4, 0.6, 0.65]);
+        }
+    }
+
+    #[test]
     fn model_draw_program_builds_tween_and_effect() {
         let commands = HashMap::from([
             (
@@ -2083,7 +2292,7 @@ mod tests {
             "initcommand".to_string(),
             "linear,0.5;x,8;ZTest,true;ZWrite,1;ClearZBuffer,true;\
              CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;rate,2;SetSecondsIntoAnimation,0;\
-             basezoomx,0.8;basezoomy,0.8;y,4"
+             basezoomx,0.8;basezoomy,0.8;draworder,90;y,4"
                 .to_string(),
         )]);
         let (draw, timeline, _) = model_draw_program(&commands);
@@ -2095,10 +2304,19 @@ mod tests {
         let mut effects = HashMap::from([("initcommand".into(), "spin;effectmagnitude,0,0,math.random(70,190);effectoffset,PREFSMAN:GetPreference(\"GlobalOffsetSeconds\")".into())]);
         resolve_effect_args(&mut effects, 0.125, 13);
         model_draw_program(&effects);
+        let mut screen = HashMap::from([(
+            "initcommand".into(),
+            "valign,1;zoomy,SCREEN_HEIGHT;addrotationz,180".into(),
+        )]);
+        resolve_screen_args(&mut screen, 854.0, 480.0);
+        assert_eq!(model_draw_program(&screen).0.zoom, [1.0, 480.0, 1.0]);
         let animation = crate::explosion::parse_explosion_animation(
-            "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;rate,0.5;diffusealpha,0",
+            "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;draworder,90;rate,0.5;diffusealpha,0",
         );
         assert_eq!(animation.animation_seconds, Some(0.0));
+        assert_eq!(animation.draw_order, 90);
+        assert_eq!(animation.segments.len(), 1);
+        assert_eq!(animation.duration(), 0.15);
         WARNINGS
             .with_borrow(|warnings| assert!(warnings.as_ref().unwrap().is_empty(), "{warnings:?}"));
 

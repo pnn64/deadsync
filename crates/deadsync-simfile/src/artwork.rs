@@ -1,4 +1,7 @@
-use crate::media::{is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg};
+use crate::media::{
+    is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg,
+    song_asset_entry_is_file,
+};
 use crate::tags::latest_simfile_tag_values;
 use image::image_dimensions;
 use std::fs;
@@ -58,29 +61,29 @@ pub fn resolve_song_artwork_like_itg(
     let images = list_song_art_images(song_dir);
     fill_song_art_hints(&images, &mut candidates);
 
-    for image in &images {
+    for image in images {
         if candidates.banner.is_some()
             && candidates.background.is_some()
             && candidates.cdtitle.is_some()
         {
             break;
         }
-        if song_art_is_classified(image, &candidates) {
+        if song_art_is_classified(&image, &candidates) {
             continue;
         }
 
-        let Ok((width, height)) = image_dimensions(image) else {
+        let Ok((width, height)) = image_dimensions(&image) else {
             continue;
         };
         if candidates.background.is_none() && width >= 320 && height >= 240 {
-            candidates.background = Some(image.clone());
+            candidates.background = Some(image);
             continue;
         }
         if candidates.banner.is_none()
             && (100..=320).contains(&width)
             && (50..=240).contains(&height)
         {
-            candidates.banner = Some(image.clone());
+            candidates.banner = Some(image);
             continue;
         }
         if candidates.banner.is_none()
@@ -88,27 +91,27 @@ pub fn resolve_song_artwork_like_itg(
             && height > 0
             && width as f32 / height as f32 > 2.0
         {
-            candidates.banner = Some(image.clone());
+            candidates.banner = Some(image);
             continue;
         }
         if candidates.cdtitle.is_none() && width <= 100 && height <= 48 {
-            candidates.cdtitle = Some(image.clone());
+            candidates.cdtitle = Some(image);
             continue;
         }
         if candidates.jacket.is_none() && width == height {
-            candidates.jacket = Some(image.clone());
+            candidates.jacket = Some(image);
             continue;
         }
         if candidates.disc.is_none()
             && width > height
             && candidates.banner.is_some()
-            && !song_art_matches(image, &candidates.banner)
+            && !song_art_matches(&image, &candidates.banner)
         {
-            candidates.disc = Some(image.clone());
+            candidates.disc = Some(image);
             continue;
         }
         if candidates.cdimage.is_none() && width == height {
-            candidates.cdimage = Some(image.clone());
+            candidates.cdimage = Some(image);
         }
     }
 
@@ -125,8 +128,13 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     };
     let mut paths = read_dir
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| !is_mac_resource_fork(path) && path.is_file() && is_song_art_image(path))
+        .filter_map(|entry| {
+            let path = entry.path();
+            (!is_mac_resource_fork(&path)
+                && is_song_art_image(&path)
+                && song_asset_entry_is_file(&entry, &path))
+            .then_some(path)
+        })
         .collect::<Vec<_>>();
     sort_song_art_paths(&mut paths);
     paths
@@ -413,5 +421,9 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    mod library_perf {
+        include!("artwork_library_perf.rs");
     }
 }

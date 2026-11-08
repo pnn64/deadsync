@@ -1,0 +1,22 @@
+--- a/crates/deadlib-assets/src/decode.rs
++++ b/crates/deadlib-assets/src/decode.rs
+@@ -385,3 +385,4 @@
+-    for color in &mut colors[..color_count as usize] {
+-        let mut entry = [0; 4];
+-        input.read_exact(&mut entry[..if header_size == 12 { 3 } else { 4 }])?;
++    let mut scratch = [0; 1024];
++    let palette = &mut scratch[..color_count as usize * entry_size as usize];
++    input.read_exact(palette)?;
++    for (color, entry) in colors.iter_mut().zip(palette.chunks_exact(entry_size as usize)) {
+@@ -392 +393,7 @@
+-    let mut row = vec![0; pitch];
++    let mut heap;
++    let row = if pitch <= scratch.len() {
++        &mut scratch[..pitch]
++    } else {
++        heap = vec![0; pitch];
++        heap.as_mut_slice()
++    };
+@@ -398 +405 @@
+-        input.read_exact(&mut row)?;
++        input.read_exact(row)?;

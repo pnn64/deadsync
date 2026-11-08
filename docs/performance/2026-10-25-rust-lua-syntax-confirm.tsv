@@ -1,0 +1,583 @@
+metric	engine	workload	sample	repeats	ns_per_iteration	rust_allocations_total	rust_reallocations_total	rust_bytes_total
+startup_drop	rust	state	0	1000	47993	230000	59000	38053000
+startup_drop	lua51	state	0	1000	113416	526000	1000	41178000
+compile_drop	rust	numeric_for	0	1000	10360	39000	30000	7514000
+compile_drop	lua51	numeric_for	0	1000	5890	16001	12000	2677068
+execute	rust	numeric_for	0	100	2877683	0	0	0
+execute	lua51	numeric_for	0	100	703944	0	0	0
+execute	lua51	numeric_for	1	100	713506	0	0	0
+execute	rust	numeric_for	1	100	2917104	0	0	0
+execute	rust	numeric_for	2	100	2869003	0	0	0
+execute	lua51	numeric_for	2	100	711979	0	0	0
+execute	lua51	numeric_for	3	100	715173	0	0	0
+execute	rust	numeric_for	3	100	2890275	0	0	0
+execute	rust	numeric_for	4	100	2987094	0	0	0
+execute	lua51	numeric_for	4	100	706379	0	0	0
+reference_live_heap_bytes	numeric_for	51513
+rust_heap_estimate	numeric_for	before_collect	17612	23292	23292	0	0	3
+rust_heap_estimate	numeric_for	after_collect	21580	27260	27260	1	0	3
+reference_after_collect_heap_bytes	numeric_for	29965
+compile_drop	rust	numeric_while	0	1000	13696	43000	33000	9581000
+compile_drop	lua51	numeric_while	0	1000	5839	16001	11000	2501068
+execute	rust	numeric_while	0	100	5921073	0	0	0
+execute	lua51	numeric_while	0	100	1449090	0	0	0
+execute	lua51	numeric_while	1	100	1440495	0	0	0
+execute	rust	numeric_while	1	100	5943114	0	0	0
+execute	rust	numeric_while	2	100	5835797	0	0	0
+execute	lua51	numeric_while	2	100	1438745	0	0	0
+execute	lua51	numeric_while	3	100	1456142	0	0	0
+execute	rust	numeric_while	3	100	5746669	0	0	0
+execute	rust	numeric_while	4	100	5736471	0	0	0
+execute	lua51	numeric_while	4	100	1431302	0	0	0
+reference_live_heap_bytes	numeric_while	50398
+rust_heap_estimate	numeric_while	before_collect	17572	23252	23252	0	0	3
+rust_heap_estimate	numeric_while	after_collect	21540	27220	27220	1	0	3
+reference_after_collect_heap_bytes	numeric_while	29810
+compile_drop	rust	array_table	0	1000	17493	57000	44000	14634000
+compile_drop	lua51	array_table	0	1000	7660	16001	15000	3333068
+execute	rust	array_table	0	50	1085232	51	600	26211216
+execute	lua51	array_table	0	50	504900	100	700	26216800
+execute	lua51	array_table	1	50	493964	100	700	26216800
+execute	rust	array_table	1	50	1200330	50	600	26211200
+execute	rust	array_table	2	50	1198096	50	600	26211200
+execute	lua51	array_table	2	50	498038	100	700	26216800
+execute	lua51	array_table	3	50	484536	100	700	26216800
+execute	rust	array_table	3	50	1069496	50	600	26211200
+execute	rust	array_table	4	50	1038738	50	600	26211200
+execute	lua51	array_table	4	50	482988	100	700	26216800
+reference_live_heap_bytes	array_table	1603303
+rust_heap_estimate	array_table	before_collect	284422	290030	584926	500	250	3
+rust_heap_estimate	array_table	after_collect	22190	27886	584926	501	251	3
+reference_after_collect_heap_bytes	array_table	30135
+compile_drop	rust	recursive_fib	0	1000	25520	65000	63000	19942000
+compile_drop	lua51	recursive_fib	0	1000	8104	25001	19001	2693708
+execute	rust	recursive_fib	0	30	3099163	30	12	4152
+execute	lua51	recursive_fib	0	30	903663	60	1	3920
+execute	lua51	recursive_fib	1	30	857830	60	0	2640
+execute	rust	recursive_fib	1	30	3059246	30	4	4728
+execute	rust	recursive_fib	2	30	3167690	30	4	9336
+execute	lua51	recursive_fib	2	30	817666	60	0	2640
+execute	lua51	recursive_fib	3	30	827513	60	0	2640
+execute	rust	recursive_fib	3	30	3102826	30	0	120
+execute	rust	recursive_fib	4	30	3066713	30	4	18552
+execute	lua51	recursive_fib	4	30	828930	60	0	2640
+reference_live_heap_bytes	recursive_fib	51430
+rust_heap_estimate	recursive_fib	before_collect	35173	49477	49477	0	0	3
+rust_heap_estimate	recursive_fib	after_collect	28873	54889	54889	1	302	3
+reference_after_collect_heap_bytes	recursive_fib	31162
+compile_drop	rust	closure_calls	0	1000	16942	66000	40000	14282000
+compile_drop	lua51	closure_calls	0	1000	7346	24001	17000	3077068
+execute	rust	closure_calls	0	50	1302624	50	16	8840
+execute	lua51	closure_calls	0	50	356862	100	0	4400
+execute	lua51	closure_calls	1	50	363768	100	0	4400
+execute	rust	closure_calls	1	50	1303824	50	4	9416
+execute	rust	closure_calls	2	50	1306628	50	4	18632
+execute	lua51	closure_calls	2	50	370104	100	0	4400
+execute	lua51	closure_calls	3	50	384566	100	0	4400
+execute	rust	closure_calls	3	50	1319274	50	0	200
+execute	rust	closure_calls	4	50	1302586	50	0	200
+execute	lua51	closure_calls	4	50	361966	100	0	4400
+reference_live_heap_bytes	closure_calls	47153
+rust_heap_estimate	closure_calls	before_collect	35584	43488	43488	0	0	3
+rust_heap_estimate	closure_calls	after_collect	22484	48500	48500	1	502	3
+reference_after_collect_heap_bytes	closure_calls	30249
+compile_drop	rust	byte_concat	0	1000	11302	41000	30000	9051000
+compile_drop	lua51	byte_concat	0	1000	6240	16001	12004	2718005
+execute	rust	byte_concat	0	30	1999746	89985	29970	60062010
+execute	lua51	byte_concat	0	30	414006	29970	19382	28847013
+execute	lua51	byte_concat	1	30	407976	29970	18960	28743840
+execute	rust	byte_concat	1	30	1935243	89985	29970	60062010
+execute	rust	byte_concat	2	30	1917990	89985	29970	60062010
+execute	lua51	byte_concat	2	30	413453	29970	18960	28743840
+execute	lua51	byte_concat	3	30	415726	29970	18960	28743840
+execute	rust	byte_concat	3	30	1948890	89985	29970	60062010
+execute	rust	byte_concat	4	30	1921570	89985	29970	60062010
+execute	lua51	byte_concat	4	30	432856	29970	18960	28743840
+reference_live_heap_bytes	byte_concat	43229
+rust_heap_estimate	byte_concat	before_collect	50927	63343	78648	1917	150822	3
+rust_heap_estimate	byte_concat	after_collect	23846	36694	78648	1918	150849	3
+reference_after_collect_heap_bytes	byte_concat	32354
+compile_drop	rust	pattern_find	0	1000	19193	59000	43000	13377000
+compile_drop	lua51	pattern_find	0	1000	7545	17001	13000	4229068
+execute	rust	pattern_find	0	30	1147780	0	0	0
+execute	lua51	pattern_find	0	30	1357243	2	0	56
+execute	lua51	pattern_find	1	30	1331846	0	0	0
+execute	rust	pattern_find	1	30	1165530	0	0	0
+execute	rust	pattern_find	2	30	1157333	0	0	0
+execute	lua51	pattern_find	2	30	1362206	0	0	0
+execute	lua51	pattern_find	3	30	1376136	0	0	0
+execute	rust	pattern_find	3	30	1149240	0	0	0
+execute	rust	pattern_find	4	30	1166390	0	0	0
+execute	lua51	pattern_find	4	30	1412956	0	0	0
+reference_live_heap_bytes	pattern_find	43330
+rust_heap_estimate	pattern_find	before_collect	19063	24679	24679	0	0	3
+rust_heap_estimate	pattern_find	after_collect	22993	28657	28657	1	2	3
+reference_after_collect_heap_bytes	pattern_find	30238
+compile_drop	rust	pattern_replace	0	1000	20763	61000	47000	16999000
+compile_drop	lua51	pattern_replace	0	1000	8123	17001	15000	4517068
+execute	rust	pattern_replace	0	30	1977230	0	0	0
+execute	lua51	pattern_replace	0	30	706843	3	0	100
+execute	lua51	pattern_replace	1	30	654343	0	0	0
+execute	rust	pattern_replace	1	30	1828066	0	0	0
+execute	rust	pattern_replace	2	30	1831936	0	0	0
+execute	lua51	pattern_replace	2	30	595440	0	0	0
+execute	lua51	pattern_replace	3	30	602496	0	0	0
+execute	rust	pattern_replace	3	30	1835706	0	0	0
+execute	rust	pattern_replace	4	30	1815216	0	0	0
+execute	lua51	pattern_replace	4	30	596566	0	0	0
+reference_live_heap_bytes	pattern_replace	45548
+rust_heap_estimate	pattern_replace	before_collect	22088	27704	27704	0	0	3
+rust_heap_estimate	pattern_replace	after_collect	26021	31669	31669	1	1	3
+reference_after_collect_heap_bytes	pattern_replace	30292
+compile_drop	rust	pattern_callback	0	1000	21821	63000	46000	17169000
+compile_drop	lua51	pattern_callback	0	1000	7933	17001	15000	4525068
+execute	rust	pattern_callback	0	30	2073520	0	0	0
+execute	lua51	pattern_callback	0	30	669910	5	0	152
+execute	lua51	pattern_callback	1	30	710756	0	0	0
+execute	rust	pattern_callback	1	30	2505513	0	0	0
+execute	rust	pattern_callback	2	30	2456210	0	0	0
+execute	lua51	pattern_callback	2	30	698263	0	0	0
+execute	lua51	pattern_callback	3	30	701110	0	0	0
+execute	rust	pattern_callback	3	30	2408510	0	0	0
+execute	rust	pattern_callback	4	30	2387910	0	0	0
+execute	lua51	pattern_callback	4	30	781846	0	0	0
+reference_live_heap_bytes	pattern_callback	45641
+rust_heap_estimate	pattern_callback	before_collect	22250	27818	27818	0	0	3
+rust_heap_estimate	pattern_callback	after_collect	26111	31791	31791	1	5	3
+reference_after_collect_heap_bytes	pattern_callback	30269
+compile_drop	rust	string_format	0	1000	20737	51000	43000	18163000
+compile_drop	lua51	string_format	0	1000	8081	16003	13000	2921356
+execute	rust	string_format	0	30	919433	150868	0	947992
+execute	lua51	string_format	0	30	808243	2919	0	162837
+execute	lua51	string_format	1	30	729400	0	0	0
+execute	rust	string_format	1	30	883630	150000	0	923580
+execute	rust	string_format	2	30	918500	150000	0	923580
+execute	lua51	string_format	2	30	728526	0	0	0
+execute	lua51	string_format	3	30	839633	0	0	0
+execute	rust	string_format	3	30	946963	150000	0	923580
+execute	rust	string_format	4	30	848140	150000	0	923580
+execute	lua51	string_format	4	30	665023	0	0	0
+reference_live_heap_bytes	string_format	83359
+rust_heap_estimate	string_format	before_collect	58690	88514	88514	1	866	3
+rust_heap_estimate	string_format	after_collect	28690	74514	88514	2	1866	3
+reference_after_collect_heap_bytes	string_format	36247
+compile_drop	rust	table_sort	0	1000	25747	66000	51000	19769000
+compile_drop	lua51	table_sort	0	1000	8831	17001	16000	4861068
+execute	rust	table_sort	0	20	5853465	2000	10000	8064000
+execute	lua51	table_sort	0	20	2716265	4000	14000	8288000
+execute	lua51	table_sort	1	20	2801255	4000	14000	8288000
+execute	rust	table_sort	1	20	5960655	2000	10000	8064000
+execute	rust	table_sort	2	20	5747925	2000	10000	8064000
+execute	lua51	table_sort	2	20	2655690	4000	14000	8288000
+execute	lua51	table_sort	3	20	2740890	4000	14000	8288000
+execute	rust	table_sort	3	20	5855810	2000	10000	8064000
+execute	rust	table_sort	4	20	5926820	2000	10000	8064000
+execute	lua51	table_sort	4	20	2709435	4000	14000	8288000
+reference_live_heap_bytes	table_sort	54249
+rust_heap_estimate	table_sort	before_collect	64371	71539	73587	560	10082	3
+rust_heap_estimate	table_sort	after_collect	25923	34675	73587	561	10100	3
+reference_after_collect_heap_bytes	table_sort	31097
+compile_drop	rust	table_sort_callback	0	1000	30682	88000	59000	28779000
+compile_drop	lua51	table_sort_callback	0	1000	12050	26001	22000	5957068
+execute	rust	table_sort_callback	0	20	13285505	2001	10000	8064016
+execute	lua51	table_sort_callback	0	20	6308050	4020	14000	8288800
+execute	lua51	table_sort_callback	1	20	6366525	4020	14000	8288800
+execute	rust	table_sort_callback	1	20	13258670	2000	10000	8064000
+execute	rust	table_sort_callback	2	20	13325970	2000	10000	8064000
+execute	lua51	table_sort_callback	2	20	6332480	4020	14000	8288800
+execute	lua51	table_sort_callback	3	20	6344875	4020	14000	8288800
+execute	rust	table_sort_callback	3	20	13430005	2000	10000	8064000
+execute	rust	table_sort_callback	4	20	13327145	2000	10000	8064000
+execute	lua51	table_sort_callback	4	20	6395000	4020	14000	8288800
+reference_live_heap_bytes	table_sort_callback	35602
+rust_heap_estimate	table_sort_callback	before_collect	28773	37413	72741	561	10199	3
+rust_heap_estimate	table_sort_callback	after_collect	26597	35365	72741	562	10201	3
+reference_after_collect_heap_bytes	table_sort_callback	31418
+compile_drop	rust	coroutine_resume	0	1000	34162	100000	75000	27762000
+compile_drop	lua51	coroutine_resume	0	1000	13178	31001	25000	7381068
+execute	rust	coroutine_resume	0	30	536096	60	72	42816
+execute	lua51	coroutine_resume	0	30	193063	120	0	37920
+execute	lua51	coroutine_resume	1	30	199370	120	0	37920
+execute	rust	coroutine_resume	1	30	535336	63	75	53616
+execute	rust	coroutine_resume	2	30	550266	60	62	24512
+execute	lua51	coroutine_resume	2	30	193636	120	0	37920
+execute	lua51	coroutine_resume	3	30	193830	120	0	37920
+execute	rust	coroutine_resume	3	30	541233	60	60	24000
+execute	rust	coroutine_resume	4	30	539830	60	60	24000
+execute	lua51	coroutine_resume	4	30	202790	120	0	37920
+reference_live_heap_bytes	coroutine_resume	59605
+rust_heap_estimate	coroutine_resume	before_collect	51466	67978	77034	3	242	3
+rust_heap_estimate	coroutine_resume	after_collect	24346	50698	77034	4	302	3
+reference_after_collect_heap_bytes	coroutine_resume	30613
+compile_drop	rust	coroutine_wrap	0	1000	27687	83000	68000	24519000
+compile_drop	lua51	coroutine_wrap	0	1000	12060	30001	23000	5741068
+execute	rust	coroutine_wrap	0	30	432666	60	78	45280
+execute	lua51	coroutine_wrap	0	30	112473	150	0	39600
+execute	lua51	coroutine_wrap	1	30	139370	150	0	39600
+execute	rust	coroutine_wrap	1	30	431583	64	78	53856
+execute	rust	coroutine_wrap	2	30	392970	60	65	27584
+execute	lua51	coroutine_wrap	2	30	116176	150	0	39600
+execute	lua51	coroutine_wrap	3	30	110293	150	0	39600
+execute	rust	coroutine_wrap	3	30	385663	60	60	24000
+execute	rust	coroutine_wrap	4	30	389896	60	60	24000
+execute	lua51	coroutine_wrap	4	30	106390	150	0	39600
+reference_live_heap_bytes	coroutine_wrap	52759
+rust_heap_estimate	coroutine_wrap	before_collect	55775	72719	78479	3	351	3
+rust_heap_estimate	coroutine_wrap	after_collect	23679	53135	78479	4	453	3
+reference_after_collect_heap_bytes	coroutine_wrap	30455
+compile_drop	rust	coroutine_deep_yield	0	1000	51566	137000	113000	39335000
+compile_drop	lua51	coroutine_deep_yield	0	1000	18567	41001	36000	9221068
+execute	rust	coroutine_deep_yield	0	30	609840	124	428	2460240
+execute	lua51	coroutine_deep_yield	0	30	253233	180	240	970080
+execute	lua51	coroutine_deep_yield	1	30	230823	180	240	970080
+execute	rust	coroutine_deep_yield	1	30	562550	120	420	2446320
+execute	rust	coroutine_deep_yield	2	30	568546	120	420	2446320
+execute	lua51	coroutine_deep_yield	2	30	212390	180	240	970080
+execute	lua51	coroutine_deep_yield	3	30	202243	180	240	970080
+execute	rust	coroutine_deep_yield	3	30	560563	120	420	2446320
+execute	rust	coroutine_deep_yield	4	30	561420	120	420	2446320
+execute	lua51	coroutine_deep_yield	4	30	203010	180	240	970080
+reference_live_heap_bytes	coroutine_deep_yield	64990
+rust_heap_estimate	coroutine_deep_yield	before_collect	69931	75627	149371	113	601	3
+rust_heap_estimate	coroutine_deep_yield	after_collect	28615	34679	149371	114	604	3
+reference_after_collect_heap_bytes	coroutine_deep_yield	30950
+compile_drop	rust	coroutine_reuse	0	1000	35053	97000	77000	27401000
+compile_drop	lua51	coroutine_reuse	0	1000	11337	27001	21000	5973068
+execute	rust	coroutine_reuse	0	30	580720	0	0	0
+execute	lua51	coroutine_reuse	0	30	188090	0	0	0
+execute	lua51	coroutine_reuse	1	30	174333	0	0	0
+execute	rust	coroutine_reuse	1	30	569243	0	0	0
+execute	rust	coroutine_reuse	2	30	658366	0	0	0
+execute	lua51	coroutine_reuse	2	30	193663	0	0	0
+execute	lua51	coroutine_reuse	3	30	171676	0	0	0
+execute	rust	coroutine_reuse	3	30	573190	0	0	0
+execute	rust	coroutine_reuse	4	30	575576	0	0	0
+execute	lua51	coroutine_reuse	4	30	171516	0	0	0
+reference_live_heap_bytes	coroutine_reuse	64655
+rust_heap_estimate	coroutine_reuse	before_collect	20935	26271	26271	0	0	3
+rust_heap_estimate	coroutine_reuse	after_collect	24903	30239	30239	1	0	3
+reference_after_collect_heap_bytes	coroutine_reuse	31771
+compile_drop	rust	gc_cycles	0	1000	18593	58000	43000	15885000
+compile_drop	lua51	gc_cycles	0	1000	6745	16001	13000	2909068
+execute	rust	gc_cycles	0	20	2540720	300000	0	22400000
+execute	lua51	gc_cycles	0	20	1971310	300000	0	12000000
+execute	lua51	gc_cycles	1	20	1801360	300000	0	12000000
+execute	rust	gc_cycles	1	20	2429110	300000	0	22400000
+execute	rust	gc_cycles	2	20	2677500	300000	0	22400000
+execute	lua51	gc_cycles	2	20	1787545	300000	0	12000000
+execute	lua51	gc_cycles	3	20	1946155	300000	0	12000000
+execute	rust	gc_cycles	3	20	2755030	300000	0	22400000
+execute	rust	gc_cycles	4	20	2542285	300000	0	22400000
+execute	lua51	gc_cycles	4	20	1796590	300000	0	12000000
+reference_live_heap_bytes	gc_cycles	30044
+rust_heap_estimate	gc_cycles	before_collect	22493	49789	80701	3737	505000	3
+rust_heap_estimate	gc_cycles	after_collect	22493	49789	80701	3738	505000	3
+reference_after_collect_heap_bytes	gc_cycles	30124
+compile_drop	rust	gc_weak_values	0	1000	23331	59000	52000	19778000
+compile_drop	lua51	gc_weak_values	0	1000	8776	17001	16000	5157068
+execute	rust	gc_weak_values	0	20	910985	60060	202	6492032
+execute	lua51	gc_weak_values	0	20	822600	120261	199	9302496
+execute	lua51	gc_weak_values	1	20	824305	120260	200	9298400
+execute	rust	gc_weak_values	1	20	905045	60060	200	6463360
+execute	rust	gc_weak_values	2	20	901625	60060	200	6463360
+execute	lua51	gc_weak_values	2	20	849650	120260	200	9298400
+execute	lua51	gc_weak_values	3	20	855140	120260	200	9298400
+execute	rust	gc_weak_values	3	20	902040	60060	200	6463360
+execute	rust	gc_weak_values	4	20	894785	60060	200	6463360
+execute	lua51	gc_weak_values	4	20	828910	120260	200	9298400
+reference_live_heap_bytes	gc_weak_values	71279
+rust_heap_estimate	gc_weak_values	before_collect	113752	214696	272072	611	303200	3
+rust_heap_estimate	gc_weak_values	after_collect	47880	149000	272072	612	303202	3
+reference_after_collect_heap_bytes	gc_weak_values	30231
+compile_drop	rust	userdata_proxy	0	1000	29783	79000	59000	21305000
+compile_drop	lua51	userdata_proxy	0	1000	9024	17001	15000	4885068
+execute	rust	userdata_proxy	0	20	1839790	1	0	16
+execute	lua51	userdata_proxy	0	20	1306835	100044	0	4002720
+execute	lua51	userdata_proxy	1	20	1289480	100045	0	4002880
+execute	rust	userdata_proxy	1	20	1870270	0	0	0
+execute	rust	userdata_proxy	2	20	2022270	0	0	0
+execute	lua51	userdata_proxy	2	20	1331945	100044	0	4002720
+execute	lua51	userdata_proxy	3	20	1322490	100044	0	4002720
+execute	rust	userdata_proxy	3	20	1824075	0	0	0
+execute	rust	userdata_proxy	4	20	1832365	0	0	0
+execute	lua51	userdata_proxy	4	20	1370315	100045	0	4002880
+reference_live_heap_bytes	userdata_proxy	30411
+rust_heap_estimate	userdata_proxy	before_collect	23582	102678	102678	809	505200	4
+rust_heap_estimate	userdata_proxy	after_collect	23430	102678	102678	810	505202	3
+reference_after_collect_heap_bytes	userdata_proxy	30387
+compile_drop	rust	userdata_finalize	0	1000	37868	98000	78000	25711000
+compile_drop	lua51	userdata_finalize	0	1000	12140	28001	21000	5813068
+execute	rust	userdata_finalize	0	20	1126180	64	13	594160
+execute	lua51	userdata_finalize	0	20	816310	60104	0	2405280
+execute	lua51	userdata_finalize	1	20	777430	60105	0	2405440
+execute	rust	userdata_finalize	1	20	1113535	60	0	3280
+execute	rust	userdata_finalize	2	20	1095845	60	0	3280
+execute	lua51	userdata_finalize	2	20	805115	60104	0	2405280
+execute	lua51	userdata_finalize	3	20	698000	60105	0	2405440
+execute	rust	userdata_finalize	3	20	1031350	60	0	3280
+execute	rust	userdata_finalize	4	20	1016265	60	0	3280
+execute	lua51	userdata_finalize	4	20	709615	60107	0	2405760
+reference_live_heap_bytes	userdata_finalize	150780
+rust_heap_estimate	userdata_finalize	before_collect	399179	786963	787127	101	300400	3004
+rust_heap_estimate	userdata_finalize	after_collect	206799	803183	803183	102	303404	3
+reference_after_collect_heap_bytes	userdata_finalize	30628
+compile_drop	rust	reader_load_single	0	1000	25882	80000	71000	21951000
+compile_drop	lua51	reader_load_single	0	1000	11001	28001	23000	5573068
+execute	rust	reader_load_single	0	10	1081640	44000	24000	6828000
+execute	lua51	reader_load_single	0	10	444530	22001	6000	1200032
+execute	lua51	reader_load_single	1	10	476810	22000	6000	1200000
+execute	rust	reader_load_single	1	10	1045850	44000	24000	6828000
+execute	rust	reader_load_single	2	10	1099660	44000	24000	6828000
+execute	lua51	reader_load_single	2	10	445080	22000	6000	1200000
+execute	lua51	reader_load_single	3	10	474160	22000	6000	1200000
+execute	rust	reader_load_single	3	10	1058330	44000	24000	6828000
+execute	rust	reader_load_single	4	10	1088250	44000	24000	6828000
+execute	lua51	reader_load_single	4	10	456190	22000	6000	1200000
+reference_live_heap_bytes	reader_load_single	43537
+rust_heap_estimate	reader_load_single	before_collect	27262	43334	55827	300	40785	3
+rust_heap_estimate	reader_load_single	after_collect	25118	41726	55827	301	40800	3
+reference_after_collect_heap_bytes	reader_load_single	30401
+compile_drop	rust	reader_load_bytes	0	1000	34816	100000	79000	26878000
+compile_drop	lua51	reader_load_bytes	0	1000	13032	31001	26000	7125068
+execute	rust	reader_load_bytes	0	10	2402040	39206	28000	7538206
+execute	lua51	reader_load_bytes	0	10	817590	16284	6000	1399530
+execute	lua51	reader_load_bytes	1	10	896120	16285	6000	1399550
+execute	rust	reader_load_bytes	1	10	2463100	39188	28000	7538188
+execute	rust	reader_load_bytes	2	10	2379810	39206	28000	7538206
+execute	lua51	reader_load_bytes	2	10	844650	16294	6000	1399784
+execute	lua51	reader_load_bytes	3	10	866580	16285	6000	1399550
+execute	rust	reader_load_bytes	3	10	2429330	39206	28000	7538206
+execute	rust	reader_load_bytes	4	10	2469170	39188	28000	7538188
+execute	lua51	reader_load_bytes	4	10	883140	16294	6000	1399784
+reference_live_heap_bytes	reader_load_bytes	37748
+rust_heap_estimate	reader_load_bytes	before_collect	47010	52002	52546	339	31578	3
+rust_heap_estimate	reader_load_bytes	after_collect	26248	35112	52546	340	31673	3
+reference_after_collect_heap_bytes	reader_load_bytes	31414
+compile_drop	rust	debug_info	0	1000	26175	83000	51000	20775000
+compile_drop	lua51	debug_info	0	1000	10311	27002	20000	5581084
+execute	rust	debug_info	0	10	1687410	50001	20000	5610016
+execute	lua51	debug_info	0	10	1606440	60323	0	7049415
+execute	lua51	debug_info	1	10	1594210	60230	0	7046010
+execute	rust	debug_info	1	10	1742550	50000	20000	5610000
+execute	rust	debug_info	2	10	1720290	50000	20000	5610000
+execute	lua51	debug_info	2	10	1587730	60230	0	7046010
+execute	lua51	debug_info	3	10	1602000	60230	0	7046010
+execute	rust	debug_info	3	10	1689850	50000	20000	5610000
+execute	rust	debug_info	4	10	1682740	50000	20000	5610000
+execute	lua51	debug_info	4	10	1608560	60230	0	7046010
+reference_live_heap_bytes	debug_info	44750
+rust_heap_estimate	debug_info	before_collect	42474	63762	79890	689	101984	3
+rust_heap_estimate	debug_info	after_collect	23731	51075	79890	690	102060	3
+reference_after_collect_heap_bytes	debug_info	32351
+compile_drop	rust	debug_locals	0	1000	23313	78000	59000	19205000
+compile_drop	lua51	debug_locals	0	1000	9358	27002	19000	3925084
+execute	rust	debug_locals	0	10	327170	0	4	1056
+execute	lua51	debug_locals	0	10	120230	10	0	400
+execute	lua51	debug_locals	1	10	121750	10	0	400
+execute	rust	debug_locals	1	10	349920	0	2	1408
+execute	rust	debug_locals	2	10	339570	0	0	0
+execute	lua51	debug_locals	2	10	120260	10	0	400
+execute	lua51	debug_locals	3	10	119980	10	0	400
+execute	rust	debug_locals	3	10	318370	0	2	2816
+execute	rust	debug_locals	4	10	316100	0	0	0
+execute	lua51	debug_locals	4	10	123180	10	0	400
+reference_live_heap_bytes	debug_locals	76271
+rust_heap_estimate	debug_locals	before_collect	21193	27457	27457	0	0	3
+rust_heap_estimate	debug_locals	after_collect	23104	31696	31696	1	52	3
+reference_after_collect_heap_bytes	debug_locals	32195
+compile_drop	rust	debug_traceback	0	1000	28681	88000	67000	23272000
+compile_drop	lua51	debug_traceback	0	1000	12032	29002	23001	6034159
+execute	rust	debug_traceback	0	10	988700	30032	14001	1156923
+execute	lua51	debug_traceback	0	10	651230	1369	11	111528
+execute	lua51	debug_traceback	1	10	630970	10	0	400
+execute	rust	debug_traceback	1	10	935150	30037	14000	1148784
+execute	rust	debug_traceback	2	10	951810	30031	14000	1152811
+execute	lua51	debug_traceback	2	10	613150	10	0	400
+execute	lua51	debug_traceback	3	10	623950	10	0	400
+execute	rust	debug_traceback	3	10	932030	30033	14000	1148748
+execute	rust	debug_traceback	4	10	958710	30031	14000	1152811
+execute	lua51	debug_traceback	4	10	610220	10	0	400
+reference_live_heap_bytes	debug_traceback	86554
+rust_heap_estimate	debug_traceback	before_collect	46694	67102	81443	53	30471	3
+rust_heap_estimate	debug_traceback	after_collect	26672	51904	81443	54	30771	3
+reference_after_collect_heap_bytes	debug_traceback	34453
+compile_drop	rust	debug_hook	0	1000	28372	91000	59000	21120000
+compile_drop	lua51	debug_hook	0	1000	9255	24002	20000	3485084
+execute	rust	debug_hook	0	10	71710	440	314	81652
+execute	lua51	debug_hook	0	10	35130	175	90	26162
+execute	lua51	debug_hook	1	10	35550	170	90	26000
+execute	rust	debug_hook	1	10	73750	440	306	82580
+execute	rust	debug_hook	2	10	65320	440	300	77460
+execute	lua51	debug_hook	2	10	40180	173	90	26097
+execute	lua51	debug_hook	3	10	31700	170	90	26000
+execute	rust	debug_hook	3	10	78750	446	319	94536
+execute	rust	debug_hook	4	10	66850	440	300	77460
+execute	lua51	debug_hook	4	10	35900	170	90	26000
+reference_live_heap_bytes	debug_hook	60323
+rust_heap_estimate	debug_hook	before_collect	47371	59675	67467	1	125	3
+rust_heap_estimate	debug_hook	after_collect	23991	39191	67467	2	206	3
+reference_after_collect_heap_bytes	debug_hook	32209
+compile_drop	rust	io_tmpfile	0	1000	47580	105000	73000	36978000
+compile_drop	lua51	io_tmpfile	0	1000	10999	17001	19000	6189068
+execute	rust	io_tmpfile	0	10	969920	2068	2013	116163
+execute	lua51	io_tmpfile	0	10	730150	85	0	2944
+execute	lua51	io_tmpfile	1	10	680020	20	0	1200
+execute	rust	io_tmpfile	1	10	811970	2066	1996	110223
+execute	rust	io_tmpfile	2	10	815180	2126	1990	103076
+execute	lua51	io_tmpfile	2	10	734610	20	0	1200
+execute	lua51	io_tmpfile	3	10	731890	20	0	1200
+execute	rust	io_tmpfile	3	10	843630	2063	1990	102958
+execute	rust	io_tmpfile	4	10	829730	2126	1990	103076
+execute	lua51	io_tmpfile	4	10	746510	20	0	1200
+reference_live_heap_bytes	io_tmpfile	69346
+rust_heap_estimate	io_tmpfile	before_collect	29160	39376	43784	7	578	11
+rust_heap_estimate	io_tmpfile	after_collect	26409	39297	43784	8	657	4
+reference_after_collect_heap_bytes	io_tmpfile	35142
+compile_drop	rust	loadfile_text	0	1000	11723	40000	32000	8507000
+compile_drop	lua51	loadfile_text	0	1000	4199	13001	11001	1509112
+execute	rust	loadfile_text	0	10	153190	453	311	129572
+execute	lua51	loadfile_text	0	10	128180	159	91	25560
+execute	lua51	loadfile_text	1	10	125750	150	92	25253
+execute	rust	loadfile_text	1	10	132230	450	300	121140
+execute	rust	loadfile_text	2	10	128570	450	300	121140
+execute	lua51	loadfile_text	2	10	132810	150	90	25120
+execute	lua51	loadfile_text	3	10	131370	150	90	25120
+execute	rust	loadfile_text	3	10	134150	450	300	121140
+execute	rust	loadfile_text	4	10	131480	450	300	121140
+execute	lua51	loadfile_text	4	10	126850	151	92	25278
+reference_live_heap_bytes	loadfile_text	37774
+rust_heap_estimate	loadfile_text	before_collect	36511	42271	48674	8	94	3
+rust_heap_estimate	loadfile_text	after_collect	32011	38091	48674	9	102	3
+reference_after_collect_heap_bytes	loadfile_text	29963
+compile_drop	rust	require_cached	0	1000	18998	61000	46000	14004000
+compile_drop	lua51	require_cached	0	1000	7976	17001	15000	4773068
+execute	rust	require_cached	0	10	303570	0	0	0
+execute	lua51	require_cached	0	10	107280	0	0	0
+execute	lua51	require_cached	1	10	106720	0	0	0
+execute	rust	require_cached	1	10	284040	0	0	0
+execute	rust	require_cached	2	10	280210	0	0	0
+execute	lua51	require_cached	2	10	108280	0	0	0
+execute	lua51	require_cached	3	10	106240	0	0	0
+execute	rust	require_cached	3	10	325150	0	0	0
+execute	rust	require_cached	4	10	286650	0	0	0
+execute	lua51	require_cached	4	10	108980	0	0	0
+reference_live_heap_bytes	require_cached	44709
+rust_heap_estimate	require_cached	before_collect	18644	24324	24324	0	0	3
+rust_heap_estimate	require_cached	after_collect	22612	28292	28292	1	0	3
+reference_after_collect_heap_bytes	require_cached	30105
+compile_drop	rust	require_preload	0	1000	31580	98000	72000	25548000
+compile_drop	lua51	require_preload	0	1000	11668	27001	21000	5877068
+execute	rust	require_preload	0	10	145080	2003	13	193232
+execute	lua51	require_preload	0	10	76490	2011	0	104425
+execute	lua51	require_preload	1	10	75690	2010	0	104400
+execute	rust	require_preload	1	10	143080	2000	0	160000
+execute	rust	require_preload	2	10	148510	2000	0	160000
+execute	lua51	require_preload	2	10	82310	2010	0	104400
+execute	lua51	require_preload	3	10	76970	2010	0	104400
+execute	rust	require_preload	3	10	137090	2000	0	160000
+execute	rust	require_preload	4	10	135460	2000	0	160000
+execute	lua51	require_preload	4	10	75130	2010	0	104400
+reference_live_heap_bytes	require_preload	59470
+rust_heap_estimate	require_preload	before_collect	41818	62986	78346	31	5081	3
+rust_heap_estimate	require_preload	after_collect	24938	52122	78346	32	5150	3
+reference_after_collect_heap_bytes	require_preload	31013
+compile_drop	rust	syntax_error	0	1000	21004	62000	49000	17427000
+compile_drop	lua51	syntax_error	0	1000	8394	17001	17001	4709101
+execute	rust	syntax_error	0	10	254080	15000	6000	1671000
+execute	lua51	syntax_error	0	10	575710	8143	39	438920
+execute	lua51	syntax_error	1	10	553960	8126	36	438183
+execute	rust	syntax_error	1	10	247920	15000	6000	1671000
+execute	rust	syntax_error	2	10	260390	15000	6000	1671000
+execute	lua51	syntax_error	2	10	566180	8126	36	438183
+execute	lua51	syntax_error	3	10	546320	8126	36	438183
+execute	rust	syntax_error	3	10	310960	15000	6000	1671000
+execute	rust	syntax_error	4	10	364030	15000	6000	1671000
+execute	lua51	syntax_error	4	10	550820	8140	40	438870
+reference_live_heap_bytes	syntax_error	34528
+rust_heap_estimate	syntax_error	before_collect	18970	24602	24602	0	0	3
+rust_heap_estimate	syntax_error	after_collect	22938	28570	28570	1	0	3
+reference_after_collect_heap_bytes	syntax_error	30394
+value_size_bytes	16
+debug_reference_libraries	ALL_SAFE plus DEBUG for debug_* workloads only
+compile_drop	rust	frontend_comment_10000	0	30	7536	540	360	100290
+compile_drop	lua51	frontend_comment_10000	0	30	24316	330	180	19680
+compile_drop	lua51	frontend_comment_10000	1	30	25970	330	180	19680
+compile_drop	rust	frontend_comment_10000	1	30	7533	540	360	100290
+compile_drop	rust	frontend_comment_10000	2	30	7263	540	360	100290
+compile_drop	lua51	frontend_comment_10000	2	30	23566	330	180	19680
+compile_drop	lua51	frontend_comment_10000	3	30	24870	330	180	19680
+compile_drop	rust	frontend_comment_10000	3	30	7970	540	360	100290
+compile_drop	rust	frontend_comment_10000	4	30	9140	540	360	100290
+compile_drop	lua51	frontend_comment_10000	4	30	30563	330	180	19680
+compile_drop	rust	frontend_quoted_10000	0	30	15413	810	600	750540
+compile_drop	lua51	frontend_quoted_10000	0	30	54106	390	480	1008240
+compile_drop	lua51	frontend_quoted_10000	1	30	52903	390	480	1008240
+compile_drop	rust	frontend_quoted_10000	1	30	16473	810	600	750540
+compile_drop	rust	frontend_quoted_10000	2	30	16490	810	600	750540
+compile_drop	lua51	frontend_quoted_10000	2	30	51606	390	480	1008240
+compile_drop	lua51	frontend_quoted_10000	3	30	51976	390	480	1008240
+compile_drop	rust	frontend_quoted_10000	3	30	16910	810	600	750540
+compile_drop	rust	frontend_quoted_10000	4	30	16396	810	600	750540
+compile_drop	lua51	frontend_quoted_10000	4	30	54630	390	480	1008240
+compile_drop	rust	frontend_comment_100000	0	10	32450	180	120	33430
+compile_drop	lua51	frontend_comment_100000	0	10	215400	110	60	6560
+compile_drop	lua51	frontend_comment_100000	1	10	240340	110	60	6560
+compile_drop	rust	frontend_comment_100000	1	10	40380	180	120	33430
+compile_drop	rust	frontend_comment_100000	2	10	35720	180	120	33430
+compile_drop	lua51	frontend_comment_100000	2	10	237640	110	60	6560
+compile_drop	lua51	frontend_comment_100000	3	10	228400	110	60	6560
+compile_drop	rust	frontend_comment_100000	3	10	32010	180	120	33430
+compile_drop	rust	frontend_comment_100000	4	10	39690	180	120	33430
+compile_drop	lua51	frontend_comment_100000	4	10	215480	110	60	6560
+compile_drop	rust	frontend_quoted_100000	0	10	136050	270	200	2050180
+compile_drop	lua51	frontend_quoted_100000	0	10	507290	130	190	2629840
+compile_drop	lua51	frontend_quoted_100000	1	10	479960	130	190	2629840
+compile_drop	rust	frontend_quoted_100000	1	10	132680	270	200	2050180
+compile_drop	rust	frontend_quoted_100000	2	10	129360	270	200	2050180
+compile_drop	lua51	frontend_quoted_100000	2	10	491490	130	190	2629840
+compile_drop	lua51	frontend_quoted_100000	3	10	497910	130	190	2629840
+compile_drop	rust	frontend_quoted_100000	3	10	132350	270	200	2050180
+compile_drop	rust	frontend_quoted_100000	4	10	159380	270	200	2050180
+compile_drop	lua51	frontend_quoted_100000	4	10	496200	130	190	2629840
+compile_drop	rust	frontend_comment_1000000	0	3	263533	54	36	10029
+compile_drop	lua51	frontend_comment_1000000	0	3	2145166	33	18	1968
+compile_drop	lua51	frontend_comment_1000000	1	3	2085400	33	18	1968
+compile_drop	rust	frontend_comment_1000000	1	3	281166	54	36	10029
+compile_drop	rust	frontend_comment_1000000	2	3	281866	54	36	10029
+compile_drop	lua51	frontend_comment_1000000	2	3	2147600	33	18	1968
+compile_drop	lua51	frontend_comment_1000000	3	3	2070800	33	18	1968
+compile_drop	rust	frontend_comment_1000000	3	3	280933	54	36	10029
+compile_drop	rust	frontend_comment_1000000	4	3	285900	54	36	10029
+compile_drop	lua51	frontend_comment_1000000	4	3	2231900	33	18	1968
+compile_drop	rust	frontend_quoted_1000000	0	3	1659300	81	60	6015054
+compile_drop	lua51	frontend_quoted_1000000	0	3	5144433	39	66	6293976
+compile_drop	lua51	frontend_quoted_1000000	1	3	5125833	39	66	6293976
+compile_drop	rust	frontend_quoted_1000000	1	3	1632400	81	60	6015054
+compile_drop	rust	frontend_quoted_1000000	2	3	1662133	81	60	6015054
+compile_drop	lua51	frontend_quoted_1000000	2	3	5523733	39	66	6293976
+compile_drop	lua51	frontend_quoted_1000000	3	3	5319000	39	66	6293976
+compile_drop	rust	frontend_quoted_1000000	3	3	1762466	81	60	6015054
+compile_drop	rust	frontend_quoted_1000000	4	3	1593666	81	60	6015054
+compile_drop	lua51	frontend_quoted_1000000	4	3	5427733	39	66	6293976
+compile_drop	rust	frontend_scopes_1000	0	5	4849360	65220	20710	16927770
+compile_drop	lua51	frontend_scopes_1000	0	5	1006320	130	205	1232640
+compile_drop	lua51	frontend_scopes_1000	1	5	1058020	130	205	1232640
+compile_drop	rust	frontend_scopes_1000	1	5	4725180	65220	20710	16927770
+compile_drop	rust	frontend_scopes_1000	2	5	4768200	65220	20710	16927770
+compile_drop	lua51	frontend_scopes_1000	2	5	1115840	130	205	1232640
+compile_drop	lua51	frontend_scopes_1000	3	5	996220	130	205	1232640
+compile_drop	rust	frontend_scopes_1000	3	5	4839160	65220	20710	16927770
+compile_drop	rust	frontend_scopes_1000	4	5	4793420	65220	20710	16927770
+compile_drop	lua51	frontend_scopes_1000	4	5	1064920	130	205	1232640
+compile_drop	rust	frontend_scopes_10000	0	2	50321850	260088	80360	76986116
+compile_drop	lua51	frontend_scopes_10000	0	2	10418650	52	106	6848256
+compile_drop	lua51	frontend_scopes_10000	1	2	9948900	52	106	6848256
+compile_drop	rust	frontend_scopes_10000	1	2	56581950	260088	80360	76986116
+compile_drop	rust	frontend_scopes_10000	2	2	53221700	260088	80360	76986116
+compile_drop	lua51	frontend_scopes_10000	2	2	10383850	52	106	6848256
+compile_drop	lua51	frontend_scopes_10000	3	2	9996600	52	106	6848256
+compile_drop	rust	frontend_scopes_10000	3	2	49200900	260088	80360	76986116
+compile_drop	rust	frontend_scopes_10000	4	2	48768750	260088	80360	76986116
+compile_drop	lua51	frontend_scopes_10000	4	2	11172150	52	106	6848256
+allocation_scope	Rust GlobalAlloc only; native C malloc excluded; totals cover all iterations in each row
+limitations	Atomic tracing GC; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary

@@ -61,6 +61,15 @@ fn search_standard_difficulty_index(name: &str) -> Option<usize> {
 
 #[must_use]
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
+    let mut out = String::new();
+    song_search_difficulties_text_into(song, chart_type, &mut out);
+    out
+}
+
+/// Format the first standard-difficulty meters into reusable storage.
+/// Replaces previous contents, including when no standard chart exists.
+pub fn song_search_difficulties_text_into(song: &SongData, chart_type: &str, out: &mut String) {
+    out.clear();
     let mut meters = [None; 5];
     let mut found = 0;
     for chart in &song.charts {
@@ -79,50 +88,63 @@ pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> Strin
         }
     }
     if found == 0 {
-        return "-".to_string();
+        out.reserve_exact(1);
+        out.push('-');
+        return;
     }
 
-    let mut out = String::with_capacity(32);
+    out.reserve(32);
     for meter in meters.into_iter().flatten() {
         if !out.is_empty() {
             out.push_str("   ");
         }
         write!(out, "{meter}").expect("writing to a String cannot fail");
     }
-    out
+}
+
+/// Inclusive display-BPM filter bounds, independent of chart type/difficulty.
+#[must_use]
+pub fn song_search_bpm_tiers(song: &SongData) -> Option<(i32, i32)> {
+    let (bpm_lo, bpm_hi) = song.display_bpm_range()?;
+    let mut lo = song_search_bpm_tier(bpm_lo);
+    let mut hi = song_search_bpm_tier(bpm_hi);
+    if lo > hi {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    Some((lo, hi))
 }
 
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     let mut filter = SongSearchFilter::default();
     let mut stripped = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        let ch = ch.to_ascii_lowercase();
-        if ch == '[' {
-            let mut tail = chars.clone();
-            let mut value: u32 = 0;
-            let mut has_digit = false;
-            while let Some(ch) = tail.peek() {
-                let Some(d) = ch.to_digit(10) else {
-                    break;
-                };
-                has_digit = true;
-                value = value.saturating_mul(10).saturating_add(d);
-                tail.next();
+    let bytes = input.as_bytes();
+    let mut scan = 0;
+    let mut start = 0;
+    while let Some(relative) = memchr::memchr(b'[', &bytes[scan..]) {
+        let open = scan + relative;
+        let tail = &bytes[open + 1..];
+        let digits = tail
+            .iter()
+            .position(|byte| !byte.is_ascii_digit())
+            .unwrap_or(tail.len());
+        let end = open + 1 + digits;
+        if digits != 0 && bytes.get(end) == Some(&b']') {
+            // A nonempty ASCII digit span can fail only by overflowing.
+            let value = input[open + 1..end].parse::<u32>().unwrap_or(u32::MAX);
+            if value <= 35 {
+                filter.difficulty = Some(value as u8);
+            } else {
+                filter.bpm_tier = Some(song_search_bpm_tier(f64::from(value)));
             }
-            if has_digit && tail.next_if_eq(&']').is_some() {
-                if value <= 35 {
-                    filter.difficulty = Some(value as u8);
-                } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(f64::from(value)));
-                }
-                chars = tail;
-                continue;
-            }
+            stripped.push_str(&input[start..open]);
+            start = end + 1;
+            scan = start;
+        } else {
+            scan = open + 1;
         }
-        stripped.push(ch);
     }
-
+    stripped.push_str(&input[start..]);
+    stripped.make_ascii_lowercase();
     let term_start = stripped.len() - stripped.trim_start().len();
     let term_end = stripped.trim_end().len();
     if term_start < term_end {
@@ -201,14 +223,9 @@ pub fn song_passes_search_filters(
     }
 
     if let Some(want_tier) = bpm_tier {
-        let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
+        let Some((lo, hi)) = song_search_bpm_tiers(song) else {
             return false;
         };
-        let mut lo = song_search_bpm_tier(bpm_lo);
-        let mut hi = song_search_bpm_tier(bpm_hi);
-        if lo > hi {
-            std::mem::swap(&mut lo, &mut hi);
-        }
         if lo == hi {
             if want_tier != lo {
                 return false;
@@ -224,67 +241,158 @@ pub fn song_passes_search_filters(
 #[inline]
 fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
     let needle = needle.as_bytes();
-    needle.is_empty()
-        || haystack
+    if needle.is_empty() {
+        return true;
+    }
+    if haystack.len() < 32 {
+        return haystack
             .as_bytes()
             .windows(needle.len())
-            .any(|window| window.eq_ignore_ascii_case(needle))
+            .any(|window| window.eq_ignore_ascii_case(needle));
+    }
+    let Some(prefix) = haystack.as_bytes().get(..needle.len()) else {
+        return false;
+    };
+    if prefix.eq_ignore_ascii_case(needle) {
+        return true;
+    }
+    contains_ignore_ascii_case_long(haystack.as_bytes(), needle)
+}
+// Sparse candidates use vectorized byte searches. Dense candidates retain
+// the scalar scan after four misses; keep this loop out of small callers.
+#[inline(never)]
+fn contains_ignore_ascii_case_long(haystack: &[u8], needle: &[u8]) -> bool {
+    let last_start = haystack.len() - needle.len();
+    let lower = needle[0].to_ascii_lowercase();
+    let upper = needle[0].to_ascii_uppercase();
+    let mut start = 1;
+    for _ in 0..4 {
+        if start > last_start {
+            return false;
+        }
+        let Some(offset) = memchr::memchr2(lower, upper, &haystack[start..=last_start]) else {
+            return false;
+        };
+        start += offset;
+        if haystack[start + 1..start + needle.len()].eq_ignore_ascii_case(&needle[1..]) {
+            return true;
+        }
+        start += 1;
+    }
+    haystack[start..]
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 #[inline]
 fn joined_contains_ignore_ascii_case(left: &str, right: &str, needle: &str) -> bool {
-    let right = (!right.trim().is_empty()).then_some(right);
-    let joined_len = left
-        .len()
-        .saturating_add(right.map_or(0, |value| value.len().saturating_add(1)));
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
+    if contains_ignore_ascii_case(left, needle) {
         return true;
     }
-    if needle.len() > joined_len {
+    if right.trim().is_empty() {
         return false;
     }
+    if contains_ignore_ascii_case(right, needle) {
+        return true;
+    }
+    let joined_len = left.len().saturating_add(right.len().saturating_add(1));
+    let Some(last_start) = joined_len.checked_sub(needle.len()) else {
+        return false;
+    };
 
+    // Only matches crossing the inserted space remain. Compare the two slices
+    // directly instead of selecting a virtual joined byte for every character.
     let left = left.as_bytes();
-    let right = right.map(str::as_bytes).unwrap_or_default();
-    (0..=joined_len - needle.len()).any(|start| {
-        needle.iter().enumerate().all(|(offset, expected)| {
-            let index = start + offset;
-            let actual = if index < left.len() {
-                left[index]
-            } else if index == left.len() {
-                b' '
-            } else {
-                right[index - left.len() - 1]
-            };
-            actual.eq_ignore_ascii_case(expected)
-        })
+    let right = right.as_bytes();
+    let needle = needle.as_bytes();
+    let first_start = left.len().saturating_sub(needle.len() - 1);
+    (first_start..=last_start.min(left.len())).any(|start| {
+        let prefix_len = left.len() - start;
+        needle[prefix_len] == b' '
+            && left[start..].eq_ignore_ascii_case(&needle[..prefix_len])
+            && right[..needle.len() - prefix_len - 1]
+                .eq_ignore_ascii_case(&needle[prefix_len + 1..])
     })
 }
 
 #[inline]
-fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
-    joined_contains_ignore_ascii_case(
-        song.display_title(translit),
-        song.display_subtitle(translit),
-        needle,
-    )
+fn song_title_contains(song: &SongData, needle: &str) -> bool {
+    let title = song.display_title(false);
+    let subtitle = song.display_subtitle(false);
+    if joined_contains_ignore_ascii_case(title, subtitle, needle) {
+        return true;
+    }
+    let translit_title = song.display_title(true);
+    let translit_subtitle = song.display_subtitle(true);
+    (title != translit_title || subtitle != translit_subtitle)
+        && joined_contains_ignore_ascii_case(translit_title, translit_subtitle, needle)
 }
 
-#[inline]
-fn lowercase_full_title_bytes(song: &SongData) -> impl Iterator<Item = u8> + '_ {
-    let subtitle = song.display_subtitle(false);
-    let has_subtitle = !subtitle.trim().is_empty();
-    song.display_title(false)
-        .bytes()
-        .chain(has_subtitle.then_some(b' '))
-        .chain(if has_subtitle { subtitle } else { "" }.bytes())
-        .map(|byte| byte.to_ascii_lowercase())
+// Keep the common title-prefix comparison small; only matching prefixes need
+// to compare the remaining title bytes and optional subtitle separator.
+#[inline(never)]
+fn display_full_title_tail_cmp(left: &SongData, right: &SongData) -> Ordering {
+    let left_title = left.display_title(false).as_bytes();
+    let right_title = right.display_title(false).as_bytes();
+    if left_title.len() == right_title.len() {
+        let left_subtitle = left.display_subtitle(false);
+        let right_subtitle = right.display_subtitle(false);
+        return match (
+            left_subtitle.trim().is_empty(),
+            right_subtitle.trim().is_empty(),
+        ) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            (false, false) => {
+                crate::song_sort::cmp_ignore_ascii_case(left_subtitle, right_subtitle)
+            }
+        };
+    }
+    let shared = left_title.len().min(right_title.len());
+    let (longer, shorter, reversed) = if left_title.len() > right_title.len() {
+        (left, right, false)
+    } else {
+        (right, left, true)
+    };
+    let subtitle = shorter.display_subtitle(false);
+    let order = if subtitle.trim().is_empty() {
+        Ordering::Greater
+    } else {
+        match longer.display_title(false).as_bytes()[shared]
+            .to_ascii_lowercase()
+            .cmp(&b' ')
+        {
+            Ordering::Equal => {
+                let longer_subtitle = longer.display_subtitle(false);
+                let has_subtitle = !longer_subtitle.trim().is_empty();
+                longer.display_title(false).as_bytes()[shared + 1..]
+                    .iter()
+                    .copied()
+                    .chain(has_subtitle.then_some(b' '))
+                    .chain(if has_subtitle { longer_subtitle } else { "" }.bytes())
+                    .map(|byte| byte.to_ascii_lowercase())
+                    .cmp(subtitle.bytes().map(|byte| byte.to_ascii_lowercase()))
+            }
+            order => order,
+        }
+    };
+    if reversed { order.reverse() } else { order }
 }
 
 #[inline]
 fn display_full_title_cmp(left: &SongData, right: &SongData) -> Ordering {
-    lowercase_full_title_bytes(left).cmp(lowercase_full_title_bytes(right))
+    let left_title = left.display_title(false).as_bytes();
+    let right_title = right.display_title(false).as_bytes();
+    for (&a, &b) in left_title.iter().zip(right_title) {
+        if a != b {
+            let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+    }
+    display_full_title_tail_cmp(left, right)
 }
 
 fn sort_song_search_candidates(candidates: &mut [SongSearchCandidate]) {
@@ -300,9 +408,10 @@ pub fn build_song_search_candidates<'a>(
     let entries = entries.into_iter();
     let (entry_count, upper) = entries.size_hint();
     let entry_count = upper.unwrap_or(entry_count);
-    let mut out = Vec::with_capacity(entry_count);
+    let mut out = Vec::new();
     let mut current_pack_name: Option<&str> = None;
     let mut current_pack_shared: Option<Arc<str>> = None;
+    let mut difficulties = String::new();
 
     for entry in entries {
         match entry {
@@ -311,13 +420,21 @@ pub fn build_song_search_candidates<'a>(
                 current_pack_shared = None;
             }
             SongSearchCatalogEntry::Song(song) => {
-                if !song
-                    .charts
-                    .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
-                {
+                // Retain the cheap presence check for short lists and queries
+                // that will never rescan charts for a difficulty match.
+                let first_chart = if song.charts.len() > 16 && filter.difficulty.is_some() {
+                    song.charts
+                        .iter()
+                        .position(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
+                } else {
+                    song.charts
+                        .iter()
+                        .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
+                        .then_some(0)
+                };
+                let Some(first_chart) = first_chart else {
                     continue;
-                }
+                };
 
                 let pack_name = current_pack_name.unwrap_or_default();
                 if let Some(pack_term) = filter.pack_term()
@@ -327,14 +444,13 @@ pub fn build_song_search_candidates<'a>(
                 }
 
                 if let Some(song_term) = filter.song_term()
-                    && !song_title_contains(song, false, song_term)
-                    && !song_title_contains(song, true, song_term)
+                    && !song_title_contains(song, song_term)
                 {
                     continue;
                 }
 
                 if let Some(diff) = filter.difficulty
-                    && !song.charts.iter().any(|c| {
+                    && !song.charts[first_chart..].iter().any(|c| {
                         c.chart_type.eq_ignore_ascii_case(chart_type)
                             && !c.difficulty.eq_ignore_ascii_case("edit")
                             && c.meter == u32::from(diff)
@@ -361,6 +477,10 @@ pub fn build_song_search_candidates<'a>(
                     }
                 }
 
+                if out.is_empty() {
+                    out.reserve_exact(entry_count);
+                    difficulties.reserve(32);
+                }
                 let pack_name =
                     Arc::clone(current_pack_shared.get_or_insert_with(|| Arc::from(pack_name)));
                 out.push(SongSearchCandidate {
@@ -368,7 +488,10 @@ pub fn build_song_search_candidates<'a>(
                     title: Arc::from(song.display_title(false)),
                     subtitle: Arc::from(song.display_subtitle(false)),
                     bpm: Arc::from(song.formatted_chart_display_bpm(None)),
-                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
+                    difficulties: {
+                        song_search_difficulties_text_into(song, chart_type, &mut difficulties);
+                        Arc::from(difficulties.as_str())
+                    },
                     song: Arc::clone(song),
                 });
             }
@@ -381,6 +504,126 @@ pub fn build_song_search_candidates<'a>(
 
 #[cfg(test)]
 mod tests {
+    include!("song_search_selection_perf.rs");
+    include!("song_text_perf.rs");
+
+    #[test]
+    fn title_search_preserves_partial_and_whitespace_transliteration_fallbacks() {
+        for (left, right, needle, matches) in [
+            ("A", "B", "a b", true),
+            ("A", "B", "a  b", false),
+            ("", "B", " b", true),
+            ("A", "", "a ", false),
+            ("A", " ", "a ", false),
+            ("A", "B", " b", true),
+            ("A", "B", "a ", true),
+            ("A", "B", "ab", false),
+            ("AB", "CD", "b c", true),
+            ("A", "B", "a b extra", false),
+            ("α", "β", "α β", true),
+        ] {
+            assert_eq!(
+                joined_contains_ignore_ascii_case(left, right, needle),
+                matches
+            );
+        }
+        for (title, subtitle, translit_title, translit_subtitle, query, matches) in [
+            ("Original", "Mix", "", "", "original mix", true),
+            (
+                "Original",
+                "Mix",
+                "\u{2003}",
+                "\u{a0}",
+                "original mix",
+                true,
+            ),
+            ("Original", "Mix", "\u{2003}", "\u{a0}", "missing", false),
+            ("Original", "Mix", "Alternate", "", "alternate mix", true),
+            ("Original", "Mix", "", "Edition", "original edition", true),
+            ("Original", "Mix", "Original", "Mix", "missing", false),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "original mix",
+                true,
+            ),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "alternate edition",
+                true,
+            ),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "original edition",
+                false,
+            ),
+            ("\u{c4}BC", "Mix", "", "", "\u{e4}bc", false),
+        ] {
+            let mut song = (*test_song_with_bpm(title, "128", 128.0, 128.0)).clone();
+            song.subtitle = subtitle.into();
+            song.translit_title = translit_title.into();
+            song.translit_subtitle = translit_subtitle.into();
+            let song = Arc::new(song);
+            let candidates = build_song_search_candidates(
+                [SongSearchCatalogEntry::Song(&song)],
+                query,
+                "dance-single",
+            );
+            assert_eq!(
+                candidates.len(),
+                usize::from(matches),
+                "{query}, {translit_title:?}, {translit_subtitle:?}"
+            );
+            if matches {
+                assert!(Arc::ptr_eq(&candidates[0].song, &song));
+            }
+        }
+        let songs: Vec<_> = [
+            (
+                "Wide",
+                "10000:20000",
+                10000.0,
+                20000.0,
+                u32::MAX,
+                "Challenge",
+            ),
+            ("Hidden", "???", 120.0, 180.0, 1, "Edit"),
+            ("Low", "1", 1.0, 1.0, 2, "Beginner"),
+        ]
+        .into_iter()
+        .map(|(title, bpm, lo, hi, meter, difficulty)| {
+            let mut song = (*test_song_with_bpm(title, bpm, lo, hi)).clone();
+            song.charts[0].meter = meter;
+            song.charts[0].difficulty = difficulty.into();
+            Arc::new(song)
+        })
+        .collect();
+        let candidates = build_song_search_candidates(
+            songs.iter().map(SongSearchCatalogEntry::Song),
+            "",
+            "dance-single",
+        );
+        assert_eq!(candidates.len(), songs.len());
+        for candidate in candidates {
+            assert_eq!(
+                candidate.bpm.as_ref(),
+                candidate.song.formatted_chart_display_bpm(None)
+            );
+            assert_eq!(
+                candidate.difficulties.as_ref(),
+                song_search_difficulties_text(&candidate.song, "dance-single")
+            );
+        }
+    }
+
     use std::{path::PathBuf, sync::Arc};
 
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
@@ -414,10 +657,12 @@ mod tests {
             min_bpm: 128.0,
             max_bpm: 128.0,
             normalized_bpms: "128".to_string(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         })
@@ -431,6 +676,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: format!("{chart_type}-hash"),
             stats: ArrowStats::default(),
@@ -528,6 +774,69 @@ mod tests {
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].pack_name.as_ref(), "Warmups");
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn difficulty_search_retains_first_match_and_skips_other_types_and_edits() {
+        let mut song = (*test_song("Alpha", "Mix")).clone();
+        let mut other_type = test_chart("dance-double");
+        other_type.meter = 12;
+        let mut edit = test_chart("dance-single");
+        edit.difficulty = "eDiT".into();
+        edit.meter = 12;
+        let mut first = test_chart("DANCE-SINGLE");
+        first.meter = 11;
+        let mut last = test_chart("dance-single");
+        last.meter = 13;
+        song.charts = vec![other_type, edit, first, last];
+        let song = Arc::new(song);
+        let entries = [
+            SongSearchCatalogEntry::PackHeader("Pack"),
+            SongSearchCatalogEntry::Song(&song),
+        ];
+        for (query, count) in [
+            ("[11]", 1),
+            ("[12]", 0),
+            ("[13]", 1),
+            ("pack/alpha [11]", 1),
+            ("other/alpha [11]", 0),
+            ("pack/missing [13]", 0),
+            ("alpha mix [13][128]", 1),
+        ] {
+            assert_eq!(
+                build_song_search_candidates(entries.clone(), query, "dance-single").len(),
+                count,
+                "{query}"
+            );
+        }
+        let mut first_match = (*song).clone();
+        first_match.charts[1].difficulty = "Hard".into();
+        let first_match = Arc::new(first_match);
+        assert_eq!(
+            build_song_search_candidates(
+                [SongSearchCatalogEntry::Song(&first_match)],
+                "[12]",
+                "dance-single"
+            )
+            .len(),
+            1
+        );
+        let mut large = (*song).clone();
+        large
+            .charts
+            .splice(0..0, std::iter::repeat_n(test_chart("pump-single"), 32));
+        let large = Arc::new(large);
+        for (query, count) in [("[11]", 1), ("[12]", 0), ("[13]", 1)] {
+            assert_eq!(
+                build_song_search_candidates(
+                    [SongSearchCatalogEntry::Song(&large)],
+                    query,
+                    "dance-single"
+                )
+                .len(),
+                count
+            );
+        }
     }
 
     #[test]
@@ -645,6 +954,39 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn full_title_comparison_preserves_subtitles_whitespace_and_utf8() {
+        let songs: Vec<_> = [
+            ("Alpha", ""),
+            ("ALPHA", " \t"),
+            ("alpha", "Mix"),
+            ("Alpha", "mIX"),
+            ("Alpha", " Mix"),
+            ("Alpha", "Zoo"),
+            ("ALPHA MIX", ""),
+            ("Alph", "a Mix"),
+            ("", "Mix"),
+            ("", ""),
+            ("\u{c4}lpha", "Mix"),
+            ("\u{e4}lpha", "mix"),
+            ("Alpha", "\u{a0}"),
+            ("Alpha", "\u{e9}Mix"),
+        ]
+        .into_iter()
+        .map(|(title, subtitle)| test_song(title, subtitle))
+        .collect();
+        for left in &songs {
+            for right in &songs {
+                assert_eq!(
+                    display_full_title_cmp(left, right),
+                    left.display_full_title(false)
+                        .to_ascii_lowercase()
+                        .cmp(&right.display_full_title(false).to_ascii_lowercase())
+                );
+            }
+        }
     }
 
     #[test]

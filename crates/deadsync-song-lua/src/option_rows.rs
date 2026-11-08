@@ -628,8 +628,17 @@ pub fn operator_menu_option_row_spec(
     method_name: &str,
     kind_arg: Option<&str>,
 ) -> SongLuaOperatorOptionRowSpec {
-    let lower = method_name.to_ascii_lowercase();
-    let (row_name, spec, pref_name) = match lower.as_str() {
+    with_ascii_lowercase_option_key(method_name, |key| {
+        operator_menu_option_row_spec_normalized(method_name, kind_arg, key)
+    })
+}
+
+fn operator_menu_option_row_spec_normalized(
+    method_name: &str,
+    kind_arg: Option<&str>,
+    key: &str,
+) -> SongLuaOperatorOptionRowSpec {
+    let (row_name, spec, pref_name) = match key {
         "theme" => (
             "Theme".to_string(),
             SongLuaOptionRowSpec::new(SongLuaOptionValues::Str(OPTION_THEME_NAMES)).one_choice(),
@@ -808,7 +817,12 @@ pub fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
 }
 
 fn create_lua_option_array(lua: &Lua, values: SongLuaOptionValues) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+    // Match Lua 5.1's dense growth so later holes keep the same length search.
+    let capacity = match values.len() {
+        0 => 0,
+        count => count.next_power_of_two(),
+    };
+    let table = lua.create_table_with_capacity(capacity, 0)?;
     match values {
         SongLuaOptionValues::Str(values) => {
             for (index, value) in values.iter().enumerate() {
@@ -1168,3 +1182,7 @@ fn create_operator_menu_option_row(
     }
     Ok(row)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/option_inputs.rs"]
+mod input_perf;

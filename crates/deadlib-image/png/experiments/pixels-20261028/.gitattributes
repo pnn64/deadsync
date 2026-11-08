@@ -1,0 +1,2 @@
+# Preserve the exact benchmark and validation evidence bytes.
+* -text -whitespace

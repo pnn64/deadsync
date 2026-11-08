@@ -14,13 +14,9 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadlib_render_core::BlendMode;
-use deadsync_assets::noteskin::{
-    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
-};
+use deadsync_assets::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot};
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_notefield::noteskin_model_actor_from_draw;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};
@@ -185,7 +181,7 @@ fn apply_judgment_palette_choices(
     let Some(row) = row_map.get_mut(RowId::JudgmentColors) else {
         return;
     };
-    row.replace_choices(choices.to_vec());
+    row.replace_choices(choices);
     apply_judgment_palette_selection(row_map, choice_ids, selected_ids);
 }
 
@@ -428,6 +424,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     let mut display_row_map = build_rows(
         &song,
@@ -445,6 +442,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     apply_judgment_palette_choices(
         &mut display_row_map,
@@ -468,6 +466,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     if policy.tournament_mode
         && let Some(row) = advanced_row_map.get_mut(RowId::FAPlusOptions)
@@ -492,6 +491,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     // Each `BitmaskBinding` lives on exactly one pane's row, and
     // `apply_derived_masks` is a pure function of `profile`, so calling
@@ -761,7 +761,11 @@ const fn active_players(
 ) -> [bool; PLAYER_SLOTS] {
     let joined_count = joined[P1] as usize + joined[P2] as usize;
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             if joined_count > 0 {
                 joined
             } else {
@@ -795,7 +799,11 @@ const fn persisted_player_idx(
     side: profile_data::PlayerSide,
 ) -> usize {
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => P1,
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => P1,
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle

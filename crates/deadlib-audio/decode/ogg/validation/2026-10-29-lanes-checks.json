@@ -1,0 +1,226 @@
+{
+  "baseline_revision": "db753972f",
+  "source_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "d6a81e16afeb747d211a09e7a93041958edb0e70a7adf72157c8032f5fdcee88",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "7d96f9747207b9aed83931634c9498bf54807bc97f51d5772d2c30d238c1ff25",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "7cf3866e8dea37f908b9ccc971abeb80ce18252af96f94f3170c77f2ac413de8",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "13cf42449067c65029e3dbc7dae071c9fc418259983f6a74f7c78329b533c30f",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "3acb98a33b59a98850cb9d5c993c8be25faf2d9f220ee64ba5c7b1d8b01430bd"
+  },
+  "tests_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\compatibility.rs": "f8024be128779b8e8f19f8a7a7e6d3ee7f6787bfe2c838c54f259a861edc0694",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\container.rs": "ddae2776f7abd594b89160552005a52643d6bc2bcb0adb9df4fac86bc8c3b198",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\libogg.rs": "3b75b7067c505b0af951babe26a3d3388df6b851f59b4d49843132acbbbc81fe",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\seeking.rs": "d66e647e8fded339056f8361a1f81ebe9e7f7e08be4ff7cb05df361c6b15cbdc",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\synchronization.rs": "b39f1dee10df0eba488accdcb5e93aa88e459c5ae8822a5eab1995d373d2e035"
+  },
+  "environment": {
+    "DEADLIB_LIBOGG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\ogg-oracle-build\\Release\\deadlib_ogg_oracle.exe",
+    "DEADLIB_OGG_CORPUS": "C:\\GitHub\\deadsync\\assets",
+    "DEADLIB_OGG_EXTERNAL_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\corpus"
+  },
+  "checks": [
+    {
+      "label": "ogg-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "--include-ignored",
+        "--skip",
+        "regenerate_sync_state_golden",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-ogg-tests.log",
+      "log_sha256": "562757819f6d0b290fba1513cf72f916463f23dc845889d82b49b975567d69b1"
+    },
+    {
+      "label": "vorbis-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-vorbis-tests.log",
+      "log_sha256": "d654617c695acfac2b09a7a25f2d10af0ea5a84b36c17e2b1e90065066ce4574"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--all-features",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-clippy.log",
+      "log_sha256": "c4fd6c443552015852200b9e885a132ccfaa61f65e1d93a5f712482769b434f9"
+    },
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_ogg_kernels.py"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-python.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "probe-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-probe.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-probe-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-paired.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-lanes-paired-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "codegen-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates/deadlib-audio/decode/ogg/validation/2026-10-29-codegen-controls.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates/deadlib-audio/decode/ogg/validation/2026-10-29-lanes-codegen-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "tested_source_unchanged": true,
+  "oracle_sha256": "364bab1990fa7c276f3bb54483c53458f8c45af66d08b4065a9060a82f779f48",
+  "protocol_record_sha256": "a3c90dc877379657d0737312130b0d61fc60835c723c1b93ee957733eeea147d",
+  "baseline_matches_revision": true,
+  "source_diffs": {
+    "before->counts": [
+      "page.rs"
+    ],
+    "counts->short": [
+      "page.rs"
+    ],
+    "short->wide192": [
+      "page.rs"
+    ]
+  },
+  "final_worker_source_matches": true,
+  "build_and_dependency_controls_match": true,
+  "saved_workers_unchanged": true,
+  "benchmark_control_sha256": {
+    "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+    "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+    "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+    "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+    "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+    "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+    "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+    "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+    "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+    "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+    "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+    "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\container.rs": "95de98f357e80218fff47d296f0d62a0769240db503dabd09cbde017d40bbae8",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\kernels.rs": "449d7640df0d3b4104324e1be2867759f1614731e7b28eae5e42dd1c11604c4a"
+  },
+  "benchmark_runner_sha256": "07a7ccb1b36fde5196eb2f18e17baa9cc5531fc70ee7ed45a23b08c52bbd730e",
+  "measurements": {
+    "rows": 6624,
+    "json_sha256": "1e0a35026697df6b7fc56655231a5840ece84065516f6c9d3f53c20efec443e0",
+    "tsv_sha256": "33b15f317a8aa61c379c4e3440c791adeaebca2993c85051018d6b21c0e0b7d9",
+    "heap_counters_never_increase": true,
+    "later_stage_counters_identical": true,
+    "summary_recomputed": true
+  },
+  "focused_measurements": {
+    "rows": 1176,
+    "summary_recomputed": true,
+    "json_sha256": "5bcdfa03fa46a82b61dd7b50138580c1e1ac9fb51cbb002d2291376274c7be1f",
+    "sources_and_workers_verified": true
+  },
+  "test_counts": {
+    "ogg-tests": {
+      "passed": 58,
+      "failed": 0,
+      "ignored": 0
+    },
+    "vorbis-tests": {
+      "passed": 113,
+      "failed": 0,
+      "ignored": 87
+    }
+  },
+  "reference_revision": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+  "reference_source_clean": true,
+  "production_line_delta": 11,
+  "heap_changes": {},
+  "production_commits": {
+    "counts": "5dcc560947cdcad342ccba415275d9e3dcb17cbe",
+    "short": "e98e827e7de43736cc08634bd3cce73bbb58c953"
+  },
+  "commit_source_matches_measured_stages": true,
+  "retained_stage": "short",
+  "rejected_stage": "wide192",
+  "rejected_source_patch_sha256": "44fc709691da438b052434ff35244a13be0f02b7a675d5c3f0f81d6689708ff6",
+  "codegen_control_record_sha256": "9ca0598c61d7b2df94f1ccd1e6938cb1af97b9ae27310c881d977229025f67c1",
+  "codegen_controls_verified": true,
+  "audit_passed": true
+}

@@ -53,6 +53,7 @@ pub(crate) struct MineLayerRequest<'a, S> {
     pub display_time_s: f32,
     pub current_beat: f32,
     pub uv_translation: [f32; 2],
+    pub rotation_x_deg: f32,
     pub rotation_y_deg: f32,
     pub note_rotation_z_deg: f32,
     pub alpha: f32,
@@ -337,6 +338,7 @@ where
         flip_y: slot.sprite_def().mirror_v,
         fade: request.draw.fade,
         blend: request.blend,
+        rot_x_deg: request.draw.rot[0],
         rot_y_deg: request.rotation_y_deg,
         rot_z_deg: request.sprite_rotation_z_deg,
         z: request.z,
@@ -413,6 +415,7 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
     F: Fn(&S) -> SpriteSource,
     Z: Fn(&S) -> [f32; 2],
 {
+    let mine_start = draws.len();
     let frame_size = request.layers.get(1).map(size_for_slot);
     let use_gradient = if let (Some(frame_size), Some(fill_slot), Some(gradient_slot)) =
         (frame_size, request.layers.first(), request.gradient_slot)
@@ -452,6 +455,30 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             sprite_source,
         );
     }
+    if let Some(mesh) = draws[mine_start..].iter_mut().find_map(|draw| match draw {
+        FlatDraw::TexturedMesh(mesh)
+            if mesh.depth_test && (mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) =>
+        {
+            Some(mesh)
+        }
+        _ => None,
+    }) {
+        mesh.clear_depth = true;
+    }
+    if let Some(mesh) = draws[mine_start..]
+        .iter_mut()
+        .rev()
+        .find_map(|draw| match draw {
+            FlatDraw::TexturedMesh(mesh)
+                if mesh.depth_test && (mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) =>
+            {
+                Some(mesh)
+            }
+            _ => None,
+        })
+    {
+        mesh.clear_depth_after = true;
+    }
 }
 
 fn compose_flat_mine_gradient<S, F>(
@@ -465,7 +492,12 @@ fn compose_flat_mine_gradient<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    if !(size[0] > 0.0 && size[1] > 0.0) {
+    if request.gradient_size_ratio <= 0.0
+        || !(size[0].is_finite()
+            && size[1].is_finite()
+            && size[0].abs() > 0.0
+            && size[1].abs() > 0.0)
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.mine_fill_phase);
@@ -475,7 +507,10 @@ fn compose_flat_mine_gradient<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw: ModelDrawState::default(),
+            draw: ModelDrawState {
+                rot: [request.rotation_x_deg, 0.0, 0.0],
+                ..ModelDrawState::default()
+            },
             model_center: request.center,
             sprite_center: request.center,
             size,
@@ -508,7 +543,7 @@ fn compose_flat_mine_slot<S, F, Z>(
 {
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, request.display_time_s, request.current_beat),
-        request.rotation_y_deg,
+        [request.rotation_x_deg, request.rotation_y_deg],
     );
     if !draw.visible {
         return;
@@ -533,12 +568,20 @@ fn compose_flat_mine_slot<S, F, Z>(
         size[1] *= draw.zoom[1];
         tint = model_tint(tint, draw);
     }
+    let layer_start = draws.len();
     compose_flat_note_layer(
         draws,
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(request.mine_uv_phase)
+                },
+                ..draw
+            },
             model_center: request.center,
             sprite_center: request.center,
             size,
@@ -556,6 +599,17 @@ fn compose_flat_mine_slot<S, F, Z>(
         },
         sprite_source,
     );
+    if slot.model_cull_back()
+        && let Some(model) = slot.model()
+    {
+        for draw in &mut draws[layer_start..] {
+            if let FlatDraw::TexturedMesh(mesh) = draw {
+                crate::noteskin_model::noteskin_model_depth(model, &mut mesh.local_transform);
+                mesh.depth_test = true;
+                mesh.depth_write = true;
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -574,12 +628,14 @@ pub(crate) struct ScrollTravelRequest<'a> {
     pub draw_distance_after_targets: f32,
     pub draw_distance_before_targets: f32,
     pub field_zoom: f32,
-    pub elapsed_screen_s: f32,
+    pub expand_seconds: f32,
     pub effect_height: f32,
     pub screen_height: f32,
     pub note_count_stats: &'a [NoteCountStat],
     pub arrow_effect_time_s: f32,
     pub lane_tipsy: f32,
+    pub lane_tipsy_offset: f32,
+    pub lane_tipsy_speed: f32,
     pub lane_move_y: &'a [f32],
 }
 
@@ -677,11 +733,7 @@ pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_
         displayed_speed_percent,
         post_accel_scale,
         accel_is_identity: accel_y_is_identity(request.accel),
-        accel_cache: accel_y_cache(
-            request.elapsed_screen_s,
-            request.effect_height,
-            request.accel,
-        ),
+        accel_cache: accel_y_cache(request.expand_seconds, request.effect_height, request.accel),
         random_speed_lane_seeds,
     }
 }
@@ -867,6 +919,8 @@ impl ScrollTravel<'_> {
             local_col,
             self.request.arrow_effect_time_s,
             self.request.lane_tipsy,
+            self.request.lane_tipsy_offset,
+            self.request.lane_tipsy_speed,
         ) + move_col_extra(self.request.lane_move_y, local_col)
     }
 
@@ -964,7 +1018,7 @@ impl ScrollTravel<'_> {
             self.request.search_beat,
             draw_distance_before_targets,
             self.displayed_speed_percent,
-            self.request.accel.boomerang > f32::EPSILON,
+            self.request.accel.boomerang != 0.0,
             |beat| self.adjusted_with_peak(self.raw_beat(beat)),
             stop_at_row_precision,
         )
@@ -1252,7 +1306,7 @@ mod tests {
         lane_window_bounds_by_note_row_from_cursor, random_speed_lane_seed, random_speed_seed,
         random_speed_seed_from_lane_seed, scroll_travel, song_time_ns_delta_seconds,
     };
-    use crate::{AccelYParams, ModelMeshCache, ModelMeshCacheStats, move_col_extra, tipsy_y_extra};
+    use crate::{AccelYParams, ModelMeshCache, ModelMeshCacheStats, move_col_extra};
     use deadlib_present::actors::{FlatDraw, SpriteSource};
     use deadlib_render_core::BlendMode;
     use deadsync_core::input::MAX_COLS;
@@ -1296,7 +1350,9 @@ mod tests {
         fn model() -> Self {
             Self {
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],
@@ -1425,12 +1481,14 @@ mod tests {
             draw_distance_after_targets: 64.0,
             draw_distance_before_targets: 64.0,
             field_zoom: 1.0,
-            elapsed_screen_s: 0.0,
+            expand_seconds: 0.0,
             effect_height: 640.0,
             screen_height: 720.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         }
     }
@@ -1576,6 +1634,7 @@ mod tests {
             display_time_s: 3.0,
             current_beat: 4.0,
             uv_translation: [0.1, 0.2],
+            rotation_x_deg: 0.0,
             rotation_y_deg: 12.0,
             note_rotation_z_deg: 5.0,
             alpha: 0.8,
@@ -1818,7 +1877,10 @@ mod tests {
                         &|slot| SpriteSource::Texture(slot.texture.clone()),
                     );
                     let gradient_size = [frame_size[0] * ratio, frame_size[1] * ratio];
-                    let gradient_visible = gradient_size[0] > 0.0 && gradient_size[1] > 0.0;
+                    let gradient_visible = ratio > 0.0
+                        && gradient_size
+                            .iter()
+                            .all(|size| size.is_finite() && size.abs() > 0.0);
                     let expected = expected_layers
                         .iter()
                         .copied()
@@ -1829,7 +1891,9 @@ mod tests {
                         .iter()
                         .map(|draw| match draw {
                             FlatDraw::Sprite(sprite) => sprite.source.texture_key().unwrap(),
-                            FlatDraw::TexturedMesh(mesh) => mesh.texture.as_ref(),
+                            FlatDraw::TexturedMesh(mesh) => {
+                                mesh.texture.texture_key().expect("asset mesh")
+                            }
                             _ => panic!("unexpected mine draw"),
                         })
                         .collect::<Vec<_>>();
@@ -1881,8 +1945,10 @@ mod tests {
             slot.draw.rot[2] = 30.0;
             slot.draw.tint[3] = 0.5;
         }
-        for hidden in [None, Some(2)] {
-            layers[2].draw.visible = hidden.is_none();
+        for hidden in [None, Some(0), Some(2)] {
+            for (i, slot) in layers.iter_mut().enumerate() {
+                slot.draw.visible = hidden != Some(i);
+            }
             let mut draws = Vec::new();
             compose_flat_mine_layers(
                 &mut draws,
@@ -1905,10 +1971,38 @@ mod tests {
                     };
                     assert_eq!(mesh.z, 140);
                     assert_eq!(mesh.world_z, 9.0);
-                    mesh.texture.as_ref()
+                    mesh.texture.texture_key().expect("asset mesh")
                 })
                 .collect();
             assert_eq!(actual, expected);
+            for (i, draw) in draws.iter().enumerate() {
+                let FlatDraw::TexturedMesh(mesh) = draw else {
+                    unreachable!()
+                };
+                assert!(mesh.depth_test);
+                assert_eq!(mesh.clear_depth, i == 0);
+                assert_eq!(mesh.clear_depth_after, i + 1 == draws.len());
+                // The depth projection must retain front/back separation.
+                let front = mesh
+                    .local_transform
+                    .project_point3(glam::Vec3::new(0.0, 0.0, 1.0));
+                let back = mesh
+                    .local_transform
+                    .project_point3(glam::Vec3::new(0.0, 0.0, -1.0));
+                assert!(front.z > back.z);
+            }
+            let next_start = draws.len();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                mine_request(&layers, None),
+                &|_| [64.0; 2],
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            let FlatDraw::TexturedMesh(next) = &draws[next_start] else {
+                unreachable!()
+            };
+            assert!(next.clear_depth, "each mine starts a fresh depth buffer");
             for passes in draws.chunks_exact(2) {
                 let [
                     FlatDraw::TexturedMesh(diffuse),
@@ -1971,6 +2065,7 @@ mod tests {
 
     fn note(beat: f32) -> Note {
         Note {
+            participant: None,
             beat,
             quantization_idx: 0,
             column: 0,
@@ -2169,7 +2264,10 @@ mod tests {
             boost: 0.35,
             brake: 0.45,
             wave: 0.8,
+            wave_period: 0.0,
+            parabola_y: 0.0,
             expand: 0.6,
+            expand_period: 0.0,
             boomerang: 0.2,
         };
         let travel = scroll_travel(travel_request);
@@ -2210,15 +2308,18 @@ mod tests {
     }
 
     #[test]
-    fn inactive_acceleration_options_select_identity_path() {
+    fn zero_acceleration_options_select_identity_path() {
         let timing = timing();
         let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
         travel_request.field_zoom = 0.75;
         travel_request.accel = AccelYParams {
-            boost: f32::NAN,
-            brake: -1.0,
-            wave: f32::EPSILON,
-            expand: f32::NEG_INFINITY,
+            boost: 0.0,
+            brake: -0.0,
+            wave: 0.0,
+            wave_period: 3.0,
+            parabola_y: 0.0,
+            expand: 0.0,
+            expand_period: 0.0,
             boomerang: -0.0,
         };
         let travel = scroll_travel(travel_request);
@@ -2313,9 +2414,12 @@ mod tests {
         let mut request = request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0);
         request.arrow_effect_time_s = 2.25;
         request.lane_tipsy = 0.75;
+        request.lane_tipsy_offset = 2.5;
+        request.lane_tipsy_speed = -0.5;
         request.lane_move_y = &move_y;
         let travel = scroll_travel(request);
-        let expected_offset = tipsy_y_extra(1, 2.25, 0.75) + move_col_extra(&move_y, 1);
+        // Native UpdateTipsy output, plus the authored MoveY offset.
+        let expected_offset = 3.88934255 + move_col_extra(&move_y, 1);
         assert_near(travel.lane_offset(1), expected_offset);
 
         let raw = travel.raw_beat(5.0);

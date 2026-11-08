@@ -10,7 +10,7 @@ pub(super) mod tests {
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NavDirection, NumericBinding, NumericInit, OptionsPane, P1, P2, PlayerOptionMasks, Row,
         RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, append_pending_effects,
-        compute_row_window, count_visible_rows, effective_scroll_speed_with_alt,
+        compute_row_window, count_visible_row_slots, effective_scroll_speed_with_alt,
         handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
         init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
         judgment_tilt_options_visible, multi_select_mask, on_start_press, player_option_column_x,
@@ -66,6 +66,10 @@ pub(super) mod tests {
             player_side,
             joined,
             music_rate: 1.0,
+            policy: crate::views::PlayerOptionsPolicyView {
+                golf_enabled: true,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -93,6 +97,7 @@ pub(super) mod tests {
     ) -> super::super::RowVisibility {
         let mut policy = crate::views::PlayerOptionsPolicyView::default();
         policy.allow_per_player_global_offsets = allow_per_player_global_offsets;
+        policy.golf_enabled = true;
         super::super::row_visibility(row_map, active, masks, policy)
     }
 
@@ -272,10 +277,12 @@ pub(super) mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
             normalized_bpms: "120".to_string(),
+            song_timing: None,
             music_length_seconds: 120.0,
             first_second: 0.0,
             total_length_seconds: 120,
             precise_last_second_seconds: 120.0,
+            precise_note_last_second_seconds: Some(120.0),
             last_second_hint: 0.0,
             charts: vec![test_chart()],
         })
@@ -289,6 +296,7 @@ pub(super) mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "player-options-test".to_string(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -370,7 +378,7 @@ pub(super) mod tests {
         assert!(is_row_visible(row_map, 0, visibility));
         assert!(!is_row_visible(row_map, 1, visibility));
 
-        let visible_rows = count_visible_rows(row_map, visibility);
+        let visible_rows = count_visible_row_slots(row_map, visibility);
         let window = compute_row_window(visible_rows, [0, 0], active);
         let mut visible_idx = 0;
         let (parent_f_pos, parent_hidden) =
@@ -760,6 +768,12 @@ pub(super) mod tests {
                 &["10ms", "11ms"],
                 [0, 0],
             ),
+            test_row(
+                RowId::TextErrorBarPosition,
+                lookup_key("PlayerOptions", "TextErrorBarPosition"),
+                &["Split", "Centered"],
+                [0, 0],
+            ),
         ]);
         let visibility = row_visibility(
             &window_row_map,
@@ -773,6 +787,7 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(!is_row_visible(&window_row_map, 3, visibility));
         assert!(!is_row_visible(&window_row_map, 1, visibility));
         assert!(!is_row_visible(&window_row_map, 2, visibility));
 
@@ -788,6 +803,7 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(is_row_visible(&window_row_map, 3, visibility));
         assert!(is_row_visible(&window_row_map, 1, visibility));
         assert!(!is_row_visible(&window_row_map, 2, visibility));
 
@@ -810,6 +826,12 @@ pub(super) mod tests {
                 &["10ms", "11ms"],
                 [0, 0],
             ),
+            test_row(
+                RowId::TextErrorBarPosition,
+                lookup_key("PlayerOptions", "TextErrorBarPosition"),
+                &["Split", "Centered"],
+                [0, 0],
+            ),
         ]);
         let visibility = row_visibility(
             &scalable_row_map,
@@ -823,8 +845,62 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(is_row_visible(&scalable_row_map, 3, visibility));
         assert!(is_row_visible(&scalable_row_map, 1, visibility));
         assert!(is_row_visible(&scalable_row_map, 2, visibility));
+    }
+
+    #[test]
+    fn text_error_bar_position_restores_and_persists_each_players_choice() {
+        ensure_i18n();
+        let view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        let (mut state, _) = setup_state_with(view);
+        state.player_options[P1].error_bar_active_mask = ErrorBarMask::TEXT;
+        state.player_options[P2].error_bar_active_mask = ErrorBarMask::TEXT;
+        state.player_options[P1].text_error_bar_centered = true;
+        super::super::apply_pane(&mut state, OptionsPane::Advanced);
+
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::TextErrorBarPosition)
+            .expect("Text Position row present");
+        assert_eq!(
+            state
+                .pane()
+                .row_map
+                .get(RowId::TextErrorBarPosition)
+                .unwrap()
+                .selected_choice_index,
+            [1, 0]
+        );
+
+        for (player, side, delta, centered) in [
+            (P1, PlayerSide::P1, -1, false),
+            (P2, PlayerSide::P2, 1, true),
+        ] {
+            state.pane_mut().selected_row[player] = row_index;
+            state.pending_effects.clear();
+            super::change_choice_for_player(&mut state, player, delta, super::NavWrap::Wrap);
+            assert_eq!(
+                state.player_options[player].text_error_bar_centered,
+                centered
+            );
+            assert!(state.pending_effects.iter().any(|effect| matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                        side: effect_side,
+                        options,
+                        ..
+                    }
+                )) if *effect_side == side && options.text_error_bar_centered == centered
+            )));
+        }
+        assert!(!state.player_options[P1].text_error_bar_centered);
+        assert!(state.player_options[P2].text_error_bar_centered);
     }
 
     #[test]
@@ -1906,12 +1982,7 @@ pub(super) mod tests {
         state.pack_menu = pack_options::PackMenu::new(&packs);
         for pane in &mut state.panes {
             if let Some(row) = pane.row_map.get_mut(RowId::NoteSkin) {
-                row.replace_choices(vec![
-                    "default".into(),
-                    "cel".into(),
-                    "sample-cel".into(),
-                    "sample-metal".into(),
-                ]);
+                row.replace_choices(["default", "cel", "sample-cel", "sample-metal"]);
             }
         }
         state.pack_menu.add_rows(
@@ -2070,22 +2141,18 @@ pub(super) mod tests {
         );
     }
 
-    #[test]
-    fn model_previews_preserve_layers_and_quants() {
-        use super::super::render;
-        use deadlib_present::actors::Actor;
-        use deadlib_render_core::BlendMode;
+    fn model_preview_skin() -> deadsync_assets::noteskin::Noteskin {
         use deadsync_assets::noteskin::{
             ModelMesh, ModelVertex, Noteskin, SpriteSource, test_model_slot,
         };
-        ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
         // A triangle shared by materials with different texture dimensions.
         // Every layer must occupy the same screen coordinates after fitting.
         let model = Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from(
                 [[-32.0, -24.0, 0.0], [32.0, -24.0, 0.0], [0.0, 24.0, 0.0]].map(|pos| {
                     ModelVertex {
+                        normal: [0.0; 3],
                         pos,
                         uv: [0.0; 2],
                         tex_matrix_scale: [1.0; 2],
@@ -2117,7 +2184,7 @@ pub(super) mod tests {
                 slot
             })
             .collect();
-        let skin = Noteskin {
+        Noteskin {
             notes: vec![layers[0].clone()],
             note_layers: vec![Arc::clone(&layers)],
             lift_note_layers: vec![Arc::from(&layers[..3])],
@@ -2147,7 +2214,311 @@ pub(super) mod tests {
             custom_parts: Default::default(),
             part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: Default::default(),
+        }
+    }
+
+    #[test]
+    fn receptor_previews_face_their_columns() {
+        use deadlib_present::actors::Actor;
+        use deadsync_noteskin::runtime::ReceptorOverlay;
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        for (rotation, expected) in [
+            (90, [-1.0, 0.0]),
+            (0, [0.0, -1.0]),
+            (180, [0.0, 1.0]),
+            (-90, [1.0, 0.0]),
+        ] {
+            let mut skin = model_preview_skin();
+            let mut slot = skin.mine_layers[0][0].clone();
+            slot.model = None;
+            slot.set_rotation_deg(rotation);
+            slot.model_draw.tint = [1.0; 4];
+            skin.receptor_off = vec![slot.clone()];
+            skin.receptor_idle_glow_layers = vec![Some(slot.clone())];
+            skin.receptor_idle_glow = deadsync_noteskin::ReceptorIdleGlow::ActorEffect;
+            skin.receptor_overlays = vec![Arc::from([ReceptorOverlay {
+                before_target: false,
+                slot,
+                reverse: Default::default(),
+            }])];
+            state
+                .noteskin
+                .cache
+                .insert("direction-fixture".into(), Arc::new(skin));
+            let mut actors = Vec::new();
+            assert!(super::super::render::draw_live_preview(
+                &mut actors,
+                &state,
+                "direction-fixture",
+                1,
+                [100.0; 2],
+                32.0,
+                1.0,
+                102
+            ));
+            assert_eq!(actors.len(), 3, "target, idle, and overlay");
+            for actor in actors {
+                let Actor::Sprite { rot_z_deg, .. } = actor else {
+                    panic!("receptor sprite");
+                };
+                let tip = glam::Mat2::from_angle(rot_z_deg.to_radians()) * glam::Vec2::NEG_Y;
+                assert!((tip - glam::Vec2::from(expected)).length() < 1e-6);
+            }
+        }
+    }
+
+    fn mine_depth_skin() -> deadsync_assets::noteskin::Noteskin {
+        use deadsync_assets::noteskin::{ModelMesh, ModelVertex};
+        let mut skin = model_preview_skin();
+        // Pixel-space geometry: a raised black prong, submitted before its body.
+        // Unit-depth quads miss the default menu camera's clipping regression.
+        let layers = [
+            ([-5.0, 12.0, 5.0, 30.0], 7.0),
+            ([-24.0, -24.0, 24.0, 24.0], 3.0),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, ([left, bottom, right, top], depth))| {
+            let mut slot = skin.mine_layers[0][index].clone();
+            slot.model_draw.tint = if index == 0 {
+                [0.0, 0.0, 0.0, 1.0]
+            } else {
+                [1.0, 0.0, 0.0, 1.0]
+            };
+            slot.model = Some(Arc::new(ModelMesh {
+                material: None,
+                vertices: [
+                    [left, bottom],
+                    [right, bottom],
+                    [right, top],
+                    [left, bottom],
+                    [right, top],
+                    [left, top],
+                ]
+                .map(|[x, y]| ModelVertex {
+                    normal: [0.0, 0.0, 1.0],
+                    pos: [x, y, depth],
+                    uv: [0.5; 2],
+                    tex_matrix_scale: [1.0; 2],
+                })
+                .into(),
+                bounds: [-32.0, -32.0, -8.0, 32.0, 32.0, 8.0],
+            }));
+            slot
+        })
+        .collect::<Vec<_>>();
+        skin.mine_layers = vec![layers.into()];
+        skin
+    }
+
+    #[test]
+    fn mine_preview_depth_fits_camera() {
+        use deadlib_present::{actors::Actor, space::Metrics};
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        state
+            .noteskin
+            .cache
+            .insert("depth-fixture".into(), Arc::new(mine_depth_skin()));
+        let projection = Metrics::centered(200.0, 200.0).projection();
+        for size in [18.0, 32.0, 64.0, 128.0] {
+            for angle in [0.0, 30.0, 90.0, 270.0] {
+                let skin = Arc::make_mut(state.noteskin.cache.get_mut("depth-fixture").unwrap());
+                for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                    slot.model_draw.rot[2] = angle;
+                }
+                let mut actors = Vec::new();
+                assert!(super::super::render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    "depth-fixture",
+                    8,
+                    [100.0; 2],
+                    size,
+                    1.0,
+                    102,
+                ));
+                assert_preview_bounds(&actors, "depth-fixture", size);
+                let mut depths = Vec::new();
+                for actor in &actors {
+                    let Actor::TexturedMesh {
+                        vertices,
+                        local_transform,
+                        ..
+                    } = actor
+                    else {
+                        panic!("mine mesh");
+                    };
+                    for vertex in vertices.iter() {
+                        let p = projection
+                            * *local_transform
+                            * glam::Vec3::from(vertex.pos).extend(1.0);
+                        assert!(
+                            p.z.abs() <= p.w,
+                            "size={size}, angle={angle}: clipped depth {p:?}"
+                        );
+                    }
+                    depths.push(
+                        (projection * *local_transform)
+                            .project_point3(glam::Vec3::from(vertices[0].pos))
+                            .z,
+                    );
+                }
+                assert!(
+                    depths[0] < depths[1],
+                    "the prong must stay closer than the body"
+                );
+            }
+        }
+    }
+
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires graphics devices and a window system"]
+    fn mine_preview_depth_pixels() {
+        use deadlib_present::{
+            actors::Actor,
+            compose, font,
+            space::Metrics,
+            texture::{TextureContext, TextureMeta},
         };
+        use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc, TextureHandleMap};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        struct WhiteTexture;
+        impl TextureContext for WhiteTexture {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<TextureMeta> {
+                Some(TextureMeta { w: 64, h: 64 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, _: &str) -> u64 {
+                1
+            }
+        }
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        state
+            .noteskin
+            .cache
+            .insert("depth-fixture".into(), Arc::new(mine_depth_skin()));
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let metrics = Metrics::centered(200.0, 200.0);
+        for kind in [
+            BackendType::VulkanWgpu,
+            BackendType::OpenGL,
+            BackendType::Vulkan,
+        ] {
+            #[expect(deprecated, reason = "hidden GPU fixture needs no event dispatch")]
+            let window = Arc::new(
+                event_loop
+                    .create_window(
+                        winit::window::Window::default_attributes()
+                            .with_visible(false)
+                            .with_inner_size(winit::dpi::PhysicalSize::new(400, 400)),
+                    )
+                    .unwrap(),
+            );
+            let mut backend = deadlib_render::create_backend(
+                kind,
+                window,
+                metrics.projection(),
+                false,
+                PresentModePolicy::Immediate,
+                false,
+                true,
+            )
+            .unwrap();
+            let mut textures = TextureHandleMap::default();
+            textures.insert(
+                1,
+                backend
+                    .create_texture(
+                        &image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+                        SamplerDesc::default(),
+                    )
+                    .unwrap(),
+            );
+            for size in [18.0, 32.0, 64.0, 128.0] {
+                for angle in [0.0, 30.0, 90.0, 270.0] {
+                    let skin =
+                        Arc::make_mut(state.noteskin.cache.get_mut("depth-fixture").unwrap());
+                    for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                        slot.model_draw.rot[2] = angle;
+                    }
+                    let mut actors = Vec::new();
+                    assert!(super::super::render::draw_live_preview(
+                        &mut actors,
+                        &state,
+                        "depth-fixture",
+                        8,
+                        [100.0; 2],
+                        size,
+                        1.0,
+                        102
+                    ));
+                    let frame = compose::build_screen_with_texture_context(
+                        &actors,
+                        [0.3, 0.3, 0.3, 1.0],
+                        &metrics,
+                        &font::FontMap::default(),
+                        0.0,
+                        &WhiteTexture,
+                    );
+                    backend.request_screenshot();
+                    backend.draw(&frame, &textures, false).unwrap();
+                    let image = backend.capture_frame().unwrap();
+                    for (index, point, expected) in [
+                        (0, [0.0, 20.0, 7.0], [0, 0, 0]),
+                        (0, [0.0, 28.0, 7.0], [0, 0, 0]),
+                        (1, [0.0, 0.0, 3.0], [255, 0, 0]),
+                    ] {
+                        let Actor::TexturedMesh {
+                            offset,
+                            local_transform,
+                            ..
+                        } = &actors[index]
+                        else {
+                            panic!("mine mesh");
+                        };
+                        let pos = local_transform.project_point3(glam::Vec3::from(point));
+                        let x = ((pos.x + offset[0]) * image.width() as f32 / 200.0) as u32;
+                        let y = ((pos.y + offset[1]) * image.height() as f32 / 200.0) as u32;
+                        assert_eq!(
+                            image.get_pixel(x, y).0[..3],
+                            expected,
+                            "{kind}: size={size}, angle={angle}, sample={point:?}"
+                        );
+                    }
+                }
+            }
+            drop(textures);
+            backend.cleanup();
+        }
+    }
+
+    #[test]
+    fn model_previews_preserve_layers_and_quants() {
+        use super::super::render;
+        use deadlib_present::actors::Actor;
+        use deadlib_render_core::BlendMode;
+        use deadsync_assets::noteskin::{SpriteSource, test_model_slot};
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let skin = model_preview_skin();
+        let layers = Arc::clone(&skin.note_layers[0]);
+        let mine_layers = Arc::clone(&skin.mine_layers[0]);
         let textures = super::super::noteskins::preview_textures(&skin, 8);
         assert_eq!(textures.len(), 5);
         for (index, (key, model)) in textures.iter().enumerate() {
@@ -2206,6 +2577,48 @@ pub(super) mod tests {
                 assert_preview_bounds(&actors, "model-fixture", size);
             }
         }
+        for angle in [30.0, 75.0, 150.0, 270.0] {
+            let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+            for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                slot.model_draw.rot[2] = angle;
+            }
+            for size in [18.0, 32.0] {
+                let mut actors = Vec::new();
+                assert!(render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    "model-fixture",
+                    8,
+                    [100.0; 2],
+                    size,
+                    1.0,
+                    102,
+                ));
+                assert_eq!(actors.len(), 5);
+                for (index, actor) in actors.iter().enumerate() {
+                    let Actor::TexturedMesh {
+                        offset,
+                        local_transform,
+                        depth_test,
+                        clear_depth,
+                        clear_depth_after,
+                        ..
+                    } = actor
+                    else {
+                        panic!("mine model layer");
+                    };
+                    assert_eq!(*offset, [100.0; 2], "mine pivot at {angle} degrees");
+                    assert!(*depth_test);
+                    assert_eq!(*clear_depth, index == 0);
+                    assert_eq!(*clear_depth_after, index + 1 == actors.len());
+                    assert_eq!(
+                        local_transform.project_point3(glam::Vec3::ZERO),
+                        glam::Vec3::ZERO
+                    );
+                }
+                assert_preview_bounds(&actors, "rotating-mine", size);
+            }
+        }
         let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
         let mut receptors = mine_layers.to_vec();
         for slot in &mut receptors {
@@ -2222,6 +2635,7 @@ pub(super) mod tests {
             receptors[3..]
                 .iter()
                 .map(|slot| deadsync_noteskin::runtime::ReceptorOverlay {
+                    before_target: false,
                     slot: slot.clone(),
                     reverse: Default::default(),
                 })
@@ -2316,7 +2730,7 @@ pub(super) mod tests {
                 .iter()
                 .filter_map(|actor| {
                     if let Actor::TexturedMesh { texture, tint, .. } = actor {
-                        Some((texture.as_ref(), tint[0]))
+                        Some((texture.texture_key().expect("asset mesh"), tint[0]))
                     } else {
                         None
                     }
@@ -2382,7 +2796,7 @@ pub(super) mod tests {
                         uv_offset,
                         ..
                     } = actor
-                        && texture.as_ref() == "synthetic-model-frames"
+                        && texture.texture_key().expect("asset mesh") == "synthetic-model-frames"
                     {
                         Some((uv_scale, uv_offset))
                     } else {
@@ -2430,7 +2844,7 @@ pub(super) mod tests {
             let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
             rows.get_mut(RowId::NoteSkin)
                 .unwrap()
-                .replace_choices(vec![name.into()]);
+                .replace_choices([name]);
             state.pack_menu.add_rows(rows, &state.player_options);
             for player in [P1, P2] {
                 pack_options::sync_player(&mut state, player);
@@ -2477,7 +2891,10 @@ pub(super) mod tests {
                                 } => {
                                     assert!(slot.model.is_some(), "{name}: {part:?}");
                                     assert!(!vertices.is_empty());
-                                    assert_eq!(texture.as_ref(), slot.texture_key());
+                                    assert_eq!(
+                                        texture.texture_key().expect("asset mesh"),
+                                        slot.texture_key()
+                                    );
                                 }
                                 Actor::Sprite {
                                     source, rot_z_deg, ..
@@ -2566,7 +2983,7 @@ pub(super) mod tests {
                     ..
                 } => {
                     for v in vertices.iter() {
-                        let p = local_transform.transform_point3(glam::Vec3::from(v.pos));
+                        let p = local_transform.project_point3(glam::Vec3::from(v.pos));
                         inside(p.x + offset[0], p.y + offset[1]);
                     }
                 }
@@ -2611,7 +3028,6 @@ pub(super) mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     #[allow(deprecated)] // One hidden window exercises transition texture uploads.
-    #[ignore = "requires assets/noteskins/hurg with the installed Workshop"]
     fn workshop_components_animate_in_rows_and_picker() {
         use super::super::{pack_options, render};
         use deadlib_present::actors::Actor;
@@ -2661,7 +3077,7 @@ pub(super) mod tests {
             let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
             rows.get_mut(RowId::NoteSkin)
                 .unwrap()
-                .replace_choices(vec![family.into()]);
+                .replace_choices([family]);
             state.pack_menu.add_rows(rows, &state.player_options);
             pack_options::sync_player(&mut state, P1);
             state.active = [true, false];
@@ -2739,6 +3155,7 @@ pub(super) mod tests {
                 .unwrap();
                 assert!(partial.mine_hit_explosion.is_none());
                 let preview_textures = super::super::noteskins::preview_textures(&skin, part);
+                let mut large_sheet_checked = false;
                 for (key, _) in &preview_textures {
                     let handle = assets.texture_context().texture_handle(key);
                     let Some(deadlib_render::Texture::Software(texture)) =
@@ -2749,22 +3166,27 @@ pub(super) mod tests {
                     let source = if let Some(generated) = deadlib_assets::generated_texture(key) {
                         (*generated.image).clone()
                     } else {
+                        let job = deadsync_assets::textures::texture_decode_job(key, false);
                         deadlib_assets::decode_texture_image(
-                            std::path::Path::new(key.as_ref()),
-                            &deadlib_assets::parse_texture_hints(key),
+                            &job.path,
+                            &job.hints,
                         )
-                        .unwrap()
+                        .unwrap_or_else(|error| panic!("{name}: native source {key}: {error}"))
                     };
                     assert_eq!(
                         texture.image, source,
-                        "{name}: preview must retain every native pixel"
+                        "{name}: preview must retain every gameplay-prepared pixel"
                     );
-                    if name.contains("bright-td-vibrant") {
+                    if name.contains("bright-td-vibrant") && key.contains("Tap Note parts") {
                         assert!(
                             texture.image.width() > 256 && texture.image.height() > 256,
                             "regression: shrinking a sheet destroys frame resolution"
                         );
+                        large_sheet_checked = true;
                     }
+                }
+                if name.contains("bright-td-vibrant") {
+                    assert!(large_sheet_checked, "large generated arrow page must be exercised");
                 }
                 let mut first_frame = None;
                 let mut animated = false;
@@ -2806,7 +3228,9 @@ pub(super) mod tests {
                         for actor in &actors {
                             let key = match actor {
                                 Actor::Sprite { source, .. } => source.texture_key().unwrap(),
-                                Actor::TexturedMesh { texture, .. } => texture,
+                                Actor::TexturedMesh { texture, .. } => {
+                                    texture.texture_key().expect("asset mesh")
+                                }
                                 _ => panic!("unexpected preview actor"),
                             };
                             assert!(
@@ -2854,6 +3278,50 @@ pub(super) mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn judgment_animation_display_row_persists_each_player_independently() {
+        use deadsync_profile::JudgmentAnimation;
+        ensure_i18n();
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        view.players[P1].options.judgment_animation = JudgmentAnimation::Default;
+        view.players[P2].options.judgment_animation = JudgmentAnimation::Itg;
+        let (mut state, _) = setup_state_with(view);
+        super::super::apply_pane(&mut state, OptionsPane::Display);
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::JudgmentAnimation)
+            .unwrap();
+        let row = state.pane().row_map.get(RowId::JudgmentAnimation).unwrap();
+        assert_eq!(row.selected_choice_index, [0, 2]);
+        assert_eq!(
+            row.choices
+                .iter()
+                .map(|choice| choice.as_ref())
+                .collect::<Vec<_>>(),
+            ["Default", "Still", "ITG"]
+        );
+        state.pane_mut().selected_row[P2] = row_index;
+        super::change_choice_for_player(&mut state, P2, -1, super::NavWrap::Wrap);
+        assert_eq!(
+            state.player_options[P1].judgment_animation,
+            JudgmentAnimation::Default
+        );
+        assert_eq!(
+            state.player_options[P2].judgment_animation,
+            JudgmentAnimation::Still
+        );
+        assert!(state.pending_effects.iter().any(|effect| matches!(effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                    side: PlayerSide::P2, options, ..
+                }
+            )) if options.judgment_animation == JudgmentAnimation::Still
+        )));
     }
 
     #[test]
@@ -2947,6 +3415,365 @@ pub(super) mod tests {
         assert!((cursor.0 - expected_x).abs() < 0.001);
         assert!(cursor.2 > row.choice_widths[last_choice]);
         assert!(cursor.3 > row.choice_height);
+    }
+
+    #[test]
+    fn gameplay_extras_wrap_and_keep_every_toggle_reachable() {
+        use super::super::*;
+        use deadlib_present::space;
+        ensure_i18n();
+        for (width, pixels) in [
+            (480.0, (640, 640)),
+            (600.0, (1280, 1024)),
+            (640.0, (640, 480)),
+            (640.0, (800, 600)),
+            (768.0, (1280, 800)),
+            (854.0, (1280, 720)),
+            (854.0, (1920, 1080)),
+        ] {
+            space::set_current_metrics(space::Metrics::centered(width, 480.0));
+            space::set_current_window_px(pixels.0, pixels.1);
+            for arcade in [false, true] {
+                for active in [[true, false], [false, true], [true, true]] {
+                    let mut view = test_init_view_for(
+                        if active == [true, true] {
+                            PlayStyle::Versus
+                        } else {
+                            PlayStyle::Single
+                        },
+                        if active == [false, true] {
+                            PlayerSide::P2
+                        } else {
+                            PlayerSide::P1
+                        },
+                        active,
+                    );
+                    view.policy.arcade_navigation = arcade;
+                    view.policy.scorebox_available = true;
+                    let (mut state, mut assets) = setup_state_with(view);
+                    let font_path =
+                        deadsync_assets::resolve_asset_path("assets/fonts/miso/_miso light.ini");
+                    let asset_root = font_path
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .to_path_buf();
+                    let font = deadlib_assets::parse_font_with_asset_context(&font_path, &[asset_root])
+                        .unwrap()
+                        .font;
+                    assets.register_font("miso", font);
+                    apply_pane(&mut state, OptionsPane::Advanced);
+                    prepare_presentation(&mut state, &assets);
+                    let row_idx = state
+                        .pane()
+                        .row_map
+                        .display_order()
+                        .iter()
+                        .position(|&id| id == RowId::GameplayExtras)
+                        .unwrap();
+                    let row = state.pane().row_map.get_at(row_idx).unwrap();
+                    assert_eq!(row.choices.len(), 8);
+                    let split = inline_choice_line_break(row);
+                    assert!(split > 0 && split < row.choices.len());
+                    let left = inline_choice_left_x_for_row(&state, row_idx);
+                    let right = (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(width - 13.0);
+                    let scale = inline_choice_scale(row);
+                    for i in 0..row.choices.len() {
+                        let [x, y] = inline_choice_position(row, i);
+                        assert!(
+                            left + x + row.choice_widths[i] * scale + INLINE_SPACING <= right + 0.001,
+                            "choice {} must fit at {width}: x={x}",
+                            row.choices[i].as_str()
+                        );
+                        assert_eq!(y.is_sign_positive(), i >= split);
+                    }
+                    state.pane_mut().selected_row = [row_idx; 2];
+                    for mask in &mut state.option_masks {
+                        mask.gameplay_extras = GameplayExtrasMask::empty();
+                    }
+                    for player in active_player_indices(active) {
+                        state.pane_mut().arcade_row_focus[player] = false;
+                        state
+                            .pane_mut()
+                            .row_map
+                            .get_mut(RowId::GameplayExtras)
+                            .unwrap()
+                            .selected_choice_index[player] = 0;
+                        sync_inline_intent_from_row(&mut state, player, row_idx);
+                        for i in 0..8 {
+                            assert_eq!(
+                                focused_inline_choice_index(&state, player, row_idx),
+                                Some(i)
+                            );
+                            let cursor = cursor_dest_for_player(&state, &assets, player).unwrap();
+                            let row = state.pane().row_map.get_at(row_idx).unwrap();
+                            let [x, y] = inline_choice_position(row, i);
+                            assert!(
+                                (cursor.0 - (left + x + row.choice_widths[i] * scale * 0.5)).abs()
+                                    < 0.001
+                            );
+                            assert!(
+                                (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y)).abs() < 0.001
+                            );
+                            commit_inline_focus_selection(&mut state, player, row_idx);
+                            assert!(super::super::choice::toggle_bitmask_row_generic(
+                                &mut state,
+                                player,
+                                RowId::GameplayExtras
+                            ));
+                            assert!(
+                                multi_select_mask(
+                                    &state,
+                                    state.pane().row_map.get_at(row_idx).unwrap(),
+                                    player
+                                )
+                                .unwrap()
+                                    & (1 << i)
+                                    != 0
+                            );
+                            if i < 7 {
+                                assert!(move_inline_focus(&mut state, player, 1, NavWrap::Clamp));
+                            }
+                        }
+                        assert!(state.player_options[player].show_golf_score);
+                    }
+                    let row = state.pane().row_map.get_at(row_idx).unwrap();
+                    let mut underlines = Vec::new();
+                    draw_multi_select_underlines(
+                        &mut underlines,
+                        &state,
+                        row,
+                        active,
+                        left,
+                        &row.choice_offsets,
+                        &row.choice_widths,
+                        200.0,
+                        row.choice_height,
+                        1.0,
+                    );
+                    assert_eq!(
+                        underlines.len(),
+                        8 * active.into_iter().filter(|v| *v).count()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gameplay_extras_double_height_fits_scrolling_for_both_players() {
+        use super::super::*;
+        use deadlib_present::space;
+        ensure_i18n();
+        space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+        let (mut state, assets) = setup_versus_state();
+        apply_pane(&mut state, OptionsPane::Advanced);
+        prepare_presentation(&mut state, &assets);
+        let rows = &state.pane().row_map;
+        let extras = rows
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::GameplayExtras)
+            .unwrap();
+        let visibility =
+            super::super::row_visibility(rows, state.active, state.option_masks, state.policy);
+        let (_, step) = row_layout_params();
+        for p1 in 0..rows.len() {
+            for p2 in 0..rows.len() {
+                if !is_row_visible(rows, p1, visibility) || !is_row_visible(rows, p2, visibility) {
+                    continue;
+                }
+                let tweens = init_row_tweens(
+                    rows,
+                    [p1, p2],
+                    state.active,
+                    state.option_masks,
+                    state.policy,
+                );
+                for player_row in [p1, p2] {
+                    assert_eq!(
+                        tweens[player_row].to_a, 1.0,
+                        "selected row must be fully visible: {p1}, {p2}"
+                    );
+                }
+                let mut bottom = 0.0_f32;
+                for (i, tween) in tweens.iter().enumerate().filter(|(_, t)| t.to_a > 0.0) {
+                    let height = ROW_HEIGHT + (row_layout_slots(rows.id_at(i)) - 1) as f32 * step;
+                    assert!(
+                        tween.to_y - height * 0.5 >= bottom - 0.01,
+                        "rows overlap at {p1}, {p2}: {i}"
+                    );
+                    bottom = tween.to_y + height * 0.5;
+                    assert!(bottom < 404.0, "row must remain above help box");
+                }
+                if p1 == extras || p2 == extras {
+                    assert_eq!(tweens[extras].to_a, 1.0);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "renders review images in a hidden GPU window"]
+    #[allow(deprecated)]
+    fn golf_layout_preview_across_resolutions() {
+        use super::super::*;
+        use crate::screens::components::gameplay::{
+            golf,
+            score_counter::{ScoreCounterParams, push_score_counter},
+        };
+        use deadlib_present::{actors::TextAlign, compose::build_screen_with_texture_context, space};
+        use deadlib_render_core::{BackendType, PresentModePolicy};
+        use deadsync_config::theme::MachineFont;
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        ensure_i18n();
+        let metrics = space::Metrics::centered(854.0, 480.0);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(1920, 1080);
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let window = event_loop
+            .create_window(
+                winit::window::Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(1920, 1080)),
+            )
+            .unwrap();
+        let mut backend = deadlib_render::create_backend(
+            BackendType::VulkanWgpu,
+            Arc::new(window),
+            metrics.projection(),
+            false,
+            PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .unwrap();
+        let mut assets = AssetManager::new();
+        deadsync_assets::load_initial_assets(
+            &mut assets,
+            &mut backend,
+            deadsync_theme::ThemeAssetManifest {
+                fonts: &crate::resources::FONT_ASSETS,
+                textures: std::iter::empty(),
+                texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+            },
+        )
+        .unwrap();
+        let output = std::env::var_os("DEADSYNC_GOLF_CAPTURE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("deadsync-golf-preview"));
+        std::fs::create_dir_all(&output).unwrap();
+        let mut capture = |name: &str,
+                           actors: &[deadlib_present::actors::Actor],
+                           metrics: &space::Metrics,
+                           width: u32,
+                           height: u32| {
+            backend.resize(width, height);
+            backend.set_default_projection(metrics.projection());
+            let frame = build_screen_with_texture_context(
+                actors,
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                assets.fonts(),
+                0.0,
+                assets.texture_context(),
+            );
+            backend.request_screenshot();
+            backend.draw(&frame, assets.textures(), false).unwrap();
+            backend
+                .capture_frame()
+                .unwrap()
+                .save(output.join(name))
+                .unwrap();
+        };
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        view.policy.scorebox_available = true;
+        let (mut state, _) = setup_state_with(view);
+        apply_pane(&mut state, OptionsPane::Advanced);
+        prepare_presentation(&mut state, &assets);
+        let extras = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::GameplayExtras)
+            .unwrap();
+        state.pane_mut().selected_row = [extras; 2];
+        state.option_masks[P1].gameplay_extras =
+            GameplayExtrasMask::COLUMN_CUES | GameplayExtrasMask::GOLF_SCORE;
+        state.option_masks[P2].gameplay_extras =
+            GameplayExtrasMask::LIVE_TIMING_STATS | GameplayExtrasMask::GOLF_SCORE;
+        for (logical_width, width, height) in [
+            (854.0, 1920, 1080),
+            (640.0, 640, 480),
+            (600.0, 1280, 1024),
+            (480.0, 640, 640),
+        ] {
+            let menu_metrics = space::Metrics::centered(logical_width, 480.0);
+            space::set_current_metrics(menu_metrics);
+            space::set_current_window_px(width, height);
+            state.pane_mut().row_tweens = init_row_tweens(
+                &state.pane().row_map,
+                [extras; 2],
+                state.active,
+                state.option_masks,
+                state.policy,
+            );
+            for (player, choice) in [(P1, 2), (P2, 7)] {
+                state
+                    .pane_mut()
+                    .row_map
+                    .get_mut(RowId::GameplayExtras)
+                    .unwrap()
+                    .selected_choice_index[player] = choice;
+                state.pane_mut().inline_choice_x[player] = f32::NAN;
+                let (x, y, w, h) = cursor_dest_for_player(&state, &assets, player).unwrap();
+                state.pane_mut().cursor_from[player] = CursorRect { x, y, w, h };
+                state.pane_mut().cursor_to[player] = CursorRect { x, y, w, h };
+                state.pane_mut().cursor_t[player] = 1.0;
+                state.pane_mut().cursor_initialized[player] = true;
+            }
+            capture(
+                &format!("gameplay-extras-{width}x{height}.png"),
+                &get_actors(&state, &assets),
+                &menu_metrics,
+                width,
+                height,
+            );
+        }
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(1920, 1080);
+        let mut actors = Vec::new();
+        for (side, badge_x, score_x, strokes) in [
+            (PlayerSide::P1, 84.5, 228.4, 6),
+            (PlayerSide::P2, 769.5, 737.5, 0),
+        ] {
+            golf::push_par_badge(&mut actors, MachineFont::Wendy, Some(3.0), [badge_x, 56.0]);
+            push_score_counter(
+                &mut actors,
+                assets.fonts(),
+                ScoreCounterParams {
+                    value: 0.35,
+                    font: "wendy_monospace_numbers",
+                    position: [score_x, 56.0],
+                    align: [1.0, 1.0],
+                    text_align: TextAlign::Right,
+                    zoom: 0.5,
+                    color: golf::COLOR,
+                    z: 90,
+                },
+            );
+            golf::push_feedback(&mut actors, strokes, 0.0, side, [score_x, 56.0], 0.5);
+        }
+        capture("golf-hud-1080p.png", &actors, &metrics, 1920, 1080);
+        println!("Golf previews: {}", output.display());
     }
 
     #[test]
@@ -4655,6 +5482,7 @@ pub(super) mod tests {
                 state.play_style,
                 state.persisted_player_idx,
                 state.policy.scorebox_available,
+                true,
             );
             (pane, map)
         })
@@ -4682,6 +5510,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         row_map
             .get(RowId::DataVisualizations)
@@ -4724,7 +5553,8 @@ pub(super) mod tests {
             .expect("Results Extras row present")
             .choices;
 
-        assert_eq!(choices.len(), 3);
+        assert_eq!(choices.len(), 4);
+        assert_eq!(choices[3].as_ref(), crate::i18n::tr("PlayerOptions", "ResultsExtrasGolf").as_ref());
         assert_eq!(
             choices[2].as_ref(),
             crate::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
@@ -4767,6 +5597,7 @@ pub(super) mod tests {
             RowId::TapExplosionSkin,
             RowId::TapExplosionOptions,
             RowId::JudgmentColors,
+            RowId::JudgmentAnimation,
             RowId::JudgmentOffsetX,
             RowId::JudgmentOffsetY,
             RowId::ComboOffsetX,
@@ -5231,7 +6062,7 @@ pub(super) mod tests {
         // CycleInit / NumericInit contract.
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
@@ -5254,6 +6085,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -5286,7 +6118,7 @@ pub(super) mod tests {
 
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.spacing_percent = 95;
         p.judgment_offset_x = -25;
@@ -5314,6 +6146,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
@@ -5375,6 +6208,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut display_row_map = super::build_rows(
             &state.song,
@@ -5392,6 +6226,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -5412,6 +6247,107 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn golf_master_switch_hides_player_choices_without_clearing_preferences() {
+        ensure_i18n();
+        let (state, _) = setup_state();
+        for enabled in [false, true] {
+            for scorebox in [false, true] {
+                let mut rows = panes::build_rows(
+                    &state.song,
+                    &state.speed_mod[P1],
+                    state.chart_steps_index,
+                    [0; 2],
+                    state.music_rate,
+                    OptionsPane::Advanced,
+                    &[],
+                    &[],
+                    &[],
+                    &[],
+                    Screen::SelectMusic,
+                    state.fixed_stepchart.as_ref(),
+                    state.play_style,
+                    state.persisted_player_idx,
+                    scorebox,
+                    enabled,
+                );
+                let mut preferences = PlayerOptionsData {
+                    show_golf_score: true,
+                    show_golf_results: true,
+                    ..Default::default()
+                };
+                let mut masks = [PlayerOptionMasks::default(); 2];
+                panes::apply_profile_defaults(&mut rows, &preferences, P1, &mut masks[P1]);
+                let visibility = super::super::row_visibility(
+                    &rows,
+                    [true, false],
+                    masks,
+                    crate::views::PlayerOptionsPolicyView {
+                        golf_enabled: enabled,
+                        ..Default::default()
+                    },
+                );
+                assert_eq!(visibility.show_golf_options, enabled);
+                assert_eq!(
+                    rows.get(RowId::GameplayExtras).unwrap().choices.len(),
+                    6 + usize::from(scorebox) + usize::from(enabled)
+                );
+                assert_eq!(
+                    rows.get(RowId::ResultsExtras).unwrap().choices.len(),
+                    3 + usize::from(enabled)
+                );
+                for id in [RowId::GameplayExtras, RowId::ResultsExtras] {
+                    let RowBehavior::Bitmask(BitmaskBinding::Generic { init, writeback }) =
+                        rows.get(id).unwrap().behavior
+                    else {
+                        panic!("extras must use a bitmask");
+                    };
+                    let bits = (init.get_active)(&masks[P1]) ^ 1;
+                    (writeback.project)(&mut masks[P1], &mut preferences, bits);
+                }
+                assert!(preferences.show_golf_score && preferences.show_golf_results);
+            }
+        }
+    }
+
+    #[test]
+    fn golf_extras_default_on_and_keep_independent_player_choices() {
+        ensure_i18n();
+        let (state, _assets) = setup_state();
+        for scorebox_available in [false, true] {
+            let mut rows = panes::build_rows(
+                &state.song, &state.speed_mod[P1], state.chart_steps_index,
+                [0; 2], state.music_rate, OptionsPane::Advanced, &[], &[], &[], &[],
+                Screen::SelectMusic, state.fixed_stepchart.as_ref(), state.play_style,
+                state.persisted_player_idx, scorebox_available,
+                true,
+            );
+            let defaults = PlayerOptionsData {
+                show_golf_score: false,
+                show_golf_results: false,
+                ..PlayerOptionsData::default()
+            };
+            let mut masks = [PlayerOptionMasks::default(); 2];
+            panes::apply_profile_defaults(&mut rows, &defaults, P1, &mut masks[P1]);
+            panes::apply_profile_defaults(&mut rows, &defaults, P2, &mut masks[P2]);
+            let visibility = row_visibility(&rows, [true, true], masks, false);
+            assert!(!visibility.show_golf_options);
+            assert!(!masks[P1].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            let p2 = PlayerOptionsData { show_golf_score: true, golf_all_charts: true, golf_stroke_feedback: true, show_golf_results: true, ..defaults };
+            panes::apply_profile_defaults(&mut rows, &p2, P2, &mut masks[P2]);
+            let visibility = row_visibility(&rows, [true, true], masks, false);
+            assert!(visibility.show_golf_options);
+            assert!(!masks[P1].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            assert!(masks[P2].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            let extras = rows.get(RowId::GameplayExtras).unwrap();
+            let golf_index = extras.choices.iter().position(|choice| choice.as_str() == "Golf Score").unwrap();
+            let RowBehavior::Bitmask(BitmaskBinding::Generic { writeback, .. }) = &extras.behavior else { panic!("extras must be a bitmask") };
+            assert_eq!(writeback.bit_mapping.bit_for_choice(golf_index), Some(u32::from(GameplayExtrasMask::GOLF_SCORE.bits())));
+            assert_eq!(rows.get(RowId::GolfDisplay).unwrap().selected_choice_index, [0, 1]);
+            assert_eq!(rows.get(RowId::GolfStrokeFeedback).unwrap().selected_choice_index, [0, 1]);
+        }
+    }
+
+    #[test]
     fn apply_profile_defaults_initializes_advanced_pane_rows_via_contracts() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
@@ -5423,7 +6359,7 @@ pub(super) mod tests {
         p.score_position = super::SCORE_POSITION_VARIANTS[1];
         p.score_display_mode = super::SCORE_DISPLAY_MODE_VARIANTS[1];
         p.display_scorebox = true;
-        p.target_score = super::TARGET_SCORE_VARIANTS[1];
+        p.target_score = deadsync_profile::TargetScoreSetting::GhostData;
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
         p.mini_indicator_subtractive_display =
             super::MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS[1];
@@ -5446,6 +6382,7 @@ pub(super) mod tests {
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
         p.text_error_bar_scalable = true;
+        p.text_error_bar_centered = true;
         p.text_error_bar_threshold_ms = 17;
         p.center_tick = true;
         p.short_average_error_bar_enabled = false;
@@ -5470,6 +6407,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
@@ -5599,6 +6537,7 @@ pub(super) mod tests {
             RowId::JudgmentBehindArrows,
             RowId::OffsetIndicator,
             RowId::TextErrorBarMode,
+            RowId::TextErrorBarPosition,
             RowId::CenterTick,
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
@@ -5615,6 +6554,7 @@ pub(super) mod tests {
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
         assert_choice_at_cursor(&row_map, RowId::TextErrorBarMode, "Scalable");
+        assert_choice_at_cursor(&row_map, RowId::TextErrorBarPosition, "Centered");
         assert_choice_at_cursor(&row_map, RowId::TextErrorBarThreshold, "17ms");
         assert_choice_at_cursor(&row_map, RowId::CenterTick, "On");
         assert_choice_at_cursor(&row_map, RowId::ShortAverageErrorBar, "Off");
@@ -6556,89 +7496,8 @@ pub(super) mod tests {
         }
     }
 
-    #[test]
-    fn cached_search_frame_matches_parent_during_edits_and_live_choice_changes() {
-        use super::search::{self, SettingSearchState};
-        use deadlib_present::actors::Actor;
-        fn normalized(mut actors: Vec<Actor>) -> String {
-            fn normalize(actor: &mut Actor) {
-                match actor {
-                    Actor::Text { content, .. } => {
-                        *content = TextContent::from(content.to_string())
-                    }
-                    Actor::Frame { children, .. } => children.iter_mut().for_each(normalize),
-                    _ => {}
-                }
-            }
-            actors.iter_mut().for_each(normalize);
-            format!("{actors:?}")
-        }
-        fn compare(state: &mut super::State) {
-            for blink_t in [0.0, 0.49, 0.5, 0.99, 0.0] {
-                if let SettingSearchState::Open(open) = &mut state.search {
-                    open.blink_t = blink_t;
-                }
-                let mut old = Vec::new();
-                search::frame_baseline::push_overlay(&mut old, state);
-                for _ in 0..2 {
-                    let mut new = Vec::new();
-                    search::push_overlay(&mut new, state);
-                    assert_eq!(normalized(new), normalized(old.clone()));
-                }
-            }
-        }
-        ensure_i18n();
-        let (mut state, _) = setup_state();
-        for query in [
-            "",
-            "spe",
-            "arrows",
-            "Background Filter",
-            "no matches \u{65e5}\u{672c}\u{8a9e}",
-            &"q".repeat(512),
-        ] {
-            search::close(&mut state);
-            open_search(&mut state);
-            search::add_text(&mut state, query);
-            compare(&mut state);
-            for direction in [1, 1, -1] {
-                search::move_selection(&mut state, direction);
-                compare(&mut state);
-            }
-            search::accept_ghost(&mut state);
-            compare(&mut state);
-            search::backspace(&mut state);
-            compare(&mut state);
-        }
-        search::close(&mut state);
-        open_search(&mut state);
-        search::add_text(&mut state, "arrows");
-        let (pane, id) = match &state.search {
-            SettingSearchState::Open(open) => {
-                let m = search::focused_match(open).expect("arrows must match NoteSkin");
-                (m.pane, m.row_id)
-            }
-            _ => panic!("search should be open"),
-        };
-        for choices in [
-            vec!["One".into(), "Two".into()],
-            vec!["Replacement".into()],
-            vec![],
-        ] {
-            let row = state.panes[pane.index()]
-                .row_map
-                .get_mut(id)
-                .expect("matched row exists");
-            row.replace_choices(choices);
-            row.selected_choice_index = [0, usize::MAX];
-            for player in [P1, P2, P1] {
-                if let SettingSearchState::Open(open) = &mut state.search {
-                    open.opener_player = player;
-                }
-                compare(&mut state);
-            }
-        }
-        search::close(&mut state);
-        compare(&mut state);
-    }
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/player_option_changes.rs"
+    ));
 }

@@ -1,0 +1,74 @@
+group	file	seeks	table_hits	rejected_hints
+subset	01 - blocksize 4096.flac	21	0	0
+subset	02 - blocksize 4608.flac	21	0	0
+subset	03 - blocksize 16.flac	21	0	0
+subset	04 - blocksize 192.flac	21	0	0
+subset	05 - blocksize 254.flac	21	0	0
+subset	06 - blocksize 512.flac	21	0	0
+subset	07 - blocksize 725.flac	21	0	0
+subset	08 - blocksize 1000.flac	21	0	0
+subset	09 - blocksize 1937.flac	21	0	0
+subset	10 - blocksize 2304.flac	21	0	0
+subset	11 - partition order 8.flac	21	0	0
+subset	12 - qlp precision 15 bit.flac	21	0	0
+subset	13 - qlp precision 2 bit.flac	21	0	0
+subset	14 - wasted bits.flac	21	0	0
+subset	15 - only verbatim subframes.flac	21	0	0
+subset	16 - partition order 8 containing escaped partitions.flac	21	0	0
+subset	17 - all fixed orders.flac	21	0	0
+subset	18 - precision search.flac	21	0	0
+subset	19 - samplerate 35467Hz.flac	21	0	0
+subset	20 - samplerate 39kHz.flac	21	0	0
+subset	21 - samplerate 22050Hz.flac	21	0	0
+subset	22 - 12 bit per sample.flac	21	0	0
+subset	23 - 8 bit per sample.flac	21	0	0
+subset	24 - variable blocksize file created with flake revision 264.flac	21	0	0
+subset	25 - variable blocksize file created with flake revision 264, modified to create smaller blocks.flac	21	0	0
+subset	26 - variable blocksize file created with CUETools.Flake 2.1.6.flac	21	2	0
+subset	27 - old format variable blocksize file created with Flake 0.11.flac	21	0	0
+subset	28 - high resolution audio, default settings.flac	21	0	0
+subset	29 - high resolution audio, blocksize 16384.flac	21	0	0
+subset	30 - high resolution audio, blocksize 13456.flac	21	0	0
+subset	31 - high resolution audio, using only 32nd order predictors.flac	21	0	0
+subset	32 - high resolution audio, partition order 8 containing escaped partitions.flac	21	0	0
+subset	33 - samplerate 192kHz.flac	21	0	0
+subset	34 - samplerate 192kHz, using only 32nd order predictors.flac	21	0	0
+subset	35 - samplerate 134560Hz.flac	21	0	0
+subset	36 - samplerate 384kHz.flac	21	0	0
+subset	37 - 20 bit per sample.flac	21	0	0
+subset	38 - 3 channels (3.0).flac	21	0	0
+subset	39 - 4 channels (4.0).flac	21	0	0
+subset	40 - 5 channels (5.0).flac	21	0	0
+subset	41 - 6 channels (5.1).flac	21	0	0
+subset	42 - 7 channels (6.1).flac	21	0	0
+subset	43 - 8 channels (7.1).flac	21	0	0
+subset	44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	21	0	0
+subset	45 - no total number of samples set.flac	21	0	0
+subset	46 - no min-max framesize set.flac	21	0	0
+subset	47 - only STREAMINFO.flac	21	0	0
+subset	48 - Extremely large SEEKTABLE.flac	21	16	0
+subset	49 - Extremely large PADDING.flac	21	0	0
+subset	50 - Extremely large PICTURE.flac	21	0	0
+subset	51 - Extremely large VORBISCOMMENT.flac	21	0	0
+subset	52 - Extremely large APPLICATION.flac	21	0	0
+subset	53 - CUESHEET with very many indexes.flac	21	18	0
+subset	54 - 1000x repeating VORBISCOMMENT.flac	21	0	0
+subset	55 - file 48-53 combined.flac	21	18	0
+subset	56 - JPG PICTURE.flac	21	0	0
+subset	57 - PNG PICTURE.flac	21	0	0
+subset	58 - GIF PICTURE.flac	21	0	0
+subset	59 - AVIF PICTURE.flac	21	0	0
+subset	60 - mono audio.flac	21	0	0
+subset	61 - predictor overflow check, 16-bit.flac	21	0	0
+subset	62 - predictor overflow check, 20-bit.flac	21	0	0
+subset	63 - predictor overflow check, 24-bit.flac	21	0	0
+subset	64 - rice partitions with escape code zero.flac	21	0	0
+uncommon	01 - changing samplerate.flac	21	0	0
+uncommon	02 - increasing number of channels.flac	21	0	0
+uncommon	03 - decreasing number of channels.flac	21	0	0
+uncommon	04 - changing bitdepth.flac	21	0	0
+uncommon	05 - 32bps audio.flac	21	1	0
+uncommon	06 - samplerate 768kHz.flac	21	1	0
+uncommon	07 - 15 bit per sample.flac	21	1	0
+uncommon	08 - blocksize 65535.flac	21	1	0
+uncommon	09 - Rice partition order 15.flac	21	0	0

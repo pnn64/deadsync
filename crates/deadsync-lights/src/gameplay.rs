@@ -156,8 +156,8 @@ where
     let local = column % state.cols_per_player();
     let pump = matches!(state.cols_per_player(), 5 | 10);
     let lanes_per_pad = if pump { 5 } else { 4 };
-    let (player, local_col) = if state.cols_per_player() > lanes_per_pad && state.num_players() == 1
-    {
+    // A field spanning both pads (doubles, or each Routine participant).
+    let (player, local_col) = if state.cols_per_player() > lanes_per_pad {
         let player = if local < lanes_per_pad {
             Player::P1
         } else {
@@ -229,6 +229,7 @@ mod tests {
 
     fn test_note(note_type: NoteType, can_be_judged: bool, is_fake: bool) -> Note {
         Note {
+            participant: None,
             beat: 0.0,
             quantization_idx: 0,
             column: 0,

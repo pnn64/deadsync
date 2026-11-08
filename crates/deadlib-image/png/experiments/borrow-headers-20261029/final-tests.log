@@ -1,0 +1,177 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 1m 15s
+     Running tests\apng_recovery.rs (target\png-borrow-headers-20261029\build\release\deps\apng_recovery-d2c2d3b61989e332.exe)
+
+running 8 tests
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test default_control_before_actl_all_formats_faults_and_deferred_events ... ok
+Recovered 3000 independent APNG faults across 60 format/interlace/default-role configurations
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+libpng APNG static images: exact native defaults=2880, strict CRC rejections=240
+test libpng_static_fallback_known_answers_and_crc_policy ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 58.19s
+
+     Running tests\decoder_boundaries.rs (target\png-borrow-headers-20261029\build\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests\deflate_prefix.rs (target\png-borrow-headers-20261029\build\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running tests\deflate_stream.rs (target\png-borrow-headers-20261029\build\release\deps\deflate_stream-67b7281eda2a22db.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests\encoder_filter_bytes.rs (target\png-borrow-headers-20261029\build\release\deps\encoder_filter_bytes-e19e8948db11a59a.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests\huffman.rs (target\png-borrow-headers-20261029\build\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+C zlib checked 19645 Huffman fixtures (3091 valid, 16554 malformed); 68 published-range definitions rejected by default policy
+test c_zlib_huffman_oracle ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.97s
+
+     Running tests\huffman_permutations.rs (target\png-borrow-headers-20261029\build\release\deps\huffman_permutations-08761b4270a07dfa.exe)
+
+running 5 tests
+code-lengths: 190 independent streams, 19 symbols x depths 1..=7, both padding values
+test every_code_length_assignment_and_all_repeat_symbols ... ok
+C zlib checked 10744 symbol-permutation streams with exact outputs
+test c_zlib_symbol_permutations ... ok
+literals: 4626 independent streams, 257 symbols x depths 1..=15, both padding values
+test every_literal_and_eob_assignment_with_empty_distances ... ok
+lengths: 5148 independent streams, 286 symbols x depths 1..=15, both padding values
+test every_literal_length_and_eob_assignment_with_matches ... ok
+distances: 780 independent streams, 30 symbols x depths 1..=15, both padding values
+test every_distance_assignment_and_full_history ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s
+
+     Running tests\inflate_stream.rs (target\png-borrow-headers-20261029\build\release\deps\inflate_stream-728da3b48ec71039.exe)
+
+running 4 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test exact_small_output_limits_and_power_of_two_boundaries ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests\png_stream.rs (target\png-borrow-headers-20261029\build\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_bounded_for_growing_heights ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\pngsuite.rs (target\png-borrow-headers-20261029\build\release\deps\pngsuite-10919ea585f5aaaa.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests\reference_samples.rs (target\png-borrow-headers-20261029\build\release\deps\reference_samples-f143a3abbd5b4c4e.exe)
+
+running 7 tests
+test native_containers_are_reused_and_invalid_reference_inputs_are_rejected ... ok
+test each_low_precision_value_is_exact_when_another_channel_requires_sixteen_bits ... ok
+test every_uniform_source_value_and_container_preserves_high_bits_and_endpoints ... ok
+test every_mixed_channel_depth_declaration_uses_the_smallest_legal_depth ... ok
+test converted_apng_frames_share_precision_and_preserve_reference_values ... ok
+test both_writers_all_source_precisions_filters_and_interlace_recover_original_samples ... ok
+libpng reference scaling: 576 exact stored-sample files and 576 exact sBIT/unshift recoveries
+test libpng_native_and_sbit_shift_recover_exact_reference_samples ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.04s
+
+     Running tests\static_png.rs (target\png-borrow-headers-20261029\build\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests\stream_literals.rs (target\png-borrow-headers-20261029\build\release\deps\stream_literals-5ff2483d4ae64c6a.exe)
+
+running 2 tests
+C streaming literal audit: 172 exact independent streams; batch retained in C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-stream-literals-31376-1793230255612986700.bin
+test c_zlib_literal_runs_and_history_wraps ... ok
+Streaming literal audit: 172 independent fixed/dynamic streams; exact flate2/native bytes and prefixes; alternating zero-output calls, input/output 1/1, 7/31 and whole/257, history wraps, limits and four trailer truncations
+test literal_runs_history_wrap_pending_output_limits_and_trailer_fragments ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running tests\zlib_headers.rs (target\png-borrow-headers-20261029\build\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 5 tests
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+C zlib checked 65652 cases; accepted 28/28 over-advertised-window references
+test every_png_zlib_header_value ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+C libpng rejected all 24 pre-output-reference PNGs at DEFLATE distance validation
+test c_zlib_header_and_history_oracle ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+

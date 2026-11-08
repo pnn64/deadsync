@@ -25,9 +25,10 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     profile.combo_offset_y = profile_data::HUD_OFFSET_MIN - 10;
     profile.measure_lines = profile_data::MeasureLines::Eighth;
     profile.hide_combo = true;
-    profile.combo_font = profile_data::ComboFont::SourceCode;
+    profile.combo_font = profile_data::ComboFont::Unprofessional;
     profile.error_bar_active_mask =
         profile_data::ErrorBarMask::COLORFUL | profile_data::ErrorBarMask::TEXT;
+    profile.text_error_bar_centered = true;
     let judgment_assets = ResolvedJudgmentAssets::from_profile(&profile);
     let plan = gameplay_notefield_plan(
         &profile,
@@ -53,9 +54,10 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     assert!(!plan.options.frame_features.combo_visible);
     assert!(plan.options.error_bar_modes.colorful);
     assert!(plan.options.frame_features.error_bar_text);
+    assert!(plan.options.text_error_bar_centered);
     assert_eq!(plan.options.blue_fantastic_window_s, 0.012_345);
-    assert_eq!(plan.small_combo_font, "combo_source_code");
-    assert_eq!(plan.combo_font, Some("combo_source_code"));
+    assert_eq!(plan.small_combo_font, "combo_unprofessional");
+    assert_eq!(plan.combo_font, Some("combo_unprofessional"));
     assert_eq!(
         plan.tap_explosion_noteskin_visible,
         !profile.tap_explosion_noteskin_hidden()
@@ -408,7 +410,7 @@ fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
         .and_then(|layers| layers.iter().find(|slot| slot.model.is_some()))
         .expect("cyber should expose model-backed tap-note layer for 4th notes");
 
-    let logical_h = slot.logical_size()[1].max(1.0);
+    let texture_h = slot.source_size()[1].max(1) as f32;
     let model_h = slot
         .model
         .as_ref()
@@ -419,9 +421,10 @@ fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
         "cyber model-backed tap slot should have positive model height"
     );
     assert!(
-        logical_h / model_h > 1.5,
-        "regression guard: cyber logical height must stay larger than model height so this test catches logical-height scaling; logical={logical_h}, model={model_h}"
+        texture_h / model_h > 1.5,
+        "regression guard: texture height must differ from mesh height; texture={texture_h}, model={model_h}"
     );
+    assert_eq!(slot.logical_size()[1], model_h);
     let scale_h = note_slot_base_size(slot, 1.0)[1];
     assert!(
         (scale_h - model_h).abs() <= 1e-4,

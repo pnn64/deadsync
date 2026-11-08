@@ -1,0 +1,327 @@
+{
+  "baseline_png_commit": "6d64c3383",
+  "change": "Native-precision compositor fuzzing with exact rational arithmetic and new independently framed APNG seeds",
+  "commands": [
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "compositor",
+        "/tmp/deadlib-image-compositor-corpus-20261027-a/compositor",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=928671",
+        "-max_len=4096",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/compositor-compositor-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 73.619,
+      "log_sha256": "36756b4074ae928180f2495c91a81431f56b7b77f0c85a84437c763c1561b9dc"
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "png_stream",
+        "/tmp/deadlib-image-compositor-corpus-20261027-a/png_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=30000",
+        "-seed=928671",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/compositor-png_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 34.795,
+      "log_sha256": "302a2feb76410dc3f844bdda4e217827014aa8e2337674501341daf5dac2a6b5"
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "decode",
+        "/tmp/deadlib-image-compositor-corpus-20261027-a/decode",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=30000",
+        "-seed=928671",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/compositor-decode-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 8.084,
+      "log_sha256": "449f39f7568edaf7de581b595176b14713b98e5596e9ff6dc97b618ca76cd819"
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "compositor",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 480,
+        "bytes": 61440,
+        "maximum_file_bytes": 128,
+        "sha256": "542deab0a0045b0ce24237e33ea5e1787f263394423741205ffd60106d2c1e91",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/compositor",
+      "binary_sha256": "85a073dae7647dbbb7378d391b5ea1123f0dbe4302ae9d366b4d6c96fe4a7e03",
+      "asan_init_defined": true,
+      "peak_rss_mib": 430,
+      "fuzz_seconds": 68
+    },
+    {
+      "target": "png_stream",
+      "runs": 30000,
+      "initial_corpus": {
+        "files": 27867,
+        "bytes": 6368086,
+        "maximum_file_bytes": 63435,
+        "sha256": "2889a6947392f977fabcaf9e7c3d570175e7000bb01532ae928db05d8e278e3d",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/png_stream",
+      "binary_sha256": "76089ecc29a76256d39b754f09cbe3928122fb1a840fffb8dd51cd4ebc9654d7",
+      "asan_init_defined": true,
+      "peak_rss_mib": 500,
+      "fuzz_seconds": 33
+    },
+    {
+      "target": "decode",
+      "runs": 30000,
+      "initial_corpus": {
+        "files": 27867,
+        "bytes": 6368086,
+        "maximum_file_bytes": 63435,
+        "sha256": "2889a6947392f977fabcaf9e7c3d570175e7000bb01532ae928db05d8e278e3d",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/decode",
+      "binary_sha256": "6d89f1fcf656aee58e759c655c960b7eea7b6d9544a667104737a9857493c85c",
+      "asan_init_defined": true,
+      "peak_rss_mib": 466,
+      "fuzz_seconds": 7
+    }
+  ],
+  "source_sha256": [
+    {
+      "path": "png/examples/seed_fuzz.rs",
+      "sha256": "85f876aa65e9258fd9431d0a6b6e59595a7d6208605e0b85a13ebbe83cbd5e9d"
+    },
+    {
+      "path": "png/fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "png/fuzz/Cargo.toml",
+      "sha256": "2b7e9bb40a0dea2ad2b9df81df1dbb5a74ef58a34c2fe09ffefb8247ba2334d1"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/compositor.rs",
+      "sha256": "e5e6573589a60ad182e02a713886171c8a0a7ab83f5598e17838b4b1e7de95bf"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/decode.rs",
+      "sha256": "4c372f567fca2803a70f44c2c38cf6f0436757fd8f3107623251d23e7d43c44b"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/deflate_stream.rs",
+      "sha256": "aa137e57e530c0c998a174395a08f3657331a7a302efbeb7c86376cd35824783"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/encode_stream.rs",
+      "sha256": "9de7cddbe4bc47c8d50dff62c1cd0a4c008cdf8e0449fcd3cae6a73ab90b6b2a"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/huffman.rs",
+      "sha256": "d625611b80e644192c27dd9f7b8065cfb78515cc55236203985ae4fd9d5c29ca"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/inflate_stream.rs",
+      "sha256": "bcf12e9ac73f10f16a003ac6e807443be9a6f2ac6c43bea6ff89bde367ade022"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "706390b3fbcb82f602da089f73e19ce583f97810aa92902e1e752cc1e1f31281"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/profiles.rs",
+      "sha256": "b26e92197b2ef55edd18cd15c0a68974c41d322767728ab2f2e4620351201d9a"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/reference_samples.rs",
+      "sha256": "4441466a9dae550a51d4512bcfe49d143d1095b09e3bedcbc0d174fa67bd85f0"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/text_body.rs",
+      "sha256": "65fb88fb2ba33e8151c27ff4696693209c5d5be8033ad0e0a4639604882be497"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/zlib.rs",
+      "sha256": "fd9554f9bdae4786df4dc5cb054de4df8bcd73aabf295f51035210cd39953e62"
+    },
+    {
+      "path": "png/fuzz/support/reference.rs",
+      "sha256": "68a2bbed1d30d3e431e41ee56162112272f1a6adec395fbf6a80c3f7c50802f9"
+    },
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "2c972535e2fe47cd64c6aa7b21c9b7af30cb156350ae172544c7b63a26d1c37b"
+    },
+    {
+      "path": "png/tests/support/ancillary_order.rs",
+      "sha256": "fc4147849cef800586ab11aed5f856340fad0096d668208c46e5d74430551ba4"
+    },
+    {
+      "path": "png/tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "png/tests/support/compositor.rs",
+      "sha256": "5bb6367253208e9ff62c6885dd9a38c33531ff6eb7590b3d0fbd544e1f858d0d"
+    },
+    {
+      "path": "png/tests/support/hdr.rs",
+      "sha256": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720"
+    },
+    {
+      "path": "png/tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "png/tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "png/tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "png/tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "scope": "80,000 fresh ASan executions: bounded native compositor model plus buffered and fragmented PNG decoders with 240 new precision animations. The compositor target calls no reference codecs; this does not prove complete native-only feedback coverage.",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "clang": "Debian clang version 19.1.7 (3+b1)",
+  "environment": {
+    "CC": "/usr/bin/clang",
+    "CFLAGS": "-fsanitize=address",
+    "CARGO_BUILD_JOBS": "4"
+  },
+  "runner_sha256": "b58bee5b9f58884c7dabac28d16e0f536238a0181474946eaff26a07ce0e9355",
+  "final_source_hashes_verified": true,
+  "historical_successful_executions_all_targets": 1000000,
+  "fuzz_target_count": 11,
+  "total_fresh_decoder_executions": 80000
+}

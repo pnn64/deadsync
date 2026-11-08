@@ -1,0 +1,79 @@
+{
+  "passed": true,
+  "timestamp_utc": "2026-10-27T20:02:19Z",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-flac"
+      ],
+      "exit_code": 0,
+      "log": "final-gate-0.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-flac",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-flac",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "final-gate-1.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-flac",
+        "--doc",
+        "--release",
+        "--target-dir",
+        "target/deadlib-flac"
+      ],
+      "exit_code": 0,
+      "log": "final-gate-2.log"
+    },
+    {
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "py_compile",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\bench_host.py",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\run.py",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\run_seek.py",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\build_native.py"
+      ],
+      "exit_code": 0,
+      "log": "final-gate-3.log"
+    }
+  ],
+  "codec_source_sha256": {
+    "src/bitstream.rs": "b6bb752fd629420541a85c2bd419ef613b0e971e1341f7fa6d8c86ea6c1d4d84",
+    "src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+    "src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src/frame.rs": "17ff70a782c633a952c3ba32744aecd64b8d44cb1c041a3051e628d42f4d16a5",
+    "src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+    "src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "src/predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+    "src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128"
+  },
+  "README_sha256": "a4c5e6ba91c3566992e9f40c873b29c1971f8cd023bbb593666c600cf1feee59"
+}

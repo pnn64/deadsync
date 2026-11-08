@@ -42,6 +42,8 @@ fn render_fixture() -> RenderFrame {
                 camera: 0,
             }),
             DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
+                additive_texture: 0,
                 geometry: 0,
                 instance_start: 0,
                 instance_count: 1,
@@ -49,6 +51,9 @@ fn render_fixture() -> RenderFrame {
                 texture_handle: 8,
                 camera: 0,
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
+                clear_depth: false,
             }),
         ],
     }
@@ -74,6 +79,29 @@ fn cloned_frame_matches() {
     let expected = render_fixture();
     let actual = expected.clone();
     assert_eq!(compare_render_frames(&expected, &actual), Ok(()));
+}
+
+#[test]
+fn model_sampler_changes_are_compared() {
+    let expected = render_fixture();
+    let mut actual = expected.clone();
+    let run = actual
+        .ops
+        .iter_mut()
+        .find_map(|op| {
+            if let DrawOp::TexturedMesh(run) = op {
+                Some(run)
+            } else {
+                None
+            }
+        })
+        .expect("fixture contains a Model draw");
+    run.sampler = Some(deadlib_render_core::MeshSampler {
+        filter: deadlib_render_core::SamplerFilter::Nearest,
+        wrap: deadlib_render_core::SamplerWrap::Clamp,
+    });
+    assert!(compare_render_frames(&expected, &actual).is_err());
+    assert!(compare_render_frames_semantic(&expected, &actual).is_err());
 }
 
 #[test]
@@ -190,6 +218,8 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         true,
     ));
     split.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+        sampler: None,
+        additive_texture: 0,
         geometry: 0,
         instance_start: 1,
         instance_count: 1,
@@ -197,6 +227,9 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         texture_handle: 8,
         camera: 0,
         depth_test: true,
+        depth_write: true,
+        depth_test_on_fail: false,
+        clear_depth: false,
     }));
     let mut joined = split.clone();
     let DrawOp::Mesh(run) = &mut joined.ops[1] else {
@@ -225,6 +258,8 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
                 texture_handle: deadlib_render_core::render_target_texture_handle(1),
                 width: 64,
                 height: 64,
+                viewport: [64, 64],
+                float_color: false,
                 alpha: true,
                 depth: true,
                 preserve: false,
@@ -240,6 +275,14 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
     let expected = target_frame(split);
     let mut actual = target_frame(joined);
     assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
+    actual.render_targets[0].viewport[0] = 32;
+    let mismatch = compare_render_frames_semantic(&expected, &actual).unwrap_err();
+    assert_eq!(mismatch.field, "viewport");
+    actual.render_targets[0].viewport = [64, 64];
+    actual.render_targets[0].float_color = true;
+    let mismatch = compare_render_frames_semantic(&expected, &actual).unwrap_err();
+    assert_eq!(mismatch.field, "float_color");
+    actual.render_targets[0].float_color = false;
     actual.render_targets[0].depth = false;
     assert!(compare_render_frames_semantic(&expected, &actual).is_err());
 }

@@ -1,0 +1,16 @@
+[package]
+name = "deadlib-lua-capi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Standalone Lua 5.1 C ABI backed by deadlib-lua's Rust interpreter"
+
+[lib]
+name = "lua51"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+deadlib-lua = { path = "..", default-features = false, features = ["c-api-runtime"] }

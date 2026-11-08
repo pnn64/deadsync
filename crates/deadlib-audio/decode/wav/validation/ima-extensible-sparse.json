@@ -1,0 +1,1641 @@
+{
+  "timestamp_utc": "2026-10-28T16:21:44Z",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "volume": "{\"FileSystem\":\"NTFS\",\"AllocationUnitSize\":4096,\"Size\":1999439392768,\"SizeRemaining\":58065117184}",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "sources": {
+    "crates/deadlib-audio/decode/wav/src/adpcm.rs": "7264025657c0689b83e7a4a82b9d5b63194ca5a54e69d39cc0bbffebef8f2d03",
+    "crates/deadlib-audio/decode/wav/src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+    "crates/deadlib-audio/decode/wav/src/adpcm_forward.rs": "910f185a1a715911ba51ada6d8b061ea107351bdae51028714bc2807ecf860e8",
+    "crates/deadlib-audio/decode/wav/src/adpcm_reader.rs": "bcb744afee6ed766fcdbaa823bc24a1373a648e27c70695f4fb3fa0dbfac4f14",
+    "crates/deadlib-audio/decode/wav/src/container.rs": "f9dd4b0be96009bcd5608bfadc3ad484ea024b35218aec6ac05c232d9747e538",
+    "crates/deadlib-audio/decode/wav/src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+    "crates/deadlib-audio/decode/wav/src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+    "crates/deadlib-audio/decode/wav/src/forward.rs": "ca6366aee050f476b0453ba63401f4a4f7f3ebf767ce1423b465f51c51b21bc7",
+    "crates/deadlib-audio/decode/wav/src/lib.rs": "3a1d2d39217e21a7052d98288c207be9b5da4784bb36957d3c5ef62ba63f1bf3",
+    "crates/deadlib-audio/decode/wav/src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "crates/deadlib-audio/decode/wav/src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "crates/deadlib-audio/decode/wav/src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "crates/deadlib-audio/decode/wav/src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "crates/deadlib-audio/decode/wav/src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "crates/deadlib-audio/decode/wav/src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+    "crates/deadlib-audio/decode/wav/src/native_io.rs": "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+    "crates/deadlib-audio/decode/wav/src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+    "crates/deadlib-audio/decode/wav/src/reader.rs": "acafafbbd9ed80a496b0eb0602f86f96f9fbac3081b3076ec33ff3bc751fea52",
+    "crates/deadlib-audio/decode/wav/src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+    "crates/deadlib-audio/decode/wav/src/timeline.rs": "b6e79f3fade91aff466bf43209591ed4539b2547a3b9bf6692f9ec1f7bc13f7a",
+    "crates/deadlib-audio/decode/wav/src/wavl_encode.rs": "37b29c61bdfee4ab60474da43177a971e3532ead1db7405940ee75ba6b4b64a7",
+    "crates/deadlib-audio/decode/wav/examples/sparse_seek.rs": "b896eb3383d79df0fc80a8ed0f626bc29045d595c4627af769600a1e91a9755a",
+    "crates/deadlib-audio/decode/wav/tests/run_sparse.py": "756f13c269f4696c99f66791030d9391efd1cafa6414bd503236fb22d1fc1d56",
+    "crates/deadlib-audio/decode/wav/Cargo.toml": "929502416f2e89e11e3b0d33da8cb78ebc763c09d3faf462691b2a36d96172bd",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "inputs_unchanged": true,
+  "build_commands": [
+    [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "deadlib-audio-decode-wav",
+      "--example",
+      "sparse_seek",
+      "--message-format=json",
+      "--target-dir",
+      "target/wav"
+    ],
+    [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "deadlib-audio-decode-wav",
+      "--example",
+      "sparse_seek",
+      "--message-format=json",
+      "--target-dir",
+      "target/wav",
+      "--target",
+      "i686-pc-windows-msvc"
+    ]
+  ],
+  "binaries": {
+    "x64": "1ae6a0fa3406553135908023c974e7e47cf57eb4bb8d56973c9dfb317247fdfb",
+    "i686": "2c4f554bcee745bc5d3abc1fba288fb18fd7525a029a1975125d88d99e35d4f5"
+  },
+  "memory_scope": "GetProcessMemoryInfo whole-process working-set/private-commit snapshots; peak includes startup and any fixture creation, measured before JSON formatting; no affinity/cache control",
+  "data_scope": "random marker and zero-hole samples plus EOF/invalid seeks; no full-file throughput or non-sparse-disk claim",
+  "fixtures": [
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\rf64-pcm-small.wav",
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "small",
+      "frames": 65573,
+      "file_bytes": 262396
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\rf64-pcm-large.wav",
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "large",
+      "frames": 4294967333,
+      "file_bytes": 17179869436
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\rf64-ima-small.wav",
+      "container": "rf64",
+      "codec": "ima",
+      "size": "small",
+      "frames": 65573,
+      "file_bytes": 262408
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\rf64-ima-large.wav",
+      "container": "rf64",
+      "codec": "ima",
+      "size": "large",
+      "frames": 4294967333,
+      "file_bytes": 17179869448
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\bw64-pcm-small.wav",
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "small",
+      "frames": 65573,
+      "file_bytes": 262396
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\bw64-pcm-large.wav",
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "large",
+      "frames": 4294967333,
+      "file_bytes": 17179869436
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\bw64-ima-small.wav",
+      "container": "bw64",
+      "codec": "ima",
+      "size": "small",
+      "frames": 65573,
+      "file_bytes": 262408
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\wav\\ima-extensible-sparse.json-files\\bw64-ima-large.wav",
+      "container": "bw64",
+      "codec": "ima",
+      "size": "large",
+      "frames": 4294967295,
+      "file_bytes": 17179869296
+    }
+  ],
+  "passed": 24,
+  "total": 24,
+  "cases": [
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "6766132b09683dd598845158ccd94d6a8c4da51957d1e1aad2251b17b7b0cf40",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002091,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3588096,
+      "before_decode_peak_working_set": 3588096,
+      "after_decode_working_set": 3616768,
+      "peak_working_set": 3616768,
+      "private_commit": 561152,
+      "peak_commit": 581632
+    },
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "6766132b09683dd598845158ccd94d6a8c4da51957d1e1aad2251b17b7b0cf40",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001825,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3543040,
+      "before_decode_peak_working_set": 3543040,
+      "after_decode_working_set": 3604480,
+      "peak_working_set": 3604480,
+      "private_commit": 552960,
+      "peak_commit": 573440
+    },
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "6766132b09683dd598845158ccd94d6a8c4da51957d1e1aad2251b17b7b0cf40",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002108,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4804608,
+      "peak_working_set": 4804608,
+      "private_commit": 790528,
+      "peak_commit": 811008
+    },
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "4b9aa447e9a59b7181e6b32e3d57cfe28a0316d9f7c8e38c17f736980fa3e378",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002408,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3584000,
+      "before_decode_peak_working_set": 3584000,
+      "after_decode_working_set": 3612672,
+      "peak_working_set": 3612672,
+      "private_commit": 552960,
+      "peak_commit": 573440
+    },
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "4b9aa447e9a59b7181e6b32e3d57cfe28a0316d9f7c8e38c17f736980fa3e378",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002178,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3543040,
+      "before_decode_peak_working_set": 3543040,
+      "after_decode_working_set": 3600384,
+      "peak_working_set": 3600384,
+      "private_commit": 552960,
+      "peak_commit": 565248
+    },
+    {
+      "container": "rf64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "4b9aa447e9a59b7181e6b32e3d57cfe28a0316d9f7c8e38c17f736980fa3e378",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002709,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4804608,
+      "peak_working_set": 4804608,
+      "private_commit": 786432,
+      "peak_commit": 806912
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "small",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "c74811fd352edd87eb88f820f7e389a5aad7095f9312a9d6bfd5320a0d4a5026",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002103,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3588096,
+      "before_decode_peak_working_set": 3588096,
+      "after_decode_working_set": 3612672,
+      "peak_working_set": 3612672,
+      "private_commit": 544768,
+      "peak_commit": 565248
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "small",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "c74811fd352edd87eb88f820f7e389a5aad7095f9312a9d6bfd5320a0d4a5026",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001983,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3538944,
+      "before_decode_peak_working_set": 3538944,
+      "after_decode_working_set": 3604480,
+      "peak_working_set": 3604480,
+      "private_commit": 557056,
+      "peak_commit": 577536
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "small",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "c74811fd352edd87eb88f820f7e389a5aad7095f9312a9d6bfd5320a0d4a5026",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002265,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4808704,
+      "peak_working_set": 4808704,
+      "private_commit": 790528,
+      "peak_commit": 811008
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "large",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "835c7bd908ac6d5daa7891b9c4de07b2f4a9c41391f3164e09ca294956062a9a",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869296,
+          "bytes": "f7c20000",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869300,
+          "bytes": "d4890000",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869444,
+          "bytes": "a8e30000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869448,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002679,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3592192,
+      "before_decode_peak_working_set": 3592192,
+      "after_decode_working_set": 3616768,
+      "peak_working_set": 3616768,
+      "private_commit": 548864,
+      "peak_commit": 569344
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "large",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "835c7bd908ac6d5daa7891b9c4de07b2f4a9c41391f3164e09ca294956062a9a",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869296,
+          "bytes": "f7c20000",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869300,
+          "bytes": "d4890000",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869444,
+          "bytes": "a8e30000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869448,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002682,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3543040,
+      "before_decode_peak_working_set": 3543040,
+      "after_decode_working_set": 3608576,
+      "peak_working_set": 3608576,
+      "private_commit": 557056,
+      "peak_commit": 577536
+    },
+    {
+      "container": "rf64",
+      "codec": "ima",
+      "size": "large",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "835c7bd908ac6d5daa7891b9c4de07b2f4a9c41391f3164e09ca294956062a9a",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869296,
+          "bytes": "f7c20000",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869300,
+          "bytes": "d4890000",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869444,
+          "bytes": "a8e30000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 4294967333,
+      "file_bytes": 17179869448,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002444,
+      "initial_working_set": 4706304,
+      "initial_peak_working_set": 4706304,
+      "before_decode_working_set": 4751360,
+      "before_decode_peak_working_set": 4751360,
+      "after_decode_working_set": 4804608,
+      "peak_working_set": 4804608,
+      "private_commit": 798720,
+      "peak_commit": 819200
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "965d0b74774414d134d07e9f30718253c40427729ab91931c7a463b771f33a59",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001936,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3588096,
+      "before_decode_peak_working_set": 3588096,
+      "after_decode_working_set": 3616768,
+      "peak_working_set": 3616768,
+      "private_commit": 552960,
+      "peak_commit": 573440
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "965d0b74774414d134d07e9f30718253c40427729ab91931c7a463b771f33a59",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001655,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3538944,
+      "before_decode_peak_working_set": 3538944,
+      "after_decode_working_set": 3596288,
+      "peak_working_set": 3596288,
+      "private_commit": 548864,
+      "peak_commit": 561152
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "small",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "965d0b74774414d134d07e9f30718253c40427729ab91931c7a463b771f33a59",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262392,
+          "bytes": "334d0ea6",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 65573,
+      "file_bytes": 262396,
+      "allocated_bytes": 131072,
+      "data_offset": 104,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001858,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4804608,
+      "peak_working_set": 4804608,
+      "private_commit": 790528,
+      "peak_commit": 811008
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "46276aebe2175e6b7e54e4a600701c16a89567c4a19d78fca37bf4d864fa065b",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.000253,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3584000,
+      "before_decode_peak_working_set": 3584000,
+      "after_decode_working_set": 3608576,
+      "peak_working_set": 3608576,
+      "private_commit": 552960,
+      "peak_commit": 565248
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "46276aebe2175e6b7e54e4a600701c16a89567c4a19d78fca37bf4d864fa065b",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002417,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3538944,
+      "before_decode_peak_working_set": 3538944,
+      "after_decode_working_set": 3596288,
+      "peak_working_set": 3596288,
+      "private_commit": 548864,
+      "peak_commit": 561152
+    },
+    {
+      "container": "bw64",
+      "codec": "pcm",
+      "size": "large",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "46276aebe2175e6b7e54e4a600701c16a89567c4a19d78fca37bf4d864fa065b",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 104,
+          "bytes": "5ff36e3c",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 108,
+          "bytes": "6c59883c",
+          "passed": true
+        },
+        {
+          "frame": 1073741797,
+          "offset": 4294967292,
+          "bytes": "f3c9a779",
+          "passed": true
+        },
+        {
+          "frame": 1073741798,
+          "offset": 4294967296,
+          "bytes": "1afcf379",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967396,
+          "bytes": "45273c7c",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967400,
+          "bytes": "79bfa17c",
+          "passed": true
+        },
+        {
+          "frame": 4294967295,
+          "offset": 17179869284,
+          "bytes": "f7c2a33b",
+          "passed": true
+        },
+        {
+          "frame": 4294967296,
+          "offset": 17179869288,
+          "bytes": "d489533d",
+          "passed": true
+        },
+        {
+          "frame": 4294967332,
+          "offset": 17179869432,
+          "bytes": "a8e3e540",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 4294967333,
+      "file_bytes": 17179869436,
+      "allocated_bytes": 262144,
+      "data_offset": 104,
+      "marker_samples": 9,
+      "decode_probe_seconds": 0.0002479,
+      "initial_working_set": 4706304,
+      "initial_peak_working_set": 4706304,
+      "before_decode_working_set": 4751360,
+      "before_decode_peak_working_set": 4751360,
+      "after_decode_working_set": 4800512,
+      "peak_working_set": 4800512,
+      "private_commit": 794624,
+      "peak_commit": 815104
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "small",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "3068d523fb909681c5b7afc31f3824c2a08d9f51ef1134b98804f2e2750571ce",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002105,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3592192,
+      "before_decode_peak_working_set": 3592192,
+      "after_decode_working_set": 3616768,
+      "peak_working_set": 3616768,
+      "private_commit": 552960,
+      "peak_commit": 573440
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "small",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "3068d523fb909681c5b7afc31f3824c2a08d9f51ef1134b98804f2e2750571ce",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0001882,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3543040,
+      "before_decode_peak_working_set": 3543040,
+      "after_decode_working_set": 3604480,
+      "peak_working_set": 3604480,
+      "private_commit": 544768,
+      "peak_commit": 557056
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "small",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "3068d523fb909681c5b7afc31f3824c2a08d9f51ef1134b98804f2e2750571ce",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 65572,
+          "offset": 262404,
+          "bytes": "334d0000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 65573,
+      "file_bytes": 262408,
+      "allocated_bytes": 131072,
+      "data_offset": 116,
+      "marker_samples": 3,
+      "decode_probe_seconds": 0.0002028,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4808704,
+      "peak_working_set": 4808704,
+      "private_commit": 790528,
+      "peak_commit": 811008
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "large",
+      "run": "x64-create",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "1bf143d53b2650274ce1ffaaf58ba6ccbf6d8bfb3ac7dd8f8bd2069e6d4e7ff8",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967294,
+          "offset": 17179869292,
+          "bytes": "04290000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967295,
+      "file_bytes": 17179869296,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 7,
+      "decode_probe_seconds": 0.0002703,
+      "initial_working_set": 3473408,
+      "initial_peak_working_set": 3473408,
+      "before_decode_working_set": 3592192,
+      "before_decode_peak_working_set": 3592192,
+      "after_decode_working_set": 3616768,
+      "peak_working_set": 3616768,
+      "private_commit": 561152,
+      "peak_commit": 581632
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "large",
+      "run": "x64-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "1bf143d53b2650274ce1ffaaf58ba6ccbf6d8bfb3ac7dd8f8bd2069e6d4e7ff8",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967294,
+          "offset": 17179869292,
+          "bytes": "04290000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 64,
+      "frames": 4294967295,
+      "file_bytes": 17179869296,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 7,
+      "decode_probe_seconds": 0.0002216,
+      "initial_working_set": 3469312,
+      "initial_peak_working_set": 3469312,
+      "before_decode_working_set": 3538944,
+      "before_decode_peak_working_set": 3538944,
+      "after_decode_working_set": 3604480,
+      "peak_working_set": 3604480,
+      "private_commit": 548864,
+      "peak_commit": 569344
+    },
+    {
+      "container": "bw64",
+      "codec": "ima",
+      "size": "large",
+      "run": "i686-verify",
+      "exit_code": 0,
+      "passed": true,
+      "header_sha256": "1bf143d53b2650274ce1ffaaf58ba6ccbf6d8bfb3ac7dd8f8bd2069e6d4e7ff8",
+      "dummy_zero": true,
+      "marker_checks": [
+        {
+          "frame": 0,
+          "offset": 116,
+          "bytes": "5ff30000",
+          "passed": true
+        },
+        {
+          "frame": 1,
+          "offset": 120,
+          "bytes": "6c590000",
+          "passed": true
+        },
+        {
+          "frame": 1073741794,
+          "offset": 4294967292,
+          "bytes": "e6630000",
+          "passed": true
+        },
+        {
+          "frame": 1073741795,
+          "offset": 4294967296,
+          "bytes": "d9fd0000",
+          "passed": true
+        },
+        {
+          "frame": 1073741823,
+          "offset": 4294967408,
+          "bytes": "45270000",
+          "passed": true
+        },
+        {
+          "frame": 1073741824,
+          "offset": 4294967412,
+          "bytes": "79bf0000",
+          "passed": true
+        },
+        {
+          "frame": 4294967294,
+          "offset": 17179869292,
+          "bytes": "04290000",
+          "passed": true
+        }
+      ],
+      "zero_hole": "00000000",
+      "pointer_bits": 32,
+      "frames": 4294967295,
+      "file_bytes": 17179869296,
+      "allocated_bytes": 262144,
+      "data_offset": 116,
+      "marker_samples": 7,
+      "decode_probe_seconds": 0.000247,
+      "initial_working_set": 4710400,
+      "initial_peak_working_set": 4710400,
+      "before_decode_working_set": 4755456,
+      "before_decode_peak_working_set": 4755456,
+      "after_decode_working_set": 4808704,
+      "peak_working_set": 4808704,
+      "private_commit": 790528,
+      "peak_commit": 811008
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cycles:Pu'
+# Event count (approx.): 16116319329
+#
+# Overhead  Command          Shared Object                             Symbol
+# ........  ...............  ........................................  .......................................................................................
+#
+    45.44%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+
+    25.78%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+            |
+             --25.65%--_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+
+    10.79%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+
+     4.91%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+
+     2.97%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+
+     1.43%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+
+     1.24%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj6_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj6_EB6_
+
+     1.17%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RNvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac8checksum3x866folded
+            |
+            ---_RNvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac8checksum3x866folded
+
+     1.12%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8residuallEB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8residuallEB4_
+
+     1.04%  deadlib-flac-de  deadlib-flac-decode-folded-crc-constants  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8subframelEB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame8subframelEB4_
+
+
+
+#
+# (Tip: To show IPC for sampling periods use perf record -e '{cycles,instructions}:S' and then browse context)
+#

@@ -330,7 +330,8 @@ pub fn push_actors(
         let cy = screen_center_y();
         let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
         let zoom = match state.runtime.machine_font {
-            deadsync_config::theme::MachineFont::Wendy => 1.2,
+            deadsync_config::theme::MachineFont::Wendy
+            | deadsync_config::theme::MachineFont::Unprofessional => 1.2,
             deadsync_config::theme::MachineFont::Mega => 1.95,
         };
 

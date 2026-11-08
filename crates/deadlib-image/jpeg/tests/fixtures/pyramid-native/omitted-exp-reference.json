@@ -1,0 +1,9 @@
+{
+  "reference": "thorfdbg/libjpeg 702114c8130ae818ccd2354cc03e879dac69e579",
+  "reference_executable_sha256": "01c2e75257ed4b217b5539909c34c388764319900b6caf281e0e737b3dbcb902",
+  "case": "8-ycck-dct-huf-2-30-444-0-0-0-True-0-True-2",
+  "original_jpeg_sha256": "f0e10a47244362a6d4ef29b9fc3c64fe6dd774f18bb0b49c0175796971d97f5a",
+  "original_header_C_decode": "rejected before frame observations",
+  "stderr": "reading a JPEG file failed - error -1038 - frame dimensions are not compatible with the the expansion factors",
+  "cause": "C retains previous EXP flags when the next frame omits EXP for a same-resolution correction. Native original-header decoding matches source exactly. The source gate inserts EXP00 only in its C-input copy; all entropy bytes are unchanged."
+}

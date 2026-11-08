@@ -1,0 +1,355 @@
+--- a/crates/deadlib-lua/src/lib.rs
++++ b/crates/deadlib-lua/src/lib.rs
+@@ -1 +1 @@
+-//! A standalone Lua compiler and register interpreter written in Rust.
++//! A standalone Lua compiler and register interpreter written in safe Rust.
+@@ -14 +14 @@
+-#![deny(unsafe_code)]
++#![forbid(unsafe_code)]
+--- a/crates/deadlib-lua/src/vm/os/process.rs
++++ b/crates/deadlib-lua/src/vm/os/process.rs
+@@ -2 +1,0 @@
+-#[cfg(not(windows))]
+@@ -6,2 +5,10 @@
+-#[allow(unsafe_code)]
+-mod windows;
++fn spawn(path: &std::path::Path, command: &[u8]) -> Result<i32, i32> {
++    use std::os::windows::process::CommandExt;
++    Command::new(path)
++        .raw_arg("/c")
++        .raw_arg(String::from_utf8_lossy(command).as_ref())
++        .creation_flags(0x08000000)
++        .status()
++        .map(|status| status.code().unwrap_or(-1))
++        .map_err(super::io::errno)
++}
+@@ -36,5 +42,0 @@
+-    if comspec.as_ref().is_some_and(|path| path.is_empty()) {
+-        // The pinned CRT invokes its fatal invalid-parameter handler for an
+-        // explicitly empty COMSPEC, including shell-availability queries.
+-        std::process::abort();
+-    }
+@@ -47,3 +49 @@
+-        match shell_path(std::path::Path::new(&path))
+-            .and_then(|executable| windows::spawn(&executable, &path, command))
+-        {
++        match shell_path(std::path::Path::new(&path)).and_then(|path| spawn(&path, command)) {
+@@ -57,4 +57 @@
+-    let name = std::ffi::OsStr::new("cmd.exe");
+-    match shell_path(std::path::Path::new(name))
+-        .and_then(|path| windows::spawn(&path, name, command))
+-    {
++    match shell_path(std::path::Path::new("cmd.exe")).and_then(|path| spawn(&path, command)) {
+@@ -73 +70 @@
+-        match shell_path(&path).and_then(|path| windows::spawn(&path, name, command)) {
++        match shell_path(&path).and_then(|path| spawn(&path, command)) {
+--- a/crates/deadlib-lua/src/vm/io.rs
++++ b/crates/deadlib-lua/src/vm/io.rs
+@@ -10 +9,0 @@
+-mod output;
+@@ -14,3 +13,16 @@
+-    output::write(bytes)
+-}
+-pub(super) use output::flush as stdout_flush;
++    use std::io::Write;
++    let mut stdout = std::io::stdout().lock();
++    if cfg!(windows) {
++        let mut start = 0;
++        for (at, &byte) in bytes.iter().enumerate() {
++            if byte == b'\n' {
++                stdout.write_all(&bytes[start..at])?;
++                stdout.write_all(b"\r\n")?;
++                start = at + 1;
++            }
++        }
++        stdout.write_all(&bytes[start..])
++    } else {
++        stdout.write_all(bytes)
++    }
++}
+@@ -655 +667,5 @@
+-                let result = self.io.files[slot].set_buffering(mode, size);
++                let result = self.io.files[slot].flush();
++                if result.is_ok() {
++                    self.io.files[slot].buffering = mode;
++                    self.io.files[slot].size = size;
++                }
+--- a/crates/deadlib-lua/src/vm/io/stream.rs
++++ b/crates/deadlib-lua/src/vm/io/stream.rs
+@@ -278,3 +277,0 @@
+-        if matches!(self.resource, Some(Resource::Output)) {
+-            return super::stdout_write(bytes).map_err(errno);
+-        }
+@@ -313,3 +309,0 @@
+-        if matches!(self.resource, Some(Resource::Output)) {
+-            return super::stdout_flush().map_err(errno);
+-        }
+@@ -335,9 +328,0 @@
+-    }
+-    pub fn set_buffering(&mut self, mode: u8, size: usize) -> Result<(), i32> {
+-        self.flush()?;
+-        if matches!(self.resource, Some(Resource::Output)) {
+-            super::output::configure(mode, size).map_err(errno)?;
+-        }
+-        self.buffering = mode;
+-        self.size = size;
+-        Ok(())
+@@ -379,2 +364 @@
+-        // Standard stdout remains a process resource when its Lua userdata dies.
+-        if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
++        if self.resource.is_some() {
+--- a/crates/deadlib-lua/src/vm/userdata.rs
++++ b/crates/deadlib-lua/src/vm/userdata.rs
+@@ -208 +207,0 @@
+-        let _ = io::stdout_flush();
+--- a/crates/deadlib-lua/src/vm/os.rs
++++ b/crates/deadlib-lua/src/vm/os.rs
+@@ -102 +102 @@
+-                let _ = io::stdout_flush();
++                let _ = std::io::stdout().flush();
+--- a/crates/deadlib-lua/src/vm/os/process/windows.rs
++++ /dev/null
+@@ -1,126 +0,0 @@
+-//! Minimal Windows process ABI. No Lua values or VM storage cross this boundary.
+-use std::{
+-    ffi::{OsStr, c_void},
+-    os::windows::ffi::OsStrExt,
+-    path::Path,
+-    ptr,
+-};
+-
+-type Handle = *mut c_void;
+-#[repr(C)]
+-#[derive(Default)]
+-struct StartupInfo {
+-    size: u32,
+-    reserved: *mut u16,
+-    desktop: *mut u16,
+-    title: *mut u16,
+-    // The eight DWORDs from dwX through dwFlags, in Windows ABI order.
+-    window: [u32; 8],
+-    show: u16,
+-    reserved_len: u16,
+-    reserved_bytes: *mut u8,
+-    standard: [Handle; 3],
+-}
+-#[repr(C)]
+-#[derive(Default)]
+-struct ProcessInfo {
+-    process: Handle,
+-    thread: Handle,
+-    process_id: u32,
+-    thread_id: u32,
+-}
+-#[cfg(target_pointer_width = "64")]
+-const _: () = {
+-    assert!(std::mem::size_of::<StartupInfo>() == 104);
+-    assert!(std::mem::offset_of!(StartupInfo, standard) == 80);
+-    assert!(std::mem::size_of::<ProcessInfo>() == 24);
+-};
+-
+-#[link(name = "kernel32")]
+-unsafe extern "system" {
+-    fn CreateProcessW(
+-        application: *const u16,
+-        command: *mut u16,
+-        process_attributes: *const c_void,
+-        thread_attributes: *const c_void,
+-        inherit: i32,
+-        flags: u32,
+-        environment: *const c_void,
+-        directory: *const u16,
+-        startup: *const StartupInfo,
+-        result: *mut ProcessInfo,
+-    ) -> i32;
+-    fn CloseHandle(handle: Handle) -> i32;
+-    fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
+-    fn GetExitCodeProcess(handle: Handle, code: *mut u32) -> i32;
+-}
+-
+-struct OwnedHandle(Handle);
+-impl Drop for OwnedHandle {
+-    fn drop(&mut self) {
+-        // SAFETY: constructed only from a successful CreateProcessW result;
+-        // each returned handle has exactly one owner and is closed once.
+-        unsafe {
+-            CloseHandle(self.0);
+-        }
+-    }
+-}
+-
+-pub(super) fn spawn(path: &Path, name: &OsStr, command: &[u8]) -> Result<i32, i32> {
+-    let mut application = Vec::with_capacity(path.as_os_str().len() + 1);
+-    application.extend(path.as_os_str().encode_wide());
+-    application.push(0);
+-    let mut line = Vec::with_capacity(name.len() + command.len() + 5);
+-    // The CRT's system call joins argv verbatim; normal Rust argument quoting
+-    // changes the shell's command line and treats .cmd files specially.
+-    line.extend(name.encode_wide());
+-    line.extend([
+-        u16::from(b' '),
+-        u16::from(b'/'),
+-        u16::from(b'c'),
+-        u16::from(b' '),
+-    ]);
+-    line.extend(String::from_utf8_lossy(command).encode_utf16());
+-    line.push(0);
+-    let startup = StartupInfo {
+-        size: std::mem::size_of::<StartupInfo>() as u32,
+-        ..StartupInfo::default()
+-    };
+-    let mut result = ProcessInfo::default();
+-    // SAFETY: both strings are owned, NUL-terminated buffers alive for the call;
+-    // line is writable. ABI records have the Windows layout. Null optional
+-    // arguments request inherited environment/current directory and default
+-    // attributes. No pointer escapes into Rust or aliases VM storage.
+-    let created = unsafe {
+-        CreateProcessW(
+-            application.as_ptr(),
+-            line.as_mut_ptr(),
+-            ptr::null(),
+-            ptr::null(),
+-            1,
+-            0,
+-            ptr::null(),
+-            ptr::null(),
+-            &startup,
+-            &mut result,
+-        )
+-    };
+-    if created == 0 {
+-        return Err(super::super::io::errno(std::io::Error::last_os_error()));
+-    }
+-    let process = OwnedHandle(result.process);
+-    let thread = OwnedHandle(result.thread);
+-    drop(thread);
+-    // SAFETY: the process handle is owned and live; INFINITE waits for process
+-    // termination. The output pointer below references a writable u32.
+-    if unsafe { WaitForSingleObject(process.0, u32::MAX) } == u32::MAX {
+-        return Err(super::super::io::errno(std::io::Error::last_os_error()));
+-    }
+-    let mut code = 0;
+-    // SAFETY: the live owned process handle grants query access, and code is a
+-    // valid writable output. The RAII owner closes the handle on every return.
+-    if unsafe { GetExitCodeProcess(process.0, &mut code) } == 0 {
+-        return Err(super::super::io::errno(std::io::Error::last_os_error()));
+-    }
+-    Ok(code as i32)
+-}
+--- a/crates/deadlib-lua/src/vm/io/output.rs
++++ /dev/null
+@@ -1,114 +0,0 @@
+-//! Shared logical stdout buffering, independent of Rust's line-buffered stdout.
+-use std::io::{IsTerminal, Write};
+-use std::sync::{LazyLock, Mutex};
+-
+-struct Output {
+-    bytes: Vec<u8>,
+-    size: usize,
+-    mode: u8,
+-    allocated: bool,
+-}
+-static OUTPUT: LazyLock<Mutex<Output>> = LazyLock::new(|| {
+-    Mutex::new(Output {
+-        bytes: Vec::new(),
+-        size: if cfg!(windows) { 4096 } else { 8192 },
+-        mode: if std::io::stdout().is_terminal() {
+-            if cfg!(windows) { 0 } else { 2 }
+-        } else {
+-            1
+-        },
+-        allocated: false,
+-    })
+-});
+-
+-impl Output {
+-    fn emit(bytes: &[u8]) -> std::io::Result<()> {
+-        let mut stdout = std::io::stdout().lock();
+-        if cfg!(windows) {
+-            let mut start = 0;
+-            for (at, &byte) in bytes.iter().enumerate() {
+-                if byte == b'\n' {
+-                    stdout.write_all(&bytes[start..at])?;
+-                    stdout.write_all(b"\r\n")?;
+-                    start = at + 1;
+-                }
+-            }
+-            stdout.write_all(&bytes[start..])?;
+-        } else {
+-            stdout.write_all(bytes)?;
+-        }
+-        stdout.flush()
+-    }
+-    fn flush(&mut self) -> std::io::Result<()> {
+-        Self::emit(&self.bytes)?;
+-        self.bytes.clear();
+-        Ok(())
+-    }
+-    fn write(&mut self, mut bytes: &[u8]) -> std::io::Result<()> {
+-        if self.mode == 0 {
+-            return Self::emit(bytes);
+-        }
+-        while !bytes.is_empty() {
+-            if self.bytes.len() == self.size {
+-                self.flush()?;
+-            }
+-            // Fresh fully buffered streams write whole blocks directly. Once
+-            // a buffer exists, a final exactly full buffer stays pending until
+-            // the next write or an explicit flush (notably print's final LF).
+-            if self.mode == 1 && !self.allocated && bytes.len() >= self.size {
+-                let count = bytes.len() / self.size * self.size;
+-                Self::emit(&bytes[..count])?;
+-                bytes = &bytes[count..];
+-                continue;
+-            }
+-            self.allocated = true;
+-            let available = self.size - self.bytes.len();
+-            let mut count = available.min(bytes.len());
+-            if !cfg!(windows)
+-                && self.mode == 2
+-                && let Some(at) = bytes[..count].iter().position(|&b| b == b'\n')
+-            {
+-                count = at + 1;
+-            }
+-            self.bytes
+-                .try_reserve(count)
+-                .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+-            self.bytes.extend_from_slice(&bytes[..count]);
+-            bytes = &bytes[count..];
+-            if !cfg!(windows) && self.mode == 2 && self.bytes.last() == Some(&b'\n') {
+-                self.flush()?;
+-            }
+-        }
+-        Ok(())
+-    }
+-}
+-
+-pub(super) fn write(bytes: &[u8]) -> std::io::Result<()> {
+-    OUTPUT
+-        .lock()
+-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+-        .write(bytes)
+-}
+-pub(in crate::vm) fn flush() -> std::io::Result<()> {
+-    OUTPUT
+-        .lock()
+-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+-        .flush()
+-}
+-pub(super) fn configure(mode: u8, size: usize) -> std::io::Result<()> {
+-    let mut output = OUTPUT
+-        .lock()
+-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+-    output.flush()?;
+-    output.mode = mode;
+-    output.size = size.max(1);
+-    if mode != 0 {
+-        let additional = output.size;
+-        output
+-            .bytes
+-            .try_reserve(additional)
+-            .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+-    }
+-    output.allocated = mode != 0;
+-    Ok(())
+-}

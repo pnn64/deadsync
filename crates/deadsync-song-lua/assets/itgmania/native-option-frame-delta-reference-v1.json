@@ -1,0 +1,242 @@
+{
+  "source_proof": {
+    "native_fapproach_source_sha256": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+    "native_fapproach_function_sha256": "d6ec00aedf7fb0af7ae0e1cc8a2a9892747700cb477d2384b838a344baa8ba93",
+    "native_fapproach_copied_verbatim": true,
+    "cpp_sha256": "85fb1fd6fa4c6d5b30530f93acd205803f2fd2ba293ef66c41a5b796fd92b0c5",
+    "native_source_sha256": {
+      "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+      "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012"
+    },
+    "expected_outputs_used_as_runtime_inputs": false,
+    "output_sha256": "2c77e272741dd5e2cccdda48a6e2d93c7e496958ec0691254ad8180760dd7d52"
+  },
+  "cases": [
+    {
+      "id": "Quarantine-large-screen-delta",
+      "screen": 128.0,
+      "delta": 0.04497300088405609,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.255026996
+    },
+    {
+      "id": "clock-0.0-delta-0.0",
+      "screen": 0.0,
+      "delta": 0.0,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.300000012
+    },
+    {
+      "id": "clock-0.0-delta-1e-06",
+      "screen": 0.0,
+      "delta": 1e-06,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.299998999
+    },
+    {
+      "id": "clock-0.0-delta-0.01787400059401989",
+      "screen": 0.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.282126009
+    },
+    {
+      "id": "clock-0.0-delta-0.04497300088405609",
+      "screen": 0.0,
+      "delta": 0.04497300088405609,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.255026996
+    },
+    {
+      "id": "clock-0.0-delta-0.25",
+      "screen": 0.0,
+      "delta": 0.25,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.0500000119
+    },
+    {
+      "id": "clock-105.0-delta-0.0",
+      "screen": 105.0,
+      "delta": 0.0,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.300000012
+    },
+    {
+      "id": "clock-105.0-delta-1e-06",
+      "screen": 105.0,
+      "delta": 1e-06,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.299998999
+    },
+    {
+      "id": "clock-105.0-delta-0.01787400059401989",
+      "screen": 105.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.282126009
+    },
+    {
+      "id": "clock-105.0-delta-0.04497300088405609",
+      "screen": 105.0,
+      "delta": 0.04497300088405609,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.255026996
+    },
+    {
+      "id": "clock-105.0-delta-0.25",
+      "screen": 105.0,
+      "delta": 0.25,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.0500000119
+    },
+    {
+      "id": "clock-172.0-delta-0.0",
+      "screen": 172.0,
+      "delta": 0.0,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.300000012
+    },
+    {
+      "id": "clock-172.0-delta-1e-06",
+      "screen": 172.0,
+      "delta": 1e-06,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.299998999
+    },
+    {
+      "id": "clock-172.0-delta-0.01787400059401989",
+      "screen": 172.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.282126009
+    },
+    {
+      "id": "clock-172.0-delta-0.04497300088405609",
+      "screen": 172.0,
+      "delta": 0.04497300088405609,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.255026996
+    },
+    {
+      "id": "clock-172.0-delta-0.25",
+      "screen": 172.0,
+      "delta": 0.25,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.0500000119
+    },
+    {
+      "id": "clock-4096.0-delta-0.0",
+      "screen": 4096.0,
+      "delta": 0.0,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.300000012
+    },
+    {
+      "id": "clock-4096.0-delta-1e-06",
+      "screen": 4096.0,
+      "delta": 1e-06,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.299998999
+    },
+    {
+      "id": "clock-4096.0-delta-0.01787400059401989",
+      "screen": 4096.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.282126009
+    },
+    {
+      "id": "clock-4096.0-delta-0.04497300088405609",
+      "screen": 4096.0,
+      "delta": 0.04497300088405609,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.255026996
+    },
+    {
+      "id": "clock-4096.0-delta-0.25",
+      "screen": 4096.0,
+      "delta": 0.25,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 1.0,
+      "expected": 0.0500000119
+    },
+    {
+      "id": "speed-0.0-target-0.0",
+      "screen": 512.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 0.0,
+      "expected": 0.300000012
+    },
+    {
+      "id": "speed-10.0-target-0.0",
+      "screen": 512.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.0,
+      "speed": 10.0,
+      "expected": 0.121260002
+    },
+    {
+      "id": "speed-1.0-target--0.4",
+      "screen": 512.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": -0.4,
+      "speed": 1.0,
+      "expected": 0.282126009
+    },
+    {
+      "id": "speed-2.0-target-0.8",
+      "screen": 512.0,
+      "delta": 0.01787400059401989,
+      "initial": 0.3,
+      "target": 0.8,
+      "speed": 2.0,
+      "expected": 0.335748017
+    }
+  ]
+}

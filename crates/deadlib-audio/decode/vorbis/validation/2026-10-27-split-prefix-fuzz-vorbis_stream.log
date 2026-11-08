@@ -1,0 +1,32 @@
+INFO: found LLVMFuzzerCustomMutator (00007FF6C0221000). Disabling -len_control by default.
+Dictionary: 8 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1339
+INFO: Loaded 1 modules   (14386 inline 8-bit counters): 14386 [00007FF6C040F348, 00007FF6C0412B7A),
+INFO: Loaded 1 PC tables (14386 PCs): 14386 [00007FF6C036EE08,00007FF6C03A7128),
+INFO:       44 files found in C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-split-prefix-20261027\corpus\vorbis_stream
+INFO: seed corpus: files: 44 min: 2730b max: 131073b total: 1801236b rss: 41Mb
+#8	pulse  cov: 2633 ft: 3343 corp: 5/14124b exec/s: 4 rss: 55Mb
+#16	pulse  cov: 2730 ft: 4057 corp: 12/47Kb exec/s: 1 rss: 75Mb
+ALARM: working on the last Unit for 30 seconds
+       and the timeout value is 20 (use -timeout=N to change)
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_stream/'; Test unit written to C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_stream/timeout-96a983b404038758b05f56633423b0752a664653
+==34144== ERROR: libFuzzer: timeout after 30 seconds
+    #0 0x7ff8d7ab9b3f in __sanitizer_print_stack_trace D:\a\_work\1\s\src\vctools\asan\llvm\compiler-rt\lib\asan\asan_stack.cpp:87
+    #1 0x7ff6c0337588 in fuzzer::PrintStackTrace(void) C:\Users\PerfectTaste\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\libfuzzer-sys-0.4.13\libfuzzer\FuzzerUtil.cpp:210
+    #2 0x7ff6c0321900 in fuzzer::Fuzzer::AlarmCallback(void) C:\Users\PerfectTaste\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\libfuzzer-sys-0.4.13\libfuzzer\FuzzerLoop.cpp:304
+    #3 0x7ff6c0327ab5 in fuzzer::Fuzzer::StaticAlarmCallback(void) C:\Users\PerfectTaste\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\libfuzzer-sys-0.4.13\libfuzzer\FuzzerLoop.cpp:197
+    #4 0x7ff6c03380d8 in fuzzer::AlarmHandler(void *, unsigned char) C:\Users\PerfectTaste\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\libfuzzer-sys-0.4.13\libfuzzer\FuzzerUtilWindows.cpp:96
+    #5 0x7ff9a47ed42f  (C:\WINDOWS\SYSTEM32\ntdll.dll+0x18006d42f)
+    #6 0x7ff9a47a0acf  (C:\WINDOWS\SYSTEM32\ntdll.dll+0x180020acf)
+    #7 0x7ff9a47a40dc  (C:\WINDOWS\SYSTEM32\ntdll.dll+0x1800240dc)
+    #8 0x7ff9a2bee956  (C:\WINDOWS\System32\KERNEL32.DLL+0x18002e956)
+    #9 0x7ff9a478427b  (C:\WINDOWS\SYSTEM32\ntdll.dll+0x18000427b)
+
+SUMMARY: libFuzzer: timeout
+stat::number_of_executed_units: 31
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              123

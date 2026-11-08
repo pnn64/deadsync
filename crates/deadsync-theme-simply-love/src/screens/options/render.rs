@@ -98,20 +98,32 @@ fn truncate_help_block(block: RenderedHelpBlock, max_lines: usize) -> RenderedHe
         RenderedHelpBlock::Paragraph { text, .. } => (text, false),
         RenderedHelpBlock::Bullet { text, .. } => (text, true),
     };
-    let mut truncated = text
-        .lines()
-        .take(max_lines.saturating_sub(1))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if !truncated.is_empty() {
-        truncated.push('\n');
-    }
-    if is_bullet && max_lines == 1 {
-        truncated.push_str("\u{2022} ...");
+    let lines = text.lines().take(max_lines.saturating_sub(1));
+    let (bytes, count) = lines
+        .clone()
+        .fold((0usize, 0usize), |(bytes, count), line| {
+            (bytes + line.len(), count + 1)
+        });
+    let joined_len = bytes + count.saturating_sub(1);
+    let ellipsis = if is_bullet && max_lines == 1 {
+        "\u{2022} ..."
     } else {
-        truncated.push_str("...");
-    }
-    let text = Arc::from(truncated);
+        "..."
+    };
+    let text = if joined_len == 0 {
+        Arc::from(ellipsis)
+    } else {
+        let mut truncated = String::with_capacity(joined_len + 1 + ellipsis.len());
+        for (index, line) in lines.enumerate() {
+            if index > 0 {
+                truncated.push('\n');
+            }
+            truncated.push_str(line);
+        }
+        truncated.push('\n');
+        truncated.push_str(ellipsis);
+        Arc::from(truncated)
+    };
     if is_bullet {
         RenderedHelpBlock::Bullet {
             text,
@@ -125,22 +137,22 @@ fn truncate_help_block(block: RenderedHelpBlock, max_lines: usize) -> RenderedHe
     }
 }
 
-fn fit_help_blocks(blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
+fn fit_help_blocks(mut blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
     let max_height = DESC_H - DESC_TITLE_TOP_PAD_PX - DESC_BOTTOM_PAD_PX;
     if help_blocks_height(&blocks) <= max_height {
         return blocks;
     }
 
-    let mut fitted = Vec::with_capacity(blocks.len());
     let mut remaining = max_height;
     let block_count = blocks.len();
-    for (idx, block) in blocks.into_iter().enumerate() {
-        let line_height = match &block {
+    for idx in 0..block_count {
+        let block = &blocks[idx];
+        let line_height = match block {
             RenderedHelpBlock::Paragraph { .. } => DESC_TITLE_LINE_H_PX,
             RenderedHelpBlock::Bullet { .. } => DESC_BODY_LINE_H_PX,
         };
         let paragraph_gap =
-            if idx + 1 < block_count && matches!(&block, RenderedHelpBlock::Paragraph { .. }) {
+            if idx + 1 < block_count && matches!(block, RenderedHelpBlock::Paragraph { .. }) {
                 DESC_BULLET_TOP_PAD_PX
             } else {
                 0.0
@@ -155,17 +167,18 @@ fn fit_help_blocks(blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
         };
         if fits {
             remaining -= full_height;
-            fitted.push(block);
             continue;
         }
 
         let max_lines = (remaining / line_height).floor() as usize;
+        blocks.truncate(idx + usize::from(max_lines > 0));
         if max_lines > 0 {
-            fitted.push(truncate_help_block(block, max_lines));
+            let block = blocks.pop().expect("retained overflowing help block");
+            blocks.push(truncate_help_block(block, max_lines));
         }
         break;
     }
-    fitted
+    blocks
 }
 
 #[cfg(test)]
@@ -202,6 +215,7 @@ pub(super) fn build_description_layout(
     s: f32,
     app_paths: &AppPathsView,
     smx_assignment_status: &str,
+    golf_enabled: bool,
 ) -> DescriptionLayout {
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
@@ -215,7 +229,12 @@ pub(super) fn build_description_layout(
 
     let mut blocks = Vec::new();
 
-    if item.help.is_empty() {
+    let help = if item.id == ItemId::SmScoreboxCycle && !golf_enabled {
+        &item.help[..1]
+    } else {
+        item.help
+    };
+    if help.is_empty() {
         // No help entries — show the item name as a paragraph fallback.
         let wrapped = wrap_miso_text(
             asset_manager,
@@ -228,7 +247,7 @@ pub(super) fn build_description_layout(
             text: Arc::from(wrapped),
         });
     } else {
-        for entry in item.help {
+        for entry in help {
             match entry {
                 HelpEntry::Paragraph(lkey) => {
                     let raw = lkey.get();
@@ -326,6 +345,7 @@ pub(super) fn description_layout<'a>(
             s,
             &state.app_paths,
             state.smx_assignment_status.as_str(),
+            golf_features_enabled(state),
         );
         *state.description_layout_cache.borrow_mut() = Some(layout);
     }
@@ -1403,6 +1423,7 @@ pub fn push_actors(
     }
 
     let combined_alpha = alpha_multiplier * state.content_alpha;
+    push_twitch_channel_entry(actors, state);
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
     }
@@ -1462,3 +1483,9 @@ pub fn get_actors(
     );
     actors
 }
+
+#[cfg(test)]
+mod resource_perf;
+
+#[cfg(test)]
+mod data_paths_perf;

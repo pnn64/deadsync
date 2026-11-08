@@ -1,0 +1,10 @@
+{
+  "before": {
+    "sha256": "1b56ce0847bd2339abbdec1a01ff8c76d3f965bb2511cc042a36b972e4d61406",
+    "checks": "\nrunning 1 test\ntest dynamic::cache_filename_perf::cache_filenames_keep_hashes_roots_and_missing_source_behavior ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s\n\n"
+  },
+  "after": {
+    "sha256": "db67fc45046923d7bc9d2d4bf23ea926372477069756f483594877f7f405f769",
+    "checks": "\nrunning 1 test\ntest dynamic::cache_filename_perf::cache_filenames_keep_hashes_roots_and_missing_source_behavior ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s\n\n"
+  }
+}

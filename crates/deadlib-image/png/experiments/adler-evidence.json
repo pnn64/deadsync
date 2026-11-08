@@ -1,0 +1,320 @@
+{
+  "baseline_png_commit": "ded016febca0bc5ce9e08e1c7c553cd649752bf1",
+  "reconstructed_checkpoints": [
+    {
+      "name": "adler-lanes",
+      "metadata_sha256": "56b0b5fe64a980e4fd6a97b28ffd156509e542f36cf8a3bcbf337bbd068eab36",
+      "patch_sha256": "665fafe8ff682fde159e059377be556d6dfbe3a1f6b01e9bd51646b7b71177ef",
+      "reconstructed_sources_verified": true,
+      "isolated_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-adler-experiment-4q60lewr"
+    },
+    {
+      "name": "adler-buffered",
+      "metadata_sha256": "d031bcb2cfca82631306b819f4ea367e53a3b32104bc8febbe80751a21cf1bf6",
+      "patch_sha256": "bfeb976b8a9db8f47c230e71a94b79e684f715fe044f912a9687a9a2d7eec852",
+      "reconstructed_sources_verified": true,
+      "isolated_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-adler-experiment-hiu1oa_j"
+    }
+  ],
+  "selected_changed_native_files": [
+    "src/checksum.rs"
+  ],
+  "incremental_update_matches_original": true,
+  "selected_source_hashes_verified": true,
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-adler-before-formats-a-manifest.json",
+      "manifest_sha256": "7786b60a8416be9e5b8f9f9fd36ee0ba7ee97875bc28ee6662036cbc97b3fd71",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-before-formats-a-run1.tsv",
+          "sha256": "ea389b05cdf014a46edca410d5ee7b9107915963349c17d10ea876acac46a3e0"
+        },
+        {
+          "path": "benchmark-adler-before-formats-a-run2.tsv",
+          "sha256": "1d822561f30bc37d4d53f27edea60e4fc699a30e3ce6556a7db6f2e5817da06f"
+        },
+        {
+          "path": "benchmark-adler-before-formats-a-run3.tsv",
+          "sha256": "356564caeec7212f07e826de613e2daf62237aa775035400c4aeaf3c2ea9f8c0"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-before-photos-a-manifest.json",
+      "manifest_sha256": "91ae7931201d5ff4ff9cbd61941a65799e249c0082b3cac2a5ce96befbc5ed8a",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-before-photos-a-run1.tsv",
+          "sha256": "b57bc07e519f5f4e495cf19753f9602c9b6eab063498cd380bee4d03e5a5f057"
+        },
+        {
+          "path": "benchmark-adler-before-photos-a-run2.tsv",
+          "sha256": "2331db3ba72b33e156321c9ed584c13749ba5506fdf0fa687263269bba831c1c"
+        },
+        {
+          "path": "benchmark-adler-before-photos-a-run3.tsv",
+          "sha256": "d02d5986278fc731a9e0f75935e20472864ff6f9de671cf8b1f94efad0e6f1e4"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-control-formats-a-manifest.json",
+      "manifest_sha256": "1d7e267da9a8e32d1031d3274815ebd3387febe8975e918e4e66e943b5ee3a71",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-control-formats-a-run1.tsv",
+          "sha256": "5678f19ad3c1cd4fc9c7b0961d39fec488de54bf706f3a941ea5bec3cf6fb905"
+        },
+        {
+          "path": "benchmark-adler-control-formats-a-run2.tsv",
+          "sha256": "9a94369cb73985b0448ec1e6f6353e1a7c5b0ee2ffb52f281bf128b3d9522ef2"
+        },
+        {
+          "path": "benchmark-adler-control-formats-a-run3.tsv",
+          "sha256": "b6dbfefe92d4975b5ad239662023c735d955aadd27742eb55eac2a79f9568b1d"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-control-photos-a-manifest.json",
+      "manifest_sha256": "a7d3df30f32c994cbcb8532c66ee9d651360191a3f19b229c7bd0ede0a27914b",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-control-photos-a-run1.tsv",
+          "sha256": "af08321476101a40cca0127f501713f0988e9dd5749f45b23750e9c0ce9f1a9a"
+        },
+        {
+          "path": "benchmark-adler-control-photos-a-run2.tsv",
+          "sha256": "9b8178965e72a24fe6cafc3e4e6c951461682397ad6500e9161fda03536ff476"
+        },
+        {
+          "path": "benchmark-adler-control-photos-a-run3.tsv",
+          "sha256": "62f1fc44f988659ac3394c9fda2cd6e43e65d12623a33cbdd8f5fbdd7cde141c"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-control2-formats-a-manifest.json",
+      "manifest_sha256": "0975ae138f5574e0818d9b45ef3090b5bd2b968fb2e5238b95042832de5b450e",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-control2-formats-a-run1.tsv",
+          "sha256": "48c3c9b771d1e9ae30832bb7261eb3ab1615c9db507b6cd2281357fe1ced3f93"
+        },
+        {
+          "path": "benchmark-adler-control2-formats-a-run2.tsv",
+          "sha256": "db42b3505eab9ec7d64fb4c80f7da90e86240325e18f9de168fb7d854b640668"
+        },
+        {
+          "path": "benchmark-adler-control2-formats-a-run3.tsv",
+          "sha256": "5b6cd7ed6bf2e5c4516026be432f41c458fa4b27a5aa958f25ffb86ca0924c5d"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-control2-photos-a-manifest.json",
+      "manifest_sha256": "8533505f2acd5bc31702f2db887265b7b296336cb4968cf4daf2e4d8778858a4",
+      "variant": "original",
+      "binary_sha256": "9c3fdecc65ddab00c68d54d690b4a304fc60f5f64725ffb3c6c5c4db063ec743",
+      "outputs": [
+        {
+          "path": "benchmark-adler-control2-photos-a-run1.tsv",
+          "sha256": "6f5fbc699bd6222ef816251dddeaa1af6734b0e7d688b7cab80b59c5cf0637ac"
+        },
+        {
+          "path": "benchmark-adler-control2-photos-a-run2.tsv",
+          "sha256": "60a07c9c9906a39e842561159de0a95e3c30da674c6ccae196eb2a4278f2c214"
+        },
+        {
+          "path": "benchmark-adler-control2-photos-a-run3.tsv",
+          "sha256": "ef5c49a66028fb0e37f29a402e34852427f1a8ba565f9c83250c21daace89e27"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-repeat-formats-a-manifest.json",
+      "manifest_sha256": "6a5657fe9f2f6219f66a0c96ec2d5b998fc96c2a75293680132d388b1007abe5",
+      "variant": "adler-lanes",
+      "binary_sha256": "6343d8aea577202189faaa82f1d2b369fb4e74e7652d3bc6aed1dd0724bf3c0f",
+      "outputs": [
+        {
+          "path": "benchmark-adler-repeat-formats-a-run1.tsv",
+          "sha256": "4945afd833d4e419d748bcb03689a4d1674948d1524bc4239b25628c63320d25"
+        },
+        {
+          "path": "benchmark-adler-repeat-formats-a-run2.tsv",
+          "sha256": "2f0f55aaed914a1259913383cb17ec17d2f1a8afc838cc2382e61fd2ff60acec"
+        },
+        {
+          "path": "benchmark-adler-repeat-formats-a-run3.tsv",
+          "sha256": "08d63f97dd6d3df1abf15bd37c1b950776c0a3b92c132a1d59808efd2fd5ff3e"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-repeat-photos-a-manifest.json",
+      "manifest_sha256": "0e8676ea20efd44c849c0753108ef0585c93611fd16ea59b9d58fdcd211b8d71",
+      "variant": "adler-lanes",
+      "binary_sha256": "6343d8aea577202189faaa82f1d2b369fb4e74e7652d3bc6aed1dd0724bf3c0f",
+      "outputs": [
+        {
+          "path": "benchmark-adler-repeat-photos-a-run1.tsv",
+          "sha256": "c4617196229cc69a014696a15783414eb08d669d91e38f6700ece931ecb3a64f"
+        },
+        {
+          "path": "benchmark-adler-repeat-photos-a-run2.tsv",
+          "sha256": "e2151a4e4136a48309c155d1cbd3bca36e4d25d5e5abfbcc2180c78ee8283ef9"
+        },
+        {
+          "path": "benchmark-adler-repeat-photos-a-run3.tsv",
+          "sha256": "b0c48088d30094803c73cae6464d442f0ce6099ce8e346f799494f9d5c376017"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-split-formats-a-manifest.json",
+      "manifest_sha256": "a974b544cabbf3df9e173809bf40dc662fa6e9650dca54ca12db10fe8d5ee5b6",
+      "variant": "adler-buffered",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948",
+      "outputs": [
+        {
+          "path": "benchmark-adler-split-formats-a-run1.tsv",
+          "sha256": "c5e01ed528aa451b8cafd6afcb0711dc9999aeadddf78515a6a471396f66a0ee"
+        },
+        {
+          "path": "benchmark-adler-split-formats-a-run2.tsv",
+          "sha256": "9046c6a4e45394482fa92ec7eb5f8b734e682d5a3fa1489f0ff3d10e085feeca"
+        },
+        {
+          "path": "benchmark-adler-split-formats-a-run3.tsv",
+          "sha256": "f8986f4906d8c6f81b01e35dba64f9876523305258546b83c3f67a6333faec88"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-split-photos-a-manifest.json",
+      "manifest_sha256": "a7df29bfb79b21e3d5f9e2e684afa056efd8fd1c4f1c9906645278cb6dbbc8df",
+      "variant": "adler-buffered",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948",
+      "outputs": [
+        {
+          "path": "benchmark-adler-split-photos-a-run1.tsv",
+          "sha256": "5d12cbc44f5b8f917a21758e60c6929513856b49a9b5069c9b31bb922169ef71"
+        },
+        {
+          "path": "benchmark-adler-split-photos-a-run2.tsv",
+          "sha256": "791b0d7169b7ad8db65e6fa7dea8d1e4f8b34a09f3815b433210063717493ad5"
+        },
+        {
+          "path": "benchmark-adler-split-photos-a-run3.tsv",
+          "sha256": "5d482fa7a9c3acbac986581e57c9b846f90396aaac6e09b7285642031792b376"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-split_repeat-formats-a-manifest.json",
+      "manifest_sha256": "88c24a9d7c8aea5b9581d9a12746255d0a58425f0b7da6e725ebc8ee086d678f",
+      "variant": "adler-buffered",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948",
+      "outputs": [
+        {
+          "path": "benchmark-adler-split_repeat-formats-a-run1.tsv",
+          "sha256": "a7c0e21880e8fe7c4001b5747d5e395a384b060d48b507663d45d8d2231545e7"
+        },
+        {
+          "path": "benchmark-adler-split_repeat-formats-a-run2.tsv",
+          "sha256": "c1ad82966c23751fd4d3ef498c4878007bcb08c2ddfc7de339d312e58451e128"
+        },
+        {
+          "path": "benchmark-adler-split_repeat-formats-a-run3.tsv",
+          "sha256": "1e898d1d43541923318f1f976a97fee4fc446a85a2c70aeadd300d264342a00a"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-split_repeat-photos-a-manifest.json",
+      "manifest_sha256": "69a4255dcf14cb1123d344b0de8064b649ea5dd96162d13a1ef499952e617f32",
+      "variant": "adler-buffered",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948",
+      "outputs": [
+        {
+          "path": "benchmark-adler-split_repeat-photos-a-run1.tsv",
+          "sha256": "7917f3bbe1dcf0385879f5eb43e769eb9a1902125569706688254d75e3e1d074"
+        },
+        {
+          "path": "benchmark-adler-split_repeat-photos-a-run2.tsv",
+          "sha256": "1711ad2face403f3c51ec29a8a3d536fce472cf6f3e4648630b327b4bbe5f0c9"
+        },
+        {
+          "path": "benchmark-adler-split_repeat-photos-a-run3.tsv",
+          "sha256": "87a16b7c8d020fe0f2f995d657c6dbdd38eae2923d327fa608dc58ebb3c85bf0"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-trial-formats-a-manifest.json",
+      "manifest_sha256": "5f6236a53a75ba51f40bafbdb9dd120dc9ae9baf13aee40f3270003e5fed2984",
+      "variant": "adler-lanes",
+      "binary_sha256": "6343d8aea577202189faaa82f1d2b369fb4e74e7652d3bc6aed1dd0724bf3c0f",
+      "outputs": [
+        {
+          "path": "benchmark-adler-trial-formats-a-run1.tsv",
+          "sha256": "dd29edd47267d76fdcfab589df7527c32135320dd82eb9aba6e6796f9d7d2d89"
+        },
+        {
+          "path": "benchmark-adler-trial-formats-a-run2.tsv",
+          "sha256": "b1917213c0c79cdf7803d238275cce1b84f0d648127c2f1378bdd17e0b48cd72"
+        },
+        {
+          "path": "benchmark-adler-trial-formats-a-run3.tsv",
+          "sha256": "f55f7e2cdec1fca5694ff3c5f0ab846a9bcd5ba88fa34774c37de45d33a54d5b"
+        }
+      ]
+    },
+    {
+      "manifest": "benchmark-adler-trial-photos-a-manifest.json",
+      "manifest_sha256": "1734d0ea4a90b47957fb63e94717587f308d8efbe93206f6a0da4b3521d49749",
+      "variant": "adler-lanes",
+      "binary_sha256": "6343d8aea577202189faaa82f1d2b369fb4e74e7652d3bc6aed1dd0724bf3c0f",
+      "outputs": [
+        {
+          "path": "benchmark-adler-trial-photos-a-run1.tsv",
+          "sha256": "1f4c8f66fe9f7b8720ecd929e564c397c94037679ff8550aa536ba30bfe4a479"
+        },
+        {
+          "path": "benchmark-adler-trial-photos-a-run2.tsv",
+          "sha256": "3210a28aa9d5b3c2a720833c6609fa4218896ca228152fe06ab6d924fd3b0db5"
+        },
+        {
+          "path": "benchmark-adler-trial-photos-a-run3.tsv",
+          "sha256": "004937a0060d8ec2912fab9a77ae6fa2afbbe649b1e1455d3ffea34f8e869058"
+        }
+      ]
+    }
+  ],
+  "selected_summary_paths": [
+    "benchmark-adler-split-photos-summary.json",
+    "benchmark-adler-split-formats-summary.json"
+  ],
+  "arithmetic_bound": {
+    "modulus": 65521,
+    "maximum_input_block_bytes": 5552,
+    "maximum_b_before_modulus": 4294690200,
+    "u32_max": 4294967295,
+    "per_lane_prefix_times_16_max": 246342240
+  },
+  "profile_manifest_sha256": "9f6467eea5c48ac39c33d653fbc3814c85f19b64eb2ebf513e9d066db10b2cce",
+  "assembly_manifest_sha256": "dfc70e1d1411176b093065be1b829aeaf625eb6a64c4447c8b6b8552d538513f",
+  "runner_sha256": "14bdf309a0d905ef9e595baf19109f6a543f70ac7736cbfe0baf99a127804463"
+}

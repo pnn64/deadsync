@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "files": 90,
+  "sample_values": 40628736,
+  "native_sha256": "508aff847d3b9c20f325ce62b2c007e395002fb58904a37035ebe26262a8e428",
+  "script_sha256": "1f32b3212de9cfc0f398455025b82d06fc70508c34b2020df6a08cc40a3f02be",
+  "numpy": "2.5.2"
+}

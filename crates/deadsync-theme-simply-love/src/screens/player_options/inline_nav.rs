@@ -1,5 +1,56 @@
 use super::*;
 
+/// Keep navigation's logical x positions in reading order. Only presentation
+/// wraps them, so moving right through the first line reaches the second line.
+pub(super) fn inline_choice_line_break(row: &Row) -> usize {
+    if row.id != RowId::GameplayExtras || row.choices.len() < 2 {
+        return row.choices.len();
+    }
+    let total = row.choice_offsets.last().copied().unwrap_or(0.0)
+        + row.choice_widths.last().copied().unwrap_or(0.0);
+    (1..row.choices.len())
+        .min_by(|&a, &b| {
+            let width = |i: usize| {
+                let first = row.choice_offsets[i] - INLINE_CHOICE_SPACING;
+                let second = total - row.choice_offsets[i];
+                first.max(second)
+            };
+            width(a).total_cmp(&width(b))
+        })
+        .unwrap_or(row.choices.len())
+}
+
+pub(super) fn inline_choice_position(row: &Row, choice_idx: usize) -> [f32; 2] {
+    let offset = row.choice_offsets[choice_idx];
+    let split = inline_choice_line_break(row);
+    if split == row.choices.len() {
+        return [offset, 0.0];
+    }
+    let (_, step) = row_layout_params();
+    let scale = inline_choice_scale(row);
+    if choice_idx < split {
+        [offset * scale, -step * 0.5]
+    } else {
+        [(offset - row.choice_offsets[split]) * scale, step * 0.5]
+    }
+}
+
+pub(super) fn inline_choice_scale(row: &Row) -> f32 {
+    let split = inline_choice_line_break(row);
+    if split == row.choices.len() {
+        return 1.0;
+    }
+    let first = row.choice_offsets[split] - INLINE_CHOICE_SPACING;
+    let second = row.choice_offsets.last().copied().unwrap_or(0.0)
+        + row.choice_widths.last().copied().unwrap_or(0.0)
+        - row.choice_offsets[split];
+    let right = (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(screen_width() - 13.0);
+    // Leave room for cursor padding and the arcade navigation label.
+    let available =
+        (right - inline_choice_left_x() - arcade_inline_choice_shift_x() - INLINE_SPACING).max(1.0);
+    (available / first.max(second).max(1.0)).min(1.0)
+}
+
 pub(super) fn inline_choice_geometry(
     row: &Row,
     left_x: f32,

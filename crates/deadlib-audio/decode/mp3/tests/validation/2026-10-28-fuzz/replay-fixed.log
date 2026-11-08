@@ -1,0 +1,11 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3220557148
+INFO: Loaded 1 modules   (5770 inline 8-bit counters): 5770 [0x5e67168a1430, 0x5e67168a2aba), 
+INFO: Loaded 1 PC tables (5770 PCs): 5770 [0x5e67168a2ac0,0x5e67168b9360), 
+/home/perfecttaste/.cache/deadlib-mp3/fuzz-build-fixed/x86_64-unknown-linux-gnu/release/streams: Running 1 inputs 1 time(s) each.
+Running: /home/perfecttaste/.cache/deadlib-mp3/fuzz-campaign-2/artifacts/streams/crash-c6185995de306fd07102566c2e01d4eb319cbc86
+Executed /home/perfecttaste/.cache/deadlib-mp3/fuzz-campaign-2/artifacts/streams/crash-c6185995de306fd07102566c2e01d4eb319cbc86 in 97 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***

@@ -1,0 +1,108 @@
+{
+  "completed_utc": "2026-10-27T03:31:07.797707+00:00",
+  "decision": "reject scalar book as production default; retain pair book and add paired consumer-cost tooling",
+  "candidate": {
+    "base_revision": "77747ae5238aa4c54719acd58be6055c31b672c8",
+    "candidate_encoder_sha256": "ba44e9e1576d50ba049cc75434552fcd3783b38f7b42633a9f47f439dda33b8f",
+    "candidate_patch_sha256": "83d925683e5991424d071a41009a495c7270feaff4790fa7d5fcea11173a918a",
+    "status": "rejected as production default: decoder throughput cost outweighs default-stage size saving",
+    "production_encoder_restored_sha256": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "line_ending_restoration": {
+      "before_sha256": "e3f49580e46892f07677fb6ee601f9adc7861e1106adc198846ad1774874f2ed",
+      "after_sha256": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+      "reason": "Reverse patch produced CRLF; normalized to the exact LF bytes of the previously tested source. Canonical content was identical."
+    },
+    "original_context_patch_sha256": "33068f547800d88c2a3a686b807a0bee5045049e8cbb30aa137f17b6461b312e",
+    "retained_patch_format": "Zero-context diff; apply with git apply --unidiff-zero. Reconstructs the exact measured candidate source."
+  },
+  "experimental_patch_reconstructs_measured_encoder_source": true,
+  "production_source_unchanged_from": "77747ae5238aa4c54719acd58be6055c31b672c8",
+  "all_previous_codec_source_hashes_match": true,
+  "measured_source_differs_from_current_only_in_rejected_encoder": [
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs"
+  ],
+  "source_sha256_of_current_production_encoder": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+  "quality_cases": 66,
+  "encoding_timing_rows": 462,
+  "decoder_timing_rows": 1008,
+  "paired_exact_cases": 24,
+  "exact_channel_samples_per_decoder": 3658112,
+  "all_output_channel_samples_per_decoder": 10059808,
+  "checks": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_encoding.py",
+        "crates/deadlib-audio/decode/scripts/profile_encoding.py"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "default_mode_smoke": {
+    "cases": 7,
+    "decode_rows": 0,
+    "native_output_hashes_reproduce_committed_pair_encoder": true
+  },
+  "previous_production_validation": "2026-10-27-encoder-entropy-checks.json",
+  "no_new_production_sanitizer_claim": true,
+  "all_recorded_sources_inputs_outputs_and_preserved_binary_hashes_rechecked": true,
+  "artifacts": {
+    "2026-10-27-scalar-evaluation-benchmark.json": "1d4d3eb07b79ca629d65c3aeafeaa40f6544a5a0af904d1499eca0a10c380835",
+    "2026-10-27-scalar-evaluation-quality.tsv": "27e61c33f4150030af8f1ecc7834eeb85a0584510f45740a6d4c4aa89bad9979",
+    "2026-10-27-scalar-evaluation-summary.tsv": "e933c2c819025d2a31f1158315139eabb0347c2433b799bad5939a0fef59d04e",
+    "2026-10-27-scalar-evaluation-trials.tsv": "0f018fdedb3daff6a078451fd31c12d701c0971dbdde7949ca29765d3c12a2c4",
+    "2026-10-27-scalar-evaluation-decode-summary.tsv": "53ac6ba72f6da9c9ab77b2217eb8407a0c914b2b450f71624b403525172b308e",
+    "2026-10-27-scalar-evaluation-decode-trials.tsv": "f53d802d6e21b43a1b35f8524f93851dfe9e59017742963cd452c9392045d669",
+    "2026-10-27-scalar-evaluation-exact.json": "1a8de4a53bc8ed87c8bf610e484f79591c5dbd2dda2111290515d01faf758343",
+    "2026-10-27-scalar-evaluation-symbols.tsv": "5f73c5e75af590289b50120042f720d16d9ff91b3d5820a8b71a3c71f0ef82d4",
+    "2026-10-27-scalar-evaluation-symbols.json": "e5d8a04eb8343966ac16e9e22d29c9e5e09e251959bdbbd5ef31e9e40213498c",
+    "2026-10-27-scalar-evaluation-candidate.patch": "83d925683e5991424d071a41009a495c7270feaff4790fa7d5fcea11173a918a",
+    "2026-10-27-scalar-evaluation-candidate.json": "ed9344f83f5332b78422b32c0c2d74b606d55724cccb4573bb7777894fcddfe0",
+    "2026-10-27-scalar-evaluation-saved-binaries.json": "eca90571448c5058e2baa82b8707fc8979dd099afe7b99d080a723062df8fdf7",
+    "2026-10-27-scalar-evaluation-rust-build.log": "82f48441f3f5cf961e04dd8aeaacfb92aae883e2f6f7b1e9a04ba3372fc4dd46",
+    "2026-10-27-scalar-evaluation-baseline-build.log": "7d181bef2c43a6a7c128d67b1fd4814e61420fd4503f3ca4c3e4d6a9ff679941",
+    "2026-10-27-scalar-evaluation-c-configure.log": "c1e826bcb193c9bc5ba095fd4e6039ad05fd083c8f59b5738562c9b838a577c4",
+    "2026-10-27-scalar-evaluation-c-build.log": "231899012870baf3f7eec438eb5b2c759a62a5b661db1274c149558314624d62",
+    "2026-10-27-scalar-evaluation-decode-rust-build.log": "990b9fed3a24884c0de6569d2f2e5d82420447b2d7e92e12e2c8249470460494",
+    "2026-10-27-scalar-evaluation-decode-c-build.log": "793a83f42dd2b1bd2050a48809082a5b67cc78ab334c14e8b1baab77deb6ff7f",
+    "2026-10-27-scalar-evaluation-storage-pair.tsv": "780033854f5e3b2b1a39ab2f03bdca840bf761c5c1f110577dcf99119c8c6404",
+    "2026-10-27-scalar-evaluation-storage-scalar.tsv": "6c867039bda3d66daf9193f08ac5c99ebf0ad114de668b6af2e9253632bea429",
+    "2026-10-27-scalar-evaluation-storage-probe.rs": "e16ba00d409243e67da4dde9ea9403a46924cd19f583e5e5b5c4585574c4ec8b",
+    "2026-10-27-scalar-evaluation-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-scalar-evaluation-clippy.log": "7b0736041fe018afaa7d0337eae44af876291c6d8141ddc3dcda8a9e1c3efcf6",
+    "2026-10-27-scalar-evaluation-python.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-scalar-evaluation-prototype-tests.log": "531991bae4da64328b12ee089023c9c5368f1914d075bdbcd7f0cde7fb161c34",
+    "2026-10-27-scalar-evaluation-smoke.json": "9ddd2bda66aba5a80e890f7a4090e1e616a5b429cf3ddf014127998bab1e3767",
+    "2026-10-27-scalar-evaluation-smoke-quality.tsv": "847c51c5b421cb4f4e0f97be367476685ddafdcf60088bcbcdad5adbd264ada7"
+  },
+  "scope": "Experimental encoder is archived, not shipped. Production decoder and encoder source are restored; common tools measure decoder cost and support scalar canonical-symbol analysis."
+}

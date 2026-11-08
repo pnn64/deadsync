@@ -20,12 +20,19 @@ impl Choice {
     }
 }
 
-/// Layouts preserve shared translations. Input handling keeps owned strings so
-/// numeric choices do not acquire a temporary Arc solely to inspect/cycle them.
+/// Layouts preserve shared translations. Input handling borrows static literals
+/// and owns dynamic values without temporary Arc conversions.
 pub(super) trait ChoiceText: Sized {
     fn shared(text: Arc<str>) -> Self;
     fn owned(text: String) -> Self;
     fn borrowed(text: &str) -> Self;
+    #[inline]
+    fn choices(choices: &[Choice]) -> Vec<Self> {
+        choices
+            .iter()
+            .map(|choice| Self::shared(choice.get()))
+            .collect()
+    }
 }
 
 impl ChoiceText for Arc<str> {
@@ -41,6 +48,16 @@ impl ChoiceText for Arc<str> {
 }
 
 impl ChoiceText for Cow<'static, str> {
+    #[inline]
+    fn choices(choices: &[Choice]) -> Vec<Self> {
+        choices
+            .iter()
+            .map(|choice| match choice {
+                Choice::Localized(key) => Self::shared(key.get()),
+                Choice::Literal(text) => Cow::Borrowed(*text),
+            })
+            .collect()
+    }
     fn shared(text: Arc<str>) -> Self {
         Cow::Owned(text.to_string())
     }
@@ -53,12 +70,17 @@ impl ChoiceText for Cow<'static, str> {
 }
 
 pub(super) fn choice_texts<T: ChoiceText>(choices: &[Choice]) -> Vec<T> {
-    choices
-        .iter()
-        .map(|choice| T::shared(choice.get()))
-        .collect()
+    T::choices(choices)
 }
 
 pub(super) fn string_choice_texts<T: ChoiceText>(choices: &[String]) -> Vec<T> {
     choices.iter().map(|text| T::borrowed(text)).collect()
 }
+
+#[cfg(test)]
+#[path = "choice_text_original.rs"]
+mod choice_text_original;
+
+#[cfg(test)]
+#[path = "choice_text_perf.rs"]
+mod choice_text_perf_tests;

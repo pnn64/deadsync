@@ -1,0 +1,19 @@
+[  7%] Built target ogg
+[ 92%] Built target FLAC
+[ 95%] Building CXX object CMakeFiles/flac_latency_benchmark.dir/benchmark.cpp.o
+[ 97%] Linking CXX executable flac_latency_benchmark
+In function ‘read_metadata_vorbiscomment_’,
+    inlined from ‘read_metadata_’ at /mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:1811:10:
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/bitreader.c:555:19: warning: inlining failed in call to ‘FLAC__bitreader_read_uint32_little_endian’: call is unlikely and code size would grow [-Winline]
+  555 | inline FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
+      |                   ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:2055:22: note: called from here
+ 2055 |                 if (!FLAC__bitreader_read_uint32_little_endian(decoder->private_->input, &obj->num_comments))
+      |                      ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/bitreader.c:555:19: warning: inlining failed in call to ‘FLAC__bitreader_read_uint32_little_endian’: call is unlikely and code size would grow [-Winline]
+  555 | inline FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
+      |                   ^
+/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac/src/libFLAC/stream_decoder.c:2082:38: note: called from here
+ 2082 |                                 if (!FLAC__bitreader_read_uint32_little_endian(decoder->private_->input, &obj->comments[i].length)) {
+      |                                      ^
+[100%] Built target flac_latency_benchmark

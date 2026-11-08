@@ -1,0 +1,29 @@
+
+running 1 test
+test decode::metadata_perf::benchmark_metadata ... metadata/gif/1: allocation Churn { allocs: 6, reallocs: 0, frees: 6, allocated_bytes: 17098, freed_bytes: 17098, peak_bytes: 16646 }
+metadata/gif/1: cycles/op 384785.21; ns/op 176060.16
+metadata/gif/256: allocation Churn { allocs: 6, reallocs: 0, frees: 6, allocated_bytes: 17098, freed_bytes: 17098, peak_bytes: 16646 }
+metadata/gif/256: cycles/op 369562.55; ns/op 169145.31
+metadata/png/1: allocation Churn { allocs: 10, reallocs: 0, frees: 10, allocated_bytes: 29367, freed_bytes: 29367, peak_bytes: 28912 }
+metadata/png/1: cycles/op 475522.74; ns/op 217551.56
+metadata/png/256: allocation Churn { allocs: 10, reallocs: 0, frees: 10, allocated_bytes: 127671, freed_bytes: 127671, peak_bytes: 127216 }
+metadata/png/256: cycles/op 423876.80; ns/op 194078.12
+metadata/bmp/1: allocation Churn { allocs: 5, reallocs: 0, frees: 5, allocated_bytes: 8791, freed_bytes: 8791, peak_bytes: 8336 }
+metadata/bmp/1: cycles/op 411250.39; ns/op 188191.41
+metadata/bmp/256: allocation Churn { allocs: 5, reallocs: 0, frees: 5, allocated_bytes: 8791, freed_bytes: 8791, peak_bytes: 8336 }
+metadata/bmp/256: cycles/op 372071.36; ns/op 170144.53
+metadata/jpg/32: allocation Churn { allocs: 7, reallocs: 0, frees: 7, allocated_bytes: 10862, freed_bytes: 10862, peak_bytes: 10335 }
+metadata/jpg/32: cycles/op 487888.46; ns/op 223264.84
+metadata/error/1: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 28264, freed_bytes: 28264, peak_bytes: 27803 }
+metadata/error/1: cycles/op 401813.62; ns/op 183910.16
+metadata/multiframe/shipped: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+metadata/multiframe/shipped: cycles/op 252498.73; ns/op 115389.06
+metadata/multiframe/short: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+metadata/multiframe/short: cycles/op 336.11; ns/op 147.66
+metadata/multiframe/long: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+metadata/multiframe/long: cycles/op 5849.34; ns/op 2685.16
+metadata/multiframe/spaces: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+metadata/multiframe/spaces: cycles/op 1762.86; ns/op 797.66
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.62s

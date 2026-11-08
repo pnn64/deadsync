@@ -75,6 +75,9 @@ pub struct ChartData {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    /// Authored per-chart MUSIC value; empty uses the song's music.
+    /// ITGmania compares this value when synchronizing selected charts.
+    pub music_file: String,
     /// Effective gameplay music path for this chart, after song-level fallback.
     pub music_path: Option<PathBuf>,
     pub short_hash: String,

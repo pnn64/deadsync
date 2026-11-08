@@ -1,0 +1,52 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "scaled-before": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\scaled-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\scaled-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "7a574944e0b9b7b60f71e921104365073c9a12d5d5b53ef52812e509b33faba5",
+      "test_source_sha256": "5146d214cb7a3b637efa94b301261914d897b5bb7e246967a7a6c5e453a80b0c",
+      "rate_source_sha256": "9342e9732a1a7851f5f3923401da9ab1a21e76498ce2409bacd96dddde62bd8f",
+      "binary_sha256": "2c56695147a860fa0fe8f702ef10d8d504b17ce27616d5c682800033e39a80fa"
+    },
+    "scaled-after": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\scaled-after\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\scaled-after\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "2a6cf58f98545129f7e8a0a0635cad4288d7932d205b7bfc0a55a0df57f0c6b1",
+      "test_source_sha256": "5146d214cb7a3b637efa94b301261914d897b5bb7e246967a7a6c5e453a80b0c",
+      "rate_source_sha256": "9342e9732a1a7851f5f3923401da9ab1a21e76498ce2409bacd96dddde62bd8f",
+      "binary_sha256": "5f908923580c444550667d45ed156e46f3c399ee3b9ab17cf1fa2284f7edb37a"
+    }
+  }
+}

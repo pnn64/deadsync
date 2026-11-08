@@ -1,0 +1,50 @@
+{
+  "scope": "Whole-input abbreviated table/image milestone; no complete-conformance or performance claim.",
+  "rust_tests": {
+    "release": 139,
+    "independent": 139
+  },
+  "all_process_markers": [
+    "C0",
+    "C1",
+    "C2",
+    "C3",
+    "C5",
+    "C6",
+    "C7",
+    "C9",
+    "CA",
+    "CB",
+    "CD",
+    "CE",
+    "CF"
+  ],
+  "image_cases": {
+    "c": 3238,
+    "native": 1524,
+    "rare": 1932
+  },
+  "genuine_C_B5_image_cases": 4762,
+  "rare_C_equivalent_interchange_image_cases": 1932,
+  "rare_C_EXP00_input_copies": 96,
+  "pinned_sessions": 44,
+  "pinned_images": 64,
+  "truncated_image_prefixes": 34201,
+  "bounded_image_mutations": 3300,
+  "bounded_table_mutations": 1000,
+  "unchanged_default_writer_cases": 10612,
+  "fresh_C_default_writer_decodes": 964,
+  "checks": [
+    "cargo fmt --check",
+    "cargo clippy --all-targets -- -D warnings",
+    "cargo doc --no-deps with RUSTDOCFLAGS=-D warnings"
+  ],
+  "reports_sha256": {
+    "abbreviated-c.json": "a40b47f512a07cf0203a5ca7ca4d65b948297f2b6b77ffcf9aec3bbeb4a84294",
+    "abbreviated-empty.json": "c83c96dd6f8fc4b992f1d3f90b075df2306bde57de670c6514e0502050ae8293",
+    "abbreviated-native.json": "d5dd727899ea37a57ba09c79e30d3692f25a7fa4f9a88c216eb584377e457bbf",
+    "abbreviated-rare.json": "aaad4098e617bb179216acbd9309cf105b8b3f505bbaf0f335d6c1b4ea1c4ec2",
+    "abbreviated-regressions.json": "a7df77af54b72e10ba681e5339bb7d061430c3fc5929eee7eb34f439c2bda305"
+  },
+  "provenance_note": "Bulk nonempty-table C gates and writer audit precede the zero-Li parser relaxation. The relaxation has targeted C/native acceptance/rejection evidence and both final full Rust suites. C rare-process evidence is explicitly equivalent interchange, not B.5 parsing."
+}

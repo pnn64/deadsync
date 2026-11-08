@@ -1,0 +1,191 @@
+{
+    "target":  "decode",
+    "stage":  "pipeline",
+    "iterations":  4096,
+    "runs":  3,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "7a393042f9c5c0aebb8a92a44bd3b34f058b6768",
+    "source_sha256":  [
+                          {
+                              "path":  "src/apng.rs",
+                              "sha256":  "1A740B5CA862CC699A39B6282C87B4CB1664BC6209B914DEE32F029B50CA8A21"
+                          },
+                          {
+                              "path":  "src/checksum.rs",
+                              "sha256":  "35B18A4A03C88605B044ADF657E8631C85074D07CA0193B566DF59AE94E47A14"
+                          },
+                          {
+                              "path":  "src/codec.rs",
+                              "sha256":  "61151EFEE02D033A12FA97B91016630A5EB909FCFFFB1D8D0380AF5B95BA296F"
+                          },
+                          {
+                              "path":  "src/composite.rs",
+                              "sha256":  "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+                          },
+                          {
+                              "path":  "src/lib.rs",
+                              "sha256":  "DFA95C53F3697B5F0975B7C9A471B79DA254CB2BAA2AF6CD4118EBD13E4A6AF9"
+                          },
+                          {
+                              "path":  "src/metadata.rs",
+                              "sha256":  "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+                          },
+                          {
+                              "path":  "src/metadata/language.rs",
+                              "sha256":  "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+                          },
+                          {
+                              "path":  "src/metadata/language/registry.rs",
+                              "sha256":  "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+                          },
+                          {
+                              "path":  "src/metadata/profile.rs",
+                              "sha256":  "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+                          },
+                          {
+                              "path":  "src/reference.rs",
+                              "sha256":  "A697D0E85784053BC856CF26D3307D9F1D3D74DEC81F7C0859CF9D00654C94E5"
+                          },
+                          {
+                              "path":  "src/scanline.rs",
+                              "sha256":  "B75B671C306D42A95A561D8EF1F24E3C536DE230D6218141FFEA8651ADFC0FB7"
+                          },
+                          {
+                              "path":  "src/stream/decode.rs",
+                              "sha256":  "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+                          },
+                          {
+                              "path":  "src/stream/encode_rows.rs",
+                              "sha256":  "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+                          },
+                          {
+                              "path":  "src/stream/mod.rs",
+                              "sha256":  "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+                          },
+                          {
+                              "path":  "src/stream/read.rs",
+                              "sha256":  "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+                          },
+                          {
+                              "path":  "src/stream/rows.rs",
+                              "sha256":  "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+                          },
+                          {
+                              "path":  "src/stream/write.rs",
+                              "sha256":  "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+                          },
+                          {
+                              "path":  "src/zlib.rs",
+                              "sha256":  "0D1D2E79057FFF589A802015EBE3F942468EFC6FF891E3964D88ED2034E84A1D"
+                          },
+                          {
+                              "path":  "src/zlib/deflate.rs",
+                              "sha256":  "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+                          },
+                          {
+                              "path":  "src/zlib/inflate.rs",
+                              "sha256":  "9082DE5B5ED2A318C9C6821FAC0AA3A8D81F67A1F8B9A896B02526F4E9B65D97"
+                          },
+                          {
+                              "path":  "src/zlib/matcher.rs",
+                              "sha256":  "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+                          }
+                      ],
+    "benchmark_source":  "examples/decode_bench.rs",
+    "benchmark_source_sha256":  "C30BAAE289A56086D5BB51B6DA5CA04D303977A229C75B6118B712B1BA8EBC06",
+    "corpus_sha256":  [
+                          {
+                              "file":  "color-0-depth-02-adam7-1-noise-0.png",
+                              "bytes":  289,
+                              "sha256":  "88196F855FED4BD9ECEA0588207970D045D878673B0BB5F58873C68A750359FA"
+                          },
+                          {
+                              "file":  "color-0-depth-08-adam7-1-noise-1.png",
+                              "bytes":  33499,
+                              "sha256":  "7D977F92620C17D015FC52FDC31B85E9561C9F33A2E25358384AACE2B48DD1D0"
+                          },
+                          {
+                              "file":  "color-2-depth-08-adam7-0-noise-1.png",
+                              "bytes":  99758,
+                              "sha256":  "C8517CA323F819E49A31065849947EB334B24E5132F1BC3251D7BBE571DDBE34"
+                          },
+                          {
+                              "file":  "color-3-depth-01-adam7-0-noise-1.png",
+                              "bytes":  4468,
+                              "sha256":  "1944B820E8B56C6CC23C7D9EB958B15131F31BC4FE96E69F0475FC8FE0F6ADD4"
+                          },
+                          {
+                              "file":  "color-3-depth-02-adam7-1-noise-1.png",
+                              "bytes":  8699,
+                              "sha256":  "BE9E43084CDCFED68441B61B601604D2AB61E7A118B4D74B8B2A1918F0567BC4"
+                          },
+                          {
+                              "file":  "color-3-depth-04-adam7-0-noise-1.png",
+                              "bytes":  16915,
+                              "sha256":  "07BBB3CED3F5E56DAA358E8B153C006B2F4A57D431D510FED35A38ADD24B2CE4"
+                          },
+                          {
+                              "file":  "color-3-depth-08-adam7-0-noise-0.png",
+                              "bytes":  2731,
+                              "sha256":  "41660C948443F0D6A4DAB12C1DAF03071518FE7CC47CF467D7AA3CDB0668B4CC"
+                          },
+                          {
+                              "file":  "color-4-depth-08-adam7-0-noise-1.png",
+                              "bytes":  66571,
+                              "sha256":  "31795D02B1A11AE6DBE5EE0DDF9E937A8FF7A3A9AD6A464F0E725B5A4043C876"
+                          },
+                          {
+                              "file":  "color-4-depth-16-adam7-0-noise-0.png",
+                              "bytes":  6173,
+                              "sha256":  "1720899E558A6538DDCA3E41A0935305BDD60317FB1DD8298F364257605A69B0"
+                          }
+                      ],
+    "executable":  "C:\\GitHub\\deadsync\\target\\png-row-reuse-trial\\decode_bench.exe",
+    "executable_sha256":  "878AB3AB528A2D873F861661E9386090DCB83F69D36934E71D4E4FA7F733593B",
+    "processor":  {
+                      "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                      "NumberOfCores":  22,
+                      "NumberOfLogicalProcessors":  44
+                  },
+    "eligible_affinity":  17592186044415,
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T21:19:40.2313253Z",
+                             "end_utc":  "2026-10-27T21:20:01.2385588Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-formats-a-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T21:20:01.2517354Z",
+                             "end_utc":  "2026-10-27T21:20:22.3426922Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-formats-a-run2.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  3,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T21:20:22.3426922Z",
+                             "end_utc":  "2026-10-27T21:20:43.4569096Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-formats-a-run3.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "limits":  "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec\u0027s allocations. Deflate stage uses identical filtered bytes per source.",
+    "subset_of_manifest":  "benchmark-row-reuse-trial-formats-a-manifest.json",
+    "subset_parent_sha256":  "78547ddef037c0fde43bb1be39cf83cad72ebb2717e981f79d8a16de914c0940",
+    "subset_scope":  "Source/binary and selected input provenance only. No measurement is attributed to this derived template. Select every case flagged below -5% by both reference and unchanged-control comparisons.",
+    "control_of":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\row-reuse-focus-candidate-formats-source.json",
+    "control_manifest_sha256":  "8BF76E45147527A5EA550B15A89787517419149197EE20B5E1C5C0A27606FF7F",
+    "control_runner_sha256":  "78E7C215EDCAADF3693FA1B20ADC6A08E85744C566FC494D532EC19503023DF0"
+}

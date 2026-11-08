@@ -1,0 +1,73 @@
+{
+    "date":  "2026-10-27",
+    "platform":  "Windows x86_64 MSVC",
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "libFLAC":  {
+                    "version":  "1.5.0",
+                    "commit":  "1507800de4b70e21be71f38caa0d9079d0bc6e45",
+                    "source":  "https://github.com/xiph/flac"
+                },
+    "libogg":  {
+                   "version":  "1.3.6",
+                   "commit":  "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+                   "source":  "https://github.com/xiph/ogg"
+               },
+    "symphonia":  "0.6.1",
+    "corpus":  {
+                   "commit":  "aa7b0c6cf32994c106ae517a08134c28a96ff5b2",
+                   "hashes":  "native-corpus-manifest.json"
+               },
+    "results":  {
+                    "generated_cases":  696,
+                    "libFLAC_both_directions_exact":  696,
+                    "symphonia_exact":  696,
+                    "generated_tail_seeks":  3480,
+                    "official_remux_exact":  73,
+                    "official_seeks":  1533,
+                    "verified_md5":  69,
+                    "unavailable_md5":  4
+                },
+    "files":  [
+                  {
+                      "path":  "Cargo.toml",
+                      "sha256":  "7fc4d176249bc8da43daebe73471c2012f9439792fd2011c53ec11ec728ffaca"
+                  },
+                  {
+                      "path":  "src/ogg.rs",
+                      "sha256":  "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85"
+                  },
+                  {
+                      "path":  "src/ogg_encode.rs",
+                      "sha256":  "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d"
+                  },
+                  {
+                      "path":  "src/ogg_seek.rs",
+                      "sha256":  "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1"
+                  },
+                  {
+                      "path":  "tests/ogg_mapping.rs",
+                      "sha256":  "df53758a79d5959ab64ce1e272be21f87b2aa968c79a6287ba15862acef4dc38"
+                  },
+                  {
+                      "path":  "tests/ogg_reference.rs",
+                      "sha256":  "76ad70e9d70f23b45e3e7979dc6d836d96cce1a7362c2a596087401bd005953e"
+                  },
+                  {
+                      "path":  "tests/oracle/oracle.c",
+                      "sha256":  "1d97b81330d0bd4415576d6c48f13a4e2b3ab2e40d82e79f58a4ec08a6f706a4"
+                  },
+                  {
+                      "path":  "tests/oracle/CMakeLists.txt",
+                      "sha256":  "e3795a6dfd7255d1c81124e74e66449b4f1fd205df5c0d8c0d3333ef19684d0b"
+                  },
+                  {
+                      "path":  "validation/ogg-matrix.tsv",
+                      "sha256":  "b74830ae1262224049bff6d77a280801d2c3aae6e2094b878843f484f260c76e"
+                  },
+                  {
+                      "path":  "validation/ogg-corpus.tsv",
+                      "sha256":  "5704b9bfef0c7d7b31ff55aa827d8282add4cfe3719dad3da857150d8ea2d70b"
+                  }
+              ]
+}

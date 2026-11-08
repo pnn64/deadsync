@@ -1,0 +1,15 @@
+{
+  "source": "local path=\"C:\\\\GitHub\\\\deadsync\\\\crates\\\\deadlib-lua\\\\..\\\\..\\\\target\\\\lua-os-fixtures\\\\raw-path-audit\\\\file.dat\";local out={};local f=assert(io.open(path,'wb'));f:close();local paths={path..'.missing/leaf',path..'/leaf',path..'/',path..'*',path..'?',path..':'};for i,p in ipairs(paths)do local a,b,c=os.remove(p);out[#out+1]=a==nil;out[#out+1]=b;out[#out+1]=c;local f=io.open(path,'rb');print(i,a,c,f~=nil);if f then f:close()end end;assert(os.remove(path));return unpack(out)",
+  "runs": {
+    "reference": {
+      "returncode": 0,
+      "stdout_hex": "31096e696c093209747275650d0a32096e696c093209747275650d0a33096e696c09323209747275650d0a34096e696c09323209747275650d0a35096e696c09323209747275650d0a36096e696c09323209747275650d0a",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "returncode": 0,
+      "stdout_hex": "31096e696c093209747275650d0a32096e696c093209747275650d0a33096e696c09323209747275650d0a34096e696c09323209747275650d0a35096e696c09323209747275650d0a36096e696c09323209747275650d0a",
+      "stderr_hex": ""
+    }
+  }
+}

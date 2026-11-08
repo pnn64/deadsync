@@ -1,0 +1,80 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 45.31s
+     Running tests\apng_rendered.rs (target\png-rows-20261028\build\release\deps\apng_rendered-fa325d642438bc3b.exe)
+
+running 3 tests
+WPT display references: 28 checked, 1 requires color management; maximum RGB difference=0/255, differing channels=0
+test wpt_published_final_states_at_reference_precision ... ok
+test external_wpt_all_rendered_rgba16_frames_and_both_writers ... ok
+Regenerated 35 libpng/fraction APNG answers at C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-apng-goldens-50180-1793193534069567800
+test regenerate_exact_render_goldens_with_independent_libpng_and_fractions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.19s
+
+     Running tests\compositing.rs (target\png-rows-20261028\build\release\deps\compositing-0f1dae3a20ee358a.exe)
+
+running 3 tests
+test separate_default_and_first_previous ... ok
+test explicit_precision_palette_and_transparency_expansion ... ok
+test source_over_and_disposal_known_answers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compositor_precision.rs (target\png-rows-20261028\build\release\deps\compositor_precision-eae43670fcd8c69d.exe)
+
+running 8 tests
+test native_rgba_source_rows_preserve_offsets_transparent_rgb_and_disposal ... ok
+test opaque_white_blends_stay_white_at_every_source_alpha ... ok
+test every_palette_size_transparency_length_and_expansion_boundary_matches_model ... ok
+test exact_canvas_and_previous_snapshot_limits_fail_before_advancing_and_reset_cleanly ... ok
+High-precision APNG: 240 independent wire files, 1920 displayed canvases, all six disposal/blend states and nine disposal transitions
+test all_native_formats_disposal_geometry_default_roles_and_adam7_match_rational_model ... ok
+test independent_libpng_and_python_fraction_canvases_retain_all_sixteen_bits ... ok
+test every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions ... ok
+Regenerated 240 independent libpng/Fraction precision animations at C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-compositor-goldens-49348-1793193542718671100
+test regenerate_precision_goldens_from_independent_c_frames_and_python_fractions ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 58.23s
+
+     Running tests\decoder_boundaries.rs (target\png-rows-20261028\build\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests\palette.rs (target\png-rows-20261028\build\release\deps\palette-14b9150ceacbb782.exe)
+
+running 2 tests
+test independent_palette_overflow_fixture ... ok
+test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\png_stream.rs (target\png-rows-20261028\build\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\static_png.rs (target\png-rows-20261028\build\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+

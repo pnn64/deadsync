@@ -1,6 +1,12 @@
 // Compile the production playback source with asset fixtures in an integration
 // crate. This avoids the library-unit-test identity cycle through deadsync-assets.
 pub use deadsync_song_lua::*;
+#[path = "../src/input.rs"]
+mod input;
+#[path = "../src/runtime_fallback.rs"]
+mod runtime_fallback;
+#[path = "../src/actor_quaternion.rs"]
+mod actor_quaternion;
 pub mod playback {
     include!("../src/playback.rs");
     mod tests {
@@ -27,14 +33,7 @@ mod tests {
                 portable: false,
             };
             dirs.ensure_dirs_exist();
-            let mut assets = dirs.asset_paths(None);
-            if let Some(root) = std::env::var_os("DEADSYNC_WORKSHOP_PACK") {
-                let root = std::path::PathBuf::from(root)
-                    .canonicalize()
-                    .expect("Workshop fixture exists");
-                assets.noteskin_pack_roots =
-                    vec![root.parent().expect("pack has a parent").to_path_buf()];
-            }
+            let assets = dirs.asset_paths(None);
             deadsync_assets::init_paths(assets).expect("initialize fixture assets");
             deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())
                 .expect("initialize fixture config");

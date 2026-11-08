@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "coefficients_bit_compared": 72,
+  "coefficient_bytes_before": 576,
+  "coefficient_bytes_after": 576,
+  "other_tables_unchanged": [
+    "ALIAS_CA",
+    "ALIAS_CS",
+    "DEWINDOW",
+    "IMDCT_LONG",
+    "SYNTHESIS",
+    "WINDOW_LONG",
+    "WINDOW_SHORT"
+  ],
+  "reproducible_generation": true,
+  "command": [
+    "python",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_dsp.py",
+    "--dewindow",
+    "target/deadlib-mp3-reference/dewindow",
+    "--crate",
+    "target\\mp3-perf-20261028\\short-regenerated"
+  ],
+  "sha256": {
+    "target\\mp3-perf-20261028\\region-only-final\\crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "f68f3fa6b68197042ac97c5cda4ace1e0defe72f4d36477340a41f9c54a976ef",
+    "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "28350c3273baced985886a8197c41f023afa79f562f0acd1f0529547ecec300f",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_dsp.py": "ac52b69f4d2a9bc1dce9079651c48ec3f6d8c86256f57fcb746d3a59b4fe83fd",
+    "target\\deadlib-mp3-reference\\dewindow": "0998ea42d245e615c4bac39afe80f5877bd28db084b3992cb0c95d8c66bf5819"
+  },
+  "other_tables_bit_compared": {
+    "WINDOW_LONG": 144,
+    "ALIAS_CS": 8,
+    "DEWINDOW": 512,
+    "ALIAS_CA": 8,
+    "SYNTHESIS": 2048,
+    "IMDCT_LONG": 648,
+    "WINDOW_SHORT": 12
+  },
+  "saved_generator": {
+    "path": "target\\mp3-perf-20261028\\short-twelve-generator.py",
+    "sha256": "ac52b69f4d2a9bc1dce9079651c48ec3f6d8c86256f57fcb746d3a59b4fe83fd"
+  },
+  "reproduction_command": [
+    "python",
+    "target\\mp3-perf-20261028\\short-twelve-generator.py",
+    "--dewindow",
+    "target/deadlib-mp3-reference/dewindow",
+    "--crate",
+    "target\\mp3-perf-20261028\\short-regenerated"
+  ]
+}

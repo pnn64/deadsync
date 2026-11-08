@@ -1,0 +1,2 @@
+warning: in the working copy of 'crates/deadlib-input-native/tests/native_kernels.rs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/benchmark_native_input.py', LF will be replaced by CRLF the next time Git touches it

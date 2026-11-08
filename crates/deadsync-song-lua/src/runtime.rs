@@ -7,17 +7,49 @@ use crate::{
     SongLuaCompileContext, song_display_bps, song_elapsed_seconds_at, song_music_rate,
 };
 
+pub(crate) struct SongLuaClock(pub deadsync_rules::timing::TimingData);
+pub(crate) struct SongLuaNoOffsetClock(pub deadsync_rules::timing::TimingData);
+pub(crate) const PLAYER_SONG_POSITIONS_KEY: &str = "__songlua_player_positions";
+
 pub fn create_song_runtime_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
 ) -> mlua::Result<Table> {
+    if let Some(timing) = &context.song_timing {
+        lua.set_app_data(SongLuaClock(timing.clone()));
+        let mut no_offset = timing.clone();
+        no_offset.set_global_offset_seconds(0.0);
+        lua.set_app_data(SongLuaNoOffsetClock(no_offset));
+    } else {
+        lua.remove_app_data::<SongLuaClock>();
+        lua.remove_app_data::<SongLuaNoOffsetClock>();
+    }
     let table = lua.create_table()?;
     table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
+    // SongPosition::Reset runs before live actors load. Song timing replaces
+    // its native construction BPS on the first gameplay update.
+    table.set(SONG_LUA_RUNTIME_BPS_KEY, if context.live { 10.0 } else { song_display_bps(context) })?;
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
+    table.set("__songlua_freeze", false)?;
+    table.set("__songlua_delay", false)?;
+    if context.live {
+        // PlayerState owns a reset SongPosition before the first gameplay
+        // update. Keep each player's position separate from GameState's.
+        let positions = lua.create_table()?;
+        for index in 1..=crate::LUA_PLAYERS {
+            let position = lua.create_table()?;
+            for key in [SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
+                SONG_LUA_RUNTIME_BPS_KEY, SONG_LUA_RUNTIME_RATE_KEY,
+                "__songlua_freeze", "__songlua_delay"] {
+                position.raw_set(key, table.raw_get::<Value>(key)?)?;
+            }
+            positions.raw_set(index, position)?;
+        }
+        table.raw_set(PLAYER_SONG_POSITIONS_KEY, positions)?;
+    }
     let bpms = lua.create_table()?;
     for (index, &(beat, bpm)) in context.song_timing_bpms.iter().enumerate() {
         let segment = lua.create_table()?;
@@ -33,6 +65,30 @@ pub fn create_song_runtime_table(
     Ok(table)
 }
 
+pub(crate) fn song_music_time(lua: &Lua, seconds: f64, rate: f32) -> f32 {
+    // Live frames already carry the audio clock's native music position.
+    if crate::live::active(lua) { return seconds as f32; }
+    // Replay seconds are elapsed wall time. SongPosition exposes the native
+    // float music timestamp, which includes the song origin and music rate.
+    let origin = lua.app_data_ref::<SongLuaClock>()
+        .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
+    (seconds * f64::from(rate)) as f32 + origin
+}
+
+pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Value> {
+    let seconds = song_music_time(lua,
+        runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+        runtime.get::<f32>(SONG_LUA_RUNTIME_RATE_KEY)?,
+    );
+    // Lua 5.1 prints whole native floats without the Lua 5.4 ".0" suffix.
+    // Preserve fractional values exactly, including times smaller than EPSILON.
+    if seconds.fract() == 0.0 && seconds.abs() < 1e14 {
+        song_lua_runtime_number(seconds)
+    } else {
+        Ok(Value::Number(f64::from(seconds)))
+    }
+}
+
 pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for method in ["GetSongBeat", "GetSongBeatVisible"] {
@@ -40,7 +96,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _self: Option<Value>| song_runtime.get::<Value>(SONG_LUA_RUNTIME_BEAT_KEY)
+                move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
             })?,
         )?;
     }
@@ -49,9 +105,19 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _self: Option<Value>| {
-                    song_runtime.get::<Value>(SONG_LUA_RUNTIME_SECONDS_KEY)
-                }
+                move |lua, _self: Option<Value>| song_music_seconds(lua, &song_runtime)
+            })?,
+        )?;
+    }
+    for (method, key) in [
+        ("GetFreeze", "__songlua_freeze"),
+        ("GetDelay", "__songlua_delay"),
+    ] {
+        table.set(
+            method,
+            lua.create_function({
+                let song_runtime = song_runtime.clone();
+                move |_, _self: Option<Value>| song_runtime.get::<bool>(key)
             })?,
         )?;
     }
@@ -66,8 +132,13 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
 }
 
 pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
-    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
-        Ok(Value::Integer(value as i64))
+    // Integer::MAX rounds up as f32, so the upper bound must be exclusive.
+    if value.is_finite()
+        && value.fract().abs() <= f32::EPSILON
+        && value >= mlua::Integer::MIN as f32
+        && value < -(mlua::Integer::MIN as f32)
+    {
+        Ok(Value::Integer(value as mlua::Integer))
     } else {
         Ok(Value::Number(f64::from(value)))
     }
@@ -75,6 +146,28 @@ pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
 
 fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
     lua.globals().get(SONG_LUA_RUNTIME_KEY)
+}
+
+pub(crate) fn reset_song_runtime_position(lua: &Lua) -> mlua::Result<()> {
+    fn reset(position: &Table) -> mlua::Result<()> {
+        position.set(SONG_LUA_RUNTIME_BEAT_KEY, 0.0)?;
+        position.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0.0)?;
+        position.set(SONG_LUA_RUNTIME_BPS_KEY, 10.0)?;
+        position.set("__songlua_freeze", false)?;
+        position.set("__songlua_delay", false)
+    }
+    // GameState::ResetMusicStatistics resets both the global SongPosition
+    // and each PlayerState position before replacement actors are loaded.
+    let runtime = compile_song_runtime_table(lua)?;
+    reset(&runtime)?;
+    runtime.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0.0)?;
+    runtime.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0.0)?;
+    if let Some(positions) = runtime.raw_get::<Option<Table>>(PLAYER_SONG_POSITIONS_KEY)? {
+        for position in positions.sequence_values::<Table>() {
+            reset(&position?)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
@@ -159,6 +252,18 @@ pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
     let music_rate = runtime
         .get::<Option<f32>>(SONG_LUA_RUNTIME_RATE_KEY)?
         .unwrap_or(1.0);
+    if let Some(clock) = lua.app_data_ref::<SongLuaClock>() {
+        let seconds = clock.0.get_time_for_beat_exact(beat);
+        let position = clock.0.get_song_position(seconds);
+        runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
+        runtime.set(
+            SONG_LUA_RUNTIME_SECONDS_KEY,
+            (seconds - clock.0.get_time_for_beat_exact(0.0)) / music_rate.max(f32::EPSILON),
+        )?;
+        runtime.set("__songlua_freeze", position.is_in_freeze)?;
+        runtime.set("__songlua_delay", position.is_in_delay)?;
+        return runtime.set(SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0);
+    }
     let mut segment_beat = 0.0;
     let mut segment_seconds = 0.0;
     if let Some(bpms) = runtime.get::<Option<Table>>("__songlua_timing_bpms")? {
@@ -180,4 +285,37 @@ pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
             / music_rate.max(f32::EPSILON),
     )?;
     runtime.set(SONG_LUA_RUNTIME_BPS_KEY, song_bps)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn music_seconds_preserves_offset_and_rate() {
+        for (origin, rate) in [(0.0, 1.0), (1.25, 1.0), (-0.5, 1.0), (1.25, 2.0), (-0.5, 0.5)] {
+            let lua = Lua::new();
+            let mut context = SongLuaCompileContext::new(std::path::Path::new("."), "music clock");
+            context.song_music_rate = rate;
+            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                origin, 0.0,
+                &deadsync_rules::timing::TimingSegments {
+                    bpms: vec![(0.0, 60.0)], ..Default::default()
+                }, &[],
+            ));
+            let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
+            let position = create_song_position_table(&lua, &runtime).expect("song position");
+            assert_eq!(context.song_timing.as_ref().expect("native song timing").get_time_for_beat_exact(0.0), origin);
+            for elapsed in [0.0, 1e-9, 1.0 / 60.0, 0.5, 2.0] {
+                runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, elapsed).expect("trace timestamp");
+                for method in ["GetMusicSeconds", "GetMusicSecondsVisible"] {
+                    let getter = position.get::<mlua::Function>(method).expect("native getter");
+                    let actual = getter.call::<f32>(position.clone()).expect("music timestamp");
+                    assert_eq!(actual, (elapsed * f64::from(rate)) as f32 + origin,
+                        "{method}: origin={origin}, rate={rate}, elapsed={elapsed}");
+                }
+                assert_eq!(runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY).expect("wall clock"), elapsed);
+            }
+        }
+    }
 }

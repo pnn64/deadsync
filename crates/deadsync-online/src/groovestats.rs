@@ -759,6 +759,9 @@ fn push_leaderboard_pane(
     }
 }
 
+/// `ArrowCloud` boards follow the two `GrooveStats` boards in the order the
+/// service returned them. Whether event boards lead is a display preference,
+/// so the scorebox and overlay reorder at draw time rather than the cache.
 fn insert_arrowcloud_panes(fetched: &mut FetchedPlayerLeaderboards, panes: Vec<LeaderboardPane>) {
     let insert_ix = 2.min(fetched.data.panes.len());
     for pane in panes.into_iter().rev() {
@@ -834,6 +837,36 @@ pub fn fetched_player_leaderboards_from_api(
     }
 }
 
+#[inline(always)]
+fn empty_fetched_player_leaderboards() -> FetchedPlayerLeaderboards {
+    FetchedPlayerLeaderboards {
+        data: PlayerLeaderboardData {
+            panes: Vec::new(),
+            srpg_self_score: None,
+            itl_self_score: None,
+            itl_self_rank: None,
+        },
+        imported_score: None,
+        itl_self_found: false,
+    }
+}
+
+/// Why a combined leaderboard request cannot run, if no service has a key.
+#[must_use]
+pub fn combined_leaderboard_request_error(
+    api_key: &str,
+    arrowcloud_api_key: Option<&str>,
+) -> Option<&'static str> {
+    let has_groovestats = !api_key.trim().is_empty();
+    let has_arrowcloud = arrowcloud_api_key.is_some_and(|key| !key.trim().is_empty());
+    (!has_groovestats && !has_arrowcloud)
+        .then_some("Missing GrooveStats and ArrowCloud API keys for leaderboard request.")
+}
+
+/// Fetch the `GrooveStats` (or `BoogieStats`) boards when that key is set,
+/// then merge the `ArrowCloud` boards when that key is set. Either service
+/// alone is enough; an `ArrowCloud` failure is fatal only when it is the sole
+/// service, otherwise it is reported beside the `GrooveStats` result.
 pub fn fetch_combined_player_leaderboards(
     service: Service,
     api_key: &str,
@@ -844,13 +877,19 @@ pub fn fetch_combined_player_leaderboards(
     max_entries: usize,
 ) -> Result<CombinedPlayerLeaderboards, OnlineRequestError> {
     let max_entries = max_entries.max(1);
-    let decoded = fetch_player_leaderboards(service, api_key, chart_hash, Some(max_entries))?;
-    let mut fetched = fetched_player_leaderboards_from_api(decoded, username, show_ex_score);
+    let has_groovestats = !api_key.trim().is_empty();
+    let mut fetched = if has_groovestats {
+        let decoded = fetch_player_leaderboards(service, api_key, chart_hash, Some(max_entries))?;
+        fetched_player_leaderboards_from_api(decoded, username, show_ex_score)
+    } else {
+        empty_fetched_player_leaderboards()
+    };
     let mut arrowcloud_error = None;
 
     if let Some(arrowcloud_api_key) = arrowcloud_api_key {
-        match crate::arrowcloud::fetch_hard_ex_leaderboard_panes(chart_hash, arrowcloud_api_key) {
+        match crate::arrowcloud::fetch_leaderboard_panes(chart_hash, arrowcloud_api_key, max_entries) {
             Ok(arrowcloud_panes) => insert_arrowcloud_panes(&mut fetched, arrowcloud_panes),
+            Err(error) if !has_groovestats => return Err(error),
             Err(error) => arrowcloud_error = Some(error),
         }
     }
@@ -873,8 +912,8 @@ pub fn fetch_validated_combined_player_leaderboards(
     if chart_hash.trim().is_empty() {
         return Err("Missing chart hash for leaderboard request.".into());
     }
-    if api_key.trim().is_empty() {
-        return Err("Missing GrooveStats API key for leaderboard request.".into());
+    if let Some(message) = combined_leaderboard_request_error(api_key, arrowcloud_api_key) {
+        return Err(message.into());
     }
     fetch_combined_player_leaderboards(
         service,
@@ -1610,7 +1649,8 @@ where
         ),
         GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
-            lua_submit_allowed: lua_submit_allowed(chart.short_hash.as_str()),
+            lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+                || lua_submit_allowed(chart.short_hash.as_str()),
             song_completed_naturally: outcome.song_completed_naturally,
             is_failing: outcome.is_failing,
             life: outcome.life,
@@ -1687,7 +1727,7 @@ where
         invalid_reason: groovestats_submit_invalid_reason_from_profile(
             chart,
             gs.song().has_lua,
-            lua_submit_allowed(chart_hash),
+            gs.mods.song_lua_compile_succeeded || lua_submit_allowed(chart_hash),
             profile,
             gs.music_rate(),
             fail_type_ok,
@@ -1779,15 +1819,12 @@ fn cache_submit_success_from_app_runtime(
     );
     if let Some(profile_id) = player.profile_id.as_deref() {
         for folders in &plan.itl_folder_groups {
-            deadsync_profile::app_runtime::update_itl_unlock_folders(
-                profile_id,
-                folders.as_slice(),
-            );
+            deadsync_profile::app_runtime::update_itl_unlock_folders(profile_id, folders);
         }
     }
     for download in &plan.downloads {
         crate::runtime::queue_event_unlock_download(
-            download.url.as_str(),
+            download.url,
             download.download_name.as_str(),
             download.pack_name.as_str(),
         );
@@ -3091,16 +3128,18 @@ pub fn unlock_events_from_submit_response<'a>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrooveStatsUnlockDownload {
-    pub url: String,
+/// A queued download description borrowing its URL from the API response.
+pub struct GrooveStatsUnlockDownload<'a> {
+    pub url: &'a str,
     pub download_name: String,
     pub pack_name: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GrooveStatsSubmitUnlockPlan {
-    pub itl_folder_groups: Vec<Vec<String>>,
-    pub downloads: Vec<GrooveStatsUnlockDownload>,
+/// Unlock work to consume while the submission response remains available.
+pub struct GrooveStatsSubmitUnlockPlan<'a> {
+    pub itl_folder_groups: Vec<&'a [String]>,
+    pub downloads: Vec<GrooveStatsUnlockDownload<'a>>,
 }
 
 fn unlock_events<'a>(
@@ -3132,9 +3171,9 @@ fn download_count(event: &GrooveStatsSubmitApiEvent) -> usize {
         .count()
 }
 
-fn append_unlock_downloads(
-    out: &mut Vec<GrooveStatsUnlockDownload>,
-    event: &GrooveStatsSubmitApiEvent,
+fn append_unlock_downloads<'a>(
+    out: &mut Vec<GrooveStatsUnlockDownload<'a>>,
+    event: &'a GrooveStatsSubmitApiEvent,
     profile_name: &str,
     separate_by_player: bool,
 ) {
@@ -3172,7 +3211,7 @@ fn append_unlock_downloads(
         }
         download_name.truncate(download_name.trim_end().len());
         out.push(GrooveStatsUnlockDownload {
-            url: url.to_string(),
+            url,
             download_name,
             pack_name,
         });
@@ -3180,11 +3219,11 @@ fn append_unlock_downloads(
 }
 
 #[must_use]
-pub fn unlock_downloads_from_submit_event(
-    event: &GrooveStatsSubmitApiEvent,
+pub fn unlock_downloads_from_submit_event<'a>(
+    event: &'a GrooveStatsSubmitApiEvent,
     profile_name: &str,
     separate_by_player: bool,
-) -> Vec<GrooveStatsUnlockDownload> {
+) -> Vec<GrooveStatsUnlockDownload<'a>> {
     let count = download_count(event);
     if count == 0 {
         return Vec::new();
@@ -3195,12 +3234,12 @@ pub fn unlock_downloads_from_submit_event(
 }
 
 #[must_use]
-pub fn submit_unlock_plan_from_response(
+pub fn submit_unlock_plan_from_response<'a>(
     player: &GrooveStatsSubmitPlayerJob,
-    response: &GrooveStatsSubmitApiPlayer,
+    response: &'a GrooveStatsSubmitApiPlayer,
     auto_download_unlocks: bool,
     separate_unlocks_by_player: bool,
-) -> GrooveStatsSubmitUnlockPlan {
+) -> GrooveStatsSubmitUnlockPlan<'a> {
     let itl_quests = response
         .itl
         .as_ref()
@@ -3209,7 +3248,6 @@ pub fn submit_unlock_plan_from_response(
     let itl_folder_groups = itl_quests
         .iter()
         .map(|quest| quest.song_download_folders.as_slice())
-        .map(<[String]>::to_vec)
         .collect();
     let mut downloads = Vec::new();
     if auto_download_unlocks {
@@ -4333,10 +4371,25 @@ mod tests {
             true,
             10,
         )
-        .expect_err("missing key should fail before request");
+        .expect_err("missing keys should fail before request");
         assert_eq!(
             missing_key.to_string(),
-            "Missing GrooveStats API key for leaderboard request."
+            "Missing GrooveStats and ArrowCloud API keys for leaderboard request."
+        );
+
+        let blank_keys = fetch_validated_combined_player_leaderboards(
+            Service::GrooveStats,
+            " ",
+            "player",
+            "deadbeef",
+            Some("  "),
+            true,
+            10,
+        )
+        .expect_err("blank keys should fail before request");
+        assert_eq!(
+            blank_keys.to_string(),
+            "Missing GrooveStats and ArrowCloud API keys for leaderboard request."
         );
     }
 
@@ -4818,6 +4871,52 @@ mod tests {
     }
 
     #[test]
+    fn combined_leaderboard_request_accepts_either_service_key() {
+        assert!(combined_leaderboard_request_error("gs-key", None).is_none());
+        assert!(combined_leaderboard_request_error("gs-key", Some("ac-key")).is_none());
+        assert!(combined_leaderboard_request_error("  ", Some("ac-key")).is_none());
+        assert!(combined_leaderboard_request_error("  ", Some("  ")).is_some());
+        assert!(combined_leaderboard_request_error("", None).is_some());
+    }
+
+    #[test]
+    fn insert_arrowcloud_panes_fill_an_empty_groovestats_result() {
+        let mut fetched = empty_fetched_player_leaderboards();
+        insert_arrowcloud_panes(
+            &mut fetched,
+            vec![
+                LeaderboardPane {
+                    name: "ArrowCloud".to_string(),
+                    entries: Vec::new(),
+                    is_ex: false,
+                    disabled: false,
+                    personalized: false,
+                    arrowcloud_kind: Some(deadsync_score::ArrowCloudPaneKind::Itg),
+                },
+                LeaderboardPane {
+                    name: "ArrowCloud".to_string(),
+                    entries: Vec::new(),
+                    is_ex: true,
+                    disabled: false,
+                    personalized: false,
+                    arrowcloud_kind: Some(deadsync_score::ArrowCloudPaneKind::Ex),
+                },
+            ],
+        );
+
+        assert_eq!(fetched.data.panes.len(), 2);
+        assert_eq!(
+            fetched.data.panes[0].arrowcloud_kind,
+            Some(deadsync_score::ArrowCloudPaneKind::Itg)
+        );
+        assert_eq!(
+            fetched.data.panes[1].arrowcloud_kind,
+            Some(deadsync_score::ArrowCloudPaneKind::Ex)
+        );
+        assert!(fetched.imported_score.is_none());
+    }
+
+    #[test]
     fn insert_arrowcloud_panes_places_them_after_core_gs_panes() {
         let mut fetched = fetched_player_leaderboards_from_api(
             LeaderboardsApiResponse {
@@ -4854,6 +4953,46 @@ mod tests {
         assert_eq!(fetched.data.panes[1].name, "GrooveStats");
         assert_eq!(fetched.data.panes[2].name, "ArrowCloud");
         assert_eq!(fetched.data.panes[3].name, "SRPG");
+    }
+
+    #[test]
+    fn insert_arrowcloud_panes_keeps_the_service_order() {
+        let mut fetched = fetched_player_leaderboards_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+                    ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
+                    srpg: None,
+                    itl: None,
+                }),
+            },
+            "perfecttaste",
+            false,
+        );
+
+        insert_arrowcloud_panes(
+            &mut fetched,
+            vec![
+                deadsync_score::arrowcloud_leaderboard_pane(
+                    deadsync_score::ArrowCloudPaneKind::Itg,
+                    Vec::new(),
+                    false,
+                ),
+                deadsync_score::arrowcloud_leaderboard_pane(
+                    deadsync_score::ArrowCloudPaneKind::Golf,
+                    Vec::new(),
+                    false,
+                ),
+            ],
+        );
+
+        let names: Vec<_> = fetched.data.panes.iter().map(|pane| pane.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["GrooveStats", "GrooveStats", "ArrowCloud", "Golf (ArrowCloud)"],
+            "ArrowCloud boards follow GrooveStats in the order the service returned them"
+        );
     }
 
     #[test]
@@ -5439,7 +5578,7 @@ mod tests {
             plan.downloads
                 .iter()
                 .map(|download| (
-                    download.url.as_str(),
+                    download.url,
                     download.download_name.as_str(),
                     download.pack_name.as_str()
                 ))
@@ -6156,20 +6295,5 @@ mod tests {
         assert_eq!(response.error, "bad api key");
         assert!(response.player_for_slot(1).is_none());
     }
-}
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/groovestats_preparation.rs"
-    ));
-}
-
-#[cfg(test)]
-mod player_responses {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/player_responses/mod.rs"
-    ));
+    include!("groovestats/unlock_tests.rs");
 }

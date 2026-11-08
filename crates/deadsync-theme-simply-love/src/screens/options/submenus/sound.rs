@@ -360,6 +360,27 @@ fn audio_sample_rate_choices(sample_rates_hz: &[u32]) -> Vec<Option<u32>> {
     choices
 }
 
+fn unique_sample_rates(state: &State) -> impl Iterator<Item = Option<u32>> + '_ {
+    let device_idx =
+        selected_sound_device_choice(state).min(state.sound_device_options.len().saturating_sub(1));
+    let rates = state
+        .sound_device_options
+        .get(device_idx)
+        .map_or(&[][..], |option| option.sample_rates_hz.as_slice());
+    let rates = if rates.is_empty() {
+        &[44_100, 48_000][..]
+    } else {
+        rates
+    };
+    std::iter::once(None).chain(
+        rates
+            .iter()
+            .enumerate()
+            .filter(|&(index, hz)| !rates[..index].contains(hz))
+            .map(|(_, &hz)| Some(hz)),
+    )
+}
+
 pub(in crate::screens::options) fn sound_device_from_choice(
     state: &State,
     idx: usize,
@@ -467,9 +488,8 @@ pub(in crate::screens::options) fn sample_rate_choice_index(
     state: &State,
     rate: Option<u32>,
 ) -> usize {
-    sound_sample_rate_choices(state)
-        .iter()
-        .position(|&value| value == rate)
+    unique_sample_rates(state)
+        .position(|value| value == rate)
         .unwrap_or(0)
 }
 
@@ -477,5 +497,5 @@ pub(in crate::screens::options) fn sample_rate_from_choice(
     state: &State,
     idx: usize,
 ) -> Option<u32> {
-    sound_sample_rate_choices(state).get(idx).copied().flatten()
+    unique_sample_rates(state).nth(idx).flatten()
 }

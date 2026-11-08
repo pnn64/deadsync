@@ -1,0 +1,10 @@
+#TITLE:Nested Start Commands (stop);
+#BPMS:0=60;
+#STOPS:1.5=0.5;
+#BGCHANGES:0=nested-start.lua=1=0=0=1;
+#NOTES:dance-single::Challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+;

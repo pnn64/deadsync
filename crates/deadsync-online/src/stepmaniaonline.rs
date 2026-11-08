@@ -22,11 +22,11 @@ const DOWNLOAD_QUEUE_CAPACITY: usize = 8;
 const PROGRESS_STEP_BYTES: u64 = 512 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 200_000;
-const MAX_ARCHIVE_PATH_BYTES: usize = 768;
+pub(crate) const MAX_ARCHIVE_PATH_BYTES: usize = 768;
 const MAX_UNCOMPRESSED_BYTES: u64 = 128 * 1024 * 1024 * 1024;
 const UNCOMPRESSED_HEADROOM_BYTES: u64 = 256 * 1024 * 1024;
-const DESTINATION_MAX_CHARS: usize = 160;
-const WINDOWS_RESERVED_NAMES: [&str; 22] = [
+pub(crate) const DESTINATION_MAX_CHARS: usize = 160;
+pub(crate) const WINDOWS_RESERVED_NAMES: [&str; 22] = [
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
@@ -115,11 +115,22 @@ fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (usize
             .sum::<usize>()
         + 21;
     let mut search_text = String::with_capacity(capacity);
-    search_text.extend(name.chars().flat_map(char::to_lowercase));
+    if name.is_ascii() {
+        search_text.push_str(name);
+        search_text.make_ascii_lowercase();
+    } else {
+        search_text.extend(name.chars().flat_map(char::to_lowercase));
+    }
     let normalized_name_len = search_text.len();
     for value in metadata.into_iter().flatten() {
         search_text.push(' ');
-        search_text.extend(value.chars().flat_map(char::to_lowercase));
+        if value.is_ascii() {
+            let start = search_text.len();
+            search_text.push_str(value);
+            search_text[start..].make_ascii_lowercase();
+        } else {
+            search_text.extend(value.chars().flat_map(char::to_lowercase));
+        }
     }
     search_text.push(' ');
     write!(&mut search_text, "{id}").expect("writing to a String cannot fail");
@@ -377,7 +388,7 @@ fn parse_catalog_line(line: &str, line_number: usize) -> Result<PackInfo, StepMa
         name.to_string(),
         song_count,
         size_bytes,
-        optional_catalog_value(fields[3]),
+        catalog_sync_value(fields[3]),
         optional_catalog_value(fields[2]),
         optional_catalog_value(fields[1]),
         optional_catalog_value(fields[0]),
@@ -399,6 +410,18 @@ where
 fn optional_catalog_value(text: &str) -> Option<String> {
     let text = text.trim();
     if text.is_empty() || text.eq_ignore_ascii_case("none") || text.eq_ignore_ascii_case("null") {
+        None
+    } else {
+        Some(text.to_string())
+    }
+}
+
+/// The sync column, which has its own vocabulary: here the literal `null` is
+/// the site saying the pack is null-synced -- its one positive answer -- not
+/// an unset field, so it is kept rather than read as absent.
+fn catalog_sync_value(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() || text.eq_ignore_ascii_case("none") {
         None
     } else {
         Some(text.to_string())
@@ -566,7 +589,8 @@ fn finish_catalog_request(generation: u64, result: Result<Vec<PackInfo>, StepMan
         log::debug!("Discarding stale StepManiaOnline catalog generation {generation}.");
         return;
     }
-    let mut snapshot = (*runtime.snapshot).clone();
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
+    snapshot.installs.shrink_to_fit();
     match result {
         Ok(packs) => {
             let count = packs.len();
@@ -582,7 +606,6 @@ fn finish_catalog_request(generation: u64, result: Result<Vec<PackInfo>, StepMan
             snapshot.message = Some(error.to_string());
         }
     }
-    runtime.snapshot = Arc::new(snapshot);
 }
 
 fn start_download_worker() -> Result<SyncSender<DownloadJob>, String> {
@@ -599,13 +622,13 @@ fn start_download_worker() -> Result<SyncSender<DownloadJob>, String> {
 }
 
 fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result<(), String> {
-    let mut snapshot = (*runtime.snapshot).clone();
-    if let Some(install) = snapshot
+    if let Some(index) = runtime
+        .snapshot
         .installs
-        .iter_mut()
-        .find(|install| install.pack_id == pack.id)
+        .iter()
+        .position(|install| install.pack_id == pack.id)
     {
-        match install.phase {
+        match runtime.snapshot.installs[index].phase {
             InstallPhase::Queued | InstallPhase::Downloading | InstallPhase::Extracting => {
                 return Err(format!("'{}' is already queued.", pack.name));
             }
@@ -616,19 +639,26 @@ fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result
                 ));
             }
             InstallPhase::Error => {
-                *install = queued_install(pack);
-                runtime.snapshot = Arc::new(snapshot);
+                let snapshot = Arc::make_mut(&mut runtime.snapshot);
+                snapshot.installs[index] = queued_install(pack);
+                snapshot.installs.shrink_to_fit();
                 return Ok(());
             }
         }
     }
-    if snapshot.installs.len() == MAX_INSTALLS {
-        let terminal = snapshot.installs.iter().position(|install| {
+    let evict = if runtime.snapshot.installs.len() == MAX_INSTALLS {
+        let terminal = runtime.snapshot.installs.iter().position(|install| {
             matches!(install.phase, InstallPhase::Installed | InstallPhase::Error)
         });
         let Some(index) = terminal else {
             return Err("Too many pack installs are active.".to_string());
         };
+        Some(index)
+    } else {
+        None
+    };
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
+    if let Some(index) = evict {
         let evicted = snapshot.installs.remove(index);
         log::debug!(
             "Evicted terminal StepManiaOnline install history for pack {}.",
@@ -636,7 +666,20 @@ fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result
         );
     }
     snapshot.installs.push(queued_install(pack));
-    runtime.snapshot = Arc::new(snapshot);
+    // Reuse must not retain more install storage than rebuilding the list.
+    let max_capacity = if evict.is_some() {
+        snapshot.installs.len()
+    } else {
+        snapshot
+            .installs
+            .len()
+            .saturating_sub(1)
+            .saturating_mul(2)
+            .max(4)
+    };
+    if snapshot.installs.capacity() > max_capacity {
+        snapshot.installs.shrink_to_fit();
+    }
     Ok(())
 }
 
@@ -675,6 +718,19 @@ fn run_download_job(job: DownloadJob) {
             set_install_error(job.pack.id, error.to_string());
         }
     }
+}
+
+/// Hand a finished install elsewhere in the crate to the same reload queue a
+/// pack install uses, so the browser's reload prompt and the shell's rescan
+/// pick it up without knowing where it came from.
+///
+/// The content relay's single-song installs land here with their singles
+/// group as `destination`: one rescan of the group covers every song added to
+/// it, and a second song into the same group is coalesced rather than queued
+/// twice.
+pub(crate) fn queue_ready_song_dir(destination: PathBuf, songs_root: &Path) {
+    let mut runtime = lock_runtime();
+    queue_ready_dir(&mut runtime, destination, songs_root);
 }
 
 fn queue_ready_dir(runtime: &mut RuntimeState, destination: PathBuf, songs_root: &Path) {
@@ -798,6 +854,10 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
 
 fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepManiaOnlineError> {
     let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
+    download_archive_from(pack, archive_path, &url)
+}
+
+fn download_archive_from(pack: &PackInfo, archive_path: &Path, url: &str) -> Result<u64, StepManiaOnlineError> {
     let response = network::get_streaming_agent()
         .get(url)
         .call()
@@ -812,34 +872,85 @@ fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepMan
 fn write_archive_download(
     pack: &PackInfo,
     archive_path: &Path,
-    mut reader: impl Read,
+    reader: impl Read,
     content_length: Option<u64>,
 ) -> Result<u64, StepManiaOnlineError> {
+    // Catalog sizes can be stale. They are only a progress estimate when the
+    // response has no known length, never an integrity check or a size limit.
+    let total_bytes = content_length.unwrap_or(pack.size_bytes.min(MAX_ARCHIVE_BYTES));
+    let mut next_report = 0u64;
+    let downloaded = stream_to_file(
+        archive_path,
+        reader,
+        content_length,
+        MAX_ARCHIVE_BYTES,
+        |downloaded| {
+            if downloaded >= next_report {
+                set_install_progress(pack.id, downloaded, total_bytes);
+                next_report = downloaded.saturating_add(PROGRESS_STEP_BYTES);
+            }
+            true
+        },
+    )?;
+    if downloaded != pack.size_bytes {
+        log::warn!(
+            "StepManiaOnline pack '{}' downloaded {downloaded} bytes, catalog listed {}; continuing with archive validation.",
+            pack.name,
+            pack.size_bytes
+        );
+    }
+    set_install_progress(pack.id, downloaded, downloaded);
+    Ok(downloaded)
+}
+
+/// Stream a response body into a new file at `path`, a chunk at a time.
+///
+/// The one download loop in the crate: pack archives, single-song archives
+/// and preview audio all come through here, so the rules a body is held to are
+/// the same everywhere. A declared length outside `1..=max_bytes` is refused
+/// before anything touches the disk; without one, `max_bytes` bounds what is
+/// written; and a body that stops short of what it declared is an error
+/// rather than a smaller file.
+///
+/// `on_progress` hears `0` once the file is open and the running total after
+/// every chunk. It throttles its own reporting -- it is called per 64 KiB --
+/// and returning `false` abandons the download, which is how a preview that
+/// has been replaced stops spending bandwidth on audio nobody will play.
+///
+/// The file is created with `create_new`, so a leftover from an earlier run
+/// is an error rather than something appended to; callers clear their temp
+/// path first. On error the partial file is left for the caller to remove,
+/// because only the caller knows whether the path is safe to delete.
+pub(crate) fn stream_to_file(
+    path: &Path,
+    mut reader: impl Read,
+    content_length: Option<u64>,
+    max_bytes: u64,
+    mut on_progress: impl FnMut(u64) -> bool,
+) -> Result<u64, StepManiaOnlineError> {
     if let Some(length) = content_length
-        && (length == 0 || length > MAX_ARCHIVE_BYTES)
+        && (length == 0 || length > max_bytes)
     {
         return Err(StepManiaOnlineError::Archive(format!(
             "server reported {length} bytes, outside the supported range"
         )));
     }
-    // Catalog sizes can be stale. They are only a progress estimate when the
-    // response has no known length, never an integrity check or a size limit.
-    let total_bytes = content_length.unwrap_or(pack.size_bytes.min(MAX_ARCHIVE_BYTES));
-    let download_limit = content_length.unwrap_or(MAX_ARCHIVE_BYTES);
+    let download_limit = content_length.unwrap_or(max_bytes);
 
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(archive_path)
-        .map_err(|error| io_error("create the temporary archive", error))?;
+        .open(path)
+        .map_err(|error| io_error("create the temporary download", error))?;
     let mut buffer = [0u8; 64 * 1024];
     let mut downloaded = 0u64;
-    let mut next_report = 0u64;
-    set_install_progress(pack.id, 0, total_bytes);
+    if !on_progress(0) {
+        return Err(download_abandoned());
+    }
     loop {
         let read = reader
             .read(&mut buffer)
-            .map_err(|error| io_error("read the pack download", error))?;
+            .map_err(|error| io_error("read the download", error))?;
         if read == 0 {
             break;
         }
@@ -850,15 +961,14 @@ fn write_archive_download(
             )));
         }
         file.write_all(&buffer[..read])
-            .map_err(|error| io_error("write the temporary archive", error))?;
+            .map_err(|error| io_error("write the temporary download", error))?;
         downloaded = next;
-        if downloaded >= next_report {
-            set_install_progress(pack.id, downloaded, total_bytes);
-            next_report = downloaded.saturating_add(PROGRESS_STEP_BYTES);
+        if !on_progress(downloaded) {
+            return Err(download_abandoned());
         }
     }
     file.flush()
-        .map_err(|error| io_error("flush the temporary archive", error))?;
+        .map_err(|error| io_error("flush the temporary download", error))?;
     if downloaded == 0 {
         return Err(StepManiaOnlineError::Archive(
             "download is empty".to_string(),
@@ -871,15 +981,17 @@ fn write_archive_download(
             "downloaded {downloaded} bytes, server reported {expected}"
         )));
     }
-    if downloaded != pack.size_bytes {
-        log::warn!(
-            "StepManiaOnline pack '{}' downloaded {downloaded} bytes, catalog listed {}; continuing with archive validation.",
-            pack.name,
-            pack.size_bytes
-        );
-    }
-    set_install_progress(pack.id, downloaded, downloaded);
     Ok(downloaded)
+}
+
+/// What a download stopped by its own caller reports. Never shown: the only
+/// caller that stops one is a preview that has already been replaced, and a
+/// replaced preview publishes nothing.
+fn download_abandoned() -> StepManiaOnlineError {
+    StepManiaOnlineError::Io {
+        action: "finish the download",
+        message: "abandoned by its caller".to_string(),
+    }
 }
 
 #[derive(Debug)]
@@ -892,6 +1004,21 @@ fn extract_archive(
     staging: &Path,
     archive_bytes: u64,
 ) -> Result<(), StepManiaOnlineError> {
+    extract_archive_root(archive_path, staging, archive_bytes).map(drop)
+}
+
+/// Validate an archive by the pack installer's rules, extract what is beneath
+/// its one top-level folder into `staging`, and say what that folder was
+/// called.
+///
+/// A pack install throws the name away -- the catalogue names the pack. A
+/// single song keeps it: the relay's song archive is that song's own folder,
+/// and its name is the folder the song lands as.
+pub(crate) fn extract_archive_root(
+    archive_path: &Path,
+    staging: &Path,
+    archive_bytes: u64,
+) -> Result<String, StepManiaOnlineError> {
     let plan = inspect_archive(archive_path, archive_bytes)?;
     fs::create_dir(staging).map_err(|error| io_error("create the staging directory", error))?;
     let file =
@@ -902,7 +1029,10 @@ fn extract_archive(
         let mut entry = archive
             .by_index(idx)
             .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
-        let parts = portable_archive_parts(entry.name())?;
+        let name = entry
+            .name()
+            .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
+        let parts = portable_archive_parts(&name)?;
         if parts
             .iter()
             .next()
@@ -916,7 +1046,7 @@ fn extract_archive(
             continue;
         }
         let output = parts.output_path(staging);
-        let is_dir = entry.is_dir() || entry.name().ends_with('\\');
+        let is_dir = entry.is_dir() || name.ends_with('\\');
         if is_dir {
             fs::create_dir_all(&output)
                 .map_err(|error| io_error("create an extracted directory", error))?;
@@ -938,11 +1068,13 @@ fn extract_archive(
         if copied != expected {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' produced {copied} bytes, expected {expected}",
-                entry.name()
+                entry
+                    .name()
+                    .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?
             )));
         }
     }
-    Ok(())
+    Ok(plan.prefix)
 }
 
 fn inspect_archive(
@@ -975,7 +1107,10 @@ fn inspect_archive(
         let entry = archive
             .by_index(idx)
             .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
-        if entry.name().len() > MAX_ARCHIVE_PATH_BYTES {
+        let name = entry
+            .name()
+            .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
+        if name.len() > MAX_ARCHIVE_PATH_BYTES {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry path exceeds {MAX_ARCHIVE_PATH_BYTES} bytes"
             )));
@@ -983,23 +1118,23 @@ fn inspect_archive(
         if entry.enclosed_name().is_none() {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' escapes the pack root",
-                entry.name()
+                name
             )));
         }
         if entry.is_symlink() {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' is a symbolic link",
-                entry.name()
+                name
             )));
         }
-        let is_dir = entry.is_dir() || entry.name().ends_with('\\');
+        let is_dir = entry.is_dir() || name.ends_with('\\');
         if !safe_unix_entry_type(entry.unix_mode(), is_dir) {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' is not a regular file or directory",
-                entry.name()
+                name
             )));
         }
-        let parts = portable_archive_parts(entry.name())?;
+        let parts = portable_archive_parts(&name)?;
         let entry_prefix = parts
             .iter()
             .next()
@@ -1033,7 +1168,7 @@ fn inspect_archive(
         if !output_files.insert(output_key) {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' duplicates another output path",
-                entry.name()
+                name
             )));
         }
         has_simfile |= is_simfile(parts.iter().next_back().unwrap_or_default());
@@ -1049,7 +1184,7 @@ fn inspect_archive(
 }
 
 #[derive(Debug)]
-struct ArchiveParts<'a> {
+pub(crate) struct ArchiveParts<'a> {
     name: &'a str,
     len: usize,
 }
@@ -1086,7 +1221,7 @@ impl ArchiveParts<'_> {
     }
 }
 
-fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlineError> {
+pub(crate) fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlineError> {
     if name.is_empty() || name.starts_with('/') || name.starts_with('\\') || name.contains('\0') {
         return Err(StepManiaOnlineError::Archive(format!(
             "entry '{name}' has an invalid path"
@@ -1123,7 +1258,7 @@ fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlin
     Ok(ArchiveParts { name, len })
 }
 
-fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
+pub(crate) fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
     const FILE_TYPE_MASK: u32 = 0o170_000;
     const REGULAR_FILE: u32 = 0o100_000;
     const DIRECTORY: u32 = 0o040_000;
@@ -1133,7 +1268,7 @@ fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
     kind == 0 || is_dir && kind == DIRECTORY || !is_dir && kind == REGULAR_FILE
 }
 
-fn is_simfile(name: &str) -> bool {
+pub(crate) fn is_simfile(name: &str) -> bool {
     Path::new(name)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -1192,7 +1327,7 @@ fn sanitized_pack_name(raw: &str, pack_id: u64) -> (String, bool) {
     (output, changed)
 }
 
-const fn invalid_path_char(ch: char) -> bool {
+pub(crate) const fn invalid_path_char(ch: char) -> bool {
     ch.is_control() || matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*')
 }
 
@@ -1233,7 +1368,7 @@ fn choose_destination(root: &Path, pack: &PackInfo) -> Result<PathBuf, StepMania
     Ok(root.join(alternate))
 }
 
-fn child_exists_case_insensitive(
+pub(crate) fn child_exists_case_insensitive(
     root: &Path,
     child_name: &std::ffi::OsStr,
 ) -> Result<bool, StepManiaOnlineError> {
@@ -1253,7 +1388,7 @@ fn child_exists_case_insensitive(
     Ok(false)
 }
 
-fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
+pub(crate) fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -1272,7 +1407,7 @@ fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
     }
 }
 
-fn io_error(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
+pub(crate) fn io_error(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
     StepManiaOnlineError::Io {
         action,
         message: error.to_string(),
@@ -1343,6 +1478,13 @@ mod tests {
         assert_eq!(packs[0].sync.as_deref(), Some("n/a"));
         assert_eq!(packs[0].pack_type, None);
         assert_eq!(packs[0].substyle, None);
+    }
+
+    #[test]
+    fn catalog_parser_keeps_a_null_sync_as_the_site_wrote_it() {
+        let text = format!("{HEADER}7, \"Pack\", 1, 99, null, None, None, Stepmania 3.9\n");
+        let packs = parse_catalog(text.as_str()).expect("catalog parses");
+        assert_eq!(packs[0].sync.as_deref(), Some("null"));
     }
 
     #[test]
@@ -1456,19 +1598,42 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "downloads and extracts Bearpocalypse from StepManiaOnline"]
-    fn live_bearpocalypse_download_and_extract() {
-        let root = temp_dir("live-bearpocalypse");
+    fn generated_pack_download_and_extract() {
+        let root = temp_dir("generated-http-pack");
         fs::create_dir_all(&root).expect("create fixture root");
+        let source = root.join("source.zip");
+        write_zip(&source, &[
+            ("Generated Pack/Song/song.ssc", b"#TITLE:Generated;"),
+            ("Generated Pack/Song/music.ogg", b"audio"),
+        ]);
+        let bytes = fs::read(&source).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/download/pack/327/", listener.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(10))).unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap(); request.push(byte[0]);
+                assert!(request.len() < 8192);
+            }
+            assert!(request.starts_with(b"GET /download/pack/327/ HTTP/1.1\r\n"));
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", bytes.len()).unwrap();
+            stream.write_all(&bytes).unwrap();
+        });
         let archive = root.join("download.zip");
         let staging = root.join("staging");
-        let mut pack = pack(327, "Bearpocalypse", Some("itg"), Some("stamina"));
+        let mut pack = pack(327, "Generated Pack", Some("itg"), Some("stamina"));
+        // A stale catalog size must not override the actual HTTP body length.
         pack.size_bytes = 103_325_333;
 
-        let downloaded = download_archive(&pack, &archive).expect("download Bearpocalypse");
+        let downloaded = download_archive_from(&pack, &archive, &url).expect("download generated pack");
+        server.join().unwrap();
         assert_eq!(downloaded, fs::metadata(&archive).unwrap().len());
-        extract_archive(&archive, &staging, downloaded).expect("extract Bearpocalypse");
-        println!("Downloaded and extracted Bearpocalypse ({downloaded} bytes)");
+        extract_archive(&archive, &staging, downloaded).expect("extract generated pack");
+        assert_eq!(fs::read(staging.join("Song/song.ssc")).unwrap(), b"#TITLE:Generated;");
+        assert_eq!(fs::read(staging.join("Song/music.ogg")).unwrap(), b"audio");
 
         fs::remove_dir_all(root).expect("clean fixture root");
     }
@@ -1523,12 +1688,4 @@ mod tests {
         assert!(error.to_string().contains("contains no .sm"));
         fs::remove_dir_all(root).expect("clean fixture root");
     }
-}
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/smo_preparation.rs"
-    ));
 }

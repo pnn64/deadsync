@@ -1,0 +1,22 @@
+{
+  "scope": "B.2.4.2 permits zero Li: retain unused empty destinations, reject their use.",
+  "driver_sha256": "507b5bbfa70ecb84bc9aeffd3a61901026448c415074d450945d0723f26a2384",
+  "results": [
+    {
+      "tool": "native",
+      "sha256": "6f2fbc378303bc1275b221c875c4c16daca82f7408d57f721a2eef3ef275c3d3",
+      "unused_empty_destinations": 8,
+      "table_only_and_image_exact": true,
+      "used_empty_diagnostic": "Error: Invalid(\"unassigned Huffman code\")\n",
+      "used_empty_exit": 1
+    },
+    {
+      "tool": "turbo",
+      "sha256": "b8ce2fa9d85909dd4d44e9f673656bd8851caedf20f1cdd6f376d51216b8dc4e",
+      "unused_empty_destinations": 8,
+      "table_only_and_image_exact": true,
+      "used_empty_diagnostic": "Corrupt JPEG data: bad Huffman code\r\n",
+      "used_empty_exit": 0
+    }
+  ]
+}

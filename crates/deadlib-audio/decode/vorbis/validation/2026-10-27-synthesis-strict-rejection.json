@@ -1,0 +1,12 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\synthesis-profile-floor0-20261027\\target\\release\\deadlib-vorbis-synthesis-probe.exe",
+    "target\\deadlib-audio-reference\\corpus\\floor0\\vorbis_floor_type_0.ogg",
+    "3",
+    "0.01",
+    "1337",
+    "0"
+  ],
+  "exit_code": 3221226505,
+  "expected_strict_container_rejection": true
+}

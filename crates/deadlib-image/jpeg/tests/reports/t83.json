@@ -1,0 +1,245 @@
+{
+  "scope": "Official T.83 original streams, exact coefficients across configured C APIs, exact lossless SRC references. Formal full conformance is not inferred from stream acceptance.",
+  "archive_sha256": "9f5ed0a74a3087c6c93f4cbb0bd5128c2a87b128e4f59f5b6649e32941da7069",
+  "tools": {
+    "native": "394d30da712c756b5eaa38dc2f403cc9808008026c0cd5087e23b95608a2124c",
+    "ijg": "aaeb9b39be7ee5d9536fc973273a1c87572b17fd20cde139bc42a59303c73207",
+    "turbo": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "moz8": "85fba3d580c8dea6678d74ece9fff5995b80ff6a7b166411ee71f0e346a05bda",
+    "moz12": "fe01075ad5ee18979854fe5b1f650b62e8522847e7c43b7e190d28cfe59ed11b",
+    "reference": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+  },
+  "driver_sha256": "dcc49b4d5cc591825973607bc86b00a9b4e0ca53f115e55db7ae3db2ee794641",
+  "streams": 21,
+  "images": 20,
+  "exact_IJG_DCT_images": 16,
+  "exact_Turbo_DCT_images": 15,
+  "exact_mozjpeg_DCT_images": 11,
+  "exact_official_lossless_samples": 219640,
+  "expectations": [
+    {
+      "file": "observed-8.coef",
+      "sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "precision": 8,
+      "meaning": "Exact native and configured C entropy-decoder observation; not official DREF data"
+    },
+    {
+      "file": "observed-12.coef",
+      "sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "precision": 12,
+      "meaning": "Exact native and configured C entropy-decoder observation; not official DREF data"
+    }
+  ],
+  "exact_JPEG_XT_lossless_images": 4,
+  "results": [
+    {
+      "file": "A1.JPG",
+      "sha256": "f893c20d82e35701ed96c28e4857f1f42b709e3fd592c1102fe97a6e54cc8e40",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "B1.JPG",
+      "sha256": "48d3dc5026b4e8ca751e2cf9fb6c576364f92bafd339c19997c12c470946950c",
+      "kind": "table-only packet"
+    },
+    {
+      "file": "B2.JPG",
+      "sha256": "b07e02e8ff185462285685ff6768d7e80133adc4fc9793bc2b35e3b23a48a739",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 255,
+      "coefficient_sha256": "1892f4aff2f23af69167162fb301c5349f8b400826bb1ec84694b2679f093934",
+      "IJG": "exact genuine table/image pair",
+      "Turbo": "skipped: selector lookup beyond first four components",
+      "mozjpeg": "skipped: default component-count cap"
+    },
+    {
+      "file": "C1.JPG",
+      "sha256": "382463b80d3a9f552cb1820a09c0bfc9482113099c466252f1ee26af856aefd8",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "C2.JPG",
+      "sha256": "b965fef07a5d731e409491fba9a423ea6d2e6078f6adde7339c53e2534ed85eb",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "D1.JPG",
+      "sha256": "e340bd5014555136dffd2f1461bc9e63c4844830d02c8bc9d03f1ad1c69465dd",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "D2.JPG",
+      "sha256": "48e06aa5406ee331aab569374d76929381df022b71a18f48aa89b98d6e76c5c4",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "E1.JPG",
+      "sha256": "cb4cdde947327de26b7dc180059f9793e5e9e556adbcee6902907c7709482391",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "E2.JPG",
+      "sha256": "0db8d2dd1d35bf4cad4df399b892533d212b1b471c278c9edc0754d98865a831",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "F1.JPG",
+      "sha256": "2534675d5f7468d311cf296d4b9a03f96e303cbd0e63432a5c6bfa90c3c7db70",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "skipped: upstream 12-bit build disables arithmetic"
+    },
+    {
+      "file": "F2.JPG",
+      "sha256": "a7332faf71fbe7bfa3509fc4b3f839029cdcee457627c795b7c646c2b2eb8dd0",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "skipped: upstream 12-bit build disables arithmetic"
+    },
+    {
+      "file": "G1.JPG",
+      "sha256": "6784b3037fb6c19f35c7b2c2f9b0072555132521d8cda6b5192c1f923350e8f6",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "H1.JPG",
+      "sha256": "e729dd0f2b43ef6dd4d0ca70184b9e40d25cdcb5e224b07fa04d67bf419878e9",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "J1.JPG",
+      "sha256": "10d06d88e0bcbe499c2a8d1a8019043c957af9526de1bc70fbe774b0326bcfa6",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "skipped: upstream 12-bit build disables arithmetic"
+    },
+    {
+      "file": "K1.JPG",
+      "sha256": "a393d8fb87caf52d1072e32e98786024e1baf6273443e10430138c9cdfbc724b",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "L1.JPG",
+      "sha256": "d8233b544fadfa3695b0dcf88320d1a949d0191cee80ea59e19b908fb663bee1",
+      "kind": "DCT",
+      "precision": 8,
+      "components": 4,
+      "coefficient_sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "exact"
+    },
+    {
+      "file": "N1.JPG",
+      "sha256": "f6852ba8e276435028cfe1b8fe58fc87a41d8577f9ff23335419d26b4d7e5ccb",
+      "kind": "DCT",
+      "precision": 12,
+      "components": 4,
+      "coefficient_sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "IJG": "exact",
+      "Turbo": "exact",
+      "mozjpeg": "skipped: upstream 12-bit build disables arithmetic"
+    },
+    {
+      "file": "O1.JPG",
+      "sha256": "363aeaa186e1d9484143a1136793e6a7399aec6ffe7355b0beb5b411d265efaf",
+      "kind": "predictive lossless",
+      "exact_official_samples": 54910,
+      "JPEG_XT_official_samples": "exact original stream, no header normalization"
+    },
+    {
+      "file": "O2.JPG",
+      "sha256": "4be6fee2379105443b9802f50759185116e9685a098f3b917277a894ca968350",
+      "kind": "predictive lossless",
+      "exact_official_samples": 54910,
+      "JPEG_XT_official_samples": "exact original stream, no header normalization"
+    },
+    {
+      "file": "P1.JPG",
+      "sha256": "1be4511fd156e4924ea3e947d836e5a228646932efc182560234e642867b2007",
+      "kind": "predictive lossless",
+      "exact_official_samples": 54910,
+      "JPEG_XT_official_samples": "exact original stream, no header normalization"
+    },
+    {
+      "file": "P2.JPG",
+      "sha256": "0957c509e1abf4a2d97819457a6d8a78c1eedd59ba5e85d1fcff634cf8dd1d8b",
+      "kind": "predictive lossless",
+      "exact_official_samples": 54910,
+      "JPEG_XT_official_samples": "exact original stream, no header normalization"
+    }
+  ]
+}

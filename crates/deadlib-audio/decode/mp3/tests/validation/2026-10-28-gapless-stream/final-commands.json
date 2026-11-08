@@ -1,0 +1,30 @@
+[
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadlib-audio-decode-mp3",
+      "--target-dir",
+      "target/deadlib-mp3-goal"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "wsl",
+      "-d",
+      "Debian",
+      "--",
+      "/home/perfecttaste/.cargo/bin/cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadlib-audio-decode-mp3",
+      "--target-dir",
+      "/home/perfecttaste/.cache/deadlib-mp3/build"
+    ],
+    "exit_code": 0
+  }
+]

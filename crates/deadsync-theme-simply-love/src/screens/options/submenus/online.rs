@@ -88,6 +88,15 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::EnableGolf,
+        label: lookup_key("OptionsGrooveStats", "EnableGolf"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ArrowCloudSubmitFails,
         label: lookup_key("OptionsGrooveStats", "ArrowCloudSubmitFails"),
         choices: &[
@@ -135,6 +144,15 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &
         label: lookup_key("OptionsOnlineScoring", "ScoreImport"),
         choices: &[],
         inline: false,
+    },
+    SubRow {
+        id: SubRowId::ShareRips,
+        label: lookup_key("OptionsOnlineScoring", "ShareRips"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
     },
 ];
 
@@ -223,6 +241,14 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::AcGolf,
+        name: lookup_key("OptionsGrooveStats", "EnableGolf"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "EnableGolfHelp",
+        ))],
+    },
+    Item {
         id: ItemId::AcSubmitFails,
         name: lookup_key("OptionsGrooveStats", "ArrowCloudSubmitFails"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -279,6 +305,14 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsOnlineScoringHelp",
             "ScoreImportHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::OsShareRips,
+        name: lookup_key("OptionsOnlineScoring", "ShareRips"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "ShareRipsHelp",
         ))],
     },
     Item {

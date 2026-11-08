@@ -586,6 +586,7 @@ fn runtime_mod_entry_hash(entry: &RuntimeModEaseEntry, state: &RandomState) -> u
     match entry.unit {
         SongLuaTimeUnit::Beat => 0u8,
         SongLuaTimeUnit::Second => 1,
+        SongLuaTimeUnit::BeatClock => 2,
     }
     .hash(&mut hash);
     entry.start.to_bits().hash(&mut hash);
@@ -779,6 +780,7 @@ fn runtime_overlay_capture_key_hash(key: &RuntimeOverlayCaptureKey) -> u64 {
     match key.unit {
         SongLuaTimeUnit::Beat => 0u8,
         SongLuaTimeUnit::Second => 1,
+        SongLuaTimeUnit::BeatClock => 2,
     }
     .hash(&mut hash);
     key.start.hash(&mut hash);
@@ -881,31 +883,175 @@ fn runtime_mod_column_key(key: &str, prefix: &str) -> bool {
 
 #[must_use]
 pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
-    if runtime_mod_column_key(key, "bumpy")
+    if runtime_mod_column_key(key, "stealth")
+        || runtime_mod_column_key(key, "bumpy")
+        || runtime_mod_column_key(key, "dark")
         || runtime_mod_column_key(key, "tiny")
         || runtime_mod_column_key(key, "movex")
         || runtime_mod_column_key(key, "movey")
+        || runtime_mod_column_key(key, "movez")
         || runtime_mod_column_key(key, "confusionoffset")
     {
         return Some(SongLuaEaseTarget::Mod(original.to_string()));
     }
+    // Actor transforms are owned by the authored node function. In Xero they
+    // can target Player, NoteField, or a wrapper; they are not PlayerOptions.
     Some(match key {
-        "z" => SongLuaEaseTarget::PlayerZ,
-        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
-        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
-        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
-        "zoom" => SongLuaEaseTarget::PlayerZoom,
-        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
-        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
-        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
-        "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "dizzy" | "confusion"
-        | "confusionoffset" | "flip" | "invert" | "tornado" | "tipsy" | "bumpy" | "bumpyoffset"
-        | "bumpyperiod" | "pulseinner" | "pulseouter" | "pulseperiod" | "pulseoffset" | "beat"
-        | "randomspeed" | "hidden" | "sudden" | "suddenoffset" | "stealth" | "blink"
-        | "rvanish" | "randomvanish" | "reversevanish" | "dark" | "blind" | "cover" | "reverse"
-        | "split" | "alternate" | "cross" | "centered" | "incoming" | "space" | "hallway"
-        | "distant" | "overhead" | "xmod" | "cmod" | "mmod" | "tiny" | "mini"
-        | "confusionyoffset" | "skewx" | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
+        "boost"
+        | "brake"
+        | "wave"
+        | "waveperiod"
+        | "expand"
+        | "expandperiod"
+        | "noattack"
+        | "randattack"
+        | "noattacks"
+        | "randomattacks"
+        | "boomerang"
+        | "drunk"
+        | "drunkoffset"
+        | "drunkspeed"
+        | "drunkperiod"
+        | "tipsyoffset"
+        | "tipsyspeed"
+        | "dizzy"
+        | "twirl"
+        | "roll"
+        | "failsetting"
+        | "modtimersetting"
+        | "modtimermult"
+        | "modtimeroffset"
+        | "parabolax"
+        | "attenuatex"
+        | "parabolay"
+        | "attenuatey"
+        | "bumpyx"
+        | "bumpyxoffset"
+        | "bumpyxperiod"
+        | "tanbumpy"
+        | "tanbumpyoffset"
+        | "tanbumpyperiod"
+        | "tanbumpyx"
+        | "tanbumpyxoffset"
+        | "tanbumpyxperiod"
+        | "drunkz"
+        | "drunkzoffset"
+        | "drunkzspeed"
+        | "drunkzperiod"
+        | "tandrunk"
+        | "tandrunkoffset"
+        | "tandrunkspeed"
+        | "tandrunkperiod"
+        | "tandrunkz"
+        | "tandrunkzoffset"
+        | "tandrunkzspeed"
+        | "tandrunkzperiod"
+        | "dizzyholds"
+        | "zbuffer"
+        | "cosecant"
+        | "drawsize"
+        | "drawsizeback"
+        | "digital"
+        | "digitalsteps"
+        | "digitaloffset"
+        | "digitalperiod"
+        | "zigzag"
+        | "zigzagz"
+        | "zigzagoffset"
+        | "zigzagzoffset"
+        | "zigzagperiod"
+        | "zigzagzperiod"
+        | "square"
+        | "squareoffset"
+        | "squareperiod"
+        | "squarez"
+        | "squarezoffset"
+        | "squarezperiod"
+        | "xmode"
+        | "bounce"
+        | "bounceperiod"
+        | "bounceoffset"
+        | "tornadoperiod"
+        | "tornadooffset"
+        | "parabolaz"
+        | "attenuatez"
+        | "confusion"
+        | "confusionoffset"
+        | "confusionxoffset"
+        | "confusionx"
+        | "confusiony"
+        | "flip"
+        | "invert"
+        | "tornado"
+        | "tipsy"
+        | "bumpy"
+        | "bumpyoffset"
+        | "bumpyperiod"
+        | "pulseinner"
+        | "pulseouter"
+        | "pulseperiod"
+        | "pulseoffset"
+        | "beat"
+        | "beatperiod"
+        | "shrinklinear"
+        | "shrinkmult"
+        | "bouncez"
+        | "bouncezoffset"
+        | "bouncezperiod"
+        | "digitalz"
+        | "digitalzoffset"
+        | "digitalzperiod"
+        | "digitalzsteps"
+        | "tornadoz"
+        | "tornadozoffset"
+        | "tornadozperiod"
+        | "sawtooth"
+        | "sawtoothperiod"
+        | "sawtoothz"
+        | "sawtoothzperiod"
+        | "beatoffset"
+        | "beatmult"
+        | "beaty"
+        | "beatyoffset"
+        | "beatymult"
+        | "beatyperiod"
+        | "beatz"
+        | "beatzoffset"
+        | "beatzmult"
+        | "beatzperiod"
+        | "randomspeed"
+        | "hidden"
+        | "hiddenoffset"
+        | "sudden"
+        | "suddenoffset"
+        | "stealth"
+        | "stealthtype"
+        | "stealthpastreceptors"
+        | "blink"
+        | "rvanish"
+        | "randomvanish"
+        | "reversevanish"
+        | "dark"
+        | "blind"
+        | "cover"
+        | "reverse"
+        | "split"
+        | "alternate"
+        | "cross"
+        | "centered"
+        | "tilt"
+        | "skew"
+        | "incoming"
+        | "space"
+        | "hallway"
+        | "distant"
+        | "overhead"
+        | "xmod"
+        | "cmod"
+        | "mmod"
+        | "tiny"
+        | "mini"
+        | "confusionyoffset" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })
 }

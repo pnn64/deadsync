@@ -1,0 +1,562 @@
+{
+  "schema": 1,
+  "packs": [
+    {
+      "name": "club-fantastic-season2",
+      "source_page": "https://clubfantastic.dance/",
+      "note": "Official null-offset StepMania song archive including Seasons 1 and 2. External media stays in ignored target storage; only this hash manifest is redistributed.",
+      "archive": {
+        "url": "https://download.clubfantastic.dance/club_fantastic_season2_songs.zip",
+        "bytes": 310406325,
+        "sha256": "79c73b5a4af53384cd8c46cc0aaecff33562335ca6c02016e86daca90627d895",
+        "last_modified": "2021-06-09T01:49:12Z"
+      },
+      "files": [
+        {
+          "member": "Club Fantastic Season 1/BACK UP/backup.ogg",
+          "bytes": 4255019,
+          "sha256": "3cb432a4c182db91c28de5326babd902e01534b9099e024cbe48e7e8bb0ffcb7",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 1/BACK UP/backup.ssc",
+          "bytes": 33134,
+          "sha256": "5935ab38448d1f315df83604f4ec47891c8c98c838ceaac26acb2b568a38af04",
+          "role": "chart",
+          "music": "backup.ogg",
+          "audio_member": "Club Fantastic Season 1/BACK UP/backup.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/BOSSY/bossy.ogg",
+          "bytes": 4762432,
+          "sha256": "e7d6deb4556db5f22d57199b5293fbc2c913e5e042157b396c0b317416ef5443",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 1/BOSSY/bossy.ssc",
+          "bytes": 51811,
+          "sha256": "e5a25c3554063b36450ea137c6655f172375de14005ecacf5e67f1b0882a59ab",
+          "role": "chart",
+          "music": "bossy.ogg",
+          "audio_member": "Club Fantastic Season 1/BOSSY/bossy.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Can't You Bounce/bounce.ogg",
+          "bytes": 5073286,
+          "sha256": "0b9c5ef750899b0b48d8886aa44e3d8748190e0d691ffd4a2eb007716da7ec71",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Can't You Bounce/bounce.ssc",
+          "bytes": 32869,
+          "sha256": "5db71a18ba7995d1c23d483d0946bb6042b012fc32a227afec2074ca1b4d13d4",
+          "role": "chart",
+          "music": "bounce.ogg",
+          "audio_member": "Club Fantastic Season 1/Can't You Bounce/bounce.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/COOL_EXCEPTION/cool_exception.ogg",
+          "bytes": 4308101,
+          "sha256": "b6c8b49652ecba613d4adb097b37c769167885b706ffc6911c0e0300b23cb305",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 1/COOL_EXCEPTION/cool_exception.ssc",
+          "bytes": 69648,
+          "sha256": "fe7566012af19b13ec117f1668fc24f1d87140434da7d210e1e15fedc4b01e73",
+          "role": "chart",
+          "music": "cool_exception.ogg",
+          "audio_member": "Club Fantastic Season 1/COOL_EXCEPTION/cool_exception.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Dysangel/dysangel.ogg",
+          "bytes": 3172371,
+          "sha256": "3ab24a6bd1b69a70b4b7e438b7431793af5edf39824e63b8cb59866e7e2c85c8",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Dysangel/dysangel.ssc",
+          "bytes": 37242,
+          "sha256": "c3cf8360b6a410e47fc8641b108f66158571f35bcadecac08d18de2d62a47fba",
+          "role": "chart",
+          "music": "dysangel.ogg",
+          "audio_member": "Club Fantastic Season 1/Dysangel/dysangel.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Fantastic World/fantasticworld.ogg",
+          "bytes": 3736694,
+          "sha256": "1d1d56149c32ad46bff3bdf2f724966f5d66cf401ac801d532e189a770d4ec63",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Fantastic World/fantasticworld.ssc",
+          "bytes": 34905,
+          "sha256": "4a2cb0419c54f81c2d3a9d48299bdfb8be3b039292bf03909c8f0d863fd81f65",
+          "role": "chart",
+          "music": "fantasticworld.ogg",
+          "audio_member": "Club Fantastic Season 1/Fantastic World/fantasticworld.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Horsepower/horsepower.ogg",
+          "bytes": 3730665,
+          "sha256": "80bee48d3063d0cdb55fa3f8f4ab056a21bf436d40bc0439e16b43e24885bc9d",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Horsepower/horsepower.ssc",
+          "bytes": 36710,
+          "sha256": "8345e0ecfecb43d223bd9564f16a05caeda90528414cfd5693383d0af322824d",
+          "role": "chart",
+          "music": "horsepower.ogg",
+          "audio_member": "Club Fantastic Season 1/Horsepower/horsepower.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Melody Mountain/melodymountain.ogg",
+          "bytes": 3158710,
+          "sha256": "7af52ae366b80077f9793bc7929eb52ab735e958b88f4b0c361fdb60fa43e383",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Melody Mountain/melodymountain.ssc",
+          "bytes": 48017,
+          "sha256": "71ba2c03c7a3dc63bac34affd784f3368dc05e64f22e6d93744438565a08c55d",
+          "role": "chart",
+          "music": "melodymountain.ogg",
+          "audio_member": "Club Fantastic Season 1/Melody Mountain/melodymountain.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Oceania 909/oceania909.ogg",
+          "bytes": 8980515,
+          "sha256": "decb5e89733b31dd67cfed3fc4832789d71833688ba4ad33e4ffa8d25a00a431",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Oceania 909/oceania909.ssc",
+          "bytes": 75339,
+          "sha256": "8260bd79346df3cf7d23d44e826022de523d63e5f7b8c7955c984a90752ab458",
+          "role": "chart",
+          "music": "oceania909.ogg",
+          "audio_member": "Club Fantastic Season 1/Oceania 909/oceania909.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Roadman/roadman.ogg",
+          "bytes": 3429715,
+          "sha256": "095513ab07b8f2f5ae95999aca9a0c7bfd228d03a72818b3f5b3ad4381f3bc48",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Roadman/roadman.ssc",
+          "bytes": 44083,
+          "sha256": "1eda3c35bd44a3636b1179db9cf542291b440346dc33bdf50387ddb08dc073f3",
+          "role": "chart",
+          "music": "Roadman.ogg",
+          "audio_member": "Club Fantastic Season 1/Roadman/roadman.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Shoes (Club Fantastic Edit)/shoes.ogg",
+          "bytes": 6313079,
+          "sha256": "d57a898975d8527ba79324bc76dbb2e090732c9eff0a2a383d5c7dbb28aae51b",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Shoes (Club Fantastic Edit)/shoes.ssc",
+          "bytes": 127545,
+          "sha256": "cb08240853e5ede7b74933e091d3eed0bc4052835381c3474f4613f1b1ae6814",
+          "role": "chart",
+          "music": "Shoes.ogg",
+          "audio_member": "Club Fantastic Season 1/Shoes (Club Fantastic Edit)/shoes.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Six Million/sixmillion.ogg",
+          "bytes": 3279691,
+          "sha256": "8a6911e6481c3b4d0513fa539bdbcdd04b7dec704d252013a750da14f85cea5f",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Six Million/sixmillion.ssc",
+          "bytes": 44321,
+          "sha256": "4b597f00c3d3bd9fdce47ea17679917c6517b608841f9ab8dad7f3aeebdda1d6",
+          "role": "chart",
+          "music": "sixmillion.ogg",
+          "audio_member": "Club Fantastic Season 1/Six Million/sixmillion.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Wandering (VIP)/wanderingvip.ogg",
+          "bytes": 4559798,
+          "sha256": "44c3e21b22d1ee439967c2db4e221f7ec0710dbbb197c9855bb0a5bf36563b0b",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Wandering (VIP)/wanderingvip.ssc",
+          "bytes": 34383,
+          "sha256": "1d76a4161b74a216728e5fea5feed03a759563fbe73510cae2146946d5442385",
+          "role": "chart",
+          "music": "wanderingvip.ogg",
+          "audio_member": "Club Fantastic Season 1/Wandering (VIP)/wanderingvip.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 1/Y.E.A.H/Y.E.A.H.ogg",
+          "bytes": 2686605,
+          "sha256": "b71a10f38ba864d451a043ae9e175290be89033836685ae6c451a7c0c4007609",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 1/Y.E.A.H/Y.E.A.H.ssc",
+          "bytes": 37032,
+          "sha256": "49f060026261c3bb8bde57444cbb3f44604df6e9451a0a6ae1d7056a2bd9f62b",
+          "role": "chart",
+          "music": "Y.E.A.H.ogg",
+          "audio_member": "Club Fantastic Season 1/Y.E.A.H/Y.E.A.H.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Adore/adore.ogg",
+          "bytes": 9059951,
+          "sha256": "c49af45959ad268dd878b9192427cb88c43d1049d81cc15ed8eadff5d730eff6",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Adore/Adore.ssc",
+          "bytes": 105061,
+          "sha256": "ac8423e3199d8434201332cde7fe821966b9bb74730631640c39091dd69ad0fd",
+          "role": "chart",
+          "music": "adore.ogg",
+          "audio_member": "Club Fantastic Season 2/Adore/adore.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Artifacts/artifacts.ogg",
+          "bytes": 15449927,
+          "sha256": "e60802a14cd7e3c733960ce145e25ba9cbdade9c0724b8089911413971f61aed",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Artifacts/artifacts.ssc",
+          "bytes": 205440,
+          "sha256": "22e128d06f24d1b143e60da6cea506224ddae515850b9c5301dec82d817433e8",
+          "role": "chart",
+          "music": "artifacts.ogg",
+          "audio_member": "Club Fantastic Season 2/Artifacts/artifacts.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Beachside Photoshoot/Beachside Photoshoot.ogg",
+          "bytes": 5409144,
+          "sha256": "8b6785af690e85b5d25207c6c83687af2bec6838abd0bc0c4c5681553e2ce573",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Beachside Photoshoot/Beachside Photoshoot.ssc",
+          "bytes": 62263,
+          "sha256": "8f413931cb846f7199a0c129ef3d6745a79051e1cc2620d2770070be12bced57",
+          "role": "chart",
+          "music": "Beachside Photoshoot.ogg",
+          "audio_member": "Club Fantastic Season 2/Beachside Photoshoot/Beachside Photoshoot.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/BOSSY (Jorts Speedy Mix)/bossyremix.ogg",
+          "bytes": 5176441,
+          "sha256": "eef6438d73a9cf1ed7936fa45360ea860c510593f33d67ae7a1ee7ba8fd128e1",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/BOSSY (Jorts Speedy Mix)/bossyremix.ssc",
+          "bytes": 66133,
+          "sha256": "890b509668907f4cfbe696bca21f2f991c415e44f43410bb21bc24ee99bb09d3",
+          "role": "chart",
+          "music": "bossyremix.ogg",
+          "audio_member": "Club Fantastic Season 2/BOSSY (Jorts Speedy Mix)/bossyremix.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/demonstration protocol/demonstration_protocol.ogg",
+          "bytes": 7138162,
+          "sha256": "623f68c06ebbe954934bb42849ee08b3d0eec70fcb8425e1a8704ba34fa01c7d",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/demonstration protocol/Demonstration_Protocol.ssc",
+          "bytes": 106508,
+          "sha256": "0189f7480de1bd029fdd6d1c9c0d04299cc583e784288ada693127f300c49392",
+          "role": "chart",
+          "music": "demonstration_protocol.ogg",
+          "audio_member": "Club Fantastic Season 2/demonstration protocol/demonstration_protocol.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/DNA/dna.ogg",
+          "bytes": 5108129,
+          "sha256": "04fc290f36ebd3251caaf9a3b7192ad349c8543458b42f84106879a324afebb7",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/DNA/dna.ssc",
+          "bytes": 32490,
+          "sha256": "a0ee8cd39772261356307b25e21c40b7ae43e1c6c48f75f98a2cbca62fe38fca",
+          "role": "chart",
+          "music": "dna.ogg",
+          "audio_member": "Club Fantastic Season 2/DNA/dna.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Oceania 909 (T2KAZUYA Remix)/oceaniat2k.ogg",
+          "bytes": 4504422,
+          "sha256": "f6e197c5e047db530d1e0425fabc6a8b3437048badbd59dc287f6791af9c2220",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Oceania 909 (T2KAZUYA Remix)/oceaniat2k.ssc",
+          "bytes": 38341,
+          "sha256": "485bbbe5e3ee812691df18eb446b4bfcca4067568ebb6e96f6e7931ce9cfb4f5",
+          "role": "chart",
+          "music": "oceaniat2k.ogg",
+          "audio_member": "Club Fantastic Season 2/Oceania 909 (T2KAZUYA Remix)/oceaniat2k.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/POT/pot.ogg",
+          "bytes": 7046458,
+          "sha256": "304c4406c4bfc1dc92ffc267b15df2a97932b2f1bde772fb76b68b938e2834e7",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/POT/pot.ssc",
+          "bytes": 58158,
+          "sha256": "9b6c57129525592a23ddfa447c19c4b03240cf5aabb2e00e3236d2d1224dcc47",
+          "role": "chart",
+          "music": "pot.ogg",
+          "audio_member": "Club Fantastic Season 2/POT/pot.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Save New Jersey/Save New Jersey.ogg",
+          "bytes": 7653317,
+          "sha256": "691579609c87f04b476e1f6bf7e4ba1b8694fb417f082d1f951b4c2327c4b7db",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Save New Jersey/Save New Jersey.ssc",
+          "bytes": 93343,
+          "sha256": "85f1dd6da3b047f69888bdaf51e8c8e17371ea650b236f029c24fcfe52668f0a",
+          "role": "chart",
+          "music": "Save New Jersey.ogg",
+          "audio_member": "Club Fantastic Season 2/Save New Jersey/Save New Jersey.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Singularity/Singularity.ogg",
+          "bytes": 8586820,
+          "sha256": "d86c0de9020473945ec0a223454f267d3ddf77ba267ea0314ae308e5d25e4e7c",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Singularity/Singularity.ssc",
+          "bytes": 54418,
+          "sha256": "d7dc3e196723275da8adc632d362f213ce9c9c046c5a133caac7215974feee13",
+          "role": "chart",
+          "music": "Singularity.ogg",
+          "audio_member": "Club Fantastic Season 2/Singularity/Singularity.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/SSS/sss.ogg",
+          "bytes": 5676077,
+          "sha256": "9992de05733b11d43ead27726298dd38e866459aea6a2216777e4fcadb921fb2",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 2/SSS/SSS.ssc",
+          "bytes": 57666,
+          "sha256": "4f590ef4db48820518cb07f0c3c9ca2f944b22e0b5ef62d88a8597799355aed9",
+          "role": "chart",
+          "music": "SSS.ogg",
+          "audio_member": "Club Fantastic Season 2/SSS/sss.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/Step It/stepit.ogg",
+          "bytes": 4559291,
+          "sha256": "9082f43ced745d4612bf3d48859d02445b52efa6b0ace4d28367b5801a2788fe",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Step It/stepit.ssc",
+          "bytes": 48747,
+          "sha256": "4cef6943c8b3e5fe8ee011cff6a212772fd621b86e9d651718cf02ef2a403a86",
+          "role": "chart",
+          "music": "stepit.ogg",
+          "audio_member": "Club Fantastic Season 2/Step It/stepit.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/succulynt/succulynt.ogg",
+          "bytes": 6258164,
+          "sha256": "2d1b4c05243c678d3d97f7e40af4c64966d0f25d34a5815fe3de810832ef3367",
+          "role": "audio",
+          "channels": 2,
+          "rate": 48000,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 2/succulynt/succulynt.ssc",
+          "bytes": 32254,
+          "sha256": "e10a015d6f27be8b5c07ef0ec66dbeec9ce76a068ccda1ba8962122c2179e662",
+          "role": "chart",
+          "music": "Succulynt.ogg",
+          "audio_member": "Club Fantastic Season 2/succulynt/succulynt.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/SWEETHEART/sweetheart.ogg",
+          "bytes": 8159536,
+          "sha256": "8d4e3d6908d95d8c7e358088892b2636626239d3f6ff863596c8c802f3b94d6f",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/SWEETHEART/sweetheart.ssc",
+          "bytes": 68812,
+          "sha256": "af04adcd1ff7d0a86f967eb6f90433af47eb50d573d1841a61385396f290e72d",
+          "role": "chart",
+          "music": "sweetheart.ogg",
+          "audio_member": "Club Fantastic Season 2/SWEETHEART/sweetheart.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/TerpZone/terpzone.ogg",
+          "bytes": 5992554,
+          "sha256": "0717eb11266c86a1daf8a3174eb2d9236ca38ce20be698119b53dee0c2bc3ede",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/TerpZone/terpzone.ssc",
+          "bytes": 38865,
+          "sha256": "4332dbd50b699d78d35b7d826b02a5cf6503a9ca0a1c589c7bdc6179cd891357",
+          "role": "chart",
+          "music": "terpzone.ogg",
+          "audio_member": "Club Fantastic Season 2/TerpZone/terpzone.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/We Can Bounce/wecanbounce.ssc",
+          "bytes": 113555,
+          "sha256": "071566161fec0ea69ac1599a8f72d663d284deac0299e8b18c0f54fc5b16dd69",
+          "role": "chart",
+          "music": "WeCanBounce_CleanUp.ogg",
+          "audio_member": "Club Fantastic Season 2/We Can Bounce/WeCanBounce_CleanUp.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/We Can Bounce/WeCanBounce_CleanUp.ogg",
+          "bytes": 2999739,
+          "sha256": "2012ea95740756e98cb792a39511f7ea1ed340eb1436b6e2672fa76f98737708",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20150105 (\u26c4\u26c4\u26c4\u26c4)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Wipeout/wipeout.ogg",
+          "bytes": 4947580,
+          "sha256": "66caa641749b28c2b7e09585205fbfffc55d5f29e08c1e3c7a5b08bda939dfba",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
+        },
+        {
+          "member": "Club Fantastic Season 2/Wipeout/wipeout.ssc",
+          "bytes": 52869,
+          "sha256": "e99402d4b76fa42fdbffd6bf3081406add94535b67e33a3d4140c8d39c7f2357",
+          "role": "chart",
+          "music": "wipeout.ogg",
+          "audio_member": "Club Fantastic Season 2/Wipeout/wipeout.ogg"
+        },
+        {
+          "member": "Club Fantastic Season 2/WRVTH/wrvth.ogg",
+          "bytes": 3066722,
+          "sha256": "7fb72c9fd3be33d459f6fe0e093739cdd777e350c46f85705fefbd655261c61d",
+          "role": "audio",
+          "channels": 2,
+          "rate": 44100,
+          "vendor": "Xiph.Org libVorbis I 20120203 (Omnipresent)"
+        },
+        {
+          "member": "Club Fantastic Season 2/WRVTH/wrvth.ssc",
+          "bytes": 111247,
+          "sha256": "e631a4702923e38e3e77831c73f42f2490ea9f6766bfdd44f1db3804c8e55354",
+          "role": "chart",
+          "music": "wrvth.ogg",
+          "audio_member": "Club Fantastic Season 2/WRVTH/wrvth.ogg"
+        }
+      ]
+    }
+  ]
+}

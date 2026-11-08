@@ -1,0 +1,75 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:499
++ ... .ogg).Path; cargo test -p deadlib-audio-decode-vorbis --release --tes ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 17.04s
+     Running tests\concealment.rs (target\release\deps\concealment-f44ed7dd8165cb02.exe)
+
+running 1 test
+historical independently selected packets: [0, 1, 2, 3, 4, 5, 25, 26, 27, 28, 29, 30, 31, 32]
+floor-zero-bits/packet-0/bits-0-24: 24 cases, 72 packets, 1 discarded, 21 truncated, 76544 samples, peak 0, RMS 0
+floor-zero-bits/packet-1/bits-0-32: 32 cases, 128 packets, 1 discarded, 25 truncated, 164096 samples, peak 0, RMS 0
+floor-zero-bits/packet-2/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 229632 samples, peak 0, RMS 0
+floor-zero-bits/packet-3/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-4/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-5/bits-0-32: 32 cases, 160 packets, 1 discarded, 25 truncated, 258304 samples, peak 0, RMS 0
+floor-zero-bits/packet-25/bits-0-64: 64 cases, 320 packets, 1 discarded, 1 truncated, 124416 samples, peak 256, RMS
+8.10456559469314
+floor-zero-bits/packet-25/bits-64-128: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.000019073486328125, RMS 0.00000025719180974772197
+floor-zero-bits/packet-25/bits-128-192: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005902414786402341
+floor-zero-bits/packet-25/bits-192-256: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005901860806040804
+floor-zero-bits/packet-25/bits-256-320: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005917924827356614
+floor-zero-bits/packet-25/bits-320-384: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005900229045878233
+floor-zero-bits/packet-25/bits-384-448: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005889227266279422
+floor-zero-bits/packet-25/bits-448-512: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005887546759524834
+floor-zero-bits/packet-25/bits-512-576: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005889653292984809
+floor-zero-bits/packet-25/bits-576-640: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005886499544752238
+floor-zero-bits/packet-25/bits-640-704: 64 cases, 320 packets, 0 discarded, 5 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005888028404127303
+floor-zero-bits/packet-25/bits-704-768: 64 cases, 320 packets, 0 discarded, 3 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005893778462608793
+floor-zero-bits/packet-25/bits-768-832: 64 cases, 320 packets, 0 discarded, 11 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005888186078852975
+floor-zero-bits/packet-25/bits-832-896: 64 cases, 320 packets, 0 discarded, 18 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005887464376233071
+floor-zero-bits/packet-25/bits-896-960: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005883179865080752
+floor-zero-bits/packet-25/bits-960-1024: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005883418587544973
+floor-zero-bits/packet-25/bits-1024-1088: 64 cases, 320 packets, 0 discarded, 2 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005885738272544888
+floor-zero-bits/packet-25/bits-1088-1152: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005888401185709121
+floor-zero-bits/packet-25/bits-1152-1216: 64 cases, 320 packets, 0 discarded, 0 truncated, 122880 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005886792625390122
+floor-zero-bits/packet-25/bits-1216-1264: 48 cases, 240 packets, 0 discarded, 9 truncated, 92160 samples, peak
+0.00000000026193447411060333, RMS 0.00000000005883913756191432
+floor-zero-bits/packet-26/bit-32/step-2: 256 samples, peak error 7.700920105e-5, RMS 2.053113936e-5, signal peak
+3.405579
+
+thread 'historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis' (2856) panicked at
+crates\deadlib-audio\decode\vorbis\tests\support\mod.rs:132:9:
+floor-zero-bits/packet-26/bit-32/step-2: PCM RMS tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis ... FAILED
+
+failures:
+
+failures:
+    historical_floor_zero_audio_bit_flips_and_recovery_match_libvorbis
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 1.83s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test concealment`

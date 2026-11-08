@@ -1,0 +1,254 @@
+{
+    "target":  "decode",
+    "stage":  "pipeline",
+    "iterations":  7,
+    "runs":  2,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "4842a620525672c48e24e72376bc37f3467f8e79",
+    "source_sha256":  [
+                          {
+                              "path":  "src/apng.rs",
+                              "sha256":  "A7776F11D43D8DD4A9802E4D354689978D819CDF56308369020D07A8EB6DA412"
+                          },
+                          {
+                              "path":  "src/checksum.rs",
+                              "sha256":  "548EC2169B7C2C6D8ABE4715F284F65FE9BD70189C670F320D6E2F244FCB2919"
+                          },
+                          {
+                              "path":  "src/codec.rs",
+                              "sha256":  "5FAD4314C55583E8A743215081FDB98809F73AA48D7D0FCDA233D564130B2E0E"
+                          },
+                          {
+                              "path":  "src/composite.rs",
+                              "sha256":  "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+                          },
+                          {
+                              "path":  "src/lib.rs",
+                              "sha256":  "DFA95C53F3697B5F0975B7C9A471B79DA254CB2BAA2AF6CD4118EBD13E4A6AF9"
+                          },
+                          {
+                              "path":  "src/metadata.rs",
+                              "sha256":  "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+                          },
+                          {
+                              "path":  "src/metadata/language.rs",
+                              "sha256":  "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+                          },
+                          {
+                              "path":  "src/metadata/language/registry.rs",
+                              "sha256":  "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+                          },
+                          {
+                              "path":  "src/metadata/profile.rs",
+                              "sha256":  "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+                          },
+                          {
+                              "path":  "src/reference.rs",
+                              "sha256":  "A697D0E85784053BC856CF26D3307D9F1D3D74DEC81F7C0859CF9D00654C94E5"
+                          },
+                          {
+                              "path":  "src/scanline.rs",
+                              "sha256":  "A8EB599EF3AB866B01A0129EB1F8BB6462CA2845B0ED1BD1C3DEE26F4614207E"
+                          },
+                          {
+                              "path":  "src/stream/decode.rs",
+                              "sha256":  "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+                          },
+                          {
+                              "path":  "src/stream/encode_rows.rs",
+                              "sha256":  "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+                          },
+                          {
+                              "path":  "src/stream/mod.rs",
+                              "sha256":  "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+                          },
+                          {
+                              "path":  "src/stream/read.rs",
+                              "sha256":  "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+                          },
+                          {
+                              "path":  "src/stream/rows.rs",
+                              "sha256":  "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+                          },
+                          {
+                              "path":  "src/stream/write.rs",
+                              "sha256":  "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+                          },
+                          {
+                              "path":  "src/zlib.rs",
+                              "sha256":  "2C972535E2FE47CD64C6AA7B21C9B7AF30CB156350AE172544C7B63A26D1C37B"
+                          },
+                          {
+                              "path":  "src/zlib/deflate.rs",
+                              "sha256":  "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+                          },
+                          {
+                              "path":  "src/zlib/inflate.rs",
+                              "sha256":  "F9DB3D3CBF32FB492ED524205E2C0699CC8A116B89B3C03E98B2C9C6253F576E"
+                          },
+                          {
+                              "path":  "src/zlib/matcher.rs",
+                              "sha256":  "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+                          }
+                      ],
+    "benchmark_source":  "examples/decode_bench.rs",
+    "benchmark_source_sha256":  "C30BAAE289A56086D5BB51B6DA5CA04D303977A229C75B6118B712B1BA8EBC06",
+    "corpus_sha256":  [
+                          {
+                              "file":  "kodim01.png",
+                              "bytes":  736501,
+                              "sha256":  "A56E27CBF5F843C048B6AF1D6E090760E9C92FADBA88B7DEE0205918A37523BD"
+                          },
+                          {
+                              "file":  "kodim02.png",
+                              "bytes":  617995,
+                              "sha256":  "4F4B74A79237E311D72CAD958237B5F7088D8BCE1C82305EBEFE1A70E3022DFD"
+                          },
+                          {
+                              "file":  "kodim03.png",
+                              "bytes":  502888,
+                              "sha256":  "E25CA1FF2F0C0CB5FDFD5F9B0A0BB21AC4C3DE3C84A67F35B09A85D3306249DB"
+                          },
+                          {
+                              "file":  "kodim04.png",
+                              "bytes":  637432,
+                              "sha256":  "E3B946107C5D3441C022F678D0C3CAF1E224D81B1604BA840A4F88E562DE61AA"
+                          },
+                          {
+                              "file":  "kodim05.png",
+                              "bytes":  785610,
+                              "sha256":  "10349E963C5C813D327852F82C1795FA4148D69FEDFFC4C589BEE458E3AC3D53"
+                          },
+                          {
+                              "file":  "kodim06.png",
+                              "bytes":  618959,
+                              "sha256":  "363510303B715D4CBC384E1CE227E466B613A09E1B71AE985882BF8E7FBD9B18"
+                          },
+                          {
+                              "file":  "kodim07.png",
+                              "bytes":  566322,
+                              "sha256":  "B77D3F006F42414BB242222E0482E750C0FB9E5EE8D4BED2F6F11C5605FE54A4"
+                          },
+                          {
+                              "file":  "kodim08.png",
+                              "bytes":  788470,
+                              "sha256":  "BA23983C76B4832EE0E8AF0592664756841A16779ACD69F792E268FB6D13D6E7"
+                          },
+                          {
+                              "file":  "kodim09.png",
+                              "bytes":  582899,
+                              "sha256":  "6A4361C2FC194FEB4EDAA9F9A4A0620FB9943E460AC7FDF037FB0F6DD6607A7D"
+                          },
+                          {
+                              "file":  "kodim10.png",
+                              "bytes":  593463,
+                              "sha256":  "9DFB70F5867C29FF9ED6313683F19B3D867849E40FBC0C4C54A4A89DF341CF23"
+                          },
+                          {
+                              "file":  "kodim11.png",
+                              "bytes":  621023,
+                              "sha256":  "7936814B58B5387FCE2E4E2488B4EC830DADD95FA9520F358DDB30990B50F2B6"
+                          },
+                          {
+                              "file":  "kodim12.png",
+                              "bytes":  531024,
+                              "sha256":  "D78C37C2F04F23761ED2367DD77E2DB584DDD4C3950833FECF89F199A8126980"
+                          },
+                          {
+                              "file":  "kodim13.png",
+                              "bytes":  822712,
+                              "sha256":  "BC34A3CE58DEA09DCE1704C997171602DE90CB34D0C8503A988B77F473D39B08"
+                          },
+                          {
+                              "file":  "kodim14.png",
+                              "bytes":  692201,
+                              "sha256":  "55A94550FF18F3246C4074FD32B77B0C74447C26B6AD274D564D999C0450BA6E"
+                          },
+                          {
+                              "file":  "kodim15.png",
+                              "bytes":  612582,
+                              "sha256":  "7538CBB80CB9103606C48B806EAE57D56C885C7F90B9B3BE70A41160F9CBB683"
+                          },
+                          {
+                              "file":  "kodim16.png",
+                              "bytes":  534247,
+                              "sha256":  "A89C7268CCD4718BA424A99FC4643C572CF692CA6EAE887185CEB4E9F11D2E54"
+                          },
+                          {
+                              "file":  "kodim17.png",
+                              "bytes":  602078,
+                              "sha256":  "37AFCC89FBDCB76D9518E04B2FC011027E2F4CD14B3B2F83CEFD721641A47C5B"
+                          },
+                          {
+                              "file":  "kodim18.png",
+                              "bytes":  780947,
+                              "sha256":  "1A9258C365988961D87A0598725B609139C303AD48A5AAD6C503C3B1A87849AA"
+                          },
+                          {
+                              "file":  "kodim19.png",
+                              "bytes":  671476,
+                              "sha256":  "B7450B264B1B0A411390D8931B112C27905A992520FC90569DC4B920AA32BBDC"
+                          },
+                          {
+                              "file":  "kodim20.png",
+                              "bytes":  492462,
+                              "sha256":  "3B46C71E3B92A563820BA32936BE8330C586C41F938EFD94BE938386AAE4328A"
+                          },
+                          {
+                              "file":  "kodim21.png",
+                              "bytes":  637051,
+                              "sha256":  "AC958597C82073F6BB65129C68F72B651DB5B9EFD82E11547D07350214BC268B"
+                          },
+                          {
+                              "file":  "kodim22.png",
+                              "bytes":  701970,
+                              "sha256":  "1CEE58EB1F2D9C7EBB254D208A03C783CE6CF2C4D8C2CF45E235DD23B4CE1B29"
+                          },
+                          {
+                              "file":  "kodim23.png",
+                              "bytes":  557596,
+                              "sha256":  "E3111A2FD4DA24AF15D6459EF9EACFE54106B38E27B4A21821B75C3F5D2D5BAF"
+                          },
+                          {
+                              "file":  "kodim24.png",
+                              "bytes":  706397,
+                              "sha256":  "1071C68372CC5A01435C2C225A5CF7D4BB803846EC08BB6B3D6721B156D7CB96"
+                          }
+                      ],
+    "executable":  "C:\\GitHub\\deadsync\\target\\png-literals-before\\decode_bench.exe",
+    "executable_sha256":  "58CD760A154B27DE3C6D4EC8DC40A388A52CAACD2ECEA5E92191E03A4BB05EE8",
+    "processor":  {
+                      "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                      "NumberOfCores":  22,
+                      "NumberOfLogicalProcessors":  44
+                  },
+    "eligible_affinity":  17592186044415,
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T10:28:00.2169578Z",
+                             "end_utc":  "2026-10-27T10:28:14.6412703Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-token-control-photos-c-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T10:28:14.6532703Z",
+                             "end_utc":  "2026-10-27T10:28:29.6327797Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-token-control-photos-c-run2.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "limits":  "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec\u0027s allocations. Deflate stage uses identical filtered bytes per source.",
+    "control_of":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literals-before-photos-a-manifest.json",
+    "control_manifest_sha256":  "8C87D9D2993A20D4682B6009815F982D3A878FDF557516CA60337217BA0283E1",
+    "control_runner_sha256":  "78E7C215EDCAADF3693FA1B20ADC6A08E85744C566FC494D532EC19503023DF0"
+}

@@ -1,0 +1,182 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index 31fc7d21c..186dd4f4c 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -366,7 +366,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+     bpp: usize,
+     out: &mut [u8],
+ ) -> u64 {
+-    let prev = if FILTER >= 2 {
++    let prev = if FILTER >= 2 && FILTER <= 4 {
+         &prev[..row.len()]
+     } else {
+         prev
+@@ -380,7 +380,8 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+             1 => left,
+             2 => prev[n],
+             3 => ((u16::from(left) + u16::from(prev[n])) / 2) as u8,
+-            _ => paeth(left, prev[n], if n >= bpp { prev[n - bpp] } else { 0 }),
++            4 => paeth(left, prev[n], if n >= bpp { prev[n - bpp] } else { 0 }),
++            _ => left / 2,
+         };
+         *out = value.wrapping_sub(predictor);
+         if SCORE {
+@@ -390,6 +391,22 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+     score
+ }
+ 
++pub(crate) fn filter_first<const SCORE: bool>(
++    row: &[u8],
++    bpp: usize,
++    filter: u8,
++    out: &mut [u8],
++) -> u64 {
++    // A pass starts with zero upper predictors: Up equals None, Paeth equals
++    // Sub, and Average uses only half the left byte.
++    match filter {
++        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out),
++        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out),
++        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out),
++        _ => unreachable!("validated scanline filter"),
++    }
++}
++
+ fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
+     if DEPTH == 4 {
+         for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
+@@ -556,7 +573,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+         row_bytes(width, channels, depth)?
+     };
+     let mut row = vec![0; capacity];
+-    let uses_previous = !matches!(filter, Filter::None | Filter::Sub);
++    let uses_previous = !matches!(filter, Filter::None | Filter::Sub) && image.height > 1;
+     let mut previous = if uses_previous {
+         vec![0; capacity]
+     } else {
+@@ -596,7 +613,6 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+         row.resize(stride, 0);
+         if uses_previous {
+             previous.resize(stride, 0);
+-            previous.fill(0);
+         }
+         if filter == Filter::Adaptive {
+             candidate.resize(stride, 0);
+@@ -609,7 +625,11 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+             if filter == Filter::Adaptive {
+                 let mut score = u64::MAX;
+                 for kind in 0..5 {
+-                    let value = filter_into::<true>(&row, &previous, bpp, kind, &mut candidate);
++                    let value = if row_index == 0 {
++                        filter_first::<true>(&row, bpp, kind, &mut candidate)
++                    } else {
++                        filter_into::<true>(&row, &previous, bpp, kind, &mut candidate)
++                    };
+                     if value < score {
+                         score = value;
+                         selected = kind;
+@@ -618,11 +638,15 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+                 }
+             } else {
+                 selected = filter as u8;
+-                filter_into::<false>(&row, &previous, bpp, selected, &mut best);
++                if row_index == 0 {
++                    filter_first::<false>(&row, bpp, selected, &mut best);
++                } else {
++                    filter_into::<false>(&row, &previous, bpp, selected, &mut best);
++                }
+             }
+             out.push(selected);
+             out.extend_from_slice(&best);
+-            if uses_previous {
++            if uses_previous && row_index + 1 < h {
+                 core::mem::swap(&mut row, &mut previous);
+             }
+         }
+@@ -745,6 +769,17 @@ mod tests {
+                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
+                         assert_eq!(actual, row);
+                         if prev.iter().all(|&v| v == 0) {
++                            let mut first_filtered = vec![0xa5; len];
++                            assert_eq!(
++                                filter_first::<true>(&row, bpp, filter, &mut first_filtered),
++                                score
++                            );
++                            assert_eq!(first_filtered, expected);
++                            assert_eq!(
++                                filter_first::<false>(&row, bpp, filter, &mut first_filtered),
++                                0
++                            );
++                            assert_eq!(first_filtered, expected);
+                             let mut first = expected.clone();
+                             unfilter_first(&mut first, bpp, filter).unwrap();
+                             assert_eq!(first, row);
+diff --git a/crates/deadlib-image/png/src/stream/encode_rows.rs b/crates/deadlib-image/png/src/stream/encode_rows.rs
+index 6f5aad66a..f2e690b3c 100644
+--- a/crates/deadlib-image/png/src/stream/encode_rows.rs
++++ b/crates/deadlib-image/png/src/stream/encode_rows.rs
+@@ -72,9 +72,8 @@ impl<'a> Rows<'a> {
+                 )?;
+                 if self.filter != Filter::None {
+                     resize(&mut self.row, bytes)?;
+-                    if self.filter != Filter::Sub {
++                    if self.filter != Filter::Sub && self.height > 1 {
+                         resize(&mut self.previous, bytes)?;
+-                        self.previous.fill(0);
+                     }
+                     if self.filter == Filter::Adaptive {
+                         resize(&mut self.candidate, bytes + 1)?;
+@@ -122,13 +121,17 @@ impl<'a> Rows<'a> {
+         if self.filter == Filter::Adaptive {
+             let mut best = u64::MAX;
+             for kind in 0..5 {
+-                let score = scanline::filter_into::<true>(
+-                    &self.row,
+-                    &self.previous,
+-                    bpp,
+-                    kind,
+-                    &mut self.candidate[1..],
+-                );
++                let score = if self.index == 0 {
++                    scanline::filter_first::<true>(&self.row, bpp, kind, &mut self.candidate[1..])
++                } else {
++                    scanline::filter_into::<true>(
++                        &self.row,
++                        &self.previous,
++                        bpp,
++                        kind,
++                        &mut self.candidate[1..],
++                    )
++                };
+                 if score < best {
+                     best = score;
+                     selected = kind;
+@@ -136,17 +139,21 @@ impl<'a> Rows<'a> {
+                 }
+             }
+         } else {
+-            scanline::filter_into::<false>(
+-                &self.row,
+-                &self.previous,
+-                bpp,
+-                selected,
+-                &mut self.output[1..],
+-            );
++            if self.index == 0 {
++                scanline::filter_first::<false>(&self.row, bpp, selected, &mut self.output[1..]);
++            } else {
++                scanline::filter_into::<false>(
++                    &self.row,
++                    &self.previous,
++                    bpp,
++                    selected,
++                    &mut self.output[1..],
++                );
++            }
+         }
+         self.output[0] = selected;
+         self.index += 1;
+-        if self.filter != Filter::Sub {
++        if self.filter != Filter::Sub && self.index < self.height {
+             core::mem::swap(&mut self.row, &mut self.previous);
+         }
+         Ok(Some(&self.output))

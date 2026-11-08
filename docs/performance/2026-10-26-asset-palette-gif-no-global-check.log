@@ -1,0 +1,9 @@
+
+running 1 test
+test local_gif_palette_works_without_any_global_color_table ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Compiling deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.25s
+     Running tests\gif_palette.rs (target\debug\deps\gif_palette-0b60b36902951416.exe)

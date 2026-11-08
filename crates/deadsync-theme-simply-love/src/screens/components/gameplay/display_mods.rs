@@ -63,7 +63,7 @@ pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
             z(84)
         ));
         actors.push(act!(text:
-            font("miso"): settext("CMod On"):
+            font("miso"): settext(crate::i18n::tr("Gameplay", "CModOn")):
             align(0.5, 0.5): xy(frame.playfield_center_x, warning_y):
             zoom(DISPLAY_MODS_WARNING_ZOOM):
             diffuse(1.0, 0.0, 0.0, frame.alpha):

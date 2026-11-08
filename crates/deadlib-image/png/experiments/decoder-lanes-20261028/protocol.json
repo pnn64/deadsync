@@ -1,0 +1,17 @@
+{
+  "source_base": "01e641a59",
+  "selected_checkpoint": "bytes",
+  "benchmark_stage": "decoder-lanes",
+  "pipeline_cases": 94,
+  "pipeline_comparisons": ["sub-paired", "sub-selected-paired", "predictor-paired", "scatter-paired", "scatter-selected-paired", "selected-paired", "packed-paired", "grouped-paired", "bytes-paired", "accepted-paired"],
+  "pipeline_protocol": "Logical CPU 2; Windows thread cycles; three warmups; separate untimed allocation probe; seven batches; four alternating processes per version. Actual requested iterations are three; readers up to 65536 native bytes use at least 64, other outputs below 4096 bytes at least 2048. Input fingerprints identify complete PNG wire bytes. Complete decoded native samples and independently modeled filtered bytes are checked outside timing.",
+  "checkpoint_scope_note": "Freeze-only checkpoint records inherit the driver's default 12-iteration scope text but contain no timed outputs. Every paired record and TSV records the actual three-iteration request and per-case minimum. Predictor is an intermediate frozen source checkpoint without a direct comparison.",
+  "in_process_protocol": "Baseline Git source and each candidate link into one caller with shared native image types and copied workspace bench-profile settings. Both decoders and both reader APIs must reproduce the complete independent source image before timing. Three processes, each retaining eleven alternating batches per variant after one warmup. Each covers 94 case/operations: height-one cases use 64 iterations, small Adam7 cases 1024, large cases three.",
+  "in_process_checkpoints": {"in-process": "scatter", "in-process-selected": "scatter-selected", "in-process-packed": "packed", "in-process-bytes": "bytes"},
+  "retained_components": ["Sub pixel lanes for byte strides 1/3/4/6; original 2/8 loops retained", "No previous-row allocation for one-row streaming passes; no terminal-row swaps", "Fixed-channel native 8-bit Adam7 pixel copies; original packed/16-bit fallback retained"],
+  "rejected_trials": ["Sub routing every byte stride through the existing pixel kernel", "Hoisted typed scatter including 16-bit conversion and packed iterators", "Indexed packed scatter rewrites and grouped-byte packed iterators"],
+  "serialization": "Benchmark processes are serialized. The initial rejected sub-paired trial overlapped a preparatory predictor compilation; subsequent measurements and supplemental comparisons were serialized with our build/test jobs. Other host workloads, CPU frequency and preemption remain uncontrolled.",
+  "shared_image_checkout": "The unchanged shared deadlib-image/src/lib.rs checkout uses CRLF while Git stores LF. Audit normalizes only that known checkout difference; PNG source matches Git bytes directly.",
+  "correctness": ["final-validation.json", "library-validation.json"],
+  "allocation_expectations": "Sub and native 8-bit scatter do not add allocations. A plain one-row reader removes exactly one allocation of stride+1 bytes. Adam7 one-row passes also omit unnecessary previous-buffer growth; actual complete-API counts are recorded. All other measured allocation counts are unchanged."
+}

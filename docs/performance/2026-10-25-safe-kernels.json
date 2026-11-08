@@ -1,0 +1,298 @@
+{
+  "baseline_commit": "241a16adc",
+  "date": "2026-10-25",
+  "environment": {
+    "cpu": "Intel Xeon E5-2696 v4, 22 cores / 44 logical processors",
+    "os": "Windows x86_64",
+    "rustc": "1.99.1",
+    "llvm": "23.1.1",
+    "profile": "release, opt-level=3, LTO disabled equally for both variants, static MSVC CRT",
+    "affinity": "benchmark thread pinned to logical processor 2",
+    "runs_per_variant": 4,
+    "measured_batches_per_process": 11,
+    "warmup_batches_per_process": 1
+  },
+  "summary": [
+    {
+      "workload": "alpha/512/kind=0",
+      "before_cycles": 1099450.275,
+      "after_cycles": 382125.33999999997,
+      "cpu_throughput": 2.8771980287933796,
+      "before_ns": 502374.5,
+      "after_ns": 174627.5,
+      "min_throughput": 2.5374042675852513,
+      "max_throughput": 3.2531947498329377
+    },
+    {
+      "workload": "alpha/512/kind=1",
+      "before_cycles": 210536.72499999998,
+      "after_cycles": 180107.435,
+      "cpu_throughput": 1.168950770966229,
+      "before_ns": 96114.0,
+      "after_ns": 82189.0,
+      "min_throughput": 0.9912689071668407,
+      "max_throughput": 1.2730478492043142
+    },
+    {
+      "workload": "alpha/512/kind=2",
+      "before_cycles": 221686.22,
+      "after_cycles": 216937.33000000002,
+      "cpu_throughput": 1.0218906077621588,
+      "before_ns": 101097.5,
+      "after_ns": 99007.0,
+      "min_throughput": 0.7456702016528953,
+      "max_throughput": 1.1884386113722765
+    },
+    {
+      "workload": "alpha/512/kind=3",
+      "before_cycles": 363351.525,
+      "after_cycles": 334939.435,
+      "cpu_throughput": 1.0848275450157132,
+      "before_ns": 165951.0,
+      "after_ns": 153030.0,
+      "min_throughput": 0.9226239151134702,
+      "max_throughput": 1.2787352267893377
+    },
+    {
+      "workload": "alpha/64/kind=0",
+      "before_cycles": 18220.805,
+      "after_cycles": 5483.52,
+      "cpu_throughput": 3.322830043475723,
+      "before_ns": 8319.265,
+      "after_ns": 2506.75,
+      "min_throughput": 3.2231787116475203,
+      "max_throughput": 4.08213904805496
+    },
+    {
+      "workload": "alpha/64/kind=1",
+      "before_cycles": 3020.4300000000003,
+      "after_cycles": 3089.49,
+      "cpu_throughput": 0.9776467960731384,
+      "before_ns": 1379.185,
+      "after_ns": 1408.9499999999998,
+      "min_throughput": 0.8902453632534089,
+      "max_throughput": 1.0993527936375895
+    },
+    {
+      "workload": "alpha/64/kind=2",
+      "before_cycles": 3187.11,
+      "after_cycles": 3597.355,
+      "cpu_throughput": 0.8859592672949987,
+      "before_ns": 1455.295,
+      "after_ns": 1640.585,
+      "min_throughput": 0.8132285118836965,
+      "max_throughput": 0.9679169495209143
+    },
+    {
+      "workload": "alpha/64/kind=3",
+      "before_cycles": 6093.48,
+      "after_cycles": 6480.1900000000005,
+      "cpu_throughput": 0.9403242806152288,
+      "before_ns": 2780.73,
+      "after_ns": 2959.665,
+      "min_throughput": 0.885724023214521,
+      "max_throughput": 0.9906297502897623
+    },
+    {
+      "workload": "golf/accurate/1024",
+      "before_cycles": 16852.44,
+      "after_cycles": 9795.96,
+      "cpu_throughput": 1.7203459385297613,
+      "before_ns": 7690.85,
+      "after_ns": 4475.625,
+      "min_throughput": 1.3973616969908322,
+      "max_throughput": 1.8774741942389321
+    },
+    {
+      "workload": "golf/late/1024",
+      "before_cycles": 48001.305,
+      "after_cycles": 10396.400000000001,
+      "cpu_throughput": 4.617108325958985,
+      "before_ns": 21900.2,
+      "after_ns": 4742.125,
+      "min_throughput": 4.432622817644925,
+      "max_throughput": 4.868568582067576
+    },
+    {
+      "workload": "golf/mixed/1024",
+      "before_cycles": 35066.005000000005,
+      "after_cycles": 9695.915,
+      "cpu_throughput": 3.6165751246787954,
+      "before_ns": 16000.95,
+      "after_ns": 4424.4,
+      "min_throughput": 3.4188937538796105,
+      "max_throughput": 3.7452870838617103
+    },
+    {
+      "workload": "pars/get/1/6/1024",
+      "before_cycles": 131170.785,
+      "after_cycles": 111502.48999999999,
+      "cpu_throughput": 1.1763933253867247,
+      "before_ns": 59891.7,
+      "after_ns": 50866.0,
+      "min_throughput": 1.0546976626641147,
+      "max_throughput": 1.2706549355069525
+    },
+    {
+      "workload": "pars/get/128/0/1024",
+      "before_cycles": 85553.85500000001,
+      "after_cycles": 80769.63500000001,
+      "cpu_throughput": 1.0592329035534207,
+      "before_ns": 39055.6,
+      "after_ns": 36889.6,
+      "min_throughput": 0.94922644994531,
+      "max_throughput": 1.2958295340006007
+    },
+    {
+      "workload": "pars/get/128/1/1024",
+      "before_cycles": 97450.1,
+      "after_cycles": 97487.63,
+      "cpu_throughput": 0.9996150280809986,
+      "before_ns": 44507.6,
+      "after_ns": 44506.100000000006,
+      "min_throughput": 0.9016860758088316,
+      "max_throughput": 1.160312751554249
+    },
+    {
+      "workload": "pars/get/128/6/1024",
+      "before_cycles": 132492.39500000002,
+      "after_cycles": 124112.76999999999,
+      "cpu_throughput": 1.067516219322154,
+      "before_ns": 60451.899999999994,
+      "after_ns": 56679.600000000006,
+      "min_throughput": 0.9070573369857005,
+      "max_throughput": 1.1200479692082566
+    },
+    {
+      "workload": "pars/parse/1/6",
+      "before_cycles": 6848.3150000000005,
+      "after_cycles": 3433.75,
+      "cpu_throughput": 1.9944128139788861,
+      "before_ns": 3124.52,
+      "after_ns": 1570.05,
+      "min_throughput": 1.562289545430648,
+      "max_throughput": 2.311137354088015
+    },
+    {
+      "workload": "pars/parse/128/0",
+      "before_cycles": 122465.64,
+      "after_cycles": 111759.51000000001,
+      "cpu_throughput": 1.0957961429859524,
+      "before_ns": 55878.0,
+      "after_ns": 51003.5,
+      "min_throughput": 0.9834379368286023,
+      "max_throughput": 1.3872575101238946
+    },
+    {
+      "workload": "pars/parse/128/1",
+      "before_cycles": 299770.055,
+      "after_cycles": 150080.93,
+      "cpu_throughput": 1.9973893751857748,
+      "before_ns": 137084.5,
+      "after_ns": 68470.5,
+      "min_throughput": 1.7979943771423386,
+      "max_throughput": 2.510538788776883
+    },
+    {
+      "workload": "pars/parse/128/6",
+      "before_cycles": 1037385.525,
+      "after_cycles": 532377.495,
+      "cpu_throughput": 1.9485901164924337,
+      "before_ns": 474192.5,
+      "after_ns": 243017.5,
+      "min_throughput": 1.748024089386783,
+      "max_throughput": 2.0486523992071684
+    }
+  ],
+  "allocations": [
+    {
+      "songs": 1,
+      "overrides_per_song": 6,
+      "before": {
+        "allocs": 23,
+        "reallocs": 0,
+        "frees": 14,
+        "allocated_bytes": 960,
+        "freed_bytes": 267,
+        "peak_bytes": 839
+      },
+      "after": {
+        "allocs": 8,
+        "reallocs": 0,
+        "frees": 6,
+        "allocated_bytes": 414,
+        "freed_bytes": 36,
+        "peak_bytes": 384
+      }
+    },
+    {
+      "songs": 128,
+      "overrides_per_song": 0,
+      "before": {
+        "allocs": 263,
+        "reallocs": 0,
+        "frees": 134,
+        "allocated_bytes": 47152,
+        "freed_bytes": 23438,
+        "peak_bytes": 35010
+      },
+      "after": {
+        "allocs": 135,
+        "reallocs": 0,
+        "frees": 6,
+        "allocated_bytes": 46238,
+        "freed_bytes": 22524,
+        "peak_bytes": 35002
+      }
+    },
+    {
+      "songs": 128,
+      "overrides_per_song": 1,
+      "before": {
+        "allocs": 775,
+        "reallocs": 0,
+        "frees": 390,
+        "allocated_bytes": 70100,
+        "freed_bytes": 26418,
+        "peak_bytes": 52482
+      },
+      "after": {
+        "allocs": 263,
+        "reallocs": 0,
+        "frees": 134,
+        "allocated_bytes": 47152,
+        "freed_bytes": 23438,
+        "peak_bytes": 35002
+      }
+    },
+    {
+      "songs": 128,
+      "overrides_per_song": 6,
+      "before": {
+        "allocs": 2823,
+        "reallocs": 0,
+        "frees": 1798,
+        "allocated_bytes": 122632,
+        "freed_bytes": 58598,
+        "peak_bytes": 70290
+      },
+      "after": {
+        "allocs": 903,
+        "reallocs": 0,
+        "frees": 774,
+        "allocated_bytes": 51722,
+        "freed_bytes": 28008,
+        "peak_bytes": 35002
+      }
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-assets/src/lib.rs": "6f1fdfbc914637ba8f36ac9b60cf3ab03b9d4599b642e3087f28f3666ff00b55",
+    "crates/deadsync-chart/src/golf.rs": "6a08a805eb7360693986168514e529d07e401633abd440c07fdc6d29a86686a5",
+    "crates/deadsync-rules/src/golf.rs": "153e4506a83a98b33fc1f8ee5903f00c8c37adebdc0726ece93e759720e2ee8e",
+    "crates/deadlib-assets/tests/hidden_alpha_kernel.rs": "326056023cb190de0cf836670670e5d92a6a6b50d636c8ff47bc0071dc2fcf09",
+    "crates/deadsync-chart/tests/golf_pars_kernel.rs": "8ab4abcafa875a9393584316f7932d9ffd620acbc3fa65573bc7dc2b89fb9556",
+    "crates/deadsync-rules/tests/golf_kernel.rs": "f16166ddff76ef9b8d7c9cb75464ee7f70073c947b2cd345da8c93b9b37b00d4",
+    "tests/support/kernel_bench.rs": "aa451b87befe2611fa8e2e2265e6e61f1fde1044c2ad165db944b888acdf9992"
+  }
+}

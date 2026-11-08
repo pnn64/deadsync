@@ -1,0 +1,265 @@
+{
+  "commands": [
+    [
+      "rustc",
+      "--crate-name",
+      "ogg_query_before",
+      "--crate-type",
+      "rlib",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "codegen-units=1",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "lto=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "-D",
+      "warnings",
+      "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\query-before\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_before.rlib"
+    ],
+    [
+      "rustc",
+      "--crate-name",
+      "ogg_query_after",
+      "--crate-type",
+      "rlib",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "codegen-units=1",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "lto=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "-D",
+      "warnings",
+      "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\query-any\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_after.rlib"
+    ],
+    [
+      "rustc",
+      "--crate-name",
+      "paired_granule",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "codegen-units=1",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "lto=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "-D",
+      "warnings",
+      "--extern",
+      "before=C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_before.rlib",
+      "--extern",
+      "after=C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_after.rlib",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-granule-pair.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule.exe"
+    ]
+  ],
+  "source_sha256": "f6da3a2687517d810181c5ebd4bf9d3f248adbc1224ffebbdad8d9c1f15a5950",
+  "libraries": {
+    "before": {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_before.rlib",
+      "sha256": "e4fd3562fb68b3c6e9c429962cee3ce7c184c2b0e7b394d351859f0993c48464"
+    },
+    "after": {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\libogg_query_after.rlib",
+      "sha256": "756b5c12806e368ee8915d5ae40791883e2c721efb89d908f0aead985d305999"
+    }
+  },
+  "executable_sha256": "037abec80b89f9271b701f177461c090482955421885f4d89d3d8ebb60dba1b3",
+  "sources": {
+    "query-before": {
+      "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "573bb8ead983829cd9a98a8f5132f00ced26e8f0dfcfe3e45cdc72ae8e348951",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "1b5c10c9352df027a7470825758edd3745b5b6e269faaaa35a11ea448a1596ea",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "33ff27ee1b726d63a92c951b94cfc36b6a8e68fa88d6968cf5cb7febc1be5a43",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "13cf42449067c65029e3dbc7dae071c9fc418259983f6a74f7c78329b533c30f",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "6d57ca6bdb6429be48de73068eab36dfc455f515bce166d2fadb3596b9c49dcf",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "90c5c0cbd1940cdbc7e926b7e52998526fad5396bad93d82ae818c1fcb8b5765"
+    },
+    "query-any": {
+      "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "573bb8ead983829cd9a98a8f5132f00ced26e8f0dfcfe3e45cdc72ae8e348951",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "f64062e6f3a491bf06be2e22048a0ed377902bb7fd876ba2a91b7e68a656d692",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "33ff27ee1b726d63a92c951b94cfc36b6a8e68fa88d6968cf5cb7febc1be5a43",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "1c40d98777d45a3831ca03f75d7019af6f084e43744b4288970d361c125272c6",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+      "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "90c5c0cbd1940cdbc7e926b7e52998526fad5396bad93d82ae818c1fcb8b5765"
+    }
+  },
+  "support_sha256": {
+    "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+  },
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "summary": [
+    {
+      "workload": "granule-pair/0",
+      "stage": "before",
+      "median_cycles": 8124.5,
+      "min_cycles": 7860.84,
+      "max_cycles": 9975.25,
+      "mad_cycles": 106.75,
+      "median_ns": 3701.565,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 2,
+        "frees": 1,
+        "allocated_bytes": 4177,
+        "freed_bytes": 4177,
+        "peak_bytes": 4096
+      }
+    },
+    {
+      "workload": "granule-pair/0",
+      "stage": "after",
+      "median_cycles": 7535.45,
+      "min_cycles": 7357.54,
+      "max_cycles": 9207.0,
+      "mad_cycles": 144.47000000000025,
+      "median_ns": 3430.66,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 2,
+        "frees": 1,
+        "allocated_bytes": 4177,
+        "freed_bytes": 4177,
+        "peak_bytes": 4096
+      }
+    },
+    {
+      "workload": "granule-pair/1",
+      "stage": "before",
+      "median_cycles": 12509.355,
+      "min_cycles": 11514.32,
+      "max_cycles": 14174.9,
+      "mad_cycles": 150.90499999999975,
+      "median_ns": 5700.785,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 2,
+        "frees": 1,
+        "allocated_bytes": 4177,
+        "freed_bytes": 4177,
+        "peak_bytes": 4096
+      }
+    },
+    {
+      "workload": "granule-pair/1",
+      "stage": "after",
+      "median_cycles": 12129.52,
+      "min_cycles": 11344.55,
+      "max_cycles": 12802.16,
+      "mad_cycles": 301.8149999999996,
+      "median_ns": 5543.75,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 2,
+        "frees": 1,
+        "allocated_bytes": 4177,
+        "freed_bytes": 4177,
+        "peak_bytes": 4096
+      }
+    },
+    {
+      "workload": "granule-pair/17",
+      "stage": "before",
+      "median_cycles": 87868.59,
+      "min_cycles": 87471.61,
+      "max_cycles": 90824.98,
+      "mad_cycles": 233.21500000000378,
+      "median_ns": 40118.945,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 3,
+        "frees": 1,
+        "allocated_bytes": 12369,
+        "freed_bytes": 12369,
+        "peak_bytes": 8192
+      }
+    },
+    {
+      "workload": "granule-pair/17",
+      "stage": "after",
+      "median_cycles": 87508.04500000001,
+      "min_cycles": 86249.78,
+      "max_cycles": 88786.89,
+      "mad_cycles": 468.58000000000175,
+      "median_ns": 39945.31,
+      "heap": {
+        "allocs": 1,
+        "reallocs": 3,
+        "frees": 1,
+        "allocated_bytes": 12369,
+        "freed_bytes": 12369,
+        "peak_bytes": 8192
+      }
+    }
+  ],
+  "runs": 8,
+  "rows": 48,
+  "improving_trials": {
+    "granule-pair/0": 8,
+    "granule-pair/1": 8,
+    "granule-pair/17": 7
+  },
+  "raw_logs_sha256": {
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-0.log": "06b5da5ccae1be64e354418de5bbab3720116a3c3bbf55f1147647f3c83437ea",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-1.log": "e0fa020c79191ef043265cf3b9d68f498a75845399bd1ceb521821e6f04ab610",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-2.log": "1ccfa88907a512448c725011029e9ff99849f2a83333680cc88dcac3f6853a78",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-3.log": "16fb8319e5194be44ad06645fd9183c203c538049ef7cb5d61b26d00080853a9",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-4.log": "d21fea580e134ecb49f41aace8484911224294147d3832b80488804744332ba8",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-5.log": "a020ff15d8006ce5844ded01a402d8801f0c11eb5ef2becbfc8f00e3a08fd67c",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-6.log": "9d3b824db79b0505373f1a6257f83a0c09a74307bf232cb1ea339d8bb7e24582",
+    "C:\\GitHub\\deadsync\\target\\ogg-packet-state-20261028\\paired-granule-run-7.log": "aef6ddc012728e8b6ea9494437c0425ece818cab7add0e49300cbaa8ca77c81d"
+  },
+  "paired_ratios": {
+    "granule-pair/0": {
+      "median": 1.0715542697043692,
+      "minimum": 1.050051094354241,
+      "maximum": 1.1163024597895492
+    },
+    "granule-pair/1": {
+      "median": 1.0438864165966426,
+      "minimum": 1.0055776502070437,
+      "maximum": 1.1072272179069782
+    },
+    "granule-pair/17": {
+      "median": 1.0063230660982136,
+      "minimum": 0.9983548635410965,
+      "maximum": 1.022954852906775
+    }
+  }
+}

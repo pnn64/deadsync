@@ -60,6 +60,7 @@ fn chart(difficulty: &str, hash: &str) -> ChartData {
         chart_name: String::new(),
         meter: 10,
         step_artist: String::new(),
+        music_file: String::new(),
         music_path: None,
         short_hash: hash.into(),
         stats: ArrowStats::default(),
@@ -119,10 +120,12 @@ fn song(simfile_path: &str, charts: Vec<ChartData>) -> SongData {
         min_bpm: 150.0,
         max_bpm: 150.0,
         normalized_bpms: String::new(),
+        song_timing: None,
         music_length_seconds: 0.0,
         first_second: 0.0,
         total_length_seconds: 0,
         precise_last_second_seconds: 0.0,
+        precise_note_last_second_seconds: None,
         last_second_hint: 0.0,
         charts,
     }
@@ -563,3 +566,6 @@ fn run_import_cleans_up_canceled_profile() {
     assert_eq!(summary.scores_imported, 0);
     assert_eq!(deleted_profile.as_deref(), Some("profile-1"));
 }
+
+#[path = "import_perf.rs"]
+mod perf;

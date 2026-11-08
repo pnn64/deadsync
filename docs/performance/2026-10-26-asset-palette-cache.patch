@@ -1,0 +1,22 @@
+--- a/crates/deadlib-assets/src/dynamic.rs
++++ b/crates/deadlib-assets/src/dynamic.rs
+@@ -48,6 +48,13 @@
+-    let shard2 = &path_hex[..2];
+-    let sep = std::path::MAIN_SEPARATOR;
+-    Some((
+-        cache_dir.join(format!("{shard2}{sep}{path_hex}-{opt_hash:016x}.rgba")),
+-        path_hex,
+-    ))
++    let mut filename = *b"0000000000000000-0000000000000000.rgba";
++    filename[..16].copy_from_slice(path_hex.as_bytes());
++    let hex = b"0123456789abcdef";
++    for (i, byte) in opt_hash.to_be_bytes().into_iter().enumerate() {
++        filename[17 + i * 2] = hex[usize::from(byte >> 4)];
++        filename[18 + i * 2] = hex[usize::from(byte & 15)];
++    }
++    // Reserve both separators, the two-character shard, and the fixed filename.
++    let mut cache_path = PathBuf::with_capacity(cache_dir.as_os_str().len() + filename.len() + 4);
++    cache_path.push(cache_dir);
++    cache_path.push(&path_hex[..2]);
++    cache_path.push(std::str::from_utf8(&filename).expect("cache filename is ASCII hex"));
++    Some((cache_path, path_hex))

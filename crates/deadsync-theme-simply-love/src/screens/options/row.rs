@@ -2,6 +2,11 @@ use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SubRowId {
+    TwitchEnabled,
+    TwitchChannel,
+    TwitchBadges,
+    TwitchEmotes,
+    TwitchGameplay,
     CheckForUpdates,
     DownloadVideoSupport,
     DownloadWorkshop,
@@ -168,6 +173,7 @@ pub enum SubRowId {
     WheelShowFails,
     WheelItlPoints,
     NewPackBadge,
+    ShowGolfPars,
     FolderStats,
     ShowPatternInfo,
     StepArtistBox,
@@ -181,6 +187,7 @@ pub enum SubRowId {
     ShowGsBox,
     GsBoxPlacement,
     GsBoxLeaderboards,
+    GsBoxEventsFirst,
     // Course Options
     ShowRandomCourses,
     ShowMostPlayed,
@@ -206,6 +213,7 @@ pub enum SubRowId {
     GrooveStatsQrLogin,
     // ArrowCloud Options
     EnableArrowCloud,
+    EnableGolf,
     ArrowCloudSubmitFails,
     ArrowCloudResultDialogs,
     ArrowCloudQrLogin,
@@ -213,6 +221,7 @@ pub enum SubRowId {
     GsBsOptions,
     ArrowCloudOptions,
     ScoreImport,
+    ShareRips,
     // Null-or-Die (launcher)
     NullOrDieOptions,
     SyncPacks,

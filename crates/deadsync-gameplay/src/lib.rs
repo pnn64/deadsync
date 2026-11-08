@@ -1,6 +1,8 @@
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, ChartDisplayBpm, GameplayChartData, SongData, SyncPref};
-use deadsync_core::input::{InputSource, Lane, LaneMask, MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::{
+    InputSource, Lane, LaneMask, MAX_COLS, MAX_COLS_PER_PLAYER, MAX_PLAYERS,
+};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
     INVALID_SONG_TIME_NS, SongTimeNs, clamp_song_time_ns, normalized_song_rate,
@@ -28,7 +30,7 @@ use deadsync_rules::stream::{
 };
 use deadsync_rules::timing::{
     BeatInfo, BeatInfoCache, BeatTimeCache, DisplayedBeatCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS,
-    TimingData, TimingProfile, TimingProfileNs, TimingSegments, WindowCounts,
+    SongPositionCache, TimingData, TimingProfile, TimingProfileNs, TimingSegments, WindowCounts,
     classify_offset_ns_with_disabled_windows, combo_multipliers_at_beat,
     largest_enabled_tap_window_ns,
 };
@@ -136,6 +138,7 @@ include!("mod_effects.rs");
 include!("score_validity.rs");
 include!("course_display.rs");
 include!("score_display.rs");
+include!("ghost.rs");
 include!("attacks.rs");
 include!("runtime_config.rs");
 include!("cues.rs");
@@ -157,12 +160,5 @@ include!("effective.rs");
 include!("tests.rs");
 #[cfg(test)]
 include!("runtime_regression_tests.rs");
-
 #[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/spline_preparation.rs"]
-mod load_preparation_perf;
+mod calibration_tests;

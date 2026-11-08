@@ -1,0 +1,25 @@
+
+running 1 test
+test decode::open_perf::benchmark_file_dispatch ... open/png/1: allocation Churn { allocs: 9, reallocs: 1, frees: 9, allocated_bytes: 36656, freed_bytes: 36656, peak_bytes: 35964 }
+open/png/1: cycles/op 505074.64; ns/op 231109.38
+open/png/16: allocation Churn { allocs: 9, reallocs: 1, frees: 9, allocated_bytes: 38700, freed_bytes: 38700, peak_bytes: 36984 }
+open/png/16: cycles/op 418102.91; ns/op 441714.84
+open/png/256: allocation Churn { allocs: 9, reallocs: 1, frees: 9, allocated_bytes: 683564, freed_bytes: 683564, peak_bytes: 552056 }
+open/png/256: cycles/op 681657.19; ns/op 312606.25
+open/gif/1: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 46677, freed_bytes: 46677, peak_bytes: 46241 }
+open/gif/1: cycles/op 343644.41; ns/op 172888.28
+open/gif/16: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 48252, freed_bytes: 48252, peak_bytes: 47816 }
+open/gif/16: cycles/op 360276.66; ns/op 164849.22
+open/gif/256: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 379452, freed_bytes: 379452, peak_bytes: 379016 }
+open/gif/256: cycles/op 990480.00; ns/op 452706.25
+open/bmp/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8632, freed_bytes: 8632, peak_bytes: 8196 }
+open/bmp/1: cycles/op 373002.55; ns/op 421516.41
+open/bmp/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9652, freed_bytes: 9652, peak_bytes: 9216 }
+open/bmp/16: cycles/op 391181.59; ns/op 1334999.22
+open/bmp/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270772, freed_bytes: 270772, peak_bytes: 270336 }
+open/bmp/256: cycles/op 638841.12; ns/op 7147400.00
+open/bmp/fallback: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 36797, freed_bytes: 36797, peak_bytes: 27800 }
+open/bmp/fallback: cycles/op 726430.05; ns/op 9362555.47
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 21.70s

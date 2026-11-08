@@ -1,0 +1,3773 @@
+{
+  "scope": "Medians and ranges across six trials from two alternating process runs per version; no confidence interval; frequency and other processes uncontrolled. Initial wavl report scope incorrectly says heap excluded: its alloc_calls/requested_bytes/peak_requested_live_bytes columns are measured by the retained scoped allocator; process RSS is excluded.",
+  "reports": {
+    "wavl-writer-pinned-control": {
+      "report_sha256": "d18d568b868f891e668d04b1eb4d88ae676a6016eb07d1b4635bbd4c57476714",
+      "baseline": "1ffaa3190",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "wavl/new_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 125.8745,
+              "minimum": 123.691,
+              "maximum": 128.364
+            },
+            "current": {
+              "trials": 6,
+              "median": 132.1955,
+              "minimum": 129.505,
+              "maximum": 133.2
+            },
+            "change_percent": 5.021668407818902
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 275.94,
+              "minimum": 271.006,
+              "maximum": 281.194
+            },
+            "current": {
+              "trials": 6,
+              "median": 289.586,
+              "minimum": 283.755,
+              "maximum": 291.941
+            },
+            "change_percent": 4.9452779589765905
+          }
+        },
+        "wavl/known_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 101.92099999999999,
+              "minimum": 99.796,
+              "maximum": 107.344
+            },
+            "current": {
+              "trials": 6,
+              "median": 110.5455,
+              "minimum": 107.889,
+              "maximum": 112.546
+            },
+            "change_percent": 8.4619460170132
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 223.4405,
+              "minimum": 218.704,
+              "maximum": 235.308
+            },
+            "current": {
+              "trials": 6,
+              "median": 242.296,
+              "minimum": 236.498,
+              "maximum": 246.677
+            },
+            "change_percent": 8.4387118718406
+          }
+        },
+        "wavl/new_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 338.2015,
+              "minimum": 332.736,
+              "maximum": 343.789
+            },
+            "current": {
+              "trials": 6,
+              "median": 345.60450000000003,
+              "minimum": 337.529,
+              "maximum": 352.293
+            },
+            "change_percent": 2.188931746311007
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 740.9300000000001,
+              "minimum": 729.344,
+              "maximum": 753.568
+            },
+            "current": {
+              "trials": 6,
+              "median": 757.542,
+              "minimum": 739.926,
+              "maximum": 772.236
+            },
+            "change_percent": 2.242047156951399
+          }
+        },
+        "wavl/known_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 317.9915,
+              "minimum": 308.631,
+              "maximum": 326.665
+            },
+            "current": {
+              "trials": 6,
+              "median": 330.9075,
+              "minimum": 315.839,
+              "maximum": 342.766
+            },
+            "change_percent": 4.061743788749084
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 696.453,
+              "minimum": 675.735,
+              "maximum": 715.691
+            },
+            "current": {
+              "trials": 6,
+              "median": 725.4855,
+              "minimum": 692.303,
+              "maximum": 750.593
+            },
+            "change_percent": 4.1686230083006315
+          }
+        },
+        "wavl/segmented_i16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 382138.28150000004,
+              "minimum": 380178.906,
+              "maximum": 387495.312
+            },
+            "current": {
+              "trials": 6,
+              "median": 386247.65650000004,
+              "minimum": 375807.031,
+              "maximum": 391025.781
+            },
+            "change_percent": 1.0753633433084886
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 835516.461,
+              "minimum": 831922.133,
+              "maximum": 847228.836
+            },
+            "current": {
+              "trials": 6,
+              "median": 842605.6285000001,
+              "minimum": 821669.109,
+              "maximum": 853568.594
+            },
+            "change_percent": 0.848477298881134
+          }
+        },
+        "wavl/segmented_i16_known": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 382155.46849999996,
+              "minimum": 378284.375,
+              "maximum": 386487.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 384680.8595,
+              "minimum": 380589.844,
+              "maximum": 391517.969
+            },
+            "change_percent": 0.6608281728670562
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 835548.164,
+              "minimum": 824287.664,
+              "maximum": 845479.711
+            },
+            "current": {
+              "trials": 6,
+              "median": 840694.4335,
+              "minimum": 831241.375,
+              "maximum": 856530.18
+            },
+            "change_percent": 0.6159153621214886
+          }
+        },
+        "wavl/u64_silence": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 198.127,
+              "minimum": 191.739,
+              "maximum": 200.661
+            },
+            "current": {
+              "trials": 6,
+              "median": 208.0135,
+              "minimum": 203.919,
+              "maximum": 209.691
+            },
+            "change_percent": 4.989981173691604
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 434.27549999999997,
+              "minimum": 419.348,
+              "maximum": 439.419
+            },
+            "current": {
+              "trials": 6,
+              "median": 455.4535,
+              "minimum": 447.001,
+              "maximum": 459.655
+            },
+            "change_percent": 4.876627854898574
+          }
+        }
+      }
+    },
+    "wavl-writer-pinned-typed": {
+      "report_sha256": "7abcce1e53f57c2ea6c3bac79e9550c679be071561a7e48d4d198f68ba28b655",
+      "baseline": "add30e338",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "wavl/new_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 134.4015,
+              "minimum": 132.49,
+              "maximum": 135.585
+            },
+            "current": {
+              "trials": 6,
+              "median": 135.4435,
+              "minimum": 131.57,
+              "maximum": 139.799
+            },
+            "change_percent": 0.7752889662689721
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 294.50800000000004,
+              "minimum": 289.921,
+              "maximum": 296.917
+            },
+            "current": {
+              "trials": 6,
+              "median": 296.2685,
+              "minimum": 288.052,
+              "maximum": 305.572
+            },
+            "change_percent": 0.5977766308555177
+          }
+        },
+        "wavl/known_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 112.82249999999999,
+              "minimum": 110.72,
+              "maximum": 121.071
+            },
+            "current": {
+              "trials": 6,
+              "median": 113.82249999999999,
+              "minimum": 110.228,
+              "maximum": 115.057
+            },
+            "change_percent": 0.8863480245518307
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 246.856,
+              "minimum": 241.773,
+              "maximum": 265.304
+            },
+            "current": {
+              "trials": 6,
+              "median": 249.0245,
+              "minimum": 241.29,
+              "maximum": 251.842
+            },
+            "change_percent": 0.8784473539229287
+          }
+        },
+        "wavl/new_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 358.2175,
+              "minimum": 355.703,
+              "maximum": 363.653
+            },
+            "current": {
+              "trials": 6,
+              "median": 353.604,
+              "minimum": 350.869,
+              "maximum": 359.512
+            },
+            "change_percent": -1.287904694773423
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 784.2239999999999,
+              "minimum": 775.84,
+              "maximum": 796.544
+            },
+            "current": {
+              "trials": 6,
+              "median": 773.149,
+              "minimum": 769.08,
+              "maximum": 784.458
+            },
+            "change_percent": -1.4122240584322765
+          }
+        },
+        "wavl/known_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 352.094,
+              "minimum": 344.16,
+              "maximum": 361.341
+            },
+            "current": {
+              "trials": 6,
+              "median": 349.33500000000004,
+              "minimum": 340.123,
+              "maximum": 358.248
+            },
+            "change_percent": -0.7835975620146818
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 768.197,
+              "minimum": 751.445,
+              "maximum": 788.758
+            },
+            "current": {
+              "trials": 6,
+              "median": 765.268,
+              "minimum": 745.58,
+              "maximum": 783.672
+            },
+            "change_percent": -0.3812824054246433
+          }
+        },
+        "wavl/segmented_i16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 376270.703,
+              "minimum": 370708.594,
+              "maximum": 383204.688
+            },
+            "current": {
+              "trials": 6,
+              "median": 384034.7655,
+              "minimum": 380067.188,
+              "maximum": 390418.75
+            },
+            "change_percent": 2.0634246668946643
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 821002.0194999999,
+              "minimum": 809267.344,
+              "maximum": 838171.039
+            },
+            "current": {
+              "trials": 6,
+              "median": 839522.3245,
+              "minimum": 831441.992,
+              "maximum": 853779.531
+            },
+            "change_percent": 2.255817228230339
+          }
+        },
+        "wavl/segmented_i16_known": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 373022.65650000004,
+              "minimum": 369115.625,
+              "maximum": 387212.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 379940.2345,
+              "minimum": 374812.5,
+              "maximum": 385048.438
+            },
+            "change_percent": 1.8544659096330296
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 816287.9335,
+              "minimum": 807235.266,
+              "maximum": 843499.062
+            },
+            "current": {
+              "trials": 6,
+              "median": 830839.2225,
+              "minimum": 818378.32,
+              "maximum": 840237.43
+            },
+            "change_percent": 1.7826171872476815
+          }
+        },
+        "wavl/u64_silence": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 208.744,
+              "minimum": 207.638,
+              "maximum": 209.038
+            },
+            "current": {
+              "trials": 6,
+              "median": 210.3585,
+              "minimum": 207.368,
+              "maximum": 211.672
+            },
+            "change_percent": 0.7734354041313729
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 456.98699999999997,
+              "minimum": 453.548,
+              "maximum": 458.042
+            },
+            "current": {
+              "trials": 6,
+              "median": 461.004,
+              "minimum": 454.108,
+              "maximum": 463.751
+            },
+            "change_percent": 0.8790184403495216
+          }
+        }
+      }
+    },
+    "wavl-writer-pinned-counted": {
+      "report_sha256": "067ee720ef4307c913465a8eba5b238aede35384d644f1d0e4d6495dccab7206",
+      "baseline": "add30e338",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "wavl/new_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 130.23250000000002,
+              "minimum": 128.995,
+              "maximum": 132.141
+            },
+            "current": {
+              "trials": 6,
+              "median": 132.3905,
+              "minimum": 128.001,
+              "maximum": 134.665
+            },
+            "change_percent": 1.657036454034122
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 285.315,
+              "minimum": 282.607,
+              "maximum": 289.476
+            },
+            "current": {
+              "trials": 6,
+              "median": 290.0415,
+              "minimum": 280.37,
+              "maximum": 294.993
+            },
+            "change_percent": 1.6565900846432946
+          }
+        },
+        "wavl/known_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 109.27600000000001,
+              "minimum": 104.784,
+              "maximum": 113.952
+            },
+            "current": {
+              "trials": 6,
+              "median": 117.981,
+              "minimum": 117.078,
+              "maximum": 120.19
+            },
+            "change_percent": 7.966067572019453
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 239.27050000000003,
+              "minimum": 229.594,
+              "maximum": 249.402
+            },
+            "current": {
+              "trials": 6,
+              "median": 258.277,
+              "minimum": 256.566,
+              "maximum": 263.218
+            },
+            "change_percent": 7.943519990972536
+          }
+        },
+        "wavl/new_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 351.517,
+              "minimum": 334.402,
+              "maximum": 364.984
+            },
+            "current": {
+              "trials": 6,
+              "median": 353.392,
+              "minimum": 346.589,
+              "maximum": 359.697
+            },
+            "change_percent": 0.533402367453073
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 769.5985000000001,
+              "minimum": 732.456,
+              "maximum": 799.599
+            },
+            "current": {
+              "trials": 6,
+              "median": 774.6485,
+              "minimum": 759.002,
+              "maximum": 788.26
+            },
+            "change_percent": 0.6561863101344434
+          }
+        },
+        "wavl/known_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 340.038,
+              "minimum": 328.18,
+              "maximum": 352.632
+            },
+            "current": {
+              "trials": 6,
+              "median": 342.9925,
+              "minimum": 338.005,
+              "maximum": 347.648
+            },
+            "change_percent": 0.8688734788464769
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 743.866,
+              "minimum": 718.759,
+              "maximum": 772.603
+            },
+            "current": {
+              "trials": 6,
+              "median": 751.2760000000001,
+              "minimum": 739.171,
+              "maximum": 761.5
+            },
+            "change_percent": 0.9961471555360868
+          }
+        },
+        "wavl/segmented_i16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 384609.375,
+              "minimum": 381315.625,
+              "maximum": 397475.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 385878.906,
+              "minimum": 380350.781,
+              "maximum": 398325.781
+            },
+            "change_percent": 0.330083217550281
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 841467.8125,
+              "minimum": 832908.164,
+              "maximum": 869072.516
+            },
+            "current": {
+              "trials": 6,
+              "median": 843025.781,
+              "minimum": 832445.188,
+              "maximum": 868937.039
+            },
+            "change_percent": 0.18514891203873507
+          }
+        },
+        "wavl/segmented_i16_known": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 384601.172,
+              "minimum": 378080.469,
+              "maximum": 391746.875
+            },
+            "current": {
+              "trials": 6,
+              "median": 383179.297,
+              "minimum": 379625.781,
+              "maximum": 388142.969
+            },
+            "change_percent": -0.36970116149308563
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 840545.246,
+              "minimum": 826575.281,
+              "maximum": 856468.414
+            },
+            "current": {
+              "trials": 6,
+              "median": 837720.887,
+              "minimum": 829759.758,
+              "maximum": 849646.789
+            },
+            "change_percent": -0.3360151060803229
+          }
+        },
+        "wavl/u64_silence": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 207.143,
+              "minimum": 197.869,
+              "maximum": 211.222
+            },
+            "current": {
+              "trials": 6,
+              "median": 203.3005,
+              "minimum": 199.691,
+              "maximum": 207.759
+            },
+            "change_percent": -1.8549987206905372
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 454.0105,
+              "minimum": 433.886,
+              "maximum": 462.941
+            },
+            "current": {
+              "trials": 6,
+              "median": 445.609,
+              "minimum": 437.65,
+              "maximum": 455.506
+            },
+            "change_percent": -1.8505078627036209
+          }
+        }
+      }
+    },
+    "wavl-writer-pinned-outlined": {
+      "report_sha256": "2a43ff1b99605b46f500904a15c8e80f354b9e89882cd5a0ba99d7a31c9b8ef3",
+      "baseline": "add30e338",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "wavl/new_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 132.31150000000002,
+              "minimum": 130.016,
+              "maximum": 134.02
+            },
+            "current": {
+              "trials": 6,
+              "median": 144.9245,
+              "minimum": 141.591,
+              "maximum": 146.969
+            },
+            "change_percent": 9.532807050029636
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 289.81399999999996,
+              "minimum": 284.98,
+              "maximum": 293.354
+            },
+            "current": {
+              "trials": 6,
+              "median": 317.3755,
+              "minimum": 310.233,
+              "maximum": 321.693
+            },
+            "change_percent": 9.51006507622132
+          }
+        },
+        "wavl/known_empty": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 110.9785,
+              "minimum": 107.894,
+              "maximum": 114.253
+            },
+            "current": {
+              "trials": 6,
+              "median": 115.0475,
+              "minimum": 113.16,
+              "maximum": 118.191
+            },
+            "change_percent": 3.6664759390332424
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 242.964,
+              "minimum": 236.476,
+              "maximum": 250.385
+            },
+            "current": {
+              "trials": 6,
+              "median": 252.16449999999998,
+              "minimum": 247.984,
+              "maximum": 258.782
+            },
+            "change_percent": 3.786774995472575
+          }
+        },
+        "wavl/new_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 359.6345,
+              "minimum": 350.027,
+              "maximum": 368.643
+            },
+            "current": {
+              "trials": 6,
+              "median": 361.22799999999995,
+              "minimum": 350.785,
+              "maximum": 366.425
+            },
+            "change_percent": 0.4430887470473266
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 786.7135000000001,
+              "minimum": 764.905,
+              "maximum": 807.927
+            },
+            "current": {
+              "trials": 6,
+              "median": 791.7760000000001,
+              "minimum": 769.045,
+              "maximum": 803.054
+            },
+            "change_percent": 0.6434998255400393
+          }
+        },
+        "wavl/known_metadata16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 348.36699999999996,
+              "minimum": 337.924,
+              "maximum": 354.051
+            },
+            "current": {
+              "trials": 6,
+              "median": 326.999,
+              "minimum": 324.193,
+              "maximum": 335.996
+            },
+            "change_percent": -6.133761234560087
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 762.5364999999999,
+              "minimum": 740.751,
+              "maximum": 774.385
+            },
+            "current": {
+              "trials": 6,
+              "median": 716.752,
+              "minimum": 710.513,
+              "maximum": 736.451
+            },
+            "change_percent": -6.004237174220506
+          }
+        },
+        "wavl/segmented_i16": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 384137.1095,
+              "minimum": 379510.156,
+              "maximum": 388435.938
+            },
+            "current": {
+              "trials": 6,
+              "median": 381160.9375,
+              "minimum": 375545.312,
+              "maximum": 389640.625
+            },
+            "change_percent": -0.774768156056016
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 839607.219,
+              "minimum": 829030.938,
+              "maximum": 848266.328
+            },
+            "current": {
+              "trials": 6,
+              "median": 832454.6135,
+              "minimum": 822320.719,
+              "maximum": 849855.992
+            },
+            "change_percent": -0.8518989996916693
+          }
+        },
+        "wavl/segmented_i16_known": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 385943.359,
+              "minimum": 380673.438,
+              "maximum": 391132.031
+            },
+            "current": {
+              "trials": 6,
+              "median": 384196.4845,
+              "minimum": 376575.781,
+              "maximum": 389490.625
+            },
+            "change_percent": -0.45262457800187006
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 842083.4454999999,
+              "minimum": 830966.969,
+              "maximum": 854352.297
+            },
+            "current": {
+              "trials": 6,
+              "median": 841027.961,
+              "minimum": 823927.523,
+              "maximum": 851327.344
+            },
+            "change_percent": -0.12534203179510595
+          }
+        },
+        "wavl/u64_silence": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 207.6635,
+              "minimum": 203.857,
+              "maximum": 212.709
+            },
+            "current": {
+              "trials": 6,
+              "median": 215.4305,
+              "minimum": 210.862,
+              "maximum": 220.962
+            },
+            "change_percent": 3.7401854442403293
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 454.1095,
+              "minimum": 446.933,
+              "maximum": 466.315
+            },
+            "current": {
+              "trials": 6,
+              "median": 472.01599999999996,
+              "minimum": 461.973,
+              "maximum": 484.138
+            },
+            "change_percent": 3.9432119345664374
+          }
+        }
+      }
+    },
+    "adpcm-flat-pinned-control": {
+      "report_sha256": "d410bf0bc3d6c9b45d765f7b5d108f32a23d96d0d45164aefeb60dc9e672cd4b",
+      "baseline": "491b3c88d",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "ms1/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 634.605,
+              "minimum": 582.71,
+              "maximum": 752.13
+            },
+            "current": {
+              "trials": 6,
+              "median": 630.2,
+              "minimum": 556.16,
+              "maximum": 742.76
+            },
+            "change_percent": -0.6941325706541823
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1391.136,
+              "minimum": 1269.566,
+              "maximum": 1638.831
+            },
+            "current": {
+              "trials": 6,
+              "median": 1379.8319999999999,
+              "minimum": 1219.191,
+              "maximum": 1615.981
+            },
+            "change_percent": -0.81257332137189
+          }
+        },
+        "ms1/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6029709.375,
+              "minimum": 5904625.0,
+              "maximum": 6200343.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6388293.75,
+              "minimum": 6311993.75,
+              "maximum": 6665500.0
+            },
+            "change_percent": 5.946959508309635
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13202259.688,
+              "minimum": 12912018.812,
+              "maximum": 13576925.375
+            },
+            "current": {
+              "trials": 6,
+              "median": 13981443.406,
+              "minimum": 13817566.125,
+              "maximum": 14600536.062
+            },
+            "change_percent": 5.901896617805713
+          }
+        },
+        "ms1/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6226221.875,
+              "minimum": 6053893.75,
+              "maximum": 6348218.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6715287.5,
+              "minimum": 6541687.5,
+              "maximum": 7070275.0
+            },
+            "change_percent": 7.85493409677116
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13623233.188,
+              "minimum": 13246262.688,
+              "maximum": 13896832.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 14701005.625,
+              "minimum": 14311880.125,
+              "maximum": 15480608.0
+            },
+            "change_percent": 7.911282308148082
+          }
+        },
+        "ms1/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 2923.1,
+              "minimum": 2828.697,
+              "maximum": 2975.86
+            },
+            "current": {
+              "trials": 6,
+              "median": 3156.145,
+              "minimum": 2973.393,
+              "maximum": 3300.143
+            },
+            "change_percent": 7.972529164243447
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6400.7335,
+              "minimum": 6191.824,
+              "maximum": 6512.016
+            },
+            "current": {
+              "trials": 6,
+              "median": 6912.0805,
+              "minimum": 6508.57,
+              "maximum": 7230.015
+            },
+            "change_percent": 7.988881274310189
+          }
+        },
+        "ms2/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 609.3599999999999,
+              "minimum": 569.03,
+              "maximum": 683.09
+            },
+            "current": {
+              "trials": 6,
+              "median": 647.0550000000001,
+              "minimum": 583.45,
+              "maximum": 716.24
+            },
+            "change_percent": 6.185998424576633
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1335.9099999999999,
+              "minimum": 1238.156,
+              "maximum": 1496.266
+            },
+            "current": {
+              "trials": 6,
+              "median": 1417.6844999999998,
+              "minimum": 1279.246,
+              "maximum": 1553.006
+            },
+            "change_percent": 6.121258168589194
+          }
+        },
+        "ms2/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 5861759.375,
+              "minimum": 5545831.25,
+              "maximum": 5882493.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6347728.125,
+              "minimum": 6056868.75,
+              "maximum": 6777000.0
+            },
+            "change_percent": 8.2904929887198
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 12837265.1875,
+              "minimum": 12139323.812,
+              "maximum": 12873249.938
+            },
+            "current": {
+              "trials": 6,
+              "median": 13893444.3435,
+              "minimum": 13256318.375,
+              "maximum": 14806399.812
+            },
+            "change_percent": 8.227446738643597
+          }
+        },
+        "ms2/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 5926775.0,
+              "minimum": 5782650.0,
+              "maximum": 6129700.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 6420621.875,
+              "minimum": 6151381.25,
+              "maximum": 6766312.5
+            },
+            "change_percent": 8.33247212860282
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 12975406.312,
+              "minimum": 12647274.188,
+              "maximum": 13425854.875
+            },
+            "current": {
+              "trials": 6,
+              "median": 14057946.188,
+              "minimum": 13467861.75,
+              "maximum": 14810488.25
+            },
+            "change_percent": 8.343013312799584
+          }
+        },
+        "ms2/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 2953.1530000000002,
+              "minimum": 2766.587,
+              "maximum": 2969.17
+            },
+            "current": {
+              "trials": 6,
+              "median": 3152.875,
+              "minimum": 2975.787,
+              "maximum": 3205.423
+            },
+            "change_percent": 6.763008892529432
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6471.3795,
+              "minimum": 6063.0,
+              "maximum": 6506.653
+            },
+            "current": {
+              "trials": 6,
+              "median": 6899.290999999999,
+              "minimum": 6507.326,
+              "maximum": 7015.813
+            },
+            "change_percent": 6.612369124697426
+          }
+        },
+        "ima4/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 616.5550000000001,
+              "minimum": 577.58,
+              "maximum": 658.46
+            },
+            "current": {
+              "trials": 6,
+              "median": 638.505,
+              "minimum": 510.57,
+              "maximum": 665.64
+            },
+            "change_percent": 3.560104126963526
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1348.707,
+              "minimum": 1265.0,
+              "maximum": 1443.761
+            },
+            "current": {
+              "trials": 6,
+              "median": 1398.939,
+              "minimum": 1115.367,
+              "maximum": 1459.258
+            },
+            "change_percent": 3.7244560901663615
+          }
+        },
+        "ima4/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6435418.75,
+              "minimum": 6089056.25,
+              "maximum": 6779068.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6680878.125,
+              "minimum": 6550831.25,
+              "maximum": 6729350.0
+            },
+            "change_percent": 3.814194297768103
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14071863.7185,
+              "minimum": 13315459.812,
+              "maximum": 14820447.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 14622397.219,
+              "minimum": 14331937.0,
+              "maximum": 14731509.188
+            },
+            "change_percent": 3.9122998311604373
+          }
+        },
+        "ima4/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6562368.75,
+              "minimum": 6333918.75,
+              "maximum": 6789550.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 6794953.125,
+              "minimum": 6510331.25,
+              "maximum": 6887725.0
+            },
+            "change_percent": 3.54421374141769
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14377407.625,
+              "minimum": 13857515.25,
+              "maximum": 14866680.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 14874342.031,
+              "minimum": 14244233.062,
+              "maximum": 15083655.938
+            },
+            "change_percent": 3.456356103696412
+          }
+        },
+        "ima4/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3144.125,
+              "minimum": 3074.607,
+              "maximum": 3303.27
+            },
+            "current": {
+              "trials": 6,
+              "median": 3156.835,
+              "minimum": 3137.167,
+              "maximum": 3193.89
+            },
+            "change_percent": 0.4042460143919291
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6885.532,
+              "minimum": 6731.97,
+              "maximum": 7231.047
+            },
+            "current": {
+              "trials": 6,
+              "median": 6911.121999999999,
+              "minimum": 6861.972,
+              "maximum": 6995.085
+            },
+            "change_percent": 0.37164884281997157
+          }
+        },
+        "ima3/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 630.2650000000001,
+              "minimum": 540.91,
+              "maximum": 683.7
+            },
+            "current": {
+              "trials": 6,
+              "median": 629.7,
+              "minimum": 556.14,
+              "maximum": 767.3
+            },
+            "change_percent": -0.08964483193578676
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1374.4650000000001,
+              "minimum": 1175.554,
+              "maximum": 1497.319
+            },
+            "current": {
+              "trials": 6,
+              "median": 1380.3919999999998,
+              "minimum": 1219.696,
+              "maximum": 1680.777
+            },
+            "change_percent": 0.4312223301429885
+          }
+        },
+        "ima3/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8357703.125,
+              "minimum": 7940456.25,
+              "maximum": 8515237.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 8161743.75,
+              "minimum": 8109831.25,
+              "maximum": 8285850.0
+            },
+            "change_percent": -2.3446558470572643
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 18292642.937,
+              "minimum": 17385415.25,
+              "maximum": 18620940.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 17862917.0315,
+              "minimum": 17756150.188,
+              "maximum": 18133004.562
+            },
+            "change_percent": -2.3491734189530655
+          }
+        },
+        "ima3/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8202493.75,
+              "minimum": 8055931.25,
+              "maximum": 8733968.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 8324078.125,
+              "minimum": 8022450.0,
+              "maximum": 8689425.0
+            },
+            "change_percent": 1.4822854939694485
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 17954558.125,
+              "minimum": 17626385.062,
+              "maximum": 19130700.625
+            },
+            "current": {
+              "trials": 6,
+              "median": 18225551.656,
+              "minimum": 17558037.688,
+              "maximum": 19043353.812
+            },
+            "change_percent": 1.5093299936057347
+          }
+        },
+        "ima3/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4059.3785,
+              "minimum": 3901.453,
+              "maximum": 4112.057
+            },
+            "current": {
+              "trials": 6,
+              "median": 3950.7785,
+              "minimum": 3814.987,
+              "maximum": 4136.317
+            },
+            "change_percent": -2.6752863769663238
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8889.563,
+              "minimum": 8542.837,
+              "maximum": 9001.197
+            },
+            "current": {
+              "trials": 6,
+              "median": 8650.751,
+              "minimum": 8358.15,
+              "maximum": 9049.144
+            },
+            "change_percent": -2.6864312677687296
+          }
+        }
+      }
+    },
+    "adpcm-flat-pinned-cached": {
+      "report_sha256": "19367eba79d2ef0dd80f5175d49489a1b7a23492e21579d662d90be5badd80b5",
+      "baseline": "add30e338",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "ms1/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 690.8499999999999,
+              "minimum": 651.36,
+              "maximum": 743.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 669.095,
+              "minimum": 644.18,
+              "maximum": 740.95
+            },
+            "change_percent": -3.1490193240211184
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1513.09,
+              "minimum": 1428.067,
+              "maximum": 1627.636
+            },
+            "current": {
+              "trials": 6,
+              "median": 1458.5995,
+              "minimum": 1399.795,
+              "maximum": 1622.303
+            },
+            "change_percent": -3.601272891896712
+          }
+        },
+        "ms1/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6332103.125,
+              "minimum": 6217368.75,
+              "maximum": 6505493.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 5906175.0,
+              "minimum": 5662956.25,
+              "maximum": 6133818.75
+            },
+            "change_percent": -6.7264874969957145
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13874375.25,
+              "minimum": 13612059.188,
+              "maximum": 14238951.562
+            },
+            "current": {
+              "trials": 6,
+              "median": 12928289.125,
+              "minimum": 12407840.812,
+              "maximum": 13421835.062
+            },
+            "change_percent": -6.818945775594476
+          }
+        },
+        "ms1/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6638331.25,
+              "minimum": 6603162.5,
+              "maximum": 6753481.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6206134.375,
+              "minimum": 6098118.75,
+              "maximum": 6315218.75
+            },
+            "change_percent": -6.510625317168373
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14549440.844,
+              "minimum": 14470935.5,
+              "maximum": 14798923.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 13580595.3125,
+              "minimum": 13365505.938,
+              "maximum": 13831710.25
+            },
+            "change_percent": -6.658988079940819
+          }
+        },
+        "ms1/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3110.465,
+              "minimum": 3066.757,
+              "maximum": 3149.103
+            },
+            "current": {
+              "trials": 6,
+              "median": 2882.9165000000003,
+              "minimum": 2786.96,
+              "maximum": 2932.653
+            },
+            "change_percent": -7.315578217404783
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6815.654500000001,
+              "minimum": 6722.005,
+              "maximum": 6902.28
+            },
+            "current": {
+              "trials": 6,
+              "median": 6314.027,
+              "minimum": 6106.519,
+              "maximum": 6427.224
+            },
+            "change_percent": -7.359931463662084
+          }
+        },
+        "ms2/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 671.815,
+              "minimum": 659.22,
+              "maximum": 714.66
+            },
+            "current": {
+              "trials": 6,
+              "median": 660.44,
+              "minimum": 621.35,
+              "maximum": 702.98
+            },
+            "change_percent": -1.6931744602308618
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1469.717,
+              "minimum": 1444.332,
+              "maximum": 1566.352
+            },
+            "current": {
+              "trials": 6,
+              "median": 1444.1345000000001,
+              "minimum": 1362.371,
+              "maximum": 1540.824
+            },
+            "change_percent": -1.740641225487627
+          }
+        },
+        "ms2/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6144140.625,
+              "minimum": 6052618.75,
+              "maximum": 6317206.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 5821034.375,
+              "minimum": 5654925.0,
+              "maximum": 5870962.5
+            },
+            "change_percent": -5.258770424057468
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13458505.375,
+              "minimum": 13247648.438,
+              "maximum": 13835633.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 12743319.437,
+              "minimum": 12380074.312,
+              "maximum": 12850764.75
+            },
+            "change_percent": -5.314007150664002
+          }
+        },
+        "ms2/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6562406.25,
+              "minimum": 6209756.25,
+              "maximum": 6589981.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 5941134.375,
+              "minimum": 5909812.5,
+              "maximum": 6000812.5
+            },
+            "change_percent": -9.467135244789215
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14379273.5935,
+              "minimum": 13605296.0,
+              "maximum": 14434964.812
+            },
+            "current": {
+              "trials": 6,
+              "median": 13015499.656,
+              "minimum": 12948716.875,
+              "maximum": 13147405.375
+            },
+            "change_percent": -9.484303422089969
+          }
+        },
+        "ms2/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3138.2865,
+              "minimum": 3091.26,
+              "maximum": 3169.347
+            },
+            "current": {
+              "trials": 6,
+              "median": 2852.4264999999996,
+              "minimum": 2819.43,
+              "maximum": 2908.317
+            },
+            "change_percent": -9.108792329827143
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6874.7,
+              "minimum": 6771.246,
+              "maximum": 6945.316
+            },
+            "current": {
+              "trials": 6,
+              "median": 6249.9555,
+              "minimum": 6178.625,
+              "maximum": 6369.736
+            },
+            "change_percent": -9.087589276622976
+          }
+        },
+        "ima4/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 627.0,
+              "minimum": 615.56,
+              "maximum": 641.17
+            },
+            "current": {
+              "trials": 6,
+              "median": 630.885,
+              "minimum": 617.47,
+              "maximum": 643.08
+            },
+            "change_percent": 0.6196172248803755
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1372.687,
+              "minimum": 1342.243,
+              "maximum": 1405.876
+            },
+            "current": {
+              "trials": 6,
+              "median": 1382.5974999999999,
+              "minimum": 1353.876,
+              "maximum": 1407.324
+            },
+            "change_percent": 0.7219781348552168
+          }
+        },
+        "ima4/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6667862.5,
+              "minimum": 6578212.5,
+              "maximum": 6822081.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6504087.5,
+              "minimum": 6420975.0,
+              "maximum": 6527506.25
+            },
+            "change_percent": -2.4561844219193163
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14608740.187,
+              "minimum": 14401792.875,
+              "maximum": 14943134.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 14246242.7815,
+              "minimum": 14058481.062,
+              "maximum": 14296556.312
+            },
+            "change_percent": -2.481373485049576
+          }
+        },
+        "ima4/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6838446.875,
+              "minimum": 6616231.25,
+              "maximum": 6950156.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6673981.25,
+              "minimum": 6622650.0,
+              "maximum": 6700206.25
+            },
+            "change_percent": -2.405014296466257
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14979551.2185,
+              "minimum": 14500375.875,
+              "maximum": 15227510.812
+            },
+            "current": {
+              "trials": 6,
+              "median": 14626163.0,
+              "minimum": 14507701.75,
+              "maximum": 14682821.125
+            },
+            "change_percent": -2.35913755589392
+          }
+        },
+        "ima4/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3170.6885,
+              "minimum": 3075.033,
+              "maximum": 3230.94
+            },
+            "current": {
+              "trials": 6,
+              "median": 3163.6485000000002,
+              "minimum": 3089.647,
+              "maximum": 3183.207
+            },
+            "change_percent": -0.22203379486821495
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6943.2865,
+              "minimum": 6739.652,
+              "maximum": 7082.212
+            },
+            "current": {
+              "trials": 6,
+              "median": 6928.682,
+              "minimum": 6762.612,
+              "maximum": 6975.644
+            },
+            "change_percent": -0.21033987291176892
+          }
+        },
+        "ima3/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 645.825,
+              "minimum": 539.04,
+              "maximum": 768.07
+            },
+            "current": {
+              "trials": 6,
+              "median": 659.26,
+              "minimum": 574.97,
+              "maximum": 723.24
+            },
+            "change_percent": 2.080284906902019
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1415.2485000000001,
+              "minimum": 1181.81,
+              "maximum": 1680.646
+            },
+            "current": {
+              "trials": 6,
+              "median": 1444.8809999999999,
+              "minimum": 1259.425,
+              "maximum": 1585.273
+            },
+            "change_percent": 2.0938019012208597
+          }
+        },
+        "ima3/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8324040.625,
+              "minimum": 8088318.75,
+              "maximum": 8394812.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 7820528.125,
+              "minimum": 7743131.25,
+              "maximum": 7876600.0
+            },
+            "change_percent": -6.048895274342803
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 18220372.719,
+              "minimum": 17714857.438,
+              "maximum": 18376746.188
+            },
+            "current": {
+              "trials": 6,
+              "median": 17122831.5,
+              "minimum": 16945934.938,
+              "maximum": 17250230.75
+            },
+            "change_percent": -6.0237034440876025
+          }
+        },
+        "ima3/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8681868.75,
+              "minimum": 8529062.5,
+              "maximum": 8759868.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 8074550.0,
+              "minimum": 7859356.25,
+              "maximum": 8124018.75
+            },
+            "change_percent": -6.995253758011488
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 19025354.531,
+              "minimum": 18691920.25,
+              "maximum": 19185905.062
+            },
+            "current": {
+              "trials": 6,
+              "median": 17687261.9065,
+              "minimum": 17227786.5,
+              "maximum": 17797691.0
+            },
+            "change_percent": -7.033207304072597
+          }
+        },
+        "ima3/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4131.255,
+              "minimum": 4056.087,
+              "maximum": 4200.043
+            },
+            "current": {
+              "trials": 6,
+              "median": 3847.6549999999997,
+              "minimum": 3776.303,
+              "maximum": 3948.267
+            },
+            "change_percent": -6.8647420699037065
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9053.3835,
+              "minimum": 8885.667,
+              "maximum": 9202.786
+            },
+            "current": {
+              "trials": 6,
+              "median": 8430.8375,
+              "minimum": 8275.011,
+              "maximum": 8644.115
+            },
+            "change_percent": -6.876390467718507
+          }
+        }
+      }
+    },
+    "adpcm-flat-pinned-retained": {
+      "report_sha256": "175089b1698e145b8e12af061efc59347279efada8405cfe3771e3f27c8c9774",
+      "baseline": "491b3c88d",
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "ms1/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 659.46,
+              "minimum": 630.74,
+              "maximum": 774.99
+            },
+            "current": {
+              "trials": 6,
+              "median": 691.645,
+              "minimum": 635.98,
+              "maximum": 780.09
+            },
+            "change_percent": 4.880508294665331
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1444.9575,
+              "minimum": 1381.094,
+              "maximum": 1699.281
+            },
+            "current": {
+              "trials": 6,
+              "median": 1514.9119999999998,
+              "minimum": 1393.891,
+              "maximum": 1689.557
+            },
+            "change_percent": 4.841284259225609
+          }
+        },
+        "ms1/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6404756.25,
+              "minimum": 6281893.75,
+              "maximum": 6486062.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6090578.125,
+              "minimum": 6010193.75,
+              "maximum": 6223681.25
+            },
+            "change_percent": -4.905387695277241
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14021975.3435,
+              "minimum": 13744541.0,
+              "maximum": 14207205.875
+            },
+            "current": {
+              "trials": 6,
+              "median": 13330996.406,
+              "minimum": 13147597.25,
+              "maximum": 13612004.5
+            },
+            "change_percent": -4.927828787120991
+          }
+        },
+        "ms1/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6633968.75,
+              "minimum": 6391293.75,
+              "maximum": 6715506.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6371306.25,
+              "minimum": 6336656.25,
+              "maximum": 6545037.5
+            },
+            "change_percent": -3.9593569083363533
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14536524.75,
+              "minimum": 13989023.0,
+              "maximum": 14714745.125
+            },
+            "current": {
+              "trials": 6,
+              "median": 13946048.9685,
+              "minimum": 13855484.938,
+              "maximum": 14341759.562
+            },
+            "change_percent": -4.062014763879517
+          }
+        },
+        "ms1/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3104.815,
+              "minimum": 3033.157,
+              "maximum": 3200.417
+            },
+            "current": {
+              "trials": 6,
+              "median": 2973.0085,
+              "minimum": 2893.04,
+              "maximum": 3012.0
+            },
+            "change_percent": -4.245228781747068
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6803.878000000001,
+              "minimum": 6645.414,
+              "maximum": 7011.049
+            },
+            "current": {
+              "trials": 6,
+              "median": 6509.389499999999,
+              "minimum": 6325.054,
+              "maximum": 6600.263
+            },
+            "change_percent": -4.328244862709196
+          }
+        },
+        "ms2/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 653.905,
+              "minimum": 629.2,
+              "maximum": 698.98
+            },
+            "current": {
+              "trials": 6,
+              "median": 666.7449999999999,
+              "minimum": 656.6,
+              "maximum": 734.17
+            },
+            "change_percent": 1.963587982963877
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1432.8850000000002,
+              "minimum": 1379.514,
+              "maximum": 1530.288
+            },
+            "current": {
+              "trials": 6,
+              "median": 1461.2334999999998,
+              "minimum": 1439.613,
+              "maximum": 1597.894
+            },
+            "change_percent": 1.9784211573154575
+          }
+        },
+        "ms2/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6118046.875,
+              "minimum": 6048287.5,
+              "maximum": 6287943.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 5966118.75,
+              "minimum": 5800062.5,
+              "maximum": 6071400.0
+            },
+            "change_percent": -2.4832782112346963
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13391990.0,
+              "minimum": 13234958.25,
+              "maximum": 13767602.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 13065730.75,
+              "minimum": 12683162.875,
+              "maximum": 13290395.75
+            },
+            "change_percent": -2.4362268042314894
+          }
+        },
+        "ms2/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6332490.625,
+              "minimum": 6142687.5,
+              "maximum": 6423000.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 6228409.375,
+              "minimum": 6162818.75,
+              "maximum": 6284550.0
+            },
+            "change_percent": -1.6436068549252725
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13869937.563,
+              "minimum": 13461757.0,
+              "maximum": 14076617.312
+            },
+            "current": {
+              "trials": 6,
+              "median": 13647467.4685,
+              "minimum": 13491292.875,
+              "maximum": 13768425.625
+            },
+            "change_percent": -1.6039732946849683
+          }
+        },
+        "ms2/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3019.2435,
+              "minimum": 2966.76,
+              "maximum": 3106.993
+            },
+            "current": {
+              "trials": 6,
+              "median": 2928.3515,
+              "minimum": 2884.583,
+              "maximum": 2986.563
+            },
+            "change_percent": -3.010422975159166
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6611.42,
+              "minimum": 6499.827,
+              "maximum": 6810.105
+            },
+            "current": {
+              "trials": 6,
+              "median": 6411.1630000000005,
+              "minimum": 6320.905,
+              "maximum": 6542.424
+            },
+            "change_percent": -3.0289559580241376
+          }
+        },
+        "ima4/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 619.8399999999999,
+              "minimum": 611.66,
+              "maximum": 633.69
+            },
+            "current": {
+              "trials": 6,
+              "median": 638.085,
+              "minimum": 616.0,
+              "maximum": 697.02
+            },
+            "change_percent": 2.9435015487867977
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1358.3865,
+              "minimum": 1340.969,
+              "maximum": 1389.216
+            },
+            "current": {
+              "trials": 6,
+              "median": 1398.259,
+              "minimum": 1350.562,
+              "maximum": 1528.049
+            },
+            "change_percent": 2.9352838827535477
+          }
+        },
+        "ima4/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6726278.125,
+              "minimum": 6573862.5,
+              "maximum": 6824487.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6590946.875,
+              "minimum": 6352275.0,
+              "maximum": 6695243.75
+            },
+            "change_percent": -2.0119782067441694
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14716933.0315,
+              "minimum": 14395825.125,
+              "maximum": 14946111.875
+            },
+            "current": {
+              "trials": 6,
+              "median": 14417603.5,
+              "minimum": 13919908.0,
+              "maximum": 14669226.25
+            },
+            "change_percent": -2.0339124385448937
+          }
+        },
+        "ima4/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6821231.25,
+              "minimum": 6759012.5,
+              "maximum": 7019925.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 6840262.5,
+              "minimum": 6741968.75,
+              "maximum": 6895581.25
+            },
+            "change_percent": 0.2790002171528805
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14943320.031,
+              "minimum": 14813149.75,
+              "maximum": 15383438.062
+            },
+            "current": {
+              "trials": 6,
+              "median": 14982562.5315,
+              "minimum": 14772637.75,
+              "maximum": 15100365.312
+            },
+            "change_percent": 0.2626089812611365
+          }
+        },
+        "ima4/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3284.295,
+              "minimum": 3243.667,
+              "maximum": 3296.61
+            },
+            "current": {
+              "trials": 6,
+              "median": 3231.1549999999997,
+              "minimum": 3199.193,
+              "maximum": 3297.753
+            },
+            "change_percent": -1.6180032548842371
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7193.4575,
+              "minimum": 7108.069,
+              "maximum": 7222.333
+            },
+            "current": {
+              "trials": 6,
+              "median": 7078.7245,
+              "minimum": 7007.977,
+              "maximum": 7221.85
+            },
+            "change_percent": -1.5949632009364056
+          }
+        },
+        "ima3/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 659.495,
+              "minimum": 637.5,
+              "maximum": 725.54
+            },
+            "current": {
+              "trials": 6,
+              "median": 662.31,
+              "minimum": 638.79,
+              "maximum": 740.19
+            },
+            "change_percent": 0.4268417501269717
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1444.6725000000001,
+              "minimum": 1397.535,
+              "maximum": 1590.102
+            },
+            "current": {
+              "trials": 6,
+              "median": 1451.312,
+              "minimum": 1400.498,
+              "maximum": 1613.193
+            },
+            "change_percent": 0.45958513088604214
+          }
+        },
+        "ima3/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8636843.75,
+              "minimum": 8568431.25,
+              "maximum": 8926193.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 8005359.375,
+              "minimum": 7902987.5,
+              "maximum": 8120425.0
+            },
+            "change_percent": -7.311517879433671
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 18902530.594,
+              "minimum": 18732720.188,
+              "maximum": 19529435.938
+            },
+            "current": {
+              "trials": 6,
+              "median": 17522088.1565,
+              "minimum": 17307287.0,
+              "maximum": 17792518.875
+            },
+            "change_percent": -7.302950420501775
+          }
+        },
+        "ima3/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8673784.375,
+              "minimum": 8582750.0,
+              "maximum": 8810268.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 8249509.375,
+              "minimum": 8114243.75,
+              "maximum": 8331025.0
+            },
+            "change_percent": -4.891463537217566
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 18996614.0,
+              "minimum": 18789227.5,
+              "maximum": 19291471.312
+            },
+            "current": {
+              "trials": 6,
+              "median": 18079144.875,
+              "minimum": 17781750.0,
+              "maximum": 18255924.75
+            },
+            "change_percent": -4.8296455620985945
+          }
+        },
+        "ima3/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4183.045,
+              "minimum": 4125.683,
+              "maximum": 4292.67
+            },
+            "current": {
+              "trials": 6,
+              "median": 3930.4465,
+              "minimum": 3827.567,
+              "maximum": 3992.133
+            },
+            "change_percent": -6.038627363559323
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9150.6695,
+              "minimum": 9027.706,
+              "maximum": 9406.614
+            },
+            "current": {
+              "trials": 6,
+              "median": 8613.363000000001,
+              "minimum": 8385.149,
+              "maximum": 8744.829
+            },
+            "change_percent": -5.871772551724208
+          }
+        }
+      }
+    },
+    "adpcm-segmented-pinned-cached": {
+      "report_sha256": "6e80f66746165eb27ac3cbab40700cefd2e4928a2ac6c3f86569bb927c64ef1f",
+      "baseline": null,
+      "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles",
+      "operations": {
+        "ms1/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 661.685,
+              "minimum": 652.36,
+              "maximum": 822.57
+            },
+            "current": {
+              "trials": 6,
+              "median": 670.4449999999999,
+              "minimum": 641.51,
+              "maximum": 835.4
+            },
+            "change_percent": 1.3238927888648
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1450.6535,
+              "minimum": 1428.967,
+              "maximum": 1801.788
+            },
+            "current": {
+              "trials": 6,
+              "median": 1469.004,
+              "minimum": 1405.305,
+              "maximum": 1816.341
+            },
+            "change_percent": 1.2649816100123168
+          }
+        },
+        "ms1/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6623056.25,
+              "minimum": 6580450.0,
+              "maximum": 6654018.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6052478.125,
+              "minimum": 5838043.75,
+              "maximum": 6118312.5
+            },
+            "change_percent": -8.615027616593174
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14495189.969,
+              "minimum": 14410037.562,
+              "maximum": 14574333.562
+            },
+            "current": {
+              "trials": 6,
+              "median": 13245480.781,
+              "minimum": 12768794.938,
+              "maximum": 13375054.0
+            },
+            "change_percent": -8.621544047871598
+          }
+        },
+        "ms1/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6963953.125,
+              "minimum": 6833481.25,
+              "maximum": 7005262.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6386078.125,
+              "minimum": 6269062.5,
+              "maximum": 6440968.75
+            },
+            "change_percent": -8.298088594615571
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 15255462.5315,
+              "minimum": 14961764.625,
+              "maximum": 15346891.312
+            },
+            "current": {
+              "trials": 6,
+              "median": 13977032.8125,
+              "minimum": 13734471.812,
+              "maximum": 14111751.062
+            },
+            "change_percent": -8.380143940967077
+          }
+        },
+        "ms1/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3216.5085,
+              "minimum": 3059.683,
+              "maximum": 3292.747
+            },
+            "current": {
+              "trials": 6,
+              "median": 2998.3265,
+              "minimum": 2966.067,
+              "maximum": 3019.63
+            },
+            "change_percent": -6.78319363993597
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7044.556500000001,
+              "minimum": 6699.169,
+              "maximum": 7211.994
+            },
+            "current": {
+              "trials": 6,
+              "median": 6568.1645,
+              "minimum": 6495.546,
+              "maximum": 6613.901
+            },
+            "change_percent": -6.76255488901254
+          }
+        },
+        "ms1/wavl/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 35601.8,
+              "minimum": 35311.07,
+              "maximum": 36127.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 36108.015,
+              "minimum": 35642.74,
+              "maximum": 36456.84
+            },
+            "change_percent": 1.4218803543641023
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 77912.1935,
+              "minimum": 77286.849,
+              "maximum": 79090.965
+            },
+            "current": {
+              "trials": 6,
+              "median": 79064.29550000001,
+              "minimum": 78016.752,
+              "maximum": 79828.946
+            },
+            "change_percent": 1.4787184755618688
+          }
+        },
+        "ms1/wavl/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6633187.5,
+              "minimum": 6507843.75,
+              "maximum": 6677906.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6072218.75,
+              "minimum": 6033025.0,
+              "maximum": 6216481.25
+            },
+            "change_percent": -8.45700125316825
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14522476.75,
+              "minimum": 14250049.875,
+              "maximum": 14626355.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 13292968.062,
+              "minimum": 13206972.125,
+              "maximum": 13620427.75
+            },
+            "change_percent": -8.466246558115497
+          }
+        },
+        "ms1/wavl/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7296737.5,
+              "minimum": 7215231.25,
+              "maximum": 7505112.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6845568.75,
+              "minimum": 6668718.75,
+              "maximum": 6937093.75
+            },
+            "change_percent": -6.183157198679545
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 15977967.438,
+              "minimum": 15812423.25,
+              "maximum": 16427160.125
+            },
+            "current": {
+              "trials": 6,
+              "median": 14995752.875,
+              "minimum": 14614667.0,
+              "maximum": 15195998.812
+            },
+            "change_percent": -6.147306075139591
+          }
+        },
+        "ms1/wavl/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3349.865,
+              "minimum": 3301.297,
+              "maximum": 3384.853
+            },
+            "current": {
+              "trials": 6,
+              "median": 3092.5915,
+              "minimum": 3086.133,
+              "maximum": 3159.69
+            },
+            "change_percent": -7.680115467339721
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7337.896000000001,
+              "minimum": 7230.564,
+              "maximum": 7418.449
+            },
+            "current": {
+              "trials": 6,
+              "median": 6774.242,
+              "minimum": 6762.561,
+              "maximum": 6923.981
+            },
+            "change_percent": -7.681411674409134
+          }
+        },
+        "ms1/wavl/seek_held": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3330.7835,
+              "minimum": 3278.55,
+              "maximum": 3436.357
+            },
+            "current": {
+              "trials": 6,
+              "median": 3129.487,
+              "minimum": 3052.45,
+              "maximum": 3202.31
+            },
+            "change_percent": -6.0435179890857444
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7293.484,
+              "minimum": 7183.554,
+              "maximum": 7531.696
+            },
+            "current": {
+              "trials": 6,
+              "median": 6851.0995,
+              "minimum": 6687.514,
+              "maximum": 7012.659
+            },
+            "change_percent": -6.065475704066814
+          }
+        },
+        "ms1/wavl/same_held_cached": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 130.627,
+              "minimum": 128.022,
+              "maximum": 135.017
+            },
+            "current": {
+              "trials": 6,
+              "median": 133.3415,
+              "minimum": 123.147,
+              "maximum": 133.798
+            },
+            "change_percent": 2.078054307302457
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 286.11,
+              "minimum": 280.574,
+              "maximum": 295.934
+            },
+            "current": {
+              "trials": 6,
+              "median": 292.0165,
+              "minimum": 269.957,
+              "maximum": 293.247
+            },
+            "change_percent": 2.064415784138962
+          }
+        },
+        "ms2/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 700.64,
+              "minimum": 650.77,
+              "maximum": 724.65
+            },
+            "current": {
+              "trials": 6,
+              "median": 681.5799999999999,
+              "minimum": 652.12,
+              "maximum": 736.71
+            },
+            "change_percent": -2.7203699474765974
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1535.4685,
+              "minimum": 1424.621,
+              "maximum": 1586.809
+            },
+            "current": {
+              "trials": 6,
+              "median": 1493.7525,
+              "minimum": 1429.538,
+              "maximum": 1613.215
+            },
+            "change_percent": -2.7168255161209687
+          }
+        },
+        "ms2/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6460950.0,
+              "minimum": 6368618.75,
+              "maximum": 6522912.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6015765.625,
+              "minimum": 5886481.25,
+              "maximum": 6166350.0
+            },
+            "change_percent": -6.890385701793078
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14148181.063,
+              "minimum": 13937906.938,
+              "maximum": 14294128.062
+            },
+            "current": {
+              "trials": 6,
+              "median": 13172236.25,
+              "minimum": 12888806.812,
+              "maximum": 13502652.25
+            },
+            "change_percent": -6.8980232063347575
+          }
+        },
+        "ms2/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6673756.25,
+              "minimum": 6578412.5,
+              "maximum": 6780881.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6160962.5,
+              "minimum": 6088568.75,
+              "maximum": 6264956.25
+            },
+            "change_percent": -7.683735077978016
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14625175.125,
+              "minimum": 14413810.188,
+              "maximum": 14862400.062
+            },
+            "current": {
+              "trials": 6,
+              "median": 13500004.375,
+              "minimum": 13340798.312,
+              "maximum": 13730109.0
+            },
+            "change_percent": -7.693383090344364
+          }
+        },
+        "ms2/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3155.607,
+              "minimum": 3107.063,
+              "maximum": 3197.137
+            },
+            "current": {
+              "trials": 6,
+              "median": 2907.6965,
+              "minimum": 2899.143,
+              "maximum": 2967.65
+            },
+            "change_percent": -7.856190583935197
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6914.554,
+              "minimum": 6807.727,
+              "maximum": 7006.447
+            },
+            "current": {
+              "trials": 6,
+              "median": 6371.368,
+              "minimum": 6353.53,
+              "maximum": 6500.471
+            },
+            "change_percent": -7.855691053971081
+          }
+        },
+        "ms2/wavl/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 37617.945,
+              "minimum": 37487.89,
+              "maximum": 38684.94
+            },
+            "current": {
+              "trials": 6,
+              "median": 38282.02,
+              "minimum": 37739.04,
+              "maximum": 38503.73
+            },
+            "change_percent": 1.7653143998163534
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 82296.4,
+              "minimum": 82071.863,
+              "maximum": 84702.57
+            },
+            "current": {
+              "trials": 6,
+              "median": 83817.052,
+              "minimum": 82623.004,
+              "maximum": 84288.504
+            },
+            "change_percent": 1.8477746292669073
+          }
+        },
+        "ms2/wavl/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6394287.5,
+              "minimum": 6305587.5,
+              "maximum": 6510337.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6040171.875,
+              "minimum": 5990781.25,
+              "maximum": 6093293.75
+            },
+            "change_percent": -5.537999738047439
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 13989667.906,
+              "minimum": 13817511.125,
+              "maximum": 14261600.938
+            },
+            "current": {
+              "trials": 6,
+              "median": 13224861.406,
+              "minimum": 13127129.125,
+              "maximum": 13346985.375
+            },
+            "change_percent": -5.4669382085330565
+          }
+        },
+        "ms2/wavl/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6840278.125,
+              "minimum": 6791168.75,
+              "maximum": 7132112.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6416781.25,
+              "minimum": 6166437.5,
+              "maximum": 6447518.75
+            },
+            "change_percent": -6.191223035978521
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14988742.5625,
+              "minimum": 14858956.375,
+              "maximum": 15630745.875
+            },
+            "current": {
+              "trials": 6,
+              "median": 14052808.344,
+              "minimum": 13513531.312,
+              "maximum": 14121546.062
+            },
+            "change_percent": -6.244247738576769
+          }
+        },
+        "ms2/wavl/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3258.9700000000003,
+              "minimum": 3217.577,
+              "maximum": 3315.673
+            },
+            "current": {
+              "trials": 6,
+              "median": 2993.593,
+              "minimum": 2961.06,
+              "maximum": 3012.287
+            },
+            "change_percent": -8.142971552361644
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7134.181500000001,
+              "minimum": 7044.333,
+              "maximum": 7264.448
+            },
+            "current": {
+              "trials": 6,
+              "median": 6558.821,
+              "minimum": 6489.196,
+              "maximum": 6596.802
+            },
+            "change_percent": -8.06484247702418
+          }
+        },
+        "ms2/wavl/seek_held": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3277.3334999999997,
+              "minimum": 3222.9,
+              "maximum": 3365.543
+            },
+            "current": {
+              "trials": 6,
+              "median": 3054.2635,
+              "minimum": 2979.44,
+              "maximum": 3196.543
+            },
+            "change_percent": -6.806447985839704
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7180.811,
+              "minimum": 7057.964,
+              "maximum": 7375.061
+            },
+            "current": {
+              "trials": 6,
+              "median": 6688.846,
+              "minimum": 6528.764,
+              "maximum": 6985.339
+            },
+            "change_percent": -6.851106372246818
+          }
+        },
+        "ms2/wavl/same_held_cached": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 131.1235,
+              "minimum": 129.14,
+              "maximum": 136.259
+            },
+            "current": {
+              "trials": 6,
+              "median": 129.905,
+              "minimum": 127.03,
+              "maximum": 132.464
+            },
+            "change_percent": -0.929276598016382
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 287.104,
+              "minimum": 283.003,
+              "maximum": 298.703
+            },
+            "current": {
+              "trials": 6,
+              "median": 284.6435,
+              "minimum": 278.413,
+              "maximum": 289.905
+            },
+            "change_percent": -0.8570065202853194
+          }
+        },
+        "ima4/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 653.5699999999999,
+              "minimum": 638.44,
+              "maximum": 673.2
+            },
+            "current": {
+              "trials": 6,
+              "median": 638.71,
+              "minimum": 616.58,
+              "maximum": 676.96
+            },
+            "change_percent": -2.2736661719478968
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1430.0529999999999,
+              "minimum": 1397.974,
+              "maximum": 1475.852
+            },
+            "current": {
+              "trials": 6,
+              "median": 1399.2689999999998,
+              "minimum": 1350.188,
+              "maximum": 1483.161
+            },
+            "change_percent": -2.1526474892888614
+          }
+        },
+        "ima4/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6744806.25,
+              "minimum": 6601150.0,
+              "maximum": 6830612.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 6537262.5,
+              "minimum": 6396056.25,
+              "maximum": 6715912.5
+            },
+            "change_percent": -3.0770898719292394
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14761766.0935,
+              "minimum": 14454664.812,
+              "maximum": 14952847.688
+            },
+            "current": {
+              "trials": 6,
+              "median": 14292351.6565,
+              "minimum": 14007955.0,
+              "maximum": 14683315.5
+            },
+            "change_percent": -3.179934121884609
+          }
+        },
+        "ima4/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6962312.5,
+              "minimum": 6731181.25,
+              "maximum": 7040106.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 6786281.25,
+              "minimum": 6730225.0,
+              "maximum": 6898687.5
+            },
+            "change_percent": -2.52834456942288
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 15255702.625,
+              "minimum": 14747313.5,
+              "maximum": 15415704.562
+            },
+            "current": {
+              "trials": 6,
+              "median": 14862893.906,
+              "minimum": 14731564.062,
+              "maximum": 15118021.188
+            },
+            "change_percent": -2.5748320392421142
+          }
+        },
+        "ima4/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3318.0330000000004,
+              "minimum": 3286.843,
+              "maximum": 3407.393
+            },
+            "current": {
+              "trials": 6,
+              "median": 3203.0565,
+              "minimum": 3095.557,
+              "maximum": 3304.5
+            },
+            "change_percent": -3.4652006173537253
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7271.135,
+              "minimum": 7202.409,
+              "maximum": 7466.475
+            },
+            "current": {
+              "trials": 6,
+              "median": 7018.8235,
+              "minimum": 6777.714,
+              "maximum": 7241.802
+            },
+            "change_percent": -3.4700428475059275
+          }
+        },
+        "ima4/wavl/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 37842.85,
+              "minimum": 37623.79,
+              "maximum": 38526.92
+            },
+            "current": {
+              "trials": 6,
+              "median": 37967.325,
+              "minimum": 37591.58,
+              "maximum": 38366.92
+            },
+            "change_percent": 0.328926071899982
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 82852.92,
+              "minimum": 82356.729,
+              "maximum": 84357.407
+            },
+            "current": {
+              "trials": 6,
+              "median": 83136.887,
+              "minimum": 82273.648,
+              "maximum": 83972.798
+            },
+            "change_percent": 0.34273626083425324
+          }
+        },
+        "ima4/wavl/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 6801587.5,
+              "minimum": 6560487.5,
+              "maximum": 6947843.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 6726446.875,
+              "minimum": 6696712.5,
+              "maximum": 6767043.75
+            },
+            "change_percent": -1.1047512804915005
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 14876139.0625,
+              "minimum": 14369594.938,
+              "maximum": 15190510.812
+            },
+            "current": {
+              "trials": 6,
+              "median": 14733717.969,
+              "minimum": 14673890.5,
+              "maximum": 14824494.812
+            },
+            "change_percent": -0.9573794174794759
+          }
+        },
+        "ima4/wavl/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7132021.875,
+              "minimum": 7047893.75,
+              "maximum": 7309706.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 7114225.0,
+              "minimum": 6802925.0,
+              "maximum": 7215912.5
+            },
+            "change_percent": -0.2495347786633073
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 15598815.562,
+              "minimum": 15436008.375,
+              "maximum": 16014431.75
+            },
+            "current": {
+              "trials": 6,
+              "median": 15581276.2815,
+              "minimum": 14907918.75,
+              "maximum": 15801283.5
+            },
+            "change_percent": -0.1124398223075862
+          }
+        },
+        "ima4/wavl/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3427.3965,
+              "minimum": 3336.307,
+              "maximum": 3461.253
+            },
+            "current": {
+              "trials": 6,
+              "median": 3365.0965,
+              "minimum": 3283.113,
+              "maximum": 3386.9
+            },
+            "change_percent": -1.81770623853994
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7503.4355,
+              "minimum": 7310.682,
+              "maximum": 7584.069
+            },
+            "current": {
+              "trials": 6,
+              "median": 7369.57,
+              "minimum": 7195.495,
+              "maximum": 7412.53
+            },
+            "change_percent": -1.78405611669481
+          }
+        },
+        "ima4/wavl/seek_held": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 3410.7870000000003,
+              "minimum": 3346.987,
+              "maximum": 3483.473
+            },
+            "current": {
+              "trials": 6,
+              "median": 3367.3585,
+              "minimum": 3341.38,
+              "maximum": 3463.55
+            },
+            "change_percent": -1.2732691897793802
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 7469.585,
+              "minimum": 7330.173,
+              "maximum": 7633.654
+            },
+            "current": {
+              "trials": 6,
+              "median": 7376.9925,
+              "minimum": 7315.781,
+              "maximum": 7577.894
+            },
+            "change_percent": -1.2395936320424683
+          }
+        },
+        "ima4/wavl/same_held_cached": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 132.1625,
+              "minimum": 125.209,
+              "maximum": 135.339
+            },
+            "current": {
+              "trials": 6,
+              "median": 130.4995,
+              "minimum": 127.98,
+              "maximum": 131.397
+            },
+            "change_percent": -1.2582994419748306
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 289.29150000000004,
+              "minimum": 274.461,
+              "maximum": 296.237
+            },
+            "current": {
+              "trials": 6,
+              "median": 285.927,
+              "minimum": 280.57,
+              "maximum": 287.865
+            },
+            "change_percent": -1.1630137767615123
+          }
+        },
+        "ima3/flat/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 677.14,
+              "minimum": 638.11,
+              "maximum": 741.36
+            },
+            "current": {
+              "trials": 6,
+              "median": 667.41,
+              "minimum": 629.87,
+              "maximum": 752.16
+            },
+            "change_percent": -1.4369258942020902
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 1483.6225,
+              "minimum": 1397.776,
+              "maximum": 1622.983
+            },
+            "current": {
+              "trials": 6,
+              "median": 1461.7930000000001,
+              "minimum": 1381.05,
+              "maximum": 1648.401
+            },
+            "change_percent": -1.4713648519080746
+          }
+        },
+        "ima3/flat/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8607359.375,
+              "minimum": 8407531.25,
+              "maximum": 8789087.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 8030753.125,
+              "minimum": 7815362.5,
+              "maximum": 8177506.25
+            },
+            "change_percent": -6.698991233882346
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 18840844.0935,
+              "minimum": 18392974.875,
+              "maximum": 19216072.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 17592979.813,
+              "minimum": 17114264.375,
+              "maximum": 17914848.688
+            },
+            "change_percent": -6.623186701759853
+          }
+        },
+        "ima3/flat/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8821659.375,
+              "minimum": 8605393.75,
+              "maximum": 9038431.25
+            },
+            "current": {
+              "trials": 6,
+              "median": 8295275.0,
+              "minimum": 8207712.5,
+              "maximum": 8374925.0
+            },
+            "change_percent": -5.966954204690089
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 19329465.0,
+              "minimum": 18828737.312,
+              "maximum": 19798255.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 18175388.5625,
+              "minimum": 17982180.5,
+              "maximum": 18329526.25
+            },
+            "change_percent": -5.970555509425635
+          }
+        },
+        "ima3/flat/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4225.326499999999,
+              "minimum": 4147.553,
+              "maximum": 4271.537
+            },
+            "current": {
+              "trials": 6,
+              "median": 3931.0114999999996,
+              "minimum": 3905.95,
+              "maximum": 3970.523
+            },
+            "change_percent": -6.9654972225223215
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9252.6675,
+              "minimum": 9080.269,
+              "maximum": 9362.143
+            },
+            "current": {
+              "trials": 6,
+              "median": 8612.467,
+              "minimum": 8558.839,
+              "maximum": 8700.175
+            },
+            "change_percent": -6.919091170194969
+          }
+        },
+        "ima3/wavl/open": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 38174.39,
+              "minimum": 37888.73,
+              "maximum": 38786.86
+            },
+            "current": {
+              "trials": 6,
+              "median": 37845.42,
+              "minimum": 37767.7,
+              "maximum": 38268.44
+            },
+            "change_percent": -0.8617557477670235
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 83571.2115,
+              "minimum": 82908.332,
+              "maximum": 84900.624
+            },
+            "current": {
+              "trials": 6,
+              "median": 82846.98199999999,
+              "minimum": 82636.437,
+              "maximum": 83759.137
+            },
+            "change_percent": -0.8666016526516662
+          }
+        },
+        "ima3/wavl/full_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 8685378.125,
+              "minimum": 8481312.5,
+              "maximum": 8957225.0
+            },
+            "current": {
+              "trials": 6,
+              "median": 8184181.25,
+              "minimum": 8042300.0,
+              "maximum": 8270006.25
+            },
+            "change_percent": -5.77058209541107
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 19022048.437,
+              "minimum": 18568849.625,
+              "maximum": 19618567.188
+            },
+            "current": {
+              "trials": 6,
+              "median": 17926702.1565,
+              "minimum": 17611953.188,
+              "maximum": 18112124.875
+            },
+            "change_percent": -5.758298240737458
+          }
+        },
+        "ima3/wavl/stream127_retained": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9331003.125,
+              "minimum": 9223450.0,
+              "maximum": 9408462.5
+            },
+            "current": {
+              "trials": 6,
+              "median": 8598840.625,
+              "minimum": 8416912.5,
+              "maximum": 8700037.5
+            },
+            "change_percent": -7.846557226396811
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 20441842.875,
+              "minimum": 20212561.5,
+              "maximum": 20620941.188
+            },
+            "current": {
+              "trials": 6,
+              "median": 18843992.719,
+              "minimum": 18446821.125,
+              "maximum": 19064740.688
+            },
+            "change_percent": -7.816566078561049
+          }
+        },
+        "ima3/wavl/seek_data_62_samples": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4363.275,
+              "minimum": 4330.243,
+              "maximum": 4422.127
+            },
+            "current": {
+              "trials": 6,
+              "median": 4041.4300000000003,
+              "minimum": 3971.823,
+              "maximum": 4137.52
+            },
+            "change_percent": -7.376225427001493
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9560.059,
+              "minimum": 9481.434,
+              "maximum": 9687.42
+            },
+            "current": {
+              "trials": 6,
+              "median": 8857.2095,
+              "minimum": 8703.022,
+              "maximum": 9059.16
+            },
+            "change_percent": -7.351936844741214
+          }
+        },
+        "ima3/wavl/seek_held": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 4373.57,
+              "minimum": 4151.807,
+              "maximum": 4445.397
+            },
+            "current": {
+              "trials": 6,
+              "median": 4063.833,
+              "minimum": 4052.37,
+              "maximum": 4111.653
+            },
+            "change_percent": -7.082017665202556
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 9580.3155,
+              "minimum": 9096.972,
+              "maximum": 9732.191
+            },
+            "current": {
+              "trials": 6,
+              "median": 8898.486,
+              "minimum": 8881.211,
+              "maximum": 9009.085
+            },
+            "change_percent": -7.116983777830699
+          }
+        },
+        "ima3/wavl/same_held_cached": {
+          "ns_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 132.09199999999998,
+              "minimum": 131.049,
+              "maximum": 134.752
+            },
+            "current": {
+              "trials": 6,
+              "median": 130.304,
+              "minimum": 128.575,
+              "maximum": 132.939
+            },
+            "change_percent": -1.3536020349453226
+          },
+          "thread_cycles_per_op": {
+            "baseline": {
+              "trials": 6,
+              "median": 289.47450000000003,
+              "minimum": 287.251,
+              "maximum": 295.366
+            },
+            "current": {
+              "trials": 6,
+              "median": 285.3645,
+              "minimum": 281.818,
+              "maximum": 291.428
+            },
+            "change_percent": -1.419814180523682
+          }
+        }
+      }
+    }
+  }
+}

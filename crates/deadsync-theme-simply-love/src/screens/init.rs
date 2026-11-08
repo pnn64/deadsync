@@ -646,7 +646,7 @@ fn push_loading_overlay(
     if show_skip_hint {
         actors.push(act!(text:
             font("miso"):
-            settext("Press &START; to skip".to_owned()):
+            settext(crate::i18n::tr("Init", "SkipHint")):
             align(0.5, 0.5):
             xy(screen_center_x(), bar_cy + 58.0):
             zoom(0.8):

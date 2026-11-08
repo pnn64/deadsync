@@ -2,7 +2,9 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::screens::components::select_music::push_retained_overlay;
-use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use crate::screens::components::shared::gs_scorebox::{
+    GolfPanePattern, SCOREBOX_GOLF_GREEN, entries_with_local_self_state, push_golf_pane_pattern,
+};
 use crate::views::{
     ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
     SelectMusicLeaderboardView,
@@ -19,6 +21,10 @@ use std::sync::Arc;
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
 const GS_LEADERBOARD_PANE_HEIGHT: f32 = 360.0;
+/// Overlay tiles are this many pane heights tall; the pane is big enough to
+/// show the course at close to its drawn size.
+const GOLF_OVERLAY_PATTERN_TILE_HEIGHTS: f32 = 1.2;
+const GOLF_OVERLAY_PATTERN_ALPHA: f32 = 0.18;
 const GS_LEADERBOARD_PANE_WIDTH_SINGLE: f32 = 330.0;
 const GS_LEADERBOARD_PANE_WIDTH_MULTI: f32 = 230.0;
 const GS_LEADERBOARD_PANE_SIDE_OFFSET: f32 = 160.0;
@@ -34,6 +40,9 @@ const GS_LEADERBOARD_NO_SCORES_TEXT: &str = "No Scores";
 const GS_LEADERBOARD_LOADING_TEXT: &str = "Loading ...";
 const GS_LEADERBOARD_MACHINE_BEST: &str = "Machine's  Best";
 const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
+/// Header while no board is on screen yet. Boards are named after their
+/// service once they arrive; before that the pane belongs to no service.
+const GS_LEADERBOARD_STATUS_HEADER: &str = "Leaderboards";
 const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#BD94FF");
 const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
@@ -105,11 +114,6 @@ fn gs_machine_pane(entries: Vec<score_data::LeaderboardEntry>) -> score_data::Le
     }
 }
 
-#[inline(always)]
-fn should_show_overlay_pane(pane: &score_data::LeaderboardPane) -> bool {
-    !pane.is_arrowcloud() || pane.is_hard_ex() || pane.personalized || !pane.entries.is_empty()
-}
-
 fn gs_error_text(error: &str) -> String {
     let lower = error.to_ascii_lowercase();
     if lower.contains("timed out") || lower.contains("timeout") {
@@ -123,16 +127,6 @@ fn apply_leaderboard_side_snapshot(
     side: &mut LeaderboardSideState,
     snapshot: score_data::CachedPlayerLeaderboardData,
 ) {
-    let current_pane = side.panes.get(side.pane_index).map(|pane| {
-        (
-            pane.name.clone(),
-            pane.is_ex,
-            pane.is_hard_ex(),
-            pane.disabled,
-            pane.personalized,
-        )
-    });
-
     if snapshot.loading {
         side.loading = true;
         side.error_text = None;
@@ -153,19 +147,26 @@ fn apply_leaderboard_side_snapshot(
         return;
     }
 
-    let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
-        data.panes
-            .iter()
-            .filter(|pane| should_show_overlay_pane(pane))
-            .cloned()
-            .collect()
+    let current_pane = side.panes.get(side.pane_index).map(|pane| {
+        (
+            pane.name.as_str(),
+            pane.is_ex,
+            pane.is_hard_ex(),
+            pane.disabled,
+            pane.personalized,
+        )
     });
-    if let Some(machine) = side.machine_pane.clone() {
-        panes.push(machine);
+
+    // Every pane the shell delivers is shown. ArrowCloud already applies the
+    // signed-in player's board preferences server-side, so an empty board here
+    // is one the player asked for and should read "No Scores", not vanish.
+    let mut panes = snapshot
+        .data
+        .map_or_else(Vec::new, |data| data.panes.clone());
+    if side.scorebox.pane_filter.events_first {
+        score_data::prioritize_event_panes(&mut panes);
     }
-    if panes.is_empty()
-        && let Some(machine) = side.machine_pane.clone()
-    {
+    if let Some(machine) = side.machine_pane.clone() {
         panes.push(machine);
     }
 
@@ -197,8 +198,8 @@ fn apply_leaderboard_side_view(
     }
 
     let machine = gs_machine_pane(view.machine_entries);
-    side.machine_pane = Some(machine.clone());
     let Some(snapshot) = view.leaderboards else {
+        side.machine_pane = Some(machine.clone());
         side.loading = false;
         side.error_text = None;
         side.panes.clear();
@@ -207,15 +208,8 @@ fn apply_leaderboard_side_view(
         side.show_icons = false;
         return;
     };
+    side.machine_pane = Some(machine);
     apply_leaderboard_side_snapshot(side, snapshot);
-}
-
-fn overlay_display_entries(
-    runtime: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> Vec<score_data::LeaderboardEntry> {
-    let entries = entries_with_local_self_state(runtime, pane);
-    score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
 #[must_use]
@@ -233,7 +227,7 @@ pub fn show_leaderboard_overlay(
 
     let mut p1 = LeaderboardSideState {
         joined: p1_joined,
-        loading: p1_joined && chart_hash_p1.is_some() && scorebox_p1.groovestats_active,
+        loading: p1_joined && chart_hash_p1.is_some() && scorebox_p1.online_active,
         machine_pane: Some(gs_machine_pane(Vec::new())),
         chart_hash: chart_hash_p1,
         scorebox: scorebox_p1,
@@ -241,7 +235,7 @@ pub fn show_leaderboard_overlay(
     };
     let mut p2 = LeaderboardSideState {
         joined: p2_joined,
-        loading: p2_joined && chart_hash_p2.is_some() && scorebox_p2.groovestats_active,
+        loading: p2_joined && chart_hash_p2.is_some() && scorebox_p2.online_active,
         machine_pane: Some(gs_machine_pane(Vec::new())),
         chart_hash: chart_hash_p2,
         scorebox: scorebox_p2,
@@ -465,31 +459,40 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
-        let display_entries = pane.map(|pane| overlay_display_entries(&side.scorebox, pane));
-        let header_text = if side.loading {
-            "GrooveStats".to_string()
-        } else if let Some(p) = pane {
-            p.name.replace("ITL Online", "ITL")
-        } else {
-            "GrooveStats".to_string()
+        let entries = pane
+            .filter(|pane| !side.loading && side.error_text.is_none() && !pane.disabled)
+            .map(|pane| entries_with_local_self_state(&side.scorebox, pane));
+        let display_entries = entries.as_ref().map(|entries| {
+            score_data::prioritized_leaderboard_entry_refs(entries, GS_LEADERBOARD_NUM_ENTRIES)
+        });
+        let header_text = match pane {
+            Some(p) if !side.loading => p.name.replace("ITL Online", "ITL"),
+            _ => GS_LEADERBOARD_STATUS_HEADER.to_string(),
         };
+        let is_golf = pane.is_some_and(|p| score_data::scorebox_pane_kind(p) == score_data::ScoreboxPaneKind::Golf);
         let show_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_ex && !p.disabled);
         let show_itg_arrowcloud = !side.loading
             && side.error_text.is_none()
             && pane
-                .is_some_and(|p| p.is_arrowcloud() && !p.is_ex && !p.is_hard_ex() && !p.disabled);
+                .is_some_and(|p| p.is_arrowcloud() && !is_golf && !p.is_ex && !p.is_hard_ex() && !p.disabled);
         let show_hard_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_hard_ex() && !p.disabled);
         let is_disabled = !side.loading && pane.is_some_and(|p| p.disabled);
 
+        // The golf board frames itself in fairway green over the course pattern.
+        let border = if is_golf {
+            SCOREBOX_GOLF_GREEN
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(center_x, pane_cy):
             zoomto(pane_width + 2.0, GS_LEADERBOARD_PANE_HEIGHT + 2.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
+            diffuse(border[0], border[1], border[2], border[3]):
             z(GS_LEADERBOARD_Z + 2)
         ));
         actors.push(act!(quad:
@@ -499,6 +502,19 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
             diffuse(0.0, 0.0, 0.0, 1.0):
             z(GS_LEADERBOARD_Z + 3)
         ));
+        if is_golf {
+            push_golf_pane_pattern(
+                actors,
+                GolfPanePattern {
+                    center: [center_x, pane_cy],
+                    size: [pane_width, GS_LEADERBOARD_PANE_HEIGHT],
+                    tile_h: GS_LEADERBOARD_PANE_HEIGHT * GOLF_OVERLAY_PATTERN_TILE_HEIGHTS,
+                    alpha: GOLF_OVERLAY_PATTERN_ALPHA,
+                    z: GS_LEADERBOARD_Z + 3,
+                },
+                crate::screens::components::shared::visual_style_bg::global_elapsed_s() as f32,
+            );
+        }
 
         let header_y = GS_LEADERBOARD_ROW_HEIGHT
             .mul_add(0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy));
@@ -610,7 +626,7 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
                 if let Some(entry) = display_entries.as_ref().and_then(|entries| entries.get(i)) {
                     rank = format!("{}.", entry.rank);
                     name.clone_from(&entry.name);
-                    score = format!("{:.2}%", entry.score / 100.0);
+                    score = if is_golf { format!("{:.2}", entry.score / 1000.0) } else { format!("{:.2}%", entry.score / 100.0) };
                     date = score_data::format_leaderboard_date(&entry.date);
 
                     if entry.is_rival || entry.is_self {
@@ -636,7 +652,11 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
                     if entry.is_fail {
                         score_col = [1.0, 0.0, 0.0, 1.0];
                     }
-                } else if i == 0 && display_entries.as_ref().is_none_or(std::vec::Vec::is_empty) {
+                } else if i == 0
+                    && display_entries
+                        .as_ref()
+                        .is_none_or(|entries| entries.is_empty())
+                {
                     name = GS_LEADERBOARD_NO_SCORES_TEXT.to_string();
                 }
             }
@@ -866,17 +886,45 @@ mod tests {
     }
 
     #[test]
-    fn empty_arrowcloud_hard_ex_pane_is_still_shown() {
-        let pane = score_data::LeaderboardPane {
-            name: "ArrowCloud".to_string(),
-            entries: Vec::new(),
-            is_ex: false,
-            disabled: false,
-            personalized: false,
-            arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::HardEx),
-        };
+    fn overlay_keeps_every_server_pane_including_empty_ones() {
+        let mut side = LeaderboardSideState::default();
+        let snapshot = score_data::CachedPlayerLeaderboardData::ready(
+            score_data::PlayerLeaderboardData {
+                panes: vec![
+                    score_data::LeaderboardPane {
+                        name: "ArrowCloud".to_string(),
+                        entries: Vec::new(),
+                        is_ex: true,
+                        disabled: false,
+                        personalized: false,
+                        arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::Ex),
+                    },
+                    score_data::LeaderboardPane {
+                        name: "ArrowCloud".to_string(),
+                        entries: Vec::new(),
+                        is_ex: false,
+                        disabled: false,
+                        personalized: false,
+                        arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::Itg),
+                    },
+                ],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            },
+        );
 
-        assert!(should_show_overlay_pane(&pane));
+        apply_leaderboard_side_snapshot(&mut side, snapshot);
+
+        let kinds: Vec<_> = side.panes.iter().map(|pane| pane.arrowcloud_kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                Some(score_data::ArrowCloudPaneKind::Ex),
+                Some(score_data::ArrowCloudPaneKind::Itg),
+            ],
+            "server order and empty preferred boards are preserved"
+        );
     }
 
     #[test]
@@ -887,7 +935,7 @@ mod tests {
             [
                 ScoreboxSideView {
                     joined: true,
-                    groovestats_active: true,
+                    online_active: true,
                     ..Default::default()
                 },
                 crate::views::ScoreboxSideView::default(),
@@ -922,3 +970,11 @@ mod tests {
         assert_eq!(data.p1.panes[0].entries[0].name, "AAA");
     }
 }
+
+#[cfg(test)]
+#[path = "leaderboard/borrowed_state_original.rs"]
+mod borrowed_state_original;
+
+#[cfg(test)]
+#[path = "leaderboard/borrowed_state_perf.rs"]
+mod borrowed_state_perf;

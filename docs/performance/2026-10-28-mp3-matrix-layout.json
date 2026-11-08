@@ -1,0 +1,95 @@
+{
+  "method": "Exact little-endian f64 table byte search, followed by PE section file-offset to RVA mapping. An empty result means no complete contiguous table match.",
+  "binary_sha256": {
+    "round5-cold-base": "c4652a6d5f7f3346d79c5478e9df49f8c3db855c87bf11cc645831c3c7ea5d55",
+    "reverse-bands-current": "b19118a13655bb031e88c7538345bbbd7a607eb8f32b71564ca35323c9e0b497",
+    "fused-stereo": "23112653fd736c3aee0c4a2ed284ba9492b0491d87e3d934df3b6d7de0fa02b5",
+    "cached-intensity": "154cee81feefcae539079eedea133ba4aed0a104974990e98fecec34e8e458cd"
+  },
+  "layouts": {
+    "round5-cold-base": {
+      "SYNTHESIS": [
+        {
+          "file_offset": 385392,
+          "rva": 392048,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "IMDCT_LONG": [
+        {
+          "file_offset": 379056,
+          "rva": 385712,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "DEWINDOW": []
+    },
+    "reverse-bands-current": {
+      "SYNTHESIS": [
+        {
+          "file_offset": 385392,
+          "rva": 392048,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "IMDCT_LONG": [
+        {
+          "file_offset": 379056,
+          "rva": 385712,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "DEWINDOW": []
+    },
+    "fused-stereo": {
+      "SYNTHESIS": [
+        {
+          "file_offset": 408688,
+          "rva": 413808,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "IMDCT_LONG": [
+        {
+          "file_offset": 402352,
+          "rva": 407472,
+          "rva_mod_16": 0,
+          "rva_mod_64": 48,
+          "section": ".rdata"
+        }
+      ],
+      "DEWINDOW": []
+    },
+    "cached-intensity": {
+      "SYNTHESIS": [
+        {
+          "file_offset": 385872,
+          "rva": 392016,
+          "rva_mod_16": 0,
+          "rva_mod_64": 16,
+          "section": ".rdata"
+        }
+      ],
+      "IMDCT_LONG": [
+        {
+          "file_offset": 379536,
+          "rva": 385680,
+          "rva_mod_16": 0,
+          "rva_mod_64": 16,
+          "section": ".rdata"
+        }
+      ],
+      "DEWINDOW": []
+    }
+  }
+}

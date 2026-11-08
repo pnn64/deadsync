@@ -1,0 +1,92 @@
+{
+  "cases": 207348,
+  "accepted": 109376,
+  "invalid": 97972,
+  "parser_policy_checks": 2073480,
+  "seeds": 6494,
+  "c_cases": 440,
+  "c_exact_matches": 408,
+  "c_histogram_drops": 32,
+  "case_scope": "Independent one-pixel fixtures across fifteen native formats and both interlace flags; both animation policies, buffered decode, reader fragments 1/7, push fragments 1/31. Scalar integer edges are varied individually; this is not every 32-bit Cartesian product. Calendar interpretation, opaque profiles, variable-length text and APNG controls have separate evidence.",
+  "per_kind": [
+    {
+      "kind": "PLTE",
+      "accepted": 2604,
+      "invalid": 20556
+    },
+    {
+      "kind": "bKGD",
+      "accepted": 20050,
+      "invalid": 3706
+    },
+    {
+      "kind": "cHRM",
+      "accepted": 1950,
+      "invalid": 1530
+    },
+    {
+      "kind": "gAMA",
+      "accepted": 240,
+      "invalid": 300
+    },
+    {
+      "kind": "hIST",
+      "accepted": 32,
+      "invalid": 5392
+    },
+    {
+      "kind": "pHYs",
+      "accepted": 570,
+      "invalid": 8100
+    },
+    {
+      "kind": "sBIT",
+      "accepted": 716,
+      "invalid": 17394
+    },
+    {
+      "kind": "sRGB",
+      "accepted": 150,
+      "invalid": 7680
+    },
+    {
+      "kind": "tIME",
+      "accepted": 71206,
+      "invalid": 33060
+    },
+    {
+      "kind": "tRNS",
+      "accepted": 11858,
+      "invalid": 254
+    }
+  ],
+  "all_timestamp_years": 65536,
+  "new_successful_sanitizer_executions": 50000,
+  "production_sources_unchanged_from": "8c71170d6fce98ab9d2eb1c84085383653ce95df",
+  "evidence": [
+    {
+      "path": "scalar-fields-validation.json",
+      "sha256": "306049c34da178c63ffc99d8582c9c5da97c36de716d59d5753ff2c6ce9cf2b0"
+    },
+    {
+      "path": "fuzz/reports/scalar-fields-source.json",
+      "sha256": "5945df17718baf8cee98703c2f94032cc6588a929ab60dc91d4a4d9fe36111a0"
+    },
+    {
+      "path": "fuzz/reports/scalar-fields-seeds.json",
+      "sha256": "9ba7a98e589eb0ad090b2b662dba1310eddd307f91ebd35b588e416cb5aa2276"
+    },
+    {
+      "path": "fuzz/reports/scalar-fields-seed-build.json",
+      "sha256": "15c81949225ecff1a2d4a4cd3e963d275a3f6e6c39fe71c0894e1b56ecb38159"
+    },
+    {
+      "path": "fuzz/reports/scalar-fields-reproduce.json",
+      "sha256": "11a4ee843085fc7eb763f37802a235150af7fa75c4e8699637437c6436602f8c"
+    },
+    {
+      "path": "experiments/scalar-hist-reference.json",
+      "sha256": "a8fd08ff84290b82baf0a88b7dbdd6127c9dc0dc88f636cc2a1078a9b8824360"
+    }
+  ]
+}

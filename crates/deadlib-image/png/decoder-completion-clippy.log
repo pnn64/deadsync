@@ -1,0 +1,19 @@
+cargo :     Checking simd-adler32 v0.3.10
+At line:2 char:1
++ cargo clippy -p deadlib-image -p deadlib-image-png --all-targets -- - ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking simd-adler32 v0.3.10:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking adler2 v2.0.1
+    Checking cfg-if v1.0.5
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking bitflags v2.13.2
+    Checking crc32fast v1.5.3
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Checking miniz_oxide v0.9.1
+    Checking fdeflate v0.3.7
+    Checking miniz_oxide v0.8.9
+    Checking flate2 v1.1.10
+    Checking png v0.18.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.26s

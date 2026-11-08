@@ -1,0 +1,13 @@
+
+running 3 tests
+test crates\deadlib-audio\decode\flac\src\ogg.rs - ogg (line 53) ... ok
+test crates\deadlib-audio\decode\flac\src\lib.rs - (line 67) ... ok
+test crates\deadlib-audio\decode\flac\src\lib.rs - (line 39) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+all doctests ran in 6.47s; merged doctests compilation took 6.24s
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-flac v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\flac)
+    Finished `release` profile [optimized] target(s) in 5.21s
+   Doc-tests deadlib_audio_decode_flac

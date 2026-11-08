@@ -1,0 +1,3 @@
+run	stage	workload	cycles_per_op	ns_per_op	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	sha256
+0	direct-host-before	native/hex/uuid	68148.38	31133.6	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+1	direct-host-before	native/hex/uuid	70453.13	32187.6	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764

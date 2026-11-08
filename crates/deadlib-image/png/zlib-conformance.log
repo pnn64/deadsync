@@ -1,0 +1,71 @@
+default zlib + native header/history matrix
+Command: cargo test -p deadlib-image-png --release --test zlib_headers -- --include-ignored --nocapture
+DEADLIB_LIBPNG_ORACLE=C:\GitHub\deadsync\target\deadlib-image-reference\oracle-build\Release\deadlib_png_oracle.exe
+DEADLIB_ZLIB_STRICT_WINDOW=unset
+    Finished `release` profile [optimized] target(s) in 0.55s
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+
+running 5 tests
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+C zlib checked 65652 cases; accepted 28/28 over-advertised-window references
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+C libpng rejected all 24 pre-output-reference PNGs at DEFLATE distance validation
+test c_zlib_header_and_history_oracle ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+
+Exit: 0
+
+strict-window zlib + native header/history matrix
+Command: cargo test -p deadlib-image-png --release --test zlib_headers -- --include-ignored --nocapture
+DEADLIB_LIBPNG_ORACLE=C:\GitHub\deadsync\target\deadlib-image-reference\oracle-strict-build\Release\deadlib_png_oracle.exe
+DEADLIB_ZLIB_STRICT_WINDOW=1
+    Finished `release` profile [optimized] target(s) in 0.53s
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+
+running 5 tests
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+C zlib checked 65652 cases; accepted 0/28 over-advertised-window references
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+C libpng rejected all 24 pre-output-reference PNGs at DEFLATE distance validation
+test c_zlib_header_and_history_oracle ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+
+Exit: 0
+
+existing PNG/profile oracle regression checks
+Command: cargo test -p deadlib-image-png --release --test libpng --test profiles -- --ignored --nocapture
+DEADLIB_LIBPNG_ORACLE=C:\GitHub\deadsync\target\deadlib-image-reference\oracle-build\Release\deadlib_png_oracle.exe
+DEADLIB_ZLIB_STRICT_WINDOW=unset
+    Finished `release` profile [optimized] target(s) in 0.87s
+     Running tests\libpng.rs (target\release\deps\libpng-48c7a432a6079b75.exe)
+     Running tests\profiles.rs (target\release\deps\profiles-7a2d6fff86ad10ba.exe)
+
+
+running 2 tests
+test libpng_native_sample_conformance ... ok
+Verified 24 corpus files, 216 native-sample libpng comparisons
+test libpng_external_corpus ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.79s
+
+
+running 1 test
+libpng preserved exact ICC and Exif bytes in 480 files
+test libpng_preserves_independent_icc_and_exif_payloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 11.45s
+
+
+Exit: 0

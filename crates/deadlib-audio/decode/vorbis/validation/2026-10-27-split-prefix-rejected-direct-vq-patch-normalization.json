@@ -1,0 +1,10 @@
+{
+  "original_sha256": "51e10599824b3a9a20521e52ac4153fc4d6544d0a8bb21a832994195661280a8",
+  "zero_context_sha256": "92f291af250513df0e4a6429ea47d1d32d720dd9008a6c66d19c10cb74084539",
+  "same_applied_file_sha256": {
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "1622e10226eb992b9ca71c13bd746ee91b78aca9affd03969ea1c700db2a70f8",
+    "crates/deadlib-audio/decode/vorbis/tests/primitives.rs": "94b3eb1df3de3fd6c6270cafac4470b5578a58b3e2cc1f2cf0c504fcdfb22977"
+  },
+  "baseline": "995ddca57",
+  "scope": "Equivalent context-free patch avoids representing blank context lines as trailing whitespace in a newly added evidence file. Original patch remains in ignored storage."
+}

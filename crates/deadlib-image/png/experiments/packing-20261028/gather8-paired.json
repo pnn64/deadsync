@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "rows",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "packed64",
+      "path": "gather8-paired-1-packed64.tsv",
+      "sha256": "7c3cd7f041866cd0dcc22dae50293736b3455fc7187e2cf17a65dd3a16bffcee",
+      "source_manifest_sha256": "9675398a9dd82466296fdc3043918d11d780aaef15444f19ce8ae4e3402ced24",
+      "executable_sha256": "1912ac1307b66070030812e4a4765b7233f9bae447063f2e8374a415d2bf4355"
+    },
+    {
+      "round": 1,
+      "label": "gather8",
+      "path": "gather8-paired-1-gather8.tsv",
+      "sha256": "a53d36baa30488b826e200a6f5436a3fd1d0998788056ab4203a832f9426e851",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 2,
+      "label": "gather8",
+      "path": "gather8-paired-2-gather8.tsv",
+      "sha256": "ee1f4fe53cc1b6eb4ac6d4df0de8a80cf30359b43ead3c535593ce3f9d922caa",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 2,
+      "label": "packed64",
+      "path": "gather8-paired-2-packed64.tsv",
+      "sha256": "c512eaf70bb711559f191ff208b03480b7c6e0233df2bc4724cbb7abdd323e76",
+      "source_manifest_sha256": "9675398a9dd82466296fdc3043918d11d780aaef15444f19ce8ae4e3402ced24",
+      "executable_sha256": "1912ac1307b66070030812e4a4765b7233f9bae447063f2e8374a415d2bf4355"
+    },
+    {
+      "round": 3,
+      "label": "packed64",
+      "path": "gather8-paired-3-packed64.tsv",
+      "sha256": "5d7c8184425e991b34e821971150e61f276f9521b9a78a563baf5b3dce443fed",
+      "source_manifest_sha256": "9675398a9dd82466296fdc3043918d11d780aaef15444f19ce8ae4e3402ced24",
+      "executable_sha256": "1912ac1307b66070030812e4a4765b7233f9bae447063f2e8374a415d2bf4355"
+    },
+    {
+      "round": 3,
+      "label": "gather8",
+      "path": "gather8-paired-3-gather8.tsv",
+      "sha256": "618e855c3befc22d2e001cce5ad4b8f84e54d5a546437128d34bacb70d403dd0",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 4,
+      "label": "gather8",
+      "path": "gather8-paired-4-gather8.tsv",
+      "sha256": "a0ddb8a646d87740b65a0c1762f82c9d3eac5f11fcc3448f7aa0a8e13fd28d96",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 4,
+      "label": "packed64",
+      "path": "gather8-paired-4-packed64.tsv",
+      "sha256": "def94068b1853a10c161c23d68121b5da8435317bec9eb3fb46b61206423af47",
+      "source_manifest_sha256": "9675398a9dd82466296fdc3043918d11d780aaef15444f19ce8ae4e3402ced24",
+      "executable_sha256": "1912ac1307b66070030812e4a4765b7233f9bae447063f2e8374a415d2bf4355"
+    }
+  ]
+}

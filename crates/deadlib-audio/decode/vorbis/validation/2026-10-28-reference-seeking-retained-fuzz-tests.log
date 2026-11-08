@@ -1,0 +1,12 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\Github\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.61s
+     Running unittests src\lib.rs (target/vorbis-completion-fuzz\debug\deps\deadlib_audio_decode_fuzz-d1c023d7d17f7745.exe)
+
+running 4 tests
+test tests::bitpacking_oracle_covers_mixed_widths_and_packet_tails ... ok
+test tests::buffered_sync_covers_raw_flags_nested_capture_limits_and_cached_seeks ... ok
+test tests::synthesis_schedules_cover_finite_ieee_pending_and_restart_states ... ok
+test tests::valid_and_truncated_seeds_reach_every_oracle ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s

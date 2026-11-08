@@ -1,0 +1,68 @@
+[
+    {
+        "target":  "vorbis_headers",
+        "exit_code":  0,
+        "executions":  306278,
+        "coverage":  2687,
+        "features":  8675,
+        "peak_rss_mb":  515,
+        "average_exec_per_second":  1017,
+        "binary_sha256":  "6c9640aacd8f38ce67d80c2d97d5ca9ee072e3f52fc6e0498903529be67ec220",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-eos-clamping-final-20261027\\corpus\\vorbis_headers\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1337",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-eos-clamping-final-20261027/artifacts/vorbis_headers/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.1717217
+    },
+    {
+        "target":  "vorbis_packets",
+        "exit_code":  0,
+        "executions":  10955,
+        "coverage":  2002,
+        "features":  4565,
+        "peak_rss_mb":  163,
+        "average_exec_per_second":  36,
+        "binary_sha256":  "3278c2b0ab52fa5324f7103c87e7b0f05ad9a824c844748f96911bab76096126",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-eos-clamping-final-20261027\\corpus\\vorbis_packets\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1338",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-eos-clamping-final-20261027/artifacts/vorbis_packets/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.1592127
+    },
+    {
+        "target":  "vorbis_stream",
+        "exit_code":  0,
+        "executions":  3165,
+        "coverage":  4232,
+        "features":  13672,
+        "peak_rss_mb":  719,
+        "average_exec_per_second":  10,
+        "binary_sha256":  "64eb8e34005918dd69bae4b289fd404b566b26ca00e201b93c2a0af1afc02d11",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-eos-clamping-final-20261027\\corpus\\vorbis_stream\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1339",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-eos-clamping-final-20261027/artifacts/vorbis_stream/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.9723802
+    }
+]

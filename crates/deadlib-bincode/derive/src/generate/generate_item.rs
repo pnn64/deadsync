@@ -28,16 +28,12 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
     ///
     /// `dependencies` are the dependencies of the parameter.
     ///
-    /// ```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Foo");
+    /// ```text
     /// generator
-    ///     .r#impl()
+    ///     .impl_for("Example")
     ///     .generate_fn("foo") // fn foo()
-    ///     .with_generic("D") // fn foo<D>()
+    ///     .with_generic_deps("D", [] as [&str; 0]) // fn foo<D>()
     ///     .with_generic_deps("E", ["Encodable"]) // fn foo<D, E: Encodable>();
-    /// # .body(|_| Ok(())).unwrap();
-    /// # generator.assert_eq("impl Foo { fn foo < D , E : Encodable > () { } }");
     /// ```
     #[must_use]
     pub fn with_generic_deps<DEP, I>(mut self, name: impl Into<String>, dependencies: DEP) -> Self
@@ -54,15 +50,11 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
 
     /// Set the value for `self`. See [`FnSelfArg`] for more information.
     ///
-    /// ```
-    /// # use virtue::prelude::{Generator, FnSelfArg};
-    /// # let mut generator = Generator::with_name("Foo");
+    /// ```text
     /// generator
-    ///     .r#impl()
+    ///     .impl_for("Example")
     ///     .generate_fn("foo") // fn foo()
     ///     .with_self_arg(FnSelfArg::RefSelf) // fn foo(&self)
-    /// # .body(|_| Ok(())).unwrap();
-    /// # generator.assert_eq("impl Foo { fn foo (& self ,) { } }");
     /// ```
     #[must_use]
     pub const fn with_self_arg(mut self, self_arg: FnSelfArg) -> Self {
@@ -72,16 +64,12 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
 
     /// Add an argument with a `name` and a `ty`.
     ///
-    /// ```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Foo");
+    /// ```text
     /// generator
-    ///     .r#impl()
+    ///     .impl_for("Example")
     ///     .generate_fn("foo") // fn foo()
     ///     .with_arg("a", "u32") // fn foo(a: u32)
     ///     .with_arg("b", "u32") // fn foo(a: u32, b: u32)
-    /// # .body(|_| Ok(())).unwrap();
-    /// # generator.assert_eq("impl Foo { fn foo (a : u32 , b : u32) { } }");
     /// ```
     #[must_use]
     pub fn with_arg(mut self, name: impl Into<String>, ty: impl Into<String>) -> Self {
@@ -91,15 +79,11 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
 
     /// Set the return type for the function. By default the function will have no return type.
     ///
-    /// ```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Foo");
+    /// ```text
     /// generator
-    ///     .r#impl()
+    ///     .impl_for("Example")
     ///     .generate_fn("foo") // fn foo()
     ///     .with_return_type("u32") // fn foo() -> u32
-    /// # .body(|_| Ok(())).unwrap();
-    /// # generator.assert_eq("impl Foo { fn foo () ->u32 { } }");
     /// ```
     #[must_use]
     pub fn with_return_type(mut self, ret_type: impl Into<String>) -> Self {
@@ -109,11 +93,9 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
 
     /// Complete the function definition. This function takes a callback that will form the body of the function.
     ///
-    /// ```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Foo");
+    /// ```text
     /// generator
-    ///     .r#impl()
+    ///     .impl_for("Example")
     ///     .generate_fn("foo") // fn foo()
     ///     .body(|b| {
     ///         b.push_parsed("println!(\"hello world\");")?;
@@ -123,7 +105,6 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
     /// // fn foo() {
     /// //     println!("Hello world");
     /// // }
-    /// # generator.assert_eq("impl Foo { fn foo () { println ! (\"hello world\") ; } }");
     /// ```
     pub fn body(
         self,

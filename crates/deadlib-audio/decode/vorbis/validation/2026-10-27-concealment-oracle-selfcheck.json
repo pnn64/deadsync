@@ -1,0 +1,52 @@
+{
+  "binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "oracle_source_sha256": "a8ac922da115d04fbdbc786538a578bd7e69f0b2df3c9279e236495b8714b35d",
+  "files": [
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+      "sha256": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+      "cases": 4,
+      "fresh_process_pcm_equals_restarted_case_mode_byte_for_byte": true,
+      "request_sha256": "8fe28edf729cb407b059096e776e5f279f8736b91bc6b31715494b8fba6d7270",
+      "response_sha256": "6f745693c57a24c6f0e832c5517a80eecace7dc4bce9340b945d6beddeb6c787",
+      "response_bytes": 4165
+    },
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+      "sha256": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+      "cases": 4,
+      "fresh_process_pcm_equals_restarted_case_mode_byte_for_byte": true,
+      "request_sha256": "21ff371dc29882842fd96d5ea6cda2e525beeea5457a4720f91ab2a566e1eef6",
+      "response_sha256": "e4e8f03968afdef58dd2469156732852d1bb9f033565612a6f39433d7fa47a3c",
+      "response_bytes": 33870
+    },
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+      "sha256": "3e4c0456de37adc014a3aa6b5aebf49f3c66717cf798fd9e6a3b9feff4c1cfb0",
+      "cases": 4,
+      "fresh_process_pcm_equals_restarted_case_mode_byte_for_byte": true,
+      "request_sha256": "0163d66d68b207990aeaf6bad6fcaff17e2a870218f4799c479e3f7793e2c398",
+      "response_sha256": "df2a56bdb4f3cb263158ca6e42c73177251cafbc7944e70877f77748640e10d7",
+      "response_bytes": 69692
+    },
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg",
+      "sha256": "4fcf854ba1c654b4581e5d98f6df570dd940d716d4f7411712e62491c08cc943",
+      "cases": 4,
+      "fresh_process_pcm_equals_restarted_case_mode_byte_for_byte": true,
+      "request_sha256": "26e85d73efd36f0096c5a25c6cfb3cd26cd0d02550348c561f32d2e25ce9a94b",
+      "response_sha256": "c740da3d071b8fb1617783865ad0e17b3362363c8115b0df531c1c7eeac3f39a",
+      "response_bytes": 135246
+    },
+    {
+      "path": "target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg",
+      "sha256": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+      "cases": 5,
+      "fresh_process_pcm_equals_restarted_case_mode_byte_for_byte": true,
+      "request_sha256": "30a2c283a1cced4f222e09439b73feaf1fa5b349d70e0e3f782dfc3355ab6be8",
+      "response_sha256": "766769302bbb889da1e6f5a8cfc0542f22275b0dd28999f344ec55d8c09dc027",
+      "response_bytes": 49796
+    }
+  ],
+  "fresh_processes_compared": 21
+}

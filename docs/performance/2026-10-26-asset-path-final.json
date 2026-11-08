@@ -1,0 +1,12 @@
+{
+  "before": {
+    "binary": "C:\\GitHub\\deadsync\\target\\asset-path-scans\\baseline.exe",
+    "sha256": "d601ae98519cf6d5bf7d72ff160745df9315f4dba2c635a90bdfb37b370037bd",
+    "checks": "\nrunning 4 tests\ntest path_scan_perf::benchmark_metadata_scans ... ignored, release CPU-cycle, throughput, and allocation benchmark\ntest path_scan_perf::candidate_offsets_and_non_ascii_bytes_match_frozen_metadata ... ok\ntest path_scan_perf::metadata_scans_preserve_nested_malformed_overflow_and_unicode_inputs ... ok\ntest path_scan_perf::shipped_names_match_frozen_metadata ... ok\n\ntest result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 109 filtered out; finished in 0.26s\n\n"
+  },
+  "after": {
+    "binary": "C:\\GitHub\\deadsync\\target\\asset-path-scans\\double.exe",
+    "sha256": "d708c45bee0389c2fd53b7991a577d88a23a824677db01e857924c1f365843a6",
+    "checks": "\nrunning 4 tests\ntest path_scan_perf::benchmark_metadata_scans ... ignored, release CPU-cycle, throughput, and allocation benchmark\ntest path_scan_perf::candidate_offsets_and_non_ascii_bytes_match_frozen_metadata ... ok\ntest path_scan_perf::metadata_scans_preserve_nested_malformed_overflow_and_unicode_inputs ... ok\ntest path_scan_perf::shipped_names_match_frozen_metadata ... ok\n\ntest result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 109 filtered out; finished in 0.22s\n\n"
+  }
+}

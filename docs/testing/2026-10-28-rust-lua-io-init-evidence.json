@@ -1,0 +1,969 @@
+{
+  "reports": {
+    "io-init-i686-verification": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-i686-verification.json",
+      "sha256": "de8f340fb1344ce8df2bc6226c98ed9873eb0c4fdccf4b4853528f5c0d0605a7"
+    },
+    "io-init-focused": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-focused.json",
+      "sha256": "f62d70766bf98f8eb15c06aac3897492568de522403effc44dd8bf73f3540550"
+    },
+    "openlibs-focused": {
+      "path": "docs/testing/2026-10-28-rust-lua-openlibs-focused.json",
+      "sha256": "919f9db4bdcb38b922544518debb693d8c3ad311fc05ad452386d49b961fb411"
+    },
+    "io-input-focused": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-input-focused.json",
+      "sha256": "234ecf5121a92261097c1397073eeb512702352ca015f8d46573f28441ee276a"
+    },
+    "io-loadstdin-focused": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-loadstdin-focused.json",
+      "sha256": "fc99f2b2366575c415a2531184e4cbdb412e5d10fcd68e78e367ac85b6056923"
+    },
+    "io-init-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-current.json",
+      "sha256": "a0cf1511261374cc1d4d9a488e3400c67d178c6a8171440d91ba040666bd9a95"
+    },
+    "openlibs-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-openlibs-current.json",
+      "sha256": "e187c74580ca7c91480392af566d7a8598918addb199e746a1f4d609be72182c"
+    },
+    "io-input-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-input-current.json",
+      "sha256": "93b9d02187534a07e1ee0af2b9365ab4fb73a0edc9a9552a2fc4731f8891c0c9"
+    },
+    "io-loadstdin-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-loadstdin-current.json",
+      "sha256": "d39a5e59771fff1fe7c943a5d0a26e43783f19725eafe0ddf2d25fc94582d8dd"
+    },
+    "io-init-i686-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-i686-current.json",
+      "sha256": "c6f78200180b654888e4510bc74e3dea3c948d24dcbc5be9b0855cc4239ba1dc"
+    },
+    "openlibs-i686-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-openlibs-i686-current.json",
+      "sha256": "ea81a38e4946e7fdce5d121c0655016560cc77d2d17326c9aed9fc6944a6c53d"
+    },
+    "io-input-i686-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-input-i686-current.json",
+      "sha256": "e9ff5af715b54011bfee35e2635efb0d267cea4042fe142794a8b2c7a5ceb1fa"
+    },
+    "io-loadstdin-i686-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-loadstdin-i686-current.json",
+      "sha256": "e739d645864cf9654cccbdbf648e6af1eb5c8b185af4564ecc1df00bf7559f25"
+    },
+    "io-init-baseline": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-baseline.json",
+      "sha256": "1902567431aff56ff2b1772d946e6fe492025703399d456e88119ad093c579f0"
+    },
+    "io-init-validation": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-validation.json",
+      "sha256": "916ec33fbd79a379f129a634701f5aa3bf27925197c2dc17f7d361fb9a3851e5"
+    },
+    "io-init-portable": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-portable.json",
+      "sha256": "32ead66c6a102fa5e25bdb30fdb7a282b8428fcaee9fb03130de3470e2571fab"
+    },
+    "io-init-stdlib": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-stdlib.json",
+      "sha256": "63ba94f97d13a863f90b11e3fc6efc57a4e563808f09db45e84b5f8b5a38540d"
+    },
+    "io-init-i686-suite": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-i686-suite.json",
+      "sha256": "f977e28820b51d18e8e8d8e50e96e5d27d8ad3914f1d8badc784bc1a4e2942f9"
+    },
+    "io-init-windows-suite": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-windows-suite.json",
+      "sha256": "9471d9949da39a40dc8f6b0b4a18dd1f850442419e4f8075862aa7b8e2f7017a"
+    },
+    "io-init-boundary-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-boundary-current.json",
+      "sha256": "c5d82c1062ca343c6698392e778a5da8dd039986f4ac307effaf6ea038177e2f"
+    }
+  },
+  "source_hashes": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "b22402b93599e6b383c1a749cd1532c1046429e21168a10babbda9cd317c3a19",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/build.rs": "77b6cb431fa4be71988e8842ab2343340d8322a73feddefcc2bded3036e2b5c4",
+    "crates/deadlib-lua/Cargo.toml": "39c6f2714d90cdd41cc7444e607040d361ff3338c74ac95ad3baf92699f852cf",
+    "crates/deadlib-lua/examples/library_initializers.rs": "98c44981cbe44e24e8e91cf777936f42397130cef1dddfe3b93fc4b4919a5b1e",
+    "crates/deadlib-lua/examples/native_boundary.rs": "92d3a55903e4b6a6865b629d69f8339b578613980de5bb2a004dee023c293181",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "455cd7c3c926e458d726098f39d203e83f04dcb3eaa4c1c8536886cb19a9e03d",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "296ad69e9f399e2c0b0f4d0d7b7a406c18968b6de27f5b9f75dc7f86fd61b6d2",
+    "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+    "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+    "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "41bcd264f09f950a68ef9ea4148a42d1a5ddbefc3ce70a98b579fd61be64d391",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "b04092bb62be23f1311eeb3d16eafefec8d590ffada9abbab814937eaad344f9",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "fb6a0342e9d2952fef77b83e6b2a3727a91de60612262bb7f359dfca7bbed568",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "bad667624328513768b52ac77acc8605d917b191001b59ce5c1f671b64b7981f",
+    "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+    "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+    "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+    "crates/deadlib-lua/src/error.rs": "004af42b89ee1e67061852495b43b013c2b9eab5ec151425a9720f32ef8beb9c",
+    "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "d0d48c5d514c962f5115e40cc096a7c9e20806ea0472346fa0231ba57d3bbdd8",
+    "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+    "crates/deadlib-lua/src/native_abi/api.h": "391d6cfb15790350030e8d2598fbfcc9c1d7c5b5444e3e865963c33102048019",
+    "crates/deadlib-lua/src/native_abi/boundary.c": "97ea3416ae20d83a3f400e2f4ab2892ce895e4bb8b22fd51bc88e4dbb45997ef",
+    "crates/deadlib-lua/src/native_abi/builtin-bodies.h": "26840ffdbe24a0f93e989bec408bce524b013e80f4594b2cb59db2df7be1c519",
+    "crates/deadlib-lua/src/native_abi/bundle.rs": "7fb5cfb09d6880c79a4337acf6852a83995e188e32519fe5b6247a03ae877be0",
+    "crates/deadlib-lua/src/native_abi/library.rs": "6b5c824977e72314436ba2b603f77100de68bdee56b52b983b68fbf2d83d69c0",
+    "crates/deadlib-lua/src/native_abi/mod.rs": "b3652d0a7cd68abfa15dfe37ed614e1784e3af5067818b306a80dfcdc1c72f62",
+    "crates/deadlib-lua/src/native_abi/standard-libraries.h": "297acf38d9d37f9537bc95f088ad736a55741d57639b02b967e7ff7cdc845afb",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "750acb3001bc0745102e474d340561f8d9ae404a499d58d3cff140420375fb25",
+    "crates/deadlib-lua/src/parser/resume.rs": "1b0373affa5f8a87a7a236a15e35707eb5ef919e35043a908ae1724cabef7e22",
+    "crates/deadlib-lua/src/parser.rs": "453f1bd0715b1c73da6d6af612f1012201ec154c78af6f8d07517a211cb4ca7a",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "74977623a283c0775e021194c28d1f09aacf1f249467edd77e95766056ca7dda",
+    "crates/deadlib-lua/src/value.rs": "94f8c20c159bb196d65da871d06f14faccf58fc0f8307f273ccee5472e57ea08",
+    "crates/deadlib-lua/src/vm/console.rs": "ba5d2d6fba8a30c653d9f3a8cb4d5074138d89d1bc16e25f5d2603178cb81d9f",
+    "crates/deadlib-lua/src/vm/debug.rs": "2c840dc70e4a798e2083d4f91dfb6eb02e72df03fba1e10d3451c0a2b34bb25a",
+    "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+    "crates/deadlib-lua/src/vm/gc.rs": "456f2c062bbb4d3419b87e0b84c1f627ed29f6d0cb24ab266e3bc7a1ff8b0733",
+    "crates/deadlib-lua/src/vm/hooks/returns/libraries.rs": "2926f0912ddea38cd4804ebbbf82b992496d995e2df99cd2b3be8dd4c92b833d",
+    "crates/deadlib-lua/src/vm/hooks/returns.rs": "c4a1d5bd1f38edfb1c83174cfbe74d821fd0f9fb33c22ead58e39d73baa3e163",
+    "crates/deadlib-lua/src/vm/hooks.rs": "82e1c6a44182c971cf8b5f5fb5887a0c03c4cac4a2822bc22605808869edfc8c",
+    "crates/deadlib-lua/src/vm/host/api.rs": "501c00e7d4fd4c75ce550743c2d143559309dc0c8fb97a9e21fac1d171edec05",
+    "crates/deadlib-lua/src/vm/host/stack/body.rs": "73c6ef08723da8743fe3f2ece316eafb340c45816edf5ca8030c2942f6bee9ea",
+    "crates/deadlib-lua/src/vm/host/stack/coroutine.rs": "b61c01e56edaef1debe310ded95eedf8b1b1da24e4345c95da32a9a3e8dea782",
+    "crates/deadlib-lua/src/vm/host/stack/dump.rs": "5a01c2d892b99d10b57c49f7e8ca7847e1ca51bc1d938f917f912361c46637d0",
+    "crates/deadlib-lua/src/vm/host/stack/file.rs": "fc7d801b6001a2b63cf832b3464d0d9714783755adcd6e50d54b2d9d190347b7",
+    "crates/deadlib-lua/src/vm/host/stack/hooks.rs": "caa0321c7dcd3869b88ae185253c2defa72634c3c066d41cbc8ac5ea354fd850",
+    "crates/deadlib-lua/src/vm/host/stack/inspection.rs": "37aed223957d93f0a15e75bd720f45a6aed3aabb7466644fa251c313d0b0156b",
+    "crates/deadlib-lua/src/vm/host/stack/io_callbacks.rs": "acad846cb6ba5961dfaff2485cd220118e81a911c3e5fb96753f354bfa5671a1",
+    "crates/deadlib-lua/src/vm/host/stack/loader.rs": "4c12f20fd1112a551922256975e153f7675fab484671c198e1dd79bf3ba0e203",
+    "crates/deadlib-lua/src/vm/host/stack/objects.rs": "b3302bf33bc79efbb54f3588dde96535372652bc8061a9c9eac8e5d9e1bba6c0",
+    "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": "9d7111b918d234ff54d5160bcd6ed360004a379ae40dd34065a30e53eea7f50c",
+    "crates/deadlib-lua/src/vm/host/stack/protected.rs": "23b2ed6976df698040124bfe6723eae98148ef7e337c70ea64a01feb9fb69fd5",
+    "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "ba14f826b629eeadc10a07d594d48f232b68eab63810fcca73617a5db3c6e32b",
+    "crates/deadlib-lua/src/vm/host/stack/tables.rs": "cd1114655b181baa703c7fb3f39a4d5a88c7440a7f9008a013f3fd42521692eb",
+    "crates/deadlib-lua/src/vm/host/stack/thread.rs": "b8ee9a0e5c06db77a94843a998329b07b91f3f12d6578610dc951e628f1d98a0",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/calls.rs": "dd0d6ef347b153a7b406315d5d3cc0ad9cf06007b90286f2b5b0c18eb2e5b98b",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/execution.rs": "89272f2d2b637423ef4618f14a18e7dff69dc7c406d511dc7d11ca9a60ec0af4",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/loader.rs": "4681e45070bf89475702b9edde327efb2792872de7bc9e4599ab69191ef2d57a",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/objects.rs": "43dc1c3a9092c6f00680b38edf16350396830886b52ea3884b01210081f89dbc",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/panic.rs": "14df5bf004965048015185b0915274e3cc127bf761bb9bc3bffd54c68d44066f",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/tables.rs": "95fe4aa0af8fc71d8a3537fc216b6ab3bb358bf15ea11504d9f561d56d9cdf15",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack.rs": "ccb42009b060a4aea576cfdd9acd42cceeb8dd143d580420688a3b9c93f931c2",
+    "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": "5a0a04e70b0e04ecaadeb14d3f9b66df19ed3ed57e3e1774af2581d2393d5fad",
+    "crates/deadlib-lua/src/vm/host/stack.rs": "ad77913f1c0a122b3b5d354dbc2fa39419da35fb4d2e8b8e27cb1bd379bea954",
+    "crates/deadlib-lua/src/vm/host/thread.rs": "c3698184771333f983807c5cfc320c0ffc383198dd1427ff26520f31ad577ef2",
+    "crates/deadlib-lua/src/vm/host.rs": "ed9d3646f9e345680109df4513ea54a11b9f2689a320fd0b36b4f353230b5a5f",
+    "crates/deadlib-lua/src/vm/identity.rs": "c9359466570bec0b2d24a753cc96fa220b2896ca85d2979074728e01f8245d1e",
+    "crates/deadlib-lua/src/vm/io/number.rs": "d2c3459749a329e9a277d584008e05c4b1e017c1f217c195d8dd23d174d61419",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/returns.rs": "a0234aeec21577f46e749d7e352ae71416f4d2830eb4f170043c906f94e2ecfd",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "1422bb92be7bc243b6113b8b329c2bede5f4a2cfe9d22a91f40b7277a7832ea5",
+    "crates/deadlib-lua/src/vm/io.rs": "651b648903018feb1247f753981fd515aba1d965bdf1e4bb5bc94e3e42f0e31d",
+    "crates/deadlib-lua/src/vm/limits.rs": "c78dad498234853ea1277cff6a46ec18cb61e2e27fdcc0bffdf648038e747a0f",
+    "crates/deadlib-lua/src/vm/loads.rs": "533acbbd994b3bbaf071e7faf00eaa0d854841cd877c112d37ab3c268fbf1385",
+    "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+    "crates/deadlib-lua/src/vm/meta.rs": "eda737950093889c32b2886f61910f25c4773a3be397e55f8987649235a12208",
+    "crates/deadlib-lua/src/vm/native.rs": "872c3e1eb927c9d29c073510a90af80dc75f902a5c8de8dc05c56ad282307c7e",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "ff60b2eb47e74ce136a57506764b7d2dd59461bc1585009f5b7204efff71a0fa",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "10131d697746fb4b8e258c5b98bc92922512144be202b1ef9627fdfc20ae4824",
+    "crates/deadlib-lua/src/vm/package/library.rs": "7e8764332c63ef5845e752b7e87e33117cb7a3e4ec8ce1e9f6e5155532ec503f",
+    "crates/deadlib-lua/src/vm/package/returns.rs": "3b6ec451a547a66b503670c3990470cdd8bca9862478aa3ba47bf6cab3d8cbf2",
+    "crates/deadlib-lua/src/vm/package.rs": "54b373d44756366a8df041ac75065414c57e444b6ed84c23bae30cd27d9e30e6",
+    "crates/deadlib-lua/src/vm/standalone.rs": "a21dc12535802a813fc77c256a0b5ccf69ae27025a422e190a69a9166d84d2c6",
+    "crates/deadlib-lua/src/vm/strings.rs": "0bb26e9dfaaf3ea6d7f5af76a9e10dcaa38f2581e58130f06c98e9282958c930",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "d49465fdf6d9fe535ccc251bf9098e45f6340ba982bb5944cada6c444a3a96f7",
+    "crates/deadlib-lua/src/vm/traces.rs": "58f3a6f448bfb55590f1daf8b1f674930a60b0ca2c08f16bca530a15f89ea46e",
+    "crates/deadlib-lua/src/vm/userdata.rs": "f3fcc73f2a54d1ce324347348f1e2dfb3998929153c2d634072135a3539ac12b",
+    "crates/deadlib-lua/src/vm.rs": "c6791846282f6fef72e7c17e76a0508b46b2c7739618c1d56c15c4ceb32e4b84",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "86544cab77044c20ed9370d99196935f41332d67b67c8733b43fbc7f7ae20061",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "40205a48e8c196ce4f452aceed95b2911532e4747d52d06ffd993fcc30050fc6",
+    "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+    "crates/deadlib-lua/tests/hooks.rs": "cfec7bba0ffc0b8c40e99a5ea0de815df512c7a634e3785f315a5f720462a5be",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+    "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+    "crates/deadlib-lua/tests/io_close_callbacks.rs": "b944a3a9938318cc8aa34743564b3b5784acd47e07599b6d4a650aa4a6feb258",
+    "crates/deadlib-lua/tests/library_initializers.rs": "f8323d74328f6f9696844db3fd9a4f94c76554b4b957e204566d8d44e6a74026",
+    "crates/deadlib-lua/tests/library_return_stacks.rs": "e317e4b05ee2f3a3d306dc6eb54405d9df75339e35b718af6bfeb5e488675b4c",
+    "crates/deadlib-lua/tests/loading.rs": "1db7b969d7677ac24ab2f2e30bb0fb184e8b751027641777589b04451d4ff4d8",
+    "crates/deadlib-lua/tests/lua51.rs": "deda152310c325a1a31c9148fcb82844df24eeb0defd77b9d53fd88b3515cb2f",
+    "crates/deadlib-lua/tests/native-boundary/allocation-gc.lua": "bf998e12f1897914e8e7f7b91618667d2463cc019420a1d0ec0b57583e7d5ccc",
+    "crates/deadlib-lua/tests/native-boundary/api-yields.lua": "53e9b2d30e0d54c1cf61115bfb89c022996e0f2c03cca572c2542bf48030fef9",
+    "crates/deadlib-lua/tests/native-boundary/api.h": "cb2211e3a7cbfba736c10144dffe77eb9f80cbb56730282be507a23c26c28ce7",
+    "crates/deadlib-lua/tests/native-boundary/boundary.c": "a00657189f0d4d57becb115c030833c734b88e412efdb392d22d4107e8bf0e8c",
+    "crates/deadlib-lua/tests/native-boundary/builtin-bodies.h": "539f5315df423708b76a3571c696cccef999482227d42a7a48aa3cc9b692f122",
+    "crates/deadlib-lua/tests/native-boundary/call-yields.lua": "ccb7749ad9699e59df0f87dd016c7a273fb18cd273685784d14ac01d6bc092b9",
+    "crates/deadlib-lua/tests/native-boundary/cases.lua": "452fa678cf2a40b8e032c51fd67fa9b49972123c29e2e17245ac0f66bcac0252",
+    "crates/deadlib-lua/tests/native-boundary/concat-yields.lua": "9da6c05b85bebe9122a2a6e2224cabebaaf5acd68b506d5a48f43beac171cb61",
+    "crates/deadlib-lua/tests/native-boundary/gc-integers.lua": "a56b6b528571943a5a2f57485b5749048311caccab1ce3cf0bcfa5ddb864d6a1",
+    "crates/deadlib-lua/tests/native-boundary/inactive-objects.lua": "67f51b868927086def654a46ae8d2a5439f29b3352617eef96d0e1896eb1696d",
+    "crates/deadlib-lua/tests/native-boundary/io-closers.lua": "dbfc7fea76bcca8897e7ede49d50c2ee8d27f6e023bd6d4e9547bf852e681bac",
+    "crates/deadlib-lua/tests/native-boundary/io-initializer-input.lua": "ba1dbd913ce08e1c789c096bb4eca9af63e8dcd1bbbd541a405a463033088852",
+    "crates/deadlib-lua/tests/native-boundary/io-initializer-loadstdin.lua": "aa203f01072448c1dbd7bb4e6d2497328c2e7953fabe67b203cad602d762b70d",
+    "crates/deadlib-lua/tests/native-boundary/io-initializer.lua": "bb4384c32fae3b65ef46a0f4b6e718fca7ce6dd1d3cc1bd47bff46571ef6d606",
+    "crates/deadlib-lua/tests/native-boundary/library-initializers.lua": "8566ee12c2de63e57d14cb4b12da1ae9997388f74bf5d755d5eaab77d8b0d4e2",
+    "crates/deadlib-lua/tests/native-boundary/library-loading.lua": "50132fa39ac41a737e889bdfc7150a35c6dbd55040cffdc37c6cf99b15eaca51",
+    "crates/deadlib-lua/tests/native-boundary/library-stacks.lua": "d22052b0f360bb904ae552ddcd22d99aa6662a57f73a3d0cff0c2fa987e50f1f",
+    "crates/deadlib-lua/tests/native-boundary/lowered-level-yield.lua": "1284a7b7d46782936dfedfbf3a922c2ef5dcf7d32e5a9c99ec7678ce7447aecc",
+    "crates/deadlib-lua/tests/native-boundary/module.c": "49aebf05dbd36eb713c0faa7a848bf4f1be1d6ed52b28d600ff186f714b8c0a3",
+    "crates/deadlib-lua/tests/native-boundary/native-bodies.lua": "0847010842277da19b51fbab8d5ae78d365555b1464304f81f12d5b92855571c",
+    "crates/deadlib-lua/tests/native-boundary/native-context.lua": "cb4807ed8ddfdd9effd04a8afceba279b1537939dc0fbd59fbb21a2e2bd066a7",
+    "crates/deadlib-lua/tests/native-boundary/native-debug.lua": "00c0e466ded137e4e91f83350a1ff0ed6557d95ad0d0d1e68d8144778583f192",
+    "crates/deadlib-lua/tests/native-boundary/native-hooks.lua": "fd4d8763fab6dd963fa5aa1321740dec91a7bd2dad4de4b5ad9d89fba74362bc",
+    "crates/deadlib-lua/tests/native-boundary/native-levels.lua": "aca95d99eec70900955f699aa9a64b9281c17704cdeda7479298b7154507f286",
+    "crates/deadlib-lua/tests/native-boundary/native-panic.lua": "4023f4197f6b65651b38c63880138705c008f89f5762d59fc26052012863112a",
+    "crates/deadlib-lua/tests/native-boundary/native-resume.lua": "6d0ccf6bb057bbf5744bec5205bf22f01b53389a498ff06405f6c2db7c34ad87",
+    "crates/deadlib-lua/tests/native-boundary/openlibs.lua": "560decd6631b1ef7a6da922b2ce1d4d0b01109c57415ae43238fd06a61d6a693",
+    "crates/deadlib-lua/tests/native-boundary/package-initializer.lua": "9ee0a7e83def696a98209db76d23290a8dbbe33c6daa711de7facbb2366384ea",
+    "crates/deadlib-lua/tests/native-boundary/package-stacks.lua": "cfe749c9cf7de5ac254f02f9a4d05f88287e447a47634b158614f6df92cbe171",
+    "crates/deadlib-lua/tests/native-boundary/protection-hooks.lua": "e3369fe1c4b04976282c47a1d734a525f57a1947e84e6c5a2aff7c25d60c3879",
+    "crates/deadlib-lua/tests/native-boundary/reader-call-levels.lua": "e0d99c567ba2fb44da42441860c408066994269fa97cf8f06ca9c3834eee3431",
+    "crates/deadlib-lua/tests/native-boundary/reader-continuations.lua": "3c03a711ceb1cc434cb5de64a7631e3f2866c66e6f22e66bb15c15df5897cd24",
+    "crates/deadlib-lua/tests/native-boundary/reader-environments.lua": "32f9e4a8ceef2e6cfccf42fcfaf9e1158e4d66fc467b8f9080a61ccbf59696d9",
+    "crates/deadlib-lua/tests/native-boundary/reader-roots.lua": "6e396f4a3dca43c0fd6a2a919fe870c27e98aed9a1ae99326db00dd05a8c5ee5",
+    "crates/deadlib-lua/tests/native-boundary/return-stacks.lua": "c089bddba9392c820dde4399e0fb8e3a07b9a0aa4be9fb61ce0e5a7d45a29406",
+    "crates/deadlib-lua/tests/native-boundary/table-yields.lua": "66bf7cbe41bfe0e2761ecc87ac855e81e8314760dab613d3dc56108abe5503bd",
+    "crates/deadlib-lua/tests/native-boundary/thread-calls.lua": "44a779cb0a54b7bfc801891a3efd1a20377aaf91ab5919e3d502f114fb0d405d",
+    "crates/deadlib-lua/tests/native-boundary/thread-execution-panic.lua": "dc7dbc4fbe541a445048833ab243b7896510e116fab1ac273b53750953f8a340",
+    "crates/deadlib-lua/tests/native-boundary/thread-execution.lua": "f5daf89a46b989333cace2878a01240d73675fc70cc7f3f62a9cdd242b057762",
+    "crates/deadlib-lua/tests/native-boundary/thread-file-panic.lua": "531c00d649b9ec3b4a26756dfc8e6515e2ab6fc21ff86bdb1410128fd35572f4",
+    "crates/deadlib-lua/tests/native-boundary/thread-file-stdin.lua": "33b07c840025ca50f797fb04ec2a8c015eb7be4f69ca99fe8f0c3203d22faa27",
+    "crates/deadlib-lua/tests/native-boundary/thread-files.lua": "a5f7ac5dd092a74459e0c7e4a871fc42532b346283cf9dc3e94cc53734e38726",
+    "crates/deadlib-lua/tests/native-boundary/thread-gc-panic.lua": "38d6b7de6c497be76ae4a704a530e26dca9a9d935923bda9e492d6c06415c17c",
+    "crates/deadlib-lua/tests/native-boundary/thread-gc.lua": "7189bb823744e6d88c68e614b423af74fe709a348ff4e40fa60345c3c8b055a7",
+    "crates/deadlib-lua/tests/native-boundary/thread-loads.lua": "f17ebb066bfee12a5a1a9205c12d9d7adb4c7f04b57882480d1367ccad103d61",
+    "crates/deadlib-lua/tests/native-boundary/thread-stacks.lua": "d98d7aaa13c8557659bab296ccdba7d1127ccb40b5cb4cde53a468d996e438a7",
+    "crates/deadlib-lua/tests/native-boundary/thread-tables.lua": "94d9c2ea26eb9c237a7171e313b5a9627088afb92c36dcd36df2febcbc6a9405",
+    "crates/deadlib-lua/tests/native-boundary/thread-unprotected-exit.lua": "6bfa4ff009f91036439adb36c5522ec9007cb6b0bc388a8a293d3e305d730699",
+    "crates/deadlib-lua/tests/native-boundary/thread-unprotected.lua": "44ec4e7ab3c2951d2c6272afeb7f53cb54fdaa6e9bd64afb36a8a7355fbd2097",
+    "crates/deadlib-lua/tests/native-boundary/waiting-errors.lua": "cd96c74b433a864111c4f7d34020c533d33e653299ae7eba058ba5ea0564fc76",
+    "crates/deadlib-lua/tests/native-default/allocation-gc.c": "c8cf87ad38b7674dff40e5879ad3af497cd8b9d5d75983eabd6f2e4ed2477794",
+    "crates/deadlib-lua/tests/native-default/call-yields.c": "354028a92ea76f8e977fbc8930aa257230aa810a619f4d9c41555212bee3fa49",
+    "crates/deadlib-lua/tests/native-default/inactive.c": "def7e8030ebc33ed55e853142f9598961bbba27ca19cb48f19dcafa59b057ef1",
+    "crates/deadlib-lua/tests/native-default/io-closers.c": "68e45976c76a98b11bf57ff842fb2085aabdf62823b5f764374596b0bb4ea95f",
+    "crates/deadlib-lua/tests/native-default/library-initializers.c": "5f428c41dcdc83ec796b9a56b5653cc5f9017f70b916ec46617646d9704e1b34",
+    "crates/deadlib-lua/tests/native-default/module.c": "f504b06bf931681ae496367049448c15080576e6cfc037e70c2d2453ef492b6e",
+    "crates/deadlib-lua/tests/native-default/panic.c": "30b76301b6ede5504691bc0e32fade6a8ebf26c9bc22e5896ae8603c552f3c07",
+    "crates/deadlib-lua/tests/native-default/table-yields.c": "9f5b11a6a0c95dcad738657f52e4e055dbc713820a58ba27cfa91d01f0311257",
+    "crates/deadlib-lua/tests/native-default/thread-calls.c": "8511eefb57a235cc5c2b0c29df2be2c69e3250232b356d88eaf1c11807446458",
+    "crates/deadlib-lua/tests/native-default/thread-execution.c": "c2837dce961b1719e13bbda5077207fd3bd9da3c1a77a020a1cb6ac2fe8ba3a0",
+    "crates/deadlib-lua/tests/native-default/thread-files.c": "471a2d52c7177d9a395cc8719dbeee2788895a57232b7be2e4b24ec23af1ca00",
+    "crates/deadlib-lua/tests/native-default/thread-gc.c": "0d9a45e4814f2463459167174105340d9416002ee1dccb63e39cabf09ab4826b",
+    "crates/deadlib-lua/tests/native-default/thread-loads.c": "d5ddc96b1984ffe7e2f2becd3bf4ada6df3e78bd9a29b187171b8b7b83f0ba8b",
+    "crates/deadlib-lua/tests/native-default/thread-tables.c": "6d080bd50f84e8b205892cd79039880f7b55153fa32554a2eda6242a8abb6609",
+    "crates/deadlib-lua/tests/native-default/thread-unprotected.c": "6be1b4d1dbdfad7226ac430880de82c387ad910eae2f4dd844c5873f53f1463c",
+    "crates/deadlib-lua/tests/native-default/waiting-errors.c": "eb5138949633217e937f76ec322128fb45c350eb9dbf032db24e103f5ac01faf",
+    "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+    "crates/deadlib-lua/tests/native_bodies.rs": "2db1e9bde03979b87603e639d4046ab8f367eca75752f38fce35d38726c4b0ad",
+    "crates/deadlib-lua/tests/native_context.rs": "180624a157dcb4efea4d6345b5917f7c8eca0957596ea68edca961c80d12008f",
+    "crates/deadlib-lua/tests/native_debug.rs": "0d871c595f0f334b5053e5544b2917bdda2c4b69819f7953ad3e99fde9fa786b",
+    "crates/deadlib-lua/tests/native_default.rs": "9a6fe58f24773cd2f758240151d0842fb974a292084d97d40d8e26fb2a1f9c2f",
+    "crates/deadlib-lua/tests/native_dump.rs": "eb389c0a57a6c19d45aad6b7d144285d136360fddea7bf5dd96c1b547da030d0",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/native_file.rs": "805e8a2e4f9560897e3101eb658d1f8b1f3b16e11d956b3852c82adba02dddc5",
+    "crates/deadlib-lua/tests/native_gc.rs": "e39148913effd10d6c8bb043bc8d5dc12c1d98856ad4068bf1a103aa37018693",
+    "crates/deadlib-lua/tests/native_hooks.rs": "00d6339c3bb1b883ddd525bb64895d711c5cd447e31a39a1e96602bff9fe43d3",
+    "crates/deadlib-lua/tests/native_inactive_objects.rs": "f5d0b1558c86a315c6569d3167bad7455551c72cdfe0705f514799899a032502",
+    "crates/deadlib-lua/tests/native_libraries.rs": "2d9402fd7072171ca7413487b8310ccd8669f104632ee45665e6514936db7491",
+    "crates/deadlib-lua/tests/native_load.rs": "3b0f13ca0be1b10ae5c47a17efe4b0961302dadf800f2a2be018ba35b4f11687",
+    "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+    "crates/deadlib-lua/tests/native_pointers.rs": "a0e2607ce38313fa17d39519567192a6e7ea2b5b35a9cad4201af8e87e2812dc",
+    "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+    "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+    "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+    "crates/deadlib-lua/tests/native_thread_calls.rs": "c97001427ace3a437e5d79986e8757f08120f6a57e3b783f17e5c0683c72b113",
+    "crates/deadlib-lua/tests/native_thread_execution.rs": "da4515e2e12dab82ab60359dd62845df52a82a55e109159c4c8517d821e3e679",
+    "crates/deadlib-lua/tests/native_thread_gc.rs": "f8dd6fb6ebb13fdcba78c6740d8074e90025add49e5c7bfba45888165ae8a0ff",
+    "crates/deadlib-lua/tests/native_thread_loads.rs": "fada8aae2c45ec6f75dad41daf1d7eb1bbaa302b9e591eafebde87aa30a04a11",
+    "crates/deadlib-lua/tests/native_thread_stacks.rs": "e4dc5030c035a3c8ab1b7933a6b524f94d48e48c73996c57329bf9086ab07234",
+    "crates/deadlib-lua/tests/native_thread_tables.rs": "7601fac07c3fdfa8dee364afb3b8dcffe0cf1072310b80f1b1c0228ec6acab94",
+    "crates/deadlib-lua/tests/native_threads.rs": "5c36b9164bbb047873b7f7a7ab42289c0cbb2d1732a4653df6d9695d7a0a6d39",
+    "crates/deadlib-lua/tests/native_upvalues.rs": "7f1738de213929b97fefb27a8d47deef77123d6e65126d8d8cf3f1d4131c2471",
+    "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+    "crates/deadlib-lua/tests/os.rs": "7524e0851f982b05cb12ae25d29602fd74eba09a047b96b3992dcdbce486194f",
+    "crates/deadlib-lua/tests/package.rs": "44eed4a9aa1862092ca33a14d5aa06fdbacba0182ae5a1fdd9a4351e2dc69c0e",
+    "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "923cfd4d761dfc70ce3f20aeb38d5456dcd0fc10038c3cd51c01c09830d1c3ed",
+    "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+    "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+    "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/check_rust_lua_native_boundary.py": "ab2535e67075090856936e61701e3804a8bfd9d687b9983733fb104e47978ef7"
+  },
+  "all_current_source_hashes_match": true,
+  "reference_source_hashes": {
+    "lapi.c": "6aa0d9fdd88b13fe46568ad6722ecf44164fb84476cfdf6480cf05b5704935f8",
+    "lapi.h": "4aea4c1b975d43184f4f1fd1a42c79cf11d74d2801315740cec07fe9abebb56d",
+    "lauxlib.c": "b564650bf4aca2757b9966311d32c8d5fea8803f6f33d72a856448d3b5d6d992",
+    "lauxlib.h": "c741f9c1587f29fd08a79acbe0c46884768a47f89bee4147669f774c5cf50fc0",
+    "lbaselib.c": "b14c49fae6fa4690662185bf842cb05d87756585d2f5bdd8495251fde83ef331",
+    "lcode.c": "027030bbef34115588bd4a64cf4c8c18236a56936835475a154277478767bac5",
+    "lcode.h": "97d5a37f3b1b19eda1ef39607b3358aa0f7e917568ccd27ed0f14bc6a70d4b17",
+    "ldblib.c": "eb8b056711f037e764f746d989f4e40621d8f9ff45add3336790c389849ed0ab",
+    "ldebug.c": "afa5840195befaec55177273c8168748026b38df3243767fc740cc7ced0c4c8f",
+    "ldebug.h": "d036f0dbb996bdecd48d505746f72c31b82fb2fc38f111b780568338d4ed9e9c",
+    "ldo.c": "d5942081ba661286327e30e22af5d11a1f4308d1f029a203c342b5f541cfa9b6",
+    "ldo.h": "591ad9a90098d3fbf06839da3de752d2c2585cbf5801dde4cdaffe12b23a182e",
+    "ldump.c": "30d83d766351bb053b3d20793a6bcd2ef0210e8fad76a7032abbe574bafa0ca3",
+    "lfunc.c": "525681d79098958530e5c937f7cbe94a4dafa679746ffdb16258f82b7ece29ce",
+    "lfunc.h": "3cea0071ffda94eac378adb5f1ecb467ef2ffafff4315459e4ccdf05b5119da4",
+    "lgc.c": "35be212ad0e4d89336f50f11cd0e991c04fe59b023ec03a626bf3f98e69fd1dc",
+    "lgc.h": "fbab2b989515377729d4c029dd58b3b6242877a88a7c4cfa703ea0deeb069a1e",
+    "linit.c": "c0c97c45862f6c978620a9682cd2201f0fc29c2afbcab824ba20d26cc1745e56",
+    "liolib.c": "a40f1d2c4aed9835885264cc6caf81c3bd2d5db93af3d313cc0478db37d93169",
+    "llex.c": "f1ade23f957e69f164ff28e133b201dff5d81726c390b060110b60907831e79b",
+    "llex.h": "0f3715d22b025727ef11debd641600a123b81718d195cd8445ac6378814458e6",
+    "llimits.h": "1910669296681d9d2814ca46c325063724bb634c0428dae4e5ff59be54e0b758",
+    "lmathlib.c": "e2933a56332d567cdd69f0fe514d638a8f82da6878754ff259e77cf2157263c3",
+    "lmem.c": "e63c50cb1c75356bd4123c9ca05f77bd0cd99e05c099cf6d1bf472086761e9c5",
+    "lmem.h": "abd1258418486c69bf5a93ceea3a1b9f8af2c7497a4fa6c27b442ffec2c5bbb1",
+    "loadlib.c": "b01bc465bb2e280fb45d24aea98d5ddd9dfd0999f44422e1151aafa1d7f5385c",
+    "lobject.c": "d704915c79c721556cc5850d741ed3bef1611221356f0e3a2f0ee5cfd5fd3632",
+    "lobject.h": "274c18373fbbad71bfebd534cae4b2d2e49934abf6672f44735edc6646fb6a8b",
+    "lopcodes.c": "63cd74edc75970092a8ce078c4ab970efa1ee18de960d00eb826d49fe98d8a76",
+    "lopcodes.h": "a15fe349da7c1e73b563e8c3249fe7d535eccc844cb30ec80b4e335b0699279b",
+    "loslib.c": "f0d5892f152cf7e1001b086e48774ccb6e567d11f1bf521f27050c15d9a0f040",
+    "lparser.c": "3590f24bab5763af673182e40d33194a7de6f5eabe5432c02a548d44225d2b63",
+    "lparser.h": "84512d6540b83ab599cd8de5a1c8c4deaf71ff353f8e4fbc2e4ca135ba4e9ef0",
+    "lstate.c": "c36d6b9354aaa30b5323b4984f3172783f69e0deb3186c2ef6f16a8281c59c29",
+    "lstate.h": "dc64ea7ec74d7c1efaeaf6a9e2257f0b7856a5c988747948af2e76cf079d20fe",
+    "lstring.c": "aa7e934c435d870b9d937ac2fb03dbfa15d367012d46e7e995a2ad8d440f2f6d",
+    "lstring.h": "c0e8af4eb33e3357be79f906e7e1191ba53a3a790d36ca15b50471d3a339e1f0",
+    "lstrlib.c": "e8048c79ae34be0fd29aa8db1a341cd600f5e09b9133b5810910e07b855a32d5",
+    "ltable.c": "3a853ce89bf5e834ec53f2a0dd2386eb8b84accbe5fdc18dabd7515b819f0f7c",
+    "ltable.h": "219e6ac2bf43aaa93093c6bcd571c012660325e6b87ea3d6c1b40679a0acfd64",
+    "ltablib.c": "e934dc4b2fc117a501c717302a00147f7b44eea978ef87a58a3e40e9bfe45d20",
+    "ltm.c": "9759ae5d1aa3b11e1c7faa6c0f65e05c7126417f7f8f3f989d82fc170b07f891",
+    "ltm.h": "54f4c2fa76b8ed8d48163e31807a19999f5d65b009ae862cb757e0773f2aa485",
+    "lua.c": "eb9ad1894926f0f807934ae52147cf9767ede0fbd01e9a1044dc4847caa9b73d",
+    "lua.h": "470551c185f058360f8d0f9e5c54a29a3950f78af6a93f3fe9e4039a380c7b87",
+    "luac.c": "b22ad97edb37c2a4b117ef81489bfc6eee15d58d4476ea149abbef7aabf8773d",
+    "luaconf.h": "0410ff22f66c275ba8fcee1fa87a0749d26d7952ed30d3bc9161688b39775464",
+    "lualib.h": "13f880e9dd997a0f7fd0b17ccd949c98f33e95bd120f084de66084e888217413",
+    "lundump.c": "55ccb55abde44e94e6c4d0bafc94f5870d2674d1944e9a81f6537d9ac92e8ebc",
+    "lundump.h": "9f3a2924d1585620993a70eea6cf3def34acb8322b2d9c3629bcdacc037edc64",
+    "lvm.c": "b560aad0a1b8bfc4e4b732b2393e8f8ecc68b6c772e6d25763d6ef71c38ab709",
+    "lvm.h": "db4b79dc7f4e7656078aa527350fbf14b2fde5d136ccf1cb4f3dc397def5fb67",
+    "lzio.c": "892bc24d898c19cbedceba419c68f910b99321c0b462be2c2c00b9d763563173",
+    "lzio.h": "0ec77d0179bf29c1ccab97028fed761944d5c21c02808e10cd7b5883b58b2ca6",
+    "print.c": "3c3b1c1dd17896e428b9742614c90ec10776ced65813eb648f02dee649892f2f"
+  },
+  "proof_tools": {
+    "target/lua-native-hooks/compare-io-init-i686.py": {
+      "sha256": "5e258387b162e1e463bf12f8d7906aa0df277257dabc0765fc92de63707eb1b8",
+      "source": "from pathlib import Path\nimport ast,hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-i686-suite.json';prior=json.loads(prior_path.read_text());src=Path(prior['reference']['binary_path']).parent/'lua-5.1.5/src'\nassert all(sha(src/name)==h for name,h in prior['reference']['source_hashes'].items())\nbase=Path('/home/perfecttaste/.cache/deadlua-io-init')/mode;base.mkdir(parents=True,exist_ok=True)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer.lua'\ntarget=Path('/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686')\nenv=os.environ.copy();env['PATH']=str(Path.home()/'.cargo/bin')+os.pathsep+env.get('PATH','');env['CARGO_TARGET_DIR']=str(target);env['CFLAGS_i686_unknown_linux_gnu']='-msse2 -mfpmath=sse'\ncommand=['cargo','build','--locked','--target','i686-unknown-linux-gnu','-p','deadlib-lua','--example','library_initializers']+([]if profile=='debug'else['--release'])\np=subprocess.run(command,capture_output=True,env=env);(base/'rust-build.log').write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:]\nbinary=target/'i686-unknown-linux-gnu'/profile/'examples/library_initializers'\nsdk=max((target/'i686-unknown-linux-gnu'/profile/'build').glob('deadlib-lua-*/out/liblua5.1.so.0'),key=lambda p:p.stat().st_mtime)\ntree=ast.parse((r/'target/lua-native-hooks/compare-package-init.py').read_text())\nassignment=next(node for node in tree.body if isinstance(node,ast.Assign)and any(isinstance(name,ast.Name)and name.id=='variants'for name in node.targets))\nvariants=eval(compile(ast.Expression(assignment.value),'<explicit package path variants>','eval'),{'dict':dict,'__builtins__':{}})\nruns={};builds=[];artifacts={str(binary):sha(binary),str(sdk):sha(sdk)};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine in ['reference','checked','rust']:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.so';launcher=work/'bare-reference'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  command=['cc','-m32','-msse2','-mfpmath=sse','-O2']\n  if not main:command+=['-shared','-fPIC','-I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source)]\n  else:\n   command+=['-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-DLIBRARY_INITIALIZERS_MAIN','-I'+str(src)]\n   if engine=='checked':\n    assertion=work/'assertions.h';assertion.write_text('#include <stdio.h>\\n#include <stdlib.h>\\n#define lua_assert(e) ((e)?(void)0:(fprintf(stderr,\"Lua 5.1 assertion: %s:%d: %s\\\\n\",__FILE__,__LINE__,#e),exit(86)))\\n');command+=['-include',str(assertion)];artifacts[str(assertion)]=sha(assertion)\n   command+=[str(source),*map(str,sorted(p for p in src.glob('*.c')if p.name not in {'lua.c','luac.c','print.c'})),'-Wl,-E','-lm','-ldl']\n  command+=['-o',str(output)];builds.append(command)\n  p=subprocess.run(command,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:];artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n active_base=env.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:active_base.pop(name,None)\n active_base['LUA_INITIALIZER_MODULE']=str(module);runs[engine]={}\n for variant in variants:\n  active_env=active_base|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45)\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1500:],flush=True);break\n  runs[engine][variant['name']]=rows;print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference=prior['reference'],reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-init-i686-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-io-init.py": {
+      "sha256": "7fe19785d827e7099cd5f8706edafb8956ec14806ab11466194068532b76feb9",
+      "source": "from pathlib import Path\nimport hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nbase=r/('target/lua-native-hooks/io-init-'+mode+'-comparison');base.mkdir(exist_ok=True)\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-focused.json';prior=json.loads(prior_path.read_text());older=json.loads((r/prior['reference_report']).read_text())\nreference=Path(older['runs']['reference']['command'][0]);checked=Path(older['runs']['checked']['command'][0])\nbinary=r/('target/lua-native-hooks/'+profile+'/examples/library_initializers.exe')\nsdk=max((r/('target/lua-native-hooks/'+profile+'/build')).glob('deadlib-lua-*/out/lua51.lib'),key=lambda p:p.stat().st_mtime)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer.lua'\nsetup=subprocess.check_output([str(Path(os.environ['ProgramFiles(x86)'])/'Microsoft Visual Studio/Installer/vswhere.exe'),'-latest','-products','*','-find','VC/Auxiliary/Build/vcvars64.bat'],text=True).strip().splitlines()[0]\nvariants=[dict(name='default',environment={}),dict(name='empty',environment={'LUA_PATH':'','LUA_CPATH':''}),dict(name='literal',environment={'LUA_PATH':'alpha/?.lua;beta%1','LUA_CPATH':'gamma/?.dll;delta%0'}),dict(name='fallback',environment={'LUA_PATH':';;','LUA_CPATH':';;'}),dict(name='repeated',environment={'LUA_PATH':'a;;;b;;;;c;','LUA_CPATH':';;;;;;'}),dict(name='executable',environment={'LUA_PATH':'!/?.lua;!!;!%1','LUA_CPATH':'!/?.dll;!!;!%0'}),dict(name='marker',environment={'LUA_PATH':'a\\1b;;c\\1d','LUA_CPATH':'x\\1y;;z'}),dict(name='path-only',environment={'LUA_PATH':'a;;b'}),dict(name='cpath-only',environment={'LUA_CPATH':'c;;d'})]\nif len(sys.argv)>2 and sys.argv[2]=='smoke':variants=variants[:1]\nruns={};builds=[];artifacts={};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine,original,lib in [('reference',reference,reference.parent/'lua51.lib'),('checked',checked,checked.parent/'lua51.lib'),('rust',binary,sdk)]:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.dll';launcher=work/'bare-reference.exe'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  args=['/nologo','/O2','/MT','/D_CRT_SECURE_NO_WARNINGS','/DLUA_BUILD_AS_DLL','/I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source),str(lib),'/DLIBRARY_INITIALIZERS_MAIN'if main else'/LD','/link','/OUT:'+str(output)]\n  if not main:args+=['/IMPLIB:'+str(work/'native.lib')]\n  rsp=work/(output.stem+'.rsp');rsp.write_text(' '.join('\"'+a+'\"'for a in args));cmd=work/(output.stem+'.cmd');cmd.write_text('@call \"'+setup+'\" >nul\\n@cl @\"'+str(rsp)+'\"\\n@exit /b %errorlevel%\\n')\n  p=subprocess.run(['cmd','/d','/c',str(cmd)],cwd=work,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,(p.stdout+p.stderr).decode(errors='replace')[-2500:];builds.append(args);artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n env=os.environ.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(name,None)\n env['PATH']=str(original.parent)+os.pathsep+env.get('PATH','');env['LUA_INITIALIZER_MODULE']=str(module)\n runs[engine]={}\n for variant in variants:\n  active_env=env|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45)\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1400:],flush=True);break\n  runs[engine][variant['name']]=rows\n  print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\n for item in [original,lib]:artifacts[str(item)]=sha(item)\n if engine!='rust':artifacts[str(original.parent/'lua51.dll')]=sha(original.parent/'lua51.dll')\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-init-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-io-input-i686.py": {
+      "sha256": "d73cd98415ed56a1faa7bc92f72a6050864e2ce64023074e33e808e30bf284fb",
+      "source": "from pathlib import Path\nimport ast,hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-i686-suite.json';prior=json.loads(prior_path.read_text());src=Path(prior['reference']['binary_path']).parent/'lua-5.1.5/src'\nassert all(sha(src/name)==h for name,h in prior['reference']['source_hashes'].items())\nbase=Path('/home/perfecttaste/.cache/deadlua-io-input')/mode;base.mkdir(parents=True,exist_ok=True)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer-input.lua'\ntarget=Path('/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686')\nenv=os.environ.copy();env['PATH']=str(Path.home()/'.cargo/bin')+os.pathsep+env.get('PATH','');env['CARGO_TARGET_DIR']=str(target);env['CFLAGS_i686_unknown_linux_gnu']='-msse2 -mfpmath=sse'\ncommand=['cargo','build','--locked','--target','i686-unknown-linux-gnu','-p','deadlib-lua','--example','library_initializers']+([]if profile=='debug'else['--release'])\np=subprocess.run(command,capture_output=True,env=env);(base/'rust-build.log').write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:]\nbinary=target/'i686-unknown-linux-gnu'/profile/'examples/library_initializers'\nsdk=max((target/'i686-unknown-linux-gnu'/profile/'build').glob('deadlib-lua-*/out/liblua5.1.so.0'),key=lambda p:p.stat().st_mtime)\ntree=ast.parse((r/'target/lua-native-hooks/compare-package-init.py').read_text())\nassignment=next(node for node in tree.body if isinstance(node,ast.Assign)and any(isinstance(name,ast.Name)and name.id=='variants'for name in node.targets))\nvariants=eval(compile(ast.Expression(assignment.value),'<explicit package path variants>','eval'),{'dict':dict,'__builtins__':{}})\nvariants=variants[:1]\nruns={};builds=[];artifacts={str(binary):sha(binary),str(sdk):sha(sdk)};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine in ['reference','checked','rust']:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.so';launcher=work/'bare-reference'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  command=['cc','-m32','-msse2','-mfpmath=sse','-O2']\n  if not main:command+=['-shared','-fPIC','-I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source)]\n  else:\n   command+=['-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-DLIBRARY_INITIALIZERS_MAIN','-I'+str(src)]\n   if engine=='checked':\n    assertion=work/'assertions.h';assertion.write_text('#include <stdio.h>\\n#include <stdlib.h>\\n#define lua_assert(e) ((e)?(void)0:(fprintf(stderr,\"Lua 5.1 assertion: %s:%d: %s\\\\n\",__FILE__,__LINE__,#e),exit(86)))\\n');command+=['-include',str(assertion)];artifacts[str(assertion)]=sha(assertion)\n   command+=[str(source),*map(str,sorted(p for p in src.glob('*.c')if p.name not in {'lua.c','luac.c','print.c'})),'-Wl,-E','-lm','-ldl']\n  command+=['-o',str(output)];builds.append(command)\n  p=subprocess.run(command,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:];artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n active_base=env.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:active_base.pop(name,None)\n active_base['LUA_INITIALIZER_MODULE']=str(module);runs[engine]={}\n for variant in variants:\n  active_env=active_base|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45,input=b'alpha\\nbeta\\ngamma\\n')\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1500:],flush=True);break\n  runs[engine][variant['name']]=rows;print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference=prior['reference'],reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-input-i686-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-io-input.py": {
+      "sha256": "d04d7a85eedb744064eba2387750b83ae90b3b19760d75b011c70c5ba75c74f5",
+      "source": "from pathlib import Path\nimport hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nbase=r/('target/lua-native-hooks/io-input-'+mode+'-comparison');base.mkdir(exist_ok=True)\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-focused.json';prior=json.loads(prior_path.read_text());older=json.loads((r/prior['reference_report']).read_text())\nreference=Path(older['runs']['reference']['command'][0]);checked=Path(older['runs']['checked']['command'][0])\nbinary=r/('target/lua-native-hooks/'+profile+'/examples/library_initializers.exe')\nsdk=max((r/('target/lua-native-hooks/'+profile+'/build')).glob('deadlib-lua-*/out/lua51.lib'),key=lambda p:p.stat().st_mtime)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer-input.lua'\nsetup=subprocess.check_output([str(Path(os.environ['ProgramFiles(x86)'])/'Microsoft Visual Studio/Installer/vswhere.exe'),'-latest','-products','*','-find','VC/Auxiliary/Build/vcvars64.bat'],text=True).strip().splitlines()[0]\nvariants=[dict(name='default',environment={}),dict(name='empty',environment={'LUA_PATH':'','LUA_CPATH':''}),dict(name='literal',environment={'LUA_PATH':'alpha/?.lua;beta%1','LUA_CPATH':'gamma/?.dll;delta%0'}),dict(name='fallback',environment={'LUA_PATH':';;','LUA_CPATH':';;'}),dict(name='repeated',environment={'LUA_PATH':'a;;;b;;;;c;','LUA_CPATH':';;;;;;'}),dict(name='executable',environment={'LUA_PATH':'!/?.lua;!!;!%1','LUA_CPATH':'!/?.dll;!!;!%0'}),dict(name='marker',environment={'LUA_PATH':'a\\1b;;c\\1d','LUA_CPATH':'x\\1y;;z'}),dict(name='path-only',environment={'LUA_PATH':'a;;b'}),dict(name='cpath-only',environment={'LUA_CPATH':'c;;d'})]\nif len(sys.argv)>2 and sys.argv[2]=='smoke':variants=variants[:1]\nvariants=variants[:1]\nruns={};builds=[];artifacts={};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine,original,lib in [('reference',reference,reference.parent/'lua51.lib'),('checked',checked,checked.parent/'lua51.lib'),('rust',binary,sdk)]:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.dll';launcher=work/'bare-reference.exe'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  args=['/nologo','/O2','/MT','/D_CRT_SECURE_NO_WARNINGS','/DLUA_BUILD_AS_DLL','/I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source),str(lib),'/DLIBRARY_INITIALIZERS_MAIN'if main else'/LD','/link','/OUT:'+str(output)]\n  if not main:args+=['/IMPLIB:'+str(work/'native.lib')]\n  rsp=work/(output.stem+'.rsp');rsp.write_text(' '.join('\"'+a+'\"'for a in args));cmd=work/(output.stem+'.cmd');cmd.write_text('@call \"'+setup+'\" >nul\\n@cl @\"'+str(rsp)+'\"\\n@exit /b %errorlevel%\\n')\n  p=subprocess.run(['cmd','/d','/c',str(cmd)],cwd=work,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,(p.stdout+p.stderr).decode(errors='replace')[-2500:];builds.append(args);artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n env=os.environ.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(name,None)\n env['PATH']=str(original.parent)+os.pathsep+env.get('PATH','');env['LUA_INITIALIZER_MODULE']=str(module)\n runs[engine]={}\n for variant in variants:\n  active_env=env|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45,input=b'alpha\\nbeta\\ngamma\\n')\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1400:],flush=True);break\n  runs[engine][variant['name']]=rows\n  print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\n for item in [original,lib]:artifacts[str(item)]=sha(item)\n if engine!='rust':artifacts[str(original.parent/'lua51.dll')]=sha(original.parent/'lua51.dll')\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-input-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-io-loadstdin-i686.py": {
+      "sha256": "797e5892198028f1358071952bcb2044f9724313ec849b7e89ad3c6cc3a94782",
+      "source": "from pathlib import Path\nimport ast,hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-i686-suite.json';prior=json.loads(prior_path.read_text());src=Path(prior['reference']['binary_path']).parent/'lua-5.1.5/src'\nassert all(sha(src/name)==h for name,h in prior['reference']['source_hashes'].items())\nbase=Path('/home/perfecttaste/.cache/deadlua-io-loadstdin')/mode;base.mkdir(parents=True,exist_ok=True)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer-loadstdin.lua'\ntarget=Path('/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686')\nenv=os.environ.copy();env['PATH']=str(Path.home()/'.cargo/bin')+os.pathsep+env.get('PATH','');env['CARGO_TARGET_DIR']=str(target);env['CFLAGS_i686_unknown_linux_gnu']='-msse2 -mfpmath=sse'\ncommand=['cargo','build','--locked','--target','i686-unknown-linux-gnu','-p','deadlib-lua','--example','library_initializers']+([]if profile=='debug'else['--release'])\np=subprocess.run(command,capture_output=True,env=env);(base/'rust-build.log').write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:]\nbinary=target/'i686-unknown-linux-gnu'/profile/'examples/library_initializers'\nsdk=max((target/'i686-unknown-linux-gnu'/profile/'build').glob('deadlib-lua-*/out/liblua5.1.so.0'),key=lambda p:p.stat().st_mtime)\ntree=ast.parse((r/'target/lua-native-hooks/compare-package-init.py').read_text())\nassignment=next(node for node in tree.body if isinstance(node,ast.Assign)and any(isinstance(name,ast.Name)and name.id=='variants'for name in node.targets))\nvariants=eval(compile(ast.Expression(assignment.value),'<explicit package path variants>','eval'),{'dict':dict,'__builtins__':{}})\nvariants=variants[:1]\nruns={};builds=[];artifacts={str(binary):sha(binary),str(sdk):sha(sdk)};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine in ['reference','checked','rust']:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.so';launcher=work/'bare-reference'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  command=['cc','-m32','-msse2','-mfpmath=sse','-O2']\n  if not main:command+=['-shared','-fPIC','-I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source)]\n  else:\n   command+=['-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-DLIBRARY_INITIALIZERS_MAIN','-I'+str(src)]\n   if engine=='checked':\n    assertion=work/'assertions.h';assertion.write_text('#include <stdio.h>\\n#include <stdlib.h>\\n#define lua_assert(e) ((e)?(void)0:(fprintf(stderr,\"Lua 5.1 assertion: %s:%d: %s\\\\n\",__FILE__,__LINE__,#e),exit(86)))\\n');command+=['-include',str(assertion)];artifacts[str(assertion)]=sha(assertion)\n   command+=[str(source),*map(str,sorted(p for p in src.glob('*.c')if p.name not in {'lua.c','luac.c','print.c'})),'-Wl,-E','-lm','-ldl']\n  command+=['-o',str(output)];builds.append(command)\n  p=subprocess.run(command,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:];artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n active_base=env.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:active_base.pop(name,None)\n active_base['LUA_INITIALIZER_MODULE']=str(module);runs[engine]={}\n for variant in variants:\n  active_env=active_base|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45,input=b'return 17\\n')\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1500:],flush=True);break\n  runs[engine][variant['name']]=rows;print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference=prior['reference'],reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-loadstdin-i686-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-io-loadstdin.py": {
+      "sha256": "9283c1dbc10f9cae49b4b6f84c3a73fd3ea053e89ae4ef3147b5775a8adc6a6e",
+      "source": "from pathlib import Path\nimport hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nbase=r/('target/lua-native-hooks/io-loadstdin-'+mode+'-comparison');base.mkdir(exist_ok=True)\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-focused.json';prior=json.loads(prior_path.read_text());older=json.loads((r/prior['reference_report']).read_text())\nreference=Path(older['runs']['reference']['command'][0]);checked=Path(older['runs']['checked']['command'][0])\nbinary=r/('target/lua-native-hooks/'+profile+'/examples/library_initializers.exe')\nsdk=max((r/('target/lua-native-hooks/'+profile+'/build')).glob('deadlib-lua-*/out/lua51.lib'),key=lambda p:p.stat().st_mtime)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/io-initializer-loadstdin.lua'\nsetup=subprocess.check_output([str(Path(os.environ['ProgramFiles(x86)'])/'Microsoft Visual Studio/Installer/vswhere.exe'),'-latest','-products','*','-find','VC/Auxiliary/Build/vcvars64.bat'],text=True).strip().splitlines()[0]\nvariants=[dict(name='default',environment={}),dict(name='empty',environment={'LUA_PATH':'','LUA_CPATH':''}),dict(name='literal',environment={'LUA_PATH':'alpha/?.lua;beta%1','LUA_CPATH':'gamma/?.dll;delta%0'}),dict(name='fallback',environment={'LUA_PATH':';;','LUA_CPATH':';;'}),dict(name='repeated',environment={'LUA_PATH':'a;;;b;;;;c;','LUA_CPATH':';;;;;;'}),dict(name='executable',environment={'LUA_PATH':'!/?.lua;!!;!%1','LUA_CPATH':'!/?.dll;!!;!%0'}),dict(name='marker',environment={'LUA_PATH':'a\\1b;;c\\1d','LUA_CPATH':'x\\1y;;z'}),dict(name='path-only',environment={'LUA_PATH':'a;;b'}),dict(name='cpath-only',environment={'LUA_CPATH':'c;;d'})]\nif len(sys.argv)>2 and sys.argv[2]=='smoke':variants=variants[:1]\nvariants=variants[:1]\nruns={};builds=[];artifacts={};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine,original,lib in [('reference',reference,reference.parent/'lua51.lib'),('checked',checked,checked.parent/'lua51.lib'),('rust',binary,sdk)]:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.dll';launcher=work/'bare-reference.exe'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  args=['/nologo','/O2','/MT','/D_CRT_SECURE_NO_WARNINGS','/DLUA_BUILD_AS_DLL','/I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source),str(lib),'/DLIBRARY_INITIALIZERS_MAIN'if main else'/LD','/link','/OUT:'+str(output)]\n  if not main:args+=['/IMPLIB:'+str(work/'native.lib')]\n  rsp=work/(output.stem+'.rsp');rsp.write_text(' '.join('\"'+a+'\"'for a in args));cmd=work/(output.stem+'.cmd');cmd.write_text('@call \"'+setup+'\" >nul\\n@cl @\"'+str(rsp)+'\"\\n@exit /b %errorlevel%\\n')\n  p=subprocess.run(['cmd','/d','/c',str(cmd)],cwd=work,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,(p.stdout+p.stderr).decode(errors='replace')[-2500:];builds.append(args);artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n env=os.environ.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(name,None)\n env['PATH']=str(original.parent)+os.pathsep+env.get('PATH','');env['LUA_INITIALIZER_MODULE']=str(module)\n runs[engine]={}\n for variant in variants:\n  active_env=env|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45,input=b'return 17\\n')\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1400:],flush=True);break\n  runs[engine][variant['name']]=rows\n  print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\n for item in [original,lib]:artifacts[str(item)]=sha(item)\n if engine!='rust':artifacts[str(original.parent/'lua51.dll')]=sha(original.parent/'lua51.dll')\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-io-loadstdin-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-openlibs-i686.py": {
+      "sha256": "a7cd9ac4edfaac580b8be8c2078d6b4cda4ec9c6f28a475ab1642d14c0e982e5",
+      "source": "from pathlib import Path\nimport ast,hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-i686-suite.json';prior=json.loads(prior_path.read_text());src=Path(prior['reference']['binary_path']).parent/'lua-5.1.5/src'\nassert all(sha(src/name)==h for name,h in prior['reference']['source_hashes'].items())\nbase=Path('/home/perfecttaste/.cache/deadlua-openlibs')/mode;base.mkdir(parents=True,exist_ok=True)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/openlibs.lua'\ntarget=Path('/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686')\nenv=os.environ.copy();env['PATH']=str(Path.home()/'.cargo/bin')+os.pathsep+env.get('PATH','');env['CARGO_TARGET_DIR']=str(target);env['CFLAGS_i686_unknown_linux_gnu']='-msse2 -mfpmath=sse'\ncommand=['cargo','build','--locked','--target','i686-unknown-linux-gnu','-p','deadlib-lua','--example','library_initializers']+([]if profile=='debug'else['--release'])\np=subprocess.run(command,capture_output=True,env=env);(base/'rust-build.log').write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:]\nbinary=target/'i686-unknown-linux-gnu'/profile/'examples/library_initializers'\nsdk=max((target/'i686-unknown-linux-gnu'/profile/'build').glob('deadlib-lua-*/out/liblua5.1.so.0'),key=lambda p:p.stat().st_mtime)\ntree=ast.parse((r/'target/lua-native-hooks/compare-package-init.py').read_text())\nassignment=next(node for node in tree.body if isinstance(node,ast.Assign)and any(isinstance(name,ast.Name)and name.id=='variants'for name in node.targets))\nvariants=eval(compile(ast.Expression(assignment.value),'<explicit package path variants>','eval'),{'dict':dict,'__builtins__':{}})\nruns={};builds=[];artifacts={str(binary):sha(binary),str(sdk):sha(sdk)};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine in ['reference','checked','rust']:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.so';launcher=work/'bare-reference'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  command=['cc','-m32','-msse2','-mfpmath=sse','-O2']\n  if not main:command+=['-shared','-fPIC','-I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source)]\n  else:\n   command+=['-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-DLIBRARY_INITIALIZERS_MAIN','-I'+str(src)]\n   if engine=='checked':\n    assertion=work/'assertions.h';assertion.write_text('#include <stdio.h>\\n#include <stdlib.h>\\n#define lua_assert(e) ((e)?(void)0:(fprintf(stderr,\"Lua 5.1 assertion: %s:%d: %s\\\\n\",__FILE__,__LINE__,#e),exit(86)))\\n');command+=['-include',str(assertion)];artifacts[str(assertion)]=sha(assertion)\n   command+=[str(source),*map(str,sorted(p for p in src.glob('*.c')if p.name not in {'lua.c','luac.c','print.c'})),'-Wl,-E','-lm','-ldl']\n  command+=['-o',str(output)];builds.append(command)\n  p=subprocess.run(command,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr.decode(errors='replace')[-2500:];artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n active_base=env.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:active_base.pop(name,None)\n active_base['LUA_INITIALIZER_MODULE']=str(module);runs[engine]={}\n for variant in variants:\n  active_env=active_base|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45)\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1500:],flush=True);break\n  runs[engine][variant['name']]=rows;print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference=prior['reference'],reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-openlibs-i686-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/compare-openlibs.py": {
+      "sha256": "eedbe326bca2583c309e5ae25c4b972b4b72efffb876049c454d17c556aef7fc",
+      "source": "from pathlib import Path\nimport hashlib,json,os,subprocess,sys\nr=Path.cwd();mode=sys.argv[1];profile='debug'if mode=='focused'else'release';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nbase=r/('target/lua-native-hooks/openlibs-'+mode+'-comparison');base.mkdir(exist_ok=True)\nprior_path=r/'docs/testing/2026-10-28-rust-lua-library-init-focused.json';prior=json.loads(prior_path.read_text());older=json.loads((r/prior['reference_report']).read_text())\nreference=Path(older['runs']['reference']['command'][0]);checked=Path(older['runs']['checked']['command'][0])\nbinary=r/('target/lua-native-hooks/'+profile+'/examples/library_initializers.exe')\nsdk=max((r/('target/lua-native-hooks/'+profile+'/build')).glob('deadlib-lua-*/out/lua51.lib'),key=lambda p:p.stat().st_mtime)\nsource=r/'crates/deadlib-lua/tests/native-default/library-initializers.c';script=r/'crates/deadlib-lua/tests/native-boundary/openlibs.lua'\nsetup=subprocess.check_output([str(Path(os.environ['ProgramFiles(x86)'])/'Microsoft Visual Studio/Installer/vswhere.exe'),'-latest','-products','*','-find','VC/Auxiliary/Build/vcvars64.bat'],text=True).strip().splitlines()[0]\nvariants=[dict(name='default',environment={}),dict(name='empty',environment={'LUA_PATH':'','LUA_CPATH':''}),dict(name='literal',environment={'LUA_PATH':'alpha/?.lua;beta%1','LUA_CPATH':'gamma/?.dll;delta%0'}),dict(name='fallback',environment={'LUA_PATH':';;','LUA_CPATH':';;'}),dict(name='repeated',environment={'LUA_PATH':'a;;;b;;;;c;','LUA_CPATH':';;;;;;'}),dict(name='executable',environment={'LUA_PATH':'!/?.lua;!!;!%1','LUA_CPATH':'!/?.dll;!!;!%0'}),dict(name='marker',environment={'LUA_PATH':'a\\1b;;c\\1d','LUA_CPATH':'x\\1y;;z'}),dict(name='path-only',environment={'LUA_PATH':'a;;b'}),dict(name='cpath-only',environment={'LUA_CPATH':'c;;d'})]\nif len(sys.argv)>2 and sys.argv[2]=='smoke':variants=variants[:1]\nruns={};builds=[];artifacts={};environment_inputs={v['name']:{k:value.encode().hex()for k,value in v['environment'].items()}for v in variants}\nfor engine,original,lib in [('reference',reference,reference.parent/'lua51.lib'),('checked',checked,checked.parent/'lua51.lib'),('rust',binary,sdk)]:\n work=base/engine;work.mkdir(exist_ok=True);module=work/'native.dll';launcher=work/'bare-reference.exe'\n for output,main in [(module,False)]+([]if engine=='rust'else[(launcher,True)]):\n  args=['/nologo','/O2','/MT','/D_CRT_SECURE_NO_WARNINGS','/DLUA_BUILD_AS_DLL','/I'+str(r/'vendor/lua-src/lua-5.1.5'),str(source),str(lib),'/DLIBRARY_INITIALIZERS_MAIN'if main else'/LD','/link','/OUT:'+str(output)]\n  if not main:args+=['/IMPLIB:'+str(work/'native.lib')]\n  rsp=work/(output.stem+'.rsp');rsp.write_text(' '.join('\"'+a+'\"'for a in args));cmd=work/(output.stem+'.cmd');cmd.write_text('@call \"'+setup+'\" >nul\\n@cl @\"'+str(rsp)+'\"\\n@exit /b %errorlevel%\\n')\n  p=subprocess.run(['cmd','/d','/c',str(cmd)],cwd=work,capture_output=True);log=work/(output.stem+'-build.log');log.write_bytes(p.stdout+p.stderr);assert p.returncode==0,(p.stdout+p.stderr).decode(errors='replace')[-2500:];builds.append(args);artifacts[str(output)]=sha(output);artifacts[str(log)]=sha(log)\n env=os.environ.copy()\n for name in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(name,None)\n env['PATH']=str(original.parent)+os.pathsep+env.get('PATH','');env['LUA_INITIALIZER_MODULE']=str(module)\n runs[engine]={}\n for variant in variants:\n  active_env=env|variant['environment'];rows=[]\n  for order in range(1,13):\n   command=([str(binary),str(module)]if engine=='rust'else[str(launcher)])+[str(script),str(order)]\n   p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45)\n   rows.append(dict(command=command,returncode=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))\n   if p.returncode:print(engine,variant['name'],order,p.returncode,p.stderr.decode(errors='replace')[-1400:],flush=True);break\n  runs[engine][variant['name']]=rows\n  print(engine,variant['name'],'runs',len(rows),'rows',len(p.stdout.splitlines()),flush=True)\n  if p.returncode:break\n for item in [original,lib]:artifacts[str(item)]=sha(item)\n if engine!='rust':artifacts[str(original.parent/'lua51.dll')]=sha(original.parent/'lua51.dll')\nequal=all(set(v)==set(environment_inputs)and all(len(rows)==12 and all(row['returncode']==0 for row in rows)for rows in v.values())for v in runs.values())\nif equal:equal=all(len({runs[engine][variant][order]['stdout_hex']for engine in runs})==1 for variant in environment_inputs for order in range(12))\nresult=dict(runs=runs,observations_equal=equal,environment_inputs=environment_inputs,artifacts=artifacts,builds=builds,source_hashes={p.relative_to(r).as_posix():sha(p)for p in(r/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h','.lua'}},script_sha256=sha(script),fixture_sha256=sha(source),reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/f'docs/testing/2026-10-28-rust-lua-openlibs-{mode}.json').write_text(json.dumps(result,indent=2)+'\\n');assert equal\n"
+    },
+    "target/lua-native-hooks/evidence-io-init.py": {
+      "sha256": "b5154e19f1f195c63344988126848b0b9a0207bbeb93ca742a3c79b4fc1e25d5",
+      "source": "from pathlib import Path\nimport ast,hashlib,json,re\nr=Path.cwd();f=r/'docs/testing';t=r/'target/lua-native-hooks';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nreports={};loaded={};initializer_stats=[];observations={}\ndef read(label):\n p=f/f'2026-10-28-rust-lua-{label}.json';d=json.loads(p.read_text());loaded[label]=d\n reports[label]=dict(path=p.relative_to(r).as_posix(),sha256=sha(p))\n return d\ndef source_check(d):\n for name,h in d.get('source_hashes',{}).items():assert sha(r/name)==h,name\ndef artifact_check(d):\n for name,h in d.get('artifacts',{}).items():assert sha(Path(name))==h,name\n\nlinux=read('io-init-i686-verification')\nassert linux['artifact_hashes_verified']and linux['source_hashes_verified']and linux['checked_references_enabled']and linux['pointer_bits']==32 and linux['total_observations']==6312\nfor profile in ['focused','current','i686-current']:\n observations[profile]={}\n for label,rows,count,variants in [('io-init',37,36,9),('openlibs',23,22,9),('io-input',3,3,1),('io-loadstdin',1,1,1)]:\n  name=label+'-'+profile;d=read(name);source_check(d)\n  assert d['observations_equal']and len(d['environment_inputs'])==variants\n  upstream=r/d['reference_report'];assert sha(upstream)==d['reference_report_sha256']\n  if profile=='i686-current':assert linux['reports'][label]==reports[name]\n  else:artifact_check(d)\n  for variant in d['environment_inputs']:\n   for engine in ['reference','checked','rust']:assert len(d['runs'][engine][variant])==12\n   for order in range(12):\n    run=[d['runs'][engine][variant][order]for engine in ['reference','checked','rust']]\n    assert len({row['stdout_hex']for row in run})==1 and all(row['returncode']==0 for row in run)\n    assert not run[0]['stderr_hex']and not run[1]['stderr_hex']\n    lines=bytes.fromhex(run[0]['stdout_hex']).splitlines();assert len(lines)==rows\n    if label in {'io-init','openlibs'}:assert lines[-1]==b'complete\\t'+str(count).encode()\n    match=re.fullmatch(r'LIBRARY_INIT operations=(\\d+) states=(\\d+) groups=(\\d+) libraries=(\\d+)\\n',bytes.fromhex(run[2]['stderr_hex']).decode())\n    assert match;initializer_stats.append(dict(zip(['operations','states','groups','libraries'],map(int,match.groups()))))\n  observations[profile][label]=count*variants*12\n assert sum(observations[profile].values())==6312\n\n# Bind the Windows release/checked DLLs to the previously verified PUC sources\n# and assertion recipe, rather than relying only on matching transcripts.\nprimary=f/'2026-10-28-rust-lua-table-yields-focused.json';old=json.loads(primary.read_text())\nprevious=f/'2026-10-28-rust-lua-io-closers-evidence.json';previous_data=json.loads(previous.read_text())\nsrc=r/'target/lua-cli-reference/lua-5.1.5/src'\nfor name,h in previous_data['reference_source_hashes'].items():assert sha(src/name)==h,name\nfor name in ['lua.h','lauxlib.h','lualib.h']:assert sha(src/name)==sha(r/'vendor/lua-src/lua-5.1.5'/name),name\nconfig=(r/'vendor/lua-src/lua-5.1.5/luaconf.h').read_text()\nassert config.replace('#if !defined(__wasi__)\\n#define LUA_USE_POPEN\\n#endif','#define LUA_USE_POPEN')==(src/'luaconf.h').read_text()\nfor engine in ['reference','checked']:\n binary=Path(old['runs'][engine]['command'][0]);dll=str(binary.parent/'lua51.dll')\n assert sha(binary)==old['artifacts'][str(binary)]and sha(Path(dll))==old['artifacts'][dll]\n for profile in ['focused','current']:\n  for label in ['io-init','openlibs','io-input','io-loadstdin']:\n   assert loaded[label+'-'+profile]['artifacts'][dll]==old['artifacts'][dll]\nchecked_path=r/old['checked_reference_report'];assert sha(checked_path)==old['checked_reference_report_sha256'];checked=json.loads(checked_path.read_text())\nfor name,h in checked['reference_source_hashes'].items():assert sha(src/name)==h,name\nrecipe=r/checked['checked_reference_report'];assert sha(recipe)==checked['checked_reference_report_sha256']\nassert any(any(arg.startswith('/FI')for arg in row['command'])for row in json.loads(recipe.read_text())['commands'])\n\nbaseline=read('io-init-baseline');artifact_check(baseline)\nassert baseline['commit']=='0a2d9c39a0644563223f8a6eeb040d1fedafb1b8'and baseline['exports']=={'luaopen_io':False,'luaL_openlibs':False}\nprior=r/baseline['reference_report'];assert sha(prior)==baseline['reference_report_sha256'];prior_sdk=json.loads(prior.read_text())['runtime_c_abi']\nassert baseline['artifacts'][str(t/'io-init-before/lua51.dll')]==prior_sdk['image_sha256']\nassert baseline['artifacts'][str(t/'io-init-before/lua51.lib')]==prior_sdk['import_library_sha256']\n\nvalidation=read('io-init-validation');source_check(validation);assert validation['sources_unchanged']\nfor row in validation['runs']:assert row['returncode']==0 and sha(Path(row['log']))==row['log_sha256'],row['name']\ncounts={row['name']:row['passed']for row in validation['runs']if row['name'].endswith('-tests')}\nassert counts=={'windows-tests':813,'linux-x64-tests':814,'linux-i686-tests':814},counts\ndeps=Path(next(row['log']for row in validation['runs']if row['name']=='windows-dependencies')).read_text()\ndependency_rows=[line for line in deps.splitlines()if not line.strip().startswith('Blocking waiting for file lock')]\nassert len(dependency_rows)==1 and dependency_rows[0].startswith('deadlib-lua v0.1.0'),deps\nportable=read('io-init-portable');assert portable['returncode']==0 and '--no-default-features'in portable['command']and sha(Path(portable['log']))==portable['log_sha256']\nassert sum(map(int,re.findall(r'test result: ok\\. (\\d+) passed',Path(portable['log']).read_text())))==11\nstdlib=read('io-init-stdlib');source_check(stdlib)\nassert stdlib['passed']==5507 and not stdlib['mismatches']and stdlib['equal_processes']and stdlib['complete_matrix']and not stdlib['rust_binary']['prebuilt']\nassert sha(Path(stdlib['rust_binary']['path']))==stdlib['rust_binary']['sha256']\nsuite=read('io-init-i686-suite');source_check(suite)\nassert reports['io-init-i686-suite']['sha256']==linux['suite_report_sha256']\nassert suite['native_libraries_enabled']and not suite['internal_test_module']and len(suite['results'])==4 and all(row['status']=='pass'for row in suite['results'])\nwindows=read('io-init-windows-suite');source_check(windows)\npasses={engine:sum(row[engine]['status']=='pass'for row in windows['results'])for engine in windows['engines']}\nassert len(passes)==4 and len(windows['results'])==18 and set(passes.values())=={17}\nbad=next(row for row in windows['results']if row['file']=='files.lua');assert all(bad[engine]['status']=='fail'and'files.lua:59'in bad[engine]['stderr']for engine in windows['engines'])\n\nboundary=read('io-init-boundary-current');source_check(boundary);normal=[];terminating=[]\ndef walk(value,path=''):\n if isinstance(value,dict):\n  if 'returncode'in value and 'stdout_hex'in value and '/rust'in path:\n   if '_exit_probe/'in path:\n    assert value['returncode']==1;terminating.append(path);return\n   err=bytes.fromhex(value['stderr_hex']).decode();a=re.search(r'BOUNDARY operations=(\\d+) drops=(\\d+) panic_abort=(\\w+)',err);s=re.search(r'STATES created=(\\d+) collected=(\\d+) destroyed=(\\d+)',err);l=re.search(r'LIBRARIES opened=(\\d+) closed=(\\d+)',err)\n   assert value['returncode']==0 and a and s and l,path\n   op,returned=map(int,a.group(1,2));created,collected,destroyed=map(int,s.groups());opened,closed=map(int,l.groups())\n   assert op==returned and created==destroyed and opened==closed and a[3]=='true',path\n   normal.append(dict(probe=path,operations=op,returned=returned,states_created=created,states_destroyed=destroyed,libraries_opened=opened,libraries_closed=closed))\n  else:\n   for key,val in value.items():walk(val,path+'/'+key)\n elif isinstance(value,list):\n  for index,val in enumerate(value):walk(val,path+'/'+str(index))\nwalk(boundary);assert len(normal)==42 and len(terminating)==25\nassert boundary['program_observations_equal']and boundary['every_dispatch_returned_before_jump']and boundary['persistent_state_lifetimes_balanced']\nsdk=boundary['runtime_c_abi'];assert sha(Path(sdk['image_path']))==sdk['image_sha256']and sha(Path(sdk['import_library_path']))==sdk['import_library_sha256']and sha(r/'crates/deadlib-lua/src/native_abi/api.h')==sdk['header_sha256']\nassert loaded['io-init-current']['artifacts'][sdk['import_library_path']]==sdk['import_library_sha256']\ncore=boundary['core_c_api_declarations'];assert core['implemented']==76 and core['total']==80 and not core['complete_semantics_proven']\nlibraries=boundary['standard_library_declarations'];assert libraries==dict(implemented=8,total=8,missing=[],openlibs_declared=True,complete_semantics_proven=False)\nproofs={name:json.loads((t/f'io-init-{name}-exit.json').read_text())['returncode']for name in ['boundary','stdlib','windows-suite']}\nassert proofs=={'boundary':0,'stdlib':0,'windows-suite':1}\nretained={}\nfor name in ['io-closers-evidence','io-closers-hook-yield','gc-integers-unsettled-current','gc-integers-counts-current','table-yields-resume-current']:\n p=f/f'2026-10-28-rust-lua-{name}.json';retained[name]=dict(path=p.relative_to(r).as_posix(),sha256=sha(p))\nstrict=json.loads((f/'2026-10-28-rust-lua-io-closers-hook-yield.json').read_text());assert not strict['observations_equal']and strict['runs']['checked']['returncode']==86\nembedded={}\nfor p in sorted(set(t.glob('*io-init*.py'))|set(t.glob('compare-openlibs*.py'))|set(t.glob('compare-io-input*.py'))|set(t.glob('compare-io-loadstdin*.py'))):\n ast.parse(p.read_text());embedded[p.relative_to(r).as_posix()]=dict(sha256=sha(p),source=p.read_text())\nresult=dict(reports=reports,source_hashes=validation['source_hashes'],all_current_source_hashes_match=True,reference_source_hashes=previous_data['reference_source_hashes'],proof_tools=embedded,retained_reports=retained,observations=observations,observations_per_profile=6312,total_observations=18936,initializer_processes=len(initializer_stats),initializer_totals={key:sum(row[key]for row in initializer_stats)for key in initializer_stats[0]},native_boundary_totals={key:sum(row[key]for row in normal)for key in ['operations','returned','states_created','states_destroyed','libraries_opened','libraries_closed']},successful_native_boundary_runs=normal,expected_terminating_processes=terminating,validation_counts=counts,portable_tests=11,stdlib_cases=5507,windows_independent_passes=passes,proof_exit_codes=proofs,core_c_api_declarations=core,standard_library_declarations=libraries,full_lua_51_parity_proven=False)\nassert result['initializer_processes']==720\n(f/'2026-10-28-rust-lua-io-init-evidence.json').write_text(json.dumps(result,indent=2)+'\\n')\nprint('Verified sources, artifacts, checked references, reports and logs.');print('Initializer observations:',result['total_observations'],'in',result['initializer_processes'],'processes; native totals:',result['native_boundary_totals'])\n"
+    },
+    "target/lua-native-hooks/io-init-baseline.py": {
+      "sha256": "e552b00c5515d04ed835e07ddffe4750beecb75758f13ee54b756953d0ce5b4d",
+      "source": "from pathlib import Path\nimport ctypes,hashlib,json,shutil,subprocess\nr=Path.cwd();sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nprior_path=r/'docs/testing/2026-10-28-rust-lua-io-closers-boundary-current.json'\nprior=json.loads(prior_path.read_text())['runtime_c_abi']\nout=r/'target/lua-native-hooks/io-init-before';out.mkdir(exist_ok=True)\nartifacts={}\nfor name,pathkey,hashkey in [('lua51.dll','image_path','image_sha256'),('lua51.lib','import_library_path','import_library_sha256')]:\n source=Path(prior[pathkey]);assert sha(source)==prior[hashkey],(source,prior)\n target=out/name;shutil.copy2(source,target);artifacts[str(target)]=sha(target)\nlib=ctypes.CDLL(str(out/'lua51.dll'));exports={}\nfor name in ['luaopen_io','luaL_openlibs']:\n try:getattr(lib,name);exports[name]=True\n except AttributeError:exports[name]=False\nassert not any(exports.values())\nreport=dict(commit='0a2d9c39a0644563223f8a6eeb040d1fedafb1b8',exports=exports,artifacts=artifacts,reference_report=prior_path.relative_to(r).as_posix(),reference_report_sha256=sha(prior_path),audit_script_sha256=sha(Path(__file__)))\n(r/'docs/testing/2026-10-28-rust-lua-io-init-baseline.json').write_text(json.dumps(report,indent=2)+'\\n')\nprint(exports)\n"
+    },
+    "target/lua-native-hooks/make-io-init-harnesses.py": {
+      "sha256": "9f0e399c8e4119c1804d749f79d5d661d024f1c01869d1607d841af154c7213a",
+      "source": "from pathlib import Path\nr=Path.cwd();base=r/'target/lua-native-hooks'\nfor label,fixture in [('io-init','io-initializer.lua'),('openlibs','openlibs.lua'),('io-input','io-initializer-input.lua'),('io-loadstdin','io-initializer-loadstdin.lua')]:\n for suffix in ['', '-i686']:\n  source=(base/('compare-package-init'+suffix+'.py')).read_text()\n  source=source.replace('package-initializer.lua',fixture).replace('package-init',label)\n  if label in {'io-input','io-loadstdin'}:\n   source=source.replace('p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45)',\n     'p=subprocess.run(command,cwd=work,env=active_env,capture_output=True,timeout=45,input='+repr(b'alpha\\nbeta\\ngamma\\n' if label=='io-input' else b'return 17\\n')+')')\n   # Reopening/input behavior is independent of package-path variants.\n   source=source.replace('runs={};builds=[];', 'variants=variants[:1]\\nruns={};builds=[];')\n  # Both initializers use the same nine controlled package-path environments.\n  source=source.replace(\"base/'compare-\"+label+\".py'\",\"base/'compare-package-init.py'\")\n  if suffix:\n   source=source.replace(\"r/'target/lua-native-hooks/compare-\"+label+\".py'\",\"r/'target/lua-native-hooks/compare-package-init.py'\")\n  (base/('compare-'+label+suffix+'.py')).write_text(source)\n"
+    },
+    "target/lua-native-hooks/prepare-io-init-validation.py": {
+      "sha256": "7d1483f81a219d16193aecdb427e2014089424421c7a8e26249f8272913e6e43",
+      "source": "from pathlib import Path\nt=Path('target/lua-native-hooks')\nfor source in ['validate-io-closers.py','run-io-closers-proof.py','run-io-closers-i686.py']:\n (t/source.replace('io-closers','io-init')).write_text((t/source).read_text().replace('io-closers','io-init'))\n"
+    },
+    "target/lua-native-hooks/run-io-init-comparisons.py": {
+      "sha256": "e8c91d50a57dd5ff5c9c146021b046550fdd7e633fde8170d10737b89524b3ea",
+      "source": "from pathlib import Path\nimport subprocess,sys\nr=Path.cwd();profile=sys.argv[1];platform=sys.argv[2]if len(sys.argv)>2 else'windows'\nif platform=='windows':\n command=['cargo','build','--locked','-p','deadlib-lua','--target-dir','target/lua-native-hooks','--example','library_initializers']+(['--release']if profile=='current'else[])\n assert subprocess.call(command)==0\nfor name in ['io-init','openlibs','io-input','io-loadstdin']:\n command=([sys.executable,str(r/('target/lua-native-hooks/compare-'+name+('-i686'if platform=='i686'else'')+'.py')),profile])\n result=subprocess.call(command)\n if result:raise SystemExit(result)\n"
+    },
+    "target/lua-native-hooks/run-io-init-i686.py": {
+      "sha256": "681d3530124906f4b4c2a0cfbecfa8a31182d59835ea08e662d5789e71aa72fa",
+      "source": "import subprocess,shlex\nargs=['CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686','CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse','python3','scripts/check_rust_lua_full_suite.py','--target','i686-unknown-linux-gnu','--reference-fp-model','sse2','--native-libraries','--run-root','/home/perfecttaste/.cache/deadlua-io-init/full-suite','--output','docs/testing/2026-10-28-rust-lua-io-init-i686-suite.json']\ncommand=['wsl.exe','-d','Debian','--cd',str(__import__('pathlib').Path.cwd()),'--','sh','-lc','exec env '+' '.join(map(shlex.quote,args))+' 2>&1']\nraise SystemExit(subprocess.call(command))\n"
+    },
+    "target/lua-native-hooks/run-io-init-portable.py": {
+      "sha256": "3605d94865c46875154ca6b337993cb2ec3ce12123eb83327de9dca38176cc89",
+      "source": "from pathlib import Path\nimport hashlib,json,subprocess\nr=Path.cwd();command=['cargo','test','--locked','--target-dir','target/lua-native-hooks','-p','deadlib-lua','--no-default-features','--test','io_close_callbacks','--test','native_bodies','--test','library_initializers']\np=subprocess.run(command,capture_output=True);log=r/'target/lua-native-hooks/io-init-portable.log';log.write_bytes(p.stdout+p.stderr)\nd=dict(command=command,returncode=p.returncode,log=str(log),log_sha256=hashlib.sha256(log.read_bytes()).hexdigest())\n(r/'docs/testing/2026-10-28-rust-lua-io-init-portable.json').write_text(json.dumps(d,indent=2)+'\\n')\nprint((p.stdout+p.stderr).decode(errors='replace')[-2000:]);raise SystemExit(p.returncode)\n"
+    },
+    "target/lua-native-hooks/run-io-init-proof.py": {
+      "sha256": "3be4eb4d700fe3482dfb802d3edc7102687c04c5cd8bf52ffc8f73b0038609d8",
+      "source": "from pathlib import Path\nimport subprocess,json,os,sys\nroot=Path.cwd();kind=sys.argv[1];env=os.environ.copy();env['CARGO_TARGET_DIR']='target/lua-native-hooks'\nscripts={'boundary':['check_rust_lua_native_boundary.py','--output','docs/testing/2026-10-28-rust-lua-io-init-boundary-current.json'],'stdlib':['check_rust_lua_stdlib.py','--output','docs/testing/2026-10-28-rust-lua-io-init-stdlib.json'],'windows-suite':['check_rust_lua_suite.py','--cached','--output','docs/testing/2026-10-28-rust-lua-io-init-windows-suite.json']}\nargs=scripts[kind];command=['python','scripts/'+args[0]]+args[1:];p=subprocess.run(command,env=env,capture_output=True);(root/f'target/lua-native-hooks/io-init-{kind}.log').write_bytes(p.stdout+p.stderr);(root/f'target/lua-native-hooks/io-init-{kind}-exit.json').write_text(json.dumps(dict(command=command,returncode=p.returncode)));print(kind,'exit',p.returncode,flush=True);print((p.stdout+p.stderr).decode(errors='replace')[-1100:],flush=True);raise SystemExit(p.returncode)\n"
+    },
+    "target/lua-native-hooks/validate-io-init.py": {
+      "sha256": "17a156f1f5bded775294ebf3f3cc2359447413c5eb9e9170c7427525e09b5863",
+      "source": "from pathlib import Path\nimport subprocess,time,json,re,hashlib,concurrent.futures,os,shlex\nroot=Path.cwd();logs=root/'target/lua-native-hooks/io-init-validation-final';logs.mkdir(exist_ok=True)\nfixture=root/'crates/deadlib-lua/tests/native-boundary'\nfiles=sorted({p for p in (root/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h'}}|set(fixture.iterdir())|{root/'crates/deadlib-lua/Cargo.toml',root/'scripts/check_rust_lua_native_boundary.py',root/'Cargo.toml',root/'Cargo.lock',root/'.cargo/config.toml'})\ndef sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()\ndef hashes():return {p.relative_to(root).as_posix():sha(p)for p in files if p.is_file()}\nbefore=hashes();linux='/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700'\ndef run(name,cmd):\n start=time.monotonic();p=subprocess.run(cmd,cwd=root,capture_output=True);log=logs/(name+'.log');log.write_bytes(p.stdout+p.stderr)\n s=(p.stdout+p.stderr).decode(errors='replace');groups=[dict(passed=int(a),failed=int(b),ignored=int(c))for a,b,c in re.findall(r'test result: ok\\. (\\d+) passed; (\\d+) failed; (\\d+) ignored',s)]\n result=dict(name=name,command=cmd,returncode=p.returncode,elapsed_seconds=time.monotonic()-start,log=str(log),log_sha256=sha(log),test_groups=groups,passed=sum(g['passed']for g in groups))\n print(name,p.returncode,result['passed'],flush=True)\n if p.returncode:print(s[-3500:],flush=True)\n return result\ndef suite(platform):\n cmds=[('tests',['cargo','test','--locked','-p','deadlib-lua','--no-fail-fast']),('no-default-features',['cargo','check','--locked','-p','deadlib-lua','--no-default-features','--all-targets']),('clippy',['cargo','clippy','--locked','-p','deadlib-lua','--all-targets','--no-deps','--','-D','warnings'])]\n if platform=='windows':\n  cmds += [('fmt',['cargo','fmt','-p','deadlib-lua','--','--check']),('dependencies',['cargo','tree','--locked','-p','deadlib-lua','--edges','normal,build'])]\n  return [run(platform+'-'+n,c[:2]+['--target-dir','target/lua-native-hooks']+c[2:] if n in ('tests','clippy','no-default-features') else c)for n,c in cmds]\n result=[]\n for name,cmd in cmds:\n  env=['CARGO_TARGET_DIR='+linux+('/native'if platform=='linux-x64'else'/i686')]\n  if platform=='linux-i686':\n   cmd=cmd[:2]+['--target','i686-unknown-linux-gnu']+cmd[2:];env+=['CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse']\n  shell='exec env '+' '.join(shlex.quote(x)for x in env+cmd)+' 2>&1'\n  result.append(run(platform+'-'+name,['wsl.exe','-d','Debian','--cd',str(root),'--','sh','-lc',shell]))\n return result\nwith concurrent.futures.ThreadPoolExecutor(max_workers=3)as pool:runs=[r for group in pool.map(suite,['windows','linux-x64','linux-i686'])for r in group]\nresult=dict(source_hashes=before,runs=runs,linux_target_root=linux,sources_unchanged=before==hashes())\n(root/'docs/testing/2026-10-28-rust-lua-io-init-validation.json').write_text(json.dumps(result,indent=2)+'\\n')\nprint('sources unchanged',result['sources_unchanged'],flush=True)\nraise SystemExit(0 if result['sources_unchanged']and all(r['returncode']==0 for r in runs)else 1)\n"
+    },
+    "target/lua-native-hooks/verify-io-init-i686.py": {
+      "sha256": "79598dd4b331d0f7abff16259d17f0dd70f3842284c0121533f23accb50bbabe",
+      "source": "from pathlib import Path\nimport hashlib,json,re,subprocess\nr=Path.cwd();f=r/'docs/testing';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nreports={};counts={};artifacts=0;elfs=0;stats=[]\nfor label,rows,observations,variants in [('io-init',37,36,9),('openlibs',23,22,9),('io-input',3,3,1),('io-loadstdin',1,1,1)]:\n p=f/f'2026-10-28-rust-lua-{label}-i686-current.json';d=json.loads(p.read_text())\n assert d['observations_equal']\n for name,h in d['artifacts'].items():\n  file=Path(name);assert sha(file)==h,(label,name);artifacts+=1\n  if file.read_bytes()[:4]==b'\\x7fELF':\n   assert file.read_bytes()[4]==1,name\n   assert 'ELF32'in subprocess.check_output(['readelf','-h',str(file)],text=True);elfs+=1\n for name,h in d['source_hashes'].items():assert sha(r/name)==h,(label,name)\n prior=r/d['reference_report'];assert sha(prior)==d['reference_report_sha256']\n src=Path(d['reference']['binary_path']).parent/'lua-5.1.5/src'\n for name,h in d['reference']['source_hashes'].items():assert sha(src/name)==h,(label,name)\n checked=[cmd for cmd in d['builds']if '-DLIBRARY_INITIALIZERS_MAIN'in cmd and '-include'in cmd]\n assert len(checked)==1\n cmd=checked[0];assert all(flag in cmd for flag in ['-m32','-msse2','-mfpmath=sse'])\n header=Path(cmd[cmd.index('-include')+1]);assert '#define lua_assert(e)'in header.read_text()and'exit(86)'in header.read_text()\n assert all(len(engine)==variants for engine in d['runs'].values())\n for variant in d['environment_inputs']:\n  for order in range(12):\n   run=[d['runs'][engine][variant][order]for engine in ['reference','checked','rust']]\n   assert len({row['stdout_hex']for row in run})==1 and all(row['returncode']==0 for row in run)\n   assert not run[0]['stderr_hex']and not run[1]['stderr_hex']\n   assert len(bytes.fromhex(run[0]['stdout_hex']).splitlines())==rows\n   match=re.fullmatch(r'LIBRARY_INIT operations=(\\d+) states=(\\d+) groups=(\\d+) libraries=(\\d+)\\n',bytes.fromhex(run[2]['stderr_hex']).decode())\n   assert match;stats.append(dict(zip(['operations','states','groups','libraries'],map(int,match.groups()))))\n counts[label]=observations*variants*12\n reports[label]=dict(path=p.relative_to(r).as_posix(),sha256=sha(p))\nsuite_path=f/'2026-10-28-rust-lua-io-init-i686-suite.json';suite=json.loads(suite_path.read_text())\nassert suite['native_libraries_enabled']and not suite['internal_test_module']and len(suite['results'])==4 and all(row['status']=='pass'for row in suite['results'])\nassert sha(Path(suite['rust_binary']['path']))==suite['rust_binary']['sha256']\nfor name,h in suite['source_hashes'].items():assert sha(r/name)==h,name\nresult=dict(reports=reports,artifact_hashes_verified=True,source_hashes_verified=True,checked_references_enabled=True,pointer_bits=32,artifact_checks=artifacts,elf32_checks=elfs,observations=counts,total_observations=sum(counts.values()),initializer_processes=len(stats),initializer_totals={key:sum(row[key]for row in stats)for key in stats[0]},suite_report=suite_path.relative_to(r).as_posix(),suite_report_sha256=sha(suite_path),audit_script_sha256=sha(Path(__file__)))\n(f/'2026-10-28-rust-lua-io-init-i686-verification.json').write_text(json.dumps(result,indent=2)+'\\n')\nprint('Verified i686 sources, checked references, artifacts,',len(stats),'processes and',sum(counts.values()),'observations.')\n"
+    }
+  },
+  "retained_reports": {
+    "io-closers-evidence": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-closers-evidence.json",
+      "sha256": "36d32380e9b5bfae07889a04f8a6af8e0200dfdc6a82a2e8bfd68c66cadd9f49"
+    },
+    "io-closers-hook-yield": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-closers-hook-yield.json",
+      "sha256": "ab66f0aceb7136eebd728cfdfe7adb00e60b6fc180aa953eeb222bd7011f40f2"
+    },
+    "gc-integers-unsettled-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-unsettled-current.json",
+      "sha256": "585a7d13514142325c8806d98e45995d8fcd4edd2cf8cc883a80e40ba44897de"
+    },
+    "gc-integers-counts-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-counts-current.json",
+      "sha256": "4830da60c6c3dbc2e87eb5546b40bc492471140c604d96cb276904311a6b5f97"
+    },
+    "table-yields-resume-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-table-yields-resume-current.json",
+      "sha256": "bd5cbf8f709ad4eaeaaaf1ba94363f292185829e1b27f528613097fe37f753ed"
+    }
+  },
+  "observations": {
+    "focused": {
+      "io-init": 3888,
+      "openlibs": 2376,
+      "io-input": 36,
+      "io-loadstdin": 12
+    },
+    "current": {
+      "io-init": 3888,
+      "openlibs": 2376,
+      "io-input": 36,
+      "io-loadstdin": 12
+    },
+    "i686-current": {
+      "io-init": 3888,
+      "openlibs": 2376,
+      "io-input": 36,
+      "io-loadstdin": 12
+    }
+  },
+  "observations_per_profile": 6312,
+  "total_observations": 18936,
+  "initializer_processes": 720,
+  "initializer_totals": {
+    "operations": 4961940,
+    "states": 1692,
+    "groups": 720,
+    "libraries": 720
+  },
+  "native_boundary_totals": {
+    "operations": 1229274,
+    "returned": 1229274,
+    "states_created": 19219,
+    "states_destroyed": 19219,
+    "libraries_opened": 52,
+    "libraries_closed": 52
+  },
+  "successful_native_boundary_runs": [
+    {
+      "probe": "/runs/rust",
+      "operations": 161662,
+      "returned": 161662,
+      "states_created": 183,
+      "states_destroyed": 183,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/parser_scratch_probe/runs/rust",
+      "operations": 14,
+      "returned": 14,
+      "states_created": 2,
+      "states_destroyed": 2,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_reader_roots_probe/runs/rust",
+      "operations": 293782,
+      "returned": 293782,
+      "states_created": 2,
+      "states_destroyed": 2,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_stacks_probe/runs/rust",
+      "operations": 72655,
+      "returned": 72655,
+      "states_created": 2023,
+      "states_destroyed": 2023,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_resume_probe/runs/rust",
+      "operations": 43858,
+      "returned": 43858,
+      "states_created": 1023,
+      "states_destroyed": 1023,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_call_levels_probe/runs/rust",
+      "operations": 96876,
+      "returned": 96876,
+      "states_created": 1076,
+      "states_destroyed": 1076,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/reader_call_levels_probe/runs/rust",
+      "operations": 2902,
+      "returned": 2902,
+      "states_created": 77,
+      "states_destroyed": 77,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_debug_probe/runs/rust",
+      "operations": 16692,
+      "returned": 16692,
+      "states_created": 6,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_hooks_probe/runs/rust",
+      "operations": 8546,
+      "returned": 8546,
+      "states_created": 7,
+      "states_destroyed": 7,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_context_probe/runs/rust",
+      "operations": 574,
+      "returned": 574,
+      "states_created": 6,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_return_stacks_probe/runs/rust",
+      "operations": 13712,
+      "returned": 13712,
+      "states_created": 254,
+      "states_destroyed": 254,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_protection_hooks_probe/runs/rust",
+      "operations": 1918,
+      "returned": 1918,
+      "states_created": 41,
+      "states_destroyed": 41,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_library_stacks_probe/runs/rust",
+      "operations": 14415,
+      "returned": 14415,
+      "states_created": 293,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_package_stacks_probe/runs/rust",
+      "operations": 8490,
+      "returned": 8490,
+      "states_created": 137,
+      "states_destroyed": 137,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/return-stacks.lua",
+      "operations": 15599,
+      "returned": 15599,
+      "states_created": 254,
+      "states_destroyed": 254,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/library-stacks.lua",
+      "operations": 16767,
+      "returned": 16767,
+      "states_created": 293,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/package-stacks.lua",
+      "operations": 9642,
+      "returned": 9642,
+      "states_created": 137,
+      "states_destroyed": 137,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_bodies_probe/runs/rust",
+      "operations": 466,
+      "returned": 466,
+      "states_created": 8,
+      "states_destroyed": 8,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_library_loading_probe/runs/rust/ordinary",
+      "operations": 435,
+      "returned": 435,
+      "states_created": 8,
+      "states_destroyed": 8,
+      "libraries_opened": 6,
+      "libraries_closed": 6
+    },
+    {
+      "probe": "/native_library_loading_probe/runs/rust/copied",
+      "operations": 505,
+      "returned": 505,
+      "states_created": 8,
+      "states_destroyed": 8,
+      "libraries_opened": 6,
+      "libraries_closed": 6
+    },
+    {
+      "probe": "/native_inactive_objects_probe/runs/rust",
+      "operations": 2093,
+      "returned": 2093,
+      "states_created": 15,
+      "states_destroyed": 15,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_calls_probe/runs/rust",
+      "operations": 2038,
+      "returned": 2038,
+      "states_created": 74,
+      "states_destroyed": 74,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_api_yields_probe/runs/rust",
+      "operations": 1291,
+      "returned": 1291,
+      "states_created": 52,
+      "states_destroyed": 52,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_loads_probe/runs/rust",
+      "operations": 3959,
+      "returned": 3959,
+      "states_created": 48,
+      "states_destroyed": 48,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_reader_continuations_probe/runs/rust",
+      "operations": 16309,
+      "returned": 16309,
+      "states_created": 123,
+      "states_destroyed": 123,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_panic_probe/runs/rust",
+      "operations": 1982,
+      "returned": 1982,
+      "states_created": 55,
+      "states_destroyed": 55,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_files_probe/runs/rust",
+      "operations": 1398,
+      "returned": 1398,
+      "states_created": 52,
+      "states_destroyed": 52,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_stdin_probe/runs/rust",
+      "operations": 122,
+      "returned": 122,
+      "states_created": 6,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_panic_probe/runs/rust",
+      "operations": 2225,
+      "returned": 2225,
+      "states_created": 54,
+      "states_destroyed": 54,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_allocation_gc_probe/runs/rust",
+      "operations": 3612,
+      "returned": 3612,
+      "states_created": 293,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_execution_probe/runs/rust",
+      "operations": 1164,
+      "returned": 1164,
+      "states_created": 60,
+      "states_destroyed": 60,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_execution_panic_probe/runs/rust",
+      "operations": 364,
+      "returned": 364,
+      "states_created": 11,
+      "states_destroyed": 11,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_concat_yields_probe/runs/rust",
+      "operations": 942,
+      "returned": 942,
+      "states_created": 25,
+      "states_destroyed": 25,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_waiting_errors_probe/runs/rust",
+      "operations": 29186,
+      "returned": 29186,
+      "states_created": 1345,
+      "states_destroyed": 1345,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_unprotected_probe/runs/rust",
+      "operations": 45714,
+      "returned": 45714,
+      "states_created": 1577,
+      "states_destroyed": 1577,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_call_yields_probe/runs/rust",
+      "operations": 87970,
+      "returned": 87970,
+      "states_created": 1473,
+      "states_destroyed": 1473,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_gc_integers_probe/runs/rust",
+      "operations": 33929,
+      "returned": 33929,
+      "states_created": 886,
+      "states_destroyed": 886,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_tables_probe/runs/rust",
+      "operations": 166952,
+      "returned": 166952,
+      "states_created": 5989,
+      "states_destroyed": 5989,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_table_yields_probe/runs/rust",
+      "operations": 36387,
+      "returned": 36387,
+      "states_created": 1079,
+      "states_destroyed": 1079,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_io_closers_probe/runs/rust",
+      "operations": 8054,
+      "returned": 8054,
+      "states_created": 10,
+      "states_destroyed": 10,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_gc_controls_probe/runs/rust",
+      "operations": 751,
+      "returned": 751,
+      "states_created": 53,
+      "states_destroyed": 53,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_gc_panic_probe/runs/rust",
+      "operations": 3322,
+      "returned": 3322,
+      "states_created": 101,
+      "states_destroyed": 101,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    }
+  ],
+  "expected_terminating_processes": [
+    "/native_panic_exit_probe/runs/rust/default",
+    "/native_panic_exit_probe/runs/rust/absent",
+    "/native_panic_exit_probe/runs/rust/returning",
+    "/native_thread_file_exit_probe/runs/rust/absent",
+    "/native_thread_file_exit_probe/runs/rust/returning",
+    "/native_thread_unprotected_exit_probe/runs/rust/fresh-False-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/fresh-False-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/fresh-True-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/fresh-True-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/completed-False-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/completed-False-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/completed-True-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/completed-True-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/yielded-False-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/yielded-False-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/yielded-True-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/yielded-True-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/failed-False-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/failed-False-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/failed-True-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/failed-True-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/partial-False-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/partial-False-3",
+    "/native_thread_unprotected_exit_probe/runs/rust/partial-True-0",
+    "/native_thread_unprotected_exit_probe/runs/rust/partial-True-3"
+  ],
+  "validation_counts": {
+    "windows-tests": 813,
+    "linux-x64-tests": 814,
+    "linux-i686-tests": 814
+  },
+  "portable_tests": 11,
+  "stdlib_cases": 5507,
+  "windows_independent_passes": {
+    "reference": 17,
+    "rust": 17,
+    "rust_cache_cold": 17,
+    "rust_cache_hit": 17
+  },
+  "proof_exit_codes": {
+    "boundary": 0,
+    "stdlib": 0,
+    "windows-suite": 1
+  },
+  "core_c_api_declarations": {
+    "implemented": 76,
+    "total": 80,
+    "missing": [
+      "lua_close",
+      "lua_getallocf",
+      "lua_newstate",
+      "lua_setallocf"
+    ],
+    "complete_semantics_proven": false
+  },
+  "standard_library_declarations": {
+    "implemented": 8,
+    "total": 8,
+    "missing": [],
+    "openlibs_declared": true,
+    "complete_semantics_proven": false
+  },
+  "full_lua_51_parity_proven": false
+}

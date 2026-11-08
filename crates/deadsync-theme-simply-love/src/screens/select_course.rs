@@ -760,10 +760,12 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         min_bpm: meta.min_bpm.unwrap_or(0.0),
         max_bpm: meta.max_bpm.unwrap_or_else(|| meta.min_bpm.unwrap_or(0.0)),
         normalized_bpms: String::new(),
+        song_timing: None,
         music_length_seconds: meta.total_length_seconds.max(0) as f32,
         first_second: 0.0,
         total_length_seconds: meta.total_length_seconds.max(0),
         precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
+        precise_note_last_second_seconds: Some(meta.total_length_seconds.max(0) as f32),
         last_second_hint: 0.0,
         charts: Vec::new(),
     }
@@ -785,17 +787,12 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
 
     for (path, course) in &init_view.courses {
         let course_type = course::course_type(course);
-        let mut total_seconds = 0i32;
-        let mut min_bpm = None;
-        let mut max_bpm = None;
-        let mut selected_song_keys = Vec::with_capacity(course.entries.len());
         let mut has_random_entries = false;
         let mut has_most_played_entries = false;
         let random_seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0_u64, |d| d.as_nanos() as u64);
-
-        for (entry_idx, entry) in course.entries.iter().enumerate() {
+        for entry in &course.entries {
             if matches!(
                 &entry.song,
                 CourseSong::RandomAny
@@ -815,35 +812,6 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 CourseSong::Select(select) if select.sort == Some(SongSort::MostPlays)
             ) {
                 has_most_played_entries = true;
-            }
-
-            let resolved = resolve_course_stage(
-                path,
-                entry_idx,
-                random_seed,
-                entry,
-                &by_group_song,
-                &by_song,
-                &all_songs,
-                &songs_by_group,
-                &song_play_counts,
-                &song_grade_counts,
-                course_type,
-                &selected_song_keys,
-                target_chart_type,
-                Difficulty::Medium,
-            );
-
-            if let Some(stage) = resolved.as_ref() {
-                let song_data = &stage.song;
-                selected_song_keys.push(song_unique_key(song_data));
-                let len = if song_data.music_length_seconds > 0.0 {
-                    song_data.music_length_seconds.round() as i32
-                } else {
-                    song_data.total_length_seconds.max(0)
-                };
-                total_seconds = total_seconds.saturating_add(len.max(0));
-                push_song_bpm_range(&mut min_bpm, &mut max_bpm, song_data);
             }
         }
 
@@ -976,17 +944,16 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         let group_name = course_group_name(path);
         let default_rating_index =
             nearest_filled_slot(&ratings, preferred_default_idx).unwrap_or(preferred_default_idx);
-        let (meta_min_bpm, meta_max_bpm, meta_total_length_seconds) = ratings
-            .get(default_rating_index)
-            .and_then(Option::as_ref)
-            .map(|rating| {
-                (
-                    rating.min_bpm,
-                    rating.max_bpm,
-                    rating.total_length_seconds.max(0),
-                )
-            })
-            .unwrap_or_else(|| (min_bpm, max_bpm, total_seconds.max(0)));
+        // Explicit nonnegative meters retain their rating even without charts;
+        // otherwise Medium is included and retained. A rating always exists.
+        let default_rating = ratings[default_rating_index]
+            .as_ref()
+            .expect("every course retains at least one rating");
+        let (meta_min_bpm, meta_max_bpm, meta_total_length_seconds) = (
+            default_rating.min_bpm,
+            default_rating.max_bpm,
+            default_rating.total_length_seconds.max(0),
+        );
         let meta = Arc::new(CourseMeta {
             source: course.clone(),
             path: path.clone(),
@@ -2305,7 +2272,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
-            visual_policy,
+            visual_policy: visual_policy.music_selection_background(),
         },
     );
     actors.push(sl_select_music_bg_flash());
@@ -2698,6 +2665,7 @@ pub fn push_actors(
             song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
             song_text_color_overrides: Some(&state.course_text_color_overrides),
             show_pack_sync: false,
+            show_golf_pars: false,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,
@@ -3331,6 +3299,7 @@ mod song_lookup_tests {
             chart_name: String::new(),
             meter: 10,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_owned(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -3390,10 +3359,12 @@ mod song_lookup_tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: chart_hashes.iter().map(|hash| chart(hash)).collect(),
         })
@@ -3441,5 +3412,8 @@ mod song_lookup_tests {
         assert_eq!(counts.get(&song_unique_key(&alpha)), Some(&u32::MAX));
         assert_eq!(counts.get(&song_unique_key(&beta)), Some(&3));
         assert!(!counts.contains_key(&song_unique_key(&gamma)));
+    }
+    mod loading_perf {
+        include!("../../../../tests/perf/course_init.rs");
     }
 }

@@ -1,0 +1,136 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index d05521e6a..31fc7d21c 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -150,7 +150,7 @@ pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+     }
+ }
+ 
+-fn scatter8<const CHANNELS: usize>(row: &[u8], out: &mut [u8], step: usize) {
++pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], step: usize) {
+     for (pixel, dst) in row
+         .as_chunks::<CHANNELS>()
+         .0
+@@ -297,10 +297,10 @@ pub(crate) fn decode(
+                     let dst = (dst_y * width as usize + x as usize) * channels;
+                     let out = &mut v[dst..];
+                     match channels {
+-                        1 => scatter8::<1>(row, out, dx as usize),
+-                        2 => scatter8::<2>(row, out, dx as usize),
+-                        3 => scatter8::<3>(row, out, dx as usize),
+-                        _ => scatter8::<4>(row, out, dx as usize),
++                        1 => scatter::<_, 1>(row, out, dx as usize),
++                        2 => scatter::<_, 2>(row, out, dx as usize),
++                        3 => scatter::<_, 3>(row, out, dx as usize),
++                        _ => scatter::<_, 4>(row, out, dx as usize),
+                     }
+                 }
+                 position += stride + 1;
+diff --git a/crates/deadlib-image/png/src/stream/read.rs b/crates/deadlib-image/png/src/stream/read.rs
+index 70b50218c..51cf2c376 100644
+--- a/crates/deadlib-image/png/src/stream/read.rs
++++ b/crates/deadlib-image/png/src/stream/read.rs
+@@ -10,12 +10,16 @@ fn allocate(info: ImageInfo) -> Result<Image, Error> {
+     let samples = if info.bit_depth == 16 {
+         let mut v = Vec::new();
+         reserve(&mut v, count)?;
+-        v.resize(count, 0);
++        if info.interlaced {
++            v.resize(count, 0);
++        }
+         Samples::U16(v)
+     } else {
+         let mut v = Vec::new();
+         reserve(&mut v, count)?;
+-        v.resize(count, 0);
++        if info.interlaced {
++            v.resize(count, 0);
++        }
+         Samples::U8(v)
+     };
+     Ok(Image {
+@@ -32,12 +36,18 @@ fn scatter(image: &mut Image, row: Row<'_>) -> Result<(), Error> {
+     let start = (row.y as usize * image.width as usize + row.x as usize) * channels;
+     macro_rules! copy {
+         ($dest:expr,$src:expr) => {
+-            if row.x_step == 1 {
++            if row.pass == 0 {
++                $dest.extend_from_slice($src);
++            } else if row.x_step == 1 {
+                 $dest[start..start + $src.len()].copy_from_slice($src);
+             } else {
+-                for (pixel, values) in $src.chunks(channels).enumerate() {
+-                    let offset = start + pixel * row.x_step as usize * channels;
+-                    $dest[offset..offset + channels].copy_from_slice(values);
++                let out = &mut $dest[start..];
++                let step = row.x_step as usize;
++                match channels {
++                    1 => crate::scanline::scatter::<_, 1>($src, out, step),
++                    2 => crate::scanline::scatter::<_, 2>($src, out, step),
++                    3 => crate::scanline::scatter::<_, 3>($src, out, step),
++                    _ => crate::scanline::scatter::<_, 4>($src, out, step),
+                 }
+             }
+         };
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 47f071611..840f568d5 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -41,7 +41,7 @@ enum State {
+     Done,
+ }
+ 
+-/// Resumable RFC 1950/1951 decoder with a fixed 32 KiB history allocation.
++/// Resumable RFC 1950/1951 decoder with at most 32 KiB of history allocation.
+ ///
+ /// Retains partial fields, code-length repeats, Huffman symbols and matches;
+ /// never replays previously consumed input. Output is provisional until `Done`.
+@@ -73,8 +73,11 @@ pub struct Inflater {
+ impl Inflater {
+     pub fn new(output_limit: usize) -> Result<Self, Error> {
+         let mut history = Vec::new();
+-        reserve(&mut history, 32768)?;
+-        history.resize(32768, 0);
++        // A distance cannot exceed produced bytes or the output limit. Round
++        // the bounded history to a power of two to retain masked ring indices.
++        let size = output_limit.clamp(1, 32768).next_power_of_two();
++        reserve(&mut history, size)?;
++        history.resize(size, 0);
+         Ok(Self {
+             state: State::HeaderCmf,
+             word: 0,
+@@ -155,10 +158,11 @@ impl Inflater {
+     }
+     fn remember(&mut self, mut bytes: &[u8]) {
+         self.total_out += bytes.len();
++        let size = self.history.len();
+         while !bytes.is_empty() {
+-            let n = bytes.len().min(32768 - self.history_pos);
++            let n = bytes.len().min(size - self.history_pos);
+             self.history[self.history_pos..self.history_pos + n].copy_from_slice(&bytes[..n]);
+-            self.history_pos = (self.history_pos + n) & 32767;
++            self.history_pos = (self.history_pos + n) & (size - 1);
+             bytes = &bytes[n..];
+         }
+     }
+@@ -180,8 +184,9 @@ impl Inflater {
+     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
+         let n = output.len();
+         let seed = distance.min(n);
+-        let start = (self.history_pos + 32768 - distance) & 32767;
+-        let first = seed.min(32768 - start);
++        let size = self.history.len();
++        let start = (self.history_pos + size - distance) & (size - 1);
++        let first = seed.min(size - start);
+         output[..first].copy_from_slice(&self.history[start..start + first]);
+         output[first..seed].copy_from_slice(&self.history[..seed - first]);
+         let mut filled = seed;
+@@ -388,7 +393,7 @@ impl Inflater {
+                             // dispatch or a one-byte ring-copy operation.
+                             output[written] = value as u8;
+                             self.history[self.history_pos] = value as u8;
+-                            self.history_pos = (self.history_pos + 1) & 32767;
++                            self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
+                             self.total_out += 1;
+                             written += 1;
+                         }

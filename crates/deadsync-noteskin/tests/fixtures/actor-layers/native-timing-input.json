@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "name": "frame-child-flash-sleep",
+  "samples": [
+    0.05,
+    0.3,
+    0.32
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "frame",
+    "state": {
+      "diffuse": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 0.31,
+            "curve": "sleep"
+          },
+          {
+            "duration": 0,
+            "curve": "linear",
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

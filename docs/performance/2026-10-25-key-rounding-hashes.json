@@ -1,0 +1,27 @@
+{
+  "baseline_revision": "d0347267ecd3bd4e9ffbd6fe3328fe5a2b1a428d",
+  "before": {
+    "crates/deadlib-assets/src/decode.rs": "eebc2d924d5fc35ca412f58056b2822cb7b801ecbe8917ef066708ca70193a8c",
+    "crates/deadlib-audio-decode/src/wav.rs": "c4c8afddd3431ed387c83432c0172322c13eb2b9ae8fc72a7e5e6d68303d34ee",
+    "crates/deadlib-audio-decode/src/resample.rs": "e1da4101262a93c74dd5a63640f2c77e89454b30f1cc13767fc458e33bc48d3a",
+    "assets.exe": "fa7efebb87fe70e7b52f80d26a89b426a28f7c0ba577e3841f9a62fc75e00033",
+    "resampler_output_kernel.exe": "564e8185b92260b339c5c87f38198cebccd90e00c8110ad8ae2b10275e4ca310",
+    "wav_float_kernel.exe": "5f182c9d474415493627fdb10b7e2081ebe9528ab0e7037f2303c0e1401d3685"
+  },
+  "after": {
+    "crates/deadlib-assets/src/decode.rs": "ab286753aabb469702b7061ddd7e9c691c98662b3f5213c628643109ef5f74db",
+    "crates/deadlib-audio-decode/src/wav.rs": "cf613af1d4b3bab6a34901f14c59c5adcfafc70d41a453a9e7a17d11759e0a2e",
+    "crates/deadlib-audio-decode/src/resample.rs": "ff865e88945c8d93cce7a749d9e8fdf1c3f7831068eba3dd0155efef1fd8086a",
+    "assets.exe": "e55dec4c265571ce925b53400eebc50befe347a2277a4b923a0d47ac85ba522f",
+    "resampler_output_kernel.exe": "60e5b105b3083db1417b89b0738bb064bf2ff8aa6ff3295d6a56a37effdfb8ed",
+    "wav_float_kernel.exe": "448a53f8c61cb06084dc13d4d0cb138d898e7deba0e10751326e948a2ad162bf"
+  },
+  "benchmark_sources": {
+    "crates/deadlib-assets/src/decode/key_kernel.rs": "69333dd81a930b42c85773274e67acdf6c8123b84789bdd37b7a6ff2e20878be",
+    "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+    "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+    "scripts/benchmark_direct_rounding.py": "b381655a71131127f2ee57435a13f80c71d9fbacfbdea0a3fec37270ab3ce190",
+    "tests/support/kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+  }
+}

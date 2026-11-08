@@ -1,0 +1,4 @@
+
+thread 'main' (39300) panicked at src\main.rs:36:14:
+called `Result::unwrap()` on an `Err` value: Invalid("granule on page without a completed packet")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,35 @@
+{
+  "scope": "Generate and lint the diagnostic decoder copy only; no timing run. Copied modules share a complete isolated crate privacy boundary.",
+  "command": [
+    "cargo",
+    "clippy",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\eos-clamping-instrumenter-final-verified-20261027\\Cargo.toml",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "source_sha256": "2913db0480dfb2159aa9cd68be62cfbd66a200d26bfa7ce1fe2adedab20bac26",
+  "script_sha256": "ea9d517a18bea505799b393060f13f8f85276cf4d30fcea69ef698d55c9fb91a",
+  "generated_sha256": {
+    "profiled-vorbis/src/bitpack.rs": "a07db230b94472dacfd43ba1cd28e84c188fcb54cd0627d057e88462dc0656fd",
+    "profiled-vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "profiled-vorbis/src/decoder.rs": "d6984ef2caf3afc91d8951a0dea16d12e717b8f0858d7f85006df0a5c2c05d07",
+    "profiled-vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "profiled-vorbis/src/eos_reference.rs": "bdc9a19f6970f36e37fd92bec4988f18013d3982fe857bb75f04d4c92003937d",
+    "profiled-vorbis/src/floor.rs": "4fbd31895e9b1123f4ace8050b223cf5bc3ee542243e412a4ef60ad45872becc",
+    "profiled-vorbis/src/floor1_reference.rs": "246e8b36feb636415a7a16fb5b4e795db5ed816820570a32984c76938aad040f",
+    "profiled-vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "profiled-vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "profiled-vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "profiled-vorbis/src/lib.rs": "e9a9a453c9de1e722e463921b11643bfaccb5b7338f0f304ecc0d47a883cb9f2",
+    "profiled-vorbis/src/ogg.rs": "57db8ed9b05849abb612674576cc557fdfc733f8532241827d458a21aca0ba06",
+    "profiled-vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "profiled-vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "profiled-vorbis/src/seek.rs": "066102a4133d6b7bf30d06d22ccde8beba36f72d37ac94cbdef464d8b08c1096",
+    "profiled-vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "profiled-vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+    "src/main.rs": "4bf9d26d98820187b564f9ab40295044df23328444be9e2073719073cd6903b6"
+  }
+}

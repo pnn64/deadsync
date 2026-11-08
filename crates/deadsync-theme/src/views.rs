@@ -311,6 +311,8 @@ pub struct EvaluationView<N, S> {
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
     pub dim_post_fail_scatter: bool,
+    pub golf_score: Option<deadsync_rules::golf::GolfScore>,
+    pub golf_par: Option<f64>,
     pub disabled_timing_windows: [bool; 5],
     pub machine_records: Vec<LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,

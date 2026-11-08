@@ -1,0 +1,20 @@
+    Checking deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+error: the borrowed expression implements the required traits
+   --> crates\deadlib-input-native\tests\native_kernels.rs:442:51
+    |
+442 |             let (_, churn) = crate::perf::measure(&mut work);
+    |                                                   ^^^^^^^^^ help: change this to: `work`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrows_for_generic_args
+    = note: `-D clippy::needless-borrows-for-generic-args` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrows_for_generic_args)]`
+
+error: the borrowed expression implements the required traits
+   --> crates\deadlib-input-native\tests\native_kernels.rs:493:55
+    |
+493 |                 let (_, churn) = crate::perf::measure(&mut work);
+    |                                                       ^^^^^^^^^ help: change this to: `work`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrows_for_generic_args
+
+error: could not compile `deadlib-input-native` (test "native_kernels") due to 2 previous errors

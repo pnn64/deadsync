@@ -1,0 +1,22 @@
+
+running 1 test
+test rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known ... FAILED
+
+failures:
+
+---- rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known stdout ----
+
+thread 'rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known' (57588) panicked at crates\deadlib-audio\decode\wav\tests\forward.rs:397:87:
+called `Result::unwrap()` on an `Err` value: Invalid("forward ADPCM duration mismatch")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.64s
+     Running tests\forward.rs (target/wav\debug\deps\forward-ff53e3acd870fb6f.exe)
+error: test failed, to rerun pass `-p deadlib-audio-decode-wav --test forward`

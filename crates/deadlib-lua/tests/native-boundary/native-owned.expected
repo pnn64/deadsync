@@ -1,0 +1,87 @@
+owned.peer.top	0
+owned.peer.status	0
+owned.peer.empty	1
+initial.top	0
+initial.frame	0
+initial.thread	1
+openlibs.top	0
+persistent.top	2
+reader.top	3
+dump.status	0
+dump.nonempty	1
+call.status	0
+call.top	5
+call.number	17
+call.nil	nil
+call.false	0
+binary.result	17
+syntax.string	1
+parser.depth.195	0
+parser.depth.196	0
+parser.depth.197	0
+parser.depth.198	0
+parser.depth.199	3
+parser.depth.200	3
+parser.depth.201	3
+protected.status	2
+protected.value	protected marker
+recursive.status	2
+recursive.calls	199
+recursive.value	C stack overflow
+raw.abs.count	1
+raw.abs.value	42
+hook.calls	3
+hook.bad	0
+hook.result	42
+child.first.status	1
+child.first.top	1
+child.first.value	17
+gc.status	0
+gc.finalized	1
+first.top	2
+first.frame	0
+first.return	517
+peer.callback.top	1
+peer.callback.result	42
+peer.after.top	1
+second.same.state	1
+second.top	2
+second.frame	0
+second.table	rooted value
+second.callback	rooted value
+second.registry	1
+child.second.status	0
+child.second.top	1
+child.second.value	42
+second.concat	a42
+second.lua.no.parent	1
+second.lua.main	1
+second.final.top	2
+second.return	-37
+peer.retained.top	1
+peer.retained.value	persistent peer prefix
+peer.closed	1
+close.finalizer	3
+close.hook.installed	1
+close.parent	0
+close.finalizer	2
+close.hook.installed	1
+close.parent	0
+close.finalizer	1
+close.hook.installed	1
+close.parent	0
+close.finalizers	3
+close.hooks	0
+close.weak.before	1
+close.weak.empty	1
+panic.status	2
+panic.top	1
+panic.value	owned root panic
+panic.after.status	2
+panic.recovery.status	0
+panic.recovery.value	46
+panic.retained.status	2
+panic.status	2
+panic.top	1
+panic.value	owned call panic
+panic.closed.upvalue	17

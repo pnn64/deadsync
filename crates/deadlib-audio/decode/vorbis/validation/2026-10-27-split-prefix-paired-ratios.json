@@ -1,0 +1,427 @@
+[
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "phase": "full",
+    "trial_paired_baseline_over_current": [
+      1.0068958343136816,
+      1.0239486586610465,
+      1.056175199151363,
+      1.0618252068709515,
+      1.0109219175945183,
+      0.996927718652727,
+      1.0268270012138194
+    ],
+    "median": 1.0239486586610465,
+    "min": 0.996927718652727,
+    "max": 1.0618252068709515
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "phase": "stream4096",
+    "trial_paired_baseline_over_current": [
+      0.9413913478833841,
+      0.9800027764560807,
+      0.8997645068274155,
+      0.948982615851753,
+      0.9318982147789268,
+      0.9097215396542033,
+      0.976381901424785
+    ],
+    "median": 0.9413913478833841,
+    "min": 0.8997645068274155,
+    "max": 0.9800027764560807
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "phase": "startup",
+    "trial_paired_baseline_over_current": [
+      0.9921426094364016,
+      1.0174419043654896,
+      0.9752054618220751,
+      0.9633037743505398,
+      1.0360269193507927,
+      0.9888766633212682,
+      0.9815556895899873
+    ],
+    "median": 0.9888766633212682,
+    "min": 0.9633037743505398,
+    "max": 1.0360269193507927
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "phase": "full",
+    "trial_paired_baseline_over_current": [
+      1.000445775807291,
+      0.9919498530957328,
+      1.0038244960055849,
+      0.9871535073794151,
+      0.9836304352364772,
+      1.0066186008419533,
+      0.9872784992571678
+    ],
+    "median": 0.9919498530957328,
+    "min": 0.9836304352364772,
+    "max": 1.0066186008419533
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "phase": "stream4096",
+    "trial_paired_baseline_over_current": [
+      0.9722673647643261,
+      0.9602044254582897,
+      0.9497069350766161,
+      0.9488916445313286,
+      1.0025361294297703,
+      0.9815686013524086,
+      0.9916786515124464
+    ],
+    "median": 0.9722673647643261,
+    "min": 0.9488916445313286,
+    "max": 1.0025361294297703
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "phase": "startup",
+    "trial_paired_baseline_over_current": [
+      0.9589462537039892,
+      0.9588911912838544,
+      1.011801834553649,
+      1.1045561700355495,
+      0.9896163959988415,
+      0.9699597381317788,
+      1.0018395924959915
+    ],
+    "median": 0.9896163959988415,
+    "min": 0.9588911912838544,
+    "max": 1.1045561700355495
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg",
+    "phase": "full",
+    "trial_paired_baseline_over_current": [
+      1.0059530667052665,
+      1.0819415478003738,
+      1.004101331763191,
+      1.001547662102387,
+      1.035487584561234,
+      1.0405283503421943,
+      0.9602898843574095
+    ],
+    "median": 1.0059530667052665,
+    "min": 0.9602898843574095,
+    "max": 1.0819415478003738
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg",
+    "phase": "stream4096",
+    "trial_paired_baseline_over_current": [
+      1.0216418752484009,
+      1.0137030935543312,
+      1.012566823027601,
+      1.0136960649191502,
+      1.0260657109030036,
+      0.9639784075302888,
+      1.0908517710688463
+    ],
+    "median": 1.0137030935543312,
+    "min": 0.9639784075302888,
+    "max": 1.0908517710688463
+  },
+  {
+    "workload": "pipeline",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg",
+    "phase": "startup",
+    "trial_paired_baseline_over_current": [
+      0.9633852471169565,
+      1.0660697191774346,
+      1.021440375815972,
+      0.9926588767238262,
+      0.898806515559708,
+      0.9589078459685083,
+      0.9673644020935886
+    ],
+    "median": 0.9673644020935886,
+    "min": 0.898806515559708,
+    "max": 1.0660697191774346
+  },
+  {
+    "workload": "pipeline",
+    "path": "assets/music/in_two (loop).ogg",
+    "phase": "full",
+    "trial_paired_baseline_over_current": [
+      1.0964447317388495,
+      1.03394294045249,
+      1.07554085378293,
+      1.070596177562062,
+      1.0555196822490824,
+      1.174124730245115,
+      1.0383941883851309
+    ],
+    "median": 1.070596177562062,
+    "min": 1.03394294045249,
+    "max": 1.174124730245115
+  },
+  {
+    "workload": "pipeline",
+    "path": "assets/music/in_two (loop).ogg",
+    "phase": "stream4096",
+    "trial_paired_baseline_over_current": [
+      1.095322923660108,
+      0.9863580330913253,
+      1.066329208887113,
+      1.0486117467099647,
+      0.9550914736700882,
+      0.9801539592428051,
+      1.0260700307233894
+    ],
+    "median": 1.0260700307233894,
+    "min": 0.9550914736700882,
+    "max": 1.095322923660108
+  },
+  {
+    "workload": "pipeline",
+    "path": "assets/music/in_two (loop).ogg",
+    "phase": "startup",
+    "trial_paired_baseline_over_current": [
+      0.9472894545327237,
+      0.9804551790299887,
+      0.9951236489174136,
+      0.9253936047685948,
+      0.9565123088943235,
+      0.986626512894701,
+      0.9910886655018062
+    ],
+    "median": 0.9804551790299887,
+    "min": 0.9253936047685948,
+    "max": 0.9951236489174136
+  },
+  {
+    "workload": "pipeline",
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "phase": "full",
+    "trial_paired_baseline_over_current": [
+      1.1123825341702436,
+      0.9864043219183278,
+      1.074537256110649,
+      1.127234802733646,
+      1.042109285015074,
+      1.0438628889367814,
+      1.2276013580826162
+    ],
+    "median": 1.074537256110649,
+    "min": 0.9864043219183278,
+    "max": 1.2276013580826162
+  },
+  {
+    "workload": "pipeline",
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "phase": "stream4096",
+    "trial_paired_baseline_over_current": [
+      0.9242271565652115,
+      1.0438444420579671,
+      1.0265980637066838,
+      1.0415228760160953,
+      1.0819541768428877,
+      1.0526600548744012,
+      1.0106837460339226
+    ],
+    "median": 1.0415228760160953,
+    "min": 0.9242271565652115,
+    "max": 1.0819541768428877
+  },
+  {
+    "workload": "pipeline",
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "phase": "startup",
+    "trial_paired_baseline_over_current": [
+      0.9286386758678472,
+      1.0254022385316988,
+      1.033887249572915,
+      1.0431568254277197,
+      1.0411316889025704,
+      1.1837897677500033,
+      1.0265431421116153
+    ],
+    "median": 1.033887249572915,
+    "min": 0.9286386758678472,
+    "max": 1.1837897677500033
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "phase": "seek_open",
+    "trial_paired_baseline_over_current": [
+      0.9581707367167123,
+      0.9600652984192647,
+      0.9021694917348133,
+      0.96282371793155,
+      0.9916581204393782,
+      0.943489215029879,
+      1.0235062536694512
+    ],
+    "median": 0.9600652984192647,
+    "min": 0.9021694917348133,
+    "max": 1.0235062536694512
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "phase": "seek_batch",
+    "trial_paired_baseline_over_current": [
+      0.9726504120548626,
+      1.062763221011966,
+      0.994402980933567,
+      0.9611427324097772,
+      1.0699214002690791,
+      1.026642553718915,
+      1.0232010840855164
+    ],
+    "median": 1.0232010840855164,
+    "min": 0.9611427324097772,
+    "max": 1.0699214002690791
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "phase": "seek_open",
+    "trial_paired_baseline_over_current": [
+      1.0322481962000867,
+      0.9927446975527171,
+      0.9920093019758873,
+      1.0117651479236087,
+      1.0531773044799955,
+      0.9959815832250674,
+      1.047930121084237
+    ],
+    "median": 1.0117651479236087,
+    "min": 0.9920093019758873,
+    "max": 1.0531773044799955
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "phase": "seek_batch",
+    "trial_paired_baseline_over_current": [
+      0.964102282112404,
+      1.0480749679772259,
+      1.0292785031178007,
+      1.011386042869046,
+      0.9397262806727387,
+      1.0489727053100302,
+      1.0442035555488023
+    ],
+    "median": 1.0292785031178007,
+    "min": 0.9397262806727387,
+    "max": 1.0489727053100302
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "phase": "seek_open",
+    "trial_paired_baseline_over_current": [
+      0.9518590359849868,
+      0.9699127699733937,
+      0.8978775323311965,
+      1.0299121480909388,
+      0.9826537560155475,
+      0.942901598907851,
+      0.9283411987078656
+    ],
+    "median": 0.9518590359849868,
+    "min": 0.8978775323311965,
+    "max": 1.0299121480909388
+  },
+  {
+    "workload": "seeking",
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "phase": "seek_batch",
+    "trial_paired_baseline_over_current": [
+      0.9539137861326565,
+      1.0153637681106604,
+      0.9955831311914545,
+      1.0035256501496326,
+      1.0033986994698174,
+      1.0206724422021574,
+      0.9969586920315064
+    ],
+    "median": 1.0033986994698174,
+    "min": 0.9539137861326565,
+    "max": 1.0206724422021574
+  },
+  {
+    "workload": "seeking",
+    "path": "assets/music/in_two (loop).ogg",
+    "phase": "seek_open",
+    "trial_paired_baseline_over_current": [
+      1.0143439347138103,
+      1.0010646604426325,
+      1.0027062318772992,
+      0.9502165515565404,
+      0.9337844784008311,
+      0.9956889933504198,
+      1.0063313870080322
+    ],
+    "median": 1.0010646604426325,
+    "min": 0.9337844784008311,
+    "max": 1.0143439347138103
+  },
+  {
+    "workload": "seeking",
+    "path": "assets/music/in_two (loop).ogg",
+    "phase": "seek_batch",
+    "trial_paired_baseline_over_current": [
+      1.0665797511478505,
+      1.0772538290787947,
+      1.0676202410458184,
+      1.0679774692632464,
+      1.0875634191884544,
+      1.0834689163924682,
+      1.13888966932957
+    ],
+    "median": 1.0772538290787947,
+    "min": 1.0665797511478505,
+    "max": 1.13888966932957
+  },
+  {
+    "workload": "seeking",
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "phase": "seek_open",
+    "trial_paired_baseline_over_current": [
+      0.9940582560514882,
+      1.0411485076823197,
+      1.027216101748343,
+      1.0071087123442513,
+      0.9876078421998676,
+      1.0179126189308294,
+      0.9744224472667886
+    ],
+    "median": 1.0071087123442513,
+    "min": 0.9744224472667886,
+    "max": 1.0411485076823197
+  },
+  {
+    "workload": "seeking",
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "phase": "seek_batch",
+    "trial_paired_baseline_over_current": [
+      0.9993638193626798,
+      1.020329262459045,
+      1.044175903699874,
+      1.042212518195051,
+      1.000676199323544,
+      1.0140301106769785,
+      0.99095697310501
+    ],
+    "median": 1.0140301106769785,
+    "min": 0.99095697310501,
+    "max": 1.044175903699874
+  }
+]

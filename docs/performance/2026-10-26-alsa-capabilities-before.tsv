@@ -1,0 +1,7 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	capabilities-baseline	rate_capabilities	200000	29111.684575	58451.05099	9035.0	9012.3396	1	0	56
+0	capabilities-baseline	probe_null	20000	57405.3714	105634.5212	23573.0	23447.3976	2	0	61
+1	capabilities-baseline	rate_capabilities	200000	29070.315855	58451.05516	8810.95	8783.896865	1	0	56
+1	capabilities-baseline	probe_null	20000	55941.74415	105634.4776	21998.5	21847.55085	2	0	61
+2	capabilities-baseline	rate_capabilities	200000	29038.742015	58451.0508	8562.7	8535.895865	1	0	56
+2	capabilities-baseline	probe_null	20000	55424.9529	105634.49545	20894.5	20763.18035	2	0	61

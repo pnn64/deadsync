@@ -1,0 +1,19 @@
+{
+  "reason": "Relocate completed mutable corpora to free tmpfs inodes; preserve all binaries, logs and build audits.",
+  "source": "/tmp/deadlib-image-stored-growth-asan-20261027-a/corpus",
+  "prior_evidence": "fuzz/reports/stored-growth-source.json",
+  "prior_evidence_sha256": "67b7ff13cc02ee4af029dba28f26378463e556e1fee752d33042242d242d78ee",
+  "archive": "target/png-fuzz-corpus-stored-growth-20261028.zip",
+  "archive_sha256": "e93b5bb897f579029d0ef13e9db0b7790a63a5586b140891d392c5ac2b1e896d",
+  "archive_bytes": 20860648,
+  "files": 55411,
+  "source_bytes": 15695361,
+  "tree_sha256": "bca5acabf9fdbde05107e3f3a9566f6346ca593b4a8c86890490967fee28a438",
+  "hash_method": "Ascending literal UTF-8 relative filename bytes, NUL, contents",
+  "all_archive_entries_match_original": true,
+  "before_free_inodes": 25070,
+  "runner_sha256": "c98f7a71d1bf432c93df47f8b5f6c77379006641988c345589ff19b2849f6013",
+  "temporary_corpus_removed_after_verification": true,
+  "after_free_inodes": 80484,
+  "wall_seconds": 59.766
+}

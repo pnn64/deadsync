@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "files": 84,
+  "tagged_files": 72,
+  "untagged_files": 12,
+  "native_seek_checks": 8700,
+  "reference_seek_checks": 840,
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file": "1fed1d2097e13386bf76d032db1db93da7de6935596fffd3ff82f5db2747c41d",
+    "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek": "c2a36224f11340893b7e9ef90f7d6853cdc4e799949e93e46c354791ee7f99e7",
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file_reference": "e4be881adce4f283cee8fcf13815328b5d97b21880a233f38a99eb3bda0d0500"
+  }
+}

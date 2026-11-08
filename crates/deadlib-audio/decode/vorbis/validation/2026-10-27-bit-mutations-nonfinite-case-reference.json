@@ -1,0 +1,49 @@
+{
+  "case": "floor-zero/packet-27/bit-16",
+  "source_sha256": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+  "input_sha256": "cc0277b071378d76878db9b4c3b82471dd09512f940cb606c1f633a64889ec0b",
+  "response_sha256": "95448ff4e6de05a0a3e408ed8c489540a11d52bc635a62fda5619ed072440639",
+  "reference_binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "records": [
+    {
+      "step": 0,
+      "kind": "P",
+      "block": 256,
+      "frames": 0,
+      "nonfinite": 0,
+      "peak_finite": 0
+    },
+    {
+      "step": 1,
+      "kind": "P",
+      "block": 256,
+      "frames": 128,
+      "nonfinite": 0,
+      "peak_finite": 0.0004944236716255546
+    },
+    {
+      "step": 2,
+      "kind": "P",
+      "block": 2048,
+      "frames": 576,
+      "nonfinite": 576,
+      "peak_finite": 0.051501378417015076
+    },
+    {
+      "step": 3,
+      "kind": "P",
+      "block": 2048,
+      "frames": 1024,
+      "nonfinite": 1024,
+      "peak_finite": 0.04496230557560921
+    },
+    {
+      "step": 4,
+      "kind": "P",
+      "block": 2048,
+      "frames": 1024,
+      "nonfinite": 0,
+      "peak_finite": 0.0006761798285879195
+    }
+  ]
+}

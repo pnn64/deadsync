@@ -203,6 +203,7 @@ pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
     );
 
     let mut cfg = default;
+    cfg.twitch = crate::streaming::load(conf, default.twitch);
     apply_display_opts(loaded.display, &mut cfg);
     apply_system_opts(loaded.system, &mut cfg);
     apply_system_hardware_opts(loaded.input_hardware, &mut cfg);
@@ -252,12 +253,14 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.show_srpg_shop = loaded.show_srpg_shop;
     cfg.srpg_shop_folder = loaded.srpg_shop_folder;
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
+    cfg.enable_golf = loaded.enable_golf;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
     cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;
     cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
     cfg.groovestats_qr_login_when = loaded.groovestats_qr_login_when;
     cfg.separate_unlocks_by_player = loaded.separate_unlocks_by_player;
+    cfg.share_rips = loaded.share_rips;
     cfg.mine_hit_sound = loaded.mine_hit_sound;
     cfg.show_stats_mode = loaded.show_stats_mode;
     cfg.frame_stats_overlay_anchor = loaded.frame_stats_overlay_anchor;
@@ -383,6 +386,9 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_scorebox_cycle_ex = loaded.scorebox_cycle_ex;
     cfg.select_music_scorebox_cycle_hard_ex = loaded.scorebox_cycle_hard_ex;
     cfg.select_music_scorebox_cycle_tournaments = loaded.scorebox_cycle_tournaments;
+    cfg.select_music_scorebox_cycle_golf = loaded.scorebox_cycle_golf;
+    cfg.select_music_scorebox_events_first = loaded.scorebox_events_first;
+    cfg.select_music_show_golf_pars = loaded.show_golf_pars;
     cfg.select_music_chart_info_peak_nps = loaded.chart_info_peak_nps;
     cfg.select_music_chart_info_effective_bpm = loaded.chart_info_effective_bpm;
     cfg.select_music_chart_info_matrix_rating = loaded.chart_info_matrix_rating;

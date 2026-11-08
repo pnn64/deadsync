@@ -543,6 +543,13 @@ fn bounded_levenshtein_by(
         return (a_len <= limit).then_some(a_len);
     }
 
+    // Trimming left a mismatch at both ends. With one edit available, equal
+    // lengths can only be a single substitution; unequal lengths must match
+    // after skipping the first scalar on the longer side. No DP row is needed.
+    if limit <= 1 {
+        return (limit == 1 && matches_one_edit(a_len, b_len, offset, equal)).then_some(1);
+    }
+
     let sentinel = limit + 1;
     let mut row: SmallVec<[usize; EDIT_DISTANCE_STACK_CAPACITY]> = smallvec![sentinel; b_len + 1];
     for (j, cell) in row.iter_mut().enumerate().take(b_len.min(limit) + 1) {
@@ -584,6 +591,21 @@ fn bounded_levenshtein_by(
     }
 
     (row[b_len] <= limit).then_some(row[b_len])
+}
+
+// Keep these loops out of the general matcher's inline code budget.
+#[inline(never)]
+fn matches_one_edit(
+    a_len: usize,
+    b_len: usize,
+    offset: usize,
+    mut equal: impl FnMut(usize, usize) -> bool,
+) -> bool {
+    match a_len.cmp(&b_len) {
+        std::cmp::Ordering::Equal => a_len == 1,
+        std::cmp::Ordering::Greater => (0..b_len).all(|i| equal(offset + i + 1, offset + i)),
+        std::cmp::Ordering::Less => (0..a_len).all(|i| equal(offset + i, offset + i + 1)),
+    }
 }
 
 #[cfg(test)]

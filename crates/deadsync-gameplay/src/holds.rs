@@ -230,6 +230,10 @@ fn build_pump_hold_events_core(
     } else {
         0
     };
+    // The sizing pass already proved that no eligible hold can emit an event.
+    if reserve_events && capacity == 0 {
+        return (Vec::new(), [0; MAX_PLAYERS]);
+    }
     let mut events = Vec::with_capacity(capacity);
     for player in 0..num_players.min(MAX_PLAYERS) {
         let compact_player = u8::try_from(player).expect("gameplay player index must fit u8");
@@ -342,6 +346,7 @@ pub struct ActiveHoldAdvance {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldResultStatsUpdate {
+    pub current_possible_points: i32,
     pub decrement_hands_holding: bool,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
@@ -356,6 +361,7 @@ pub struct HoldResultStatsUpdate {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldResultStatsState {
+    pub current_possible_points: i32,
     pub hands_holding_count_for_stats: i32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
@@ -371,6 +377,8 @@ pub const fn apply_hold_result_stats_update(
     state: &mut HoldResultStatsState,
     update: HoldResultStatsUpdate,
 ) {
+    state.current_possible_points = state.current_possible_points
+        .saturating_add(update.current_possible_points);
     if update.decrement_hands_holding && state.hands_holding_count_for_stats > 0 {
         state.hands_holding_count_for_stats -= 1;
     }
@@ -405,6 +413,7 @@ pub struct HoldResolutionPlayerState {
 #[must_use]
 pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
     HoldResultStatsState {
+        current_possible_points: player.current_possible_points,
         hands_holding_count_for_stats: player.hands_holding_count_for_stats,
         holds_held: player.holds_held,
         holds_held_for_score: player.holds_held_for_score,
@@ -418,6 +427,7 @@ pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsS
 }
 
 pub const fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStatsState) {
+    player.current_possible_points = stats.current_possible_points;
     player.hands_holding_count_for_stats = stats.hands_holding_count_for_stats;
     player.holds_held = stats.holds_held;
     player.holds_held_for_score = stats.holds_held_for_score;
@@ -783,7 +793,7 @@ pub enum PendingMissedHoldResolutionStep {
 pub struct PendingMissedHoldResolutionEvent {
     pub note_index: usize,
     pub column: usize,
-    pub end_time_ns: SongTimeNs,
+    pub time_ns: SongTimeNs,
     pub resolution: PendingMissedHoldResolution,
 }
 
@@ -815,22 +825,23 @@ pub const fn pending_missed_hold_resolution_action(
 #[must_use]
 pub fn pending_missed_hold_resolution_for_note(
     note: Option<&Note>,
-    hold_end_time_ns: Option<SongTimeNs>,
-    current_time_ns: SongTimeNs,
+    current_row: i32,
     num_cols: usize,
     score_missed_holds_rolls: bool,
 ) -> PendingMissedHoldResolutionStep {
-    let Some(end_time_ns) = hold_end_time_ns else {
-        return PendingMissedHoldResolutionStep::Remove;
-    };
-    if current_time_ns < end_time_ns {
-        return PendingMissedHoldResolutionStep::Wait;
-    }
     let Some(note) = note else {
         return PendingMissedHoldResolutionStep::Remove;
     };
     if note.column >= num_cols {
         return PendingMissedHoldResolutionStep::Remove;
+    }
+    let Some(hold) = &note.hold else {
+        return PendingMissedHoldResolutionStep::Remove;
+    };
+    // Player::UpdateHoldNotes compares rounded fixed-grid note rows, so a
+    // missed hold can resolve before the tail's exact music timestamp.
+    if current_row < beat_to_note_row(hold.end_beat) {
+        return PendingMissedHoldResolutionStep::Wait;
     }
     PendingMissedHoldResolutionStep::Resolve(pending_missed_hold_resolution_action(
         note.hold.as_ref().and_then(|hold| hold.result),
@@ -844,10 +855,10 @@ pub fn pending_missed_hold_resolution_for_note(
 /// Panics if an internal state invariant is violated.
 pub fn collect_pending_missed_hold_resolutions(
     notes: &[Note],
-    hold_end_time_cache_ns: &[SongTimeNs],
     pending_resolution: &mut [bool],
     pending_indices: &mut Vec<usize>,
     current_time_ns: SongTimeNs,
+    current_rows_by_column: &[i32],
     score_missed_holds_rolls_by_column: &[bool],
     events: &mut [Option<PendingMissedHoldResolutionEvent>],
 ) -> PendingMissedHoldResolutionUpdate {
@@ -855,20 +866,17 @@ pub fn collect_pending_missed_hold_resolutions(
     let mut event_count = 0usize;
     while i < pending_indices.len() {
         let note_index = pending_indices[i];
-        let end_time_ns = hold_end_time_cache_ns
-            .get(note_index)
-            .copied()
-            .and_then(cached_hold_end_time_ns);
         let note = notes.get(note_index);
+        let current_row = note.and_then(|note| current_rows_by_column.get(note.column))
+            .copied().unwrap_or(i32::MIN);
         let score_missed_holds_rolls = note
             .and_then(|note| score_missed_holds_rolls_by_column.get(note.column))
             .copied()
             .unwrap_or(false);
         let step = pending_missed_hold_resolution_for_note(
             note,
-            end_time_ns,
-            current_time_ns,
-            score_missed_holds_rolls_by_column.len(),
+            current_row,
+            current_rows_by_column.len(),
             score_missed_holds_rolls,
         );
         match step {
@@ -889,7 +897,7 @@ pub fn collect_pending_missed_hold_resolutions(
                 events[event_count] = Some(PendingMissedHoldResolutionEvent {
                     note_index,
                     column: note.column,
-                    end_time_ns: end_time_ns.expect("resolved missed hold event has an end time"),
+                    time_ns: current_time_ns,
                     resolution,
                 });
                 event_count += 1;
@@ -920,6 +928,9 @@ pub const fn hold_result_stats_update(
     };
     if scoring_blocked {
         return update;
+    }
+    if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+        update.current_possible_points = judgment::HOLD_SCORE_HELD;
     }
 
     match (note_type, result, player_dead) {
@@ -964,6 +975,7 @@ pub const fn hold_result_stats_update(
 
 impl HoldResultStatsUpdate {
     pub const ZERO: Self = Self {
+        current_possible_points: 0,
         decrement_hands_holding: false,
         holds_held: 0,
         holds_held_for_score: 0,
@@ -1174,7 +1186,10 @@ pub fn advance_active_hold_to_time(
         hold.let_go_started_at = None;
         hold.let_go_starting_life = 0.0;
     }
-    if resolution.is_none() && !active.let_go && final_time_ns >= active.end_time_ns {
+    // Player::UpdateHoldNotes resolves at the rounded player timing row,
+    // which can reach the tail up to half a row before its exact timestamp.
+    let current_row = beat_to_note_row(timing.get_beat_for_time(song_time_ns_to_seconds(target_time_ns)));
+    if resolution.is_none() && !active.let_go && current_row >= beat_to_note_row(hold.end_beat) {
         resolution = Some(ActiveHoldResolution::Success { note_index });
     }
 
@@ -1280,14 +1295,6 @@ pub fn integrate_active_hold_column(
 pub struct ActiveHoldColumnResolution {
     pub column: usize,
     pub resolution: ActiveHoldResolution,
-}
-
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ActiveHoldColumnsUpdate {
-    pub columns_scanned: usize,
-    pub event_count: usize,
-    pub stopped: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1838,3 +1845,7 @@ pub const fn let_go_head_beat(
         .clamp(note_beat, end_beat)
         .min(visible_beat.max(note_beat))
 }
+
+#[cfg(test)]
+#[path = "gameplay_state_perf.rs"]
+mod state_perf;

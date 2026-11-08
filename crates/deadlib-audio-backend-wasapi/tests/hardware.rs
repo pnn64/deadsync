@@ -53,8 +53,15 @@ fn shared_and_exclusive_render_and_release_endpoint() {
                 "clock stalled in {mode:?}"
             );
             if mode == WasapiAccessMode::Exclusive {
+                // The current callback publishes a zero frame count while it
+                // is rendering. Check the last completed packet in that case.
+                let completed_frames = if after.last_callback_frames == 0 {
+                    after.prev_callback_frames
+                } else {
+                    after.last_callback_frames
+                };
                 assert_eq!(
-                    after.last_callback_frames,
+                    completed_frames,
                     u64::from(get_output_timing_snapshot().buffer_frames)
                 );
             }

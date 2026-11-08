@@ -1,0 +1,982 @@
+assets/fonts/Common default 2x1.png
+assets/fonts/Mega/_ScreenEvaluation numbers 5x3 (doubleres).png
+assets/fonts/Mega/_game chars 36px 4x1 (doubleres).png
+assets/fonts/Mega/_mega font 13x7 (res 520x560).png
+assets/fonts/Mega/_mega font [nameentry] 2x1 (res 80x80).png
+assets/fonts/Mega/_mega monospace numbers 7x2 (doubleres).png
+assets/fonts/_combo/Arial Rounded/Arial Rounded 8x2 (doubleres).png
+assets/fonts/_combo/Asap/Asap 8x2 (doubleres).png
+assets/fonts/_combo/Bebas Neue/Bebas Neue 8x2 (doubleres).png
+assets/fonts/_combo/Mega/Mega 7x2 (doubleres).png
+assets/fonts/_combo/Source Code/Source Code 8x3 (doubleres).png
+assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed) 10x1 (doubleres).png
+assets/fonts/_combo/Wendy (Cursed)/_Wendy (Cursed).jpg
+assets/fonts/_combo/Work/Work 8x2 (doubleres).png
+assets/fonts/_combo/wendy/Wendy 10x1 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [ank] 16x10 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [compatible] 4x2 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-ibm] 32x12 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-jis1] 32x32 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-jis2 1] 32x32 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-jis2 2] 32x32 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-jis2 3] 32x32 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-jis2 4] 32x10 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-regular 1] 32x32 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [kanji-regular 2] 32x29 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [main] 16x16 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [symbol2] 16x16 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [symbol3] 16x6 (doubleres).png
+assets/fonts/cjk/_jfonts 16px [symbol] 26x3 (doubleres).png
+assets/fonts/emoji/_emoji 16px 32x34 (doubleres).png
+assets/fonts/game/_game chars 16px 4x3 (doubleres).png
+assets/fonts/miso/_miso light 15x15 (res 360x360).png
+assets/fonts/miso/_miso light [alt] 10x10 (res 240x240).png
+assets/fonts/miso/_miso light [cyrillic-a] 16x7 (res 384x170).png
+assets/fonts/wendy/_ScreenEvaluation numbers 5x3 (doubleres).png
+assets/fonts/wendy/_game chars 36px 4x1 (doubleres).png
+assets/fonts/wendy/_wendy monospace numbers 14x1 (doubleres).png
+assets/fonts/wendy/_wendy small 13x8 (doubleres).png
+assets/fonts/wendy/_wendy small [alt] 10x10 (doubleres).png
+assets/fonts/wendy/_wendy small [cyrillic] 8x8 (doubleres).png
+assets/fonts/wendy/_wendy white 13x6 (doubleres).png
+assets/fonts/wendy/_wendy white [special] 4x4.png
+assets/graphics/BoogieStatsEX.png
+assets/graphics/GrooveStats.png
+assets/graphics/ITL.png
+assets/graphics/SRPG9_logo_alt (doubleres).png
+assets/graphics/_fallback/banner1.png
+assets/graphics/_fallback/banner10.png
+assets/graphics/_fallback/banner11.png
+assets/graphics/_fallback/banner12.png
+assets/graphics/_fallback/banner2.png
+assets/graphics/_fallback/banner3.png
+assets/graphics/_fallback/banner4.png
+assets/graphics/_fallback/banner5.png
+assets/graphics/_fallback/banner6.png
+assets/graphics/_fallback/banner7.png
+assets/graphics/_fallback/banner8.png
+assets/graphics/_fallback/banner9.png
+assets/graphics/arrowcloud (doubleres).png
+assets/graphics/arrowcloud.png
+assets/graphics/circle.png
+assets/graphics/combo_explosion.png
+assets/graphics/content_browser/beginner.png
+assets/graphics/content_browser/deadsync_logo.png
+assets/graphics/content_browser/disc.png
+assets/graphics/content_browser/dot.png
+assets/graphics/content_browser/doubles.png
+assets/graphics/content_browser/download.png
+assets/graphics/content_browser/glow.png
+assets/graphics/content_browser/installed.png
+assets/graphics/content_browser/keyboard.png
+assets/graphics/content_browser/nobanner.png
+assets/graphics/content_browser/pad.png
+assets/graphics/content_browser/rip.png
+assets/graphics/content_browser/search.png
+assets/graphics/content_browser/stamina.png
+assets/graphics/content_browser/tech.png
+assets/graphics/content_browser/year.png
+assets/graphics/crown.png
+assets/graphics/dance.png
+assets/graphics/evaluation/cleared.png
+assets/graphics/evaluation/failed.png
+assets/graphics/fave-icon.png
+assets/graphics/feet-diagram.png
+assets/graphics/folder-solid.png
+assets/graphics/grades/a-minus.png
+assets/graphics/grades/a-plus.png
+assets/graphics/grades/a.png
+assets/graphics/grades/affluent.png
+assets/graphics/grades/b-minus.png
+assets/graphics/grades/b-plus.png
+assets/graphics/grades/b.png
+assets/graphics/grades/c-minus.png
+assets/graphics/grades/c-plus.png
+assets/graphics/grades/c.png
+assets/graphics/grades/d.png
+assets/graphics/grades/f.png
+assets/graphics/grades/goldstar (stretch).png
+assets/graphics/grades/grades 1x19.png
+assets/graphics/grades/q.png
+assets/graphics/grades/s-minus.png
+assets/graphics/grades/s-plus.png
+assets/graphics/grades/s.png
+assets/graphics/grades/star.png
+assets/graphics/has_edit.png
+assets/graphics/has_lua.png
+assets/graphics/heart.png
+assets/graphics/held_miss/Bayo (doubleres).png
+assets/graphics/held_miss/Chromatic (doubleres).png
+assets/graphics/held_miss/Corner Flag (doubleres).png
+assets/graphics/held_miss/Corner Flag Mini (doubleres).png
+assets/graphics/held_miss/DMC5 (doubleres).png
+assets/graphics/held_miss/DMC5 Chroma (doubleres).png
+assets/graphics/held_miss/FastHand (doubleres).png
+assets/graphics/held_miss/Focus (doubleres).png
+assets/graphics/held_miss/Glowstone (doubleres).png
+assets/graphics/held_miss/H (doubleres).png
+assets/graphics/held_miss/ITG2 (doubleres).png
+assets/graphics/held_miss/Love (doubleres).png
+assets/graphics/held_miss/Love Chroma (doubleres).png
+assets/graphics/held_miss/PS2 (doubleres).png
+assets/graphics/held_miss/Reconcile (doubleres).png
+assets/graphics/held_miss/Wendy (doubleres).png
+assets/graphics/held_miss/Wendy Chroma (doubleres).png
+assets/graphics/hold_judgements/ITG2 1x2 (doubleres).png
+assets/graphics/hold_judgements/Love 1x2 (doubleres).png
+assets/graphics/hold_judgements/mute 1x2 (doubleres).png
+assets/graphics/icon/icon-1024.png
+assets/graphics/icon/icon-128.png
+assets/graphics/icon/icon-16.png
+assets/graphics/icon/icon-24.png
+assets/graphics/icon/icon-256.png
+assets/graphics/icon/icon-32.png
+assets/graphics/icon/icon-48.png
+assets/graphics/icon/icon-512.png
+assets/graphics/icon/icon-64.png
+assets/graphics/icon/icon-96.png
+assets/graphics/icon/icon.png
+assets/graphics/init_arrow.png
+assets/graphics/judgements/Bebas 2x7 (doubleres).png
+assets/graphics/judgements/Censored 1x7 (doubleres).png
+assets/graphics/judgements/Chromatic 2x7 (doubleres).png
+assets/graphics/judgements/Code 2x7 (doubleres).png
+assets/graphics/judgements/Comic Sans 2x7 (doubleres).png
+assets/graphics/judgements/Emoticon 2x7 (doubleres).png
+assets/graphics/judgements/Focus 2x7 (doubleres).png
+assets/graphics/judgements/Grammar 2x7 (doubleres).png
+assets/graphics/judgements/GrooveNights 2x7 (doubleres).png
+assets/graphics/judgements/ITG2 2x7 (doubleres).png
+assets/graphics/judgements/Love 2x7 (doubleres).png
+assets/graphics/judgements/Love Chroma 2x7 (doubleres).png
+assets/graphics/judgements/Miso 2x7 (doubleres).png
+assets/graphics/judgements/Papyrus 2x7 (doubleres).png
+assets/graphics/judgements/Rainbowmatic 2x7 (doubleres).png
+assets/graphics/judgements/Roboto 2x7 (doubleres).png
+assets/graphics/judgements/Shift 2x7 (doubleres).png
+assets/graphics/judgements/Tactics 2x7 (doubleres).png
+assets/graphics/judgements/Wendy 2x7 (doubleres).png
+assets/graphics/judgements/Wendy Chroma 2x7 (doubleres).png
+assets/graphics/lock.png
+assets/graphics/logo.png
+assets/graphics/menu_bg_technique/arrow_tex.png
+assets/graphics/menu_bg_technique/square.png
+assets/graphics/menu_bg_technique/white_tex.png
+assets/graphics/meter_arrow.png
+assets/graphics/name_entry_cursor.png
+assets/graphics/nice.png
+assets/graphics/practice/note_field_bars_1x4_wrap.png
+assets/graphics/practice/snap_display_icon_9x1 (doubleres).png
+assets/graphics/pump.png
+assets/graphics/rounded-square.png
+assets/graphics/select_mode/arrow-body.png
+assets/graphics/select_mode/arrow-border.png
+assets/graphics/select_mode/arrow-stripes.png
+assets/graphics/select_mode/center-body.png
+assets/graphics/select_mode/center-border.png
+assets/graphics/select_mode/center-feet.png
+assets/graphics/srpg10_logo_alt.png
+assets/graphics/srpg10_logo_main.png
+assets/graphics/srpg10_shop/janus5kshopd.jpg
+assets/graphics/srpg10_shop/levitasshopc.jpg
+assets/graphics/srpg10_shop/remsshopc.jpg
+assets/graphics/srpg10_shop/tevshopc.jpg
+assets/graphics/srpg9_logo_alt.png
+assets/graphics/step_stats_gifs/AmongUs 3x2.png
+assets/graphics/step_stats_gifs/Bocchi 6x3.png
+assets/graphics/step_stats_gifs/CrabPls 8x8.png
+assets/graphics/step_stats_gifs/Dancing Duck 8x14.png
+assets/graphics/step_stats_gifs/DonChan 2x2.png
+assets/graphics/step_stats_gifs/NyanCat 4x3.png
+assets/graphics/step_stats_gifs/Rin Cat 2x3.png
+assets/graphics/step_stats_gifs/Sonic 4x2.png
+assets/graphics/step_stats_gifs/brodyquest 7x12.gif
+assets/graphics/step_stats_gifs/catjam 11x14.png
+assets/graphics/step_stats_gifs/snoop 8x8.png
+assets/graphics/submit/Check_1x1.png
+assets/graphics/submit/Hourglass_10x3.png
+assets/graphics/submit/LoadingSpinner_10x3.png
+assets/graphics/submit/Refresh_1x1.png
+assets/graphics/submit/Rejected_1x1.png
+assets/graphics/swoosh.png
+assets/graphics/test_input/buttons.png
+assets/graphics/test_input/dance-solo.png
+assets/graphics/test_input/dance.png
+assets/graphics/test_input/highlight.png
+assets/graphics/test_input/highlightarrow.png
+assets/graphics/test_input/highlightgreen.png
+assets/graphics/test_input/highlightred.png
+assets/graphics/test_input/pump.png
+assets/graphics/test_lights/bass light (blue).png
+assets/graphics/test_lights/blue.png
+assets/graphics/test_lights/cabinet ITG2.png
+assets/graphics/test_lights/dance.png
+assets/graphics/test_lights/highlight.png
+assets/graphics/test_lights/pink.png
+assets/graphics/test_lights/red.png
+assets/graphics/test_lights/white.png
+assets/graphics/visual_styles/arrows/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/arrows/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/arrows/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/arrows/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/arrows/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/arrows/select_color.png
+assets/graphics/visual_styles/arrows/shared_background.png
+assets/graphics/visual_styles/arrows/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/arrows/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/arrows/titlemenu_flytop (doubleres).png
+assets/graphics/visual_styles/bears/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/bears/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/bears/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/bears/gameplayin_minisplode.png
+assets/graphics/visual_styles/bears/gameplayin_splode.png
+assets/graphics/visual_styles/bears/select_color.png
+assets/graphics/visual_styles/bears/shared_background.png
+assets/graphics/visual_styles/bears/titlemenu_flybottom.png
+assets/graphics/visual_styles/bears/titlemenu_flycenter.png
+assets/graphics/visual_styles/bears/titlemenu_flytop.png
+assets/graphics/visual_styles/cats/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/cats/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/cats/combo_100milestone_splode.png
+assets/graphics/visual_styles/cats/gameplayin_minisplode.png
+assets/graphics/visual_styles/cats/gameplayin_splode.png
+assets/graphics/visual_styles/cats/select_color.png
+assets/graphics/visual_styles/cats/shared_background.png
+assets/graphics/visual_styles/cats/titlemenu_flybottom.png
+assets/graphics/visual_styles/cats/titlemenu_flycenter.png
+assets/graphics/visual_styles/cats/titlemenu_flytop.png
+assets/graphics/visual_styles/ducks/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/ducks/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/ducks/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/ducks/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/ducks/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/ducks/select_color.png
+assets/graphics/visual_styles/ducks/shared_background.png
+assets/graphics/visual_styles/ducks/titlemenu_flybottom.png
+assets/graphics/visual_styles/ducks/titlemenu_flycenter.png
+assets/graphics/visual_styles/ducks/titlemenu_flytop.png
+assets/graphics/visual_styles/ecs15/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/ecs15/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/ecs15/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/ecs15/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/ecs15/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/ecs15/select_color.png
+assets/graphics/visual_styles/ecs15/shared_background.png
+assets/graphics/visual_styles/ecs15/title_logo.png
+assets/graphics/visual_styles/ecs15/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/ecs15/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/ecs15/titlemenu_flytop (doubleres).png
+assets/graphics/visual_styles/gay/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/gay/combo_100milestone_minisplode.png
+assets/graphics/visual_styles/gay/combo_100milestone_splode.png
+assets/graphics/visual_styles/gay/gameplayin_minisplode.png
+assets/graphics/visual_styles/gay/gameplayin_splode.png
+assets/graphics/visual_styles/gay/select_color.png
+assets/graphics/visual_styles/gay/shared_background.png
+assets/graphics/visual_styles/gay/titlemenu_flybottom.png
+assets/graphics/visual_styles/gay/titlemenu_flycenter.png
+assets/graphics/visual_styles/gay/titlemenu_flytop.png
+assets/graphics/visual_styles/hearts/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/hearts/combo_100milestone_minisplode.png
+assets/graphics/visual_styles/hearts/combo_100milestone_splode.png
+assets/graphics/visual_styles/hearts/gameplayin_minisplode.png
+assets/graphics/visual_styles/hearts/gameplayin_splode.png
+assets/graphics/visual_styles/hearts/select_color.png
+assets/graphics/visual_styles/hearts/shared_background.png
+assets/graphics/visual_styles/hearts/titlemenu_flybottom.png
+assets/graphics/visual_styles/hearts/titlemenu_flycenter.png
+assets/graphics/visual_styles/hearts/titlemenu_flytop.png
+assets/graphics/visual_styles/spooky/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/spooky/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/spooky/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/spooky/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/spooky/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/spooky/select_color.png
+assets/graphics/visual_styles/spooky/shared_background.png
+assets/graphics/visual_styles/spooky/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/spooky/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/spooky/titlemenu_flytop (doubleres).png
+assets/graphics/visual_styles/srpg10/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/srpg10/combo_100milestone_minisplode.png
+assets/graphics/visual_styles/srpg10/combo_100milestone_splode.png
+assets/graphics/visual_styles/srpg10/eval/expedition_failed.png
+assets/graphics/visual_styles/srpg10/eval/gold_leaf_background.png
+assets/graphics/visual_styles/srpg10/eval/paint.png
+assets/graphics/visual_styles/srpg10/eval/pass_bg.png
+assets/graphics/visual_styles/srpg10/eval/red_lines.png
+assets/graphics/visual_styles/srpg10/eval/victory.png
+assets/graphics/visual_styles/srpg10/gameplayin_minisplode.png
+assets/graphics/visual_styles/srpg10/gameplayin_splode.png
+assets/graphics/visual_styles/srpg10/select_color.png
+assets/graphics/visual_styles/srpg10/shared_background.png
+assets/graphics/visual_styles/srpg10/titlemenu_flybottom.png
+assets/graphics/visual_styles/srpg10/titlemenu_flycenter.png
+assets/graphics/visual_styles/srpg10/titlemenu_flytop.png
+assets/graphics/visual_styles/srpg9/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/srpg9/combo_100milestone_minisplode.png
+assets/graphics/visual_styles/srpg9/combo_100milestone_splode.png
+assets/graphics/visual_styles/srpg9/gameplayin_minisplode.png
+assets/graphics/visual_styles/srpg9/gameplayin_splode.png
+assets/graphics/visual_styles/srpg9/select_color.png
+assets/graphics/visual_styles/srpg9/shared_background.png
+assets/graphics/visual_styles/srpg9/titlemenu_flybottom.png
+assets/graphics/visual_styles/srpg9/titlemenu_flycenter.png
+assets/graphics/visual_styles/srpg9/titlemenu_flytop.png
+assets/graphics/visual_styles/stars/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/stars/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/stars/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/stars/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/stars/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/stars/select_color.png
+assets/graphics/visual_styles/stars/shared_background.png
+assets/graphics/visual_styles/stars/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/stars/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/stars/titlemenu_flytop (doubleres).png
+assets/graphics/visual_styles/technique/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/technique/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/technique/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/technique/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/technique/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/technique/select_color.png
+assets/graphics/visual_styles/technique/shared_background.png
+assets/graphics/visual_styles/technique/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/technique/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/technique/titlemenu_flytop (doubleres).png
+assets/graphics/visual_styles/thonk/combo_1000milestone_swoosh.png
+assets/graphics/visual_styles/thonk/combo_100milestone_minisplode (doubleres).png
+assets/graphics/visual_styles/thonk/combo_100milestone_splode (doubleres).png
+assets/graphics/visual_styles/thonk/gameplayin_minisplode (doubleres).png
+assets/graphics/visual_styles/thonk/gameplayin_splode (doubleres).png
+assets/graphics/visual_styles/thonk/select_color.png
+assets/graphics/visual_styles/thonk/shared_background.png
+assets/graphics/visual_styles/thonk/titlemenu_flybottom (doubleres).png
+assets/graphics/visual_styles/thonk/titlemenu_flycenter (doubleres).png
+assets/graphics/visual_styles/thonk/titlemenu_flytop (doubleres).png
+assets/noteskins/common/common/Fallback HitMine Explosion.png
+assets/noteskins/common/common/Fallback Hold Body active (doubleres).png
+assets/noteskins/common/common/Fallback Hold Body inactive (doubleres).png
+assets/noteskins/common/common/Fallback Hold BottomCap active (doubleres).png
+assets/noteskins/common/common/Fallback Hold BottomCap inactive (doubleres).png
+assets/noteskins/common/common/Fallback Hold Explosion 2x1.png
+assets/noteskins/common/common/Fallback Hold TopCap Active (doubleres).png
+assets/noteskins/common/common/Fallback Hold TopCap Inactive (doubleres).png
+assets/noteskins/common/common/Fallback Ready Receptor 3x1.png
+assets/noteskins/common/common/Fallback Roll Body active (doubleres).png
+assets/noteskins/common/common/Fallback Roll Body inactive (doubleres).png
+assets/noteskins/common/common/Fallback Roll BottomCap active (doubleres).png
+assets/noteskins/common/common/Fallback Roll BottomCap inactive (doubleres).png
+assets/noteskins/common/common/Fallback Roll TopCap Active (doubleres).png
+assets/noteskins/common/common/Fallback Roll TopCap Inactive (doubleres).png
+assets/noteskins/common/common/Fallback Tap Explosion Bright.png
+assets/noteskins/common/common/Fallback Tap Explosion Dim.png
+assets/noteskins/common/common/Fallback Tap Fake 4x1.png
+assets/noteskins/common/common/Fallback Tap Lift 4x1.png
+assets/noteskins/common/common/Fallback Tap Note 4x1.png
+assets/noteskins/common/common/_blank.png
+assets/noteskins/common/common/_mine (doubleres).png
+assets/noteskins/dance/cel/Down Hold Body Active.png
+assets/noteskins/dance/cel/Down Hold Body Inactive.png
+assets/noteskins/dance/cel/Down Hold BottomCap active.png
+assets/noteskins/dance/cel/Down Hold BottomCap inactive.png
+assets/noteskins/dance/cel/Down Roll Body Inactive.png
+assets/noteskins/dance/cel/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/cel/Down Tap Explosion Bright W1.png
+assets/noteskins/dance/cel/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/cel/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/cel/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/cel/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/cel/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/cel/_Down Receptor Go 4x1 (doubleres).png
+assets/noteskins/dance/cel/_Down Roll Body active 4x1.png
+assets/noteskins/dance/cel/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/cel/_mine tex.png
+assets/noteskins/dance/cel/down hold explosion.png
+assets/noteskins/dance/cel/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/cel/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/cyber/Down Hold Body Active.png
+assets/noteskins/dance/cyber/Down Hold Body Inactive.png
+assets/noteskins/dance/cyber/Down Hold BottomCap active.png
+assets/noteskins/dance/cyber/Down Hold BottomCap inactive.png
+assets/noteskins/dance/cyber/Down Roll Body Inactive.png
+assets/noteskins/dance/cyber/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/cyber/Down Tap Explosion Bright W1.png
+assets/noteskins/dance/cyber/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/cyber/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/cyber/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/cyber/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/cyber/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/cyber/_Down Receptor Go 4x1 (doubleres).png
+assets/noteskins/dance/cyber/_Down Roll Body active 4x1.png
+assets/noteskins/dance/cyber/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/cyber/_mine tex.png
+assets/noteskins/dance/cyber/down hold explosion.png
+assets/noteskins/dance/cyber/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/cyber/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/ddr-note/Down Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-note/Down Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Down Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-note/Down Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Down Hold Head active 16x1 (doubleres).png
+assets/noteskins/dance/ddr-note/Down Hold Head inactive 16x1 (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll Body Active (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll Head active 16x1 (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll Head inactive 16x1 (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll TopCap Active (doubleres).png
+assets/noteskins/dance/ddr-note/Down Roll TopCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Down Tap Explosion Bright.png
+assets/noteskins/dance/ddr-note/Down Tap Explosion Dim (doubleres).png
+assets/noteskins/dance/ddr-note/Left Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-note/Left Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Left Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-note/Left Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Right Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-note/Right Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Right Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-note/Right Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Up Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-note/Up Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-note/Up Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-note/Up Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-note/UpLeft Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-note/UpLeft Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/UpLeft Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-note/UpLeft Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/UpRight Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-note/UpRight Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/UpRight Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-note/UpRight Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-note/_Down Go Receptor Go 2x1 (res 128x64).png
+assets/noteskins/dance/ddr-note/_Down Hold Explosion 4x1 (doubleres).png
+assets/noteskins/dance/ddr-note/_mine tex.png
+assets/noteskins/dance/ddr-note/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/ddr-note/textures/Tap Lift2 parts (mipmaps).png
+assets/noteskins/dance/ddr-note/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/ddr-rainbow/Down Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Hold Head active 16x1 (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Hold Head inactive 16x1 (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll Body Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll Head active 16x1 (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll Head inactive 16x1 (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll TopCap Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Roll TopCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Down Tap Explosion Bright.png
+assets/noteskins/dance/ddr-rainbow/Down Tap Explosion Dim (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Left Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Left Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Left Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Left Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Right Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Right Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Right Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Right Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Up Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Up Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Up Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/Up Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpLeft Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpLeft Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpLeft Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpLeft Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpRight Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpRight Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpRight Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-rainbow/UpRight Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-rainbow/_Down Go Receptor Go 2x1 (res 128x64).png
+assets/noteskins/dance/ddr-rainbow/_Down Hold Explosion 4x1 (doubleres).png
+assets/noteskins/dance/ddr-rainbow/_mine tex.png
+assets/noteskins/dance/ddr-rainbow/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/ddr-rainbow/textures/Tap Lift2 parts (mipmaps).png
+assets/noteskins/dance/ddr-rainbow/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/ddr-vivid/Down Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Hold Head active 8x1 (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Hold Head inactive 8x1 (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll Body Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll Head active 8x1 (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll Head inactive 8x1 (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll TopCap Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Roll TopCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Down Tap Explosion Bright.png
+assets/noteskins/dance/ddr-vivid/Down Tap Explosion Dim (doubleres).png
+assets/noteskins/dance/ddr-vivid/Left Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Left Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Left Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Left Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Right Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Right Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Right Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Right Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Up Hold Body active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Up Hold Body inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/Up Hold BottomCap active (doubleres).png
+assets/noteskins/dance/ddr-vivid/Up Hold BottomCap inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpLeft Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpLeft Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpLeft Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpLeft Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpRight Hold Body Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpRight Hold Body Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpRight Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/ddr-vivid/UpRight Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/ddr-vivid/_Down Go Receptor Go 2x1 (res 128x64).png
+assets/noteskins/dance/ddr-vivid/_Down Hold Explosion 4x1 (doubleres).png
+assets/noteskins/dance/ddr-vivid/_mine tex.png
+assets/noteskins/dance/ddr-vivid/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/ddr-vivid/textures/Tap Lift2 parts (mipmaps).png
+assets/noteskins/dance/ddr-vivid/textures/colours.png
+assets/noteskins/dance/ddr-vivid/textures/frame.png
+assets/noteskins/dance/default/Down Hold Body Active (doubleres).png
+assets/noteskins/dance/default/Down Hold Body Inactive (doubleres).png
+assets/noteskins/dance/default/Down Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/default/Down Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/default/Down Hold TopCap Active (doubleres).png
+assets/noteskins/dance/default/Down Hold TopCap Inactive (doubleres).png
+assets/noteskins/dance/default/Down Roll Body Active (doubleres).png
+assets/noteskins/dance/default/Down Roll Body Inactive (doubleres).png
+assets/noteskins/dance/default/Down Roll BottomCap Active (doubleres).png
+assets/noteskins/dance/default/Down Roll BottomCap Inactive (doubleres).png
+assets/noteskins/dance/default/Down Roll TopCap Active (doubleres).png
+assets/noteskins/dance/default/Down Roll TopCap Inactive (doubleres).png
+assets/noteskins/dance/default/_arrow 1x8 (doubleres).png
+assets/noteskins/dance/default/_circle (doubleres).png
+assets/noteskins/dance/default/_glow (doubleres).png
+assets/noteskins/dance/default/_receptor (doubleres).png
+assets/noteskins/dance/default/_rflash (doubleres).png
+assets/noteskins/dance/devcel-2024/(Backup) _mine tex.png
+assets/noteskins/dance/devcel-2024/(Backup2) _Down Receptor tex (res 64x64).png
+assets/noteskins/dance/devcel-2024/(Grey) _mine tex.png
+assets/noteskins/dance/devcel-2024/(Semi-Transparent) _Down Receptor tex (res 64x64).png
+assets/noteskins/dance/devcel-2024/(Technicolor) _mine tex.png
+assets/noteskins/dance/devcel-2024/(Transparent Center) _mine tex.png
+assets/noteskins/dance/devcel-2024/Backup_Down Tap Explosion Dim W1.png
+assets/noteskins/dance/devcel-2024/Down Hold Body Active.png
+assets/noteskins/dance/devcel-2024/Down Hold Body Inactive.png
+assets/noteskins/dance/devcel-2024/Down Hold BottomCap active.png
+assets/noteskins/dance/devcel-2024/Down Hold BottomCap inactive.png
+assets/noteskins/dance/devcel-2024/Down Roll Body Inactive.png
+assets/noteskins/dance/devcel-2024/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Bright W1.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/devcel-2024/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/devcel-2024/_Down Receptor Go 4x1 (doubleres).png
+assets/noteskins/dance/devcel-2024/_Down Receptor tex (res 64x64).png
+assets/noteskins/dance/devcel-2024/_Down Roll Body active 4x1.png
+assets/noteskins/dance/devcel-2024/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/devcel-2024/_mine tex.png
+assets/noteskins/dance/devcel-2024/down hold explosion.png
+assets/noteskins/dance/devcel-2024/textures/(Backup Green) Tap Note parts (mipmaps).png
+assets/noteskins/dance/devcel-2024/textures/(Original) Tap Note parts (mipmaps).png
+assets/noteskins/dance/devcel-2024/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/enchantment/Down Hold Body Active.png
+assets/noteskins/dance/enchantment/Down Hold Body Inactive.png
+assets/noteskins/dance/enchantment/Down Hold BottomCap active (stretch).png
+assets/noteskins/dance/enchantment/Down Hold BottomCap inactive (stretch).png
+assets/noteskins/dance/enchantment/Down Roll Body Inactive.png
+assets/noteskins/dance/enchantment/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Bright W1.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/enchantment/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/enchantment/_Down Receptor Go (doubleres) 4x1.png
+assets/noteskins/dance/enchantment/_Down Roll Body active 4x1.png
+assets/noteskins/dance/enchantment/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/enchantment/_Down Tap Lift (doubleres) 16x1.png
+assets/noteskins/dance/enchantment/_Down Tap Mine (doubleres) 8x1.png
+assets/noteskins/dance/enchantment/_Down Tap Note (doubleres) 16x8.png
+assets/noteskins/dance/enchantment/down hold explosion.png
+assets/noteskins/dance/lambda/Down Hold Body Active (doubleres).png
+assets/noteskins/dance/lambda/Down Hold Body Inactive (doubleres).png
+assets/noteskins/dance/lambda/Down Hold BottomCap Active (doubleres).png
+assets/noteskins/dance/lambda/Down Hold BottomCap Inactive (doubleres).png
+assets/noteskins/dance/lambda/Down Hold Explosion 2x1 (doubleres).png
+assets/noteskins/dance/lambda/Down Hold TopCap Active (doubleres).png
+assets/noteskins/dance/lambda/Down Hold TopCap Inactive (doubleres).png
+assets/noteskins/dance/lambda/Down Roll Body Active (doubleres).png
+assets/noteskins/dance/lambda/Down Roll Body Inactive (doubleres).png
+assets/noteskins/dance/lambda/Down Roll BottomCap Active (doubleres).png
+assets/noteskins/dance/lambda/Down Roll BottomCap Inactive (doubleres).png
+assets/noteskins/dance/lambda/Down Roll TopCap Active (doubleres).png
+assets/noteskins/dance/lambda/Down Roll TopCap Inactive (doubleres).png
+assets/noteskins/dance/lambda/_Down Tap Lift (doubleres).png
+assets/noteskins/dance/lambda/_Down Tap Mine (doubleres).png
+assets/noteskins/dance/lambda/_arrow 1x8 (res 64x512).png
+assets/noteskins/dance/lambda/_circle (doubleres).png
+assets/noteskins/dance/lambda/_glow (doubleres).png
+assets/noteskins/dance/lambda/_receptor (res 64x64).png
+assets/noteskins/dance/lambda/_rflash (doubleres).png
+assets/noteskins/dance/metal/Down Hold Body Active.png
+assets/noteskins/dance/metal/Down Hold Body Inactive.png
+assets/noteskins/dance/metal/Down Hold BottomCap active.png
+assets/noteskins/dance/metal/Down Hold BottomCap inactive.png
+assets/noteskins/dance/metal/Down Roll Body Inactive.png
+assets/noteskins/dance/metal/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/metal/Down Tap Explosion Bright W1.png
+assets/noteskins/dance/metal/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/metal/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/metal/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/metal/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/metal/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/metal/_Down Receptor Go 4x1 (doubleres).png
+assets/noteskins/dance/metal/_Down Roll Body active 4x1.png
+assets/noteskins/dance/metal/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/metal/_mine tex.png
+assets/noteskins/dance/metal/down hold explosion.png
+assets/noteskins/dance/metal/textures/Note.png
+assets/noteskins/dance/metal/textures/Tap Lift parts (mipmaps).png
+assets/noteskins/dance/metal/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/robot/Down Hold Body Active.png
+assets/noteskins/dance/robot/Down Hold Body Inactive.png
+assets/noteskins/dance/robot/Down Hold BottomCap active.png
+assets/noteskins/dance/robot/Down Hold BottomCap inactive.png
+assets/noteskins/dance/robot/Down Roll Body Inactive.png
+assets/noteskins/dance/robot/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/robot/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/robot/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/robot/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/robot/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/robot/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/robot/_Down Receptor Go 4x1 (doubleres).png
+assets/noteskins/dance/robot/_Down Roll Body active 4x1.png
+assets/noteskins/dance/robot/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/robot/_mine tex.png
+assets/noteskins/dance/robot/down hold explosion.png
+assets/noteskins/dance/robot/textures/Tap Note parts (mipmaps).png
+assets/noteskins/dance/vivid/Down Hold Body Active.png
+assets/noteskins/dance/vivid/Down Hold Body Inactive.png
+assets/noteskins/dance/vivid/Down Hold BottomCap active.png
+assets/noteskins/dance/vivid/Down Hold BottomCap inactive.png
+assets/noteskins/dance/vivid/Down Roll Body Inactive.png
+assets/noteskins/dance/vivid/Down Roll BottomCap Inactive.png
+assets/noteskins/dance/vivid/Down Tap Explosion Dim W1.png
+assets/noteskins/dance/vivid/Down Tap Explosion Dim W2.png
+assets/noteskins/dance/vivid/Down Tap Explosion Dim W3.png
+assets/noteskins/dance/vivid/Down Tap Explosion Dim W4.png
+assets/noteskins/dance/vivid/Down Tap Explosion Dim W5.png
+assets/noteskins/dance/vivid/_Down Receptor Go 4x1.png
+assets/noteskins/dance/vivid/_Down Roll Body active 4x1.png
+assets/noteskins/dance/vivid/_Down Roll BottomCap active 4x1.png
+assets/noteskins/dance/vivid/_mine tex.png
+assets/noteskins/dance/vivid/down hold explosion.png
+assets/noteskins/dance/vivid/textures/Tap Note parts (mipmaps).png
+assets/noteskins/pump/cmd-routine-p1/Center Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/Center Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/Center Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/Center Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/DownLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/DownLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/DownLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/DownLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/DownRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/DownRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/DownRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/DownRight Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/UpLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/UpLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/UpLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/UpLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/UpRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/UpRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p1/UpRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p1/UpRight Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/Center Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/Center Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/Center Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/Center Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/DownLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/DownLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/DownLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/DownLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/DownRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/DownRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/DownRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/DownRight Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/UpLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/UpLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/UpLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/UpLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/UpRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/UpRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd-routine-p2/UpRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd-routine-p2/UpRight Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd/Center Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/Center Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/Center Outline Receptor (doubleres).png
+assets/noteskins/pump/cmd/Center Ready Receptor (doubleres) 1x3.png
+assets/noteskins/pump/cmd/Center Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd/Center Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd/DownLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/DownLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/DownLeft Ready Receptor (doubleres) 1x3.png
+assets/noteskins/pump/cmd/DownLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd/DownLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd/DownRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/DownRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/DownRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd/UpLeft Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/UpLeft Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/UpLeft Ready Receptor (doubleres) 1x3.png
+assets/noteskins/pump/cmd/UpLeft Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/cmd/UpLeft Tap Note (doubleres) 3x2.png
+assets/noteskins/pump/cmd/UpRight Hold Body active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/UpRight Hold BottomCap active (doubleres) 6x1.png
+assets/noteskins/pump/cmd/UpRight Roll Head Active (doubleres) 3x2.png
+assets/noteskins/pump/complex/Center Hold Body active (doubleres).png
+assets/noteskins/pump/complex/Center Hold BottomCap active (doubleres).png
+assets/noteskins/pump/complex/Center Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/complex/Center Tap Note 5x1 (doubleres).png
+assets/noteskins/pump/complex/DownLeft Hold Body active (doubleres).png
+assets/noteskins/pump/complex/DownLeft Hold BottomCap active (doubleres).png
+assets/noteskins/pump/complex/DownLeft Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/complex/DownLeft Tap Note 6x1 (doubleres).png
+assets/noteskins/pump/complex/DownRight Hold Body active (doubleres).png
+assets/noteskins/pump/complex/DownRight Hold BottomCap active (doubleres).png
+assets/noteskins/pump/complex/UpLeft Hold Body active (doubleres).png
+assets/noteskins/pump/complex/UpLeft Hold BottomCap active (doubleres).png
+assets/noteskins/pump/complex/UpLeft Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/complex/UpLeft Tap Note 6x1 (doubleres).png
+assets/noteskins/pump/complex/UpRight Hold Body active (doubleres).png
+assets/noteskins/pump/complex/UpRight Hold BottomCap active (doubleres).png
+assets/noteskins/pump/default/Center Hold Body Active 6x1.png
+assets/noteskins/pump/default/Center Hold BottomCap Active 6x1.png
+assets/noteskins/pump/default/Center Outline Receptor.png
+assets/noteskins/pump/default/Center Ready Receptor 1x3.png
+assets/noteskins/pump/default/Center Tap Note 3x2.png
+assets/noteskins/pump/default/DownLeft Hold Body Active 6x1.png
+assets/noteskins/pump/default/DownLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/default/DownLeft Ready Receptor 1x3.png
+assets/noteskins/pump/default/DownLeft Tap Note 3x2.png
+assets/noteskins/pump/default/DownRight Hold Body Active 6x1.png
+assets/noteskins/pump/default/DownRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/default/UpLeft Hold Body Active 6x1.png
+assets/noteskins/pump/default/UpLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/default/UpLeft Ready Receptor 1x3.png
+assets/noteskins/pump/default/UpLeft Tap Note 3x2.png
+assets/noteskins/pump/default/UpRight Hold Body Active 6x1.png
+assets/noteskins/pump/default/UpRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/default/_flash (doubleres).png
+assets/noteskins/pump/delta-note/Center Hold Body Active.png
+assets/noteskins/pump/delta-note/Center Hold BottomCap Active.png
+assets/noteskins/pump/delta-note/Center Ready Receptor 3x1.png
+assets/noteskins/pump/delta-note/Center_feet.png
+assets/noteskins/pump/delta-note/DownLeft Hold Body Active.png
+assets/noteskins/pump/delta-note/DownLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-note/DownLeft Ready Receptor 3x1.png
+assets/noteskins/pump/delta-note/DownRight Hold Body Active.png
+assets/noteskins/pump/delta-note/DownRight Hold BottomCap Active.png
+assets/noteskins/pump/delta-note/Mine_Base.png
+assets/noteskins/pump/delta-note/Mine_Border.png
+assets/noteskins/pump/delta-note/Mine_Fill.png
+assets/noteskins/pump/delta-note/Mine_Light.png
+assets/noteskins/pump/delta-note/Mine_Overlay.png
+assets/noteskins/pump/delta-note/UpLeft Hold Body Active.png
+assets/noteskins/pump/delta-note/UpLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-note/UpLeft Ready Receptor 3x1.png
+assets/noteskins/pump/delta-note/UpRight Hold Body Active.png
+assets/noteskins/pump/delta-note/UpRight Hold BottomCap Active.png
+assets/noteskins/pump/delta-note/_Center Tap Note 6x8.png
+assets/noteskins/pump/delta-note/_CenterHit 3x1.png
+assets/noteskins/pump/delta-note/_DownLeft Tap Note 6x8.png
+assets/noteskins/pump/delta-note/_DownLeftHit 3x1.png
+assets/noteskins/pump/delta-note/_UpLeft Tap Note 6x8.png
+assets/noteskins/pump/delta-note/_blank.png
+assets/noteskins/pump/delta-routine-p1/Center Hold Body Active.png
+assets/noteskins/pump/delta-routine-p1/Center Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p1/Center Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p1/DownLeft Hold Body Active.png
+assets/noteskins/pump/delta-routine-p1/DownLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p1/DownLeft Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p1/DownRight Hold Body Active.png
+assets/noteskins/pump/delta-routine-p1/DownRight Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p1/UpLeft Hold Body Active.png
+assets/noteskins/pump/delta-routine-p1/UpLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p1/UpLeft Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p1/UpRight Hold Body Active.png
+assets/noteskins/pump/delta-routine-p1/UpRight Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p2/Center Hold Body Active.png
+assets/noteskins/pump/delta-routine-p2/Center Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p2/Center Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p2/DownLeft Hold Body Active.png
+assets/noteskins/pump/delta-routine-p2/DownLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p2/DownLeft Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p2/DownRight Hold Body Active.png
+assets/noteskins/pump/delta-routine-p2/DownRight Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p2/UpLeft Hold Body Active.png
+assets/noteskins/pump/delta-routine-p2/UpLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta-routine-p2/UpLeft Tap Note 6x1.png
+assets/noteskins/pump/delta-routine-p2/UpRight Hold Body Active.png
+assets/noteskins/pump/delta-routine-p2/UpRight Hold BottomCap Active.png
+assets/noteskins/pump/delta/Center Hold Body Active.png
+assets/noteskins/pump/delta/Center Hold BottomCap Active.png
+assets/noteskins/pump/delta/Center Ready Receptor 3x1.png
+assets/noteskins/pump/delta/Center border.png
+assets/noteskins/pump/delta/Center_blend.png
+assets/noteskins/pump/delta/Center_feet.png
+assets/noteskins/pump/delta/Center_fill.png
+assets/noteskins/pump/delta/DownLeft Hold Body Active.png
+assets/noteskins/pump/delta/DownLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta/DownLeft Ready Receptor 3x1.png
+assets/noteskins/pump/delta/DownLeft border.png
+assets/noteskins/pump/delta/DownLeft_blend.png
+assets/noteskins/pump/delta/DownLeft_fill.png
+assets/noteskins/pump/delta/DownRight Hold Body Active.png
+assets/noteskins/pump/delta/DownRight Hold BottomCap Active.png
+assets/noteskins/pump/delta/Mine_Base.png
+assets/noteskins/pump/delta/Mine_Border.png
+assets/noteskins/pump/delta/Mine_Fill.png
+assets/noteskins/pump/delta/Mine_Light.png
+assets/noteskins/pump/delta/Mine_Overlay.png
+assets/noteskins/pump/delta/UpLeft Hold Body Active.png
+assets/noteskins/pump/delta/UpLeft Hold BottomCap Active.png
+assets/noteskins/pump/delta/UpLeft Ready Receptor 3x1.png
+assets/noteskins/pump/delta/UpLeft border.png
+assets/noteskins/pump/delta/UpLeft_blend.png
+assets/noteskins/pump/delta/UpLeft_fill.png
+assets/noteskins/pump/delta/UpRight Hold Body Active.png
+assets/noteskins/pump/delta/UpRight Hold BottomCap Active.png
+assets/noteskins/pump/delta/_CenterHit 3x1.png
+assets/noteskins/pump/delta/_DownLeftHit 3x1.png
+assets/noteskins/pump/delta/_blank.png
+assets/noteskins/pump/frame5p/Center Hold Body active (doubleres).png
+assets/noteskins/pump/frame5p/Center Hold BottomCap active (doubleres).png
+assets/noteskins/pump/frame5p/Center Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/frame5p/Center Tap Note 8x1 (doubleres).png
+assets/noteskins/pump/frame5p/DownLeft Hold Body active (doubleres).png
+assets/noteskins/pump/frame5p/DownLeft Hold BottomCap active (doubleres).png
+assets/noteskins/pump/frame5p/DownLeft Hold TopCap Active (doubleres).png
+assets/noteskins/pump/frame5p/DownLeft Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/frame5p/DownLeft Tap Note 8x1 (doubleres).png
+assets/noteskins/pump/frame5p/DownRight Hold Body active (doubleres).png
+assets/noteskins/pump/frame5p/DownRight Hold BottomCap active (doubleres).png
+assets/noteskins/pump/frame5p/DownRight Hold TopCap Active(doubleres).png
+assets/noteskins/pump/frame5p/UpLeft Hold Body active (doubleres).png
+assets/noteskins/pump/frame5p/UpLeft Hold BottomCap active (doubleres).png
+assets/noteskins/pump/frame5p/UpLeft Hold TopCap (doubleres).png
+assets/noteskins/pump/frame5p/UpLeft Ready Receptor 3x1 (doubleres).png
+assets/noteskins/pump/frame5p/UpLeft Tap Note 8x1 (doubleres).png
+assets/noteskins/pump/frame5p/UpRight Hold Body active (doubleres).png
+assets/noteskins/pump/frame5p/UpRight Hold BottomCap active (doubleres).png
+assets/noteskins/pump/frame5p/UpRight Hold TopCap (doubleres).png
+assets/noteskins/pump/newextra/Center Hold Body Active 6x1.png
+assets/noteskins/pump/newextra/Center Hold BottomCap Active 6x1.png
+assets/noteskins/pump/newextra/Center Outline Receptor.png
+assets/noteskins/pump/newextra/Center Ready Receptor 1x3.png
+assets/noteskins/pump/newextra/Center Tap Note 3x2.png
+assets/noteskins/pump/newextra/DownLeft Hold Body Active 6x1.png
+assets/noteskins/pump/newextra/DownLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/newextra/DownLeft Ready Receptor 1x3.png
+assets/noteskins/pump/newextra/DownLeft Tap Note 3x2.png
+assets/noteskins/pump/newextra/DownRight Hold Body Active 6x1.png
+assets/noteskins/pump/newextra/DownRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/newextra/UpLeft Hold Body Active 6x1.png
+assets/noteskins/pump/newextra/UpLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/newextra/UpLeft Ready Receptor 1x3.png
+assets/noteskins/pump/newextra/UpLeft Tap Note 3x2.png
+assets/noteskins/pump/newextra/UpRight Hold Body Active 6x1.png
+assets/noteskins/pump/newextra/UpRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/Center Hold Body Active 6x1.png
+assets/noteskins/pump/pad/Center Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/Center Outline Receptor.png
+assets/noteskins/pump/pad/Center Ready Receptor 1x3.png
+assets/noteskins/pump/pad/Center Roll Head Active 3x2.png
+assets/noteskins/pump/pad/Center Tap Note 3x2.png
+assets/noteskins/pump/pad/DownLeft Hold Body Active 6x1.png
+assets/noteskins/pump/pad/DownLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/DownLeft Ready Receptor 1x3.png
+assets/noteskins/pump/pad/DownLeft Roll Head Active 3x2.png
+assets/noteskins/pump/pad/DownLeft Tap Note 3x2.png
+assets/noteskins/pump/pad/DownRight Hold Body Active 6x1.png
+assets/noteskins/pump/pad/DownRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/DownRight Roll Head Active 3x2.png
+assets/noteskins/pump/pad/UpLeft Hold Body Active 6x1.png
+assets/noteskins/pump/pad/UpLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/UpLeft Ready Receptor 1x3.png
+assets/noteskins/pump/pad/UpLeft Roll Head Active 3x2.png
+assets/noteskins/pump/pad/UpLeft Tap Note 3x2.png
+assets/noteskins/pump/pad/UpRight Hold Body Active 6x1.png
+assets/noteskins/pump/pad/UpRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/pad/UpRight Roll Head Active 3x2.png
+assets/noteskins/pump/rhythm/Center Hold Body Active 6x1.png
+assets/noteskins/pump/rhythm/Center Hold BottomCap Active 6x1.png
+assets/noteskins/pump/rhythm/Center Ready Receptor 1x3.png
+assets/noteskins/pump/rhythm/DownLeft Hold Body Active 6x1.png
+assets/noteskins/pump/rhythm/DownLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/rhythm/DownLeft Ready Receptor 1x3.png
+assets/noteskins/pump/rhythm/DownRight Hold Body Active 6x1.png
+assets/noteskins/pump/rhythm/DownRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/rhythm/UpLeft Hold Body Active 6x1.png
+assets/noteskins/pump/rhythm/UpLeft Hold BottomCap Active 6x1.png
+assets/noteskins/pump/rhythm/UpLeft Ready Receptor 1x3.png
+assets/noteskins/pump/rhythm/UpRight Hold Body Active 6x1.png
+assets/noteskins/pump/rhythm/UpRight Hold BottomCap Active 6x1.png
+assets/noteskins/pump/rhythm/_Center Tap Note 6x8.png
+assets/noteskins/pump/rhythm/_DownLeft Tap Note 6x8.png
+assets/noteskins/pump/rhythm/_UpLeft Tap Note 6x8.png
+assets/noteskins/pump/simple/Center Hold Body active.png
+assets/noteskins/pump/simple/Center Hold BottomCap active.png
+assets/noteskins/pump/simple/Center Ready Receptor 3x1.png
+assets/noteskins/pump/simple/Center Tap Note 8x1.png
+assets/noteskins/pump/simple/DownLeft Hold Body active.png
+assets/noteskins/pump/simple/DownLeft Hold BottomCap active.png
+assets/noteskins/pump/simple/DownLeft Ready Receptor 3x1.png
+assets/noteskins/pump/simple/DownLeft Tap Note 8x1.png
+assets/noteskins/pump/simple/DownRight Hold Body active.png
+assets/noteskins/pump/simple/DownRight Hold BottomCap active.png
+assets/noteskins/pump/simple/UpLeft Hold Body active.png
+assets/noteskins/pump/simple/UpLeft Hold BottomCap active.png
+assets/noteskins/pump/simple/UpLeft Ready Receptor 3x1.png
+assets/noteskins/pump/simple/UpLeft Tap Note 8x1.png
+assets/noteskins/pump/simple/UpRight Hold Body active.png
+assets/noteskins/pump/simple/UpRight Hold BottomCap active.png
+assets/smx-judge-lights/common/common/bad_16.gif
+assets/smx-judge-lights/common/common/bad_25.gif
+assets/smx-judge-lights/common/common/decent_25.gif
+assets/smx-judge-lights/common/common/excellent_25.gif
+assets/smx-judge-lights/common/common/fantastic_blue_25.gif
+assets/smx-judge-lights/common/common/fantastic_white_25.gif
+assets/smx-judge-lights/common/common/freeze_16.gif
+assets/smx-judge-lights/common/common/freeze_25.gif
+assets/smx-judge-lights/common/common/great_25.gif
+assets/smx-judge-lights/common/common/mine_16.gif
+assets/smx-judge-lights/common/common/mine_25.gif
+assets/smx-judge-lights/common/common/miss_16.gif
+assets/smx-judge-lights/common/common/miss_25.gif
+assets/smx-judge-lights/common/common/ok_16.gif
+assets/smx-judge-lights/common/common/ok_25.gif
+assets/smx-judge-lights/common/common/press_25.gif
+assets/smx-judge-lights/common/common/roll_16.gif
+assets/smx-judge-lights/common/common/roll_25.gif
+assets/smx-judge-lights/common/common/way_off_25.gif
+assets/smx-judge-lights/dance/senpi-basic/bad_25.gif
+assets/smx-judge-lights/dance/senpi-basic/mine_25.gif
+assets/smx-judge-lights/dance/senpi-basic/miss_25.gif
+assets/smx-judge-lights/dance/senpi-basic/ok_25.gif
+assets/smx-judge-lights/dance/senpi-basic/roll_25.gif
+assets/smx-pad-lights/common/common/default_25.gif
+assets/smx-pad-lights/common/common/results_25.gif
+assets/smx-pad-lights/common/common/song_select_25@1b113.gif
+assets/smx-pad-lights/common/common/song_select_25@1b225.gif
+assets/smx-pad-lights/dance/senpi-basic/gameplay_25@10b164.gif
+assets/smx-pad-lights/dance/senpi-basic/results_25@star5.gif
+assets/smx-pad-lights/dance/senpi-basic/song_select_25@2b128.gif
+assets/smx-pad-lights/dance/senpi-basic/song_select_25@2b129.gif
+assets/smx-pad-lights/dance/senpi-basic/song_select_25@2b139.gif
+assets/smx-pad-lights/dance/senpi-basic/song_select_25@2b158.gif

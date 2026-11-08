@@ -1,0 +1,13 @@
+    Finished `release` profile [optimized] target(s) in 2.50s
+     Running `/tmp/deadlib-image-scalar-fields-seed-target-20261027-a/release/examples/seed_fuzz /tmp/deadlib-image-scalar-fields-full-reproduction-20261027-a`
+Huffman: 19645 fixtures, 649 seeds
+Native resource budgets: 6376 seeds; independent mixed/one-bit prefixes: 2220 seeds per raw corpus
+PNG chunk grammar: 1893 independent seeds
+Scalar PNG fields: 6494 independent seeds per PNG target
+Named PNG metadata: 3710 independent seeds
+Latin-1 text bodies: 512 PNG seeds and 4304 structured seeds
+Independent APNG validity/recovery: 3060 seeds
+APNG fcTL before acTL: 1560 seeds
+Pinned WPT APNG/reference images: 42 seeds
+Independent HDR fields/grammar: 8534 seeds
+{"archive_sha256": "7b5d927b5f52efc06da75d29ea91f3b0c6891c4420d320c1912f73d44d95d2f9", "initial_corpora": [{"target": "png_stream", "files": 34361, "bytes": 7204344, "maximum_file_bytes": 63435, "sha256": "370cfa04789fb745f2fc4feb02b24c551507a53cd9e9e0f0aba4d159223d68ff"}], "runner_sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610", "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents", "included_archives": []}

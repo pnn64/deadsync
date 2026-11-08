@@ -1,0 +1,41 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.58s
+     Running unittests src\lib.rs (target\debug\deps\deadlib_audio_decode_vorbis-79f391c83bbd7219.exe)
+
+running 12 tests
+test codebook::prefix_tests::prefix_memory_is_optional_and_logical_node_limits_are_unchanged ... ok
+test decoder::tests::inverse_coupling_covers_all_signs_and_channel_orders ... ok
+test decoder::tests::windows_obey_complementary_slopes_and_hybrid_bounds ... ok
+test residue::tests::residue_interleaves_clips_and_propagates_truncation ... ok
+test floor::tests::floor0_odd_even_products_match_closed_form_at_dc ... ok
+test setup::tests::floor1_sixty_five_point_limit_is_a_format_constraint ... ok
+test floor::tests::render_integer_line_and_prediction_use_spec_rounding ... ok
+test encoder::tests::first_stage_packed_scalar_pairs_decode_all_entries_with_exact_lengths ... ok
+test transform::tests::analysis_window_and_synthesis_overlap_reconstruct_unquantized_pcm ... ok
+test codebook::prefix_tests::lookup_matches_tree_at_every_prefix_alignment_and_packet_tail ... ok
+test transform::tests::fft_imdct_matches_direct_cosine_for_all_vorbis_sizes ... ok
+test transform::tests::fft_mdct_matches_direct_analysis_at_every_legal_size ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\allocations.rs (target\debug\deps\allocations-8536a6b815f9b993.exe)
+
+running 1 test
+test repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests\encoding.rs (target\debug\deps\encoding-bc8e5b836cff79f9.exe)
+
+running 9 tests
+test raw_encoder_argument_errors_callback_failures_limits_and_reset ... ok
+test ogg_encoder_seek_positions_and_write_failures_are_explicit ... ok
+test native_encoder_codebooks_match_libvorbis_for_every_entry ... ok
+test forward_mdct_matches_libvorbis_at_all_legal_sizes ... ok
+test libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages ... ok
+test native_generated_packets_match_symphonia_without_channel_coupling ... ok
+test native_encoded_setup_pcm_lengths_chunking_and_precision ... ok
+test encoder_handles_channel_range_silence_dc_impulses_and_precision_stages ... ok
+test native_encoding_is_accepted_by_libvorbis_with_exact_counts_and_pcm_parity ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.12s

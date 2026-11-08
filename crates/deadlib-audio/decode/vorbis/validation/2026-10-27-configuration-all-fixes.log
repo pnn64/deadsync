@@ -1,0 +1,182 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 16.61s
+     Running tests\configuration_parity.rs (target\release\deps\configuration_parity-35d80e974c59ef95.exe)
+
+running 3 tests
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 1 cases, 5 packets, 1 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 192 samples, peak error 1.430511475e-6, RMS 4.738390671e-7, signal peak 17.799383
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 2.861022949e-6, RMS 5.504910611e-7, signal peak 32.587280
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 3.576278687e-6, RMS 4.708214932e-7, signal peak 21.831312
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 2.861022949e-6, RMS 5.504910611e-7, signal peak 32.587280
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 3.576278687e-6, RMS 4.708214932e-7, signal peak 21.831312
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 2.026557922e-6, RMS 4.437301189e-7, signal peak 23.042686
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 3.576278687e-6, RMS 4.708214932e-7, signal peak 21.831312
+test synthetic_setup_regressions_match_retained_libvorbis_pcm ... ok
+modes-1: 3 cases, 15 packets, 2 discarded
+modes-1: 640 samples, peak error 1.549720764e-6, RMS 4.814823757e-7, signal peak 17.799383
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 28672 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-2: 11 cases, 55 packets, 6 discarded
+modes-2: 6368 samples, peak error 5.722045898e-6, RMS 7.429363071e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-3: 13 cases, 65 packets, 7 discarded
+modes-3: 3648 samples, peak error 4.887580872e-6, RMS 5.606072327e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 28672 samples, peak error 4.112720490e-6, RMS 4.433348777e-7, signal peak 26.209942
+modes-4: 20 cases, 100 packets, 10 discarded
+modes-4: 11776 samples, peak error 5.722045898e-6, RMS 7.434094505e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.356005669e-6, RMS 1.683516347e-7, signal peak 11.561051
+modes-5: 24 cases, 120 packets, 13 discarded
+modes-5: 6848 samples, peak error 4.887580872e-6, RMS 5.652167818e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 28672 samples, peak error 4.887580872e-6, RMS 3.863863872e-7, signal peak 23.770929
+modes-6: 31 cases, 155 packets, 16 discarded
+modes-6: 18144 samples, peak error 5.722045898e-6, RMS 7.432434256e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.343824975e-7, signal peak 10.485217
+modes-7: 31 cases, 155 packets, 15 discarded
+modes-7: 9280 samples, peak error 4.887580872e-6, RMS 5.739056388e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 28672 samples, peak error 4.887580872e-6, RMS 3.863863872e-7, signal peak 23.770929
+modes-8: 38 cases, 190 packets, 18 discarded
+modes-8: 22592 samples, peak error 5.722045898e-6, RMS 7.436760473e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.343824975e-7, signal peak 10.485217
+modes-9: 46 cases, 230 packets, 25 discarded
+modes-9: 13248 samples, peak error 4.887580872e-6, RMS 5.677393931e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 28672 samples, peak error 2.384185791e-5, RMS 2.416407401e-6, signal peak 197.974182
+modes-10: 53 cases, 265 packets, 28 discarded
+modes-10: 30880 samples, peak error 5.722045898e-6, RMS 7.431167745e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }/word-0/vector-0/entry-1/step-3: 160 samples, peak error 7.867813110e-6, RMS 7.588548268e-7, signal peak 2.595959
+
+thread 'residue_classwords_and_stageless_submaps_match_libvorbis_with_recovery' (7016) panicked at crates\deadlib-audio\decode\vorbis\tests\support\mod.rs:128:9:
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }/word-0/vector-0/entry-1/step-3: PCM peak tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test residue_classwords_and_stageless_submaps_match_libvorbis_with_recovery ... FAILED
+modes-11: 53 cases, 265 packets, 27 discarded
+modes-11: 15680 samples, peak error 4.887580872e-6, RMS 5.724880273e-7, signal peak 26.217289
+modes-12: 60 cases, 300 packets, 30 discarded
+modes-12: 35328 samples, peak error 5.722045898e-6, RMS 7.434094505e-7, signal peak 26.217289
+modes-13: 60 cases, 300 packets, 29 discarded
+modes-13: 18112 samples, peak error 4.887580872e-6, RMS 5.759366176e-7, signal peak 26.217289
+modes-14: 67 cases, 335 packets, 32 discarded
+modes-14: 39776 samples, peak error 5.722045898e-6, RMS 7.436365893e-7, signal peak 26.217289
+modes-15: 67 cases, 335 packets, 31 discarded
+modes-15: 20544 samples, peak error 4.887580872e-6, RMS 5.785548875e-7, signal peak 26.217289
+modes-16: 74 cases, 370 packets, 34 discarded
+modes-16: 44224 samples, peak error 5.722045898e-6, RMS 7.438179875e-7, signal peak 26.217289
+modes-17: 90 cases, 450 packets, 49 discarded
+modes-17: 26048 samples, peak error 4.887580872e-6, RMS 5.690612928e-7, signal peak 26.217289
+modes-18: 97 cases, 485 packets, 52 discarded
+modes-18: 56352 samples, peak error 5.722045898e-6, RMS 7.430352058e-7, signal peak 26.217289
+modes-19: 97 cases, 485 packets, 51 discarded
+modes-19: 28480 samples, peak error 4.887580872e-6, RMS 5.715622983e-7, signal peak 26.217289
+modes-20: 104 cases, 520 packets, 54 discarded
+modes-20: 60800 samples, peak error 5.722045898e-6, RMS 7.432112650e-7, signal peak 26.217289
+modes-21: 104 cases, 520 packets, 53 discarded
+modes-21: 30912 samples, peak error 4.887580872e-6, RMS 5.736613058e-7, signal peak 26.217289
+modes-22: 111 cases, 555 packets, 56 discarded
+modes-22: 65248 samples, peak error 5.722045898e-6, RMS 7.433632864e-7, signal peak 26.217289
+modes-23: 111 cases, 555 packets, 55 discarded
+modes-23: 33344 samples, peak error 4.887580872e-6, RMS 5.754480616e-7, signal peak 26.217289
+modes-24: 118 cases, 590 packets, 58 discarded
+modes-24: 69696 samples, peak error 5.722045898e-6, RMS 7.434958784e-7, signal peak 26.217289
+modes-25: 118 cases, 590 packets, 57 discarded
+modes-25: 35776 samples, peak error 4.887580872e-6, RMS 5.769874396e-7, signal peak 26.217289
+modes-26: 125 cases, 625 packets, 60 discarded
+modes-26: 74144 samples, peak error 5.722045898e-6, RMS 7.436125422e-7, signal peak 26.217289
+modes-27: 125 cases, 625 packets, 59 discarded
+modes-27: 38208 samples, peak error 4.887580872e-6, RMS 5.783275016e-7, signal peak 26.217289
+modes-28: 132 cases, 660 packets, 62 discarded
+modes-28: 78592 samples, peak error 5.722045898e-6, RMS 7.437159852e-7, signal peak 26.217289
+modes-29: 132 cases, 660 packets, 61 discarded
+modes-29: 40640 samples, peak error 4.887580872e-6, RMS 5.795046136e-7, signal peak 26.217289
+modes-30: 139 cases, 695 packets, 64 discarded
+modes-30: 83040 samples, peak error 5.722045898e-6, RMS 7.438083342e-7, signal peak 26.217289
+modes-31: 139 cases, 695 packets, 63 discarded
+modes-31: 43072 samples, peak error 4.887580872e-6, RMS 5.805467999e-7, signal peak 26.217289
+modes-32: 146 cases, 730 packets, 66 discarded
+modes-32: 87488 samples, peak error 5.722045898e-6, RMS 7.438912833e-7, signal peak 26.217289
+modes-33: 242 cases, 1210 packets, 161 discarded
+modes-33: 63936 samples, peak error 4.887580872e-6, RMS 5.526006009e-7, signal peak 26.217289
+modes-34: 253 cases, 1265 packets, 168 discarded
+modes-34: 139936 samples, peak error 5.722045898e-6, RMS 7.416207857e-7, signal peak 26.217289
+modes-35: 253 cases, 1265 packets, 167 discarded
+modes-35: 67136 samples, peak error 4.887580872e-6, RMS 5.534632802e-7, signal peak 26.217289
+modes-36: 264 cases, 1320 packets, 174 discarded
+modes-36: 146304 samples, peak error 5.722045898e-6, RMS 7.416780934e-7, signal peak 26.217289
+modes-37: 264 cases, 1320 packets, 173 discarded
+modes-37: 70336 samples, peak error 4.887580872e-6, RMS 5.542462977e-7, signal peak 26.217289
+modes-38: 275 cases, 1375 packets, 180 discarded
+modes-38: 152672 samples, peak error 5.722045898e-6, RMS 7.417306165e-7, signal peak 26.217289
+modes-39: 275 cases, 1375 packets, 179 discarded
+modes-39: 73536 samples, peak error 4.887580872e-6, RMS 5.549602028e-7, signal peak 26.217289
+modes-40: 286 cases, 1430 packets, 186 discarded
+modes-40: 159040 samples, peak error 5.722045898e-6, RMS 7.417789303e-7, signal peak 26.217289
+modes-41: 286 cases, 1430 packets, 185 discarded
+modes-41: 76736 samples, peak error 4.887580872e-6, RMS 5.556137603e-7, signal peak 26.217289
+modes-42: 297 cases, 1485 packets, 192 discarded
+modes-42: 165408 samples, peak error 5.722045898e-6, RMS 7.418235213e-7, signal peak 26.217289
+modes-43: 297 cases, 1485 packets, 191 discarded
+modes-43: 79936 samples, peak error 4.887580872e-6, RMS 5.562143133e-7, signal peak 26.217289
+modes-44: 308 cases, 1540 packets, 198 discarded
+modes-44: 171776 samples, peak error 5.722045898e-6, RMS 7.418648038e-7, signal peak 26.217289
+modes-45: 308 cases, 1540 packets, 197 discarded
+modes-45: 83136 samples, peak error 4.887580872e-6, RMS 5.567680594e-7, signal peak 26.217289
+modes-46: 319 cases, 1595 packets, 204 discarded
+modes-46: 178144 samples, peak error 5.722045898e-6, RMS 7.419031328e-7, signal peak 26.217289
+modes-47: 319 cases, 1595 packets, 203 discarded
+modes-47: 86336 samples, peak error 4.887580872e-6, RMS 5.572802663e-7, signal peak 26.217289
+modes-48: 330 cases, 1650 packets, 210 discarded
+modes-48: 184512 samples, peak error 5.722045898e-6, RMS 7.419388144e-7, signal peak 26.217289
+modes-49: 330 cases, 1650 packets, 209 discarded
+modes-49: 89536 samples, peak error 4.887580872e-6, RMS 5.577554397e-7, signal peak 26.217289
+modes-50: 341 cases, 1705 packets, 216 discarded
+modes-50: 190880 samples, peak error 5.722045898e-6, RMS 7.419721136e-7, signal peak 26.217289
+modes-51: 341 cases, 1705 packets, 215 discarded
+modes-51: 92736 samples, peak error 4.887580872e-6, RMS 5.581974563e-7, signal peak 26.217289
+modes-52: 352 cases, 1760 packets, 222 discarded
+modes-52: 197248 samples, peak error 5.722045898e-6, RMS 7.420032614e-7, signal peak 26.217289
+modes-53: 352 cases, 1760 packets, 221 discarded
+modes-53: 95936 samples, peak error 4.887580872e-6, RMS 5.586096700e-7, signal peak 26.217289
+modes-54: 363 cases, 1815 packets, 228 discarded
+modes-54: 203616 samples, peak error 5.722045898e-6, RMS 7.420324598e-7, signal peak 26.217289
+modes-55: 363 cases, 1815 packets, 227 discarded
+modes-55: 99136 samples, peak error 4.887580872e-6, RMS 5.589949969e-7, signal peak 26.217289
+modes-56: 374 cases, 1870 packets, 234 discarded
+modes-56: 209984 samples, peak error 5.722045898e-6, RMS 7.420598862e-7, signal peak 26.217289
+modes-57: 374 cases, 1870 packets, 233 discarded
+modes-57: 102336 samples, peak error 4.887580872e-6, RMS 5.593559847e-7, signal peak 26.217289
+modes-58: 385 cases, 1925 packets, 240 discarded
+modes-58: 216352 samples, peak error 5.722045898e-6, RMS 7.420856971e-7, signal peak 26.217289
+modes-59: 385 cases, 1925 packets, 239 discarded
+modes-59: 105536 samples, peak error 4.887580872e-6, RMS 5.596948691e-7, signal peak 26.217289
+modes-60: 396 cases, 1980 packets, 246 discarded
+modes-60: 222720 samples, peak error 5.722045898e-6, RMS 7.421100312e-7, signal peak 26.217289
+modes-61: 396 cases, 1980 packets, 245 discarded
+modes-61: 108736 samples, peak error 4.887580872e-6, RMS 5.600136201e-7, signal peak 26.217289
+modes-62: 407 cases, 2035 packets, 252 discarded
+modes-62: 229088 samples, peak error 5.722045898e-6, RMS 7.421330118e-7, signal peak 26.217289
+modes-63: 407 cases, 2035 packets, 251 discarded
+modes-63: 111936 samples, peak error 4.887580872e-6, RMS 5.603139803e-7, signal peak 26.217289
+modes-64: 418 cases, 2090 packets, 258 discarded
+modes-64: 235456 samples, peak error 5.722045898e-6, RMS 7.421547487e-7, signal peak 26.217289
+test all_mode_counts_and_unused_slots_match_libvorbis_with_recovery ... ok
+
+failures:
+
+failures:
+    residue_classwords_and_stageless_submaps_match_libvorbis_with_recovery
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 4.35s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test configuration_parity`

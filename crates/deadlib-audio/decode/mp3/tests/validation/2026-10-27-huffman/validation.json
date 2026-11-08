@@ -1,0 +1,85 @@
+{
+  "passed": true,
+  "timestamp_utc": "2026-10-27T21:49:05Z",
+  "integration_tests": 14,
+  "pair_configurations": 175680,
+  "quad_configurations": 4096,
+  "independent_vectors": 22476,
+  "scope": "Native Huffman integer/bit-consumption parity and independent codeword meaning via libmad hybrid output. Complete native spectral/PCM decoding remains unfinished.",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--target-dir",
+        "target/deadlib-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-mp3",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "Cargo.toml": "dbe8fce81c33370989bf6747ef274afed81c60c13b9252e0cb09b9d59b38cc71",
+    "examples/inspect.rs": "2c4042ca498e6e99bbbbccfee9db2023182df2ef09525206df76d42dedd332a3",
+    "scripts/generate_huffman.py": "caea54b7d6d439219c91685cdbc4fdf24ff71743d29adee821cc0479602a3ea3",
+    "src/bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+    "src/checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+    "src/frame.rs": "7428ee4e2c3294ad234366cd81a5d18234dfedeba898f8cb35284ec62ad90e30",
+    "src/huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+    "src/huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+    "src/lib.rs": "c0f09b3c8c81270490b98c2bd8985120cdf5ca1551302bcb971974461a87e6a5",
+    "src/reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+    "src/scalefactors.rs": "c7158a2fb7e4397597cb2c3e5ccdf34f4afa5487b23640cfa7f3937872c34d62",
+    "src/side.rs": "6f1ad3b2d2ee65b3093d233accd8128b2766789c3a0fed1c99e63d0401dcc4f4",
+    "src/tags.rs": "4cf2b0d700d373766a09a8a76a0974a9271ffc409177ed6675cc9b4a8e423da3",
+    "tests/foundation.rs": "c09f1976dcfb57b05cd17efa20363a06875cd1ff26941429bb50f2ccad72385a",
+    "tests/huffman.rs": "cd7858fbb1dcb69967fd11a5b5f843ed5047609af1dccdcb5a350fd6a5fe2bff",
+    "tests/reference_framing.py": "3c09a01192a34920ee65cee8dde6f3d4e1c8ff332f5b8f23bd45197f1dd72f42",
+    "tests/reference_huffman.py": "c917efba39e0e1f7fbb5db5def4aecfdaf954917309dc159be8ae9756731a83b",
+    "tests/scalefactors.rs": "e4f2452030ced15a2bbf41ae61d2c1dc7c523d7e68a52d2f823f59e3769de98d",
+    "tests/data/huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "tests/data/huffman.json": "9bfd7a46a027eb55a4fcb78eb375e178e876219190cd563de1ba66514ae76c3e",
+    "tests/oracle/hybrid.c": "b60511e08ea78682bd81a9e088ca3f61ca4bc94ddbf4e027fdf01f3c379a7902",
+    "tests/oracle/inspect.c": "8792a155a47f752fbfa8bbf3ae6f8190b9161c24df8e1ac17015083f4034ba82"
+  },
+  "regenerated_sha256": {
+    "src/huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+    "tests/data/huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "tests/data/huffman.json": "9bfd7a46a027eb55a4fcb78eb375e178e876219190cd563de1ba66514ae76c3e"
+  },
+  "report_sha256": {
+    "gate-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gate-1.log": "df33fed2bd5cc55ec9e2012c991989ab234e1b2b080698a06ff964f69a5a5b9d",
+    "gate-2.log": "a60e6b9a354c9649abf56fce56a56e0842ae1b265f855dfb3cdccda2beb92ebe",
+    "numeric-source.json": "5786317380fa870d540bfabe8201a21107b04cd002ea1b62204ea532cd89f92e",
+    "reference-hybrid.json": "0899c4c197edcf5b09b54ca04df87c847fc4114b9ade84fd533b26f918ec099c"
+  }
+}

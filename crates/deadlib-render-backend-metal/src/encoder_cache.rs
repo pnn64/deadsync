@@ -25,7 +25,7 @@ pub struct EncoderCache {
     cameras: [Option<u8>; 2],
     texture: Option<u64>,
     sampler: Option<usize>,
-    depth: Option<bool>,
+    depth: Option<deadlib_render_core::DepthMode>,
     cull: Option<CullMode>,
 }
 
@@ -70,7 +70,7 @@ impl EncoderCache {
     }
 
     #[inline(always)]
-    pub(crate) fn depth_changed(&mut self, depth: bool) -> bool {
+    pub(crate) fn depth_changed(&mut self, depth: deadlib_render_core::DepthMode) -> bool {
         update(&mut self.depth, depth)
     }
 

@@ -1,0 +1,60 @@
+[
+  {
+    "stage": "native-rate-before",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-native-rate-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-native-rate-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "2da8881bda13c8e4f7cdc49ffa364900363b800ef421fa0097f87f368e0c3e5d",
+      "test_source_sha256": "48da42e0e421eb2927d7d1cac0bb4dec0692012551b273d2c8cb3beaa86ec249",
+      "rate_source_sha256": "9342e9732a1a7851f5f3923401da9ab1a21e76498ce2409bacd96dddde62bd8f",
+      "binary_sha256": "689ef34cf274990a4941f5137df561333a865e57ed0bf9cb80f3048b7689aa73"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.05s\n\n"
+  },
+  {
+    "stage": "native-complete",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-native-complete\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-native-complete\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "7a574944e0b9b7b60f71e921104365073c9a12d5d5b53ef52812e509b33faba5",
+      "test_source_sha256": "5146d214cb7a3b637efa94b301261914d897b5bb7e246967a7a6c5e453a80b0c",
+      "rate_source_sha256": "9342e9732a1a7851f5f3923401da9ab1a21e76498ce2409bacd96dddde62bd8f",
+      "binary_sha256": "e9579036f5e389dd2cf1503ca3a6a742021f05ad34d8bf0844f0d522309f98f1"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.04s\n\n"
+  }
+]

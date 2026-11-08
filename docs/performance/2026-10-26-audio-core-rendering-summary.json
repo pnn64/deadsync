@@ -1,0 +1,289 @@
+{
+  "selected": [
+    {
+      "name": "unity-i16",
+      "workload": "rendering/i16/music-unit/samples=4096",
+      "before_stage": "pcm-three-before",
+      "after_stage": "pcm-three-unity",
+      "before_cycles": 14587.305,
+      "after_cycles": 2327.24,
+      "cpu_throughput": 6.268070761932591
+    },
+    {
+      "name": "unity-i16-small",
+      "workload": "rendering/i16/music-unit/samples=512",
+      "before_stage": "pcm-three-before",
+      "after_stage": "pcm-three-unity",
+      "before_cycles": 1984.575,
+      "after_cycles": 435.15,
+      "cpu_throughput": 4.560668734918994
+    },
+    {
+      "name": "silence-i16",
+      "workload": "rendering/i16/silence/samples=4096",
+      "before_stage": "pcm-three-before",
+      "after_stage": "pcm-three-unity",
+      "before_cycles": 1294.96,
+      "after_cycles": 412.235,
+      "cpu_throughput": 3.1413150266231638
+    },
+    {
+      "name": "muted-i16",
+      "workload": "rendering/i16/music-muted/samples=4096",
+      "before_stage": "pcm-three-unity",
+      "after_stage": "pcm-three-i16-mute",
+      "before_cycles": 15029.455,
+      "after_cycles": 2245.825,
+      "cpu_throughput": 6.692175481170617
+    },
+    {
+      "name": "muted-i16-ramp",
+      "workload": "rendering/i16/music-muted-ramp/samples=4096",
+      "before_stage": "pcm-three-unity",
+      "after_stage": "pcm-three-i16-mute",
+      "before_cycles": 33325.32,
+      "after_cycles": 21706.665,
+      "cpu_throughput": 1.5352574888864778
+    },
+    {
+      "name": "muted-i16-surround",
+      "workload": "rendering/i16/music-muted-surround/samples=12288",
+      "before_stage": "pcm-three-unity",
+      "after_stage": "pcm-three-i16-mute",
+      "before_cycles": 81910.76000000001,
+      "after_cycles": 25971.449999999997,
+      "cpu_throughput": 3.1538770457560137
+    },
+    {
+      "name": "muted-f32-surround",
+      "workload": "rendering/f32/music-muted-surround/samples=12288",
+      "before_stage": "pcm-three-i16-mute",
+      "after_stage": "pcm-three-final",
+      "before_cycles": 45912.755000000005,
+      "after_cycles": 30105.375,
+      "cpu_throughput": 1.5250683640379834
+    },
+    {
+      "name": "muted-f32-surround-small",
+      "workload": "rendering/f32/music-muted-surround/samples=1536",
+      "before_stage": "pcm-three-i16-mute",
+      "after_stage": "pcm-three-final",
+      "before_cycles": 5793.485000000001,
+      "after_cycles": 3881.125,
+      "cpu_throughput": 1.4927334213662278
+    },
+    {
+      "name": "muted-f32-steady",
+      "workload": "rendering/f32/music-muted/samples=4096",
+      "before_stage": "pcm-three-i16-mute",
+      "after_stage": "pcm-three-final",
+      "before_cycles": 4293.965,
+      "after_cycles": 3926.04,
+      "cpu_throughput": 1.0937140222718058
+    }
+  ],
+  "all_median_cycles": {
+    "rendering/f32/music-gain/samples=4096": {
+      "pcm-three-before": 4059.8500000000004,
+      "pcm-three-unity": 4162.85,
+      "pcm-three-i16-mute": 4214.13,
+      "pcm-three-final": 4099.21
+    },
+    "rendering/f32/music-gain/samples=512": {
+      "pcm-three-before": 643.325,
+      "pcm-three-unity": 676.45,
+      "pcm-three-i16-mute": 685.22,
+      "pcm-three-final": 697.19
+    },
+    "rendering/f32/music-muted-negative-zero/samples=4096": {
+      "pcm-three-before": 22282.845,
+      "pcm-three-unity": 22529.33,
+      "pcm-three-i16-mute": 22425.205,
+      "pcm-three-final": 22261.71
+    },
+    "rendering/f32/music-muted-negative-zero/samples=512": {
+      "pcm-three-before": 3030.575,
+      "pcm-three-unity": 3027.48,
+      "pcm-three-i16-mute": 3016.38,
+      "pcm-three-final": 3066.8450000000003
+    },
+    "rendering/f32/music-muted-ramp/samples=4096": {
+      "pcm-three-before": 22039.059999999998,
+      "pcm-three-unity": 22300.165,
+      "pcm-three-i16-mute": 22391.92,
+      "pcm-three-final": 22424.305
+    },
+    "rendering/f32/music-muted-ramp/samples=512": {
+      "pcm-three-before": 3020.71,
+      "pcm-three-unity": 3018.66,
+      "pcm-three-i16-mute": 3046.7,
+      "pcm-three-final": 3051.675
+    },
+    "rendering/f32/music-muted-surround/samples=12288": {
+      "pcm-three-before": 44731.93,
+      "pcm-three-unity": 48188.375,
+      "pcm-three-i16-mute": 45912.755000000005,
+      "pcm-three-final": 30105.375
+    },
+    "rendering/f32/music-muted-surround/samples=1536": {
+      "pcm-three-before": 5853.755,
+      "pcm-three-unity": 6240.16,
+      "pcm-three-i16-mute": 5793.485000000001,
+      "pcm-three-final": 3881.125
+    },
+    "rendering/f32/music-muted/samples=4096": {
+      "pcm-three-before": 4123.045,
+      "pcm-three-unity": 4188.715,
+      "pcm-three-i16-mute": 4293.965,
+      "pcm-three-final": 3926.04
+    },
+    "rendering/f32/music-muted/samples=512": {
+      "pcm-three-before": 693.035,
+      "pcm-three-unity": 703.23,
+      "pcm-three-i16-mute": 706.52,
+      "pcm-three-final": 681.515
+    },
+    "rendering/f32/music-unit/samples=4096": {
+      "pcm-three-before": 4077.395,
+      "pcm-three-unity": 4229.424999999999,
+      "pcm-three-i16-mute": 4222.45,
+      "pcm-three-final": 4095.6050000000005
+    },
+    "rendering/f32/music-unit/samples=512": {
+      "pcm-three-before": 647.9649999999999,
+      "pcm-three-unity": 683.365,
+      "pcm-three-i16-mute": 681.26,
+      "pcm-three-final": 683.2
+    },
+    "rendering/f32/sfx/samples=4096": {
+      "pcm-three-before": 8083.04,
+      "pcm-three-unity": 8228.55,
+      "pcm-three-i16-mute": 8317.835,
+      "pcm-three-final": 8137.245
+    },
+    "rendering/f32/sfx/samples=512": {
+      "pcm-three-before": 1288.2,
+      "pcm-three-unity": 1309.585,
+      "pcm-three-i16-mute": 1299.0149999999999,
+      "pcm-three-final": 1309.835
+    },
+    "rendering/f32/silence/samples=4096": {
+      "pcm-three-before": 1035.6550000000002,
+      "pcm-three-unity": 1058.82,
+      "pcm-three-i16-mute": 1033.63,
+      "pcm-three-final": 1044.65
+    },
+    "rendering/f32/silence/samples=512": {
+      "pcm-three-before": 313.17499999999995,
+      "pcm-three-unity": 330.63,
+      "pcm-three-i16-mute": 350.15,
+      "pcm-three-final": 338.1
+    },
+    "rendering/i16/music-gain/samples=4096": {
+      "pcm-three-before": 14700.875,
+      "pcm-three-unity": 15149.325,
+      "pcm-three-i16-mute": 15176.09,
+      "pcm-three-final": 15018.43
+    },
+    "rendering/i16/music-gain/samples=512": {
+      "pcm-three-before": 1956.895,
+      "pcm-three-unity": 2015.905,
+      "pcm-three-i16-mute": 2097.275,
+      "pcm-three-final": 2059.8199999999997
+    },
+    "rendering/i16/music-muted-negative-zero/samples=4096": {
+      "pcm-three-before": 32693.13,
+      "pcm-three-unity": 33126.729999999996,
+      "pcm-three-i16-mute": 21693.165,
+      "pcm-three-final": 21649.085
+    },
+    "rendering/i16/music-muted-negative-zero/samples=512": {
+      "pcm-three-before": 4405.65,
+      "pcm-three-unity": 4387.33,
+      "pcm-three-i16-mute": 2918.74,
+      "pcm-three-final": 2916.7749999999996
+    },
+    "rendering/i16/music-muted-ramp/samples=4096": {
+      "pcm-three-before": 32714.949999999997,
+      "pcm-three-unity": 33325.32,
+      "pcm-three-i16-mute": 21706.665,
+      "pcm-three-final": 21685.97
+    },
+    "rendering/i16/music-muted-ramp/samples=512": {
+      "pcm-three-before": 4370.5,
+      "pcm-three-unity": 4476.12,
+      "pcm-three-i16-mute": 2961.365,
+      "pcm-three-final": 2917.1949999999997
+    },
+    "rendering/i16/music-muted-surround/samples=12288": {
+      "pcm-three-before": 76951.685,
+      "pcm-three-unity": 81910.76000000001,
+      "pcm-three-i16-mute": 25971.449999999997,
+      "pcm-three-final": 25696.405
+    },
+    "rendering/i16/music-muted-surround/samples=1536": {
+      "pcm-three-before": 9678.985,
+      "pcm-three-unity": 10183.32,
+      "pcm-three-i16-mute": 3272.185,
+      "pcm-three-final": 3269.91
+    },
+    "rendering/i16/music-muted/samples=4096": {
+      "pcm-three-before": 14828.17,
+      "pcm-three-unity": 15029.455,
+      "pcm-three-i16-mute": 2245.825,
+      "pcm-three-final": 2224.01
+    },
+    "rendering/i16/music-muted/samples=512": {
+      "pcm-three-before": 2014.81,
+      "pcm-three-unity": 2041.955,
+      "pcm-three-i16-mute": 442.345,
+      "pcm-three-final": 441.245
+    },
+    "rendering/i16/music-unit/samples=4096": {
+      "pcm-three-before": 14587.305,
+      "pcm-three-unity": 2327.24,
+      "pcm-three-i16-mute": 2314.87,
+      "pcm-three-final": 2348.38
+    },
+    "rendering/i16/music-unit/samples=512": {
+      "pcm-three-before": 1984.575,
+      "pcm-three-unity": 435.15,
+      "pcm-three-i16-mute": 429.195,
+      "pcm-three-final": 426.495
+    },
+    "rendering/i16/sfx/samples=4096": {
+      "pcm-three-before": 16963.12,
+      "pcm-three-unity": 17128.42,
+      "pcm-three-i16-mute": 17796.59,
+      "pcm-three-final": 17218.83
+    },
+    "rendering/i16/sfx/samples=512": {
+      "pcm-three-before": 2354.37,
+      "pcm-three-unity": 2413.8,
+      "pcm-three-i16-mute": 2412.8950000000004,
+      "pcm-three-final": 2470.3
+    },
+    "rendering/i16/silence/samples=4096": {
+      "pcm-three-before": 1294.96,
+      "pcm-three-unity": 412.235,
+      "pcm-three-i16-mute": 410.21,
+      "pcm-three-final": 407.96500000000003
+    },
+    "rendering/i16/silence/samples=512": {
+      "pcm-three-before": 364.42499999999995,
+      "pcm-three-unity": 234.73000000000002,
+      "pcm-three-i16-mute": 263.785,
+      "pcm-three-final": 236.02
+    }
+  },
+  "source_differences_between_stages": [
+    "crates/deadlib-audio-core/src/render.rs"
+  ],
+  "final_source_matches_archive": true,
+  "binary_hashes_verified": true,
+  "trace_equal_bytes": 2588580,
+  "trace_sha256": "d20cd6571f3061a9330779228c16490a3e8ce04137a1c0144961c8defa255389",
+  "all_allocation_churn_zero": true,
+  "runs": 6,
+  "workloads_per_stage": 32
+}

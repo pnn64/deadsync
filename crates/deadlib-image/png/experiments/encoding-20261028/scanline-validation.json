@@ -1,0 +1,41 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-encoding-20261028/build",
+        "--release",
+        "--lib",
+        "scanline::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "scanline-release.log",
+      "sha256": "944a1c6f17808834b39afc4b4f4b95cce37607660b74e5a6089e8b69d01b786e"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-encoding-20261028/build",
+        "--lib",
+        "scanline::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "scanline-debug.log",
+      "sha256": "4fa77debb3880dfcb86ec56666c8485dcf0e49f95a241df816caff96aa326250"
+    }
+  ]
+}

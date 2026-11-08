@@ -1,3 +1,5 @@
+mod protocol;
+
 #[cfg(any(
     windows,
     target_os = "linux",
@@ -5,6 +7,9 @@
     target_os = "macos"
 ))]
 mod imp {
+    use super::protocol::{
+        ConfigReport, Configuration, SENSOR_COUNT, Transport, parse_config_report,
+    };
     use arrayvec::ArrayVec;
     use deadsync_input::fsr::{
         BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
@@ -24,7 +29,6 @@ mod imp {
     const REPORT_ID_PAD_CONFIGURATION: u8 = 0x02;
     const REPORT_ID_NAME: u8 = 0x05;
 
-    const SENSOR_COUNT: usize = 12;
     const BUTTON_COUNT: usize = 16;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
@@ -54,13 +58,6 @@ mod imp {
     const INPUT_REPORT_LIMIT: usize = 8;
 
     #[derive(Clone, Copy, Debug, Default)]
-    struct ConfigReport {
-        sensor_thresholds: [u16; SENSOR_COUNT],
-        release_threshold: f32,
-        sensor_to_button_mapping: [i8; SENSOR_COUNT],
-    }
-
-    #[derive(Clone, Copy, Debug, Default)]
     struct InputReport {
         sensor_values: [u16; SENSOR_COUNT],
     }
@@ -70,8 +67,41 @@ mod imp {
         path: CString,
         handle: HidDevice,
         name: Arc<str>,
-        config: ConfigReport,
+        config: Configuration,
         input: InputReport,
+    }
+
+    impl Transport for HidDevice {
+        fn get_feature(&self, bytes: &mut [u8]) -> Result<usize, ()> {
+            self.get_feature_report(bytes).map_err(|error| {
+                log::debug!("FSRio: get feature 0x{:02X}: {error}", bytes[0]);
+            })
+        }
+
+        fn send_feature(&self, bytes: &[u8]) -> Result<(), ()> {
+            // Match ADP Tool's delay before configuration/property writes.
+            std::thread::sleep(Duration::from_millis(2));
+            self.send_feature_report(bytes).map_err(|error| {
+                log::warn!("FSRio: send feature 0x{:02X}: {error}", bytes[0]);
+            })
+        }
+
+        fn write_output(&self, bytes: &[u8]) -> Result<usize, ()> {
+            self.write(bytes).map_err(|error| {
+                log::warn!("FSRio: save configuration: {error}");
+            })
+        }
+    }
+
+    impl Drop for Device {
+        fn drop(&mut self) {
+            if self.config.flush(&self.handle, Instant::now()).is_err() {
+                log::warn!(
+                    "FSRio: could not save pending configuration for {} before closing",
+                    self.name
+                );
+            }
+        }
     }
 
     #[derive(Default)]
@@ -82,19 +112,56 @@ mod imp {
         last_scan_attempt: Option<Instant>,
     }
 
+    impl Drop for Monitor {
+        fn drop(&mut self) {
+            // Flush while the HID API and all device handles are still alive.
+            self.flush_pending_saves();
+        }
+    }
+
     impl Monitor {
         pub fn new() -> Self {
             Self::default()
         }
 
-        /// FSRIO streams sensor values continuously, so there's no test mode to
-        /// toggle; live reads happen in `poll_pads`.
-        pub const fn set_active(&self, _active: bool) {}
+        /// FSRIO has no test mode. Flush pending edits when leaving the editor
+        /// so an immediate unplug does not discard them.
+        pub fn set_active(&mut self, active: bool) {
+            if !active {
+                self.flush_pending_saves();
+            }
+        }
+
+        /// Service saves without scanning devices or reading sensor streams.
+        pub fn poll_pending_saves(&mut self) {
+            let now = Instant::now();
+            for device in &mut self.devices {
+                if device.config.save_if_due(&device.handle, now).is_err() {
+                    log::warn!(
+                        "FSRio: configuration save failed for {}; changes remain pending",
+                        device.name
+                    );
+                }
+            }
+        }
+
+        pub fn flush_pending_saves(&mut self) {
+            let now = Instant::now();
+            for device in &mut self.devices {
+                if device.config.flush(&device.handle, now).is_err() {
+                    log::warn!(
+                        "FSRio: configuration save failed for {}; changes remain pending",
+                        device.name
+                    );
+                }
+            }
+        }
 
         /// Expose every connected FSRIO board, grouping sensors by the board's
         /// sensor-to-button mapping.
         pub fn poll_pads_into(&mut self, pads: &mut Vec<PadView>) {
             self.ensure_devices();
+            self.poll_pending_saves();
             self.read_pending_reports();
             pads.extend(self.devices.iter().map(pad_view));
         }
@@ -115,28 +182,24 @@ mod imp {
                 return false;
             };
             let device = &mut self.devices[device_index];
-            let indices = group_sensor_indices(&device.config.sensor_to_button_mapping, button);
+            let mut indices =
+                group_sensor_indices(&device.config.report.sensor_to_button_mapping, button);
             if indices.is_empty() {
                 return false;
             }
-            match sensor {
-                Some(index) => {
-                    if !indices.contains(&index) {
-                        return false;
-                    }
-                    device.config.sensor_thresholds[index] = value;
+            if let Some(index) = sensor {
+                if !indices.contains(&index) {
+                    return false;
                 }
-                None => {
-                    for index in indices {
-                        device.config.sensor_thresholds[index] = value;
-                    }
-                }
+                indices.clear();
+                indices.push(index);
             }
-            if write_config(&device.handle, &device.config).is_ok() {
-                return true;
-            }
-            self.devices.remove(device_index);
-            false
+            // Retain the device on failure: an earlier sensor in a group may
+            // already have changed and still needs its pending save.
+            device
+                .config
+                .set_threshold(&device.handle, &indices, value, Instant::now())
+                .is_ok()
         }
 
         /// FSRIO has no per-sensor enable bit; Advanced exposes thresholds only.
@@ -208,7 +271,8 @@ mod imp {
                     continue;
                 };
                 let name = read_name_from_device(&handle).unwrap_or_else(|()| "FSR Pad".to_owned());
-                let Ok(config) = read_config(&handle) else {
+                let Ok(config) = Configuration::read(&handle) else {
+                    log::warn!("FSRio: could not read configuration for {name}");
                     continue;
                 };
                 let id = self.next_device_id;
@@ -238,13 +302,16 @@ mod imp {
 
     fn pad_view(device: &Device) -> PadView {
         PadView {
+            host_controls: None,
             device_id: PadDeviceId {
                 backend: BackendKind::Fsrio,
                 index: device.id,
             },
             device_name: Arc::clone(&device.name),
+            thresholds_editable: true,
+            status: None,
             is_p2_side: false,
-            buttons: button_views(&device.config, &device.input),
+            buttons: button_views(&device.config.report, &device.input),
             supports_advanced: true,
             simple_per_sensor_bars: false,
             supports_sensor_toggle: false,
@@ -254,25 +321,37 @@ mod imp {
     }
 
     fn button_views(config: &ConfigReport, input: &InputReport) -> ButtonViews {
-        mapped_buttons(&config.sensor_to_button_mapping)
-            .into_iter()
-            .map(|button| button_view(config, input, button))
-            .collect()
-    }
-
-    fn button_view(config: &ConfigReport, input: &InputReport, button: usize) -> ButtonView {
-        let mut sensors = SensorViews::new();
-        let mut aggregate_value = 0;
-        let mut aggregate_threshold = 0;
+        let mut buttons = ButtonViews::new();
+        let mut slots = [0usize; BUTTON_COUNT];
+        let mut mask = mapped_button_mask(&config.sensor_to_button_mapping);
+        while mask != 0 {
+            let button = mask.trailing_zeros() as usize;
+            slots[button] = buttons.len();
+            buttons.push(ButtonView {
+                label: ButtonLabel::Hid((button + 1) as u8),
+                sensors: SensorViews::new(),
+                min_raw_threshold: 0,
+                max_raw_threshold: MAX_SENSOR_VALUE,
+                aggregate_value: 0,
+                aggregate_threshold: 0,
+                active: false,
+                value_curve: VALUE_CURVE,
+                release_threshold: None,
+            });
+            mask &= mask - 1;
+        }
         for (index, &mapped) in config.sensor_to_button_mapping.iter().enumerate() {
-            if mapped < 0 || mapped as usize != button {
+            if mapped < 0 || mapped as usize >= BUTTON_COUNT {
                 continue;
             }
+            let button = &mut buttons[slots[mapped as usize]];
             let raw_value = input.sensor_values[index];
             let raw_threshold = config.sensor_thresholds[index];
-            aggregate_value = aggregate_value.max(raw_value);
-            aggregate_threshold = aggregate_threshold.max(raw_threshold);
-            sensors.push(SensorView {
+            button.aggregate_value = button.aggregate_value.max(raw_value);
+            button.aggregate_threshold = button.aggregate_threshold.max(raw_threshold);
+            button.sensors.push(SensorView {
+                release_threshold: None,
+                baseline: None,
                 firmware_index: index,
                 label: None,
                 raw_value,
@@ -283,17 +362,11 @@ mod imp {
                 enabled: true,
             });
         }
-        ButtonView {
-            label: ButtonLabel::Hid((button + 1) as u8),
-            sensors,
-            min_raw_threshold: 0,
-            max_raw_threshold: MAX_SENSOR_VALUE,
-            aggregate_value,
-            aggregate_threshold,
-            active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
-            value_curve: VALUE_CURVE,
-            release_threshold: None,
+        for button in &mut buttons {
+            button.active =
+                button.aggregate_value >= button.aggregate_threshold && button.aggregate_threshold > 0;
         }
+        buttons
     }
 
     fn read_pending(device: &mut Device) -> bool {
@@ -333,16 +406,21 @@ mod imp {
             let _ = writeln!(out, "device {}:", device.id);
             let _ = writeln!(out, "  path: {}", device.path.to_string_lossy());
             let _ = writeln!(out, "  name: {}", device.name);
-            let _ = writeln!(out, "  thresholds: {:?}", device.config.sensor_thresholds);
+            let _ = writeln!(
+                out,
+                "  thresholds: {:?}",
+                device.config.report.sensor_thresholds
+            );
+            let _ = writeln!(out, "  pending_save: {}", device.config.has_pending_save());
             let _ = writeln!(
                 out,
                 "  release_threshold: {:.6}",
-                device.config.release_threshold
+                device.config.report.release_threshold
             );
             let _ = writeln!(
                 out,
                 "  sensor_to_button_mapping: {:?}",
-                device.config.sensor_to_button_mapping
+                device.config.report.sensor_to_button_mapping
             );
             let _ = writeln!(
                 out,
@@ -584,20 +662,6 @@ mod imp {
         parse_config_report(&buf[..len]).ok_or(())
     }
 
-    fn write_config(device: &HidDevice, config: &ConfigReport) -> Result<(), ()> {
-        let mut buf = Vec::with_capacity(1 + SENSOR_COUNT * 2 + 4 + SENSOR_COUNT);
-        buf.push(REPORT_ID_PAD_CONFIGURATION);
-        for threshold in config.sensor_thresholds {
-            buf.extend_from_slice(&threshold.to_le_bytes());
-        }
-        buf.extend_from_slice(&config.release_threshold.to_le_bytes());
-        for mapping in config.sensor_to_button_mapping {
-            buf.push(mapping as u8);
-        }
-        device.send_feature_report(&buf).map_err(|_| ())?;
-        Ok(())
-    }
-
     fn parse_input_report(bytes: &[u8]) -> Option<InputReport> {
         let payload = match bytes {
             [REPORT_ID_SENSOR_VALUES, rest @ ..] if rest.len() >= 2 + SENSOR_COUNT * 2 => rest,
@@ -605,46 +669,10 @@ mod imp {
             _ => return None,
         };
 
-        let _button_bits = u16::from_le_bytes(payload[0..2].try_into().ok()?);
-        let mut sensor_values = [0u16; SENSOR_COUNT];
-        let mut offset = 2usize;
-        for value in &mut sensor_values {
-            let end = offset + 2;
-            *value = u16::from_le_bytes(payload[offset..end].try_into().ok()?);
-            offset = end;
-        }
+        let sensor_values = std::array::from_fn(|index| {
+            u16::from_le_bytes([payload[2 + index * 2], payload[3 + index * 2]])
+        });
         Some(InputReport { sensor_values })
-    }
-
-    fn parse_config_report(bytes: &[u8]) -> Option<ConfigReport> {
-        if bytes.len() < 1 + SENSOR_COUNT * 2 + 4 + SENSOR_COUNT
-            || bytes[0] != REPORT_ID_PAD_CONFIGURATION
-        {
-            return None;
-        }
-
-        let mut sensor_thresholds = [0u16; SENSOR_COUNT];
-        let mut offset = 1usize;
-        for value in &mut sensor_thresholds {
-            let end = offset + 2;
-            *value = u16::from_le_bytes(bytes[offset..end].try_into().ok()?);
-            offset = end;
-        }
-
-        let release_threshold = f32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?);
-        offset += 4;
-
-        let mut sensor_to_button_mapping = [0i8; SENSOR_COUNT];
-        for value in &mut sensor_to_button_mapping {
-            *value = bytes[offset] as i8;
-            offset += 1;
-        }
-
-        Some(ConfigReport {
-            sensor_thresholds,
-            release_threshold,
-            sensor_to_button_mapping,
-        })
     }
 
     fn parse_name_report(bytes: &[u8]) -> Option<String> {
@@ -659,42 +687,51 @@ mod imp {
         SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
     }
 
-    fn mapped_buttons(mapping: &[i8; SENSOR_COUNT]) -> ArrayVec<usize, SENSOR_COUNT> {
-        let mut mapped_mask = 0u16;
-        for &mapped in mapping {
-            if mapped >= 0 && (mapped as usize) < BUTTON_COUNT {
-                mapped_mask |= 1 << mapped;
-            }
+    const BUTTON_BITS: [u16; 256] = {
+        let mut bits = [0; 256];
+        let mut index = 0;
+        while index < BUTTON_COUNT {
+            bits[index] = 1 << index;
+            index += 1;
         }
-        let mut buttons: ArrayVec<usize, SENSOR_COUNT> = ArrayVec::new();
-        while mapped_mask != 0 {
-            let button = mapped_mask.trailing_zeros() as usize;
-            buttons.push(button);
-            mapped_mask &= mapped_mask - 1;
-        }
-        buttons
+        bits
+    };
+
+    fn mapped_button_mask(mapping: &[i8; SENSOR_COUNT]) -> u16 {
+        mapping
+            .iter()
+            .fold(0, |mask, &mapped| mask | BUTTON_BITS[mapped as u8 as usize])
     }
 
     fn group_sensor_indices(
         mapping: &[i8; SENSOR_COUNT],
         group: usize,
     ) -> ArrayVec<usize, SENSOR_COUNT> {
-        mapped_buttons(mapping)
-            .get(group)
-            .map_or_else(ArrayVec::new, |&button| sensor_indices(mapping, button))
+        let mut mask = mapped_button_mask(mapping);
+        if group >= mask.count_ones() as usize {
+            return ArrayVec::new();
+        }
+        for _ in 0..group {
+            mask &= mask - 1;
+        }
+        let button = mask.trailing_zeros() as usize;
+        let mut indices = ArrayVec::new();
+        for (index, &mapped) in mapping.iter().enumerate() {
+            if mapped as u8 as usize == button {
+                indices.push(index);
+            }
+        }
+        indices
     }
 
-    fn sensor_indices(
-        mapping: &[i8; SENSOR_COUNT],
-        button: usize,
-    ) -> ArrayVec<usize, SENSOR_COUNT> {
-        mapping
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &mapped)| {
-                (mapped >= 0 && mapped as usize == button).then_some(index)
-            })
-            .collect()
+    #[cfg(test)]
+    mod mask_performance {
+        include!("mask_performance.rs");
+    }
+
+    #[cfg(test)]
+    mod polling_performance {
+        include!("fsrio_performance.rs");
     }
 
     #[cfg(test)]
@@ -737,10 +774,15 @@ mod imp {
             for (index, mapped) in mapping[..8].iter_mut().enumerate() {
                 *mapped = index as i8;
             }
-            assert_eq!(
-                mapped_buttons(&mapping).as_slice(),
-                [0, 1, 2, 3, 4, 5, 6, 7]
-            );
+            let config = ConfigReport {
+                sensor_to_button_mapping: mapping,
+                ..ConfigReport::default()
+            };
+            let buttons = button_views(&config, &InputReport::default());
+            assert_eq!(buttons.len(), 8);
+            for (index, button) in buttons.iter().enumerate() {
+                assert_eq!(button.label, ButtonLabel::Hid((index + 1) as u8));
+            }
             assert_eq!(group_sensor_indices(&mapping, 7).as_slice(), [7]);
             assert!(group_sensor_indices(&mapping, 8).is_empty());
         }

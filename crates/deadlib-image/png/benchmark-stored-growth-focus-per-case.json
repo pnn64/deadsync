@@ -1,0 +1,34 @@
+[
+  {
+    "case": "color-0-depth-08-adam7-1-noise-0",
+    "operation": "decode",
+    "before_ns": 212686.0,
+    "after_ns": 217062.5,
+    "reference_relative_percent": -2.5680530807307034,
+    "unchanged_control_relative_percent": -1.5202541146164927
+  },
+  {
+    "case": "color-2-depth-16-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 430548.0,
+    "after_ns": 434112.5,
+    "reference_relative_percent": 1.3115155373760956,
+    "unchanged_control_relative_percent": -2.0829740043071587
+  },
+  {
+    "case": "color-0-depth-08-adam7-1-noise-0",
+    "operation": "inflate",
+    "before_ns": 36443.0,
+    "after_ns": 35899.0,
+    "reference_relative_percent": 8.907358227051908,
+    "unchanged_control_relative_percent": 1.3105032312459075
+  },
+  {
+    "case": "color-2-depth-16-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 59793.0,
+    "after_ns": 59264.5,
+    "reference_relative_percent": 3.2489684741406455,
+    "unchanged_control_relative_percent": 3.50055823270925
+  }
+]

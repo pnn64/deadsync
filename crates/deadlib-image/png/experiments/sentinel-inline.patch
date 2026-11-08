@@ -1,0 +1,212 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..82f7100b0 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -26,23 +26,29 @@ const DIST_EXTRA: [u8; 30] = [
+ struct Bits<'a> {
+     input: &'a [u8],
+     pos: usize,
++    // The highest set bit marks the end of the buffered data. An empty
++    // reservoir is 1; data occupies only the bits below the marker.
+     word: u64,
+-    count: u8,
+ }
+ impl<'a> Bits<'a> {
+     fn new(input: &'a [u8]) -> Self {
+         Self {
+             input,
+             pos: 0,
+-            word: 0,
+-            count: 0,
++            word: 1,
+         }
+     }
++    fn bit_count(&self) -> u8 {
++        (63 - self.word.leading_zeros()) as u8
++    }
+     fn fill(&mut self, n: u8) {
+-        while self.count < n && self.pos < self.input.len() {
+-            self.word |= u64::from(self.input[self.pos]) << self.count;
+-            self.pos += 1;
+-            self.count += 8;
++        if self.word < 1u64 << n {
++            let mut count = self.bit_count();
++            while count < n && self.pos < self.input.len() {
++                self.word += (u64::from(self.input[self.pos]) + 255) << count;
++                self.pos += 1;
++                count += 8;
++            }
+         }
+     }
+     fn fill_huffman(&mut self, n: u8) {
+@@ -51,12 +57,12 @@ impl<'a> Bits<'a> {
+         // at least 10. After EOB and alignment, at most four bytes remain: the
+         // zlib Adler trailer. A streaming caller's suffix is never accepted.
+         // General field/checksum reads retain their conservative byte refill.
+-        if self.count < n {
++        if self.word < 1u64 << n {
+             if self.input.len() - self.pos >= 4 {
+                 let bytes = self.input[self.pos..self.pos + 4].try_into().unwrap();
+-                self.word |= u64::from(u32::from_le_bytes(bytes)) << self.count;
++                let count = self.bit_count();
++                self.word += (u64::from(u32::from_le_bytes(bytes)) + u64::from(u32::MAX)) << count;
+                 self.pos += 4;
+-                self.count += 32;
+             } else {
+                 self.fill(n);
+             }
+@@ -64,22 +70,24 @@ impl<'a> Bits<'a> {
+     }
+     fn read(&mut self, n: u8) -> Result<u32, Error> {
+         self.fill(n);
+-        if self.count < n {
++        let remaining = self.word >> n;
++        if remaining == 0 {
+             return Err(Error::Truncated);
+         }
+         let value = self.word as u32 & ((1u64 << n) - 1) as u32;
+-        self.word >>= n;
+-        self.count -= n;
++        self.word = remaining;
+         Ok(value)
+     }
+     fn consumed(&self) -> usize {
+         // ceil((pos * 8 - count) / 8), without overflowing the byte cursor.
+-        self.pos - usize::from(self.count / 8)
++        Self::consumed_at(self.pos, self.bit_count())
++    }
++    fn consumed_at(pos: usize, count: u8) -> usize {
++        pos - usize::from(count / 8)
+     }
+     fn align(&mut self) {
+-        let n = self.count % 8;
++        let n = self.bit_count() % 8;
+         self.word >>= n;
+-        self.count -= n;
+     }
+ }
+ 
+@@ -155,14 +163,16 @@ impl Huffman {
+     }
+     // A small primary lookup can inline at symbol call sites; keep the
+     // canonical long-code and error paths in a separate function.
+-    #[inline]
++    #[inline(always)]
+     fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+         bits.fill_huffman(9);
+         let entry = self.fast[(bits.word & 511) as usize];
+         let n = (entry & 15) as u8;
+-        if n != 0 && n <= bits.count {
+-            bits.word >>= n;
+-            bits.count -= n;
++        // Shifting the marker out detects an incomplete code. A zero-length
++        // table miss shifts by 63 after halving, which always produces zero.
++        let remaining = (bits.word >> 1) >> (n.wrapping_sub(1) & 63);
++        if remaining != 0 {
++            bits.word = remaining;
+             return Ok((entry >> 4) as usize);
+         }
+         self.decode_slow(bits)
+@@ -174,17 +184,17 @@ impl Huffman {
+         // A primary-table miss cannot match a code of length 1 through 9.
+         // Reverse once, then compare only the remaining canonical lengths.
+         let prefix = (bits.word as u16).reverse_bits();
+-        for n in 10..=self.max.min(bits.count) as usize {
++        let count = bits.bit_count();
++        for n in 10..=self.max.min(count) as usize {
+             let code = prefix >> (16 - n);
+             if code >= self.first[n] && code - self.first[n] < self.counts[n] {
+                 bits.word >>= n;
+-                bits.count -= n as u8;
+                 return Ok(
+                     self.symbols[(self.offsets[n] + code - self.first[n]) as usize] as usize,
+                 );
+             }
+         }
+-        if bits.count < self.max {
++        if count < self.max {
+             Err(Error::Truncated)
+         } else {
+             Err(Error::Invalid("invalid Huffman code"))
+@@ -283,7 +293,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             // Drain bytes prefetched by a preceding Huffman block, then copy
+             // the byte-aligned payload directly without bit-reader dispatch.
+             let mut left = len;
+-            while left != 0 && bits.count >= 8 {
++            while left != 0 && bits.bit_count() >= 8 {
+                 output.push(bits.read(8)? as u8);
+                 left -= 1;
+             }
+@@ -585,14 +595,22 @@ mod tests {
+                 if pos as u128 * 8 < u128::from(count) {
+                     continue;
+                 }
+-                let bits = Bits {
+-                    input: &[],
+-                    pos,
+-                    word: 0,
+-                    count,
+-                };
+                 let expected = (pos as u128 * 8 - u128::from(count)).div_ceil(8);
+-                assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");
++                assert_eq!(
++                    Bits::consumed_at(pos, count) as u128,
++                    expected,
++                    "pos={pos} count={count}"
++                );
++                // Keep the virtual 64-bit arithmetic case above. Marker
++                // reservoirs represent zero through 63 buffered data bits.
++                if count < 64 {
++                    let bits = Bits {
++                        input: &[],
++                        pos,
++                        word: 1u64 << count,
++                    };
++                    assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");
++                }
+             }
+         }
+     }
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 47f071611..7c459068a 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -50,7 +50,6 @@ enum State {
+ pub struct Inflater {
+     state: State,
+     word: u64,
+-    bit_count: u8,
+     final_block: bool,
+     window: usize,
+     history: Vec<u8>,
+@@ -77,8 +76,7 @@ impl Inflater {
+         history.resize(32768, 0);
+         Ok(Self {
+             state: State::HeaderCmf,
+-            word: 0,
+-            bit_count: 0,
++            word: 1,
+             final_block: false,
+             window: 32768,
+             history,
+@@ -129,11 +127,9 @@ impl Inflater {
+             input,
+             pos: 0,
+             word: self.word,
+-            count: self.bit_count,
+         };
+         let result = self.run(&mut bits, output);
+         self.word = bits.word;
+-        self.bit_count = bits.count;
+         self.total_in = match self.total_in.checked_add(bits.pos) {
+             Some(n) => n,
+             None => {
+@@ -281,7 +277,7 @@ impl Inflater {
+                     if written == output.len() {
+                         stop!(StreamStatus::NeedOutput);
+                     }
+-                    let n = if bits.count >= 8 {
++                    let n = if bits.bit_count() >= 8 {
+                         output[written] = read!(8) as u8;
+                         1
+                     } else {

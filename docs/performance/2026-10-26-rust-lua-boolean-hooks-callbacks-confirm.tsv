@@ -1,0 +1,121 @@
+meta	vm_size_bytes	4440
+meta	value_size_bytes	16
+meta	cache_build	f2f408a2b092ee9d0e4a56a116d16e1b
+layout	add_lua_loop	16	9
+heap	add_lua_loop	19740	25332	1	32415
+sample	add_lua_loop	rust	0	20	5000	896795	0	0	0
+sample	add_lua_loop	reference	0	20	5000	473460	0	0	0
+sample	add_lua_loop	reference	1	20	5000	437400	0	0	0
+sample	add_lua_loop	rust	1	20	5000	891080	0	0	0
+sample	add_lua_loop	rust	2	20	5000	988530	0	0	0
+sample	add_lua_loop	reference	2	20	5000	455430	0	0	0
+sample	add_lua_loop	reference	3	20	5000	449010	0	0	0
+sample	add_lua_loop	rust	3	20	5000	929115	0	0	0
+sample	add_lua_loop	rust	4	20	5000	917105	0	0	0
+sample	add_lua_loop	reference	4	20	5000	498375	0	0	0
+sample	add_lua_loop	reference	5	20	5000	476345	0	0	0
+sample	add_lua_loop	rust	5	20	5000	943980	0	0	0
+sample	add_lua_loop	rust	6	20	5000	1031855	0	0	0
+sample	add_lua_loop	reference	6	20	5000	457180	0	0	0
+sample	add_lua_loop	reference	7	20	5000	470000	0	0	0
+sample	add_lua_loop	rust	7	20	5000	1029105	0	0	0
+sample	add_lua_loop	rust	8	20	5000	965365	0	0	0
+sample	add_lua_loop	reference	8	20	5000	488535	0	0	0
+layout	echo_lua_loop	32	12
+heap	echo_lua_loop	20572	26148	1	34197
+sample	echo_lua_loop	rust	0	20	5000	1753065	0	0	0
+sample	echo_lua_loop	reference	0	20	5000	881840	0	0	0
+sample	echo_lua_loop	reference	1	20	5000	864080	0	0	0
+sample	echo_lua_loop	rust	1	20	5000	1518185	0	0	0
+sample	echo_lua_loop	rust	2	20	5000	1711005	0	0	0
+sample	echo_lua_loop	reference	2	20	5000	771805	0	0	0
+sample	echo_lua_loop	reference	3	20	5000	665690	0	0	0
+sample	echo_lua_loop	rust	3	20	5000	1680885	0	0	0
+sample	echo_lua_loop	rust	4	20	5000	1585120	0	0	0
+sample	echo_lua_loop	reference	4	20	5000	726870	0	0	0
+sample	echo_lua_loop	reference	5	20	5000	774510	0	0	0
+sample	echo_lua_loop	rust	5	20	5000	1805440	0	0	0
+sample	echo_lua_loop	rust	6	20	5000	1759600	0	0	0
+sample	echo_lua_loop	reference	6	20	5000	775180	0	0	0
+sample	echo_lua_loop	reference	7	20	5000	663280	0	0	0
+sample	echo_lua_loop	rust	7	20	5000	1539865	0	0	0
+sample	echo_lua_loop	rust	8	20	5000	1594810	0	0	0
+sample	echo_lua_loop	reference	8	20	5000	657940	0	0	0
+layout	capture_lua_loop	15	8
+heap	capture_lua_loop	19632	25224	1	32391
+sample	capture_lua_loop	rust	0	20	5000	740475	0	0	0
+sample	capture_lua_loop	reference	0	20	5000	317085	0	0	0
+sample	capture_lua_loop	reference	1	20	5000	344215	0	0	0
+sample	capture_lua_loop	rust	1	20	5000	774975	0	0	0
+sample	capture_lua_loop	rust	2	20	5000	768510	0	0	0
+sample	capture_lua_loop	reference	2	20	5000	328665	0	0	0
+sample	capture_lua_loop	reference	3	20	5000	326705	0	0	0
+sample	capture_lua_loop	rust	3	20	5000	776075	0	0	0
+sample	capture_lua_loop	rust	4	20	5000	767690	0	0	0
+sample	capture_lua_loop	reference	4	20	5000	340665	0	0	0
+sample	capture_lua_loop	reference	5	20	5000	337360	0	0	0
+sample	capture_lua_loop	rust	5	20	5000	762665	0	0	0
+sample	capture_lua_loop	rust	6	20	5000	750485	0	0	0
+sample	capture_lua_loop	reference	6	20	5000	342805	0	0	0
+sample	capture_lua_loop	reference	7	20	5000	333550	0	0	0
+sample	capture_lua_loop	rust	7	20	5000	781300	0	0	0
+sample	capture_lua_loop	rust	8	20	5000	781415	0	0	0
+sample	capture_lua_loop	reference	8	20	5000	342455	0	0	0
+layout	reenter_add_lua_loop	18	11
+heap	reenter_add_lua_loop	21008	26464	1	33235
+sample	reenter_add_lua_loop	rust	0	20	5000	1652155	0	0	0
+sample	reenter_add_lua_loop	reference	0	20	5000	542395	0	0	0
+sample	reenter_add_lua_loop	reference	1	20	5000	527710	0	0	0
+sample	reenter_add_lua_loop	rust	1	20	5000	1646235	0	0	0
+sample	reenter_add_lua_loop	rust	2	20	5000	1622780	0	0	0
+sample	reenter_add_lua_loop	reference	2	20	5000	526295	0	0	0
+sample	reenter_add_lua_loop	reference	3	20	5000	523845	0	0	0
+sample	reenter_add_lua_loop	rust	3	20	5000	1630540	0	0	0
+sample	reenter_add_lua_loop	rust	4	20	5000	1639500	0	0	0
+sample	reenter_add_lua_loop	reference	4	20	5000	549300	0	0	0
+sample	reenter_add_lua_loop	reference	5	20	5000	530825	0	0	0
+sample	reenter_add_lua_loop	rust	5	20	5000	1677075	0	0	0
+sample	reenter_add_lua_loop	rust	6	20	5000	1653310	0	0	0
+sample	reenter_add_lua_loop	reference	6	20	5000	561920	0	0	0
+sample	reenter_add_lua_loop	reference	7	20	5000	589680	0	0	0
+sample	reenter_add_lua_loop	rust	7	20	5000	1603390	0	0	0
+sample	reenter_add_lua_loop	rust	8	20	5000	1628570	0	0	0
+sample	reenter_add_lua_loop	reference	8	20	5000	536765	0	0	0
+layout	reenter_echo_lua_loop	34	13
+heap	reenter_echo_lua_loop	22012	27452	1	34317
+sample	reenter_echo_lua_loop	rust	0	20	5000	2355020	0	0	0
+sample	reenter_echo_lua_loop	reference	0	20	5000	708960	0	0	0
+sample	reenter_echo_lua_loop	reference	1	20	5000	688805	0	0	0
+sample	reenter_echo_lua_loop	rust	1	20	5000	2376525	0	0	0
+sample	reenter_echo_lua_loop	rust	2	20	5000	2350665	0	0	0
+sample	reenter_echo_lua_loop	reference	2	20	5000	717065	0	0	0
+sample	reenter_echo_lua_loop	reference	3	20	5000	660545	0	0	0
+sample	reenter_echo_lua_loop	rust	3	20	5000	2328605	0	0	0
+sample	reenter_echo_lua_loop	rust	4	20	5000	2323105	0	0	0
+sample	reenter_echo_lua_loop	reference	4	20	5000	691555	0	0	0
+sample	reenter_echo_lua_loop	reference	5	20	5000	698195	0	0	0
+sample	reenter_echo_lua_loop	rust	5	20	5000	2445415	0	0	0
+sample	reenter_echo_lua_loop	rust	6	20	5000	2357095	0	0	0
+sample	reenter_echo_lua_loop	reference	6	20	5000	708040	0	0	0
+sample	reenter_echo_lua_loop	reference	7	20	5000	696935	0	0	0
+sample	reenter_echo_lua_loop	rust	7	20	5000	2402780	0	0	0
+sample	reenter_echo_lua_loop	rust	8	20	5000	2358555	0	0	0
+sample	reenter_echo_lua_loop	reference	8	20	5000	667290	0	0	0
+sample	add_direct	rust	0	20000	1	110	0	0	0
+sample	add_direct	reference	0	20000	1	170	0	0	0
+sample	add_direct	reference	1	20000	1	164	0	0	0
+sample	add_direct	rust	1	20000	1	107	0	0	0
+sample	add_direct	rust	2	20000	1	112	0	0	0
+sample	add_direct	reference	2	20000	1	156	0	0	0
+sample	add_direct	reference	3	20000	1	163	0	0	0
+sample	add_direct	rust	3	20000	1	107	0	0	0
+sample	add_direct	rust	4	20000	1	106	0	0	0
+sample	add_direct	reference	4	20000	1	164	0	0	0
+sample	add_direct	reference	5	20000	1	161	0	0	0
+sample	add_direct	rust	5	20000	1	106	0	0	0
+sample	add_direct	rust	6	20000	1	112	0	0	0
+sample	add_direct	reference	6	20000	1	165	0	0	0
+sample	add_direct	reference	7	20000	1	159	0	0	0
+sample	add_direct	rust	7	20000	1	99	0	0	0
+sample	add_direct	rust	8	20000	1	102	0	0	0
+sample	add_direct	reference	8	20000	1	166	0	0	0

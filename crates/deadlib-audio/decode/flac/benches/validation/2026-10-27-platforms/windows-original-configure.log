@@ -1,0 +1,21 @@
+CMake Deprecation Warning at C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- Configuring ogg 1.3.6
+-- Configuring done (0.7s)
+CMake Warning (dev) at C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt:89 (add_library):
+  Policy CMP0069 is not set: INTERPROCEDURAL_OPTIMIZATION is enforced when
+  enabled.  Run "cmake --help-policy CMP0069" for policy details.  Use the
+  cmake_policy command to set the policy and suppress this warning.
+
+  INTERPROCEDURAL_OPTIMIZATION property will be ignored for target 'ogg'.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Generating done (2.2s)
+-- Build files have been written to: C:/GitHub/deadsync/target/deadlib-flac-reference/windows-perf-build/oracle

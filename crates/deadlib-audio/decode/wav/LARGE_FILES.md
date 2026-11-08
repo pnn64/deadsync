@@ -1,0 +1,82 @@
+# Physical large-file and process-memory evidence
+
+`validation/ima-extensible-sparse.json` records eight real NTFS sparse files and 24
+successful fresh-process checks on Windows 11, rustc 1.99.1. RF64 and BW64 are each
+tested with native mono i32 and IMA ADPCM, at 65573 and 4294967333 decoded frames,
+except large BW64 IMA uses 4294967295, the largest literal u32 fact count.
+Each file is created/checked by an x64 release process, reopened by a separate x64
+process, and reopened by an i686 process. Python independently checks marker
+bytes, a zero hole, physical EOF and header hashes. Source and executable hashes,
+compiler/build commands and build logs accompany the report.
+
+| File geometry | Logical file length, bytes | NTFS allocated bytes |
+| --- | ---: | ---: |
+| Small native PCM | 262396 | 131072 |
+| Small IMA | 262408 | 131072 |
+| Large native PCM | 17179869436 | 262144 |
+| Large RF64 IMA | 17179869448 | 262144 |
+| Large BW64 IMA | 17179869296 | 262144 |
+
+The large files all exceed 16 GiB. RF64 and native PCM frame counts exceed u32;
+BW64 IMA ends at its literal fact limit. Markers straddle the physical
+4 GiB byte boundary and, where representable, the 2^32 frame boundary, with start/end and
+near-boundary samples. Marker values mix the high frame bits so truncating an
+offset to 32 bits cannot return a matching sample. Exact EOF seeks and reads,
+out-of-range rejection without changing position, and an unwritten zero hole
+are checked through `Reader` and `AdpcmReader`.
+
+All BW64 headers now independently check for zero dummy words. The original
+`physical-sparse.json` remains as historical evidence: its large BW64 IMA file
+used an RF64-style count extension in those words and is now rejected. The
+updated case preserves a real >16 GiB physical-file check without that extension.
+BW64 IMA and extensible native output here are compatibility cases rather than
+normative BW64 profile evidence; see [BW64.md](BW64.md).
+The runner requests force_extensible. That flag now emits a 40-byte IMA format
+instead of the legacy 20-byte descriptor, adding 20 bytes to its header/file
+length. `bw64-dummy-sparse.json` retains the preceding legacy-header run;
+[IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the new mapping and its limits.
+
+This fixture builder uses known-length writer headers and then creates sparse
+extents with the filesystem, so it does not claim that a writer accepted missing
+audio writes. IMA uses valid header-only, one-frame blocks; this exercises block
+index and decoded-count arithmetic without representing typical compression
+geometry. The sparse flag, allocated size and file length are queried from the
+actual file handle. The Windows
+[sparse-file control](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_set_sparse)
+is confined to the validation example; the production crate remains portable.
+
+## Working-set scope
+
+The validation process queries
+[PROCESS_MEMORY_COUNTERS_EX](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex)
+at startup, before decode and after decode. The table uses peak working set from
+the separate verify processes: four fresh processes per architecture/size cell
+(two containers times two codecs). Exact byte counts, current working set and
+private/peak commit are retained in the JSON.
+
+| Verify process | Small-file peak working set, MiB | Large-file peak working set, MiB |
+| --- | ---: | ---: |
+| x64 | 3.43–3.44 | 3.43–3.44 |
+| i686 | 4.58–4.59 | 4.58–4.59 |
+
+The measurements show bounded whole-process memory for these open/random-seek
+probes as logical audio grows from about 256 KiB to over 16 GiB. They include the
+runtime, executable pages and startup, and are taken before JSON formatting.
+The report also includes create-process peaks, which include sparse fixture
+construction. No affinity/cache control or reference-library memory comparison
+is performed. These are neither isolated codec RSS nor full-file streaming or
+fully allocated disk throughput measurements. OS working set and requested heap
+allocations in PERFORMANCE.md measure different things.
+
+Reproduce from the workspace root on Windows/NTFS with the i686 MSVC target:
+
+```sh
+python crates/deadlib-audio/decode/wav/tests/run_sparse.py --output target/wav/new-physical-sparse.json
+```
+
+The runner refuses existing report/fixture destinations. Large logical fixtures
+are generated locally instead of archived as enormous zero-filled WAV files;
+the independent marker algorithm, source hashes, header hashes and exact file
+geometry make the retained checks reproducible. The report records NTFS with
+4096-byte allocation units. Broader filesystems, standard ADPCM block sizes,
+sequential throughput and comparative process-memory measurements remain open.

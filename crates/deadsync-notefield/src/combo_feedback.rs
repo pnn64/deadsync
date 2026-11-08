@@ -50,26 +50,55 @@ pub(crate) fn compose_combo_milestones(
     if !request.show {
         return;
     }
+    let Some(assets) = request.milestone_assets else {
+        return;
+    };
+    if request.milestones.is_empty() {
+        return;
+    }
     let zoom_mod = combo_actor_zoom(request.mini);
-    if let Some(assets) = request.milestone_assets {
-        for milestone in request.milestones {
-            match milestone.kind {
-                ComboMilestoneKind::Hundred => {
-                    append_hundred(draws, request, assets, milestone.elapsed, zoom_mod);
-                }
-                ComboMilestoneKind::Thousand => {
-                    append_thousand(draws, request, assets, milestone.elapsed, zoom_mod);
-                }
+    for milestone in request.milestones {
+        match milestone.kind {
+            ComboMilestoneKind::Hundred => {
+                append_hundred(draws, request, assets, milestone.elapsed, zoom_mod);
+            }
+            ComboMilestoneKind::Thousand => {
+                append_thousand(draws, request, assets, milestone.elapsed, zoom_mod);
             }
         }
     }
 }
 
 /// Compose the prepared numeric half after the milestone sprites.
+#[inline(always)]
 pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFeedbackRequest<'_>) {
-    if request.show {
-        append_combo_number(draws, request, combo_actor_zoom(request.mini));
+    if !request.show {
+        return;
     }
+    let Some(font) = request.font else { return };
+    let (value, color) = if request.miss_combo >= request.style.threshold {
+        (request.miss_combo, request.style.miss_color)
+    } else if request.combo >= request.style.threshold {
+        (request.combo, request.combo_color)
+    } else {
+        return;
+    };
+
+    let scale = request.style.number_zoom * combo_actor_zoom(request.mini);
+    draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
+        align: [0.5, 0.5],
+        offset: request.number_xy,
+        color,
+        font,
+        text: InlineU32Text::new(value),
+        slot: request.number_text_slot,
+        align_text: TextAlign::Center,
+        z: request.style.number_z,
+        scale: [scale, scale],
+        blend: BlendMode::Alpha,
+        shadow_len: [request.style.shadow_len, -request.style.shadow_len],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+    }));
 }
 
 fn append_hundred(
@@ -172,37 +201,6 @@ fn append_thousand(
     }
 }
 
-fn append_combo_number(
-    draws: &mut Vec<FlatDraw>,
-    request: &ComboFeedbackRequest<'_>,
-    zoom_mod: f32,
-) {
-    let Some(font) = request.font else { return };
-    let (value, color) = if request.miss_combo >= request.style.threshold {
-        (request.miss_combo, request.style.miss_color)
-    } else if request.combo >= request.style.threshold {
-        (request.combo, request.combo_color)
-    } else {
-        return;
-    };
-
-    let scale = request.style.number_zoom * zoom_mod;
-    draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
-        align: [0.5, 0.5],
-        offset: request.number_xy,
-        color,
-        font,
-        text: InlineU32Text::new(value),
-        slot: request.number_text_slot,
-        align_text: TextAlign::Center,
-        z: request.style.number_z,
-        scale: [scale, scale],
-        blend: BlendMode::Alpha,
-        shadow_len: [request.style.shadow_len, -request.style.shadow_len],
-        shadow_color: [0.0, 0.0, 0.0, 0.5],
-    }));
-}
-
 fn append_sprite(
     draws: &mut Vec<FlatDraw>,
     sprite: &ComboMilestoneSprite,
@@ -227,6 +225,7 @@ fn append_sprite(
         flip_y: zoom[1].is_sign_negative(),
         fade: [0.0; 4],
         blend: BlendMode::Add,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: rotation_deg,
         z,
@@ -515,4 +514,9 @@ mod tests {
             other => panic!("expected combo sprite draw, got {other:?}"),
         }
     }
+}
+
+#[cfg(test)]
+mod combo_kernel_perf {
+    include!("combo_kernel_perf.rs");
 }

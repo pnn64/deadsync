@@ -230,7 +230,11 @@ fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
         profile_data::PlayStyle::Double
         | profile_data::PlayStyle::Versus
         | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::PumpVersus => true,
+        | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => true,
         profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
             session.joined.get(pad).copied().unwrap_or(false)
         }
@@ -349,10 +353,13 @@ impl App {
         })
     }
 
-    pub(super) fn sync_select_music_runtime_view(&mut self, policy: SelectMusicFramePolicy) {
+    pub(super) fn sync_select_music_runtime_view(&mut self, mut policy: SelectMusicFramePolicy) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
+        // Device hotplug can enable the shared pad editor without changing the
+        // cached configuration policy or requiring the FSR option.
+        policy.view.fsr_profiles |= deadsync_reflex::connected();
         let now = Instant::now();
         let lobby = self.select_music_lobby.refresh_if_dirty(now);
         let downloads_visible =
@@ -538,7 +545,7 @@ impl App {
                             } else {
                                 Vec::new()
                             };
-                            let leaderboards = if player.leaderboard.gs_active {
+                            let leaderboards = if player.leaderboard.online_active() {
                                 chart_hash.and_then(|hash| {
                                     scores::get_or_fetch_player_leaderboards_for_profile(
                                         hash,

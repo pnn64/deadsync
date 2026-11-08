@@ -4,6 +4,17 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+song-lua-performance = ["deadsync-song-lua/performance"]
+
+[[bin]]
+name = "song_lua_compile_performance"
+path = "../../examples/song_lua_performance.rs"
+required-features = ["song-lua-performance"]
+
+[[bin]]
+name = "song_lua_execution"
+
 [dependencies]
 deadlib-audio = { path = "../deadlib-audio" }
 deadlib-assets = { path = "../deadlib-assets" }
@@ -24,6 +35,7 @@ deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-heart-rate = { path = "../deadsync-heart-rate" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-input-fsr = { path = "../deadsync-input-fsr" }
+deadsync-reflex = { path = "../deadsync-reflex" }
 deadlib-input-native = { path = "../deadlib-input-native" }
 deadsync-import = { path = "../deadsync-import" }
 deadsync-lights = { path = "../deadsync-lights" }
@@ -46,12 +58,15 @@ null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rfd = "0.17.2"
 rustc-hash = "2.1.3"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.11.0"
-smallvec = "1.16.1"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+smallvec = "1.16.4"
 winit = "0.30.13"
 
 [dev-dependencies]
+zstd = "0.14.3"
+tar = "0.4.46"
+tempfile = "3.27.0"
 deadsync-song-lua = { path = "../deadsync-song-lua", features = ["test-support"] }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 
@@ -59,7 +74,7 @@ deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love", features = ["test-support"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
+objc2 = { version = "0.6.5", features = ["relax-sign-encoding"] }
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
 

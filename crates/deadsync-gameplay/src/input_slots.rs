@@ -15,7 +15,7 @@ pub(crate) struct PreparedInputSlotUpdate {
 }
 
 const PREPARED_INPUT_SLOT_NONE: u8 = u8::MAX;
-const PREPARED_INPUT_LANE_NONE: u8 = 0x0f;
+const PREPARED_INPUT_LANE_NONE: u8 = 0x1f;
 const _: () = assert!(MAX_ACTIVE_INPUT_SLOTS < PREPARED_INPUT_SLOT_NONE as usize);
 const _: () = assert!(MAX_COLS < PREPARED_INPUT_LANE_NONE as usize);
 
@@ -56,7 +56,7 @@ impl PreparedInputSlotUpdate {
 
 /// Game-thread active input bindings in fixed song-lifetime storage.
 ///
-/// Each record packs the full slot id, source, and ten-lane mask into one word.
+/// Each record packs the full slot id, source, and lane mask into one word.
 /// `slot_count` bounds every scan and removal swap-fills holes. The table never
 /// allocates, grows, or hashes.
 #[derive(Clone, Debug)]
@@ -224,6 +224,7 @@ pub const fn remap_live_input_lane(
             Lane::Col9 => (GameplayInputPlayerSide::P2, 2),
             Lane::P2Up => (GameplayInputPlayerSide::P2, 3),
             Lane::P2Right => (GameplayInputPlayerSide::P2, 4),
+            _ => return None,
         };
         if matches!(play_style, GameplayInputPlayStyle::PumpSingle) {
             let same_pad = matches!(
@@ -297,16 +298,16 @@ pub const fn live_input_lane_for_queue(
 #[inline(always)]
 #[must_use]
 pub const fn input_lane_bit(lane_idx: usize) -> LaneMask {
-    1u16 << lane_idx
+    1 << lane_idx
 }
 
 #[inline(always)]
 #[must_use]
 pub const fn input_lane_mask(num_cols: usize) -> LaneMask {
     if num_cols >= MAX_COLS {
-        (1u16 << MAX_COLS) - 1
+        (1 << MAX_COLS) - 1
     } else {
-        (1u16 << num_cols) - 1
+        (1 << num_cols) - 1
     }
 }
 

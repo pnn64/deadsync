@@ -1,0 +1,109 @@
+raw-first	4	24	2	1	-1
+raw-state	4	24	4	1	-1	1	L
+raw-second	4	24	2	0	3
+raw-done	4	24	4	0	3	0	<empty>
+move-first	4	24	2	1	-1
+move	4	24	3	true	0	0
+move-state	4	24	4	1	0	1	L
+raw-first	4	25	2	1	-2
+raw-state	4	25	4	1	-2	1	L
+raw-second	4	25	2	0	3
+raw-done	4	25	4	0	3	0	<empty>
+move-first	4	25	2	1	-2
+move	4	25	3	true	0	0
+move-state	4	25	4	1	0	1	L
+raw-first	4	26	2	1	-3
+raw-state	4	26	4	1	-3	1	L
+raw-second	4	26	2	0	3
+raw-done	4	26	4	0	3	0	<empty>
+move-first	4	26	2	1	-3
+move	4	26	3	true	0	0
+move-state	4	26	4	1	0	1	L
+raw-first	8	24	2	1	-1
+raw-state	8	24	4	1	-1	1	L
+raw-second	8	24	2	0	3
+raw-done	8	24	4	0	3	0	<empty>
+move-first	8	24	2	1	-1
+move	8	24	3	true	0	0
+move-state	8	24	4	1	0	1	L
+raw-first	8	25	2	1	-2
+raw-state	8	25	4	1	-2	1	L
+raw-second	8	25	2	0	3
+raw-done	8	25	4	0	3	0	<empty>
+move-first	8	25	2	1	-2
+move	8	25	3	true	0	0
+move-state	8	25	4	1	0	1	L
+raw-first	8	26	2	1	-3
+raw-state	8	26	4	1	-3	1	L
+raw-second	8	26	2	0	3
+raw-done	8	26	4	0	3	0	<empty>
+move-first	8	26	2	1	-3
+move	8	26	3	true	0	0
+move-state	8	26	4	1	0	1	L
+raw-first	12	24	2	1	-1
+raw-state	12	24	4	1	-1	1	L
+raw-second	12	24	2	0	3
+raw-done	12	24	4	0	3	0	<empty>
+move-first	12	24	2	1	-1
+move	12	24	3	true	0	0
+move-state	12	24	4	1	0	1	L
+raw-first	12	25	2	1	-2
+raw-state	12	25	4	1	-2	1	L
+raw-second	12	25	2	0	3
+raw-done	12	25	4	0	3	0	<empty>
+move-first	12	25	2	1	-2
+move	12	25	3	true	0	0
+move-state	12	25	4	1	0	1	L
+raw-first	12	26	2	1	-3
+raw-state	12	26	4	1	-3	1	L
+raw-second	12	26	2	0	3
+raw-done	12	26	4	0	3	0	<empty>
+move-first	12	26	2	1	-3
+move	12	26	3	true	0	0
+move-state	12	26	4	1	0	1	L
+active	1	27	4	true	17	1	42
+active-top	1	27	1	1
+destination	1	27	4	0	1	0	<empty>
+active	1	28	4	true	17	29	2
+active-top	1	28	1	2
+destination	1	28	4	0	1	0	<empty>
+active	1	29	4	true	17	29	42
+active-top	1	29	1	3
+destination	1	29	4	0	1	0	<empty>
+active	2	27	4	true	17	29	42
+active-top	2	27	1	1
+destination	2	27	4	0	1	0	<empty>
+active	2	28	4	true	17	29	42
+active-top	2	28	1	2
+destination	2	28	4	0	1	0	<empty>
+active	2	29	4	true	3	29	42
+active-top	2	29	1	3
+destination	2	29	4	0	1	0	<empty>
+active	4	27	4	true	17	1	42
+active-top	4	27	1	1
+destination	4	27	4	0	1	0	<empty>
+active	4	28	4	true	17	29	2
+active-top	4	28	1	2
+destination	4	28	4	0	1	0	<empty>
+active	4	29	4	true	17	29	42
+active-top	4	29	1	3
+destination	4	29	4	0	1	0	<empty>
+active	8	27	4	true	17	1	42
+active-top	8	27	1	1
+destination	8	27	4	0	1	0	<empty>
+active	8	28	4	true	17	29	2
+active-top	8	28	1	2
+destination	8	28	4	0	1	0	<empty>
+active	8	29	4	true	17	29	42
+active-top	8	29	1	3
+destination	8	29	4	0	1	0	<empty>
+active	12	27	4	true	17	1	42
+active-top	12	27	1	1
+destination	12	27	4	0	1	0	<empty>
+active	12	28	4	true	17	29	2
+active-top	12	28	1	2
+destination	12	28	4	0	1	0	<empty>
+active	12	29	4	true	17	29	42
+active-top	12	29	1	3
+destination	12	29	4	0	1	0	<empty>
+hook-offsets-complete

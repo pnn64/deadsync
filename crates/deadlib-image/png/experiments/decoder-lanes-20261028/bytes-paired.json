@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "decoder-lanes",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "predictor-selected",
+      "path": "bytes-paired-1-predictor-selected.tsv",
+      "sha256": "af1de5e641512592daab3fdcd5617f66ff2f2a24ed95f73c9194c427019616e2",
+      "source_manifest_sha256": "2db2b0bd9bf5c34d2d62e119f3359546a30dc9bf4d36551f089e76d521bf9ba8",
+      "executable_sha256": "24f24d40b4f9e8afc0cd6b8ff36d660607d08e3c563b510f51c160cd8a672690"
+    },
+    {
+      "round": 1,
+      "label": "bytes",
+      "path": "bytes-paired-1-bytes.tsv",
+      "sha256": "b98e0ad30817eee2f7eade6d3ecdee75ba55cdbdc00511b640d261189dbbb83f",
+      "source_manifest_sha256": "ffbf3faf29cb1734b3bff0aabb6544ae7f612cae0e18e968e534cd8b67d494ed",
+      "executable_sha256": "1ee06204ff3d44239112def0e4ff669f689dc473319d49f7d0aa5e7c4dadad1f"
+    },
+    {
+      "round": 2,
+      "label": "bytes",
+      "path": "bytes-paired-2-bytes.tsv",
+      "sha256": "100656c451e6486350249f07f46b7755132f2a15f3ca825399a021fc03f95611",
+      "source_manifest_sha256": "ffbf3faf29cb1734b3bff0aabb6544ae7f612cae0e18e968e534cd8b67d494ed",
+      "executable_sha256": "1ee06204ff3d44239112def0e4ff669f689dc473319d49f7d0aa5e7c4dadad1f"
+    },
+    {
+      "round": 2,
+      "label": "predictor-selected",
+      "path": "bytes-paired-2-predictor-selected.tsv",
+      "sha256": "d31a6e0c88356a26ccc80023642a644dfffea7bd1f109b6dcb39ede9ef83e951",
+      "source_manifest_sha256": "2db2b0bd9bf5c34d2d62e119f3359546a30dc9bf4d36551f089e76d521bf9ba8",
+      "executable_sha256": "24f24d40b4f9e8afc0cd6b8ff36d660607d08e3c563b510f51c160cd8a672690"
+    },
+    {
+      "round": 3,
+      "label": "predictor-selected",
+      "path": "bytes-paired-3-predictor-selected.tsv",
+      "sha256": "82dca3a1896b1ef796234bd6f8d7210b73a53e3f2d3a56551470775bcba86213",
+      "source_manifest_sha256": "2db2b0bd9bf5c34d2d62e119f3359546a30dc9bf4d36551f089e76d521bf9ba8",
+      "executable_sha256": "24f24d40b4f9e8afc0cd6b8ff36d660607d08e3c563b510f51c160cd8a672690"
+    },
+    {
+      "round": 3,
+      "label": "bytes",
+      "path": "bytes-paired-3-bytes.tsv",
+      "sha256": "8e9f7c15cdbc3301bef1b5b5ea4d16736b018a13d3abe34d79959c391811e17c",
+      "source_manifest_sha256": "ffbf3faf29cb1734b3bff0aabb6544ae7f612cae0e18e968e534cd8b67d494ed",
+      "executable_sha256": "1ee06204ff3d44239112def0e4ff669f689dc473319d49f7d0aa5e7c4dadad1f"
+    },
+    {
+      "round": 4,
+      "label": "bytes",
+      "path": "bytes-paired-4-bytes.tsv",
+      "sha256": "221ead701a237c6746440532d0d851f700fc7a2c56ba94c3d7f38e1871472f03",
+      "source_manifest_sha256": "ffbf3faf29cb1734b3bff0aabb6544ae7f612cae0e18e968e534cd8b67d494ed",
+      "executable_sha256": "1ee06204ff3d44239112def0e4ff669f689dc473319d49f7d0aa5e7c4dadad1f"
+    },
+    {
+      "round": 4,
+      "label": "predictor-selected",
+      "path": "bytes-paired-4-predictor-selected.tsv",
+      "sha256": "a401c909133ca91c1829fb7b06a3d255869e488887830708e70906b2ef48263d",
+      "source_manifest_sha256": "2db2b0bd9bf5c34d2d62e119f3359546a30dc9bf4d36551f089e76d521bf9ba8",
+      "executable_sha256": "24f24d40b4f9e8afc0cd6b8ff36d660607d08e3c563b510f51c160cd8a672690"
+    }
+  ]
+}

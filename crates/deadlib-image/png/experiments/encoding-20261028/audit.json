@@ -1,0 +1,23 @@
+{
+  "selected_checkpoint": "bounded",
+  "source_base": "e372c77f0",
+  "canonical_comparisons": [
+    "dispatch-paired",
+    "score-paired",
+    "bounded-paired",
+    "selected-paired"
+  ],
+  "canonical_measurement_processes": 32,
+  "complete_sequential_processes": 48,
+  "retained_raw_process_logs": 57,
+  "interrupted_unsaved_processes": 1,
+  "verified_build_measurement_validation_logs": 71,
+  "cases_per_process": 116,
+  "final_source_hashes_match": true,
+  "final_fingerprints_match_baseline": true,
+  "final_allocation_requests_do_not_increase": true,
+  "final_validation_sha256": "cbd85ad60ba441898673e555fccb9f99ff8acf28c72a098bca8c9d2ed7db81dd",
+  "scanline_validation_sha256": "62fd8c11281142c512b590388281342ba594ba706aba746b48736202a633da0b",
+  "exclusions_sha256": "39351e958829d94c011db0e593e4a7a0510ee3e3c8d123df0d19ab0a1e538373",
+  "final_report_sha256": "b0b2ed68014ba83cc1fc1a4f8145bd3e833cd9281743ac09e1771aafab01a3f0"
+}

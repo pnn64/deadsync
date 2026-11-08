@@ -1,0 +1,52 @@
+{
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "seconds": 21.0836412999779,
+      "log": "docs/testing/2026-10-26-native-input-check-0.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--locked",
+        "--release"
+      ],
+      "exit_code": 0,
+      "seconds": 15.74301390000619,
+      "log": "docs/testing/2026-10-26-native-input-check-1.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-input-native",
+        "--locked",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "seconds": 13.903109900071286,
+      "log": "docs/testing/2026-10-26-native-input-check-2.log"
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-input-native/src/backend.rs": "c497aa764d70b18fae33d43500a82f3b82c4e67cc85b779a80f18c89397f112f",
+    "crates/deadlib-input-native/src/backend/wgi.rs": "6d35421704a942b479aea1bcff59f113d0c68b71ce5e843d786f00f44637eb73",
+    "crates/deadlib-input-native/src/backend/w32_raw_input.rs": "b9cd683d95ad91ff5f9377c3ab097dc9e2124c5b241cb9dbf8d5dd615d8e803a",
+    "crates/deadlib-input-native/tests/native_kernels.rs": "0c18825e9ad78e58002efc66ce1fd2cfa577d92fa1c40c9015a5b8dddbc2d57c"
+  }
+}

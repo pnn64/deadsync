@@ -486,7 +486,7 @@ fn create_palette(state: &mut State, source_id: Option<String>) -> ThemeEffect {
         source_id.unwrap_or_else(|| state.judgment_palettes.resolved_default_id().to_owned());
     let mut suffix = 1;
     let name = loop {
-        let candidate = format!("Custom Palette {suffix}");
+        let candidate = crate::i18n::tr_fmt("UiMessages", "CustomPaletteSuffix", &[("suffix", &(suffix).to_string())]).to_string();
         if !state
             .judgment_palettes
             .palettes
@@ -953,18 +953,13 @@ fn push_editor(
                 diffuse(rgba[0], rgba[1], rgba[2], 1.0): z(Z + 6)
             ));
             let channels = [color.r, color.g, color.b].map(|v| (v * 255.0).round() as u8);
-            let channel_text = ["R", "G", "B"]
-                .into_iter()
-                .enumerate()
-                .map(|(index, name)| {
-                    if row == selected && channel_focus == Some(index) {
-                        format!("[{name} {:03}]", channels[index])
-                    } else {
-                        format!("{name} {:03}", channels[index])
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("  ");
+            let [r, g, b] = channels;
+            let channel_text = match channel_focus.filter(|_| row == selected) {
+                Some(0) => format!("[R {r:03}]  G {g:03}  B {b:03}"),
+                Some(1) => format!("R {r:03}  [G {g:03}]  B {b:03}"),
+                Some(2) => format!("R {r:03}  G {g:03}  [B {b:03}]"),
+                _ => format!("R {r:03}  G {g:03}  B {b:03}"),
+            };
             out.push(act!(text:
                 font("miso"): settext(channel_text): align(1.0, 0.5):
                 xy(PANEL_W.mul_add(0.5, cx) - 26.0, y): zoom(0.62):
@@ -1069,3 +1064,11 @@ fn push_delete_confirm(
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "palette_data_original.rs"]
+mod course_data_original;
+
+#[cfg(test)]
+#[path = "palette_data_perf.rs"]
+mod course_data_perf;

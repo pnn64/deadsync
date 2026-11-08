@@ -1,0 +1,17 @@
+cargo :     Blocking waiting for file lock on package cache
+At line:2 char:113
++ ... .exe).Path; cargo test -p deadlib-image-png --release --test encoder_ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...n package cache:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized] target(s) in 0.87s
+     Running tests\encoder_reference.rs (target\release\deps\encoder_reference-eeff3eb1f75b57da.exe)
+
+running 1 test
+C libpng encoder audit: 1620 reference files and 3240 native files; all 15 formats, three geometries, six filters, plain/Adam7, levels 0/1/9, exact samples/palettes/transparency
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 26.11s
+

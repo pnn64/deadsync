@@ -1,0 +1,37 @@
+   Compiling autocfg v1.5.1
+   Compiling bytemuck v1.25.2
+   Compiling bitflags v2.13.2
+   Compiling log v0.4.34
+   Compiling lazy_static v1.5.1
+   Compiling smallvec v1.16.4
+   Compiling regex-lite v0.1.9
+   Compiling deadlib-audio-decode-mp3 v0.1.0 (C:\GitHub\deadsync\target\deadlib-mp3-reference\extracted-regions-final)
+   Compiling num-traits v0.2.19
+   Compiling num-complex v0.4.6
+   Compiling symphonia-core v0.6.1
+   Compiling symphonia-bundle-mp3 v0.6.1
+   Compiling symphonia-metadata v0.6.1
+   Compiling symphonia v0.6.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.90s
+     Running tests\spectral.rs (target\deadlib-mp3-extracted-before\debug\deps\spectral-e7745c2908790a56.exe)
+
+running 1 test
+test switched_huffman_regions_count_long_and_short_window_bands ... FAILED
+
+failures:
+
+---- switched_huffman_regions_count_long_and_short_window_bands stdout ----
+
+thread 'switched_huffman_regions_count_long_and_short_window_bands' (47756) panicked at tests\spectral.rs:66:17:
+assertion `left == right` failed: 8000 mixed=true line=72
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    switched_huffman_regions_count_long_and_short_window_bands
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test spectral`

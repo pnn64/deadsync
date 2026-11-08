@@ -1,0 +1,402 @@
+{
+  "decode": {
+    "case_count": 24,
+    "median_reference_relative_percent": 0.8104759202251732,
+    "median_control_relative_percent": 1.5429837262932455,
+    "both_comparisons_below_minus_5_percent": [],
+    "cases": [
+      {
+        "case": "kodim02",
+        "sample_bytes": 1179648,
+        "before_ns": 10180250.0,
+        "after_ns": 10378829.0,
+        "reference_relative_percent": -4.10176873183572,
+        "unchanged_control_relative_percent": -2.7716339724803474
+      },
+      {
+        "case": "kodim22",
+        "sample_bytes": 1179648,
+        "before_ns": 10546316.5,
+        "after_ns": 10458170.5,
+        "reference_relative_percent": -0.6538795041784562,
+        "unchanged_control_relative_percent": -1.8550452983980725
+      },
+      {
+        "case": "kodim09",
+        "sample_bytes": 1179648,
+        "before_ns": 10461120.5,
+        "after_ns": 10501662.0,
+        "reference_relative_percent": 1.84657972321971,
+        "unchanged_control_relative_percent": -1.3231170054179398
+      },
+      {
+        "case": "kodim08",
+        "sample_bytes": 1179648,
+        "before_ns": 12333383.0,
+        "after_ns": 12507916.5,
+        "reference_relative_percent": 0.1028956058373165,
+        "unchanged_control_relative_percent": -0.8385062942478427
+      },
+      {
+        "case": "kodim13",
+        "sample_bytes": 1179648,
+        "before_ns": 12742858.0,
+        "after_ns": 13204653.5,
+        "reference_relative_percent": -3.4681999775007633,
+        "unchanged_control_relative_percent": -0.7774997145082119
+      },
+      {
+        "case": "kodim20",
+        "sample_bytes": 1179648,
+        "before_ns": 9458024.5,
+        "after_ns": 9511904.0,
+        "reference_relative_percent": -2.7024203065328156,
+        "unchanged_control_relative_percent": -0.3206512524232763
+      },
+      {
+        "case": "kodim24",
+        "sample_bytes": 1179648,
+        "before_ns": 10675791.5,
+        "after_ns": 10758666.0,
+        "reference_relative_percent": 2.5735074407668757,
+        "unchanged_control_relative_percent": 0.057115491165826704
+      },
+      {
+        "case": "kodim04",
+        "sample_bytes": 1179648,
+        "before_ns": 10219662.0,
+        "after_ns": 10281374.5,
+        "reference_relative_percent": 1.51805623461303,
+        "unchanged_control_relative_percent": 0.4088195445948184
+      },
+      {
+        "case": "kodim01",
+        "sample_bytes": 1179648,
+        "before_ns": 10773712.0,
+        "after_ns": 10944379.0,
+        "reference_relative_percent": -2.642073640208764,
+        "unchanged_control_relative_percent": 0.7092948047796366
+      },
+      {
+        "case": "kodim12",
+        "sample_bytes": 1179648,
+        "before_ns": 10445016.0,
+        "after_ns": 10317654.0,
+        "reference_relative_percent": 1.8092712536550648,
+        "unchanged_control_relative_percent": 0.7859092205565688
+      },
+      {
+        "case": "kodim23",
+        "sample_bytes": 1179648,
+        "before_ns": 9481041.5,
+        "after_ns": 9148941.0,
+        "reference_relative_percent": -3.373653141473676,
+        "unchanged_control_relative_percent": 0.8245616993560523
+      },
+      {
+        "case": "kodim10",
+        "sample_bytes": 1179648,
+        "before_ns": 10595487.0,
+        "after_ns": 10695391.0,
+        "reference_relative_percent": -0.2914579431568365,
+        "unchanged_control_relative_percent": 1.381425821044746
+      },
+      {
+        "case": "kodim07",
+        "sample_bytes": 1179648,
+        "before_ns": 11407991.5,
+        "after_ns": 11232574.5,
+        "reference_relative_percent": 2.037205131407527,
+        "unchanged_control_relative_percent": 1.704541631541745
+      },
+      {
+        "case": "kodim19",
+        "sample_bytes": 1179648,
+        "before_ns": 10379183.0,
+        "after_ns": 10609033.0,
+        "reference_relative_percent": -0.8568104584578573,
+        "unchanged_control_relative_percent": 1.7128491122348821
+      },
+      {
+        "case": "kodim18",
+        "sample_bytes": 1179648,
+        "before_ns": 10410533.0,
+        "after_ns": 10430004.0,
+        "reference_relative_percent": -0.8081460192219558,
+        "unchanged_control_relative_percent": 2.3339752093211263
+      },
+      {
+        "case": "kodim16",
+        "sample_bytes": 1179648,
+        "before_ns": 10316228.5,
+        "after_ns": 10257178.5,
+        "reference_relative_percent": -1.252634047495338,
+        "unchanged_control_relative_percent": 2.8650339053279295
+      },
+      {
+        "case": "kodim03",
+        "sample_bytes": 1179648,
+        "before_ns": 9671991.5,
+        "after_ns": 9635179.0,
+        "reference_relative_percent": 2.118071456710835,
+        "unchanged_control_relative_percent": 3.4073949834639183
+      },
+      {
+        "case": "kodim11",
+        "sample_bytes": 1179648,
+        "before_ns": 10958949.5,
+        "after_ns": 11260966.0,
+        "reference_relative_percent": -0.9477505269424369,
+        "unchanged_control_relative_percent": 3.8610749329903493
+      },
+      {
+        "case": "kodim14",
+        "sample_bytes": 1179648,
+        "before_ns": 11856562.0,
+        "after_ns": 11656508.0,
+        "reference_relative_percent": 3.2167112522415664,
+        "unchanged_control_relative_percent": 3.8671581196956684
+      },
+      {
+        "case": "kodim21",
+        "sample_bytes": 1179648,
+        "before_ns": 11434378.5,
+        "after_ns": 11375816.5,
+        "reference_relative_percent": 3.9082411721629073,
+        "unchanged_control_relative_percent": 4.094720782429584
+      },
+      {
+        "case": "kodim15",
+        "sample_bytes": 1179648,
+        "before_ns": 10311962.0,
+        "after_ns": 10317058.0,
+        "reference_relative_percent": 2.3315475610063308,
+        "unchanged_control_relative_percent": 4.403558902538562
+      },
+      {
+        "case": "kodim06",
+        "sample_bytes": 1179648,
+        "before_ns": 11465904.0,
+        "after_ns": 11426470.5,
+        "reference_relative_percent": 2.7042388802118067,
+        "unchanged_control_relative_percent": 5.028410114978676
+      },
+      {
+        "case": "kodim05",
+        "sample_bytes": 1179648,
+        "before_ns": 12944203.5,
+        "after_ns": 12983008.0,
+        "reference_relative_percent": 2.7739034424966835,
+        "unchanged_control_relative_percent": 5.685378598016455
+      },
+      {
+        "case": "kodim17",
+        "sample_bytes": 1179648,
+        "before_ns": 11106662.5,
+        "after_ns": 11125141.5,
+        "reference_relative_percent": 3.8521287440019814,
+        "unchanged_control_relative_percent": 8.318069918772885
+      }
+    ]
+  },
+  "inflate": {
+    "case_count": 24,
+    "median_reference_relative_percent": 0.6234495058874412,
+    "median_control_relative_percent": 0.2758774127241681,
+    "both_comparisons_below_minus_5_percent": [],
+    "cases": [
+      {
+        "case": "kodim09",
+        "sample_bytes": 1180416,
+        "before_ns": 8048220.5,
+        "after_ns": 8345912.0,
+        "reference_relative_percent": 3.180941932408521,
+        "unchanged_control_relative_percent": -4.517907648524389
+      },
+      {
+        "case": "kodim15",
+        "sample_bytes": 1180160,
+        "before_ns": 7777145.5,
+        "after_ns": 8147024.5,
+        "reference_relative_percent": -1.6431497854151988,
+        "unchanged_control_relative_percent": -3.270538756777197
+      },
+      {
+        "case": "kodim06",
+        "sample_bytes": 1180160,
+        "before_ns": 9417883.0,
+        "after_ns": 9735670.5,
+        "reference_relative_percent": 1.3284721924459397,
+        "unchanged_control_relative_percent": -2.521092274760295
+      },
+      {
+        "case": "kodim23",
+        "sample_bytes": 1180160,
+        "before_ns": 7901608.0,
+        "after_ns": 7396749.5,
+        "reference_relative_percent": 0.14187855634739677,
+        "unchanged_control_relative_percent": -1.7713647316977887
+      },
+      {
+        "case": "kodim02",
+        "sample_bytes": 1180160,
+        "before_ns": 8252137.5,
+        "after_ns": 8251379.0,
+        "reference_relative_percent": -0.5940367927691592,
+        "unchanged_control_relative_percent": -1.0125807534560827
+      },
+      {
+        "case": "kodim22",
+        "sample_bytes": 1180160,
+        "before_ns": 8213812.5,
+        "after_ns": 8117629.0,
+        "reference_relative_percent": -1.2208833903089245,
+        "unchanged_control_relative_percent": -0.924658205140827
+      },
+      {
+        "case": "kodim20",
+        "sample_bytes": 1180160,
+        "before_ns": 7465841.5,
+        "after_ns": 7639766.5,
+        "reference_relative_percent": 2.5801929801483103,
+        "unchanged_control_relative_percent": -0.8933958903295292
+      },
+      {
+        "case": "kodim12",
+        "sample_bytes": 1180160,
+        "before_ns": 8613574.5,
+        "after_ns": 8609983.0,
+        "reference_relative_percent": 4.944471757450941,
+        "unchanged_control_relative_percent": -0.5839539380432912
+      },
+      {
+        "case": "kodim05",
+        "sample_bytes": 1180160,
+        "before_ns": 10915541.0,
+        "after_ns": 10986491.5,
+        "reference_relative_percent": 4.402098187101999,
+        "unchanged_control_relative_percent": -0.4082923001567318
+      },
+      {
+        "case": "kodim24",
+        "sample_bytes": 1180160,
+        "before_ns": 8200753.5,
+        "after_ns": 8312941.0,
+        "reference_relative_percent": 0.30996666004181606,
+        "unchanged_control_relative_percent": -0.11259541302970355
+      },
+      {
+        "case": "kodim11",
+        "sample_bytes": 1180160,
+        "before_ns": 9067241.0,
+        "after_ns": 9158362.0,
+        "reference_relative_percent": 1.8703324572918678,
+        "unchanged_control_relative_percent": -0.0621280374276334
+      },
+      {
+        "case": "kodim21",
+        "sample_bytes": 1180160,
+        "before_ns": 9577366.5,
+        "after_ns": 9453041.5,
+        "reference_relative_percent": 0.45366812330627226,
+        "unchanged_control_relative_percent": 0.03231785818227362
+      },
+      {
+        "case": "kodim17",
+        "sample_bytes": 1180416,
+        "before_ns": 8859433.0,
+        "after_ns": 9168891.5,
+        "reference_relative_percent": 0.590855724878514,
+        "unchanged_control_relative_percent": 0.5194369672660626
+      },
+      {
+        "case": "kodim07",
+        "sample_bytes": 1180160,
+        "before_ns": 8493470.5,
+        "after_ns": 8493312.0,
+        "reference_relative_percent": 3.8303347530918908,
+        "unchanged_control_relative_percent": 0.5626911502922605
+      },
+      {
+        "case": "kodim01",
+        "sample_bytes": 1180160,
+        "before_ns": 9187962.5,
+        "after_ns": 9315803.5,
+        "reference_relative_percent": 2.540313073803624,
+        "unchanged_control_relative_percent": 0.8976733727982689
+      },
+      {
+        "case": "kodim16",
+        "sample_bytes": 1180160,
+        "before_ns": 8539433.0,
+        "after_ns": 8392979.0,
+        "reference_relative_percent": 5.640944820049998,
+        "unchanged_control_relative_percent": 1.1863043890381508
+      },
+      {
+        "case": "kodim13",
+        "sample_bytes": 1180160,
+        "before_ns": 10676941.0,
+        "after_ns": 10754287.0,
+        "reference_relative_percent": 0.6560432868963684,
+        "unchanged_control_relative_percent": 1.3490402561328274
+      },
+      {
+        "case": "kodim08",
+        "sample_bytes": 1180160,
+        "before_ns": 9438850.0,
+        "after_ns": 9439558.0,
+        "reference_relative_percent": 0.10572660255088184,
+        "unchanged_control_relative_percent": 1.5130837441118983
+      },
+      {
+        "case": "kodim03",
+        "sample_bytes": 1180160,
+        "before_ns": 7904262.0,
+        "after_ns": 8077137.5,
+        "reference_relative_percent": -1.7704673649936997,
+        "unchanged_control_relative_percent": 2.4727998943831597
+      },
+      {
+        "case": "kodim04",
+        "sample_bytes": 1180416,
+        "before_ns": 8300458.0,
+        "after_ns": 8219862.5,
+        "reference_relative_percent": 2.5963677464094115,
+        "unchanged_control_relative_percent": 3.354792579190935
+      },
+      {
+        "case": "kodim10",
+        "sample_bytes": 1180416,
+        "before_ns": 8019279.0,
+        "after_ns": 8091691.5,
+        "reference_relative_percent": 2.9034475547579097,
+        "unchanged_control_relative_percent": 4.257517568355995
+      },
+      {
+        "case": "kodim19",
+        "sample_bytes": 1180416,
+        "before_ns": 8186975.0,
+        "after_ns": 8149887.5,
+        "reference_relative_percent": 0.0266889626375999,
+        "unchanged_control_relative_percent": 4.316916615480637
+      },
+      {
+        "case": "kodim18",
+        "sample_bytes": 1180416,
+        "before_ns": 8329733.0,
+        "after_ns": 8409416.5,
+        "reference_relative_percent": -2.039459366579499,
+        "unchanged_control_relative_percent": 4.390592236368307
+      },
+      {
+        "case": "kodim14",
+        "sample_bytes": 1180160,
+        "before_ns": 10029658.0,
+        "after_ns": 9659166.5,
+        "reference_relative_percent": 0.4858681038631074,
+        "unchanged_control_relative_percent": 5.876914268506539
+      }
+    ]
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "base": "c4c6ffd11",
+  "stages": {
+    "before-final": {
+      "stage": "before-final",
+      "binaries": {
+        "wav_format_kernel.exe": "19c10b1d5d33440e6245f03d54c067008456fa8f9d0eb184b40ae49461380661",
+        "metadata_probes.exe": "6f2c8f8f91ec28db740f1f6af338e9eea78508f84fc0e6c941b67efed4c14976"
+      },
+      "sources": {
+        "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+        "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+        "crates/deadlib-audio-decode/src/mp3.rs": "872859d4eaf84b0e0373eb356e5ce12f4143b4d47f6dc19ef559de5d78fb8947",
+        "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+        "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+        "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+        "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+        "crates/deadlib-audio-decode/src/wav.rs": "f9b668f075af03a9e11b304f46096d5e2326a398bd3f4c41fd694b7867137026",
+        "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+        "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+        "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+        "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+        "crates/deadlib-audio-decode/tests/metadata_probes.rs": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+        "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+        "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+        "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+        "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+        "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+        "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+        "Cargo.lock": "b3de8d26138feeb7010030c07978a6149583b626aacb96efae548891f2113688",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        "crates/deadlib-audio-decode/Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "fa42ec8ea7457f44a7ce8276c31d46d0e2d5189f"
+    },
+    "walk-final": {
+      "stage": "walk-final",
+      "binaries": {
+        "wav_format_kernel.exe": "4324412af76de0346a45502178e9e5f4fcc61030d6b683c9146ec7be1fb484ed",
+        "metadata_probes.exe": "1a9c02bb617372cd560981e724c7918085ec9e98d1c29ea6a58aa35b1d109d32"
+      },
+      "sources": {
+        "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+        "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+        "crates/deadlib-audio-decode/src/mp3.rs": "872859d4eaf84b0e0373eb356e5ce12f4143b4d47f6dc19ef559de5d78fb8947",
+        "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+        "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+        "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+        "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+        "crates/deadlib-audio-decode/src/wav.rs": "6f5cd28c26104741a4d58152bf702ab8ebcecf916eaad175d3ffd98289356a26",
+        "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+        "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+        "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+        "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+        "crates/deadlib-audio-decode/tests/metadata_probes.rs": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+        "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+        "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+        "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+        "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+        "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+        "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+        "Cargo.lock": "b3de8d26138feeb7010030c07978a6149583b626aacb96efae548891f2113688",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        "crates/deadlib-audio-decode/Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "fa42ec8ea7457f44a7ce8276c31d46d0e2d5189f"
+    },
+    "tail-final": {
+      "stage": "tail-final",
+      "binaries": {
+        "wav_format_kernel.exe": "212dbfaeb2a29a01e6620e3da2ca40973eb22c8f57c1d25e2b4608f3b0a25cf6",
+        "metadata_probes.exe": "5608dc96c03f02e096ad141a999f6aca887fd2e9c766dee5a945ae4618f9c4ca"
+      },
+      "sources": {
+        "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+        "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+        "crates/deadlib-audio-decode/src/mp3.rs": "872859d4eaf84b0e0373eb356e5ce12f4143b4d47f6dc19ef559de5d78fb8947",
+        "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+        "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+        "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+        "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+        "crates/deadlib-audio-decode/src/wav.rs": "1f796fcc5f824ab4a6a789d3780f89763bb90237e85c161f76917a22a53f85ae",
+        "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+        "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+        "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+        "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+        "crates/deadlib-audio-decode/tests/metadata_probes.rs": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+        "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+        "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+        "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+        "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+        "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+        "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+        "Cargo.lock": "b3de8d26138feeb7010030c07978a6149583b626aacb96efae548891f2113688",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        "crates/deadlib-audio-decode/Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "fa42ec8ea7457f44a7ce8276c31d46d0e2d5189f"
+    },
+    "after-checks": {
+      "stage": "after-checks",
+      "binaries": {
+        "fade_equivalence.exe": "8ab6984d465734b36a5f744bfce4fe0e16cfaf3c72413f6ac8526609ca4c94a9",
+        "wav_float_kernel.exe": "8249de7dfb59dbe9e2b68d1adb9143a9218fa8ecada2e2fc48cecc41ac574c7b",
+        "wav_format_kernel.exe": "822909452d1b430b67b53ae3cebceb6e45f8d78ce4ca13c0b393bab90cef6a33",
+        "mapped_output_kernel.exe": "89b2d290cbe3afc5cb18226af1dee3078ca330865255643cc38dec14266b9058",
+        "resampler_output_kernel.exe": "45c5d8f685fd67c23afc2fbb4bfd76c913594d7bfe2fd393f603f8a215d91cc9",
+        "planar_kernel.exe": "4cac057d431e69dcb7df7d17d53bc1e96055a0c886b889cb2e10a39b6d14fbfa",
+        "slice_kernels.exe": "e41bec9cefe54085d7bf403c6992ff09d3d4c71f00ac6af740dd065b5e2bee49",
+        "deadlib_audio_decode.exe": "e029971bb2196da7a2347f0be0f3ff979a47da5f89f7b3a39d0e924a44cc4266",
+        "metadata_probes.exe": "8d312bf9adf0c64c3709e77a9adbc9790ccad2216f0dac67cdb697fdc3df4ee4"
+      },
+      "sources": {
+        "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+        "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+        "crates/deadlib-audio-decode/src/mp3.rs": "50e25914b20a5134a5a9ca4aa36a9a6eae96de5551ce4e37e4bb85e5a121f7d8",
+        "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+        "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+        "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+        "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+        "crates/deadlib-audio-decode/src/wav.rs": "1f796fcc5f824ab4a6a789d3780f89763bb90237e85c161f76917a22a53f85ae",
+        "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+        "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+        "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+        "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+        "crates/deadlib-audio-decode/tests/metadata_probes.rs": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+        "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+        "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+        "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+        "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+        "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+        "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+        "Cargo.lock": "b3de8d26138feeb7010030c07978a6149583b626aacb96efae548891f2113688",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        "crates/deadlib-audio-decode/Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "fa42ec8ea7457f44a7ce8276c31d46d0e2d5189f"
+    }
+  },
+  "dependency_rebuilds": {
+    "before-final": [],
+    "walk-final": [],
+    "tail-final": [],
+    "after-checks": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "baseline_png_commit": "8c5713343",
+  "variant": "pixels",
+  "reverse_patch": "filter-pixels-before.patch",
+  "reverse_patch_sha256": "7f985248a12a661b953c0a78e9a85b170bc165a5f570821d9b32b27c45180752",
+  "source": "src/scanline.rs",
+  "before_sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3",
+  "candidate_sha256": "a5a56a0bc3976e98e2a66906d496557f50f9690fc9f2b1515f15014e12b44680",
+  "reverse_patch_exact_reconstruction_verified": true,
+  "retained_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-filter-checkpoint-8iz19a_4",
+  "selection_role": "Exploratory fixed pixel loops for all six strides"
+}

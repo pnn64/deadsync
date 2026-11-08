@@ -1,0 +1,101 @@
+{
+  "baseline_png_commit": "b19a1d1b339f0ae77a1c0d0a6e6869198ec36954",
+  "patch": "experiments/sentinel-add.patch",
+  "patch_sha256": "dba20e6e1f4bbc41fc8ccf43f0cc09be599c9458e0db8f82145e9760b9e4f6d0",
+  "candidate_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "fb1f519a0260b84dad5f3b461be8bbe6bc9b371a82f8b4e9d2a4b4a8315a2737"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "72e7cf40493765f5744814f37faf2d4731adedc88028f383e7614d8184b619c3"
+    }
+  ],
+  "change": "Marker-bit decoder reservoir with one-shift arithmetic refill. The old marker contributes 2^count; adding (input + 2^width - 1) << count replaces it with the new data plus marker at count+width. Refill widths/conditions, error behavior and encoder bit writing are unchanged.",
+  "reservoir_invariant": {
+    "representation": "word = data + 2^count, with 0 <= data < 2^count; empty word = 1",
+    "availability": "word >= 2^n iff count >= n",
+    "refill": "word + ((input + 2^width - 1) << count) = data + (input << count) + 2^(count+width)",
+    "refill_bounds": "Byte refill starts below n <= 32, so count+8 <= 39. Wide Huffman refill starts below n <= 15, so count+32 <= 46. Every refill fits below bit 47.",
+    "primary_consumption": "remaining = (word >> 1) >> ((n-1) mod 64). For primary lengths 1..9, remaining is nonzero iff count >= n. A table miss n=0 always gives zero because (word >> 1) >> 63 = 0.",
+    "partial_lookup": "A marker within the nine-bit table index cannot affect any complete code whose width is at most count; incomplete lookups reject before changing the reservoir. Canonical fallback checks only the available low bits.",
+    "consumed_bytes": "pos - floor(count / 8); retain virtual count-64 arithmetic coverage independently of representable marker states 0..63."
+  }
+}

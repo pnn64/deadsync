@@ -1,0 +1,115 @@
+{
+  "passed": true,
+  "pair_word_and_prefix_checks": 5218,
+  "all_pair_codewords_and_escape_prefix_slots": true,
+  "all_count1_prefix_slots_and_signed_records": true,
+  "reachable_nodes": 1337,
+  "signed_quadruple_records": 81,
+  "csv_unchanged": true,
+  "generation_byte_reproducible": true,
+  "command": [
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py",
+    "--input",
+    "target/deadlib-mp3-reference/huffcode",
+    "--crate",
+    "target\\mp3-perf-20261028\\round7-escape-regenerated"
+  ],
+  "sha256": {
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py": "d77de59fb22ac71066cd2d98c6696e1836dcb6eb31e72c20dd4bbb6c5b02d1ef",
+    "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "c3f4d26f983b732994e5f507ee886d34bf4072afbde2885e129dd25831d3f66d",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.json": "a8742bde589c5597e293e66802626fd6e0b74b0474be411f2b3eae000c50295c",
+    "target\\deadlib-mp3-reference\\huffcode": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7"
+  },
+  "table_sizes": {
+    "round7-base": {
+      "elements_bytes": {
+        "ROOTS": 66,
+        "LINBITS": 32,
+        "NODES": 5512
+      },
+      "total_bytes": 5610
+    },
+    "quad-sign-table": {
+      "elements_bytes": {
+        "ROOTS": 66,
+        "LINBITS": 32,
+        "NODES": 5512,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6290
+    },
+    "round7-count1-direct": {
+      "elements_bytes": {
+        "ROOTS": 64,
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "NODES": 5452,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6292
+    },
+    "round7-escape-prefix": {
+      "elements_bytes": {
+        "ROOTS": 48,
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "ESCAPE_PREFIX": 64,
+        "NODES": 5348,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6236
+    },
+    "round7-escape-inline": {
+      "elements_bytes": {
+        "ROOTS": 48,
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "ESCAPE_PREFIX": 64,
+        "NODES": 5348,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6236
+    }
+  },
+  "tests": {
+    "passed": 65,
+    "log": "target\\mp3-perf-20261028\\round7-escape-tests.log",
+    "encoding": "UTF-16",
+    "sha256": "25b0c64163e90615a3b0a93453bf78522ce9c7715754994db1e108ccc037cc9b"
+  },
+  "inline_tests": {
+    "passed": 65,
+    "log": "target\\mp3-perf-20261028\\round7-inline-tests.log",
+    "encoding": "UTF-16",
+    "sha256": "2b909a8ba3aea1186aaa695dbea695829cf2087362c92d38489fab5ceea0b601"
+  },
+  "inline_source_sha256": "6a0fd6c3b0ccbce06207de3d263aba5e9a115636b277b193e37bc375d05593e0",
+  "benchmark_image_bytes": {
+    "round7-base": {
+      "bytes": 574464,
+      "binary_sha256": "35ae6163539d4b92dd0311f6004d6f4314c0e9a890b8ec91e3063bc941c87efe"
+    },
+    "quad-sign-table": {
+      "bytes": 574976,
+      "binary_sha256": "4ea224dfa77e5c34914cd594a221f50d299f8bb2a2624daf27d3b33ed56a1d23"
+    },
+    "round7-count1-direct": {
+      "bytes": 568320,
+      "binary_sha256": "73b57252357ade335fa97397fe875406e597564b81f19b63ec8aaf2d7a06aea3"
+    },
+    "round7-escape-prefix": {
+      "bytes": 576000,
+      "binary_sha256": "c75562b2b8ae921a8570f4e7bfc95c9934b7e9dd6055bf1adabd9a24e38f33eb"
+    },
+    "round7-escape-inline": {
+      "bytes": 576000,
+      "binary_sha256": "4a82be609c5414cd6fdd7d06173de35d7c2fc33893cdd4f7b022e763567e6e85"
+    }
+  }
+}

@@ -461,6 +461,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats::default(),
@@ -520,10 +521,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts,
         }
@@ -734,8 +737,5 @@ mod tests {
             assert!(Arc::ptr_eq(&songs[*actual_ix], expected_song));
             assert_eq!(actual_grade, expected_grade);
         }
-    }
-    mod popularity_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/popularity.rs"));
     }
 }

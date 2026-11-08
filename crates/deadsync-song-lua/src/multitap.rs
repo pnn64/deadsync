@@ -3,12 +3,12 @@ use mlua::{Lua, Table, Value};
 use std::sync::Arc;
 
 use crate::{
-    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_NOTE_COLUMNS, SongLuaCompileContext,
-    SongLuaNoteskinResolver, SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
+    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaNoteskinResolver,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
     SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
     SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     named_overlay_indices_by_name, overlay_delta_intersection, overlay_descendants_by_parent,
-    read_f32, song_lua_style_column_x,
+    read_f32, song_lua_style_column_x, song_lua_style_info,
 };
 
 pub const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
@@ -50,10 +50,20 @@ pub fn read_multitap_descs(
         .difficulty
         .sm_name()
         .trim_start_matches("Difficulty_");
+    let is_double = song_lua_style_info(&context.style_name).name == "double";
+    let key = if is_double {
+        format!("Double_{difficulty}")
+    } else {
+        difficulty.to_owned()
+    };
     let table = multitaps
-        .get::<Option<Table>>(difficulty)
+        .get::<Option<Table>>(key)
         .map_err(|err| err.to_string())?
-        .or_else(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten());
+        .or_else(|| {
+            (!is_double)
+                .then(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten())
+                .flatten()
+        });
     let Some(table) = table else {
         return Ok(None);
     };
@@ -398,6 +408,7 @@ fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, 
 
 pub fn compile_multitap_update_overlays_for_actors<Slot, Vertex, Attribute, EnsureArrowVisual>(
     lua: &Lua,
+    root: &Value,
     context: &SongLuaCompileContext,
     overlays: &mut Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<Slot, Vertex, Attribute>>>,
     noteskin_resolver: SongLuaNoteskinResolver,
@@ -410,10 +421,28 @@ where
         &str,
     ) -> Result<(), String>,
 {
+    // An omitted root frame can own additional callbacks. Check the complete
+    // update plan before replacing the factory's sampled replay.
+    if !crate::lua_util::actor_tree_update_only(lua, root, "Update")
+        .map_err(|err| err.to_string())?
+    {
+        return Ok(None);
+    }
     let Some(multitaps) = read_multitap_descs(lua, context)? else {
         return Ok(None);
     };
     if multitaps.is_empty() {
+        return Ok(None);
+    }
+    // The analytic curves encode `beat > tap` with tap.next_up(). A float
+    // seconds conversion can collapse that edge onto the tap itself. Replay
+    // the authored Lua in that case, preserving its native frame predicates.
+    if context.song_timing.as_ref().is_some_and(|timing| {
+        multitaps.iter().flat_map(|desc| &desc.taps).any(|&tap| {
+            timing.get_time_for_beat_exact(tap.next_up())
+                <= timing.get_time_for_beat_exact(tap)
+        })
+    }) {
         return Ok(None);
     }
     let overlay_indices = named_overlay_indices_by_name(overlays.len(), |index| {
@@ -517,7 +546,7 @@ where
                 numbered,
             );
         }
-        for lane in 1..=SONG_LUA_NOTE_COLUMNS {
+        for lane in 1..=song_lua_style_info(&context.style_name).columns {
             let Some(&explosion_index) =
                 overlay_indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str())
             else {
@@ -531,7 +560,6 @@ where
                 &multitaps,
                 lane,
             );
-            install_multitap_explosion_messages(lua, overlays, explosion_index, lane, pn)?;
         }
     }
     Ok(Some(out))
@@ -554,7 +582,39 @@ fn multitap_arrow_noteskin<Kind>(
         })
 }
 
-fn install_multitap_explosion_messages<Kind>(
+// Hit callbacks belong to the factory even when native model clocks or
+// float beat boundaries require chronological update replay.
+pub(crate) fn install_multitap_hits<Kind>(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+) -> Result<(), String> {
+    let indices = named_overlay_indices_by_name(overlays.len(), |index| {
+        overlays[index].actor.name.as_deref()
+    });
+    for player in 0..LUA_PLAYERS {
+        let pn = player + 1;
+        if !context.players[player].enabled
+            || !indices.contains_key(format!("MultitapFrameP{pn}").as_str())
+            || !matches!(
+                lua.globals()
+                    .get::<Value>(format!("multitap_note_callback_P{pn}"))
+                    .map_err(|err| err.to_string())?,
+                Value::Function(_)
+            )
+        {
+            continue;
+        }
+        for lane in 1..=song_lua_style_info(&context.style_name).columns {
+            if let Some(&index) = indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str()) {
+                capture_explosion_hits(lua, overlays, index, lane, pn)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn capture_explosion_hits<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     explosion_index: usize,
@@ -601,9 +661,9 @@ fn install_multitap_explosion_messages<Kind>(
                     .actor
                     .message_commands
                     .push(SongLuaOverlayMessageCommand {
+                        frame_advance: 0.0,
                         message,
                         blocks,
-                        aux: None,
                     });
             }
         }
@@ -1126,6 +1186,8 @@ macro_rules! overlay_value_fields {
         $visit!(z_bias);
         $visit!(draw_order);
         $visit!(draw_by_z_position);
+        $visit!(aft_created);
+        $visit!(aft_preserve);
         $visit!(halign);
         $visit!(valign);
         $visit!(text_align);
@@ -1181,6 +1243,8 @@ macro_rules! overlay_value_fields {
         $visit!(max_h_pre_zoom);
         $visit!(max_dimension_uses_zoom);
         $visit!(depth_test);
+        $visit!(depth_write);
+        $visit!(depth_test_on_fail);
         $visit!(texture_filtering);
         $visit!(texture_wrapping);
     };
@@ -1378,7 +1442,8 @@ mod tests {
                     crate::create_song_runtime_table(&lua, &context).unwrap(),
                 )
                 .unwrap();
-            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0).unwrap();
+            // This clock takes elapsed wall time; beat 6 is music second 3.
+            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0 / rate).unwrap();
             globals
                 .set(
                     "ArrowEffects",
@@ -1400,7 +1465,7 @@ mod tests {
                 local options = {__songlua_reference_bpm=240}
                 options[speed_method] = function() return speed_value end
                 local ps = {GetPlayerNumber=function() return "PlayerNumber_P1" end,
-                    GetPlayerOptions=function() return options end}
+                    GetCurrentPlayerOptions=function() return options end}
                 return ArrowEffects.GetYOffset(ps, 1, 10) - ArrowEffects.GetYOffset(ps, 1, 6)
             "#,
                 )
@@ -1408,7 +1473,7 @@ mod tests {
                 .unwrap();
             assert!(
                 (actual - expected).abs() < 0.001,
-                "Lua ArrowEffects {speed:?}"
+                "Lua ArrowEffects {speed:?}: actual {actual}, expected {expected}"
             );
         }
     }
@@ -1445,11 +1510,3 @@ mod tests {
         assert_eq!(actual, expected);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/multitap_work.rs"]
-mod multitap_work_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/multitap_compile.rs"]
-mod multitap_compile_perf;

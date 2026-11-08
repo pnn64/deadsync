@@ -1,0 +1,683 @@
+{
+  "runs": {
+    "fresh-0": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093009310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093009310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093009310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "fresh-1": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093109310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093109310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093109310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "fresh-2": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093209310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093209310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093209310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "fresh-3": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093309310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093309310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096672657368093309310932093109340974727565097472756509300930093109320d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "completed-0": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093009300930093009300966616c73650966616c736509300930092d3209310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650966756e6374696f6e3a2030303030303232363537453743464630097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093009300930093009300966616c73650966616c736509300930092d3209310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093009300930093009300966616c73650966616c736509300930092d3209310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e27202836323430292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "completed-1": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093109300930093009300966616c73650966616c736509300930092d3109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565096f6e65097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093109300930093009300966616c73650966616c736509300930092d3109310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093109300930093009300966616c73650966616c736509300930092d3109310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283239373136292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "completed-2": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650974776f097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650974776f097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650974776f097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "completed-3": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565097468726565097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565097468726565097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e63617409636f6d706c65746564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565097468726565097809646f6e650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "yielded-0": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097969656c646564093009300930093009300966616c73650966616c736509300930092d3209310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097969656c646564093009300930093009300966616c73650966616c736509300930092d3209310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283339393230292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "yielded-1": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097969656c646564093109300930093009300966616c73650966616c736509300930092d3109310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097969656c646564093109300930093009300966616c73650966616c736509300930092d3109310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283236343434292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "yielded-2": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097969656c646564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097969656c646564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283434323638292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3733393a31383a0a7969656c6420726573756d6520617267756d656e74730a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "yielded-3": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097969656c646564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097969656c646564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283430383536292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3733393a31383a0a7969656c6420726573756d6520617267756d656e74730a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "failed-0": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174096661696c6564093009300930093009300966616c73650966616c736509300930092d3209310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174096661696c6564093009300930093009300966616c73650966616c736509300930092d3209310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283437393630292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "failed-1": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174096661696c6564093109300930093009300966616c73650966616c736509300930092d3109310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174096661696c6564093109300930093009300966616c73650966616c736509300930092d3109310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283333393634292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "failed-2": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174096661696c6564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096661696c6564093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640966616c73650928636f6d6d616e64206c696e65293a313a2062616420617267756d656e7420233220746f20276572726f722720286e756d6265722065787065637465642c20676f7420737472696e67290d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "failed-3": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174096661696c6564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174096661696c6564093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640966616c73650928636f6d6d616e64206c696e65293a313a2062616420617267756d656e7420233220746f20276572726f722720286e756d6265722065787065637465642c20676f7420737472696e67290d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "partial-0": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174097061727469616c093009300930093009300966616c73650966616c736509300930092d3209310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650931310931330966756e6374696f6e3a2030303030303135443731354444453230097809646f6e65096e696c096e696c09646f6e650972657475726e6564096e696c096e696c096e696c096e696c0966756e6374696f6e3a2030303030303135443731354444313430096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c0d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097061727469616c093009300930093009300966616c73650966616c736509300930092d3209310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097061727469616c093009300930093009300966616c73650966616c736509300930092d3209310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283433323630292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "partial-1": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174097061727469616c093109300930093009300966616c73650966616c736509300930092d3109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565093131093133096f6e65097809646f6e65096e696c096e696c09646f6e650972657475726e6564096e696c096e696c096e696c096e696c0966756e6374696f6e3a2030303030303144383241463243363730096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c0d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097061727469616c093109300930093009300966616c73650966616c736509300930092d3109310d0a",
+        "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097061727469616c093109300930093009300966616c73650966616c736509300930092d3109310d0a726573756d656409747275650d0a7374617465096465616409300d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283332393838292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c746872656164732e72733a3734303a34373a0a617474656d707420746f2073756274726163742077697468206f766572666c6f770a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "partial-2": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174097061727469616c093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650931310931330974776f097809646f6e65096e696c096e696c09646f6e650972657475726e6564096e696c096e696c096e696c096e696c0966756e6374696f6e3a2030303030303234464131374343353230096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c0d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097061727469616c093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097061727469616c093209300930093009300966616c73650966616c736509300930093009310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283230383736292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c6e61746976652e72733a3434333a32323a0a6e6174697665207969656c6420726573756d6520617267756d656e74730a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    },
+    "partial-3": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 0,
+        "stdout_hex": "636f6e636174097061727469616c093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d65640974727565093131093133097468726565097809646f6e65096e696c096e696c09646f6e650972657475726e6564096e696c096e696c096e696c096e696c0966756e6374696f6e3a2030303030303145303844383543304430096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c096e696c0d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "checked": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-thread-execution-panic-checked-1793188037549751500\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 86,
+        "stdout_hex": "636f6e636174097061727469616c093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a",
+        "stderr_hex": "4c55415f4153534552542069734c7561284c2d3e63692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3634390d0a"
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+        ],
+        "returncode": 101,
+        "stdout_hex": "636f6e636174097061727469616c093309300930093009300966616c73650966616c736509300930093109310d0a72657475726e6564096e696c096e696c096e696c096e696c0d0a726573756d656409747275650d0a7374617465096465616409310d0a757361626c650934360d0a",
+        "stderr_hex": "0a74687265616420276d61696e2720283331303834292070616e69636b6564206174206372617465735c646561646c69622d6c75615c7372635c766d5c6e61746976652e72733a3434333a32323a0a6e6174697665207969656c6420726573756d6520617267756d656e74730a6e6f74653a2072756e20776974682060525553545f4241434b54524143453d316020656e7669726f6e6d656e74207661726961626c6520746f20646973706c61792061206261636b74726163650a"
+      }
+    }
+  },
+  "sources": {
+    "fresh-0": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "fresh-1": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "fresh-2": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "fresh-3": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='fresh';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "completed-0": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "completed-1": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "completed-2": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "completed-3": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='completed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "yielded-0": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "yielded-1": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "yielded-2": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "yielded-3": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='yielded';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "failed-0": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "failed-1": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "failed-2": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "failed-3": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='failed';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "partial-0": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=0;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "partial-1": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=1;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "partial-2": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=2;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)",
+    "partial-3": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('concat resume');local kind='partial';local n=3;local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;local visited=0;local x=setmetatable({},{__concat=function()local a,b=coroutine.yield(unpack({'one','two','three'},1,n));visited=visited+1;print('returned',type(a),a,type(b),b);return'done'end});print('concat',kind,n,m.concat_thread_panic(co,'attempt to yield across metamethod/C-call boundary',x,'x'));collectgarbage();if kind~='fresh'then print('resumed',coroutine.resume(co));print('state',coroutine.status(co),visited);collectgarbage()end;print('usable',46)"
+  },
+  "matched": [
+    "fresh-0",
+    "fresh-1",
+    "fresh-2",
+    "fresh-3",
+    "completed-2",
+    "completed-3"
+  ],
+  "strict_equal": false,
+  "public_module_report": "docs\\testing\\2026-10-28-rust-lua-thread-execution-panic-current.json",
+  "public_module_report_sha256": "b3e97e6f0533a6e14792d5d69f73eb15182d8c18997e3c47f48221652d672513",
+  "checked_report": "docs\\testing\\2026-10-28-rust-lua-thread-execution-panic-checked.json",
+  "checked_report_sha256": "d37495b8df4fea0999b85610d0bfd96f7bf7758aef63abf034b9ffe7e3f12f02",
+  "rust_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+    "sha256": "24b57e877e1a729165a3c5c8734d264a44c767caf697d1eef18616369cd18faf"
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "scope": "Post-trial source-commit comparison of declared build inputs. Exact benchmark binaries, source/harness hashes, toolchains and references are bound by per-run manifests; host activity remains uncontrolled.",
+  "checks": [
+    {
+      "path": "Cargo.toml",
+      "baseline_source_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+      "baseline_committed_sha256": "bd1a7a9e58b004837565e8302dc0321b640588a57c56752e42de60249a5690c5",
+      "current_observed_sha256": "64e84136f2e0303d1730a73f051ead1398cbe3ae29b2a7385320aaf46fc6ca2b",
+      "workspace_versions": [
+        "0.5.2475",
+        "0.5.2476"
+      ],
+      "only_semantic_difference": "Unrelated workspace release version; all profiles, patches and dependencies match."
+    },
+    {
+      "path": "Cargo.lock",
+      "baseline_source_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+      "baseline_committed_sha256": "fce258bfcc950a71dd19acdfdbf85a322079ababcdb29c5cbda2b90c88d8490c",
+      "current_observed_sha256": "abadb51fd9b756ca36c30e349062ecdd65ca6d83617526896d29942bdcae8ef9",
+      "verified_nodes": [
+        {
+          "name": "adler2",
+          "version": "2.0.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+        },
+        {
+          "name": "cfg-if",
+          "version": "1.0.5",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
+        },
+        {
+          "name": "crc32fast",
+          "version": "1.5.3",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "0ba106e844045ddc02c20768ac4b0b7cb45f2cc2ecbd833ac9f5dacb183c2055",
+          "dependencies": [
+            "cfg-if"
+          ]
+        },
+        {
+          "name": "deadlib-image",
+          "version": "0.1.0"
+        },
+        {
+          "name": "deadlib-image-png",
+          "version": "0.1.0",
+          "dependencies": [
+            "deadlib-image",
+            "flate2",
+            "png"
+          ]
+        },
+        {
+          "name": "fdeflate",
+          "version": "0.3.7",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c",
+          "dependencies": [
+            "simd-adler32"
+          ]
+        },
+        {
+          "name": "flate2",
+          "version": "1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb",
+          "dependencies": [
+            "crc32fast",
+            "miniz_oxide 0.9.1",
+            "zlib-rs"
+          ]
+        },
+        {
+          "name": "miniz_oxide",
+          "version": "0.8.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+          "dependencies": [
+            "adler2",
+            "simd-adler32"
+          ]
+        },
+        {
+          "name": "miniz_oxide",
+          "version": "0.9.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c",
+          "dependencies": [
+            "adler2",
+            "simd-adler32"
+          ]
+        },
+        {
+          "name": "png",
+          "version": "0.18.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61",
+          "dependencies": [
+            "bitflags 2.13.2",
+            "crc32fast",
+            "fdeflate",
+            "flate2",
+            "miniz_oxide 0.8.9"
+          ]
+        },
+        {
+          "name": "simd-adler32",
+          "version": "0.3.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
+        }
+      ],
+      "scope": "Native package and reference/compression dependency nodes agree; unrelated workspace packages may differ."
+    },
+    {
+      "path": "crates/deadlib-image/png/Cargo.toml",
+      "baseline_source_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+      "baseline_committed_sha256": "ba683ac0c28f96f73dc41c95f77b6fe00ea63920ff60602c00ef4585d20b6ffd",
+      "current_observed_sha256": "ba683ac0c28f96f73dc41c95f77b6fe00ea63920ff60602c00ef4585d20b6ffd",
+      "parsed_contents_equal": true
+    },
+    {
+      "path": "crates/deadlib-image/Cargo.toml",
+      "baseline_source_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+      "baseline_committed_sha256": "7c9f0d36db9d4a157c96ae2323369e09b3667d2445c30ae0500fb49112046bd4",
+      "current_observed_sha256": "7c9f0d36db9d4a157c96ae2323369e09b3667d2445c30ae0500fb49112046bd4",
+      "parsed_contents_equal": true
+    }
+  ]
+}

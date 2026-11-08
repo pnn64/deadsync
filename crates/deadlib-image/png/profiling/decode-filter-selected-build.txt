@@ -1,0 +1,2 @@
+   Compiling deadlib-image-png v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png)
+    Finished `release` profile [optimized + debuginfo] target(s) in 11.58s

@@ -163,7 +163,16 @@ pub fn apply_life_delta(
     current_music_time: f32,
     delta: f32,
 ) -> LifeDeltaResult {
-    if meter.is_failing || meter.life <= 0.0 {
+    apply_life_delta_mode(meter, current_music_time, delta, true)
+}
+
+pub fn apply_life_delta_mode(
+    meter: &mut LifeMeter,
+    current_music_time: f32,
+    delta: f32,
+    fail_at_zero: bool,
+) -> LifeDeltaResult {
+    if meter.is_failing || (fail_at_zero && meter.life <= 0.0) {
         let old_life = meter.life;
         meter.life = 0.0;
         meter.is_failing = true;
@@ -197,9 +206,9 @@ pub fn apply_life_delta(
     }
 
     let mut new_life = (meter.life + final_delta).clamp(0.0, 1.0);
-    let failed_now = new_life <= 0.0 && !meter.is_failing;
+    let failed_now = fail_at_zero && new_life <= 0.0 && !meter.is_failing;
 
-    if new_life <= 0.0 {
+    if fail_at_zero && new_life <= 0.0 {
         if failed_now {
             meter.fail_time = Some(current_music_time);
         }

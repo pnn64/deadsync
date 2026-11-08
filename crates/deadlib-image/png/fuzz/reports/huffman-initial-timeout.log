@@ -1,0 +1,90 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.16s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.17s
+     Running `/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/huffman/ -runs=20000 -seed=782347 -max_len=64 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1 /mnt/c/GitHub/deadsync/target/deadlib-image-reference/huffman-fuzz-run`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 782347
+INFO: Loaded 1 modules   (9164 inline 8-bit counters): 9164 [0x630b488cf930, 0x630b488d1cfc), 
+INFO: Loaded 1 PC tables (9164 PCs): 9164 [0x630b488d1d00,0x630b488f59c0), 
+INFO:      649 files found in /mnt/c/GitHub/deadsync/target/deadlib-image-reference/huffman-fuzz-run
+INFO: seed corpus: files: 649 min: 12b max: 12b total: 7788b rss: 35Mb
+#2	pulse  ft: 1848 exec/s: 0 rss: 126Mb
+#4	pulse  cov: 1847 ft: 1893 corp: 1/12b exec/s: 0 rss: 127Mb
+#8	pulse  cov: 1903 ft: 1997 corp: 5/60b exec/s: 1 rss: 128Mb
+#16	pulse  cov: 2233 ft: 2576 corp: 11/132b exec/s: 2 rss: 133Mb
+#32	pulse  cov: 2267 ft: 2722 corp: 20/240b exec/s: 4 rss: 135Mb
+#64	pulse  cov: 2291 ft: 3089 corp: 32/384b exec/s: 9 rss: 144Mb
+#128	pulse  cov: 2310 ft: 3332 corp: 46/552b exec/s: 14 rss: 176Mb
+#256	pulse  cov: 2357 ft: 3576 corp: 66/792b exec/s: 21 rss: 220Mb
+#512	pulse  cov: 2427 ft: 3844 corp: 87/1044b exec/s: 32 rss: 298Mb
+#651	INITED cov: 2432 ft: 3965 corp: 98/1176b exec/s: 34 rss: 336Mb
+#652	NEW    cov: 2443 ft: 3992 corp: 99/1182b lim: 15 exec/s: 34 rss: 336Mb L: 6/12 MS: 1 EraseBytes-
+#653	REDUCE cov: 2443 ft: 3992 corp: 99/1178b lim: 15 exec/s: 13 rss: 337Mb L: 8/12 MS: 1 EraseBytes-
+#654	NEW    cov: 2455 ft: 4017 corp: 100/1190b lim: 15 exec/s: 9 rss: 337Mb L: 12/12 MS: 1 CrossOver-
+#660	NEW    cov: 2455 ft: 4022 corp: 101/1203b lim: 15 exec/s: 7 rss: 338Mb L: 13/13 MS: 1 InsertByte-
+#666	NEW    cov: 2456 ft: 4039 corp: 102/1216b lim: 15 exec/s: 5 rss: 339Mb L: 13/13 MS: 1 CopyPart-
+#667	NEW    cov: 2464 ft: 4080 corp: 103/1228b lim: 15 exec/s: 4 rss: 340Mb L: 12/13 MS: 1 CopyPart-
+#672	NEW    cov: 2464 ft: 4123 corp: 104/1238b lim: 15 exec/s: 4 rss: 342Mb L: 10/13 MS: 5 ChangeBinInt-CopyPart-InsertByte-ChangeByte-EraseBytes-
+#676	NEW    cov: 2479 ft: 4141 corp: 105/1247b lim: 15 exec/s: 3 rss: 342Mb L: 9/13 MS: 4 CopyPart-CMP-ChangeBinInt-CrossOver- DE: "\001\000\000\000\000\000\000\017"-
+#677	NEW    cov: 2481 ft: 4143 corp: 106/1259b lim: 15 exec/s: 3 rss: 343Mb L: 12/13 MS: 1 CMP- DE: "\363\000"-
+#681	NEW    cov: 2481 ft: 4153 corp: 107/1272b lim: 15 exec/s: 3 rss: 343Mb L: 13/13 MS: 4 ChangeBit-EraseBytes-ShuffleBytes-CrossOver-
+#685	NEW    cov: 2482 ft: 4155 corp: 108/1273b lim: 15 exec/s: 3 rss: 343Mb L: 1/13 MS: 4 ChangeBit-PersAutoDict-CopyPart-CrossOver- DE: "\363\000"-
+#686	NEW    cov: 2482 ft: 4159 corp: 109/1285b lim: 15 exec/s: 3 rss: 343Mb L: 12/13 MS: 1 ChangeBinInt-
+#687	REDUCE cov: 2482 ft: 4159 corp: 109/1284b lim: 15 exec/s: 3 rss: 347Mb L: 11/13 MS: 1 EraseBytes-
+#692	NEW    cov: 2482 ft: 4171 corp: 110/1297b lim: 15 exec/s: 3 rss: 347Mb L: 13/13 MS: 5 ChangeByte-CopyPart-ShuffleBytes-ChangeByte-ChangeBit-
+#696	NEW    cov: 2493 ft: 4182 corp: 111/1309b lim: 15 exec/s: 3 rss: 347Mb L: 12/13 MS: 4 ChangeBit-ChangeByte-ChangeBit-ChangeBinInt-
+ALARM: working on the last Unit for 5 seconds
+       and the timeout value is 5 (use -timeout=N to change)
+MS: 1 InsertByte-; base unit: 33de3af1f5f681a0ec060fa51fd60f8ac2793aaf
+0xaf,0x4c,0x0,0x0,0x0,0x0,0x2,0x3,0x0,0x0,0x0,0x0,0x0,
+\257L\000\000\000\000\002\003\000\000\000\000\000
+artifact_prefix='/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/huffman/'; Test unit written to /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/huffman/timeout-c65b4e289a802caedd65da76f09e47d1288ac7c1
+Base64: r0wAAAAAAgMAAAAAAA==
+==238869== ERROR: libFuzzer: timeout after 5 seconds
+    #0 0x630b486b16c1  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1776c1) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #1 0x630b487c16ea  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x2876ea) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #2 0x630b488393e9  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x2ff3e9) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #3 0x7f5d6324bd6f  (/lib/x86_64-linux-gnu/libc.so.6+0x3fd6f) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #4 0x630b487b9a20  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x27fa20) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #5 0x630b487142ca  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1da2ca) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #6 0x630b4871c2cc  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1e22cc) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #7 0x630b487329c4  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1f89c4) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #8 0x630b487337a8  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1f97a8) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #9 0x630b487320bd  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1f80bd) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #10 0x630b48839ba3  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x2ffba3) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #11 0x630b48850f82  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x316f82) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #12 0x630b4885524c  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x31b24c) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #13 0x630b488599e7  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x31f9e7) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #14 0x630b48769e12  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x22fe12) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #15 0x630b4873383d  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0x1f983d) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+    #16 0x7f5d63235ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #17 0x7f5d63235d64  (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #18 0x630b48612260  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman+0xd8260) (BuildId: e849a049b58c5848b20314481de96afdf95170b4)
+
+SUMMARY: libFuzzer: timeout
+stat::number_of_executed_units: 697
+stat::average_exec_per_sec:     3
+stat::new_units_added:          15
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              350
+
+────────────────────────────────────────────────────────────────────────────────
+
+Failing input:
+
+	fuzz/artifacts/huffman/timeout-c65b4e289a802caedd65da76f09e47d1288ac7c1
+
+Output of `std::fmt::Debug`:
+
+	[175, 76, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0]
+
+Reproduce with:
+
+	cargo fuzz run --target-dir=/tmp/deadlib-image-fuzz-target huffman fuzz/artifacts/huffman/timeout-c65b4e289a802caedd65da76f09e47d1288ac7c1
+
+Minimize test case with:
+
+	cargo fuzz tmin --target-dir=/tmp/deadlib-image-fuzz-target huffman fuzz/artifacts/huffman/timeout-c65b4e289a802caedd65da76f09e47d1288ac7c1
+
+────────────────────────────────────────────────────────────────────────────────
+
+Error: Fuzz target exited with exit status: 70

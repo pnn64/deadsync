@@ -79,14 +79,68 @@ pub fn song_artist_sort_key(song: &SongData) -> (String, String) {
     )
 }
 
-#[inline]
-fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
-    left.bytes()
-        .map(|byte| byte.to_ascii_lowercase())
-        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+// Keep the small dispatch in callers; the bulk loop stays out of line.
+#[inline(always)]
+/// Compare ASCII-lowercased bytes, leaving other UTF-8 bytes unchanged.
+#[must_use]
+pub fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    let shared = left.len().min(right.len());
+    if shared == 0 {
+        return left.len().cmp(&right.len());
+    }
+    // An early difference should not pay for selecting the bulk path.
+    let order = left[0]
+        .to_ascii_lowercase()
+        .cmp(&right[0].to_ascii_lowercase());
+    if order != Ordering::Equal {
+        return order;
+    }
+    if shared < 32 {
+        return cmp_ignore_ascii_case_scalar(&left[1..], &right[1..]);
+    }
+    let order = cmp_ignore_ascii_case_scalar(&left[1..4], &right[1..4]);
+    if order != Ordering::Equal {
+        return order;
+    }
+    cmp_ignore_ascii_case_long(&left[4..], &right[4..])
 }
 
 #[inline]
+fn cmp_ignore_ascii_case_scalar(left: &[u8], right: &[u8]) -> Ordering {
+    // Equal bytes need no folding, even inside a short name or partial block.
+    for (&a, &b) in left.iter().zip(right) {
+        if a != b {
+            let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+    }
+    left.len().cmp(&right.len())
+}
+
+// Keep the bulk path out of scalar callers' inline code and register budget.
+#[inline(never)]
+fn cmp_ignore_ascii_case_long(left: &[u8], right: &[u8]) -> Ordering {
+    // Identical byte blocks need no case folding. Differing blocks use the
+    // original ASCII rules, including unchanged non-ASCII bytes.
+    let shared = left.len().min(right.len());
+    let mut offset = 0;
+    while shared - offset >= 16 {
+        let (a, b) = (&left[offset..offset + 16], &right[offset..offset + 16]);
+        if a != b {
+            let order = cmp_ignore_ascii_case_scalar(a, b);
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+        offset += 16;
+    }
+    cmp_ignore_ascii_case_scalar(&left[offset..], &right[offset..])
+}
+
+#[inline(always)]
 #[must_use]
 pub fn song_title_cmp(left: &SongData, right: &SongData) -> Ordering {
     cmp_ignore_ascii_case(left.display_title(true), right.display_title(true))
@@ -171,17 +225,18 @@ fn fill_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec
 #[inline]
 fn fill_small_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec<u32>) {
     meters.clear();
-    let has_non_edit = song.charts.iter().any(|chart| {
-        chart.has_note_data
-            && chart.chart_type.eq_ignore_ascii_case(chart_type)
-            && !chart.difficulty.eq_ignore_ascii_case("edit")
-    });
+    let mut has_non_edit = false;
     for chart in &song.charts {
-        if !chart.has_note_data
-            || !chart.chart_type.eq_ignore_ascii_case(chart_type)
-            || has_non_edit == chart.difficulty.eq_ignore_ascii_case("edit")
-        {
+        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
+        }
+        if chart.difficulty.eq_ignore_ascii_case("edit") {
+            if has_non_edit {
+                continue;
+            }
+        } else if !has_non_edit {
+            has_non_edit = true;
+            meters.clear();
         }
         if meters.is_empty() {
             meters.reserve(song.charts.len());
@@ -261,9 +316,9 @@ fn grouped_genre_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
 
 #[must_use]
 pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    // Compact indices keep the temporary to eight bytes per song. Preserve the
-    // original path for inputs whose positions cannot be represented by u32.
-    if songs.len() > u32::MAX as usize {
+    // Tiny inputs need no cached keys. Compact indices keep larger temporaries
+    // to eight bytes per song; unrepresentable positions use the original path.
+    if songs.len() <= 1 || songs.len() > u32::MAX as usize {
         return bpm_grouped_songs_uncached(songs);
     }
     let mut order: Vec<_> = songs
@@ -290,7 +345,16 @@ pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     }
     let runs =
         || order.chunk_by(|left, right| bpm_bucket_range(left.0) == bpm_bucket_range(right.0));
-    let mut groups = Vec::with_capacity(runs().count());
+    let group_count = runs().count();
+    if group_count == 1 {
+        let (lo, hi) = bpm_bucket_range(order[0].0);
+        songs.shrink_to_fit();
+        return vec![GroupedSongs {
+            group: SongSortGroup::Bpm { lo, hi },
+            songs,
+        }];
+    }
+    let mut groups = Vec::with_capacity(group_count);
     let mut songs = songs.into_iter();
     for run in runs() {
         let (lo, hi) = bpm_bucket_range(run[0].0);
@@ -446,11 +510,14 @@ fn grouped_song_runs(
 }
 
 fn alpha_grouped_songs(
-    songs: Vec<Arc<SongData>>,
+    mut songs: Vec<Arc<SongData>>,
     bucket_for: impl Fn(&SongData) -> u8,
     compare: impl Fn(&SongData, &SongData) -> Ordering,
     group_for: impl Fn(u8) -> SongSortGroup,
 ) -> Vec<GroupedSongs> {
+    if songs.len() <= 1 {
+        return grouped_contiguous_songs(songs, |song| group_for(bucket_for(song)));
+    }
     let mut counts = [0usize; ALPHA_GROUP_COUNT];
     // Keep one byte per song so sizing the buckets does not require parsing
     // title/artist prefixes twice. The temporary replaces repeated Vec growth.
@@ -462,6 +529,14 @@ fn alpha_grouped_songs(
             bucket
         })
         .collect();
+    if counts[usize::from(bucket_indices[0])] == songs.len() {
+        // The input already owns every handle in the only output bucket.
+        let group = group_for(bucket_indices[0]);
+        drop(bucket_indices);
+        songs.sort_by(|left, right| compare(left, right));
+        songs.shrink_to_fit();
+        return vec![GroupedSongs { group, songs }];
+    }
     let mut buckets: [Vec<Arc<SongData>>; ALPHA_GROUP_COUNT] =
         std::array::from_fn(|bucket| Vec::with_capacity(counts[bucket]));
     for (song, bucket) in songs.into_iter().zip(bucket_indices) {
@@ -484,7 +559,80 @@ fn alpha_grouped_songs(
 
 #[cfg(test)]
 mod tests {
+    include!("song_sort_selection_perf.rs");
     use super::*;
+
+    #[test]
+    fn alpha_tiny_inputs_preserve_buckets_identity_and_capacity() {
+        for artist in [false, true] {
+            let empty = Vec::with_capacity(64);
+            let groups = if artist {
+                artist_grouped_songs(empty)
+            } else {
+                title_grouped_songs(empty)
+            };
+            assert!(groups.is_empty());
+            assert_eq!(groups.capacity(), 0);
+            for (label, bucket) in [("", 0), ("\u{2003}7th", 1), ("Zulu", 27), ("\u{66f2}", 0)] {
+                for capacity in [1, 64] {
+                    let mut song = test_song();
+                    song.translit_title = label.into();
+                    song.title = label.into();
+                    song.artist = label.into();
+                    let song = Arc::new(song);
+                    let mut songs = Vec::with_capacity(capacity);
+                    songs.push(Arc::clone(&song));
+                    let groups = if artist {
+                        artist_grouped_songs(songs)
+                    } else {
+                        title_grouped_songs(songs)
+                    };
+                    assert_eq!(groups.len(), 1);
+                    assert_eq!(groups.capacity(), 1);
+                    assert_eq!(
+                        groups[0].group,
+                        if artist {
+                            SongSortGroup::Artist(bucket)
+                        } else {
+                            SongSortGroup::Title(bucket)
+                        }
+                    );
+                    assert_eq!(groups[0].songs.capacity(), 1);
+                    assert!(Arc::ptr_eq(&groups[0].songs[0], &song));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bpm_single_group_preserves_order_ties_and_trims_spare_capacity() {
+        let mut songs = Vec::with_capacity(64);
+        for title in ["Zulu", "Alpha", "Alpha"] {
+            let mut song = test_song();
+            song.title = title.into();
+            song.display_bpm = "128".into();
+            songs.push(Arc::new(song));
+        }
+        let expected = [
+            Arc::clone(&songs[1]),
+            Arc::clone(&songs[2]),
+            Arc::clone(&songs[0]),
+        ];
+        let groups = bpm_grouped_songs(songs);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].group, SongSortGroup::Bpm { lo: 120, hi: 129 });
+        assert_eq!(groups[0].songs.capacity(), 3);
+        for (actual, expected) in groups[0].songs.iter().zip(&expected) {
+            assert!(Arc::ptr_eq(actual, expected));
+        }
+        let song = Arc::new(test_song());
+        let mut single = Vec::with_capacity(64);
+        single.push(Arc::clone(&song));
+        let groups = bpm_grouped_songs(single);
+        assert_eq!(groups[0].songs.capacity(), 1);
+        assert!(Arc::ptr_eq(&groups[0].songs[0], &song));
+        assert!(bpm_grouped_songs(Vec::with_capacity(64)).is_empty());
+    }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use std::path::PathBuf;
 
@@ -496,6 +644,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: format!("{difficulty}-{meter}"),
             stats: ArrowStats::default(),
@@ -555,10 +704,12 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 180.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 123,
             precise_last_second_seconds: 123.0,
+            precise_note_last_second_seconds: Some(123.0),
             last_second_hint: 0.0,
             charts: Vec::new(),
         }
@@ -617,6 +768,54 @@ mod tests {
             test_chart("Edit", 19, true),
         ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![19, 21]);
+    }
+
+    #[test]
+    fn meters_match_two_pass_selection_across_edit_prefixes_and_overflow() {
+        let mut song = test_song();
+        let mut scratch = Vec::new();
+        let mut seed = 1u32;
+        for count in [0, 1, 4, 16, 17, 32, 129] {
+            for standard_at in 0..=count {
+                song.charts = (0..count)
+                    .map(|index| {
+                        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                        let mut chart = test_chart(
+                            if index < standard_at { "EdIt" } else { "Hard" },
+                            [0, 1, 63, 64, 127, 128, u32::MAX][seed as usize % 7],
+                            !seed.is_multiple_of(5),
+                        );
+                        if seed.is_multiple_of(7) {
+                            chart.chart_type = "pump-single".into();
+                        }
+                        chart
+                    })
+                    .collect();
+                let matching = |chart: &&ChartData| {
+                    chart.has_note_data && chart.chart_type.eq_ignore_ascii_case("DANCE-SINGLE")
+                };
+                let has_standard = song
+                    .charts
+                    .iter()
+                    .filter(matching)
+                    .any(|chart| !chart.difficulty.eq_ignore_ascii_case("edit"));
+                let mut expected: Vec<_> = song
+                    .charts
+                    .iter()
+                    .filter(matching)
+                    .filter(|chart| has_standard != chart.difficulty.eq_ignore_ascii_case("edit"))
+                    .map(|chart| chart.meter)
+                    .collect();
+                expected.sort_unstable();
+                expected.dedup();
+                fill_song_meters_for_sort(&song, "DANCE-SINGLE", &mut scratch);
+                assert_eq!(
+                    scratch, expected,
+                    "{count} charts, {standard_at} leading edits"
+                );
+                assert_eq!(song_meters_for_sort(&song, "DANCE-SINGLE"), expected);
+            }
+        }
     }
 
     #[test]
@@ -718,17 +917,5 @@ mod tests {
                 .map(|song| song.simfile_path.as_path())
                 .collect::<Vec<_>>()
         );
-    }
-    mod grouping_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/song_grouping.rs"
-        ));
-    }
-    mod library_sort_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/library_sort.rs"
-        ));
     }
 }

@@ -1,0 +1,72 @@
+import csv
+import hashlib
+import json
+from pathlib import Path
+import statistics
+import subprocess
+import sys
+import time
+
+root = Path('crates/deadlib-audio/decode/wav')
+stem = Path('target/wav/ms-narrow-paired-reference-i686')
+assert not Path(str(stem) + '.json').exists()
+old_path = root / 'validation/adpcm-cursor-i686.json'
+new_path = Path('target/wav/ms-narrow-final-i686.json')
+old, new = [json.loads(p.read_text()) for p in (old_path, new_path)]
+sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+assert old['completed'] and new['completed']
+assert old['inputs_unchanged'] and new['inputs_unchanged']
+assert old['reference_packages'] == new['reference_packages']
+assert old['reference_packages_unchanged'] and new['reference_packages_unchanged']
+assert old['build_command'][-2:] == new['build_command'][-2:] == ['--target', 'i686-pc-windows-msvc']
+core = lambda r: {k: v for k, v in r['sources'].items() if '/src/' in k and '/tests/' not in k}
+old_core, new_core = core(old), core(new)
+assert set(old_core) == set(new_core)
+assert [k for k in old_core if old_core[k] != new_core[k]] == ['crates/deadlib-audio/decode/wav/src/adpcm.rs']
+assert all(sha(Path(k)) == v for k, v in new_core.items())
+sys.path.insert(0, str(root / 'benches'))
+from run_symphonia import verify_registry
+manifest = Path(new['build_command'][new['build_command'].index('--manifest-path') + 1])
+packages = verify_registry(manifest)
+assert packages == new['reference_packages']
+binaries = {'baseline': Path(old['runs'][0]['command'][0]), 'current': Path(new['runs'][0]['command'][0])}
+for label, r in [('baseline', old), ('current', new)]:
+    assert sha(binaries[label]) == r['binary_sha256']
+runs = []
+for label in ['control1', 'current1', 'control2', 'current2']:
+    version = 'baseline' if label.startswith('control') else 'current'
+    for name in ['RIFF-ms-c2-ext0', 'RIFF-ima4sign-c2-ext0']:
+        case = next(r for r in new['runs'] if r['case']['name'] == name)
+        prior = next(r for r in old['runs'] if r['case']['name'] == name)
+        assert case['case']['fixture_sha256'] == prior['case']['fixture_sha256']
+        command = [str(binaries[version])] + case['command'][1:]
+        assert sha(Path(command[2])) == case['case']['fixture_sha256']
+        p = subprocess.run(command, capture_output=True)
+        data = p.stdout.decode()
+        gates = [line.split('\t')[1:] for line in data.splitlines() if line.startswith('# gate\t')]
+        assert p.returncode == 0 and gates == case['gates'], (label, name, p.stderr)
+        raw = Path(str(stem) + '-' + label + '-' + name)
+        Path(str(raw) + '.tsv').write_bytes(p.stdout)
+        Path(str(raw) + '.stderr').write_bytes(p.stderr)
+        rows = list(csv.DictReader((line for line in data.splitlines() if not line.startswith('#')), delimiter='\t'))
+        runs.append(dict(label=label, version=version, case=name, command=command, gates=gates, exit_code=p.returncode, output_sha256=hashlib.sha256(p.stdout).hexdigest(), stderr_sha256=hashlib.sha256(p.stderr).hexdigest(), rows=rows))
+        print(label, name, 'passed', flush=True)
+for label, r in [('baseline', old), ('current', new)]:
+    assert sha(binaries[label]) == r['binary_sha256']
+assert verify_registry(manifest) == packages
+assert all(sha(Path(k)) == v for k, v in new_core.items())
+summary = []
+for name in ['RIFF-ms-c2-ext0', 'RIFF-ima4sign-c2-ext0']:
+    operations = sorted({row['operation'] for run in runs if run['case'] == name for row in run['rows']})
+    for operation in operations:
+        row = dict(case=name, operation=operation)
+        for version in ['baseline', 'current']:
+            values = [float(row['ns_per_op']) for run in runs if run['case'] == name and run['version'] == version for row in run['rows'] if row['operation'] == operation]
+            assert len(values) == 6
+            row[version] = dict(median=statistics.median(values), min=min(values), max=max(values), trials=values)
+        row['baseline_over_current_time'] = row['baseline']['median'] / row['current']['median']
+        summary.append(row)
+report = dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), driver_sha256=sha(Path(__file__)), baseline_report_sha256=sha(old_path), current_report_sha256=sha(new_path), baseline_source_archive=old['source_archive'], current_source_archive=new['source_archive'], baseline_binary_sha256=old['binary_sha256'], current_binary_sha256=new['binary_sha256'], reference_packages=packages, sources=new_core, inputs_unchanged=True, reference_packages_unchanged=True, runs=runs, summary=summary, scope='existing source-pinned i686 opt-3/LTO/debug-1 performance binaries; same independently constructed random Microsoft and sign-only IMA fixtures; baseline/current/baseline/current, three warmed trials each; common i16 caller output; native and Symphonia operations in each process; thread pinned to bit 31, frequency/other processes uncontrolled; no rebuild or cold-device claim')
+Path(str(stem) + '.json').write_text(json.dumps(report, indent=2) + '\n')
+for row in summary:
+    print(row['case'], row['operation'], round(row['baseline_over_current_time'], 3))

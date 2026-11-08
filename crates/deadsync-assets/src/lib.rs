@@ -9,15 +9,6 @@ pub mod screenshot;
 pub mod song_lua;
 pub mod textures;
 
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/asset_discovery/support.rs"]
-mod asset_discovery_support;
-
 use deadlib_assets::{
     open_image_fallback, register_generated_texture, register_texture_dims, sprite_sheet_dims,
     texture_dims, texture_source_frame_dims_from_real,
@@ -34,6 +25,31 @@ pub fn init_paths(paths: deadsync_config::dirs::AssetPaths) -> Result<(), &'stat
 
 pub(crate) fn paths() -> &'static deadsync_config::dirs::AssetPaths {
     PATHS.get().expect("asset paths initialized at startup")
+}
+
+#[cfg(test)]
+pub(crate) fn init_asset_paths() {
+    use std::path::Path;
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate is under the workspace crates directory")
+            .to_path_buf();
+        let data =
+            std::env::temp_dir().join(format!("deadsync-noteskin-paths-{}", std::process::id()));
+        init_paths(deadsync_config::dirs::AssetPaths {
+            search_roots: vec![data.clone(), bundle.clone()],
+            graphic_roots: vec![bundle.join("assets/graphics")],
+            texture_roots: [data.join("assets"), bundle.join("assets")],
+            noteskin_roots: vec![bundle.join("assets/noteskins")],
+            noteskin_pack_roots: vec![bundle.join("assets/noteskins")],
+            noteskin_cache: data.join("cache/noteskins"),
+            banner_cache: data.join("cache/banners"),
+            cdtitle_cache: data.join("cache/cdtitles"),
+        }).expect("initialize fixture asset paths");
+    });
 }
 
 /// Resolve a bundled or data-overlay asset without exposing platform paths to

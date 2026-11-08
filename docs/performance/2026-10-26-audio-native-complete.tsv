@@ -1,0 +1,457 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	storage_allocs	storage_reallocs	storage_frees	storage_allocated_bytes	storage_freed_bytes	storage_peak_bytes
+0	native-rate-before	sola/append-6ch	206636.97	94454.69		0	0	0	0	0	0	8	0	0	294024	0	294024
+0	native-rate-before	sola/append-8ch	291713.79	133446.88		0	0	0	0	0	0	10	0	0	390112	0	390112
+0	native-rate-before	sola/append-16ch	623025.04	535453.12		0	0	0	0	0	0	18	0	0	774464	0	774464
+0	native-rate-before	sola/crossfade-256	101.18	45.12		0	0	0	0	0	0						
+0	native-rate-before	sola/crossfade-1440	621.2	281.25		0	0	0	0	0	0						
+0	native-rate-before	sola/mono/360	125725.44	57828.12		0	0	0	0	0	0						
+0	native-rate-before	sola/stereo/360	259167.78	118684.38		0	0	0	0	0	0						
+0	native-rate-before	sola/left-silent/360	134066.47	61115.62		0	0	0	0	0	0						
+0	native-rate-before	sola/right-silent/360	125595.16	57303.12		0	0	0	0	0	0						
+0	native-rate-before	sola/mono/720	522787.31	239828.12		0	0	0	0	0	0						
+0	native-rate-before	sola/stereo/720	1000618.22	520878.12		0	0	0	0	0	0						
+0	native-rate-before	sola/left-silent/720	490925.47	224318.75		0	0	0	0	0	0						
+0	native-rate-before	sola/right-silent/720	486453.16	222071.88		0	0	0	0	0	0						
+0	native-rate-before	sola/stream-1ch-noise-1.2	586614.0	266800.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	native-rate-before	sola/stream-2ch-noise-0.8	2230120.0	2026600.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	native-rate-before	sola/stream-2ch-tone-1.2	215658.5	97850.0	5907aac396672cd5	0	0	0	0	0	0						
+0	native-rate-before	sola/stream-2ch-left-silent-1.2	768030.5	350600.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	native-rate-before	sola/stream-2ch-silence-1.2	110737.5	50000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	native-rate-before	sola/stream-6ch-noise-1.2	3674430.0	1676150.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	native-buffer	sola/append-6ch	161881.26	89643.75		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	native-buffer	sola/append-8ch	227333.43	119671.88		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	native-buffer	sola/append-16ch	500389.69	244767.19		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	native-buffer	sola/crossfade-256	222.29	100.39		0	0	0	0	0	0						
+0	native-buffer	sola/crossfade-1440	1370.16	622.66		0	0	0	0	0	0						
+0	native-buffer	sola/mono/360	131946.94	60493.75		0	0	0	0	0	0						
+0	native-buffer	sola/stereo/360	364431.75	166818.75		0	0	0	0	0	0						
+0	native-buffer	sola/left-silent/360	157408.94	71762.5		0	0	0	0	0	0						
+0	native-buffer	sola/right-silent/360	180353.56	85368.75		0	0	0	0	0	0						
+0	native-buffer	sola/mono/720	540553.03	247168.75		0	0	0	0	0	0						
+0	native-buffer	sola/stereo/720	1198202.53	634809.38		0	0	0	0	0	0						
+0	native-buffer	sola/left-silent/720	672177.56	322112.5		0	0	0	0	0	0						
+0	native-buffer	sola/right-silent/720	734529.34	369665.62		0	0	0	0	0	0						
+0	native-buffer	sola/stream-1ch-noise-1.2	892157.0	604750.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	native-buffer	sola/stream-2ch-noise-0.8	3213480.5	1465300.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	native-buffer	sola/stream-2ch-tone-1.2	240901.0	111350.0	5907aac396672cd5	0	0	0	0	0	0						
+0	native-buffer	sola/stream-2ch-left-silent-1.2	1027040.0	499750.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	native-buffer	sola/stream-2ch-silence-1.2	134334.0	60450.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	native-buffer	sola/stream-6ch-noise-1.2	5376104.0	2460150.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	native-complete	sola/append-6ch	263065.61	137164.06		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	native-complete	sola/append-8ch	304755.19	139685.94		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	native-complete	sola/append-16ch	525117.71	240155.47		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	native-complete	sola/crossfade-256	194.85	87.79		0	0	0	0	0	0						
+0	native-complete	sola/crossfade-1440	724.52	329.1		0	0	0	0	0	0						
+0	native-complete	sola/mono/360	130472.19	59500.0		0	0	0	0	0	0						
+0	native-complete	sola/stereo/360	261959.53	119509.38		0	0	0	0	0	0						
+0	native-complete	sola/left-silent/360	128153.72	58946.88		0	0	0	0	0	0						
+0	native-complete	sola/right-silent/360	124909.22	56946.88		0	0	0	0	0	0						
+0	native-complete	sola/mono/720	498518.75	228237.5		0	0	0	0	0	0						
+0	native-complete	sola/stereo/720	944782.81	431612.5		0	0	0	0	0	0						
+0	native-complete	sola/left-silent/720	479058.75	281265.62		0	0	0	0	0	0						
+0	native-complete	sola/right-silent/720	487495.75	285640.62		0	0	0	0	0	0						
+0	native-complete	sola/stream-1ch-noise-1.2	577724.0	262800.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	native-complete	sola/stream-2ch-noise-0.8	2165367.5	1989400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	native-complete	sola/stream-2ch-tone-1.2	218292.5	99050.0	5907aac396672cd5	0	0	0	0	0	0						
+0	native-complete	sola/stream-2ch-left-silent-1.2	755409.0	343750.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	native-complete	sola/stream-2ch-silence-1.2	108542.5	49050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	native-complete	sola/stream-6ch-noise-1.2	3504866.0	1605750.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	native-buffer	sola/append-6ch	180684.52	98204.69		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	native-buffer	sola/append-8ch	238148.93	109000.78		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	native-buffer	sola/append-16ch	473255.72	236949.22		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	native-buffer	sola/crossfade-256	221.64	100.2		0	0	0	0	0	0						
+1	native-buffer	sola/crossfade-1440	1248.62	571.68		0	0	0	0	0	0						
+1	native-buffer	sola/mono/360	130321.28	59481.25		0	0	0	0	0	0						
+1	native-buffer	sola/stereo/360	240379.94	110203.12		0	0	0	0	0	0						
+1	native-buffer	sola/left-silent/360	124394.78	56712.5		0	0	0	0	0	0						
+1	native-buffer	sola/right-silent/360	126274.22	57840.62		0	0	0	0	0	0						
+1	native-buffer	sola/mono/720	489258.62	285721.88		0	0	0	0	0	0						
+1	native-buffer	sola/stereo/720	1004617.22	522100.0		0	0	0	0	0	0						
+1	native-buffer	sola/left-silent/720	485931.88	284868.75		0	0	0	0	0	0						
+1	native-buffer	sola/right-silent/720	489471.31	286418.75		0	0	0	0	0	0						
+1	native-buffer	sola/stream-1ch-noise-1.2	585955.5	266300.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	native-buffer	sola/stream-2ch-noise-0.8	2288287.5	2048650.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	native-buffer	sola/stream-2ch-tone-1.2	224439.0	101800.0	5907aac396672cd5	0	0	0	0	0	0						
+1	native-buffer	sola/stream-2ch-left-silent-1.2	803040.5	364500.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	native-buffer	sola/stream-2ch-silence-1.2	112823.0	50950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	native-buffer	sola/stream-6ch-noise-1.2	3642273.0	1660150.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	native-complete	sola/append-6ch	163139.95	90300.78		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	native-complete	sola/append-8ch	218942.68	100049.22		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	native-complete	sola/append-16ch	459742.77	210294.53		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	native-complete	sola/crossfade-256	147.26	66.21		0	0	0	0	0	0						
+1	native-complete	sola/crossfade-1440	730.31	331.45		0	0	0	0	0	0						
+1	native-complete	sola/mono/360	118530.0	54043.75		0	0	0	0	0	0						
+1	native-complete	sola/stereo/360	231366.72	105537.5		0	0	0	0	0	0						
+1	native-complete	sola/left-silent/360	116842.59	53468.75		0	0	0	0	0	0						
+1	native-complete	sola/right-silent/360	115443.28	53193.75		0	0	0	0	0	0						
+1	native-complete	sola/mono/720	479292.0	219340.62		0	0	0	0	0	0						
+1	native-complete	sola/stereo/720	990164.59	515253.12		0	0	0	0	0	0						
+1	native-complete	sola/left-silent/720	485081.28	221596.88		0	0	0	0	0	0						
+1	native-complete	sola/right-silent/720	491426.19	287165.62		0	0	0	0	0	0						
+1	native-complete	sola/stream-1ch-noise-1.2	564554.0	256600.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	native-complete	sola/stream-2ch-noise-0.8	2200926.5	1003900.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	native-complete	sola/stream-2ch-tone-1.2	216976.0	98400.0	5907aac396672cd5	0	0	0	0	0	0						
+1	native-complete	sola/stream-2ch-left-silent-1.2	801943.0	364600.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	native-complete	sola/stream-2ch-silence-1.2	108104.0	48850.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	native-complete	sola/stream-6ch-noise-1.2	3675856.5	1781300.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	native-rate-before	sola/append-6ch	220877.03	116561.72		0	0	0	0	0	0	8	0	0	294024	0	294024
+1	native-rate-before	sola/append-8ch	293543.52	150039.84		0	0	0	0	0	0	10	0	0	390112	0	390112
+1	native-rate-before	sola/append-16ch	613785.46	296359.38		0	0	0	0	0	0	18	0	0	774464	0	774464
+1	native-rate-before	sola/crossfade-256	105.03	46.97		0	0	0	0	0	0						
+1	native-rate-before	sola/crossfade-1440	405.99	187.6		0	0	0	0	0	0						
+1	native-rate-before	sola/mono/360	118125.28	116537.5		0	0	0	0	0	0						
+1	native-rate-before	sola/stereo/360	252486.75	178378.12		0	0	0	0	0	0						
+1	native-rate-before	sola/left-silent/360	126020.44	57500.0		0	0	0	0	0	0						
+1	native-rate-before	sola/right-silent/360	119702.94	54559.38		0	0	0	0	0	0						
+1	native-rate-before	sola/mono/720	486995.03	222253.12		0	0	0	0	0	0						
+1	native-rate-before	sola/stereo/720	987935.16	515006.25		0	0	0	0	0	0						
+1	native-rate-before	sola/left-silent/720	516401.19	299118.75		0	0	0	0	0	0						
+1	native-rate-before	sola/right-silent/720	491145.0	224337.5		0	0	0	0	0	0						
+1	native-rate-before	sola/stream-1ch-noise-1.2	592869.5	269700.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	native-rate-before	sola/stream-2ch-noise-0.8	2287519.5	1043550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	native-rate-before	sola/stream-2ch-tone-1.2	215219.5	97650.0	5907aac396672cd5	0	0	0	0	0	0						
+1	native-rate-before	sola/stream-2ch-left-silent-1.2	781310.5	362450.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	native-rate-before	sola/stream-2ch-silence-1.2	110628.0	50050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	native-rate-before	sola/stream-6ch-noise-1.2	3903697.5	2795750.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	native-complete	sola/append-6ch	164937.11	91125.78		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	native-complete	sola/append-8ch	222278.03	117438.28		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	native-complete	sola/append-16ch	479813.27	235242.97		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	native-complete	sola/crossfade-256	179.84	81.05		0	0	0	0	0	0						
+2	native-complete	sola/crossfade-1440	677.15	311.13		0	0	0	0	0	0						
+2	native-complete	sola/mono/360	120978.78	55178.12		0	0	0	0	0	0						
+2	native-complete	sola/stereo/360	245126.59	111856.25		0	0	0	0	0	0						
+2	native-complete	sola/left-silent/360	123064.06	56590.62		0	0	0	0	0	0						
+2	native-complete	sola/right-silent/360	123448.16	56565.62		0	0	0	0	0	0						
+2	native-complete	sola/mono/720	484834.31	221800.0		0	0	0	0	0	0						
+2	native-complete	sola/stereo/720	995768.59	518540.62		0	0	0	0	0	0						
+2	native-complete	sola/left-silent/720	487283.19	222671.88		0	0	0	0	0	0						
+2	native-complete	sola/right-silent/720	486370.84	221821.88		0	0	0	0	0	0						
+2	native-complete	sola/stream-1ch-noise-1.2	586065.0	268550.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	native-complete	sola/stream-2ch-noise-0.8	2245156.0	1024150.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	native-complete	sola/stream-2ch-tone-1.2	218622.0	99200.0	5907aac396672cd5	0	0	0	0	0	0						
+2	native-complete	sola/stream-2ch-left-silent-1.2	795577.5	363450.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	native-complete	sola/stream-2ch-silence-1.2	108323.5	49000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	native-complete	sola/stream-6ch-noise-1.2	3643042.0	1661900.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	native-rate-before	sola/append-6ch	214619.55	98247.66		0	0	0	0	0	0	8	0	0	294024	0	294024
+2	native-rate-before	sola/append-8ch	293181.69	149801.56		0	0	0	0	0	0	10	0	0	390112	0	390112
+2	native-rate-before	sola/append-16ch	610246.01	294682.81		0	0	0	0	0	0	18	0	0	774464	0	774464
+2	native-rate-before	sola/crossfade-256	110.61	53.61		0	0	0	0	0	0						
+2	native-rate-before	sola/crossfade-1440	571.69	258.59		0	0	0	0	0	0						
+2	native-rate-before	sola/mono/360	122933.72	56078.12		0	0	0	0	0	0						
+2	native-rate-before	sola/stereo/360	251437.22	177828.12		0	0	0	0	0	0						
+2	native-rate-before	sola/left-silent/360	128599.56	58650.0		0	0	0	0	0	0						
+2	native-rate-before	sola/right-silent/360	122652.5	55937.5		0	0	0	0	0	0						
+2	native-rate-before	sola/mono/720	495240.0	289159.38		0	0	0	0	0	0						
+2	native-rate-before	sola/stereo/720	982235.03	449134.38		0	0	0	0	0	0						
+2	native-rate-before	sola/left-silent/720	496358.09	227103.12		0	0	0	0	0	0						
+2	native-rate-before	sola/right-silent/720	496385.53	227150.0		0	0	0	0	0	0						
+2	native-rate-before	sola/stream-1ch-noise-1.2	589467.5	269450.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	native-rate-before	sola/stream-2ch-noise-0.8	2329992.5	1062300.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	native-rate-before	sola/stream-2ch-tone-1.2	215329.5	97650.0	5907aac396672cd5	0	0	0	0	0	0						
+2	native-rate-before	sola/stream-2ch-left-silent-1.2	799419.0	363750.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	native-rate-before	sola/stream-2ch-silence-1.2	110738.0	50000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	native-rate-before	sola/stream-6ch-noise-1.2	3839933.0	1758750.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	native-buffer	sola/append-6ch	161989.28	74098.44		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	native-buffer	sola/append-8ch	226668.05	119364.84		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	native-buffer	sola/append-16ch	483515.63	236784.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	native-buffer	sola/crossfade-256	221.43	100.0		0	0	0	0	0	0						
+2	native-buffer	sola/crossfade-1440	1261.91	576.17		0	0	0	0	0	0						
+2	native-buffer	sola/mono/360	121829.38	55940.62		0	0	0	0	0	0						
+2	native-buffer	sola/stereo/360	249777.28	177015.62		0	0	0	0	0	0						
+2	native-buffer	sola/left-silent/360	122343.78	56315.62		0	0	0	0	0	0						
+2	native-buffer	sola/right-silent/360	120334.03	54884.38		0	0	0	0	0	0						
+2	native-buffer	sola/mono/720	489992.59	224171.88		0	0	0	0	0	0						
+2	native-buffer	sola/stereo/720	978688.81	447656.25		0	0	0	0	0	0						
+2	native-buffer	sola/left-silent/720	484601.12	221637.5		0	0	0	0	0	0						
+2	native-buffer	sola/right-silent/720	501283.12	229721.88		0	0	0	0	0	0						
+2	native-buffer	sola/stream-1ch-noise-1.2	579370.0	263500.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	native-buffer	sola/stream-2ch-noise-0.8	2187317.0	1002650.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	native-buffer	sola/stream-2ch-tone-1.2	231243.5	107000.0	5907aac396672cd5	0	0	0	0	0	0						
+2	native-buffer	sola/stream-2ch-left-silent-1.2	766933.0	348900.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	native-buffer	sola/stream-2ch-silence-1.2	112823.0	50950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	native-buffer	sola/stream-6ch-noise-1.2	3620214.0	1656700.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	native-rate-before	sola/append-6ch	218651.16	115529.69		0	0	0	0	0	0	8	0	0	294024	0	294024
+3	native-rate-before	sola/append-8ch	296434.73	151131.25		0	0	0	0	0	0	10	0	0	390112	0	390112
+3	native-rate-before	sola/append-16ch	613922.66	298171.88		0	0	0	0	0	0	18	0	0	774464	0	774464
+3	native-rate-before	sola/crossfade-256	97.1	43.36		0	0	0	0	0	0						
+3	native-rate-before	sola/crossfade-1440	404.7	183.5		0	0	0	0	0	0						
+3	native-rate-before	sola/mono/360	122254.62	55731.25		0	0	0	0	0	0						
+3	native-rate-before	sola/stereo/360	254530.81	116050.0		0	0	0	0	0	0						
+3	native-rate-before	sola/left-silent/360	129724.5	59128.12		0	0	0	0	0	0						
+3	native-rate-before	sola/right-silent/360	122350.66	56296.88		0	0	0	0	0	0						
+3	native-rate-before	sola/mono/720	489546.72	223246.88		0	0	0	0	0	0						
+3	native-rate-before	sola/stereo/720	980101.78	448734.38		0	0	0	0	0	0						
+3	native-rate-before	sola/left-silent/720	487530.06	222971.88		0	0	0	0	0	0						
+3	native-rate-before	sola/right-silent/720	490726.56	287431.25		0	0	0	0	0	0						
+3	native-rate-before	sola/stream-1ch-noise-1.2	612624.5	277750.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	native-rate-before	sola/stream-2ch-noise-0.8	2284227.0	1049100.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	native-rate-before	sola/stream-2ch-tone-1.2	231902.0	105000.0	5907aac396672cd5	0	0	0	0	0	0						
+3	native-rate-before	sola/stream-2ch-left-silent-1.2	775054.5	354900.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	native-rate-before	sola/stream-2ch-silence-1.2	110847.5	50050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	native-rate-before	sola/stream-6ch-noise-1.2	3777595.0	1723900.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	native-buffer	sola/append-6ch	167800.88	76741.41		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	native-buffer	sola/append-8ch	226856.68	103771.09		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	native-buffer	sola/append-16ch	489076.88	474548.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	native-buffer	sola/crossfade-256	275.45	123.83		0	0	0	0	0	0						
+3	native-buffer	sola/crossfade-1440	1245.62	569.43		0	0	0	0	0	0						
+3	native-buffer	sola/mono/360	119997.91	54675.0		0	0	0	0	0	0						
+3	native-buffer	sola/stereo/360	239927.22	109718.75		0	0	0	0	0	0						
+3	native-buffer	sola/left-silent/360	122604.44	55903.12		0	0	0	0	0	0						
+3	native-buffer	sola/right-silent/360	120656.41	55012.5		0	0	0	0	0	0						
+3	native-buffer	sola/mono/720	488593.28	223365.62		0	0	0	0	0	0						
+3	native-buffer	sola/stereo/720	974367.38	445962.5		0	0	0	0	0	0						
+3	native-buffer	sola/left-silent/720	485897.56	222112.5		0	0	0	0	0	0						
+3	native-buffer	sola/right-silent/720	489457.59	223853.12		0	0	0	0	0	0						
+3	native-buffer	sola/stream-1ch-noise-1.2	576297.0	266550.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	native-buffer	sola/stream-2ch-noise-0.8	2373563.5	1081750.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	native-buffer	sola/stream-2ch-tone-1.2	226963.0	102900.0	5907aac396672cd5	0	0	0	0	0	0						
+3	native-buffer	sola/stream-2ch-left-silent-1.2	801614.5	366250.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	native-buffer	sola/stream-2ch-silence-1.2	114140.0	51550.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	native-buffer	sola/stream-6ch-noise-1.2	3635798.0	1663150.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	native-complete	sola/append-6ch	162447.13	322919.53		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	native-complete	sola/append-8ch	222478.69	117264.06		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	native-complete	sola/append-16ch	467390.96	229750.78		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	native-complete	sola/crossfade-256	180.06	81.15		0	0	0	0	0	0						
+3	native-complete	sola/crossfade-1440	738.88	335.16		0	0	0	0	0	0						
+3	native-complete	sola/mono/360	118104.72	53856.25		0	0	0	0	0	0						
+3	native-complete	sola/stereo/360	243480.34	111068.75		0	0	0	0	0	0						
+3	native-complete	sola/left-silent/360	121424.66	55393.75		0	0	0	0	0	0						
+3	native-complete	sola/right-silent/360	120656.41	55215.62		0	0	0	0	0	0						
+3	native-complete	sola/mono/720	491275.34	224518.75		0	0	0	0	0	0						
+3	native-complete	sola/stereo/720	994623.09	454462.5		0	0	0	0	0	0						
+3	native-complete	sola/left-silent/720	492969.59	225565.62		0	0	0	0	0	0						
+3	native-complete	sola/right-silent/720	486096.44	222312.5		0	0	0	0	0	0						
+3	native-complete	sola/stream-1ch-noise-1.2	596271.5	271150.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	native-complete	sola/stream-2ch-noise-0.8	2215962.0	1011400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	native-complete	sola/stream-2ch-tone-1.2	218622.0	99200.0	5907aac396672cd5	0	0	0	0	0	0						
+3	native-complete	sola/stream-2ch-left-silent-1.2	753873.0	347150.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	native-complete	sola/stream-2ch-silence-1.2	108433.0	48950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	native-complete	sola/stream-6ch-noise-1.2	3566106.5	1626050.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+4	native-buffer	sola/append-6ch	164429.51	90750.0		0	0	0	0	0	0	8	0	0	150012	0	150012
+4	native-buffer	sola/append-8ch	223569.34	102341.41		0	0	0	0	0	0	10	0	0	198096	0	198096
+4	native-buffer	sola/append-16ch	476237.84	217903.91		0	0	0	0	0	0	18	0	0	390432	0	390432
+4	native-buffer	sola/crossfade-256	222.29	100.49		0	0	0	0	0	0						
+4	native-buffer	sola/crossfade-1440	1280.13	581.74		0	0	0	0	0	0						
+4	native-buffer	sola/mono/360	118626.0	54121.88		0	0	0	0	0	0						
+4	native-buffer	sola/stereo/360	236202.59	107612.5		0	0	0	0	0	0						
+4	native-buffer	sola/left-silent/360	122186.06	55612.5		0	0	0	0	0	0						
+4	native-buffer	sola/right-silent/360	121918.53	55831.25		0	0	0	0	0	0						
+4	native-buffer	sola/mono/720	493744.69	289175.0		0	0	0	0	0	0						
+4	native-buffer	sola/stereo/720	993628.47	453962.5		0	0	0	0	0	0						
+4	native-buffer	sola/left-silent/720	497153.78	227090.62		0	0	0	0	0	0						
+4	native-buffer	sola/right-silent/720	498518.81	228462.5		0	0	0	0	0	0						
+4	native-buffer	sola/stream-1ch-noise-1.2	571907.5	264900.0	b136b3511ed0a703	0	0	0	0	0	0						
+4	native-buffer	sola/stream-2ch-noise-0.8	2280934.5	1040350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+4	native-buffer	sola/stream-2ch-tone-1.2	223341.5	101350.0	5907aac396672cd5	0	0	0	0	0	0						
+4	native-buffer	sola/stream-2ch-left-silent-1.2	771432.5	350950.0	11b0c279269ca04b	0	0	0	0	0	0						
+4	native-buffer	sola/stream-2ch-silence-1.2	112932.5	51050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+4	native-buffer	sola/stream-6ch-noise-1.2	3585313.5	1647200.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+4	native-complete	sola/append-6ch	163714.42	74828.91		0	0	0	0	0	0	8	0	0	150012	0	150012
+4	native-complete	sola/append-8ch	221813.31	117142.19		0	0	0	0	0	0	10	0	0	198096	0	198096
+4	native-complete	sola/append-16ch	477229.02	218175.78		0	0	0	0	0	0	18	0	0	390432	0	390432
+4	native-complete	sola/crossfade-256	186.49	84.08		0	0	0	0	0	0						
+4	native-complete	sola/crossfade-1440	761.39	345.51		0	0	0	0	0	0						
+4	native-complete	sola/mono/360	120244.84	54856.25		0	0	0	0	0	0						
+4	native-complete	sola/stereo/360	246423.06	112456.25		0	0	0	0	0	0						
+4	native-complete	sola/left-silent/360	126521.16	58050.0		0	0	0	0	0	0						
+4	native-complete	sola/right-silent/360	120965.06	55137.5		0	0	0	0	0	0						
+4	native-complete	sola/mono/720	486885.31	285265.62		0	0	0	0	0	0						
+4	native-complete	sola/stereo/720	980067.56	510718.75		0	0	0	0	0	0						
+4	native-complete	sola/left-silent/720	495871.03	226587.5		0	0	0	0	0	0						
+4	native-complete	sola/right-silent/720	479360.56	218862.5		0	0	0	0	0	0						
+4	native-complete	sola/stream-1ch-noise-1.2	551823.0	254600.0	b136b3511ed0a703	0	0	0	0	0	0						
+4	native-complete	sola/stream-2ch-noise-0.8	2192036.5	999350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+4	native-complete	sola/stream-2ch-tone-1.2	229267.5	104050.0	5907aac396672cd5	0	0	0	0	0	0						
+4	native-complete	sola/stream-2ch-left-silent-1.2	776371.5	353050.0	11b0c279269ca04b	0	0	0	0	0	0						
+4	native-complete	sola/stream-2ch-silence-1.2	97128.5	43850.0	b40ebf824bb571ed	0	0	0	0	0	0						
+4	native-complete	sola/stream-6ch-noise-1.2	3509366.0	1601200.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+4	native-rate-before	sola/append-6ch	219047.29	100123.44		0	0	0	0	0	0	8	0	0	294024	0	294024
+4	native-rate-before	sola/append-8ch	293809.33	150171.09		0	0	0	0	0	0	10	0	0	390112	0	390112
+4	native-rate-before	sola/append-16ch	613773.45	296355.47		0	0	0	0	0	0	18	0	0	774464	0	774464
+4	native-rate-before	sola/crossfade-256	97.1	43.36		0	0	0	0	0	0						
+4	native-rate-before	sola/crossfade-1440	392.06	177.73		0	0	0	0	0	0						
+4	native-rate-before	sola/mono/360	125540.25	57237.5		0	0	0	0	0	0						
+4	native-rate-before	sola/stereo/360	248810.12	113409.38		0	0	0	0	0	0						
+4	native-rate-before	sola/left-silent/360	128695.59	58706.25		0	0	0	0	0	0						
+4	native-rate-before	sola/right-silent/360	122261.53	56106.25		0	0	0	0	0	0						
+4	native-rate-before	sola/mono/720	490390.5	224468.75		0	0	0	0	0	0						
+4	native-rate-before	sola/stereo/720	982420.31	450246.88		0	0	0	0	0	0						
+4	native-rate-before	sola/left-silent/720	494053.38	288796.88		0	0	0	0	0	0						
+4	native-rate-before	sola/right-silent/720	497976.91	227484.38		0	0	0	0	0	0						
+4	native-rate-before	sola/stream-1ch-noise-1.2	604283.0	276600.0	b136b3511ed0a703	0	0	0	0	0	0						
+4	native-rate-before	sola/stream-2ch-noise-0.8	2244607.0	1023800.0	af8cf13a71adbea9	0	0	0	0	0	0						
+4	native-rate-before	sola/stream-2ch-tone-1.2	221475.5	100350.0	5907aac396672cd5	0	0	0	0	0	0						
+4	native-rate-before	sola/stream-2ch-left-silent-1.2	678584.5	310450.0	11b0c279269ca04b	0	0	0	0	0	0						
+4	native-rate-before	sola/stream-2ch-silence-1.2	115457.0	52150.0	b40ebf824bb571ed	0	0	0	0	0	0						
+4	native-rate-before	sola/stream-6ch-noise-1.2	3797789.5	1733000.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+5	native-complete	sola/append-6ch	169500.27	93295.31		0	0	0	0	0	0	8	0	0	150012	0	150012
+5	native-complete	sola/append-8ch	227722.69	104173.44		0	0	0	0	0	0	10	0	0	198096	0	198096
+5	native-complete	sola/append-16ch	476841.45	233766.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+5	native-complete	sola/crossfade-256	173.41	78.22		0	0	0	0	0	0						
+5	native-complete	sola/crossfade-1440	637.06	289.45		0	0	0	0	0	0						
+5	native-complete	sola/mono/360	117007.22	53671.88		0	0	0	0	0	0						
+5	native-complete	sola/stereo/360	243891.94	111228.12		0	0	0	0	0	0						
+5	native-complete	sola/left-silent/360	123681.41	56403.12		0	0	0	0	0	0						
+5	native-complete	sola/right-silent/360	115635.34	52634.38		0	0	0	0	0	0						
+5	native-complete	sola/mono/720	479257.69	281596.88		0	0	0	0	0	0						
+5	native-complete	sola/stereo/720	969517.81	506343.75		0	0	0	0	0	0						
+5	native-complete	sola/left-silent/720	489272.31	223428.12		0	0	0	0	0	0						
+5	native-complete	sola/right-silent/720	492578.59	225056.25		0	0	0	0	0	0						
+5	native-complete	sola/stream-1ch-noise-1.2	592979.5	269400.0	b136b3511ed0a703	0	0	0	0	0	0						
+5	native-complete	sola/stream-2ch-noise-0.8	2244607.5	1023100.0	af8cf13a71adbea9	0	0	0	0	0	0						
+5	native-complete	sola/stream-2ch-tone-1.2	189428.5	85950.0	5907aac396672cd5	0	0	0	0	0	0						
+5	native-complete	sola/stream-2ch-left-silent-1.2	748604.5	340650.0	11b0c279269ca04b	0	0	0	0	0	0						
+5	native-complete	sola/stream-2ch-silence-1.2	108433.0	49000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+5	native-complete	sola/stream-6ch-noise-1.2	3488185.0	1601650.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+5	native-rate-before	sola/append-6ch	220940.47	100960.16		0	0	0	0	0	0	8	0	0	294024	0	294024
+5	native-rate-before	sola/append-8ch	293432.06	134400.78		0	0	0	0	0	0	10	0	0	390112	0	390112
+5	native-rate-before	sola/append-16ch	607769.77	293813.28		0	0	0	0	0	0	18	0	0	774464	0	774464
+5	native-rate-before	sola/crossfade-256	97.96	43.75		0	0	0	0	0	0						
+5	native-rate-before	sola/crossfade-1440	369.76	175.98		0	0	0	0	0	0						
+5	native-rate-before	sola/mono/360	122467.28	55868.75		0	0	0	0	0	0						
+5	native-rate-before	sola/stereo/360	251862.5	114778.12		0	0	0	0	0	0						
+5	native-rate-before	sola/left-silent/360	132331.06	59734.38		0	0	0	0	0	0						
+5	native-rate-before	sola/right-silent/360	121390.38	55675.0		0	0	0	0	0	0						
+5	native-rate-before	sola/mono/720	486213.09	222396.88		0	0	0	0	0	0						
+5	native-rate-before	sola/stereo/720	980842.59	511103.12		0	0	0	0	0	0						
+5	native-rate-before	sola/left-silent/720	492653.97	225243.75		0	0	0	0	0	0						
+5	native-rate-before	sola/right-silent/720	492530.56	224593.75		0	0	0	0	0	0						
+5	native-rate-before	sola/stream-1ch-noise-1.2	579589.5	265250.0	b136b3511ed0a703	0	0	0	0	0	0						
+5	native-rate-before	sola/stream-2ch-noise-0.8	2265240.5	1033400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+5	native-rate-before	sola/stream-2ch-tone-1.2	215549.0	97800.0	5907aac396672cd5	0	0	0	0	0	0						
+5	native-rate-before	sola/stream-2ch-left-silent-1.2	962946.5	1441550.0	11b0c279269ca04b	0	0	0	0	0	0						
+5	native-rate-before	sola/stream-2ch-silence-1.2	99104.5	44800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+5	native-rate-before	sola/stream-6ch-noise-1.2	3757949.5	1711800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+5	native-buffer	sola/append-6ch	169193.35	92935.94		0	0	0	0	0	0	8	0	0	150012	0	150012
+5	native-buffer	sola/append-8ch	225808.91	103097.66		0	0	0	0	0	0	10	0	0	198096	0	198096
+5	native-buffer	sola/append-16ch	477247.87	233951.56		0	0	0	0	0	0	18	0	0	390432	0	390432
+5	native-buffer	sola/crossfade-256	205.78	92.97		0	0	0	0	0	0						
+5	native-buffer	sola/crossfade-1440	1277.34	580.37		0	0	0	0	0	0						
+5	native-buffer	sola/mono/360	116355.59	52759.38		0	0	0	0	0	0						
+5	native-buffer	sola/stereo/360	241731.22	110621.88		0	0	0	0	0	0						
+5	native-buffer	sola/left-silent/360	117583.41	54006.25		0	0	0	0	0	0						
+5	native-buffer	sola/right-silent/360	119970.47	54940.62		0	0	0	0	0	0						
+5	native-buffer	sola/mono/720	499184.12	228118.75		0	0	0	0	0	0						
+5	native-buffer	sola/stereo/720	980671.19	448303.12		0	0	0	0	0	0						
+5	native-buffer	sola/left-silent/720	485122.44	221953.12		0	0	0	0	0	0						
+5	native-buffer	sola/right-silent/720	497126.38	227468.75		0	0	0	0	0	0						
+5	native-buffer	sola/stream-1ch-noise-1.2	587382.0	266950.0	b136b3511ed0a703	0	0	0	0	0	0						
+5	native-buffer	sola/stream-2ch-noise-0.8	2228145.5	2026700.0	af8cf13a71adbea9	0	0	0	0	0	0						
+5	native-buffer	sola/stream-2ch-tone-1.2	250779.0	113350.0	5907aac396672cd5	0	0	0	0	0	0						
+5	native-buffer	sola/stream-2ch-left-silent-1.2	824771.5	375300.0	11b0c279269ca04b	0	0	0	0	0	0						
+5	native-buffer	sola/stream-2ch-silence-1.2	112713.5	50950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+5	native-buffer	sola/stream-6ch-noise-1.2	3671686.0	1673250.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+6	native-rate-before	sola/append-6ch	219395.41	100430.47		0	0	0	0	0	0	8	0	0	294024	0	294024
+6	native-rate-before	sola/append-8ch	290890.66	133034.38		0	0	0	0	0	0	10	0	0	390112	0	390112
+6	native-rate-before	sola/append-16ch	605818.28	292683.59		0	0	0	0	0	0	18	0	0	774464	0	774464
+6	native-rate-before	sola/crossfade-256	114.68	42.19		0	0	0	0	0	0						
+6	native-rate-before	sola/crossfade-1440	427.64	193.36		0	0	0	0	0	0						
+6	native-rate-before	sola/mono/360	117720.59	53675.0		0	0	0	0	0	0						
+6	native-rate-before	sola/stereo/360	250113.41	114634.38		0	0	0	0	0	0						
+6	native-rate-before	sola/left-silent/360	125389.38	57068.75		0	0	0	0	0	0						
+6	native-rate-before	sola/right-silent/360	123139.53	118796.88		0	0	0	0	0	0						
+6	native-rate-before	sola/mono/720	502545.25	292678.12		0	0	0	0	0	0						
+6	native-rate-before	sola/stereo/720	1000412.41	519781.25		0	0	0	0	0	0						
+6	native-rate-before	sola/left-silent/720	488236.56	223465.62		0	0	0	0	0	0						
+6	native-rate-before	sola/right-silent/720	496913.66	227065.62		0	0	0	0	0	0						
+6	native-rate-before	sola/stream-1ch-noise-1.2	587053.0	265800.0	b136b3511ed0a703	0	0	0	0	0	0						
+6	native-rate-before	sola/stream-2ch-noise-0.8	2300250.5	1055550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+6	native-rate-before	sola/stream-2ch-tone-1.2	216427.0	98150.0	5907aac396672cd5	0	0	0	0	0	0						
+6	native-rate-before	sola/stream-2ch-left-silent-1.2	774286.0	359350.0	11b0c279269ca04b	0	0	0	0	0	0						
+6	native-rate-before	sola/stream-2ch-silence-1.2	122371.0	57250.0	b40ebf824bb571ed	0	0	0	0	0	0						
+6	native-rate-before	sola/stream-6ch-noise-1.2	3788680.0	1735250.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+6	native-buffer	sola/append-6ch	169568.89	77583.59		0	0	0	0	0	0	8	0	0	150012	0	150012
+6	native-buffer	sola/append-8ch	224809.16	102860.94		0	0	0	0	0	0	10	0	0	198096	0	198096
+6	native-buffer	sola/append-16ch	478674.66	234436.72		0	0	0	0	0	0	18	0	0	390432	0	390432
+6	native-buffer	sola/crossfade-256	223.14	100.88		0	0	0	0	0	0						
+6	native-buffer	sola/crossfade-1440	1340.79	613.09		0	0	0	0	0	0						
+6	native-buffer	sola/mono/360	120430.03	55234.38		0	0	0	0	0	0						
+6	native-buffer	sola/stereo/360	247788.06	112990.62		0	0	0	0	0	0						
+6	native-buffer	sola/left-silent/360	123249.22	56203.12		0	0	0	0	0	0						
+6	native-buffer	sola/right-silent/360	121705.88	55468.75		0	0	0	0	0	0						
+6	native-buffer	sola/mono/720	504616.78	285178.12		0	0	0	0	0	0						
+6	native-buffer	sola/stereo/720	990576.06	453193.75		0	0	0	0	0	0						
+6	native-buffer	sola/left-silent/720	475039.12	217115.62		0	0	0	0	0	0						
+6	native-buffer	sola/right-silent/720	484079.78	283775.0		0	0	0	0	0	0						
+6	native-buffer	sola/stream-1ch-noise-1.2	568943.5	265550.0	b136b3511ed0a703	0	0	0	0	0	0						
+6	native-buffer	sola/stream-2ch-noise-0.8	2262496.0	1032350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+6	native-buffer	sola/stream-2ch-tone-1.2	223780.0	101550.0	5907aac396672cd5	0	0	0	0	0	0						
+6	native-buffer	sola/stream-2ch-left-silent-1.2	828832.0	376900.0	11b0c279269ca04b	0	0	0	0	0	0						
+6	native-buffer	sola/stream-2ch-silence-1.2	112823.0	50950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+6	native-buffer	sola/stream-6ch-noise-1.2	3676845.0	1678200.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+6	native-complete	sola/append-6ch	166763.41	76282.81		0	0	0	0	0	0	8	0	0	150012	0	150012
+6	native-complete	sola/append-8ch	223893.42	118093.75		0	0	0	0	0	0	10	0	0	198096	0	198096
+6	native-complete	sola/append-16ch	477933.79	234073.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+6	native-complete	sola/crossfade-256	179.84	81.15		0	0	0	0	0	0						
+6	native-complete	sola/crossfade-1440	648.64	291.7		0	0	0	0	0	0						
+6	native-complete	sola/mono/360	121054.25	55262.5		0	0	0	0	0	0						
+6	native-complete	sola/stereo/360	247150.12	113040.62		0	0	0	0	0	0						
+6	native-complete	sola/left-silent/360	124257.59	57012.5		0	0	0	0	0	0						
+6	native-complete	sola/right-silent/360	117514.84	54559.38		0	0	0	0	0	0						
+6	native-complete	sola/mono/720	482090.62	220212.5		0	0	0	0	0	0						
+6	native-complete	sola/stereo/720	970786.72	506212.5		0	0	0	0	0	0						
+6	native-complete	sola/left-silent/720	496426.69	288931.25		0	0	0	0	0	0						
+6	native-complete	sola/right-silent/720	493298.81	288109.38		0	0	0	0	0	0						
+6	native-complete	sola/stream-1ch-noise-1.2	583321.0	267300.0	b136b3511ed0a703	0	0	0	0	0	0						
+6	native-complete	sola/stream-2ch-noise-0.8	2221011.0	1018250.0	af8cf13a71adbea9	0	0	0	0	0	0						
+6	native-complete	sola/stream-2ch-tone-1.2	218731.5	99250.0	5907aac396672cd5	0	0	0	0	0	0						
+6	native-complete	sola/stream-2ch-left-silent-1.2	764518.5	347850.0	11b0c279269ca04b	0	0	0	0	0	0						
+6	native-complete	sola/stream-2ch-silence-1.2	108433.0	49000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+6	native-complete	sola/stream-6ch-noise-1.2	3579386.0	1639950.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+7	native-buffer	sola/append-6ch	162467.73	74297.66		0	0	0	0	0	0	8	0	0	150012	0	150012
+7	native-buffer	sola/append-8ch	225733.47	118980.47		0	0	0	0	0	0	10	0	0	198096	0	198096
+7	native-buffer	sola/append-16ch	476453.9	233526.56		0	0	0	0	0	0	18	0	0	390432	0	390432
+7	native-buffer	sola/crossfade-256	239.22	108.11		0	0	0	0	0	0						
+7	native-buffer	sola/crossfade-1440	1264.7	578.03		0	0	0	0	0	0						
+7	native-buffer	sola/mono/360	123592.22	56846.88		0	0	0	0	0	0						
+7	native-buffer	sola/stereo/360	256231.94	116787.5		0	0	0	0	0	0						
+7	native-buffer	sola/left-silent/360	125265.91	57396.88		0	0	0	0	0	0						
+7	native-buffer	sola/right-silent/360	121760.78	55537.5		0	0	0	0	0	0						
+7	native-buffer	sola/mono/720	498361.03	289775.0		0	0	0	0	0	0						
+7	native-buffer	sola/stereo/720	988888.69	451853.12		0	0	0	0	0	0						
+7	native-buffer	sola/left-silent/720	484868.59	221665.62		0	0	0	0	0	0						
+7	native-buffer	sola/right-silent/720	500892.09	291406.25		0	0	0	0	0	0						
+7	native-buffer	sola/stream-1ch-noise-1.2	556871.5	253300.0	b136b3511ed0a703	0	0	0	0	0	0						
+7	native-buffer	sola/stream-2ch-noise-0.8	2218486.0	1011450.0	af8cf13a71adbea9	0	0	0	0	0	0						
+7	native-buffer	sola/stream-2ch-tone-1.2	187233.5	84950.0	5907aac396672cd5	0	0	0	0	0	0						
+7	native-buffer	sola/stream-2ch-left-silent-1.2	804687.0	365850.0	11b0c279269ca04b	0	0	0	0	0	0						
+7	native-buffer	sola/stream-2ch-silence-1.2	112933.0	51050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+7	native-buffer	sola/stream-6ch-noise-1.2	3572362.5	1638250.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+7	native-complete	sola/append-6ch	165763.66	75738.28		0	0	0	0	0	0	8	0	0	150012	0	150012
+7	native-complete	sola/append-8ch	221722.45	101475.78		0	0	0	0	0	0	10	0	0	198096	0	198096
+7	native-complete	sola/append-16ch	477426.23	225862.5		0	0	0	0	0	0	18	0	0	390432	0	390432
+7	native-complete	sola/crossfade-256	180.49	81.45		0	0	0	0	0	0						
+7	native-complete	sola/crossfade-1440	746.81	338.67		0	0	0	0	0	0						
+7	native-complete	sola/mono/360	121328.62	55728.12		0	0	0	0	0	0						
+7	native-complete	sola/stereo/360	242924.78	111178.12		0	0	0	0	0	0						
+7	native-complete	sola/left-silent/360	120148.81	54793.75		0	0	0	0	0	0						
+7	native-complete	sola/right-silent/360	124209.56	56540.62		0	0	0	0	0	0						
+7	native-complete	sola/mono/720	504212.09	230050.0		0	0	0	0	0	0						
+7	native-complete	sola/stereo/720	971136.62	443906.25		0	0	0	0	0	0						
+7	native-complete	sola/left-silent/720	486055.28	222146.88		0	0	0	0	0	0						
+7	native-complete	sola/right-silent/720	484649.12	1224625.0		0	0	0	0	0	0						
+7	native-complete	sola/stream-1ch-noise-1.2	578163.0	263000.0	b136b3511ed0a703	0	0	0	0	0	0						
+7	native-complete	sola/stream-2ch-noise-0.8	2213328.0	1008900.0	af8cf13a71adbea9	0	0	0	0	0	0						
+7	native-complete	sola/stream-2ch-tone-1.2	218073.5	98950.0	5907aac396672cd5	0	0	0	0	0	0						
+7	native-complete	sola/stream-2ch-left-silent-1.2	762103.5	348250.0	11b0c279269ca04b	0	0	0	0	0	0						
+7	native-complete	sola/stream-2ch-silence-1.2	116883.5	52650.0	b40ebf824bb571ed	0	0	0	0	0	0						
+7	native-complete	sola/stream-6ch-noise-1.2	3530767.5	1610900.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+7	native-rate-before	sola/append-6ch	221952.23	101445.31		0	0	0	0	0	0	8	0	0	294024	0	294024
+7	native-rate-before	sola/append-8ch	295671.65	385903.12		0	0	0	0	0	0	10	0	0	390112	0	390112
+7	native-rate-before	sola/append-16ch	612375.84	530649.22		0	0	0	0	0	0	18	0	0	774464	0	774464
+7	native-rate-before	sola/crossfade-256	90.24	40.33		0	0	0	0	0	0						
+7	native-rate-before	sola/crossfade-1440	352.62	159.86		0	0	0	0	0	0						
+7	native-rate-before	sola/mono/360	119380.53	54443.75		0	0	0	0	0	0						
+7	native-rate-before	sola/stereo/360	252665.09	115637.5		0	0	0	0	0	0						
+7	native-rate-before	sola/left-silent/360	127968.53	58371.88		0	0	0	0	0	0						
+7	native-rate-before	sola/right-silent/360	119943.06	55078.12		0	0	0	0	0	0						
+7	native-rate-before	sola/mono/720	493847.56	288656.25		0	0	0	0	0	0						
+7	native-rate-before	sola/stereo/720	995014.03	517500.0		0	0	0	0	0	0						
+7	native-rate-before	sola/left-silent/720	481418.38	282965.62		0	0	0	0	0	0						
+7	native-rate-before	sola/right-silent/720	499890.69	228562.5		0	0	0	0	0	0						
+7	native-rate-before	sola/stream-1ch-noise-1.2	588589.0	268950.0	b136b3511ed0a703	0	0	0	0	0	0						
+7	native-rate-before	sola/stream-2ch-noise-0.8	2329114.5	1061950.0	af8cf13a71adbea9	0	0	0	0	0	0						
+7	native-rate-before	sola/stream-2ch-tone-1.2	215220.0	97600.0	5907aac396672cd5	0	0	0	0	0	0						
+7	native-rate-before	sola/stream-2ch-left-silent-1.2	799309.0	363450.0	11b0c279269ca04b	0	0	0	0	0	0						
+7	native-rate-before	sola/stream-2ch-silence-1.2	112933.0	51100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+7	native-rate-before	sola/stream-6ch-noise-1.2	3608142.0	1652900.0	5d00c00f1cc77d00	0	0	0	0	0	0						

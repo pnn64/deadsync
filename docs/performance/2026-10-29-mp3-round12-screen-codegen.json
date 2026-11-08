@@ -1,0 +1,1027 @@
+{
+  "note": "Static standalone function bodies only, excluding helpers, initializers and inlined callees. Counts are not retired instructions. Missing functions were inlined or not emitted.",
+  "records": [
+    {
+      "stage": "round12-base",
+      "command": [
+        "cargo",
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\Cargo.toml",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--bench",
+        "kernels",
+        "--profile",
+        "bench",
+        "--",
+        "--emit=asm"
+      ],
+      "functions": {
+        "huffman.pair": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-huffman.pair.s",
+          "sha256": "a1d4b17b11900b669a5102a92e17a014f8f20b326693bc48efaa8334e4dbc6e2",
+          "instruction_count": 413,
+          "stack_reservation": [
+            "88"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "huffman.signed": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-huffman.signed.s",
+          "sha256": "e72f32e2d151b5b1ed73993a8240dc88dc47770b4c5298b54356fbb2c8bacddc",
+          "instruction_count": 39,
+          "stack_reservation": [
+            "40"
+          ],
+          "calls": [
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.quantized": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-spectral.quantized.s",
+          "sha256": "70998253eacef851dc81b6a3ab4adfac17df447aae8c328e1b2a713ceb7336b2",
+          "instruction_count": 225,
+          "stack_reservation": [
+            "104"
+          ],
+          "calls": [
+            "memset",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4quad",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.requantize": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-spectral.requantize.s",
+          "sha256": "0b32731a472c6bffddbdc35d41dd072cdc6a1a8123c51e9eb4408bfa9f45e81b",
+          "instruction_count": 652,
+          "stack_reservation": [
+            "264"
+          ],
+          "calls": [
+            "exp2",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvMs0_NtNtNtNtCscx1ptWZUqVR_3std3sys4sync4once5futexNtB5_4Once4call",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-scalefactors.read.s",
+          "sha256": "b7e1715caf0665bcc30efb4826c49885e74ab1ce275a488fec6b2090a131b8d9",
+          "instruction_count": 1221,
+          "stack_reservation": [
+            "392"
+          ],
+          "calls": [
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memset",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read_values": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-scalefactors.read_values.s",
+          "sha256": "d3d2dce021d89297bdec0ae538ee703cf74643da84474fafcac539651e01907d",
+          "instruction_count": 75,
+          "stack_reservation": [
+            "56"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read"
+          ]
+        },
+        "FrameDecoder.decode": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-base-FrameDecoder.decode.s",
+          "sha256": "3a6394b2ab312e1d33214f6b1c18dda6900b99b9465fd45cca2de4419008160c",
+          "instruction_count": 3515,
+          "stack_reservation": [
+            "1272"
+          ],
+          "calls": [
+            "_RNvMs0_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35frameNtB5_5Frame5parse",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvMs5_NtCsg1aDjJ6Ud3l_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral6stereo",
+            "_RNvMs_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB4_6Hybrid7process",
+            "_RNvMs1_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB5_9Synthesis7process",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        }
+      },
+      "layout_command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "-C",
+        "panic=abort",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.rs",
+        "--extern",
+        "deadlib_audio_decode_mp3=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.exe"
+      ],
+      "layout_source": "use deadlib_audio_decode_mp3::{FrameDecoder,scalefactors::ScaleFactors,synthesis::{Hybrid,Synthesis}};\nfn main(){println!(\"FrameDecoder {} {} ScaleFactors {} {} Hybrid {} {} Synthesis {} {}\",std::mem::size_of::<FrameDecoder>(),std::mem::align_of::<FrameDecoder>(),std::mem::size_of::<ScaleFactors>(),std::mem::align_of::<ScaleFactors>(),std::mem::size_of::<Hybrid>(),std::mem::align_of::<Hybrid>(),std::mem::size_of::<Synthesis>(),std::mem::align_of::<Synthesis>());}\n",
+      "layout": "FrameDecoder 51568 16 ScaleFactors 136 8 Hybrid 4608 8 Synthesis 8208 16"
+    },
+    {
+      "stage": "round12-lsf",
+      "command": [
+        "cargo",
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\Cargo.toml",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--bench",
+        "kernels",
+        "--profile",
+        "bench",
+        "--",
+        "--emit=asm"
+      ],
+      "functions": {
+        "huffman.pair": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-huffman.pair.s",
+          "sha256": "eb814624b5165143fa1eda9ad1f384667775f5f13093e13ec82cee40d77a1f70",
+          "instruction_count": 413,
+          "stack_reservation": [
+            "88"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "huffman.signed": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-huffman.signed.s",
+          "sha256": "89510a9fb3d6e1a6f3afa6e71b4575afc524b3315889f85d8256f96757afa191",
+          "instruction_count": 39,
+          "stack_reservation": [
+            "40"
+          ],
+          "calls": [
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.quantized": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-spectral.quantized.s",
+          "sha256": "70998253eacef851dc81b6a3ab4adfac17df447aae8c328e1b2a713ceb7336b2",
+          "instruction_count": 225,
+          "stack_reservation": [
+            "104"
+          ],
+          "calls": [
+            "memset",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4quad",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.requantize": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-spectral.requantize.s",
+          "sha256": "0b32731a472c6bffddbdc35d41dd072cdc6a1a8123c51e9eb4408bfa9f45e81b",
+          "instruction_count": 652,
+          "stack_reservation": [
+            "264"
+          ],
+          "calls": [
+            "exp2",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvMs0_NtNtNtNtCscx1ptWZUqVR_3std3sys4sync4once5futexNtB5_4Once4call",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-scalefactors.read.s",
+          "sha256": "20915ab00ab8aadd4f76f31bd0f7ae08224a2f287bc7a5b17cbe2eb3243f6fb6",
+          "instruction_count": 1295,
+          "stack_reservation": [
+            "392"
+          ],
+          "calls": [
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memcpy",
+            "memset",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking9panic_fmt",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read_values": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-scalefactors.read_values.s",
+          "sha256": "a96292a1d181e5562377eef4b0120bbe5c40939f1b15fb855faeb91e81b194e0",
+          "instruction_count": 75,
+          "stack_reservation": [
+            "56"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read"
+          ]
+        },
+        "FrameDecoder.decode": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-lsf-FrameDecoder.decode.s",
+          "sha256": "653cdb4a0f292b7a0f388b846ac06e0f75fa1f9d0af1c4f464af99e172c90640",
+          "instruction_count": 3515,
+          "stack_reservation": [
+            "1272"
+          ],
+          "calls": [
+            "_RNvMs0_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35frameNtB5_5Frame5parse",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvMs5_NtCsg1aDjJ6Ud3l_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral6stereo",
+            "_RNvMs_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB4_6Hybrid7process",
+            "_RNvMs1_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB5_9Synthesis7process",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        }
+      },
+      "layout_command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "-C",
+        "panic=abort",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.rs",
+        "--extern",
+        "deadlib_audio_decode_mp3=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.exe"
+      ],
+      "layout_source": "use deadlib_audio_decode_mp3::{FrameDecoder,scalefactors::ScaleFactors,synthesis::{Hybrid,Synthesis}};\nfn main(){println!(\"FrameDecoder {} {} ScaleFactors {} {} Hybrid {} {} Synthesis {} {}\",std::mem::size_of::<FrameDecoder>(),std::mem::align_of::<FrameDecoder>(),std::mem::size_of::<ScaleFactors>(),std::mem::align_of::<ScaleFactors>(),std::mem::size_of::<Hybrid>(),std::mem::align_of::<Hybrid>(),std::mem::size_of::<Synthesis>(),std::mem::align_of::<Synthesis>());}\n",
+      "layout": "FrameDecoder 51568 16 ScaleFactors 136 8 Hybrid 4608 8 Synthesis 8208 16"
+    },
+    {
+      "stage": "round12-bands",
+      "command": [
+        "cargo",
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\Cargo.toml",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--bench",
+        "kernels",
+        "--profile",
+        "bench",
+        "--",
+        "--emit=asm"
+      ],
+      "functions": {
+        "huffman.pair": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-huffman.pair.s",
+          "sha256": "a5434aed37b007ca1afa286a37adf805f5f809041a5ea1f1267fd8308f356ddf",
+          "instruction_count": 413,
+          "stack_reservation": [
+            "88"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "huffman.signed": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-huffman.signed.s",
+          "sha256": "18a98dd6a3eed176f9b9a29cf252c6937053b16252834d5f8dd87395eb7e1c9b",
+          "instruction_count": 39,
+          "stack_reservation": [
+            "40"
+          ],
+          "calls": [
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.quantized": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-spectral.quantized.s",
+          "sha256": "ff1c8e2c5aefc4e1471f75ac1b79fbf25c16f9c2d2872b5f0c51c34717263688",
+          "instruction_count": 228,
+          "stack_reservation": [
+            "104"
+          ],
+          "calls": [
+            "memset",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4quad",
+            "_RINvNtCs7uUmbfRqPp3_4core3ptr9drop_glueINtNtB4_6result6ResultAsj4_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35ErrorEEB14_",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.requantize": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-spectral.requantize.s",
+          "sha256": "6f3c7706a6427f70e3fcc7b5b19d3a45de4fb198f15f67bc9dbe4cfef2fdfefe",
+          "instruction_count": 679,
+          "stack_reservation": [
+            "296"
+          ],
+          "calls": [
+            "exp2",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMs0_NtNtNtNtCscx1ptWZUqVR_3std3sys4sync4once5futexNtB5_4Once4call",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-scalefactors.read.s",
+          "sha256": "6d6cb124e04738d4d00fef1451dc16d3d42f27b8d90cb4e9e4de6ff8c233b565",
+          "instruction_count": 1295,
+          "stack_reservation": [
+            "392"
+          ],
+          "calls": [
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memcpy",
+            "memset",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking9panic_fmt",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read_values": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-scalefactors.read_values.s",
+          "sha256": "e96751a705424f21e9c05db0bbc0ff106df15d4ba579ea744a495c425e3faf18",
+          "instruction_count": 75,
+          "stack_reservation": [
+            "56"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read"
+          ]
+        },
+        "FrameDecoder.decode": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-bands-FrameDecoder.decode.s",
+          "sha256": "ee9987d0e22c74dd6c161c4afb52beb0f8d8994fad09e86ca2aa09913cf840b9",
+          "instruction_count": 3510,
+          "stack_reservation": [
+            "1256"
+          ],
+          "calls": [
+            "_RNvMs0_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35frameNtB5_5Frame5parse",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvMs5_NtCsg1aDjJ6Ud3l_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "memcpy",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral6stereo",
+            "_RNvMs_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB4_6Hybrid7process",
+            "_RNvMs1_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB5_9Synthesis7process",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        }
+      },
+      "layout_command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "-C",
+        "panic=abort",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.rs",
+        "--extern",
+        "deadlib_audio_decode_mp3=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.exe"
+      ],
+      "layout_source": "use deadlib_audio_decode_mp3::{FrameDecoder,scalefactors::ScaleFactors,synthesis::{Hybrid,Synthesis}};\nfn main(){println!(\"FrameDecoder {} {} ScaleFactors {} {} Hybrid {} {} Synthesis {} {}\",std::mem::size_of::<FrameDecoder>(),std::mem::align_of::<FrameDecoder>(),std::mem::size_of::<ScaleFactors>(),std::mem::align_of::<ScaleFactors>(),std::mem::size_of::<Hybrid>(),std::mem::align_of::<Hybrid>(),std::mem::size_of::<Synthesis>(),std::mem::align_of::<Synthesis>());}\n",
+      "layout": "FrameDecoder 51568 16 ScaleFactors 136 8 Hybrid 4608 8 Synthesis 8208 16"
+    },
+    {
+      "stage": "round12-prefix",
+      "command": [
+        "cargo",
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\Cargo.toml",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--bench",
+        "kernels",
+        "--profile",
+        "bench",
+        "--",
+        "--emit=asm"
+      ],
+      "functions": {
+        "huffman.pair": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-huffman.pair.s",
+          "sha256": "bec82aab6d403e0aef2c359a2f72893566ffd816bec584bf4305659a856b0369",
+          "instruction_count": 423,
+          "stack_reservation": [
+            "96"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman6signed",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "huffman.signed": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-huffman.signed.s",
+          "sha256": "0b7b2f612d071a6df5ae5459ec3d7f9868f213c404998a8c9b2261f788f10d9e",
+          "instruction_count": 39,
+          "stack_reservation": [
+            "40"
+          ],
+          "calls": [
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.quantized": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-spectral.quantized.s",
+          "sha256": "8088267a9ee12881ff2e3e5a76acbb2c4021aba86a5cb03a9ec4bdd806b10241",
+          "instruction_count": 228,
+          "stack_reservation": [
+            "104"
+          ],
+          "calls": [
+            "memset",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4pair",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4quad",
+            "_RINvNtCs7uUmbfRqPp3_4core3ptr9drop_glueINtNtB4_6result6ResultAsj4_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35ErrorEEB14_",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.requantize": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-spectral.requantize.s",
+          "sha256": "86d20a750c993b4ade92cc5a00a06161ca56b9246f0e6714c8ad8206922aa059",
+          "instruction_count": 679,
+          "stack_reservation": [
+            "296"
+          ],
+          "calls": [
+            "exp2",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMs0_NtNtNtNtCscx1ptWZUqVR_3std3sys4sync4once5futexNtB5_4Once4call",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-scalefactors.read.s",
+          "sha256": "a7647fc8df9be56855cf29b3fbe0f020015dd66438bd64a8f48d96822202599c",
+          "instruction_count": 1295,
+          "stack_reservation": [
+            "392"
+          ],
+          "calls": [
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memcpy",
+            "memset",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking9panic_fmt",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read_values": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-scalefactors.read_values.s",
+          "sha256": "55abf0cb3b5ad8066ee4115c201dc94f300bbe18aafdcfe4d2706348bfd20560",
+          "instruction_count": 75,
+          "stack_reservation": [
+            "56"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read"
+          ]
+        },
+        "FrameDecoder.decode": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-prefix-FrameDecoder.decode.s",
+          "sha256": "307c4c2869f41e0ed776db37da7d36b9bf16f76916341ee3a9d4d59b666e46b3",
+          "instruction_count": 3510,
+          "stack_reservation": [
+            "1256"
+          ],
+          "calls": [
+            "_RNvMs0_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35frameNtB5_5Frame5parse",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvMs5_NtCsg1aDjJ6Ud3l_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "memcpy",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral6stereo",
+            "_RNvMs_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB4_6Hybrid7process",
+            "_RNvMs1_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB5_9Synthesis7process",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        }
+      },
+      "layout_command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "-C",
+        "panic=abort",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.rs",
+        "--extern",
+        "deadlib_audio_decode_mp3=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.exe"
+      ],
+      "layout_source": "use deadlib_audio_decode_mp3::{FrameDecoder,scalefactors::ScaleFactors,synthesis::{Hybrid,Synthesis}};\nfn main(){println!(\"FrameDecoder {} {} ScaleFactors {} {} Hybrid {} {} Synthesis {} {}\",std::mem::size_of::<FrameDecoder>(),std::mem::align_of::<FrameDecoder>(),std::mem::size_of::<ScaleFactors>(),std::mem::align_of::<ScaleFactors>(),std::mem::size_of::<Hybrid>(),std::mem::align_of::<Hybrid>(),std::mem::size_of::<Synthesis>(),std::mem::align_of::<Synthesis>());}\n",
+      "layout": "FrameDecoder 51568 16 ScaleFactors 136 8 Hybrid 4608 8 Synthesis 8208 16"
+    },
+    {
+      "stage": "round12-inline",
+      "command": [
+        "cargo",
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\Cargo.toml",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--bench",
+        "kernels",
+        "--profile",
+        "bench",
+        "--",
+        "--emit=asm"
+      ],
+      "functions": {
+        "huffman.pair": {
+          "emitted": false
+        },
+        "huffman.signed": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-huffman.signed.s",
+          "sha256": "f7bc78618c895d756352b3ddfa4fe5edc9268914faae8d6b8e304e60069e3eb2",
+          "instruction_count": 39,
+          "stack_reservation": [
+            "40"
+          ],
+          "calls": [
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        },
+        "spectral.quantized": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-spectral.quantized.s",
+          "sha256": "59f78629190fe4460296371b045957179aad876c4d56f773593b2e741174b706",
+          "instruction_count": 880,
+          "stack_reservation": [
+            "232"
+          ],
+          "calls": [
+            "memset",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp37huffman4quad",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "spectral.requantize": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-spectral.requantize.s",
+          "sha256": "3c993997457a745a28d3b878406340cbccb7396b27e81c533af5bbdf95095d70",
+          "instruction_count": 679,
+          "stack_reservation": [
+            "296"
+          ],
+          "calls": [
+            "exp2",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "exp2",
+            "pow",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMs0_NtNtNtNtCscx1ptWZUqVR_3std3sys4sync4once5futexNtB5_4Once4call",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-scalefactors.read.s",
+          "sha256": "fd391bc1eb34567be36403c395fe379c7941d56ef79b2bb94cda33b92069d29c",
+          "instruction_count": 1295,
+          "stack_reservation": [
+            "392"
+          ],
+          "calls": [
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors11read_values",
+            "memcpy",
+            "memset",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "memcpy",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking9panic_fmt",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check",
+            "_RNvNtCs7uUmbfRqPp3_4core9panicking18panic_bounds_check"
+          ]
+        },
+        "scalefactors.read_values": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-scalefactors.read_values.s",
+          "sha256": "b6db6001fe70b72ec0c419f102c830eec0fb41291b5986f23bb031925ff37559",
+          "instruction_count": 75,
+          "stack_reservation": [
+            "56"
+          ],
+          "calls": [
+            "_RNvMNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp34bitsNtB2_9BitReader4read"
+          ]
+        },
+        "FrameDecoder.decode": {
+          "emitted": true,
+          "assembly": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\round12-inline-FrameDecoder.decode.s",
+          "sha256": "ba37a217a062854b4de9eef38ee6bf31302a7e784c9d34a797d35e5bd29fba95",
+          "instruction_count": 3504,
+          "stack_reservation": [
+            "1272"
+          ],
+          "calls": [
+            "_RNvMs0_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp35frameNtB5_5Frame5parse",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "memmove",
+            "memcpy",
+            "_RNvMs5_NtCsg1aDjJ6Ud3l_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "memcpy",
+            "memmove",
+            "memmove",
+            "memcpy",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "_RINvNvMs2_NtCsg1aDjJ6Ud3l_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9dRwPqIQ6Ph_24deadlib_audio_decode_mp3",
+            "memcpy",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp312scalefactors4read",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral9quantized",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral10requantize",
+            "_RNvNtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp38spectral6stereo",
+            "_RNvMs_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB4_6Hybrid7process",
+            "_RNvMs1_NtCs9dRwPqIQ6Ph_24deadlib_audio_decode_mp39synthesisNtB5_9Synthesis7process",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail",
+            "_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail"
+          ]
+        }
+      },
+      "layout_command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "-C",
+        "panic=abort",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.rs",
+        "--extern",
+        "deadlib_audio_decode_mp3=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build\\target\\release\\deps",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-codegen\\layout.exe"
+      ],
+      "layout_source": "use deadlib_audio_decode_mp3::{FrameDecoder,scalefactors::ScaleFactors,synthesis::{Hybrid,Synthesis}};\nfn main(){println!(\"FrameDecoder {} {} ScaleFactors {} {} Hybrid {} {} Synthesis {} {}\",std::mem::size_of::<FrameDecoder>(),std::mem::align_of::<FrameDecoder>(),std::mem::size_of::<ScaleFactors>(),std::mem::align_of::<ScaleFactors>(),std::mem::size_of::<Hybrid>(),std::mem::align_of::<Hybrid>(),std::mem::size_of::<Synthesis>(),std::mem::align_of::<Synthesis>());}\n",
+      "layout": "FrameDecoder 51568 16 ScaleFactors 136 8 Hybrid 4608 8 Synthesis 8208 16"
+    }
+  ]
+}

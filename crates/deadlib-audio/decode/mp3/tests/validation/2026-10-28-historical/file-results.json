@@ -1,0 +1,2139 @@
+{
+  "method": "Full historical file PCM/count/seek gate with bounded-memory comparisons.",
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "file": "Silent_Light.mp3",
+      "input_sha256": "10793142947d5bdb77165b6c94bae67f077a7c39c1b9a6327d5906f370913bc3",
+      "format": {
+        "rate": 44100,
+        "channels": 2,
+        "samples": 11619072,
+        "blocks": 10086
+      },
+      "raw_samples": 11619072,
+      "physical_frames": 10086,
+      "raw_start": 0,
+      "raw_end": 11619072,
+      "linear": {
+        "mpg123": {
+          "sample_values": 23238144,
+          "rms": 7.787333809067433e-08,
+          "max": 2.294778823852539e-06,
+          "bit_identical": false
+        },
+        "symphonia": {
+          "sample_values": 23238144,
+          "rms": 9.16980177949854e-08,
+          "max": 1.2367963790893555e-06,
+          "bit_identical": false
+        },
+        "libmad_cropped_raw": {
+          "sample_values": 23238144,
+          "rms": 1.204912542912732e-07,
+          "max": 1.3113021850585938e-06,
+          "bit_identical": false
+        }
+      },
+      "native_seek_checks": 30341,
+      "native_seek_sample_values": 116464716,
+      "reference_seeks": [
+        {
+          "position": 0,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.704809765891525e-15,
+            "max": 2.7255975254547593e-14,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.711565985978551e-15,
+            "max": 2.7255975254547593e-14,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 529,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.0382537091100222e-12,
+            "max": 2.1827872842550278e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 575,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.0236097502335192e-11,
+            "max": 8.003553375601768e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 576,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.0699006999955949e-11,
+            "max": 8.003553375601768e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1151,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.450863791721285e-09,
+            "max": 7.450580596923828e-09,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1152,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.4508894779635995e-09,
+            "max": 7.450580596923828e-09,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 2013838,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.0919453318529095e-08,
+            "max": 1.564621925354004e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 2112221,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.140738587205165e-08,
+            "max": 2.682209014892578e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 2955112,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.090907483239488e-08,
+            "max": 2.5331974029541016e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 3418881,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 7.16144968813395e-08,
+            "max": 4.76837158203125e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 3886761,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 9.627516939529315e-08,
+            "max": 4.731118679046631e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4505597,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.7924782882927044e-08,
+            "max": 2.086162567138672e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4832229,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.7871299241491802e-07,
+            "max": 8.344650268554688e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4896493,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.5437703659962485e-08,
+            "max": 1.0663643479347229e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5504747,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.6930594313280395e-08,
+            "max": 3.0547380447387695e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5806823,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.3304033888215497e-07,
+            "max": 5.662441253662109e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5809536,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 8.562009792044403e-08,
+            "max": 4.76837158203125e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 7568865,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.639134540822222e-08,
+            "max": 1.1175870895385742e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 7606724,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 9.542623403855607e-08,
+            "max": 5.178153514862061e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8017666,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 3.546080570393631e-08,
+            "max": 1.1920928955078125e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8115501,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.3230547579916154e-08,
+            "max": 1.9371509552001953e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8464100,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.3664528700773133e-08,
+            "max": 1.043081283569336e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 9102847,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.766817351267318e-07,
+            "max": 1.039355993270874e-06,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 9226543,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.627150900017908e-08,
+            "max": 2.086162567138672e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 9865268,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 3.040418185254192e-08,
+            "max": 1.564621925354004e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 11083334,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.5175488774898694e-08,
+            "max": 2.682209014892578e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 11401586,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 9.840272308390077e-08,
+            "max": 3.725290298461914e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 11619071,
+          "samples": 1,
+          "reference_linear": {
+            "sample_values": 2,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 2,
+            "rms": 2.761031786359712e-10,
+            "max": 3.4924596548080444e-10,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 11619072,
+          "samples": 0,
+          "reference_linear": {
+            "sample_values": 0,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 0,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          }
+        }
+      ],
+      "commands": [
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-native.bin",
+            "gapless",
+            "audit"
+          ],
+          "exit_code": 0,
+          "stdout": "range\t0\t11619072\t11619072\t11619072\t10086\nseeks\t30341\t116464716\tbit-identical\n",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file_reference",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-mad-raw.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-0.bin",
+            "0",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-1.bin",
+            "1",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-529.bin",
+            "529",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-575.bin",
+            "575",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-576.bin",
+            "576",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-1151.bin",
+            "1151",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-1152.bin",
+            "1152",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-2013838.bin",
+            "2013838",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-2112221.bin",
+            "2112221",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-2955112.bin",
+            "2955112",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-3418881.bin",
+            "3418881",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-3886761.bin",
+            "3886761",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-4505597.bin",
+            "4505597",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-4832229.bin",
+            "4832229",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-4896493.bin",
+            "4896493",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-5504747.bin",
+            "5504747",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-5806823.bin",
+            "5806823",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-5809536.bin",
+            "5809536",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-7568865.bin",
+            "7568865",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-7606724.bin",
+            "7606724",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-8017666.bin",
+            "8017666",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-8115501.bin",
+            "8115501",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-8464100.bin",
+            "8464100",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-9102847.bin",
+            "9102847",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-9226543.bin",
+            "9226543",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-9865268.bin",
+            "9865268",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-11083334.bin",
+            "11083334",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-11401586.bin",
+            "11401586",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-11619071.bin",
+            "11619071",
+            "1"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/Silent_Light-seek-11619072.bin",
+            "11619072",
+            "0"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ],
+      "pcm_sha256": {
+        "Silent_Light-native.bin": "fd323920d529cde5924827c1bb6d65b078262d70591ae372ae7e46da0a3cb0ef",
+        "Silent_Light-mpg123.bin": "dc587333313de55c086335b44647fab7424330cb91e3660925a9dffbed2c0ff1",
+        "Silent_Light-symphonia.bin": "0f5c7025bd3df41ec80f0bc47f08195bfc423785d49ad189bf23025470d1cc06",
+        "Silent_Light-mad-raw.bin": "b1d6c2e9424858aab0156452f53794abdd6c27385499add3be2260387783f5d9"
+      }
+    },
+    {
+      "file": "01 - Charity Case.mp3",
+      "input_sha256": "937858498fd1e92eaa1c47238f7cf4a67bc5eb8b8428d0358845b07d85a38469",
+      "format": {
+        "rate": 44100,
+        "channels": 2,
+        "samples": 8486016,
+        "blocks": 7368
+      },
+      "raw_samples": 8489088,
+      "physical_frames": 7369,
+      "raw_start": 2257,
+      "raw_end": 8488273,
+      "linear": {
+        "mpg123": {
+          "sample_values": 16972032,
+          "rms": 8.66332400907738e-08,
+          "max": 2.384185791015625e-06,
+          "bit_identical": false
+        },
+        "symphonia": {
+          "sample_values": 16972032,
+          "rms": 1.115520334737311e-07,
+          "max": 1.4901161193847656e-06,
+          "bit_identical": false
+        },
+        "libmad_cropped_raw": {
+          "sample_values": 16972032,
+          "rms": 1.220036047278882e-07,
+          "max": 1.3113021850585938e-06,
+          "bit_identical": false
+        }
+      },
+      "native_seek_checks": 22185,
+      "native_seek_sample_values": 85127216,
+      "reference_seeks": [
+        {
+          "position": 0,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.9268096417896474e-12,
+            "max": 3.5925040720030665e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.9268096417896474e-12,
+            "max": 3.5925040720030665e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 529,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.586415401173081e-12,
+            "max": 2.3646862246096134e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 575,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.641527826178165e-12,
+            "max": 2.1373125491663814e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 576,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.653712118381823e-12,
+            "max": 2.1373125491663814e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1151,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 7.8115429406109e-12,
+            "max": 3.319655661471188e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1152,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 7.816840336970715e-12,
+            "max": 3.319655661471188e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 345710,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.8746234917682e-08,
+            "max": 3.5762786865234375e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1320237,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.93757004009515e-08,
+            "max": 4.470348358154297e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 1863362,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.1840082841297184e-07,
+            "max": 6.62636011838913e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 2671666,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.380178139587463e-08,
+            "max": 2.980232238769531e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 2952867,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 3.9373628314065536e-08,
+            "max": 1.3504177331924438e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 3267854,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.260788926847648e-08,
+            "max": 1.7881393432617188e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4243008,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.1665948253978672e-07,
+            "max": 4.917383193969727e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4425276,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.9051710932650847e-08,
+            "max": 1.8067657947540283e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4493665,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 4.146152644660042e-08,
+            "max": 2.3096799850463867e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 4857750,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 2.2052317799177058e-07,
+            "max": 1.1324882507324219e-06,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5180460,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 3.2679909806348254e-08,
+            "max": 1.4901161193847656e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5440938,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 8.946694203130012e-08,
+            "max": 3.725290298461914e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5700087,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 9.754607159934999e-08,
+            "max": 3.725290298461914e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 5930337,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 7.375895195368133e-08,
+            "max": 4.470348358154297e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 6484806,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.27432630994205e-07,
+            "max": 7.748603820800781e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 6769049,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 7.605353441455521e-08,
+            "max": 4.76837158203125e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 6785622,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 5.833681472312757e-08,
+            "max": 2.980232238769531e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 7363875,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.5325248779064059e-07,
+            "max": 7.748603820800781e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8009022,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.516274911551867e-08,
+            "max": 3.5762786865234375e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8173233,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 1.5046089477339047e-07,
+            "max": 8.046627044677734e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8176858,
+          "samples": 577,
+          "reference_linear": {
+            "sample_values": 1154,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 1154,
+            "rms": 6.32607843462569e-08,
+            "max": 2.384185791015625e-07,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8486015,
+          "samples": 1,
+          "reference_linear": {
+            "sample_values": 2,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 2,
+            "rms": 1.4551915228366852e-11,
+            "max": 1.4551915228366852e-11,
+            "bit_identical": false
+          }
+        },
+        {
+          "position": 8486016,
+          "samples": 0,
+          "reference_linear": {
+            "sample_values": 0,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "native_linear": {
+            "sample_values": 0,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          }
+        }
+      ],
+      "commands": [
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-native.bin",
+            "gapless",
+            "audit"
+          ],
+          "exit_code": 0,
+          "stdout": "range\t2257\t8488273\t8486016\t8489088\t7369\nseeks\t22185\t85127216\tbit-identical\n",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file_reference",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-mad-raw.bin"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-0.bin",
+            "0",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-1.bin",
+            "1",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-529.bin",
+            "529",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-575.bin",
+            "575",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-576.bin",
+            "576",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-1151.bin",
+            "1151",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-1152.bin",
+            "1152",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-345710.bin",
+            "345710",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-1320237.bin",
+            "1320237",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-1863362.bin",
+            "1863362",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-2671666.bin",
+            "2671666",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-2952867.bin",
+            "2952867",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-3267854.bin",
+            "3267854",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-4243008.bin",
+            "4243008",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-4425276.bin",
+            "4425276",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-4493665.bin",
+            "4493665",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-4857750.bin",
+            "4857750",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-5180460.bin",
+            "5180460",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-5440938.bin",
+            "5440938",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-5700087.bin",
+            "5700087",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-5930337.bin",
+            "5930337",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-6484806.bin",
+            "6484806",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-6769049.bin",
+            "6769049",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-6785622.bin",
+            "6785622",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-7363875.bin",
+            "7363875",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-8009022.bin",
+            "8009022",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-8173233.bin",
+            "8173233",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-8176858.bin",
+            "8176858",
+            "577"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-8486015.bin",
+            "8486015",
+            "1"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/file-reference-seek",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-file-initial/01 - Charity Case-seek-8486016.bin",
+            "8486016",
+            "0"
+          ],
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ],
+      "pcm_sha256": {
+        "01 - Charity Case-native.bin": "f16730e108f02753aa0f13dd6016214fa29eade195efdd0eb02ae757c7178745",
+        "01 - Charity Case-mpg123.bin": "03d6dda5e808399caf2509bb8427566716944c4755a22ca0a1defbfafb753d03",
+        "01 - Charity Case-symphonia.bin": "a04b3b26a3f529158df10f20f5ed7c48a739bc2fe670d37d1c0d4c8e0c34b76b",
+        "01 - Charity Case-mad-raw.bin": "38454071f61de4e91dbfd27134e24c81f3cdf7c3c1e2ab5d0b39ba9c29f49b55"
+      }
+    }
+  ]
+}

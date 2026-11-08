@@ -1,0 +1,20 @@
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 5.35s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.16s
+     Running `/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/huffman/ -runs=1 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1 fuzz/reports/huffman-timeout-input.bin`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2896242378
+INFO: Loaded 1 modules   (9171 inline 8-bit counters): 9171 [0x6045c969f070, 0x6045c96a1443), 
+INFO: Loaded 1 PC tables (9171 PCs): 9171 [0x6045c96a1448,0x6045c96c5178), 
+/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman: Running 1 inputs 1 time(s) each.
+Running: fuzz/reports/huffman-timeout-input.bin
+Executed fuzz/reports/huffman-timeout-input.bin in 5249 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***
+stat::number_of_executed_units: 2
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              132

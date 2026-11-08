@@ -1,0 +1,6456 @@
+{
+  "method": "Distinct-codebook switched regions, with independently known spectra/PCM.\n\nThe 1997 Layer3 description counts eight band entries in mixed region zero:\neight long MPEG-1 bands, or six LSF long bands and two short-window bands.\nExpected PCM comes from the direct matrix/shift-history oracle, never a decoder.\nReference disagreements are recorded separately from native correctness.\n",
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "file": "22050-short.mp3",
+      "input_sha256": "d72306346a81834f8e970e229924de00902ada6961c3ad4296c9a764a06715a9",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.8584078586598626e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "f06d80c5af97ca92de819a55b7120c836a84fe0c733bcb8330972a9f85c4b8a8"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.2035536665252687e-08,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "5725a7ff6b851dc35385a1327cd9d9ff2247445a7232c86f3019de2d2750d183"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1812063093908439e-08,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "b3034bb07aaf0cbfd8a9cec07f1890da2d59a4168ae0881e29c5b600da20ea37"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.5860269533594917e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "ed282914652b1cb2ebb0636609971ff1eb48344f9009b5d36f31b60ec06710b4"
+        }
+      }
+    },
+    {
+      "file": "22050-mixed.mp3",
+      "input_sha256": "14c237fd6ba11547cdd469fc50e658d0a034d5912417f965d819d492f04d2704",
+      "boundary": 48,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 9396: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.13176098597738606,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "3026cb472758939ed901814f3ff20ee382e6813937bb5fed57c1f2d27d9d4e68"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.562951005429118e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "00cc7266cd2d32429e0e860290e98a0a5c05d319f57b9ab5f87d9502c653e32d"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/22050-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.09316945448662334,
+          "max": 1.102936248778041,
+          "pcm_sha256": "4acce8f2c4313a9eeadaf3f80ffbe38d0bf50f5cc85c5cfe5adf6754d3361f3c"
+        }
+      }
+    },
+    {
+      "file": "24000-short.mp3",
+      "input_sha256": "b1cb4deb83357ede242e0f5793f0f571e85f47a7e65baccce6ec05f4fa4ca49c",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.8584078586598626e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "821ff9c62ef03c28a5099b9ddc0acf39f9718987aa09d54a0d6d9585cd109342"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.2035536665252687e-08,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "3b98dac7529803a2377a652a7e7115b0975bb147317f92dfac85fa9387a4bee5"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1812063093908439e-08,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "5350ae48b795e1567d8811d1b95bc868054198b68b42595702ed1320b2c25832"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.5860269533594917e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "55ffed1abce155d96aa80bd8f985898537e48d292990b5ccca6498a89c463988"
+        }
+      }
+    },
+    {
+      "file": "24000-mixed.mp3",
+      "input_sha256": "5f113e80fc81519df8be08596e056b205e2d0df5b1c47a43a7cf54ba20807dce",
+      "boundary": 48,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 8640: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.13176098597738606,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "69baab4db52756fa4c738c740dd0edee6aae8e6d94bd3708f33cc2ae7b7f910a"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.562951005429118e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "d12860056c330fea4f03072cbfa4fe6e38e3c66ae752b158c6bdfa6a066bdfc8"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/24000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.09316945448662334,
+          "max": 1.102936248778041,
+          "pcm_sha256": "77230a38e447fd855f8be108d6fafdd27b5c17e3929d6ee028cd3dce6611aabc"
+        }
+      }
+    },
+    {
+      "file": "16000-short.mp3",
+      "input_sha256": "b3c0393c44af97f582968a9eaed56943f60f823085516a86c1b49f1a25a08f1b",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.8584078586598626e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "fecb9a680a21186985d4f8334169737c60933a86c32aef207eba71c4d3b4f123"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.2035536665252687e-08,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "1cc857130ef6f8caf5e03b263e2bcdf73a83c4283d86cf408dae76ac93cd9a7e"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1812063093908439e-08,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "9d5fe5376d31a290c33fc05c4aeab17593f0bb243e19d78057e6cd47c50ef6d0"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.5860269533594917e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "955b77e143a6e27c97bef6c6e6601d1d41f9efeb150cc4d6b191ad82638f1a68"
+        }
+      }
+    },
+    {
+      "file": "16000-mixed.mp3",
+      "input_sha256": "e286079218ae7c14ebfbf81f1ef1569548f5e3ad698080cee1600911c41debf8",
+      "boundary": 48,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 12960: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.13176098597738606,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "a59732294a806abce56e7c19847d7f8778b35f738dede1ec7c08fcc8749da1de"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.562951005429118e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "3ec3a8f582cd4f820e5a4b97494503a9e4e333703fb3eb54239b1e4c315ac104"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/16000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.09316945448662334,
+          "max": 1.102936248778041,
+          "pcm_sha256": "e2f54b6ab46b833d67cba801896c8a02e3ce4afbaf15036d98ad2c8fa4bab7ea"
+        }
+      }
+    },
+    {
+      "file": "44100-short.mp3",
+      "input_sha256": "f80a8aca4da54f220ffa2436021454723953a2cd83a2da003c404bb8ba15a68c",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.021199580255307e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "eaf87714f7ed9e130d4411c5d2f9d7dd6e838dcd110ca41d99fd6d4a8e06043d"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.510409591219502e-09,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "a48655dac17651669f48a27e6317d11b75f02e469d1411bc04f9ec024f430545"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.35238991350601e-09,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "b330d969419d46b8d81449fce8021f536255d50618c9e65f039684d2163acdc8"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1216211888457532e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "16a60b6c936af834b98380ccf3d156ce2e5b9b3c5bac575073bd4b719ca4c31a"
+        }
+      }
+    },
+    {
+      "file": "44100-mixed.mp3",
+      "input_sha256": "ee5fd336f25c215c9ff7abc855822c5e0aa8d7a26a045d3068541ddab6d747d3",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.7562177953683196e-09,
+          "max": 2.9634410814161072e-08,
+          "pcm_sha256": "a0dd37fccee0950c1abc7f6106514aa9bfc511479f528c0e4ee96adbc4a221e3"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.09960174693782047,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "aba86e76dd2dafac6e739f3c865080e44f3854f5bd3284fe84ca6ea5ceaa2eac"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.3120719312482837e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "d78fabdb25595bd1036c41015ab97066db68aaea8fce104f3e51f480a3ce0495"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/44100-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.650479147035556e-08,
+          "max": 1.8719956424578799e-07,
+          "pcm_sha256": "e7765e6f48eb66c6ca415db7fe962301595fd3130aea299dd3da4206da4f1cbe"
+        }
+      }
+    },
+    {
+      "file": "48000-short.mp3",
+      "input_sha256": "b249f4c9635452117927452248aa0cf43f1db9bc0bf55b6c28d5cb65649d746b",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.021199580255307e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "fbd5be4b6b9e8384d898d3700753a56d476a3b935adc382b4a16ce0442488037"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.510409591219502e-09,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "3dd983aa2f3e6779decf439130cd755b32c92bdf5ab4a9a84e9cc1651936ba89"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.35238991350601e-09,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "141502dc183c5d0fdc686b3733fff6f1900ba0688efbc25766e394a2ce41e806"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1216211888457532e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "627b19eb0a065c99156096fb2794aa9fbe1a77cd2740134897c60a8123ff9f60"
+        }
+      }
+    },
+    {
+      "file": "48000-mixed.mp3",
+      "input_sha256": "da97a2391f536954798f84598f171759a2d4ec6e2c9c6b91bbdc82d82a7a9e41",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.7562177953683196e-09,
+          "max": 2.9634410814161072e-08,
+          "pcm_sha256": "b0c9fa0ba28d36b8f9d7f7ddb735a61a7ef52ca085bafabb4b6959f64c647d9e"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.09960174693782047,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "2186fb1f4f1227211ab9375882147ef1d07b957abe08f1ce8726ac7eddd5d954"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.3120719312482837e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "638cbb2ac7f900514585d183c87fdcde482744b325e7be5363fc5372a75a3e48"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/48000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.650479147035556e-08,
+          "max": 1.8719956424578799e-07,
+          "pcm_sha256": "452fa9b6bd75b60fb40db5af52d0b0428ad3dbdebe47df768020e322c09d21c2"
+        }
+      }
+    },
+    {
+      "file": "32000-short.mp3",
+      "input_sha256": "40e45298d53bd61b72430f64027c65512f36e2a2584718ab6ce34fa080ee9615",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.021199580255307e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "11458457e5ae99df46e7a49571b4b0407ac4428fa568f7824b0c416372687b32"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.510409591219502e-09,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "59e8cffedf5de6e6eb583088a30c42e80abfde3d0a31910b05e925c021e7486f"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 8.35238991350601e-09,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "0dfdb5c103be4a6e0cbb71b38fff4d928bfd1a439f744e9cd43099acc991a7ba"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1216211888457532e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "52b7c97dbbc35ba77205f72883d6a7099276d82ad7b0f0199a60ad10eeb48c88"
+        }
+      }
+    },
+    {
+      "file": "32000-mixed.mp3",
+      "input_sha256": "30d63942be454caa258b3d2a29767711a6ef2fed08ec72d471ab91709c90e80c",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 96768,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.7562177953683196e-09,
+          "max": 2.9634410814161072e-08,
+          "pcm_sha256": "78de2fdf23d9aa6ed4a9176b00f44e7301b8f906cef900f6542e82a103d03021"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.09960174693782047,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "289229792bb8e823061419227bedf5c99dbfce5fa4a8ed53fa6d937c89a339c5"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.3120719312482837e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "29bdee3b7c00def4936894834833c46c33741fe7c1adc3919c646724b632857b"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/32000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.650479147035556e-08,
+          "max": 1.8719956424578799e-07,
+          "pcm_sha256": "98625406411c817aaed0160f8125bcbf3f8f515c8f66c8f7cc88e70928d721a6"
+        }
+      }
+    },
+    {
+      "file": "11025-short.mp3",
+      "input_sha256": "9362fb5fcfaeb75e2c6aa71eb0aeac39158587f9f6c1c44111bd5305eb19a52d",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.8584078586598626e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "a92d5576214ea6de671cc7f6d05843abac4152d5719e8b10c7df617655db684d"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.2035536665252687e-08,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "2eb3b1b5314ab1dd078493c550222126b4f0546bb2ef91d5ba4e48dbec5fad15"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1812063093908439e-08,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "758d561cfc0c7c02e4a8c4ecd71c163e9b835c72bf6c2548c354f41e4aa92fd6"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.5860269533594917e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "4edfd917ffadde1f2283aa5e4562e60737ce62c81b3c5e0f2d97950b72c02c4e"
+        }
+      }
+    },
+    {
+      "file": "11025-mixed.mp3",
+      "input_sha256": "9953bebc117e9ac00da49edb9b247b94ab9928201ee11020d6f0b136b646d112",
+      "boundary": 48,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 18792: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.13176098597738606,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "0c5b3df86a48445fd186613648ecd6ce63ab4dd9dc3c7c21d4752824602f1eb3"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.562951005429118e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "4167f4d82aada31d83839cbdf023505fa654d3693e1333c481d805e36e9ec535"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/11025-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.07216876205708335,
+          "max": 1.102936248778041,
+          "pcm_sha256": "d8930bde526d2d251bb15cab7a996dff488deb843470da3c50fb3cd20bd61218"
+        }
+      }
+    },
+    {
+      "file": "12000-short.mp3",
+      "input_sha256": "92fad0d879777f5dd6ed72b5fb4d022187eda479d3ef11afd4054dc80d2f6274",
+      "boundary": 36,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 2.8584078586598626e-09,
+          "max": 2.906126927992858e-08,
+          "pcm_sha256": "2d87ac0523aaa0b67b4541995d25b364db139cd9b7d0765109792e23b9626803"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.2035536665252687e-08,
+          "max": 1.3143267846293938e-07,
+          "pcm_sha256": "f5b35c34fa13b398c7dfc570b251c896dab66ba25f99d0fd62b0e0c78f56f2a2"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1812063093908439e-08,
+          "max": 1.0850084694591366e-07,
+          "pcm_sha256": "5031f03abbcaaba325c4703d30bf918ef4ba818ec6092a638d68329998ff66ef"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.5860269533594917e-08,
+          "max": 1.411606168622015e-07,
+          "pcm_sha256": "1cca2491c32cf3f1147223f3a4fbec94e88522896db1e2b18fe5a91c6503aaff"
+        }
+      }
+    },
+    {
+      "file": "12000-mixed.mp3",
+      "input_sha256": "ba2a416b7f055f03be95bc160d77e393c67d194c2e3c7d45afc78413ce1b545a",
+      "boundary": 48,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          34,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          35,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          36,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          37,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          38,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          46,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          47,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          48,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          49,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          50,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 17280: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.13176098597738606,
+          "max": 0.6514874056811214,
+          "pcm_sha256": "f3ba6485dff9f37618ca7e9027a1c6bf839d23554a2f3fe6a702fd1e71171247"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.562951005429118e-08,
+          "max": 1.2652825598369333e-07,
+          "pcm_sha256": "302a12bc56c06da02dfb2e36ab7e15e23e030ea41eb2a170c0304319b5ecdeb9"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/12000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.07216876205708335,
+          "max": 1.102936248778041,
+          "pcm_sha256": "e55681541a7dce70c80761ce742a1576836a356d58bb38eaa785d1a4a9710d35"
+        }
+      }
+    },
+    {
+      "file": "8000-short.mp3",
+      "input_sha256": "84f53aedc2e8fcae9efb04969de0910c8baf08353aef19d97d69bd065275d0ca",
+      "boundary": 72,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          70,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          70,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          71,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          71,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          72,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          72,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          73,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          73,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          74,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          74,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          70,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          70,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          71,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          71,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          72,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          72,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          73,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          73,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          74,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          74,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 48384,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 3.0288119607661447e-09,
+          "max": 2.9700827686163223e-08,
+          "pcm_sha256": "23efc9c341721268208c14ebc93c4649854af324e3e7c8c68f7a773dfc32d089"
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.3922065291073262e-08,
+          "max": 1.9397343437033143e-07,
+          "pcm_sha256": "29de4dfa18967634c52ca5036aea3208f48571c79e5b42ede6e2557cbbad1fa6"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.1575280527502539e-08,
+          "max": 9.6030111335077e-08,
+          "pcm_sha256": "0de6fd24551ed50b160c5eeace97ad64cee780676c7fbaddea9d086e4b19fd80"
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-short-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": true,
+          "rms": 1.662113446129533e-08,
+          "max": 1.7135041557869712e-07,
+          "pcm_sha256": "58aaba790ed2fae28eecc77efe8cab6b250ff9f45317baa69315050ecef7de56"
+        }
+      }
+    },
+    {
+      "file": "8000-mixed.mp3",
+      "input_sha256": "7a0b7a5772a0e7453a5b666269d97894b1e85c2fc24fc4ba5c002512271c4839",
+      "boundary": 96,
+      "cases": [
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          70,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          70,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          71,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          71,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          72,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          72,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          73,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          73,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          74,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          74,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          94,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          94,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          95,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          95,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          96,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          96,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          97,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          97,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          98,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          98,
+          1
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            1,
+            2
+          ],
+          575,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          0,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          70,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          70,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          71,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          71,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          72,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          72,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          73,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          73,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          74,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          74,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          94,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          94,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          95,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          95,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          96,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          96,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          97,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          97,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          98,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          98,
+          1
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          0
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          575,
+          1
+        ]
+      ],
+      "sample_values": 82944,
+      "results": {
+        "native": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed-native.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "Error: \"at byte 25920: Invalid(\\\"truncated main data in complete frame\\\")\"\n",
+          "passed": false
+        },
+        "symphonia": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "passed": false,
+          "rms": 0.1317609982511766,
+          "max": 0.6514755983180209,
+          "pcm_sha256": "d1b5d9d0b707ecd522a89d6f872218060e9d96614ca8de7db887c6000e427a91"
+        },
+        "mad": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed-mad.bin"
+          ],
+          "exit_code": 1,
+          "stderr": "libmad at 8640: Huffman data overrun\n",
+          "passed": false
+        },
+        "mpg123": {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-before2/8000-mixed-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": "[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n[src/libmpg123/layer3.c:INT123_do_layer3():1908] error: dequantization failed!\n",
+          "passed": false,
+          "rms": 0.11050446950012874,
+          "max": 1.103961313259044,
+          "pcm_sha256": "b5f6fc253ca95cd3b4888a5ece3391e190fd79824a8a88e8f3291baeaefa761e"
+        }
+      }
+    }
+  ]
+}

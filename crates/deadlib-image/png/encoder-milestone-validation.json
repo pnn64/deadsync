@@ -1,0 +1,46 @@
+{
+  "status": "milestone_verified_goal_active",
+  "production_changes": [],
+  "checks": [
+    {
+      "command": "cargo test -p deadlib-image-png --release --test encoder_fields --test encoder_boundaries --test encoder_reference -- --nocapture",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 1,
+      "log": "encoder-milestone.log",
+      "sha256": "3c08d57cb135bf9380643d19fd3f1989de2c023aa3d240edbab7e5cc8381c71d"
+    },
+    {
+      "command": "DEADLIB_LIBPNG_ENCODER=target/png-encoder-reference/Release/deadlib_png_encoder.exe; cargo test -p deadlib-image-png --release --test encoder_reference -- --ignored --nocapture",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "log": "encoder-reference-c.log",
+      "sha256": "60de1a4ae9eb8e4e8529505a8dea710070b04d9bd8777c154bfee66aebb95d83"
+    }
+  ],
+  "source_sha256": [
+    {
+      "path": "tests/encoder_fields.rs",
+      "sha256": "3e22877ce39ba72ce7c4b22acfc59218f94a3ceb3d920af30e6d6c8a1cb570e8"
+    },
+    {
+      "path": "tests/encoder_boundaries.rs",
+      "sha256": "58a2a9f684a51616ded79a2273d919fae889768cae9edce371dfc184776b5a33"
+    },
+    {
+      "path": "tests/encoder_reference.rs",
+      "sha256": "1d78ea35c02d9209da05da408edae833402ffca55280eb6cf8cb9bfcebedba60"
+    },
+    {
+      "path": "tests/oracle/encode.c",
+      "sha256": "90d621cb315f3a66479465710b76dfcbc75a414ba8d242521a6c1499f1a5052c"
+    },
+    {
+      "path": "tests/oracle/CMakeLists.txt",
+      "sha256": "12a196f0313f2fdc771b65f2e8ca992600ea1b7cc162922e9560f2f930ba3f35"
+    }
+  ],
+  "reference_encoder_sha256": "b6363ce8d377ac35b2f7d4e1677a26b05c00cf08a78293493c4c922b75c6672e",
+  "baseline": "38d14f427"
+}

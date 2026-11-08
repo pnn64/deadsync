@@ -91,6 +91,7 @@ pub(crate) struct ReceptorDrawRequest<'a, S> {
     pub press_visual: Option<(f32, f32)>,
     pub receptor_alpha: f32,
     pub field_zoom: f32,
+    pub rotation_x_deg: f32,
     pub rotation_y_deg: f32,
     pub pulse_color: [f32; 4],
     pub idle_glow: ReceptorIdleGlow,
@@ -110,6 +111,7 @@ struct ReceptorSpriteDraw {
     size: [f32; 2],
     zoom: [f32; 2],
     tint: [f32; 4],
+    rotation_x_deg: f32,
     rotation_y_deg: f32,
     rotation_z_deg: f32,
     uv: [f32; 4],
@@ -137,6 +139,24 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         1.0
     };
     if targets_visible {
+        for overlay in request
+            .overlays
+            .iter()
+            .filter(|overlay| overlay.before_target)
+        {
+            compose_receptor_overlay(
+                draws,
+                model_cache,
+                &request,
+                &overlay.slot,
+                overlay.reverse,
+                1.0,
+                1.0,
+                false,
+                crate::style::RECEPTOR_Z - 2,
+                sprite_source,
+            );
+        }
         let slot = request
             .target_slot
             .expect("visible receptor target must have a noteskin slot");
@@ -165,7 +185,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 slot,
                 sprite_source,
                 ReceptorSpriteDraw {
-                    align: [0.5, reverse.vert_align()],
+                    align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                     center,
                     size,
                     zoom: mirrored_zoom(
@@ -178,6 +198,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         color[2] * draw.tint[2],
                         alpha,
                     ],
+                    rotation_x_deg: request.rotation_x_deg,
                     rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
                     uv,
@@ -201,6 +222,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             request.idle_glow_alpha,
             idle_press_zoom,
             request.idle_glow_shares_press && request.press_behavior.blend_add,
+            crate::style::RECEPTOR_GLOW_Z,
             sprite_source,
         );
     }
@@ -208,7 +230,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
     if let Some(slot) = request.hold_slot {
         let draw = song_lua_note_model_draw(
             model_cache.draw_at(slot, request.elapsed, request.beat),
-            request.rotation_y_deg,
+            [request.rotation_x_deg, request.rotation_y_deg],
         );
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [
@@ -262,7 +284,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     size,
                     zoom: [1.0, 1.0],
                     tint: color,
-                    rotation_y_deg: 0.0,
+                    rotation_x_deg: request.rotation_x_deg,
+                    rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: -final_rotation,
                     uv,
                     blend,
@@ -310,7 +333,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     slot,
                     sprite_source,
                     ReceptorSpriteDraw {
-                        align: [0.5, reverse.vert_align()],
+                        align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                         center,
                         size,
                         zoom: mirrored_zoom(slot, request.bop_zoom * request.effect_zoom.signum()),
@@ -320,6 +343,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                             draw.tint[2],
                             alpha * draw.tint[3],
                         ],
+                        rotation_x_deg: request.rotation_x_deg,
                         rotation_y_deg: request.rotation_y_deg,
                         rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
                         uv,
@@ -328,14 +352,22 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         } else {
                             BlendMode::Alpha
                         },
-                        z: crate::style::RECEPTOR_GLOW_Z,
+                        z: if request.press_behavior.draw_before_target {
+                            crate::style::RECEPTOR_Z - 1
+                        } else {
+                            crate::style::RECEPTOR_GLOW_Z
+                        },
                     },
                 );
             }
         }
     }
     if targets_visible {
-        for overlay in request.overlays {
+        for overlay in request
+            .overlays
+            .iter()
+            .filter(|overlay| !overlay.before_target)
+        {
             compose_receptor_overlay(
                 draws,
                 model_cache,
@@ -345,6 +377,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 1.0,
                 1.0,
                 false,
+                crate::style::RECEPTOR_GLOW_Z,
                 sprite_source,
             );
         }
@@ -360,6 +393,7 @@ fn compose_receptor_overlay<S, F>(
     opacity: f32,
     press_zoom: f32,
     force_add: bool,
+    z: i16,
     sprite_source: &F,
 ) where
     S: NoteskinSlot,
@@ -385,7 +419,7 @@ fn compose_receptor_overlay<S, F>(
             slot,
             sprite_source,
             ReceptorSpriteDraw {
-                align: [0.5, reverse.vert_align()],
+                align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                 center,
                 size,
                 zoom: mirrored_zoom(
@@ -393,6 +427,7 @@ fn compose_receptor_overlay<S, F>(
                     request.bop_zoom * press_zoom * request.effect_zoom.signum(),
                 ),
                 tint: [draw.tint[0], draw.tint[1], draw.tint[2], alpha],
+                rotation_x_deg: request.rotation_x_deg,
                 rotation_y_deg: request.rotation_y_deg,
                 rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
                 uv,
@@ -401,7 +436,7 @@ fn compose_receptor_overlay<S, F>(
                 } else {
                     BlendMode::Alpha
                 },
-                z: crate::style::RECEPTOR_GLOW_Z,
+                z,
             },
         );
     }
@@ -457,10 +492,15 @@ fn append_receptor_sprite<S, F>(
         draw.size[0] * draw.zoom[0].abs(),
         draw.size[1] * draw.zoom[1].abs(),
     ];
+    let offset = [
+        (0.5 - draw.align[0]) * size[0],
+        (0.5 - draw.align[1]) * size[1],
+    ];
+    let (sin, cos) = draw.rotation_z_deg.to_radians().sin_cos();
     draws.push(FlatDraw::Sprite(FlatSprite {
         center: [
-            (0.5 - draw.align[0]).mul_add(size[0], draw.center[0]),
-            (0.5 - draw.align[1]).mul_add(size[1], draw.center[1]),
+            draw.center[0] + cos * offset[0] - sin * offset[1],
+            draw.center[1] + sin * offset[0] + cos * offset[1],
         ],
         world_z: 0.0,
         size,
@@ -472,6 +512,7 @@ fn append_receptor_sprite<S, F>(
         flip_y: draw.zoom[1] < 0.0,
         fade: [0.0; 4],
         blend: draw.blend,
+        rot_x_deg: draw.rotation_x_deg,
         rot_y_deg: draw.rotation_y_deg,
         rot_z_deg: draw.rotation_z_deg,
         z: draw.z,
@@ -520,7 +561,9 @@ mod tests {
         fn model(key: &str) -> Self {
             let mut slot = Self::sprite(key);
             slot.model = Some(ModelMesh {
+                material: None,
                 vertices: Arc::from([ModelVertex {
+                    normal: [0.0, 0.0, 1.0],
                     pos: [0.0, 0.0, 0.0],
                     uv: [0.0, 0.0],
                     tex_matrix_scale: [1.0, 1.0],
@@ -629,6 +672,7 @@ mod tests {
             press_visual: None,
             receptor_alpha: 1.0,
             field_zoom: 1.0,
+            rotation_x_deg: 0.0,
             rotation_y_deg: 0.0,
             pulse_color: pulse.color_for_beat(3.0),
             idle_glow: ReceptorIdleGlow::None,
@@ -791,6 +835,57 @@ mod tests {
     }
 
     #[test]
+    fn receptor_underlay_and_press_light_stay_below_visible_target() {
+        let target = TestSlot::sprite("target");
+        let press = TestSlot::sprite("press");
+        let mut rail = TestSlot::sprite("rail");
+        rail.logical_size = [64.0, 1.0];
+        rail.draw.zoom = [1.0, 480.0, 1.0];
+        rail.draw.vert_align = 1.0;
+        rail.draw.rot[2] = 180.0;
+        let overlays = [ReceptorOverlay {
+            slot: rail,
+            reverse: Default::default(),
+            before_target: true,
+        }];
+        let pulse = pulse();
+        for pressed in [false, true] {
+            let mut request = request(Some(&target), None, &pulse);
+            request.overlays = &overlays;
+            request.press_behavior.draw_before_target = true;
+            let mut draws = Vec::new();
+            compose_receptor_draws(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                || {
+                    pressed.then_some(ReceptorPress {
+                        slot: &press,
+                        reverse: None,
+                        visual: (1.0, 1.0),
+                    })
+                },
+                &texture_source,
+            );
+            assert_eq!(draws.len(), if pressed { 3 } else { 2 });
+            assert_sprite(&draws[0], "rail", 98, BlendMode::Alpha);
+            assert_sprite(&draws[1], "target", 100, BlendMode::Alpha);
+            if pressed {
+                assert_sprite(&draws[2], "press", 99, BlendMode::Add);
+            }
+            let FlatDraw::Sprite(rail) = &draws[0] else {
+                panic!("rail sprite")
+            };
+            assert_eq!(rail.size, [64.0, 480.0]);
+            assert!((rail.center[0] - 10.0).abs() < 0.001);
+            assert!(
+                (rail.center[1] - 260.0).abs() < 0.001,
+                "bottom alignment must rotate around the receptor pivot"
+            );
+        }
+    }
+
+    #[test]
     fn trailing_receptor_overlays_preserve_order_rotation_and_visibility() {
         let target = TestSlot::sprite("target");
         let idle = TestSlot::sprite("idle");
@@ -803,6 +898,7 @@ mod tests {
         hidden.draw.visible = false;
         let overlays = [
             ReceptorOverlay {
+                before_target: false,
                 slot: sparkle,
                 reverse: ReceptorReverseBehavior {
                     reverse_on: ReceptorReverseState {
@@ -813,6 +909,7 @@ mod tests {
                 },
             },
             ReceptorOverlay {
+                before_target: false,
                 slot: hidden,
                 reverse: Default::default(),
             },
@@ -856,6 +953,54 @@ mod tests {
                 };
                 assert_eq!(sprite.tint[3], 0.125);
                 assert_eq!(sprite.rot_z_deg, if reverse { -270.0 } else { -90.0 });
+            }
+        }
+    }
+
+    #[test]
+    fn receptor_layers_face_their_columns() {
+        let pulse = pulse();
+        for (rotation, expected) in [
+            (90, [-1.0, 0.0]),
+            (0, [0.0, -1.0]),
+            (180, [0.0, 1.0]),
+            (-90, [1.0, 0.0]),
+        ] {
+            let mut slot = TestSlot::sprite("receptor");
+            slot.def.rotation_deg = rotation;
+            let mut overlay = TestSlot::sprite("overlay");
+            overlay.def.rotation_deg = rotation;
+            let overlays = [ReceptorOverlay {
+                before_target: false,
+                slot: overlay,
+                reverse: Default::default(),
+            }];
+            let mut request = request(Some(&slot), None, &pulse);
+            request.idle_glow = ReceptorIdleGlow::ActorEffect;
+            request.idle_glow_alpha = 1.0;
+            request.idle_glow_slot = Some(&slot);
+            request.overlays = &overlays;
+            let mut draws = Vec::new();
+            compose_receptor_draws(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                || {
+                    Some(ReceptorPress {
+                        slot: &slot,
+                        reverse: None,
+                        visual: (1.0, 1.0),
+                    })
+                },
+                &texture_source,
+            );
+            assert_eq!(draws.len(), 4, "target, idle, press, and overlay");
+            for draw in draws {
+                let FlatDraw::Sprite(sprite) = draw else {
+                    panic!("receptor sprite");
+                };
+                let tip = glam::Mat2::from_angle(sprite.rot_z_deg.to_radians()) * glam::Vec2::NEG_Y;
+                assert!((tip - glam::Vec2::from(expected)).length() < 1e-6);
             }
         }
     }
@@ -907,7 +1052,9 @@ mod tests {
         else {
             panic!("expected target sprite");
         };
-        assert_eq!(*center, [12.0, 13.0]);
+        // Alignment is applied in the actor's rotated local coordinates.
+        assert!((center[0] - 15.25568).abs() < 0.0001);
+        assert!((center[1] - 32.455185).abs() < 0.0001);
         assert_eq!(*size, [120.0, 20.0]);
         assert!(*flip_x && *flip_y);
         assert_eq!(*rot_y_deg, 12.0);
@@ -973,7 +1120,8 @@ mod tests {
         else {
             panic!("expected press sprite");
         };
-        assert_eq!(*center, [22.0, 44.0]);
+        assert!((center[0] - 51.34443).abs() < 0.0001);
+        assert!((center[1] - 7.7626514).abs() < 0.0001);
         assert_eq!(*size, [15.0, 120.0]);
         assert!(matches!(
             source,
@@ -1080,7 +1228,8 @@ mod tests {
                     assert_eq!(sprite.uv_rect, [0.1, 0.2, 0.8, 0.9]);
                     assert_eq!((sprite.flip_x, sprite.flip_y), (false, false));
                     assert_eq!(sprite.fade, [0.0; 4]);
-                    assert_eq!(sprite.rot_y_deg, 0.0);
+                    // GhostArrowRow uses the same native receptor X/Y rotation.
+                    assert_eq!(sprite.rot_y_deg, 19.0);
                     assert_eq!(sprite.rot_z_deg, -175.0);
                 }
             }

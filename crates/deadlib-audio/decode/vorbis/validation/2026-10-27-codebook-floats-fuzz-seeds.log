@@ -1,0 +1,5 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `release` profile [optimized] target(s) in 4.30s
+     Running `crates\deadlib-audio\decode\fuzz\target\release\seed.exe C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-codebook-floats-20261027\corpus`
+Fuzz seeds retained at C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-codebook-floats-20261027\corpus

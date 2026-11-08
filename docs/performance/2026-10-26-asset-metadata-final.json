@@ -1,0 +1,10 @@
+{
+  "before": {
+    "sha256": "e2cdf1c9743ed5f26c8b5c027814b6fd807dcda889cfb0af90f3bcdcf0d22412",
+    "checks": "\nrunning 2 tests\ntest decode::metadata_perf::dimensions_preserve_content_extension_and_error_behavior ... ok\ntest decode::metadata_perf::multiframe_scans_preserve_shipped_and_malformed_names ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.41s\n\n"
+  },
+  "after": {
+    "sha256": "88b6689648c9da375ef3d895ad4ad5ad53894e56109572e9b784d3aaf10e39e3",
+    "checks": "\nrunning 2 tests\ntest decode::metadata_perf::dimensions_preserve_content_extension_and_error_behavior ... ok\ntest decode::metadata_perf::multiframe_scans_preserve_shipped_and_malformed_names ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.74s\n\n"
+  }
+}

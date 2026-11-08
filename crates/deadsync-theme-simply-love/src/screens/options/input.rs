@@ -313,10 +313,10 @@ pub(super) fn apply_submenu_choice_delta(
 
     submenu_choice_indices_mut(state, kind)[row_index] = new_index;
     submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
-    if let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_index)
-        && layout.inline_row
-        && let Some(&x) = layout.centers.get(new_index)
-    {
+    let inline_x = borrow_submenu_row_layout(state, asset_manager, kind, row_index)
+        .filter(|layout| layout.inline_row)
+        .and_then(|layout| layout.centers.get(new_index).copied());
+    if let Some(x) = inline_x {
         state.sub_inline_x = x;
     }
     queue_sfx(state, "assets/sounds/change_value.ogg");
@@ -1058,6 +1058,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::WheelItlPoints => crate::SimplyLoveSelectMusicConfigRequest::WheelItlPoints(
                 yes_no_from_choice(new_index),
             ),
+            SubRowId::ShowGolfPars => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowGolfPars(new_index == 1)
+            }
             SubRowId::NewPackBadge => crate::SimplyLoveSelectMusicConfigRequest::NewPackMode(
                 select_music_new_pack_mode_from_choice(new_index),
             ),
@@ -1108,9 +1111,24 @@ pub(super) fn apply_submenu_choice_delta(
                     select_music_scorebox_placement_from_choice(new_index),
                 )
             }
+            SubRowId::GsBoxEventsFirst => {
+                crate::SimplyLoveSelectMusicConfigRequest::ScoreboxEventsFirst(
+                    yes_no_from_choice(new_index),
+                )
+            }
             _ => return None,
         };
         action = Some(select_music_config_effect(request));
+    } else if matches!(kind, SubmenuKind::Streaming) {
+        let enabled = yes_no_from_choice(new_index);
+        match rows[row_index].id {
+            SubRowId::TwitchEnabled => state.twitch.enabled = enabled,
+            SubRowId::TwitchBadges => state.twitch.show_badges = enabled,
+            SubRowId::TwitchEmotes => state.twitch.show_emotes = enabled,
+            SubRowId::TwitchGameplay => state.twitch.show_gameplay = enabled,
+            _ => return None,
+        }
+        action = Some(twitch_effect(state));
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
         let enabled = yes_no_from_choice(new_index);
@@ -1156,6 +1174,32 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::EnableArrowCloud => {
                 crate::SimplyLoveOnlineConfigRequest::EnableArrowCloud(enabled)
             }
+            SubRowId::EnableGolf => {
+                let select_music = &mut state.sub[SubmenuKind::SelectMusic];
+                for indices in [
+                    &mut select_music.choice_indices,
+                    &mut select_music.cursor_indices,
+                ] {
+                    if enabled {
+                        // Mirror the shell: enabling golf defaults the wheel par
+                        // badges on, so the switch has a visible effect right away.
+                        if let Some(index) = get_choice_by_id_mut(
+                            indices,
+                            SELECT_MUSIC_OPTIONS_ROWS,
+                            SubRowId::ShowGolfPars,
+                        ) {
+                            *index = 1;
+                        }
+                    } else if let Some(index) = get_choice_by_id_mut(
+                        indices,
+                        SELECT_MUSIC_OPTIONS_ROWS,
+                        SubRowId::GsBoxLeaderboards,
+                    ) {
+                        *index = (*index).min(3);
+                    }
+                }
+                crate::SimplyLoveOnlineConfigRequest::EnableGolf(enabled)
+            }
             SubRowId::ArrowCloudSubmitFails => {
                 crate::SimplyLoveOnlineConfigRequest::SubmitArrowCloudFails(enabled)
             }
@@ -1172,6 +1216,12 @@ pub(super) fn apply_submenu_choice_delta(
             queue_online_reinitialize(state);
         }
         action = Some(effect);
+    } else if matches!(kind, SubmenuKind::OnlineScoring) {
+        if rows[row_index].id == SubRowId::ShareRips {
+            action = Some(online_config_effect(
+                crate::SimplyLoveOnlineConfigRequest::ShareRips(yes_no_from_choice(new_index)),
+            ));
+        }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
         if row.id == SubRowId::ScoreImportEndpoint {
@@ -1711,6 +1761,12 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
+                ItemId::StreamingServices => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Streaming);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
                 ItemId::DownloadPacks => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     clear_navigation_holds(state);
@@ -1844,6 +1900,13 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToMain;
                 }
                 state.submenu_fade_t = 0.0;
+                return ThemeEffect::None;
+            }
+            if kind == SubmenuKind::Streaming
+                && submenu_visible_row_to_actual(state, kind, selected_row)
+                    .is_some_and(|idx| STREAMING_ROWS[idx].id == SubRowId::TwitchChannel)
+            {
+                begin_twitch_channel_entry(state);
                 return ThemeEffect::None;
             }
             if matches!(kind, SubmenuKind::Input) {
@@ -2146,6 +2209,9 @@ fn handle_input_impl(
     }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
+    }
+    if let Some(effect) = handle_twitch_channel_input(state, ev) {
+        return effect;
     }
     if let Some(effect) = handle_judgment_palette_input(state, ev) {
         return effect;

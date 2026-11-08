@@ -1,0 +1,13 @@
+40 fixtures checked; own failures=0; core reference failures=0
+80 fixtures checked; own failures=0; core reference failures=0
+120 fixtures checked; own failures=0; core reference failures=0
+160 fixtures checked; own failures=0; core reference failures=0
+200 fixtures checked; own failures=0; core reference failures=0
+240 fixtures checked; own failures=0; core reference failures=0
+280 fixtures checked; own failures=0; core reference failures=0
+320 fixtures checked; own failures=0; core reference failures=0
+360 fixtures checked; own failures=0; core reference failures=0
+400 fixtures checked; own failures=0; core reference failures=0
+440 fixtures checked; own failures=0; core reference failures=0
+460/460 own native fixture/API/encoder gates; 24/24 four-reference core gates
+{'dr_wav': 270, 'libsndfile': 310, 'symphonia': 92, 'ffmpeg': 302}

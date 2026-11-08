@@ -1,0 +1,39 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-directrows-20261028/build",
+        "--release",
+        "--lib",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "library-release.log",
+      "sha256": "67bb3d867d973216e43d1c593a58e71a3ff83ec4429091e93dd3f104573e5ef9"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-directrows-20261028/build",
+        "--lib",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "library-debug.log",
+      "sha256": "0787151d200f4bb9e417e34042058a585193945dafda513454c1e0db86aa6f1e"
+    }
+  ]
+}

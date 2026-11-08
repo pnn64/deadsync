@@ -1,0 +1,10 @@
+{
+  "before": {
+    "sha256": "63ea802c3b653a3ef7eae7ad358c91f869fef362aba2b9019de90fd57b5b5e02",
+    "checks": "\nrunning 2 tests\ntest decode::open_perf::dispatch_matches_committed_image_corpus ... ok\ntest decode::open_perf::dispatch_matches_frozen_pixels_error_categories_and_dimensions ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.18s\n\n"
+  },
+  "after": {
+    "sha256": "d80873605b56410d6a586fd08602367b43f89bb73c912dbbbc0382dea3b08dab",
+    "checks": "\nrunning 2 tests\ntest decode::open_perf::dispatch_matches_committed_image_corpus ... ok\ntest decode::open_perf::dispatch_matches_frozen_pixels_error_categories_and_dimensions ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.23s\n\n"
+  }
+}

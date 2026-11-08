@@ -1,0 +1,152 @@
+{
+  "cursor": {
+    "source": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-sync-cursor-probe.rs",
+    "source_sha256": "0415fff5d33026aea6d40d09d82ab5daec53b16afccb51c67ff971b191173c4b",
+    "complete_traces_equal": true,
+    "configurations": 120,
+    "workers": {
+      "before": {
+        "command": [
+          "rustc",
+          "--crate-name",
+          "ogg_cursor_probe",
+          "--edition",
+          "2024",
+          "-D",
+          "warnings",
+          "-C",
+          "opt-level=3",
+          "-C",
+          "lto=yes",
+          "-C",
+          "panic=abort",
+          "-C",
+          "target-feature=+crt-static",
+          "--extern",
+          "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+          "-L",
+          "dependency=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before\\target\\release\\deps",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-sync-cursor-probe.rs",
+          "-o",
+          "C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before-cursor-protocol.exe"
+        ],
+        "library_sha256": "f27c14a98394ad8e747c13f225dc9fd9fa745c1c8ee181124c3d8287b6cd2e59",
+        "executable_sha256": "8161b4ef98d6f7ae931b461e6f3f7f108e83d594c6c9924870217b0fb4b3ec92",
+        "trace_sha256": "efc2f0e6574a05872307fcc522724f78381f2232ed75a6d707b90f48437c3f70",
+        "trace_bytes": 182630684,
+        "layout": "SyncBuffer 96\nSyncReader 152\n"
+      },
+      "sum-lanes": {
+        "command": [
+          "rustc",
+          "--crate-name",
+          "ogg_cursor_probe",
+          "--edition",
+          "2024",
+          "-D",
+          "warnings",
+          "-C",
+          "opt-level=3",
+          "-C",
+          "lto=yes",
+          "-C",
+          "panic=abort",
+          "-C",
+          "target-feature=+crt-static",
+          "--extern",
+          "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+          "-L",
+          "dependency=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes\\target\\release\\deps",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-sync-cursor-probe.rs",
+          "-o",
+          "C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes-cursor-protocol.exe"
+        ],
+        "library_sha256": "ede693cb406b02946badcc12c1a5c2be552626a849de9f2a2f5b8b00af6cd3db",
+        "executable_sha256": "9c81a1f6529cba44a040a23ee68a0711878c243372b28a6c4823651f9246269c",
+        "trace_sha256": "efc2f0e6574a05872307fcc522724f78381f2232ed75a6d707b90f48437c3f70",
+        "trace_bytes": 182630684,
+        "layout": "SyncBuffer 96\nSyncReader 152\n"
+      }
+    }
+  },
+  "index": {
+    "source": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-lookup-probe.rs",
+    "source_sha256": "6cc19787629166b3044bc418c2c4debb760ed88408f1fa1b53af3bc117a8208a",
+    "complete_traces_equal": true,
+    "configurations": 784,
+    "workers": {
+      "before": {
+        "command": [
+          "rustc",
+          "--crate-name",
+          "ogg_index_probe",
+          "--edition",
+          "2024",
+          "-D",
+          "warnings",
+          "-C",
+          "opt-level=3",
+          "-C",
+          "lto=yes",
+          "-C",
+          "panic=abort",
+          "-C",
+          "target-feature=+crt-static",
+          "--extern",
+          "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+          "-L",
+          "dependency=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before\\target\\release\\deps",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-lookup-probe.rs",
+          "-o",
+          "C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\before-index-protocol.exe"
+        ],
+        "library_sha256": "f27c14a98394ad8e747c13f225dc9fd9fa745c1c8ee181124c3d8287b6cd2e59",
+        "executable_sha256": "b115cff811b8b60fb11f1a0d00731af0fb4fc7762bd61a08513927a78c9968be",
+        "trace_sha256": "32b8e1e700432a1212f60a4eb415dd53f10385efba6934d488dc174889ffd46b",
+        "trace_bytes": 3800798
+      },
+      "sum-lanes": {
+        "command": [
+          "rustc",
+          "--crate-name",
+          "ogg_index_probe",
+          "--edition",
+          "2024",
+          "-D",
+          "warnings",
+          "-C",
+          "opt-level=3",
+          "-C",
+          "lto=yes",
+          "-C",
+          "panic=abort",
+          "-C",
+          "target-feature=+crt-static",
+          "--extern",
+          "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+          "-L",
+          "dependency=C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes\\target\\release\\deps",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-lookup-probe.rs",
+          "-o",
+          "C:\\GitHub\\deadsync\\target\\ogg-metadata-20261028\\sum-lanes-index-protocol.exe"
+        ],
+        "library_sha256": "ede693cb406b02946badcc12c1a5c2be552626a849de9f2a2f5b8b00af6cd3db",
+        "executable_sha256": "0475972c9efe4512f3976ffd87b40524871c6fa83ee296cb84974e4b202a465c",
+        "trace_sha256": "32b8e1e700432a1212f60a4eb415dd53f10385efba6934d488dc174889ffd46b",
+        "trace_bytes": 3800798
+      }
+    }
+  },
+  "final_source_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "573bb8ead983829cd9a98a8f5132f00ced26e8f0dfcfe3e45cdc72ae8e348951",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "1b5c10c9352df027a7470825758edd3745b5b6e269faaaa35a11ea448a1596ea",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "33ff27ee1b726d63a92c951b94cfc36b6a8e68fa88d6968cf5cb7febc1be5a43",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "1c40d98777d45a3831ca03f75d7019af6f084e43744b4288970d361c125272c6",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "90c5c0cbd1940cdbc7e926b7e52998526fad5396bad93d82ae818c1fcb8b5765"
+  }
+}

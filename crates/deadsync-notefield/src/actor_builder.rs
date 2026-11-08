@@ -86,6 +86,16 @@ pub(crate) fn notefield_frame_plan(
     })
 }
 
+/// Prefix lengths in each HUD stream: theme Underlay, then Player combo.
+/// All remaining HUD actors/draws are Player judgments above the field.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NotefieldHudParts {
+    pub underlay_actors: usize,
+    pub underlay_draws: usize,
+    pub combo_actors: usize,
+    pub combo_draws: usize,
+}
+
 pub struct BuiltNotefield {
     pub layout_center_x: f32,
     pub field_camera: Option<glam::Mat4>,
@@ -96,6 +106,7 @@ pub struct BuiltNotefield {
     pub judgment_draw_range: Option<Range<usize>>,
     pub combo_actors: Option<CapturedActorSource>,
     pub combo_draw_range: Option<Range<usize>>,
+    pub hud_parts: NotefieldHudParts,
 }
 
 pub type CapturedActorSource = [Arc<[Actor]>; 1];
@@ -142,6 +153,12 @@ impl BuiltNotefield {
             judgment_draw_range: None,
             combo_actors: None,
             combo_draw_range: None,
+            hud_parts: NotefieldHudParts {
+                underlay_actors: 0,
+                underlay_draws: 0,
+                combo_actors: 0,
+                combo_draws: 0,
+            },
         }
     }
 }

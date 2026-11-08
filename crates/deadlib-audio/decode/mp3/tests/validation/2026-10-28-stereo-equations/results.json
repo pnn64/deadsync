@@ -1,0 +1,1719 @@
+{
+  "method": "Direct-equation oracle for the independently bit-written stereo survey.\n\nExpected spectra derive from each input's isolated coefficient and transmitted\npan, not native output. Complete stateful PCM follows the MPEG matrix equations.\n",
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "file": "22050-long-1-0.mp3",
+      "input_sha256": "dfd645440331355f28bc35d16de4f5fbbc0de3d3626d19bc4d05d646120d20be",
+      "samples": 254592,
+      "rms": 7.19698953480915e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-long-1-0.bin"
+      ],
+      "pcm_sha256": "8fbf9402520da050bf40e830e29bd98371a4695f6dba030877e85d24707185c3",
+      "passed": true
+    },
+    {
+      "file": "22050-long-1-1.mp3",
+      "input_sha256": "ac01183248e5a4e7c5101151ef8f52394ee2cd9862f258b330032e0e1842915e",
+      "samples": 254592,
+      "rms": 6.819395052891892e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-long-1-1.bin"
+      ],
+      "pcm_sha256": "83bbbb505bfe8a61b91a5f76fcc67986d436cb19aa4c0c05caf643ab20bac256",
+      "passed": true
+    },
+    {
+      "file": "22050-long-3-0.mp3",
+      "input_sha256": "31cfaa3c18b4dffcb9f1c3e9939ef29ee60b9dd3c86d0485be9f8a5a2f397d59",
+      "samples": 254592,
+      "rms": 7.194800994254165e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-long-3-0.bin"
+      ],
+      "pcm_sha256": "82424782bb34ded86ff406734159f3f095c72a3ac9ffd0b68048b3ddf72ec19b",
+      "passed": true
+    },
+    {
+      "file": "22050-long-3-1.mp3",
+      "input_sha256": "d5684e4c2b8115c64ca2305960ded8f65d57849dbbe33fb7f2df94f99258d331",
+      "samples": 254592,
+      "rms": 6.81339471000039e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-long-3-1.bin"
+      ],
+      "pcm_sha256": "00cc0aaeb043a800203fef3fca69cca7258a5f9becca6a53088dad964e4bb7d6",
+      "passed": true
+    },
+    {
+      "file": "22050-short-1-0.mp3",
+      "input_sha256": "9ddbd82b1c80c893b05e03ccb4479910440b58d38a5fad2c701ed1df97f4338d",
+      "samples": 450432,
+      "rms": 4.373437171199595e-09,
+      "max": 2.9700827686163223e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-short-1-0.bin"
+      ],
+      "pcm_sha256": "6b7791407caaa5dcc5893233acfaa2a68ef9d3359b3c8a529041700e50f84f38",
+      "passed": true
+    },
+    {
+      "file": "22050-short-1-1.mp3",
+      "input_sha256": "0f144f101feeb51f55a62b252e2d0fdb0741e17105578d0fd2e808d90f9f45ad",
+      "samples": 450432,
+      "rms": 4.12065843095434e-09,
+      "max": 2.9747045826589158e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-short-1-1.bin"
+      ],
+      "pcm_sha256": "f795b9b31e98d7609153a70e3b3fd15d0fa6e0b896597b583f5fb0150c42393f",
+      "passed": true
+    },
+    {
+      "file": "22050-short-3-0.mp3",
+      "input_sha256": "466ee0052b082dcee307133d27aa5f8e25fcafea09d35ed47a21b503e3706caa",
+      "samples": 450432,
+      "rms": 4.380877558326677e-09,
+      "max": 2.9773994825177397e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-short-3-0.bin"
+      ],
+      "pcm_sha256": "d437e54a3adcc8c6c561a6cfef7a845cf900e1adaffa15c34834b3d209468ddd",
+      "passed": true
+    },
+    {
+      "file": "22050-short-3-1.mp3",
+      "input_sha256": "499f97402fa812bd75842d3a5bb7d461a5656f705d01547c595b8480dd40c629",
+      "samples": 450432,
+      "rms": 4.129163678557505e-09,
+      "max": 2.9773994825177397e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-short-3-1.bin"
+      ],
+      "pcm_sha256": "0de3e09960cf342d42e60c412ccee97100d6df9ce49c729cb104981ef54bcd4b",
+      "passed": true
+    },
+    {
+      "file": "22050-mixed-1-0.mp3",
+      "input_sha256": "e0d935affd4afbb59e1457fe327facd3ed0bad9e2c1e05bd7899d69a154c05ea",
+      "samples": 415872,
+      "rms": 4.963308532472065e-09,
+      "max": 2.9738614792940155e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "a0a2ad9f457b933a7eba06fc42651dfcb617b4c61eaa6bd26f6383d855e88cad",
+      "passed": true
+    },
+    {
+      "file": "22050-mixed-1-1.mp3",
+      "input_sha256": "11e3e2343ab3afc4d07c702c9cb86a1555bd6587ca367d3e27f0e019f159e7ae",
+      "samples": 415872,
+      "rms": 4.690671654628674e-09,
+      "max": 2.9758093433862598e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "7115878156e8117f6f3e2a7fa0e9c3bcf59b59d177b6ee0b0a09b16af2698365",
+      "passed": true
+    },
+    {
+      "file": "22050-mixed-3-0.mp3",
+      "input_sha256": "bd38ab8a9ea145660b03df756cf638033ea427b5cac912e65d774d433421e4bc",
+      "samples": 415872,
+      "rms": 4.970156560498225e-09,
+      "max": 2.979457669471941e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "b28cd1e2bb7b2473ea559ee4fa671f051b9d33744a3de2da7e4f5023927fdec8",
+      "passed": true
+    },
+    {
+      "file": "22050-mixed-3-1.mp3",
+      "input_sha256": "79676305ab7285e977032bb0a750eeda1f7711ba03a4455ecb7ed8c5f1ea782d",
+      "samples": 415872,
+      "rms": 4.696925074459631e-09,
+      "max": 2.9794440803421196e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/22050-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/22050-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "8380f99b2ebd8e778cd2434e00d71e39cb6da2c9262cb49738c4910c222c22e3",
+      "passed": true
+    },
+    {
+      "file": "24000-long-1-0.mp3",
+      "input_sha256": "ef463bb26f6fa3e742b47d344dffcbf63ec397f52136cd06359ffc736001688f",
+      "samples": 254592,
+      "rms": 7.202135111081981e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-long-1-0.bin"
+      ],
+      "pcm_sha256": "0d60e8cf12b904217b89223a4290d99cba62a63ca52f48ee0f13552fab139b9e",
+      "passed": true
+    },
+    {
+      "file": "24000-long-1-1.mp3",
+      "input_sha256": "025f3d8822e076a9ec20388822b5ca59d0e42e5fe9a710215e059f09f1e2c972",
+      "samples": 254592,
+      "rms": 6.82571169512313e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-long-1-1.bin"
+      ],
+      "pcm_sha256": "c87977303486e4aedac8d1f2b947e434d853fe048ddc1e6019a6cfe428c2f36a",
+      "passed": true
+    },
+    {
+      "file": "24000-long-3-0.mp3",
+      "input_sha256": "7d77f4c6322d1bea86d7ab4c9ac7c4a641a6cb65ef4de3a609af967be655ec4e",
+      "samples": 254592,
+      "rms": 7.202653285636818e-09,
+      "max": 2.979589186491438e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-long-3-0.bin"
+      ],
+      "pcm_sha256": "6f96fb875e5d4e47fd1e7da8d33455a4259a42baa945df4362d67a28476198de",
+      "passed": true
+    },
+    {
+      "file": "24000-long-3-1.mp3",
+      "input_sha256": "cfb97df773d459011e279506196a38366b2a61c61159277cca86cca0b7d3f16e",
+      "samples": 254592,
+      "rms": 6.837376358175397e-09,
+      "max": 2.979589186491438e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-long-3-1.bin"
+      ],
+      "pcm_sha256": "3618a3973e1e6ae23f7ea0dd746b194530b6f86781bd133fe769516e02e0550e",
+      "passed": true
+    },
+    {
+      "file": "24000-short-1-0.mp3",
+      "input_sha256": "642bd5f6aad859bb8eb89e0171782d6df15b637b811c6b8b49164cfcf26d80ac",
+      "samples": 450432,
+      "rms": 4.321752008706032e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-short-1-0.bin"
+      ],
+      "pcm_sha256": "d899a2f71d4e288bef892b86afd4010bb6ca628204fd1c16dc404734574b82f1",
+      "passed": true
+    },
+    {
+      "file": "24000-short-1-1.mp3",
+      "input_sha256": "9de771c4faef09c03d3be4b96d6bfb9aed4c1f01f45abd28a9a30b282325375f",
+      "samples": 450432,
+      "rms": 4.059703625931677e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-short-1-1.bin"
+      ],
+      "pcm_sha256": "5258902ece1ba083c3ffb2178cb4920c3c8eacf3aecc442e579b69332b958df2",
+      "passed": true
+    },
+    {
+      "file": "24000-short-3-0.mp3",
+      "input_sha256": "a9b62ce673300a9ce0905f6bf26f8172187d6154ce1edced281d6e614cdf667f",
+      "samples": 450432,
+      "rms": 4.338157508428089e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-short-3-0.bin"
+      ],
+      "pcm_sha256": "aa00cb86d929009032326851db39410d653a21f2bdd5fe6f89841aee07690b02",
+      "passed": true
+    },
+    {
+      "file": "24000-short-3-1.mp3",
+      "input_sha256": "4a0152ee84e7d650e2a385e368c07cdf38a2b30004e8e9b8b75599fa64c51933",
+      "samples": 450432,
+      "rms": 4.077293125292769e-09,
+      "max": 2.9770398257689124e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-short-3-1.bin"
+      ],
+      "pcm_sha256": "70abf6e88aee532576fa8ee3b007c70c1422d55a7b1585c9e5792d22ce1f404d",
+      "passed": true
+    },
+    {
+      "file": "24000-mixed-1-0.mp3",
+      "input_sha256": "13971018cf81a75902139219307066a7a60315aabb13a9566bb10f8be9ac5924",
+      "samples": 415872,
+      "rms": 4.914028087337136e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "bb40565ac5b10ad5dc10fbb9095b20da82b175c37873a4607ab9a1c95e3c2614",
+      "passed": true
+    },
+    {
+      "file": "24000-mixed-1-1.mp3",
+      "input_sha256": "39aeb9c2afb77e2d57affccf60106a2a9969ac45391a09a3e0c3d7301f0e9d20",
+      "samples": 415872,
+      "rms": 4.632745471523495e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "c730c56829122831acaff477fbea1830ef654218792e3274cb9be7aa92d31bf0",
+      "passed": true
+    },
+    {
+      "file": "24000-mixed-3-0.mp3",
+      "input_sha256": "f0634d867499831a706d5282298829afbbb12f1e58e4218ff0fb708f686e92f0",
+      "samples": 415872,
+      "rms": 4.929404102371754e-09,
+      "max": 2.979457669471941e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "fbbbf6e7b87e95cb32a07b7a2fe5e3da33121514f2258cb0ded7baf58e100f4c",
+      "passed": true
+    },
+    {
+      "file": "24000-mixed-3-1.mp3",
+      "input_sha256": "e5f1aeee03807e166c4ffc819e3dca62d369e29ffd359a825d812fcaf1182b79",
+      "samples": 415872,
+      "rms": 4.647586166495734e-09,
+      "max": 2.9794440803421196e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/24000-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/24000-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "9b01030f4005e44dd943805690f1013ce86e2fc37253350a874a084847fc7277",
+      "passed": true
+    },
+    {
+      "file": "16000-long-1-0.mp3",
+      "input_sha256": "c6c692af2152157a2c96500de7cfe99f2bda5f8272541d673fc801e1c9eb1f4f",
+      "samples": 254592,
+      "rms": 7.19698953480915e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-long-1-0.bin"
+      ],
+      "pcm_sha256": "16f1fc779abf73ae434658138aa046aec530ccf386818ccf6eed0c01a06bef1d",
+      "passed": true
+    },
+    {
+      "file": "16000-long-1-1.mp3",
+      "input_sha256": "8719d809d080f4b4eb1b52048ae94b1e3aec4bf7c11c5bc89f6e17b0bddf95c8",
+      "samples": 254592,
+      "rms": 6.819395052891892e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-long-1-1.bin"
+      ],
+      "pcm_sha256": "3b0aa5784ec322a473444354287e56c9a82f63cb7af4b716afa2c40656656f59",
+      "passed": true
+    },
+    {
+      "file": "16000-long-3-0.mp3",
+      "input_sha256": "8ef78cfa9d43d384ef8e189d5341497b88d210b2194a992ac293a71a00e54009",
+      "samples": 254592,
+      "rms": 7.194800994254165e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-long-3-0.bin"
+      ],
+      "pcm_sha256": "47c8996c7fb59d1b8a8511a20f60b8de7c85356663d87ba486a4a9dfb3b49f40",
+      "passed": true
+    },
+    {
+      "file": "16000-long-3-1.mp3",
+      "input_sha256": "196b281ef196ba7b391b92eb1bd952b1b65da9a71806559bcd377d2cc7f6cb66",
+      "samples": 254592,
+      "rms": 6.81339471000039e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-long-3-1.bin"
+      ],
+      "pcm_sha256": "4965a759669b73680e94f4822f306fb40ea572bedc2f0e547f99764b73dcd01f",
+      "passed": true
+    },
+    {
+      "file": "16000-short-1-0.mp3",
+      "input_sha256": "05281adb4c25edc855623c9d21bece2ee4e934a72981fc3a7c9c537aa33c15e6",
+      "samples": 450432,
+      "rms": 4.325173385440682e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-short-1-0.bin"
+      ],
+      "pcm_sha256": "721010b6ddcc473050c7029658753dfab1ce56b2dae0006c8685a3509f34b17e",
+      "passed": true
+    },
+    {
+      "file": "16000-short-1-1.mp3",
+      "input_sha256": "1e484c91dfc3a2e68ee39e0e385c4d844c73dd69a2864853cf0556037cc3e3f9",
+      "samples": 450432,
+      "rms": 4.064865313673212e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-short-1-1.bin"
+      ],
+      "pcm_sha256": "ab4da1f2891b9b185700d505fd9342227d5c1ad488044c76420e3dbc7c9f96ae",
+      "passed": true
+    },
+    {
+      "file": "16000-short-3-0.mp3",
+      "input_sha256": "5000dae730257185aeef9802d5f10654f5308a90a2f69196877e842bd71a3c77",
+      "samples": 450432,
+      "rms": 4.34363055170408e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-short-3-0.bin"
+      ],
+      "pcm_sha256": "21227724101e4e5189117bc335f404c592bd6923d02c48597e1942caa55924dd",
+      "passed": true
+    },
+    {
+      "file": "16000-short-3-1.mp3",
+      "input_sha256": "0a155122233c49b56ddbc889d1ad639eba46818ea71ea75048455b0a3d2d52a5",
+      "samples": 450432,
+      "rms": 4.0823379283204e-09,
+      "max": 2.9773994825177397e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-short-3-1.bin"
+      ],
+      "pcm_sha256": "e3ec2cd739335626f116556eab55e89685bfeece0370f498a158fa5bf4180d9e",
+      "passed": true
+    },
+    {
+      "file": "16000-mixed-1-0.mp3",
+      "input_sha256": "f076b0ebaa66dca6605981b10a355dfc902df4f1a2f26f60304bcb3b5d6ccb3f",
+      "samples": 415872,
+      "rms": 4.917287358800662e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "eb8b5bedf1fc909bd902f58164a4d04bf376013002a6f0445be2d20df4a8cf58",
+      "passed": true
+    },
+    {
+      "file": "16000-mixed-1-1.mp3",
+      "input_sha256": "47858aed7ee083e5696f8be773edb771e36d7571cdb47895c4ddee71f6199b1e",
+      "samples": 415872,
+      "rms": 4.637645104847678e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "18f447b10f15d05ee79e6f07e91100b1d51733e9b472fe74408ed27e169f2b80",
+      "passed": true
+    },
+    {
+      "file": "16000-mixed-3-0.mp3",
+      "input_sha256": "c1b5e1111dd7ba72008b6b74211ff2078a7673c000edb49cfcbf6f73185be03f",
+      "samples": 415872,
+      "rms": 4.93462149387699e-09,
+      "max": 2.979457669471941e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "116fe825c3cf7ed6df16b61d070d18c7a77009f184570473713aac96c295e35a",
+      "passed": true
+    },
+    {
+      "file": "16000-mixed-3-1.mp3",
+      "input_sha256": "ff01b38582d7bb2e3be1a4d24b938f5e7cdc3b2b80afac1b4eed86455f0f97f7",
+      "samples": 415872,
+      "rms": 4.652380220398303e-09,
+      "max": 2.9794440803421196e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/16000-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/16000-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "beff66d71716a517d2f5fb6ba805728ffd5f90f0ccdbe68d10b68d6f45139bdd",
+      "passed": true
+    },
+    {
+      "file": "44100-long-1-0.mp3",
+      "input_sha256": "f44ddf713677a089996ee6c1e5ecf1585588aa6aef9ea6703e161e1334da967a",
+      "samples": 509184,
+      "rms": 3.726349594080234e-09,
+      "max": 2.9402315138149504e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-long-1-0.bin"
+      ],
+      "pcm_sha256": "2ea8639445b4e6d9fa2caa066ed1a550395db29662c2964bad0cb2a12f43145d",
+      "passed": true
+    },
+    {
+      "file": "44100-long-3-0.mp3",
+      "input_sha256": "93e1205ca543c35f01c1165c8b2027e5fb127353387ab8cfcae697d35ae0550b",
+      "samples": 509184,
+      "rms": 3.8497114363699325e-09,
+      "max": 2.980019297993408e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-long-3-0.bin"
+      ],
+      "pcm_sha256": "286a01a44a22d588e74936322fa70d50b594fc8d9ccd282c1078ad005859bcdb",
+      "passed": true
+    },
+    {
+      "file": "44100-short-1-0.mp3",
+      "input_sha256": "801ad89cde068dc5a88079674a4ac5a44854dfd1175525c09443c92423783efd",
+      "samples": 900864,
+      "rms": 2.2516417960431067e-09,
+      "max": 2.925465336645061e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-short-1-0.bin"
+      ],
+      "pcm_sha256": "596dec703063c2f0656ac5917a9b2570fbe097785e6f81c30a0d157e6b83bf04",
+      "passed": true
+    },
+    {
+      "file": "44100-short-3-0.mp3",
+      "input_sha256": "e796701e803d3f451f062037d186a40eb380d08c8668ff9cbebfa1da61087b8c",
+      "samples": 900864,
+      "rms": 2.273456885256068e-09,
+      "max": 2.975254853598841e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-short-3-0.bin"
+      ],
+      "pcm_sha256": "9f93facd66094c868b4498ba03648ae6449f613aecb48c374d0587939a4dd08e",
+      "passed": true
+    },
+    {
+      "file": "44100-mixed-1-0.mp3",
+      "input_sha256": "352e58219c5fbb8345d9d81a6096ee8c78d5bc0a2e12a3af2a8903679e6dd1d4",
+      "samples": 877824,
+      "rms": 2.6425025693684335e-09,
+      "max": 2.9634410814161072e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "3e58bb4ddda2783a7cee4671561e4f3fb034b81ff35d82c3d533b64185af55a1",
+      "passed": true
+    },
+    {
+      "file": "44100-mixed-3-0.mp3",
+      "input_sha256": "55f136de3b5a83085d6986dbdbd028989e1eefb9c7bc9a60ff86a3d45e7054c6",
+      "samples": 877824,
+      "rms": 2.6931192558064763e-09,
+      "max": 2.975254853598841e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/44100-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/44100-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "6018b3a1d303d28c6c17e6cb34a99e8cbe552529be71ad3e09b0574ba9f5af14",
+      "passed": true
+    },
+    {
+      "file": "48000-long-1-0.mp3",
+      "input_sha256": "d23a32a91c14337d3bf1516c583d679ef0dafd795b30f4ad42d1c8b1ad2f7014",
+      "samples": 509184,
+      "rms": 3.744369698161826e-09,
+      "max": 2.969093859661598e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-long-1-0.bin"
+      ],
+      "pcm_sha256": "31ba33af69436d131612cbb9efbc831ad9aaf57d42cba73fd2c404873d244efb",
+      "passed": true
+    },
+    {
+      "file": "48000-long-3-0.mp3",
+      "input_sha256": "5afc73d02e61ff99d686d2991175aed345bc1924801c28c2ef0f82e32c38999b",
+      "samples": 509184,
+      "rms": 3.8623784971388914e-09,
+      "max": 2.969093859661598e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-long-3-0.bin"
+      ],
+      "pcm_sha256": "e40d10c56eb3a972e27c0f1482537a4296febb187f06fee7beb8e1608ca0f4ba",
+      "passed": true
+    },
+    {
+      "file": "48000-short-1-0.mp3",
+      "input_sha256": "640c2884d2bf8957f99e62a3a194129d636a500da134feb9fc89854a8e0c6d7a",
+      "samples": 900864,
+      "rms": 2.2200420084635995e-09,
+      "max": 2.9274449531158098e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-short-1-0.bin"
+      ],
+      "pcm_sha256": "2ac18eda4da7a64886f7cb82854f20cd02c7662cd4c5d1002ffb0c26f11ab177",
+      "passed": true
+    },
+    {
+      "file": "48000-short-3-0.mp3",
+      "input_sha256": "27a6318162040b1cc8a59c7acd7d929fb30e283c68542979a858385929d24b3e",
+      "samples": 900864,
+      "rms": 2.244630912435996e-09,
+      "max": 2.9274449531158098e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-short-3-0.bin"
+      ],
+      "pcm_sha256": "8f828b67703cd75582bb5c17a233a29397e1c75680aada9fec0cec6645a076b1",
+      "passed": true
+    },
+    {
+      "file": "48000-mixed-1-0.mp3",
+      "input_sha256": "d8a51492fc1418206bff48e35bce56ee14ffbf617bfbf6a7ed887c47235425d9",
+      "samples": 877824,
+      "rms": 2.61492003655728e-09,
+      "max": 2.9634410814161072e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "6c08b766703b0f45538c35cef6b6bf1c75fbb6f1914e24e1d554ea6916e201ff",
+      "passed": true
+    },
+    {
+      "file": "48000-mixed-3-0.mp3",
+      "input_sha256": "de58542d3702000829a43d385e9f136ccece5fa3ce220e4ccad3fbb70529f037",
+      "samples": 877824,
+      "rms": 2.6681894090347387e-09,
+      "max": 2.9285936897771592e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/48000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/48000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "9910ae5a646ed6a2fd3b5daff6af7a6cdd67f6c4697aae25cf00608d79de4921",
+      "passed": true
+    },
+    {
+      "file": "32000-long-1-0.mp3",
+      "input_sha256": "c73fe9af59bbe8304f0c6b2cc99418c6fa1026f9054078d606e9adb9ef676210",
+      "samples": 509184,
+      "rms": 3.7341792404285705e-09,
+      "max": 2.969093859661598e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-long-1-0.bin"
+      ],
+      "pcm_sha256": "9f89badbb3cd7d196cd488aeac84ac0bea4e9f1c8046d3cf9d581311f0aae1df",
+      "passed": true
+    },
+    {
+      "file": "32000-long-3-0.mp3",
+      "input_sha256": "bc9bf4f7dd9b988f8eca537977364eaab033b8d7d9be3d92bf80aada221e7c1e",
+      "samples": 509184,
+      "rms": 3.862924033813535e-09,
+      "max": 2.9763265962934327e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-long-3-0.bin"
+      ],
+      "pcm_sha256": "bb654250465e708e54f4945399ecd1946923a679abe3f086da9808c3f4e2c8cf",
+      "passed": true
+    },
+    {
+      "file": "32000-short-1-0.mp3",
+      "input_sha256": "fed3b531f706aadec1bcb58aeb2e4af594caf45d126c44c9639c4227bcbbe5ff",
+      "samples": 900864,
+      "rms": 2.2472077420558615e-09,
+      "max": 2.9667552858825275e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-short-1-0.bin"
+      ],
+      "pcm_sha256": "914b2df5eb807407b1a12d29a26c408cedbc38ec3336b4ae77da4a612f9c80a1",
+      "passed": true
+    },
+    {
+      "file": "32000-short-3-0.mp3",
+      "input_sha256": "1cbeff814dfe3bf6866c54c231877ca14cc3428e6ebe49c2941d036a87684ebd",
+      "samples": 900864,
+      "rms": 2.2652174279049973e-09,
+      "max": 2.9295679770946492e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-short-3-0.bin"
+      ],
+      "pcm_sha256": "6710c8e5b86a942814ecb9be1d8d68cb0e3f41e60e60220f7836dbc01ecd5a2b",
+      "passed": true
+    },
+    {
+      "file": "32000-mixed-1-0.mp3",
+      "input_sha256": "d1bcecb894ae89427dd0f40047088209ea635770113f70a8e113cd45a6f7d1df",
+      "samples": 877824,
+      "rms": 2.6386261793047782e-09,
+      "max": 2.9667552858825275e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "917420841cc124e69c13db4913c726613199e90ed546e1442982902f147658fa",
+      "passed": true
+    },
+    {
+      "file": "32000-mixed-3-0.mp3",
+      "input_sha256": "5893ef1d9998ab75699327b83c23fe21ef8a51adeb97899e0270e9d95153ab56",
+      "samples": 877824,
+      "rms": 2.685984658305087e-09,
+      "max": 2.9295679770946492e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/32000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/32000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "3efa5bb40f71498704016d7ac966bdda61355ef6fba9026669485f4332f1f379",
+      "passed": true
+    },
+    {
+      "file": "11025-long-1-0.mp3",
+      "input_sha256": "4cf418c4671ebdd09262f23b804668fa8ce6e349f18cfea663a0e986ff57ab7f",
+      "samples": 254592,
+      "rms": 7.19698953480915e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-long-1-0.bin"
+      ],
+      "pcm_sha256": "f0d9685434c80cacc0d601a4b37673dc667860e2926d497c29bf8e70b069c56e",
+      "passed": true
+    },
+    {
+      "file": "11025-long-1-1.mp3",
+      "input_sha256": "cacd26064cae07ff29348282b211fefa19ce7739a83835f73df49a419f73ed3d",
+      "samples": 254592,
+      "rms": 6.819395052891892e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-long-1-1.bin"
+      ],
+      "pcm_sha256": "1bfd3982b5c6f945bdd66dff442417833a32649e8f7143d48fa8e1135d25d299",
+      "passed": true
+    },
+    {
+      "file": "11025-long-3-0.mp3",
+      "input_sha256": "7c32cbc165f960b25cb936fd70ab3ed8fcada39650b85a848893e0e9785f1378",
+      "samples": 254592,
+      "rms": 7.194800994254165e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-long-3-0.bin"
+      ],
+      "pcm_sha256": "66d2d30b12d384fe75eab0ac6fdddfc1265742412d46345182d7d3b67346a55b",
+      "passed": true
+    },
+    {
+      "file": "11025-long-3-1.mp3",
+      "input_sha256": "0194f2c4eef7d97813e809316bfea7cc857e75e1d49107f89084f365027c51a4",
+      "samples": 254592,
+      "rms": 6.81339471000039e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-long-3-1.bin"
+      ],
+      "pcm_sha256": "078e5653a34002dbcd0efad101b88e441599a775ccc9b44e27830dce9143bc86",
+      "passed": true
+    },
+    {
+      "file": "11025-short-1-0.mp3",
+      "input_sha256": "c99cad4f3ce458f8e000864f17a96a23b1785334383fdb878e6f320efb99b05c",
+      "samples": 450432,
+      "rms": 4.325173385440682e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-short-1-0.bin"
+      ],
+      "pcm_sha256": "114a14030b4d2cbb786207952b577b33d722ce3c1845d6dd9eee9da907f46564",
+      "passed": true
+    },
+    {
+      "file": "11025-short-1-1.mp3",
+      "input_sha256": "a4ab8f9066938dcb0bbbd6829b33acd047c646b7841a91f2ca3d1f8a82a90b7e",
+      "samples": 450432,
+      "rms": 4.064865313673212e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-short-1-1.bin"
+      ],
+      "pcm_sha256": "a2ea9ff16f8e376c415e02d3d8646080ee1347efd505a3eef012956c8ea873b1",
+      "passed": true
+    },
+    {
+      "file": "11025-short-3-0.mp3",
+      "input_sha256": "27b38a3ded1a709cdfc550ac26988fc5e354bbdfd912646b39b3ecfa2486cf6e",
+      "samples": 450432,
+      "rms": 4.34363055170408e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-short-3-0.bin"
+      ],
+      "pcm_sha256": "6b629c28c98dc591abbfe260edee1010f858bd1f0be7320655c47cb34df8c705",
+      "passed": true
+    },
+    {
+      "file": "11025-short-3-1.mp3",
+      "input_sha256": "6f57d11441b7c612fbdb374b24bf37607f1468553bdf17ad8fd9ca3ac132e400",
+      "samples": 450432,
+      "rms": 4.0823379283204e-09,
+      "max": 2.9773994825177397e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-short-3-1.bin"
+      ],
+      "pcm_sha256": "cc1c5c2316c82ebdc56f9e5068705beddfa95edcd597156fbe690bcbcf84ebaa",
+      "passed": true
+    },
+    {
+      "file": "11025-mixed-1-0.mp3",
+      "input_sha256": "cb0246649e07a4de692979ec4e934075f7aef9b0786cc5572bc1883ef5e91a40",
+      "samples": 415872,
+      "rms": 4.917287358800662e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "97ae4b18c11feec12f136a28694624a34b47334b6c2f2ec6c025d8c0c1e50248",
+      "passed": true
+    },
+    {
+      "file": "11025-mixed-1-1.mp3",
+      "input_sha256": "d9520442f963e864e5cba2fd458600c09d58e2f5caa99af1165ef7ca61a5ce2b",
+      "samples": 415872,
+      "rms": 4.637645104847678e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "6cbe82ee640424c9056ad5539823db3cebf304055a82f6806d58a5f7b69278ec",
+      "passed": true
+    },
+    {
+      "file": "11025-mixed-3-0.mp3",
+      "input_sha256": "f060d8ee18cbc2ee55244b47d75a87e6e7a695ee1bb2f125886844cbe2790b8a",
+      "samples": 415872,
+      "rms": 4.93462149387699e-09,
+      "max": 2.979457669471941e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "246f08b8624e8d2c088b5f10786d2c82e0a02a09b9b201e85482783435a405cd",
+      "passed": true
+    },
+    {
+      "file": "11025-mixed-3-1.mp3",
+      "input_sha256": "38b927ea0544cf766adfa33ca7fe2787a141e323a1015b11f7f0848feee01a22",
+      "samples": 415872,
+      "rms": 4.652380220398303e-09,
+      "max": 2.9794440803421196e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/11025-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/11025-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "c95b2e3f687482b524057e83dab92de0cc7eafbe45d85dcf4b28360e47f1bd97",
+      "passed": true
+    },
+    {
+      "file": "12000-long-1-0.mp3",
+      "input_sha256": "c6d5fd11f7952fe7b73113b7c58af04a29885abb55167a98a8df3c4379592b88",
+      "samples": 254592,
+      "rms": 7.19698953480915e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-long-1-0.bin"
+      ],
+      "pcm_sha256": "2463adc34629270c9559723326af18284a71a9b7d91927755caea5176e62632e",
+      "passed": true
+    },
+    {
+      "file": "12000-long-1-1.mp3",
+      "input_sha256": "f35ef92421ffc34b408616b818b2a32eaa0c312e0a89eb729e8a090b82d9fe35",
+      "samples": 254592,
+      "rms": 6.819395052891892e-09,
+      "max": 2.9800638068344654e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-long-1-1.bin"
+      ],
+      "pcm_sha256": "1a894c3149802269ae0c21698ddd32df02ac50953573fa1c78b5219877cef0b0",
+      "passed": true
+    },
+    {
+      "file": "12000-long-3-0.mp3",
+      "input_sha256": "f3ebf11487bb8c23587d3f2394f56f363f5853d06936b9c76dcddc7ef1a501ef",
+      "samples": 254592,
+      "rms": 7.194800994254165e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-long-3-0.bin"
+      ],
+      "pcm_sha256": "3378f69765160275c17b5c1bcc1c785c08ef7ec622619d5ccad9b523f2fbd791",
+      "passed": true
+    },
+    {
+      "file": "12000-long-3-1.mp3",
+      "input_sha256": "390cdfa862b13d38ae83ddd0ef2a64bc257fd248307d8b702ed9e54597825d48",
+      "samples": 254592,
+      "rms": 6.81339471000039e-09,
+      "max": 2.9801455081468475e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-long-3-1.bin"
+      ],
+      "pcm_sha256": "842da32ea4bf4de066fa344d4696f7cfc8afa3d022d4fa741fdd0c40b8298911",
+      "passed": true
+    },
+    {
+      "file": "12000-short-1-0.mp3",
+      "input_sha256": "f1ff9d6947217b36b3513e618f9c64164d27931d3d166ddd074ff1c70eca5dcb",
+      "samples": 450432,
+      "rms": 4.325173385440682e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-short-1-0.bin"
+      ],
+      "pcm_sha256": "044ed81aec98ba3dd83258735011562bff922591d90a9adb72373a8b70318946",
+      "passed": true
+    },
+    {
+      "file": "12000-short-1-1.mp3",
+      "input_sha256": "292588a188b113d35a0613b6d89de5ff9490f6e1010050d3f9ee4ca255b8dc27",
+      "samples": 450432,
+      "rms": 4.064865313673212e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-short-1-1.bin"
+      ],
+      "pcm_sha256": "ab90c12e26a55240640185431b07c958664578141bbe1f5fbb945292af7959d7",
+      "passed": true
+    },
+    {
+      "file": "12000-short-3-0.mp3",
+      "input_sha256": "eaca5ce2f3ecc3f521a5b0d13d32758533f960ab2562eea407b048a0c937e36a",
+      "samples": 450432,
+      "rms": 4.34363055170408e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-short-3-0.bin"
+      ],
+      "pcm_sha256": "366ce1186c091abf5e1c97324cf587737eb4fa8b61d48a4916c6b90e03a75213",
+      "passed": true
+    },
+    {
+      "file": "12000-short-3-1.mp3",
+      "input_sha256": "a1634631d8cc53f116167c988d81209ce0d5c01679ab925d5110c1ec802225ca",
+      "samples": 450432,
+      "rms": 4.0823379283204e-09,
+      "max": 2.9773994825177397e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-short-3-1.bin"
+      ],
+      "pcm_sha256": "52f877d2f5b55eb0b28338ea387e8101dbce569aafbeb4465ef4221f0c399563",
+      "passed": true
+    },
+    {
+      "file": "12000-mixed-1-0.mp3",
+      "input_sha256": "e600ccef8638edc11e449c68ebcfc5d46a536ff75d76ead47c14e747a1369540",
+      "samples": 415872,
+      "rms": 4.917287358800662e-09,
+      "max": 2.9786021982225463e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "723c7d0e6b0fa1d8587d25cd94feaf4fa2e030dd735d676bb66963c8f9653699",
+      "passed": true
+    },
+    {
+      "file": "12000-mixed-1-1.mp3",
+      "input_sha256": "582cafaa9a8e4b2364cb614847c83dceb0e3da539787e0533a6aa3abd28c3589",
+      "samples": 415872,
+      "rms": 4.637645104847678e-09,
+      "max": 2.977335111786772e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "2c878a3757a510c41fc70cac5069fe86b069e3fce8af4680cc1022f6b58bd940",
+      "passed": true
+    },
+    {
+      "file": "12000-mixed-3-0.mp3",
+      "input_sha256": "493b6e57e5fe62ee02f321e51b9fa4f38f9e140ae9d158af02ad0f562a70bc51",
+      "samples": 415872,
+      "rms": 4.93462149387699e-09,
+      "max": 2.979457669471941e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "743a3c3c5fa691b5d8e75b41549819fbd402c94210c1f9152a4a7aef71b011a8",
+      "passed": true
+    },
+    {
+      "file": "12000-mixed-3-1.mp3",
+      "input_sha256": "fd88cb3a3d06c495cd3c8f5466ab050040a0be46593136cd94e76cd86b780d51",
+      "samples": 415872,
+      "rms": 4.652380220398303e-09,
+      "max": 2.9794440803421196e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/12000-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/12000-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "b7505dc5996a4fa2915401c9fe862458a59b96ef3c2b1459514cd2b8e0fab298",
+      "passed": true
+    },
+    {
+      "file": "8000-long-1-0.mp3",
+      "input_sha256": "7175ad2b7230aab35a36a29a921456cced06ac53d798bf04af586a0ed8f55332",
+      "samples": 254592,
+      "rms": 7.215296996193106e-09,
+      "max": 2.9794907763225353e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-long-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-long-1-0.bin"
+      ],
+      "pcm_sha256": "aa290d0949b29ac504ef18f5422e9b045cdbb079bd5eee4e9a3ccc2788aa6463",
+      "passed": true
+    },
+    {
+      "file": "8000-long-1-1.mp3",
+      "input_sha256": "9e062d65c9df6b73acc8f77609295a7ff326483e991b8548cdb3cb5b044790f8",
+      "samples": 254592,
+      "rms": 6.8589953391686586e-09,
+      "max": 2.9794907763225353e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-long-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-long-1-1.bin"
+      ],
+      "pcm_sha256": "70b6c56c29ddf54b29098fabfe787abe5142abb5d67b6b858b67ca2cc9d10b92",
+      "passed": true
+    },
+    {
+      "file": "8000-long-3-0.mp3",
+      "input_sha256": "8d096035a01cd6369b78051ef98df8c7781209b92542ae960c348d22ab3d92da",
+      "samples": 254592,
+      "rms": 7.1973820206921265e-09,
+      "max": 2.9783241206615685e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-long-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-long-3-0.bin"
+      ],
+      "pcm_sha256": "a60dae84b09ed7d68822b2f3ff3e03e65d1305f4b60395302a9714f3e579eb24",
+      "passed": true
+    },
+    {
+      "file": "8000-long-3-1.mp3",
+      "input_sha256": "c7d5fe6fa36d0119b4691f8c2dbde2a081c87b5a8632202cc2b188545094ca62",
+      "samples": 254592,
+      "rms": 6.836038108346656e-09,
+      "max": 2.9783241206615685e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-long-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-long-3-1.bin"
+      ],
+      "pcm_sha256": "072826b2f2b5e66e4a5ca1f97bb0e51cf1535e98bbceb45986d31402138b20f6",
+      "passed": true
+    },
+    {
+      "file": "8000-short-1-0.mp3",
+      "input_sha256": "1cb037a3b85cbb8dff187037282343fc75e1b4ab4bdeda47dae31ab2029d86b1",
+      "samples": 450432,
+      "rms": 4.448138094133185e-09,
+      "max": 2.980220281667556e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-short-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-short-1-0.bin"
+      ],
+      "pcm_sha256": "29922711b707675f11c1a6db1b917737a5ac5b6f40577da8cf1a318d91fe0c27",
+      "passed": true
+    },
+    {
+      "file": "8000-short-1-1.mp3",
+      "input_sha256": "a4d094f49360478d965e7777dfb7d8109dac6d12e2a42524f46252ca6d31dd51",
+      "samples": 450432,
+      "rms": 4.203169374984426e-09,
+      "max": 2.980220281667556e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-short-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-short-1-1.bin"
+      ],
+      "pcm_sha256": "cd3cc67582614c7c66c6f249bdd30b7a67dbc04b38a323b9e773ad37605cf9fb",
+      "passed": true
+    },
+    {
+      "file": "8000-short-3-0.mp3",
+      "input_sha256": "ac95e6921bc4717bb00acb662ab9a2b5774570f00cbc7b8ae7ab84e4b2a28a65",
+      "samples": 450432,
+      "rms": 4.463173176557686e-09,
+      "max": 2.979452751183942e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-short-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-short-3-0.bin"
+      ],
+      "pcm_sha256": "a5840a4664593ffb298825f87cd8bde98753213273a9c5a3a298390c10771d72",
+      "passed": true
+    },
+    {
+      "file": "8000-short-3-1.mp3",
+      "input_sha256": "9c6aaffec2ffc5033ab8fd21dfa6b8732014e7e7a9f83386e09eb198df27e99f",
+      "samples": 450432,
+      "rms": 4.216807071767425e-09,
+      "max": 2.979452751183942e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-short-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-short-3-1.bin"
+      ],
+      "pcm_sha256": "641b46604ce8fc44fc7910f38d9f0817e37bfe3c64a8036c8c078b3b070b1205",
+      "passed": true
+    },
+    {
+      "file": "8000-mixed-1-0.mp3",
+      "input_sha256": "35579392ff0c0feeecf7bb7eaae2c4fd1bfa56a61d36d3745b491a55df692065",
+      "samples": 415872,
+      "rms": 5.040972369125125e-09,
+      "max": 2.980220281667556e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-mixed-1-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-mixed-1-0.bin"
+      ],
+      "pcm_sha256": "56bbe3ece12b0bb1e9e0bcacf4ed2293b026ebcd89c25c08f63e890405d09b34",
+      "passed": true
+    },
+    {
+      "file": "8000-mixed-1-1.mp3",
+      "input_sha256": "b5ab23dc71f6b552fc370629a4a0517bb268630b9f3208836556abf0afe8fe06",
+      "samples": 415872,
+      "rms": 4.769496817953404e-09,
+      "max": 2.980220281667556e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-mixed-1-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-mixed-1-1.bin"
+      ],
+      "pcm_sha256": "48e321925a91ce19e3d643f60d3846d4254bda7440648028140ea59fce637b9c",
+      "passed": true
+    },
+    {
+      "file": "8000-mixed-3-0.mp3",
+      "input_sha256": "6acf80fb5116958776892917c621cd45057ee2bc7a0480b8d3b88bac24b6baaa",
+      "samples": 415872,
+      "rms": 5.050611060031651e-09,
+      "max": 2.979452751183942e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-mixed-3-0.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-mixed-3-0.bin"
+      ],
+      "pcm_sha256": "b80a85be50f2481c0622fab7dcf53671c9c2d308527cb7990e086c8ed0f6ef4a",
+      "passed": true
+    },
+    {
+      "file": "8000-mixed-3-1.mp3",
+      "input_sha256": "5b75d2e686c0f9ce20d1e246952b8353937bdd799d99a8bb2ed94089665cad9f",
+      "samples": 415872,
+      "rms": 4.78699499983715e-09,
+      "max": 2.979452751183942e-08,
+      "command": [
+        "wsl",
+        "-d",
+        "Debian",
+        "--",
+        "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+        "native",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-input/8000-mixed-3-1.mp3",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/stereo-equations-full/8000-mixed-3-1.bin"
+      ],
+      "pcm_sha256": "6f11e39ff9aaa4df759387e16486dd8a298c1331b6d3183e8785f3528b7b1091",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+local f=assert(io.tmpfile())
+assert(f:write('closed before process exit')and f:seek('set')and f:read(1)=='c')
+assert(native_files.close(f))
+local g=assert(io.tmpfile());assert(g:write('buffered for C exit'))
+io.write('file-payloads-exit')
+os.exit(7)

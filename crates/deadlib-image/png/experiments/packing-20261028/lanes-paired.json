@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "rows",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "gather8",
+      "path": "lanes-paired-1-gather8.tsv",
+      "sha256": "cb968b759006d68b17c0a4b4411133562ee2564186967b6c9014d68e3e6c8a02",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 1,
+      "label": "lanes",
+      "path": "lanes-paired-1-lanes.tsv",
+      "sha256": "1aa045bfdafbee5cd75658d14b18ebe354edb29140085e9098b8f2f397661b2c",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 2,
+      "label": "lanes",
+      "path": "lanes-paired-2-lanes.tsv",
+      "sha256": "0e1c65326e524f395b77252b065622ce2cf0f2cae5b1a27eb5dbf0954f89b319",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 2,
+      "label": "gather8",
+      "path": "lanes-paired-2-gather8.tsv",
+      "sha256": "c113f1107ec3d4ec5696946c58128ac12e81b882be071590860e9e30352b632e",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 3,
+      "label": "gather8",
+      "path": "lanes-paired-3-gather8.tsv",
+      "sha256": "364d853d22f801eac7755c43c0a7dfd6cecaa5f02482630608d84f5320bb0ddf",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 3,
+      "label": "lanes",
+      "path": "lanes-paired-3-lanes.tsv",
+      "sha256": "7fb45fed443fca700eaaa65c24f575feae1161c32f9bbb298d4b9645aa9e2772",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 4,
+      "label": "lanes",
+      "path": "lanes-paired-4-lanes.tsv",
+      "sha256": "33ed21305816b658aab809b87073f4aa046f711c9fed0435555248e067360d11",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 4,
+      "label": "gather8",
+      "path": "lanes-paired-4-gather8.tsv",
+      "sha256": "d1c9a5f49b1a92149b73effe59c8b31a365bc5c776a1a1faeecbb70869748a02",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    }
+  ]
+}

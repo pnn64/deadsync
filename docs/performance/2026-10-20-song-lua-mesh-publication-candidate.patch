@@ -1,0 +1,454 @@
+--- a/crates/deadsync-song-lua/src/live.rs
++++ b/crates/deadsync-song-lua/src/live.rs
+@@ -1032,6 +1032,7 @@
+     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
+     targets: Vec<(usize, SongLuaLiveTarget)>,
+     visual_targets: rustc_hash::FxHashMap<usize, SongLuaLiveTarget>,
++    mesh_caches: rustc_hash::FxHashMap<usize, crate::lua_util::ActorMultiVertexMeshCache>,
+     context: SongLuaCompileContext,
+     pub(crate) entry_paths: Vec<std::path::PathBuf>,
+     pub(crate) primary_index: usize,
+@@ -1186,7 +1187,7 @@
+         let background_order = (0..backgrounds.len()).collect();
+         crate::lua_util::begin_live_actor_playback(&lua, &registry)?;
+         Ok(Self { lua, root, stage, players, actors, states, tracked,
+-            targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
++            targets: Vec::new(), visual_targets: Default::default(), mesh_caches: Default::default(), context, entry_paths, primary_index, last_beat,
+             last_music_seconds: -9999.0, prepared_frame_beat: None, backgrounds, background_layers, background_order, foregrounds, startup_output,
+             outro_started: false, outro_options_reset: false, outro_off_pending: false, outro_failed: false,
+             ended: false, updated: false,
+@@ -1821,7 +1822,7 @@
+     /// Apply current local poses. The screen marks these actors dynamic in
+     /// FrameScratch at entry, before rendering starts; baked timelines stay empty.
+     pub fn write_visuals<N, M>(
+-        &self,
++        &mut self,
+         visuals: &mut deadsync_gameplay::SongLuaRuntimeVisuals<
+             crate::SongLuaOverlayActor<crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>>, crate::SongLuaCapturedActor,
+             crate::gameplay::SongLuaRuntimeOverlayStateDelta>,
+@@ -1836,7 +1837,9 @@
+             }.ok_or_else(|| "live Lua actor has no prepared visual slot".to_owned())?;
+             actor.initial_state = self.states[global];
+             let owned = &self.actors[global];
+-            sync_visual_content(owned, &mut actor.kind)?;
++            let mesh_cache = matches!(actor.kind, crate::SongLuaOverlayKind::ActorMultiVertex { .. })
++                .then(|| self.mesh_caches.entry(global).or_default());
++            sync_visual_content(owned, &mut actor.kind, mesh_cache)?;
+             if let crate::SongLuaOverlayKind::ActorProxy { target: proxy_target } = &mut actor.kind {
+                 *proxy_target = self.proxy_target(owned, target)?;
+             }
+@@ -1885,10 +1888,10 @@
+     }
+ }
+ 
+-fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>) -> Result<(), String> {
++fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>, mesh_cache: Option<&mut crate::lua_util::ActorMultiVertexMeshCache>) -> Result<(), String> {
+     match kind {
+         crate::SongLuaOverlayKind::ActorMultiVertex { vertices, texture_path, texture_key, .. } => {
+-            *vertices = crate::lua_util::read_actor_multi_vertex_mesh(owned)?.unwrap_or_else(|| std::sync::Arc::from([]));
++            *vertices = crate::lua_util::read_actor_multi_vertex_mesh_with_cache(owned, mesh_cache)?.unwrap_or_else(|| std::sync::Arc::from([]));
+             let path = crate::lua_util::live_multi_vertex_texture_path(owned).map_err(|error| error.to_string())?;
+             if *texture_path != path {
+                 *texture_key = path.as_ref().map(|path| std::sync::Arc::from(path.to_string_lossy().as_ref()));
+@@ -3217,6 +3220,74 @@
+     }
+ 
+     #[test]
++    fn live_mesh_publication_preserves_input_update_draw_and_uploads() {
++        let mut compiled = compile_with_context("live-mesh-publication", r#"
++local vertices = {
++    {{0,0,0},{1,0,0,1},{0,0}}, {{0,8,0},{0,1,0,1},{0,1}},
++    {{8,8,0},{0,0,1,1},{1,1}}, {{8,0,0},{1,1,1,1},{1,0}},
++}
++return Def.ActorFrame {
++    OnCommand=function(self)
++        SCREENMAN:GetTopScreen():AddInputCallback(function()
++            vertices[1][1][1]=20
++            MESH:SetVertices(vertices)
++            vertices[1][1][1]=99 -- uploads own a copy
++        end)
++        self:SetUpdateFunction(function()
++            MESH:SetDrawState{Mode='DrawMode_Triangles',Num=3}
++        end)
++        self:SetDrawFunction(function()
++            MESH:SetDrawState{Mode='DrawMode_Quads',Num=4}:Draw()
++        end)
++    end,
++    Def.ActorMultiVertex {
++        Name='Mesh',
++        InitCommand=function(self)
++            MESH=self
++            self:SetVertices(vertices):SetDrawState{Mode='DrawMode_Quads'}
++        end,
++    },
++}
++"#, |context| context.defer_initial_live_update = true);
++        let local = compiled.overlays.iter().position(|actor| actor.name.as_deref()==Some("Mesh")).unwrap();
++        let global = compiled.live_actor_indices()[local];
++        let mut kind = compiled.overlays[local].kind.clone();
++        let mesh = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
++            SongLuaOverlayKind::ActorMultiVertex { vertices, .. } => vertices.clone(),
++            _ => panic!("mesh visual slot"),
++        };
++        let original = mesh(&kind);
++        let mut cache = crate::lua_util::ActorMultiVertexMeshCache::default();
++        let mut scene = compiled.live_scene.take().unwrap();
++        let owned = scene.actors[global].clone();
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        let published = mesh(&kind);
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        assert!(Arc::ptr_eq(&published, &mesh(&kind)));
++        let input = crate::SongLuaInputEvent {
++            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
++            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
++            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
++        };
++        assert!(scene.input(&input).unwrap().1.errors.is_empty());
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        let uploaded = mesh(&kind);
++        assert_eq!(uploaded[0].pos[0], 20.0);
++        assert_eq!(uploaded.len(), 6);
++        assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        assert_eq!(mesh(&kind).len(), 3);
++        assert!(scene.draw().unwrap().errors.is_empty());
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        assert_eq!(mesh(&kind).len(), 6);
++        let drawn = mesh(&kind);
++        sync_visual_content(&owned, &mut kind, Some(&mut cache)).unwrap();
++        assert!(Arc::ptr_eq(&drawn, &mesh(&kind)));
++        assert_eq!(original[0].pos[0], 0.0);
++        assert_eq!(uploaded[0].pos[0], 20.0, "previous draw snapshots remain immutable");
++    }
++
++    #[test]
+     fn live_sprite_publication_preserves_input_update_draw_and_texture_loads() {
+         let mut compiled = compile_with_context("live-sprite-publication", r#"
+ return Def.ActorFrame {
+@@ -3246,7 +3317,7 @@
+         let original = frames(&kind);
+         let mut scene = compiled.live_scene.take().unwrap();
+         let owned = scene.actors[global].clone();
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert!(Arc::ptr_eq(&original, &frames(&kind)));
+         let input = crate::SongLuaInputEvent {
+             player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+@@ -3254,23 +3325,23 @@
+             level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+         };
+         assert!(scene.input(&input).unwrap().1.errors.is_empty());
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert_eq!(frames(&kind)[0].frame, 2);
+         assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert_eq!(frames(&kind)[0].delay, 0.25);
+         assert!(scene.draw().unwrap().errors.is_empty());
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert_eq!(frames(&kind)[0].frame, 3);
+         assert_eq!(original[0], crate::SongLuaSpriteState { frame:0, delay:0.5 });
+         let drawn = frames(&kind);
+         let next = crate::lua_util::actor_texture_path(&owned).unwrap().unwrap().with_file_name("second.png");
+         scene.lua.globals().set("NEXT_TEXTURE", next.to_string_lossy().as_ref()).unwrap();
+         scene.lua.load("SPRITE:SetTexture(NEXT_TEXTURE)").exec().unwrap();
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert!(Arc::ptr_eq(&drawn, &frames(&kind)), "SetTexture keeps custom frames");
+         scene.lua.load("SPRITE:Load(NEXT_TEXTURE)").exec().unwrap();
+-        sync_visual_content(&owned, &mut kind).unwrap();
++        sync_visual_content(&owned, &mut kind, None).unwrap();
+         assert!(frames(&kind).is_empty(), "Load replaces custom frames with texture defaults");
+         assert_eq!(drawn[0].frame, 3, "previous draw snapshots remain immutable");
+     }
+@@ -3578,8 +3649,8 @@
+         assert!(matches!(visuals.overlays[proxy].kind, SongLuaOverlayKind::ActorProxy {
+             target: crate::SongLuaProxyTarget::NoteField { player_index: 0 }
+         }), "late foreground On must bind the actual prepared render slot");
+-        let owned = &scene.actors[scene.targets.iter().find(|(_, target)|
+-            matches!(target, SongLuaLiveTarget::Root(index) if *index == proxy)).unwrap().0];
++        let owned = scene.actors[scene.targets.iter().find(|(_, target)|
++            matches!(target, SongLuaLiveTarget::Root(index) if *index == proxy)).unwrap().0].clone();
+         let target_actor = &scene.actors[scene.targets.iter().find(|(_, target)|
+             matches!(target, SongLuaLiveTarget::Root(index) if *index == local)).unwrap().0];
+         owned.get::<Function>("SetTarget").unwrap().call::<()>((owned.clone(), target_actor.clone())).unwrap();
+@@ -4909,8 +4980,8 @@
+             assert!(scene.advance(SongLuaLiveFrame { screen_seconds:seconds,music_seconds:seconds,
+                 delta_seconds:1.0/60.0,..Default::default() }).unwrap().errors.is_empty());
+         }
+-        sync_visual_content(&scene.actors[mesh_global], &mut mesh).unwrap();
+-        sync_visual_content(&scene.actors[text_global], &mut text).unwrap();
++        sync_visual_content(&scene.actors[mesh_global], &mut mesh, None).unwrap();
++        sync_visual_content(&scene.actors[text_global], &mut text, None).unwrap();
+         let SongLuaOverlayKind::ActorMultiVertex { vertices,texture_path,.. } = &mesh else { panic!("mesh") };
+         assert_eq!(vertices.len(),6,"non-finite vertices preserve native triangle boundaries");
+         assert_eq!(vertices[0].pos,[2.0,0.0]);
+@@ -4923,7 +4994,7 @@
+         scene.input(&input).unwrap();
+         scene.advance(SongLuaLiveFrame{screen_seconds:0.05,music_seconds:0.05,
+             delta_seconds:1.0/60.0,..Default::default()}).unwrap();
+-        sync_visual_content(&scene.actors[mesh_global], &mut mesh).unwrap();
++        sync_visual_content(&scene.actors[mesh_global], &mut mesh, None).unwrap();
+         let SongLuaOverlayKind::ActorMultiVertex{vertices,..}=&mesh else{panic!("mesh")};
+         assert_eq!(vertices[0].pos,[2.0,0.0],"release reaches the authored controller");
+     }
+--- a/crates/deadsync-song-lua/src/lua_util.rs
++++ b/crates/deadsync-song-lua/src/lua_util.rs
+@@ -20793,14 +20793,54 @@
+     Ok(resolve_actor_asset_path(actor, &texture).ok())
+ }
+ 
++// Publication owns at most one derived mesh per visual slot. Lua uploads keep
++// their existing immutable point buffers; replacing a publication releases its
++// old mesh independently of when Lua collects the old upload userdata.
++#[derive(Default)]
++pub(crate) struct ActorMultiVertexMeshCache {
++    entry: Option<(Arc<[SongLuaActorMultiVertexPoint]>, MultiVertexMeshKey,
++                   Option<Arc<[SongLuaOverlayMeshVertex]>>)>,
++}
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++struct MultiVertexMeshKey {
++    start: usize,
++    end: usize,
++    mode: MultiVertexMeshMode,
++    width_bits: u32,
++}
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum MultiVertexMeshMode { Triangles, Quads, QuadStrip, LineStrip, Fan }
++
++impl MultiVertexMeshMode {
++    fn from_str(mode: &str) -> Self {
++        if mode.eq_ignore_ascii_case("DrawMode_Quads") { Self::Quads }
++        else if mode.eq_ignore_ascii_case("DrawMode_QuadStrip") { Self::QuadStrip }
++        else if mode.eq_ignore_ascii_case("DrawMode_LineStrip") { Self::LineStrip }
++        else if mode.eq_ignore_ascii_case("DrawMode_Fan") { Self::Fan }
++        else { Self::Triangles }
++    }
++}
++
+ pub fn read_actor_multi_vertex_mesh(
+     actor: &Table,
++) -> Result<Option<Arc<[SongLuaOverlayMeshVertex]>>, String> {
++    read_actor_multi_vertex_mesh_with_cache(actor, None)
++}
++
++pub(crate) fn read_actor_multi_vertex_mesh_with_cache(
++    actor: &Table,
++    mut cache: Option<&mut ActorMultiVertexMeshCache>,
+ ) -> Result<Option<Arc<[SongLuaOverlayMeshVertex]>>, String> {
+     let source: Arc<[SongLuaActorMultiVertexPoint]> = match actor
+         .get::<Value>("__songlua_vertices")
+         .map_err(|err| err.to_string())?
+     {
+-        Value::Nil => return Ok(None),
++        Value::Nil => {
++            if let Some(cache) = cache.as_mut() { cache.entry = None; }
++            return Ok(None);
++        },
+         Value::UserData(points) => {
+             let points = points
+                 .borrow::<Arc<[SongLuaActorMultiVertexPoint]>>()
+@@ -20812,6 +20852,7 @@
+         _ => return Err("invalid ActorMultiVertex vertex buffer".into()),
+     };
+     let Some((start, end)) = read_actor_multi_vertex_range(actor, source.len())? else {
++        if let Some(cache) = cache.as_mut() { cache.entry = None; }
+         return Ok(None);
+     };
+     let draw_mode = actor
+@@ -20825,11 +20866,22 @@
+         .map_err(|err| err.to_string())?
+         .unwrap_or(1.0)
+         .max(0.0);
+-    Ok(actor_multi_vertex_mesh_arc(
+-        &source[start..end],
+-        draw_mode,
+-        line_width,
+-    ))
++    let mode = MultiVertexMeshMode::from_str(draw_mode);
++    let key = MultiVertexMeshKey { start, end, mode, width_bits: line_width.to_bits() };
++    // Read every setting before reuse: Lua getters can mutate settings or
++    // replace the upload. The sampled source is immutable, and raw-table
++    // compatibility reads create fresh sources so in-place edits stay visible.
++    if let Some(cache) = cache.as_ref()
++        && let Some((previous_source, previous_key, mesh)) = &cache.entry
++        && Arc::ptr_eq(previous_source, &source) && *previous_key == key
++    {
++        return Ok(mesh.clone());
++    }
++    let mesh = actor_multi_vertex_mesh_arc(&source[start..end], mode, line_width);
++    if let Some(cache) = cache {
++        cache.entry = Some((source, key, mesh.clone()));
++    }
++    Ok(mesh)
+ }
+ 
+ pub(crate) fn live_multi_vertex_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
+@@ -21952,10 +22004,10 @@
+ 
+ fn actor_multi_vertex_mesh_arc(
+     vertices: &[SongLuaActorMultiVertexPoint],
+-    mode: &str,
++    mode: MultiVertexMeshMode,
+     width: f32,
+ ) -> Option<Arc<[SongLuaOverlayMeshVertex]>> {
+-    if mode.eq_ignore_ascii_case("DrawMode_Quads") {
++    if mode == MultiVertexMeshMode::Quads {
+         let groups = vertices.as_chunks::<4>().0;
+         if groups.is_empty() {
+             return None;
+@@ -21968,7 +22020,7 @@
+                 .collect(),
+         );
+     }
+-    if mode.eq_ignore_ascii_case("DrawMode_QuadStrip") {
++    if mode == MultiVertexMeshMode::QuadStrip {
+         let count = vertices.len().saturating_sub(2) / 2;
+         if count == 0 {
+             return None;
+@@ -21981,11 +22033,11 @@
+                 .collect(),
+         );
+     }
+-    if mode.eq_ignore_ascii_case("DrawMode_LineStrip") {
++    if mode == MultiVertexMeshMode::LineStrip {
+         let mesh = actor_multi_vertex_line_strip(vertices, width);
+         return (!mesh.is_empty()).then(|| mesh.into());
+     }
+-    if mode.eq_ignore_ascii_case("DrawMode_Fan") {
++    if mode == MultiVertexMeshMode::Fan {
+         if vertices.len() < 3 {
+             return None;
+         }
+--- a/crates/deadsync-song-lua/tests/perf/mesh.rs
++++ b/crates/deadsync-song-lua/tests/perf/mesh.rs
+@@ -59,6 +59,112 @@
+                 .collect()
+         })
+     })
++}
++
++fn published(actor: &Table, cache: &mut ActorMultiVertexMeshCache)
++    -> Result<Option<Arc<[SongLuaOverlayMeshVertex]>>, String>
++{
++    read_actor_multi_vertex_mesh_with_cache(actor, Some(cache))
++}
++
++#[test]
++fn native_mesh_publication_matches_frozen_topologies_and_reuses_snapshots() {
++    let lua = Lua::new();
++    for count in (0..17).chain([257]) {
++        let a = actor(&lua, count, None, false);
++        let mut cache = ActorMultiVertexMeshCache::default();
++        for mode in ["DrawMode_Triangles", "dRaWmOdE_QuAdS", "DrawMode_QuadStrip",
++                     "DrawMode_LineStrip", "DrawMode_Fan", "unknown"] {
++            for (first, num) in [(1, -1), (2, 7), (0, 0), (999, 3), (-8, 4)] {
++                for width in [0.0, -0.0, 1.25, f32::NAN, f32::INFINITY] {
++                    a.raw_set("__songlua_draw_state_mode", mode).unwrap();
++                    a.raw_set("__songlua_line_width", width).unwrap();
++                    let range = lua.create_table().unwrap();
++                    range.raw_set("First", first).unwrap();
++                    range.raw_set("Num", num).unwrap();
++                    a.raw_set("__songlua_draw_state", range).unwrap();
++                    let expected = bits(before::read_actor_multi_vertex_mesh(&a));
++                    let first = published(&a, &mut cache).unwrap();
++                    let second = published(&a, &mut cache).unwrap();
++                    assert_eq!(bits(Ok(first.clone())), expected);
++                    assert_eq!(bits(Ok(second.clone())), expected);
++                    if let (Some(first), Some(second)) = (first, second) {
++                        assert!(Arc::ptr_eq(&first, &second));
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn native_mesh_publication_preserves_raw_table_mutations() {
++    let lua = Lua::new();
++    let a = actor(&lua, 4, Some("DrawMode_Quads"), true);
++    let mut cache = ActorMultiVertexMeshCache::default();
++    let original = published(&a, &mut cache).unwrap().unwrap();
++    let vertices = a.get::<Table>("__songlua_vertices").unwrap();
++    vertices.get::<Table>(1).unwrap().get::<Table>(1).unwrap().set(1, 321.0).unwrap();
++    let edited = published(&a, &mut cache).unwrap().unwrap();
++    assert_eq!(edited[0].pos[0], 321.0);
++    assert_eq!(original[0].pos[0], 0.0);
++}
++
++#[test]
++fn native_mesh_publication_releases_previous_mesh_before_lua_collection() {
++    let lua = Lua::new();
++    let a = actor(&lua, 8, Some("DrawMode_Quads"), false);
++    install_actor_display_state_methods(&lua, &a).unwrap();
++    let vertices = actor(&lua, 8, None, true).get::<Table>("__songlua_vertices").unwrap();
++    let upload = a.get::<Function>("SetVertices").unwrap();
++    let mut cache = ActorMultiVertexMeshCache::default();
++    upload.call::<()>((a.clone(), vertices.clone())).unwrap();
++    // Root the old userdata explicitly so collection cannot hide retention.
++    let old_upload = a.raw_get::<mlua::AnyUserData>("__songlua_vertices").unwrap();
++    let snapshot = published(&a, &mut cache).unwrap().unwrap();
++    assert_eq!(Arc::strong_count(&snapshot), 2);
++    upload.call::<()>((a.clone(), vertices)).unwrap();
++    let current = published(&a, &mut cache).unwrap().unwrap();
++    assert_eq!(Arc::strong_count(&snapshot), 1, "only the old draw retains the old mesh");
++    assert_eq!(old_upload.borrow::<Arc<[SongLuaActorMultiVertexPoint]>>().unwrap().len(), 8);
++    assert_eq!(current.len(), 12);
++    a.raw_set("__songlua_vertices", Value::Nil).unwrap();
++    assert!(published(&a, &mut cache).unwrap().is_none());
++    assert_eq!(Arc::strong_count(&current), 1, "cleared geometry releases the publication");
++}
++
++#[test]
++fn native_mesh_publication_allows_reentrant_getters_and_upload_replacement() {
++    let lua = Lua::new();
++    let a = actor(&lua, 8, Some("DrawMode_Quads"), false);
++    install_actor_display_state_methods(&lua, &a).unwrap();
++    a.raw_set("__songlua_line_width", 2.0).unwrap();
++    let mut cache = ActorMultiVertexMeshCache::default();
++    let original = published(&a, &mut cache).unwrap().unwrap();
++    a.raw_set("__songlua_line_width", Value::Nil).unwrap();
++    let replacement = actor(&lua, 8, None, true).get::<Table>("__songlua_vertices").unwrap();
++    replacement.get::<Table>(1).unwrap().get::<Table>(1).unwrap().set(1, 42.0).unwrap();
++    lua.globals().set("replacement", replacement).unwrap();
++    lua.globals().set("mesh_actor", a.clone()).unwrap();
++    lua.globals().set("read_mesh", lua.create_function(|_, actor: Table| {
++        read_actor_multi_vertex_mesh(&actor).map_err(mlua::Error::external)?;
++        Ok(())
++    }).unwrap()).unwrap();
++    lua.load(r#"
++setmetatable(mesh_actor, {__index=function(self, key)
++    if key == '__songlua_line_width' then
++        rawset(self, key, 1)
++        read_mesh(self)
++        self:SetVertices(replacement)
++        return 2
++    end
++end})
++"#).exec().unwrap();
++    let old_upload = published(&a, &mut cache).unwrap().unwrap();
++    assert!(Arc::ptr_eq(&original, &old_upload));
++    let new_upload = published(&a, &mut cache).unwrap().unwrap();
++    assert_eq!(old_upload[0].pos[0], 0.0, "source is sampled before the authored getters");
++    assert_eq!(new_upload[0].pos[0], 42.0);
+ }
+ 
+ #[test]
+@@ -159,8 +265,11 @@
+                     ))
+                     .eval()
+                     .unwrap();
++                let mut cache = ActorMultiVertexMeshCache::default();
++                let _ = if current { published(&a, &mut cache) }
++                    else { before::read_actor_multi_vertex_mesh(&a) };
+                 let result = if current {
+-                    read_actor_multi_vertex_mesh(&a)
++                    published(&a, &mut cache)
+                 } else {
+                     before::read_actor_multi_vertex_mesh(&a)
+                 };

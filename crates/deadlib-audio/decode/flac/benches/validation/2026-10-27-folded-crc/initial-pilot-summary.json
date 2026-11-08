@@ -1,0 +1,82 @@
+[
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 9.753051911240687,
+    "min_ns_per_unit": 9.358492121338331,
+    "max_ns_per_unit": 9.861306168725994,
+    "median_ns_per_iteration": 6021534.25
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 9.284869363180412,
+    "min_ns_per_unit": 9.053895479374015,
+    "max_ns_per_unit": 9.877703886152162,
+    "median_ns_per_iteration": 5732478.344827586
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 8.637047045924596,
+    "min_ns_per_unit": 8.198756759113902,
+    "max_ns_per_unit": 8.838633226184246,
+    "median_ns_per_iteration": 5332512.846153846
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "baseline-crc",
+    "median_ns_per_unit": 0.6843828855033434,
+    "min_ns_per_unit": 0.653093474636597,
+    "max_ns_per_unit": 0.6964809056592551,
+    "median_ns_per_iteration": 370695.9899328859
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "crc",
+    "median_ns_per_unit": 0.06437446110567317,
+    "min_ns_per_unit": 0.06267592034624032,
+    "max_ns_per_unit": 0.06674281479245596,
+    "median_ns_per_iteration": 34868.42685788788
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 11.688214766430082,
+    "min_ns_per_unit": 11.488279590614246,
+    "max_ns_per_unit": 12.239457045998025,
+    "median_ns_per_iteration": 19590289.5
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 10.665255728870836,
+    "min_ns_per_unit": 10.348352949634622,
+    "max_ns_per_unit": 11.0959231614155,
+    "median_ns_per_iteration": 17875736.5
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 10.044172260433257,
+    "min_ns_per_unit": 9.794279057754613,
+    "max_ns_per_unit": 10.256697537788087,
+    "median_ns_per_iteration": 16834755.888888888
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-crc",
+    "median_ns_per_unit": 0.7001352672110518,
+    "min_ns_per_unit": 0.680232179133951,
+    "max_ns_per_unit": 0.7175729478433256,
+    "median_ns_per_iteration": 2428492.6885245903
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "crc",
+    "median_ns_per_unit": 0.06610937610364974,
+    "min_ns_per_unit": 0.06394617918701448,
+    "max_ns_per_unit": 0.0668875426125459,
+    "median_ns_per_iteration": 229307.3125
+  }
+]

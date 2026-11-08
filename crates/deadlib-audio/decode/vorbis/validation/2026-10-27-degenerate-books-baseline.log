@@ -1,0 +1,24 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.30s
+     Running tests\codebook_compatibility.rs (target\debug\deps\codebook_compatibility-427ec053701286a6.exe)
+
+running 2 tests
+
+thread 'zero_dimension_scalar_books_match_libvorbis' (39396) panicked at crates\deadlib-audio\decode\vorbis\tests\support\raw_cases.rs:53:65:
+called `Result::unwrap()` on an `Err` value: Invalid("zero codebook dimensions/entries")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test zero_dimension_scalar_books_match_libvorbis ... FAILED
+
+thread 'empty_codebook_consumers_match_libvorbis' (30604) panicked at crates\deadlib-audio\decode\vorbis\tests\support\raw_cases.rs:53:65:
+called `Result::unwrap()` on an `Err` value: Invalid("empty Huffman tree")
+test empty_codebook_consumers_match_libvorbis ... FAILED
+
+failures:
+
+failures:
+    empty_codebook_consumers_match_libvorbis
+    zero_dimension_scalar_books_match_libvorbis
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test codebook_compatibility`

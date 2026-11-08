@@ -1,9 +1,9 @@
 use deadlib_render_core::{
-    BlendMode, DrawOp, DrawStats, RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT,
-    SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
-    SamplerWrap, TextureHandle, TexturedMeshGeometry, TexturedMeshInstanceRaw, Yuv420Upload,
-    draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest,
+    BlendMode, DrawOp, DrawStats, MeshSampler, RenderFrame, RenderTargetFrame,
+    SOFTWARE_MESH_STORAGE_SLOT, SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT,
+    SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle, TexturedMeshGeometry,
+    TexturedMeshInstanceRaw, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, render_target_uses_nearest, texture_sampler_desc,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -28,6 +28,8 @@ pub struct Texture {
     sampler: SamplerDesc,
     opaque: bool,
     yuv420: bool,
+    // Empty for uploaded byte images; captures retain physical RGBA16F texels.
+    half_pixels: Vec<u64>,
 }
 
 pub trait TextureLookup {
@@ -47,27 +49,88 @@ pub struct State {
     prepared_mesh_triangles: Vec<PreparedTriangle<ScreenVertexColor>>,
     prepared_tmesh_triangles: Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stripe_bins: StripeBins,
+    // Sized at window creation/resize, split with pixel stripes for exclusive
+    // worker access, reused each frame, and freed with the renderer. Stripes
+    // are reset only when a depth-tested draw reaches them.
+    depth: Vec<f32>,
     offscreen_targets: Vec<OffscreenTarget>,
 }
 
 /// Render-thread-owned, song-reused software `ActorFrameTexture` storage.
 /// Slots are bounded by the largest active graph, allocated at graph warmup,
-/// and replaced only when its handle or dimensions change. Gameplay redraws
-/// reuse the pixel buffers without lookup, eviction, pruning, I/O, or
+/// and replaced only when its handle, dimensions, color format or depth flag changes.
+/// Gameplay redraws reuse pixel buffers without eviction, pruning, I/O, or
 /// destruction; the renderer owns and frees them at shutdown. A pass miss is a
 /// transparent texture, and per-frame work is bounded by target pixels plus its
-/// draw list.
+/// draw list. Pixel/depth capacities cover the entire backing image; their
+/// lengths cover the viewport. Viewport changes reload at most the backing
+/// pixel count without reallocating. Clears include the backing padding.
+/// Float slots retain 8-byte RGBA16F texels in both backing and viewport
+/// buffers, plus the 4-byte decoded-image view. Byte slots retain their
+/// original color buffers. Depth-enabled slots retain two backing-sized f32
+/// allocations (compact viewport rows and physical image rows); depth-disabled
+/// slots retain none. Capture comparisons quantize to native 16-bit depth.
+/// There is no per-pixel allocation; clear, reload
+/// and image-copy work each visit at most the backing pixel count. Formats,
+/// buffer pointers and capacities are covered by the warmed capture tests.
 struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
+    viewport: [u32; 2],
     texture: Texture,
     pixels: Vec<u32>,
+    half_pixels: Vec<u64>,
+    float_color: bool,
+    depth: Vec<f32>,
+    depth_image: Vec<f32>,
+    with_depth: bool,
     initialized: bool,
+}
+
+struct DepthRows<'a> {
+    pixels: &'a mut [f32],
+    unorm16: bool,
+    mode: deadlib_render_core::DepthMode,
+}
+
+impl DepthRows<'_> {
+    fn test(&mut self, index: usize, z: f32) -> bool {
+        if !(0.0..=1.0).contains(&z) {
+            return false;
+        }
+        if self.pixels.is_empty() {
+            return true;
+        }
+        let z = if self.unorm16 {
+            // Valid depths are nonnegative; widen before the half bias to
+            // retain values just below a tie. Restore negative zero's sign.
+            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
+            (rounded as f32 / 65535.0).copysign(z)
+        } else {
+            z
+        };
+        if self.mode.tests()
+            && if self.mode.on_fail() {
+                z <= self.pixels[index]
+            } else {
+                z > self.pixels[index]
+            }
+        {
+            return false;
+        }
+        if self.mode.writes() {
+        self.pixels[index] = z;
+        }
+        true
+    }
 }
 
 #[derive(Clone, Copy)]
 struct SoftwarePass<'a> {
+    depth: bool,
+    reset_depth: bool,
+    depth_unorm: bool,
     cameras: &'a [Matrix4],
     sprite_instances: &'a [deadlib_render_core::SpriteInstanceRaw],
     mesh_vertices: &'a [deadlib_render_core::MeshVertex],
@@ -79,6 +142,9 @@ struct SoftwarePass<'a> {
 impl<'a> From<&'a RenderFrame> for SoftwarePass<'a> {
     fn from(frame: &'a RenderFrame) -> Self {
         Self {
+            depth: true,
+            reset_depth: true,
+            depth_unorm: false,
             cameras: &frame.cameras,
             sprite_instances: &frame.sprite_instances,
             mesh_vertices: &frame.mesh_vertices,
@@ -92,6 +158,9 @@ impl<'a> From<&'a RenderFrame> for SoftwarePass<'a> {
 impl<'a> From<&'a RenderTargetFrame> for SoftwarePass<'a> {
     fn from(frame: &'a RenderTargetFrame) -> Self {
         Self {
+            depth: frame.depth,
+            reset_depth: false,
+            depth_unorm: true,
             cameras: &frame.cameras,
             sprite_instances: &frame.sprite_instances,
             mesh_vertices: &frame.mesh_vertices,
@@ -114,6 +183,7 @@ struct WorkerPool {
 /// renderer-owned vectors retain their session high-water capacities, while
 /// entries are cleared and rebuilt without allocation on warmed frames.
 enum PreparedObject {
+    ClearDepth,
     Sprite {
         vertices: [ScreenVertex; 4],
         rows: ScreenRows,
@@ -141,14 +211,22 @@ enum PreparedObject {
         rows: ScreenRows,
         texture_mask: bool,
         blend: BlendMode,
+        depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         texture_handle: TextureHandle,
+        sampler: Option<MeshSampler>,
     },
     DirectTexturedMesh {
         geometry: u32,
         instance: u32,
         mvp: Matrix4,
         blend: BlendMode,
+        depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         texture_handle: TextureHandle,
+        sampler: Option<MeshSampler>,
     },
 }
 
@@ -159,10 +237,12 @@ impl PreparedObject {
             Self::Sprite { rows, .. }
             | Self::Mesh { rows, .. }
             | Self::TexturedMesh { rows, .. } => *rows,
-            Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => ScreenRows {
-                start: 0,
-                end: height as u32,
-            },
+            Self::ClearDepth | Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => {
+                ScreenRows {
+                    start: 0,
+                    end: height as u32,
+                }
+            }
         }
     }
 }
@@ -394,6 +474,7 @@ pub fn init(
         prepared_mesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         prepared_tmesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         stripe_bins: StripeBins::warmed(),
+        depth: vec![1.0; window_size.width as usize * window_size.height as usize],
         offscreen_targets: Vec::with_capacity(4),
     })
 }
@@ -433,6 +514,7 @@ pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture
         sampler,
         opaque: texture_is_opaque(image),
         yuv420: false,
+        half_pixels: Vec::new(),
     })
 }
 
@@ -440,6 +522,7 @@ pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Bo
     texture.image.clone_from(image);
     texture.opaque = texture_is_opaque(image);
     texture.yuv420 = false;
+    texture.half_pixels.clear();
     Ok(())
 }
 
@@ -453,6 +536,7 @@ pub fn create_yuv420_texture(
         sampler,
         opaque: true,
         yuv420: true,
+        half_pixels: Vec::new(),
     })
 }
 
@@ -503,14 +587,31 @@ const fn effective_sampler(texture: &Texture, handle: TextureHandle) -> SamplerD
     }
 }
 
-fn create_offscreen_target(handle: TextureHandle, width: u32, height: u32) -> OffscreenTarget {
+fn create_offscreen_target(
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    viewport: [u32; 2],
+    float_color: bool,
+    with_depth: bool,
+) -> OffscreenTarget {
     let width = width.max(1);
     let height = height.max(1);
     let len = width as usize * height as usize;
+    let viewport = [viewport[0].clamp(1, width), viewport[1].clamp(1, height)];
+    let viewport_len = viewport[0] as usize * viewport[1] as usize;
+    // Retain backing-sized capacity so viewport changes reuse the buffers.
+    let mut pixels = vec![0; if float_color { 0 } else { len }];
+    let mut half_pixels = vec![0; if float_color { len } else { 0 }];
+    let mut depth = vec![1.0; if with_depth { len } else { 0 }];
+    pixels.truncate(viewport_len);
+    half_pixels.truncate(viewport_len);
+    depth.truncate(viewport_len);
     OffscreenTarget {
         handle,
         width,
         height,
+        viewport,
         texture: Texture {
             image: RgbaImage::new(width, height),
             sampler: SamplerDesc {
@@ -520,23 +621,81 @@ fn create_offscreen_target(handle: TextureHandle, width: u32, height: u32) -> Of
             },
             opaque: false,
             yuv420: false,
+            half_pixels: vec![0; if float_color { len } else { 0 }],
         },
-        pixels: vec![0; len],
+        pixels,
+        half_pixels,
+        float_color,
+        depth,
+        depth_image: vec![1.0; if with_depth { len } else { 0 }],
+        with_depth,
         initialized: false,
     }
 }
 
 fn ensure_offscreen_targets(targets: &mut Vec<OffscreenTarget>, frame: &RenderFrame) {
     for (index, pass) in frame.render_targets.iter().enumerate() {
+        let viewport = deadlib_render_core::render_target_viewport(pass);
         let matches = targets.get(index).is_some_and(|target| {
             target.handle == pass.texture_handle
                 && target.width == pass.width.max(1)
                 && target.height == pass.height.max(1)
+                && target.float_color == pass.float_color
+                && target.with_depth == pass.depth
         });
         if matches {
+            let target = &mut targets[index];
+            if target.viewport != viewport {
+                let len = viewport[0] as usize * viewport[1] as usize;
+                if target.float_color {
+                    target.half_pixels.resize(len, 0);
+                } else {
+                    target.pixels.resize(len, 0);
+                }
+                if pass.depth {
+                    target.depth.resize(len, 1.0);
+                    for (source, dest) in target
+                        .depth_image
+                        .chunks_exact(target.width as usize)
+                        .zip(target.depth.chunks_exact_mut(viewport[0] as usize))
+                    {
+                        dest.copy_from_slice(&source[..dest.len()]);
+                    }
+                }
+                target.viewport = viewport;
+                if target.initialized && target.float_color {
+                    for (source, dest) in target
+                        .texture
+                        .half_pixels
+                        .chunks_exact(target.width as usize)
+                        .zip(target.half_pixels.chunks_exact_mut(viewport[0] as usize))
+                    {
+                        dest.copy_from_slice(&source[..dest.len()]);
+                    }
+                } else if target.initialized {
+                    for (source, dest) in target
+                        .texture
+                        .image
+                        .as_raw()
+                        .chunks_exact(target.width as usize * 4)
+                        .zip(target.pixels.chunks_exact_mut(viewport[0] as usize))
+                    {
+                        for (rgba, pixel) in source.as_chunks::<4>().0.iter().zip(dest) {
+                            *pixel = u32::from_be_bytes([rgba[3], rgba[0], rgba[1], rgba[2]]);
+                        }
+                    }
+                }
+            }
             continue;
         }
-        let target = create_offscreen_target(pass.texture_handle, pass.width, pass.height);
+        let target = create_offscreen_target(
+            pass.texture_handle,
+            pass.width,
+            pass.height,
+            viewport,
+            pass.float_color,
+            pass.depth,
+        );
         if index < targets.len() {
             targets[index] = target;
         } else {
@@ -545,24 +704,75 @@ fn ensure_offscreen_targets(targets: &mut Vec<OffscreenTarget>, frame: &RenderFr
     }
 }
 
+// Equal strides are contiguous; retain only complete rows on both sides.
+fn copy_target_rows<T: Copy>(source: &[T], dest: &mut [T], source_width: usize, dest_width: usize) {
+    if source_width == dest_width && source_width != 0 {
+        let len = source.len().min(dest.len()) / source_width * source_width;
+        dest[..len].copy_from_slice(&source[..len]);
+    } else {
+        for (source, dest) in source
+            .chunks_exact(source_width)
+            .zip(dest.chunks_exact_mut(dest_width))
+        {
+            dest[..source.len()].copy_from_slice(source);
+        }
+    }
+}
+
 fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) {
-    for (rgba, pixel) in target
+    if target.with_depth {
+        copy_target_rows(
+            &target.depth,
+            &mut target.depth_image,
+            target.viewport[0] as usize,
+            target.width as usize,
+        );
+    }
+
+    if target.float_color {
+        copy_target_rows(
+            &target.half_pixels,
+            &mut target.texture.half_pixels,
+            target.viewport[0] as usize,
+            target.width as usize,
+        );
+        for (rgba, &pixel) in target
+            .texture
+            .image
+            .as_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(&target.texture.half_pixels)
+        {
+            *rgba = std::array::from_fn(|i| half_to_byte((pixel >> (i * 16)) as u16));
+        }
+        return;
+    }
+
+    // A full viewport writes every alpha byte below; padding still needs filling.
+    if !PRESERVE_ALPHA && target.viewport != [target.width, target.height] {
+        for rgba in target.texture.image.as_mut().as_chunks_mut::<4>().0 {
+            rgba[3] = 255;
+        }
+    }
+    for (row, pixels) in target
         .texture
         .image
         .as_mut()
-        .as_chunks_mut::<4>()
-        .0
-        .iter_mut()
-        .zip(&mut target.pixels)
+        .chunks_exact_mut(target.width as usize * 4)
+        .zip(target.pixels.chunks_exact_mut(target.viewport[0] as usize))
     {
-        if !PRESERVE_ALPHA {
-            *pixel |= 0xff00_0000;
+        for (rgba, pixel) in row.as_chunks_mut::<4>().0.iter_mut().zip(pixels) {
+            if !PRESERVE_ALPHA {
+                *pixel |= 0xff00_0000;
+            }
+            let pixel = *pixel;
+            rgba[0] = (pixel >> 16) as u8;
+            rgba[1] = (pixel >> 8) as u8;
+            rgba[2] = pixel as u8;
+            rgba[3] = (pixel >> 24) as u8;
         }
-        let pixel = *pixel;
-        rgba[0] = (pixel >> 16) as u8;
-        rgba[1] = (pixel >> 8) as u8;
-        rgba[2] = pixel as u8;
-        rgba[3] = (pixel >> 24) as u8;
     }
 }
 
@@ -575,12 +785,25 @@ fn draw_offscreen_targets(
     ensure_offscreen_targets(&mut targets, frame);
     let mut vertices = 0u32;
     for (index, pass) in frame.render_targets.iter().enumerate() {
-        let width = pass.width.max(1) as usize;
-        let height = pass.height.max(1) as usize;
+        let [width, height] = targets[index].viewport.map(|value| value as usize);
         let initialized = targets[index].initialized;
         let mut pixels = std::mem::take(&mut targets[index].pixels);
+        let mut half_pixels = std::mem::take(&mut targets[index].half_pixels);
+        let mut depth = std::mem::take(&mut targets[index].depth);
         if !pass.preserve || !initialized {
+            depth.fill(1.0);
+            targets[index].depth_image.fill(1.0);
             pixels.fill(if pass.alpha { 0 } else { 0xff00_0000 });
+            let clear = pack_half([0.0, 0.0, 0.0, if pass.alpha { 0.0 } else { 1.0 }]);
+            half_pixels.fill(clear);
+            targets[index].texture.half_pixels.fill(clear);
+            if pass.alpha {
+                targets[index].texture.image.as_mut().fill(0);
+            } else {
+                for rgba in targets[index].texture.image.as_mut().as_chunks_mut::<4>().0 {
+                    *rgba = [0, 0, 0, 255];
+                }
+            }
         }
         let resolved = ResolvedTextures {
             external: textures,
@@ -598,21 +821,42 @@ fn draw_offscreen_targets(
             &mut state.prepared_tmesh_triangles,
             false,
         );
-        vertices = vertices.saturating_add(draw_rows(
-            software_pass,
-            &state.prepared_objects,
-            None,
-            &state.prepared_mesh_triangles,
-            &state.prepared_tmesh_triangles,
-            &resolved,
-            width,
-            height,
-            0,
-            height,
-            &mut pixels,
-            fixed_vertices,
-        ));
+        if pass.float_color {
+            vertices = vertices.saturating_add(draw_rows(
+                software_pass,
+                &state.prepared_objects,
+                None,
+                &state.prepared_mesh_triangles,
+                &state.prepared_tmesh_triangles,
+                &resolved,
+                width,
+                height,
+                0,
+                height,
+                &mut half_writer(&mut half_pixels, pass.alpha),
+                fixed_vertices,
+                &mut depth,
+            ));
+        } else {
+            vertices = vertices.saturating_add(draw_rows(
+                software_pass,
+                &state.prepared_objects,
+                None,
+                &state.prepared_mesh_triangles,
+                &state.prepared_tmesh_triangles,
+                &resolved,
+                width,
+                height,
+                0,
+                height,
+                &mut byte_writer(&mut pixels),
+                fixed_vertices,
+                &mut depth,
+            ));
+        }
         targets[index].pixels = pixels;
+        targets[index].half_pixels = half_pixels;
+        targets[index].depth = depth;
         targets[index].initialized = true;
         if pass.alpha {
             copy_target_pixels::<true>(&mut targets[index]);
@@ -719,8 +963,9 @@ pub fn draw(
         worker_pool.install(|| {
             pixels
                 .par_chunks_mut(w * SOFTWARE_ROW_CHUNK)
+                .zip(state.depth.par_chunks_mut(w * SOFTWARE_ROW_CHUNK))
                 .enumerate()
-                .map(|(chunk_index, stripe)| {
+                .map(|(chunk_index, (stripe, depth))| {
                     stripe.fill(clear);
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
@@ -735,14 +980,16 @@ pub fn draw(
                         h,
                         y_start,
                         y_end,
-                        stripe,
+                        &mut byte_writer(stripe),
                         fixed_vertices,
+                        depth,
                     )
                 })
                 .reduce(|| 0, u32::saturating_add)
         })
     } else {
         buffer.fill(clear);
+        let depth = &mut state.depth;
         draw_rows(
             software_frame,
             prepared_objects,
@@ -754,8 +1001,9 @@ pub fn draw(
             h,
             0,
             h,
-            &mut buffer,
+            &mut byte_writer(&mut buffer),
             fixed_vertices,
+            depth,
         )
     };
     let backend_record_us = elapsed_us_since(backend_record_started);
@@ -812,6 +1060,9 @@ fn prepare_objects(
     let mut fixed_vertices = 0u32;
 
     for op in frame.ops {
+        if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            prepared.push(PreparedObject::ClearDepth);
+        }
         match *op {
             DrawOp::Sprite(run) => {
                 if textures.software_texture(run.texture_handle).is_none() {
@@ -925,13 +1176,21 @@ fn prepare_objects(
                             > tmesh_triangles
                                 .capacity()
                                 .saturating_sub(tmesh_triangles.len())
+                        || geometry
+                            .vertices
+                            .first()
+                            .is_some_and(|vertex| vertex.normal[3] != 0.0)
                     {
                         prepared.push(PreparedObject::DirectTexturedMesh {
                             geometry: run.geometry,
                             instance: instance_index,
                             mvp,
                             blend: run.blend,
+                            depth_test: frame.depth && run.depth_test,
+                            depth_write: frame.depth && run.depth_write,
+                            depth_test_on_fail: frame.depth && run.depth_test_on_fail,
                             texture_handle: run.texture_handle,
+                            sampler: run.sampler,
                         });
                         continue;
                     }
@@ -947,6 +1206,7 @@ fn prepare_objects(
                             geometry.vertices.as_ref(),
                             width,
                             height,
+                            instance.cull_mode,
                         )
                     else {
                         continue;
@@ -958,7 +1218,11 @@ fn prepare_objects(
                         rows,
                         texture_mask: instance.texture_mask != 0.0,
                         blend: run.blend,
+                        depth_test: frame.depth && run.depth_test,
+                        depth_write: frame.depth && run.depth_write,
+                        depth_test_on_fail: frame.depth && run.depth_test_on_fail,
                         texture_handle: run.texture_handle,
+                        sampler: run.sampler,
                     });
                 }
             }
@@ -978,11 +1242,20 @@ fn draw_rows(
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     fixed_vertices: u32,
+
+    depth: &mut [f32],
 ) -> u32 {
     let mut vertices_drawn = fixed_vertices;
     let mut texture_cache = None;
+    // `depth` still holds a previous pass; it is reset before its first use.
+    let mut depth_reset = frame.reset_depth;
+    let mut depth = DepthRows {
+        pixels: depth,
+        unorm16: frame.depth_unorm,
+        mode: deadlib_render_core::DepthMode::TestWrite,
+    };
     if let Some(items) = stripe_items {
         for &item in items {
             let (object, triangle) = if item.is_whole() {
@@ -995,6 +1268,9 @@ fn draw_rows(
                 (mesh_triangles[triangle].object as usize, Some(triangle))
             };
             let prepared = &prepared_objects[object];
+            if !apply_depth_reset(prepared, depth.pixels, &mut depth_reset) {
+                continue;
+            }
             if let Some(triangle) = triangle {
                 draw_prepared_triangle(
                     prepared,
@@ -1007,6 +1283,7 @@ fn draw_rows(
                     stripe_y_end,
                     buffer,
                     width,
+                    &mut depth,
                 );
             } else {
                 vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
@@ -1022,11 +1299,15 @@ fn draw_rows(
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
+                    &mut depth,
                 ));
             }
         }
     } else {
         for prepared in prepared_objects {
+            if !apply_depth_reset(prepared, depth.pixels, &mut depth_reset) {
+                continue;
+            }
             vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
                 prepared,
                 false,
@@ -1040,10 +1321,42 @@ fn draw_rows(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                &mut depth,
             ));
         }
     }
     vertices_drawn
+}
+
+/// Defers depth resets to the next depth-tested draw in these rows. Only those
+/// draws read or write depth, so rows they never reach skip the fill. Returns
+/// false for reset markers, which draw nothing.
+#[inline(always)]
+fn apply_depth_reset(prepared: &PreparedObject, depth: &mut [f32], pending: &mut bool) -> bool {
+    match prepared {
+        PreparedObject::ClearDepth => {
+            *pending = true;
+            false
+        }
+        PreparedObject::TexturedMesh {
+            depth_test: true, ..
+        }
+        | PreparedObject::DirectTexturedMesh {
+            depth_test: true, ..
+        }
+        | PreparedObject::TexturedMesh {
+            depth_write: true, ..
+        }
+        | PreparedObject::DirectTexturedMesh {
+            depth_write: true, ..
+        } => {
+            if std::mem::take(pending) {
+                depth.fill(1.0);
+            }
+            true
+        }
+        _ => true,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1059,9 +1372,38 @@ fn draw_prepared<'a>(
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
 ) -> u32 {
+    if let PreparedObject::TexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    }
+    | PreparedObject::DirectTexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    } = prepared
+    {
+        depth.mode = deadlib_render_core::DepthMode::from_flags(
+            *depth_test,
+            *depth_write,
+            *depth_test_on_fail,
+        );
+    }
+
+    let mut no_depth = DepthRows {
+        pixels: &mut [],
+        unorm16: false,
+        mode: deadlib_render_core::DepthMode::TestWrite,
+    };
     match prepared {
+        // `draw_rows` applies resets before dispatching depth-tested draws.
+        PreparedObject::ClearDepth => 0,
         PreparedObject::Sprite {
             vertices,
             rows,
@@ -1081,7 +1423,7 @@ fn draw_prepared<'a>(
                     *tint,
                     *texture_mask,
                     *blend,
-                    &tex.image,
+                    tex.texels(),
                     effective_sampler(tex, *texture_handle),
                     tex.opaque,
                     width,
@@ -1142,7 +1484,11 @@ fn draw_prepared<'a>(
             rows,
             texture_mask,
             blend,
+            depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
+            sampler,
             ..
         } => {
             if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
@@ -1155,13 +1501,14 @@ fn draw_prepared<'a>(
                     &tmesh_triangles[start..end],
                     *texture_mask,
                     *blend,
-                    &tex.image,
-                    effective_sampler(tex, *texture_handle),
+                    tex.texels(),
+                    texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                     tex.opaque,
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
                     width,
+                    if *depth_test || *depth_write { depth } else { &mut no_depth },
                 );
             }
             0
@@ -1171,7 +1518,11 @@ fn draw_prepared<'a>(
             instance,
             mvp,
             blend,
+            depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
+            sampler,
         } => {
             let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
                 return 0;
@@ -1182,6 +1533,28 @@ fn draw_prepared<'a>(
             let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
                 return 0;
             };
+            if geometry
+                .vertices
+                .first()
+                .is_some_and(|vertex| vertex.normal[3] != 0.0)
+            {
+                let additive = textures.software_texture(instance.additive_texture);
+                return rasterize_environment(
+                    mvp,
+                    geometry.vertices.as_ref(),
+                    *instance,
+                    *blend,
+                    tex,
+                    texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
+                    additive,
+                    width,
+                    height,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                    if *depth_test || *depth_write { depth } else { &mut no_depth },
+                );
+            }
             rasterize_textured_mesh_triangles(
                 mvp,
                 geometry.vertices.as_ref(),
@@ -1191,14 +1564,16 @@ fn draw_prepared<'a>(
                 instance.uv_tex_shift,
                 instance.texture_mask != 0.0,
                 *blend,
-                &tex.image,
-                effective_sampler(tex, *texture_handle),
+                tex.texels(),
+                texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                 tex.opaque,
                 width,
                 height,
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                instance.cull_mode,
+                if *depth_test || *depth_write { depth } else { &mut no_depth },
             )
         }
     }
@@ -1214,9 +1589,36 @@ fn draw_prepared_triangle<'a>(
     texture_cache: &mut Option<(TextureHandle, Option<&'a Texture>)>,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
+
+    depth: &mut DepthRows<'_>,
 ) {
+    if let PreparedObject::TexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    }
+    | PreparedObject::DirectTexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    } = prepared
+    {
+        depth.mode = deadlib_render_core::DepthMode::from_flags(
+            *depth_test,
+            *depth_write,
+            *depth_test_on_fail,
+        );
+    }
+
+    let mut no_depth = DepthRows {
+        pixels: &mut [],
+        unorm16: false,
+        mode: deadlib_render_core::DepthMode::TestWrite,
+    };
     match prepared {
         PreparedObject::Mesh { blend, .. } => {
             let triangle = &mesh_triangles[triangle as usize];
@@ -1233,7 +1635,11 @@ fn draw_prepared_triangle<'a>(
         PreparedObject::TexturedMesh {
             texture_mask,
             blend,
+            depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
+            sampler,
             ..
         } => {
             let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
@@ -1245,16 +1651,14 @@ fn draw_prepared_triangle<'a>(
                 triangle.setup,
                 *blend,
                 *texture_mask,
-                &tex.image,
-                SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..effective_sampler(tex, *texture_handle)
-                },
+                tex.texels(),
+                texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                 tex.opaque,
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
                 width,
+                if *depth_test || *depth_write { depth } else { &mut no_depth },
             );
         }
         _ => debug_assert!(false, "whole objects must use whole-object stripe items"),
@@ -1281,6 +1685,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     let window_size = PhysicalSize::new(width, height);
     state.surface_resize_pending |= state.window_size != window_size;
     state.window_size = window_size;
+    state.depth.resize(width as usize * height as usize, 1.0);
 }
 
 pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
@@ -1323,6 +1728,8 @@ struct ScreenVertexColor {
 
 #[derive(Clone, Copy)]
 struct ScreenVertexTexColor {
+    inv_w: f32,
+    z: f32,
     x: f32,
     y: f32,
     u: f32,
@@ -1552,7 +1959,10 @@ fn prepare_mesh_triangles(
 #[inline]
 fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
     let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
-    if distances.iter().all(|distance| *distance >= 0.0) {
+    if distances
+        .into_iter()
+        .fold(true, |inside, distance| inside & (distance >= 0.0))
+    {
         return ([triangle[0], triangle[1], triangle[2], triangle[0]], 3);
     }
     if distances.iter().all(|distance| *distance < 0.0) {
@@ -1601,6 +2011,7 @@ fn project_tmesh_polygon(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
+    cull_mode: f32,
 ) -> Option<([ScreenVertexTexColor; 4], usize)> {
     debug_assert_eq!(vertices.len(), 3);
     let mut triangle = [ClipVertexTexColor {
@@ -1638,6 +2049,8 @@ fn project_tmesh_polygon(
     let (clipped, len) = clip_tmesh_near(triangle);
     let polygon = &clipped[..len];
     let mut projected = [ScreenVertexTexColor {
+        inv_w: 1.0,
+        z: 0.0,
         x: 0.0,
         y: 0.0,
         u: 0.0,
@@ -1654,12 +2067,22 @@ fn project_tmesh_polygon(
             return None;
         }
         projected[i] = ScreenVertexTexColor {
+            inv_w: vertex.clip.w.recip(),
+            z: (vertex.clip.z / vertex.clip.w + 1.0) * 0.5,
             x: f32::midpoint(ndc_x, 1.0) * width as f32,
             y: ((1.0 - ndc_y) * 0.5) * height as f32,
             u: vertex.u,
             v: vertex.v,
             color: vertex.color,
         };
+    }
+    if cull_mode > 0.5 && polygon.len() >= 3 {
+        let [a, b, c] = [projected[0], projected[1], projected[2]];
+        // Screen Y points down, so a CCW clip-space face has negative area.
+        let area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        if (cull_mode < 1.5 && area >= 0.0) || (cull_mode > 1.5 && area <= 0.0) {
+            return None;
+        }
     }
     Some((projected, polygon.len()))
 }
@@ -1676,6 +2099,7 @@ fn prepare_tmesh_triangles(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
+    cull_mode: f32,
 ) -> Option<(u32, u32, u32, ScreenRows)> {
     if vertices.is_empty() || width == 0 || height == 0 {
         return None;
@@ -1694,6 +2118,7 @@ fn prepare_tmesh_triangles(
             chunk,
             width,
             height,
+            cull_mode,
         ) else {
             continue;
         };
@@ -1741,14 +2166,14 @@ fn rasterize_prepared_sprite(
     tint: [f32; 4],
     texture_mask: bool,
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
     if width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return;
@@ -1799,7 +2224,7 @@ fn rasterize_prepared_mesh(
     blend: BlendMode,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
 ) {
     for triangle in triangles {
@@ -1820,18 +2245,16 @@ fn rasterize_prepared_tmesh(
     triangles: &[PreparedTriangle<ScreenVertexTexColor>],
     texture_mask: bool,
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
+
+    depth: &mut DepthRows<'_>,
 ) {
-    let sampler = SamplerDesc {
-        wrap: SamplerWrap::Repeat,
-        ..sampler
-    };
     for triangle in triangles {
         rasterize_triangle_tex_color_prepared(
             &triangle.vertices,
@@ -1845,6 +2268,7 @@ fn rasterize_prepared_tmesh(
             stripe_y_end,
             buffer,
             width,
+            depth,
         );
     }
 }
@@ -1857,7 +2281,7 @@ fn rasterize_mesh_triangles(
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) -> u32 {
     if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
@@ -1909,6 +2333,166 @@ fn rasterize_mesh_triangles(
     verts_drawn
 }
 
+// Environment coordinates are generated at vertices, then perspective-correctly
+// interpolated. Stack triangles also preserve clipping without transient buffers.
+#[allow(clippy::too_many_arguments)]
+fn rasterize_environment(
+    mvp: &Matrix4,
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    instance: deadlib_render_core::TexturedMeshInstanceRaw,
+    blend: BlendMode,
+    primary: &Texture,
+    primary_sampler: SamplerDesc,
+    additive: Option<&Texture>,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    depth: &mut DepthRows<'_>,
+) -> u32 {
+    let texture_uvs = deadlib_render_core::textured_mesh_uv_mapper(instance);
+    let mut count = 0;
+    for triangle in vertices.as_chunks::<3>().0 {
+        let mut first = *triangle;
+        let mut second = *triangle;
+        for i in 0..3 {
+            let uv = texture_uvs(triangle[i]);
+            first[i].uv = uv[0];
+            second[i].uv = uv[1];
+        }
+        let Some((p, len)) = project_tmesh_polygon(
+            mvp,
+            instance.tint,
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            &first,
+            width,
+            height,
+            instance.cull_mode,
+        ) else {
+            continue;
+        };
+        // Projection and rejection depend only on positions, which are equal
+        // for both stages. Materials without reflection never consume q's UVs.
+        let (q, _) = if !(instance.texture_mask > 0.5) && triangle[0].normal[3] as u8 & 4 != 0 {
+            let Some(projected) = project_tmesh_polygon(
+                mvp,
+                instance.tint,
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                &second,
+                width,
+                height,
+                instance.cull_mode,
+            ) else {
+                continue;
+            };
+            projected
+        } else {
+            (p, len)
+        };
+        count += 3;
+        for i in 1..len.saturating_sub(1) {
+            let p = [p[0], p[i], p[i + 1]];
+            let q = [q[0], q[i], q[i + 1]];
+            let Some(setup) = triangle_setup(p.map(|v| v.x), p.map(|v| v.y), width, height) else {
+                continue;
+            };
+            let Some((min_x, max_x, min_y, max_y, start)) =
+                setup.stripe_bounds(stripe_y_start, stripe_y_end)
+            else {
+                continue;
+            };
+            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
+                let image = texture.texels();
+                if sampler.filter == SamplerFilter::Linear {
+                    sample_tex_linear::<false, 4>(
+                        image,
+                        image.width,
+                        image.height,
+                        uv[0],
+                        uv[1],
+                        sampler,
+                    )
+                } else {
+                    sample_tex_nearest::<false, 4>(
+                        image,
+                        image.width,
+                        image.height,
+                        uv[0],
+                        uv[1],
+                        sampler,
+                    )
+                }
+                .unwrap_or([0.0; 4])
+            };
+            let edges = [
+                owns_edge(p[1].x, p[1].y, p[2].x, p[2].y, setup.inv_denom),
+                owns_edge(p[2].x, p[2].y, p[0].x, p[0].y, setup.inv_denom),
+                owns_edge(p[0].x, p[0].y, p[1].x, p[1].y, setup.inv_denom),
+            ];
+            for y in min_y..=max_y {
+                for x in min_x..=max_x {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
+                    let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
+                    let c = 1.0 - a - b;
+                    if !covered([a, b, c], edges) {
+                        continue;
+                    }
+                    let z = a * p[0].z + b * p[1].z + c * p[2].z;
+                    let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
+                    let w = [
+                        a * p[0].inv_w / sum,
+                        b * p[1].inv_w / sum,
+                        c * p[2].inv_w / sum,
+                    ];
+                    let uv = |v: &[ScreenVertexTexColor; 3]| {
+                        [
+                            w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
+                            w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
+                        ]
+                    };
+                    let texel = sample(primary, primary_sampler, uv(&p));
+                    let tint: [f32; 4] = std::array::from_fn(|i| {
+                        w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
+                    });
+                    let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
+                    if instance.texture_mask > 0.5 {
+                        color[..3].copy_from_slice(&tint[..3]);
+                    } else if triangle[0].normal[3] as u8 & 4 != 0 {
+                        let reflection = sample(
+                            additive.unwrap_or(primary),
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..additive.unwrap_or(primary).sampler
+                            },
+                            uv(&q),
+                        );
+                        for i in 0..3 {
+                            color[i] = (color[i] + reflection[i]).min(1.0);
+                        }
+                        color[3] *= reflection[3];
+                    }
+                    if color[3] <= 1.0 / 256.0 {
+                        continue;
+                    }
+                    let index = (y - start) as usize * width + x as usize;
+                    if !depth.test(index, z) {
+                        continue;
+                    }
+                    buffer(index, color, blend);
+                }
+            }
+        }
+    }
+    count
+}
+
 fn rasterize_textured_mesh_triangles(
     mvp: &Matrix4,
     vertices: &[deadlib_render_core::TexturedMeshVertex],
@@ -1918,23 +2502,21 @@ fn rasterize_textured_mesh_triangles(
     uv_tex_shift: [f32; 2],
     texture_mask: bool,
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    cull_mode: f32,
+
+    depth: &mut DepthRows<'_>,
 ) -> u32 {
     if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
     }
-
-    let sampler = SamplerDesc {
-        wrap: SamplerWrap::Repeat,
-        ..sampler
-    };
 
     let mut verts_drawn = 0u32;
     for chunk in vertices.as_chunks::<3>().0 {
@@ -1947,6 +2529,7 @@ fn rasterize_textured_mesh_triangles(
             chunk,
             width,
             height,
+            cull_mode,
         ) else {
             continue;
         };
@@ -1966,6 +2549,7 @@ fn rasterize_textured_mesh_triangles(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
     }
@@ -1982,14 +2566,14 @@ fn rasterize_triangle_with_inv(
     tint: [f32; 4],
     texture_mask: bool,
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
     match (texture_mask, opaque) {
         (false, false) => rasterize_triangle_mode::<false, false>(
@@ -2064,16 +2648,16 @@ fn rasterize_triangle_mode<const MASK: bool, const OPAQUE: bool>(
     inv_denom: f32,
     tint: [f32; 4],
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
-    match (sampler.filter, matches!(blend, BlendMode::Add)) {
-        (SamplerFilter::Nearest, true) => rasterize_triangle_impl::<false, true, MASK, OPAQUE>(
+    match sampler.filter {
+        SamplerFilter::Nearest => rasterize_triangle_impl::<false, MASK, OPAQUE>(
             v0,
             v1,
             v2,
@@ -2085,9 +2669,10 @@ fn rasterize_triangle_mode<const MASK: bool, const OPAQUE: bool>(
             height,
             stripe_y_start,
             stripe_y_end,
+            blend,
             buffer,
         ),
-        (SamplerFilter::Nearest, false) => rasterize_triangle_impl::<false, false, MASK, OPAQUE>(
+        SamplerFilter::Linear => rasterize_triangle_impl::<true, MASK, OPAQUE>(
             v0,
             v1,
             v2,
@@ -2099,34 +2684,7 @@ fn rasterize_triangle_mode<const MASK: bool, const OPAQUE: bool>(
             height,
             stripe_y_start,
             stripe_y_end,
-            buffer,
-        ),
-        (SamplerFilter::Linear, true) => rasterize_triangle_impl::<true, true, MASK, OPAQUE>(
-            v0,
-            v1,
-            v2,
-            inv_denom,
-            tint,
-            image,
-            sampler,
-            width,
-            height,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        ),
-        (SamplerFilter::Linear, false) => rasterize_triangle_impl::<true, false, MASK, OPAQUE>(
-            v0,
-            v1,
-            v2,
-            inv_denom,
-            tint,
-            image,
-            sampler,
-            width,
-            height,
-            stripe_y_start,
-            stripe_y_end,
+            blend,
             buffer,
         ),
     }
@@ -2139,14 +2697,16 @@ fn rasterize_triangle_tex_color(
     v2: &ScreenVertexTexColor,
     blend: BlendMode,
     texture_mask: bool,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
 ) {
     let Some(setup) = triangle_setup_in_rows(
         [v0.x, v1.x, v2.x],
@@ -2170,6 +2730,7 @@ fn rasterize_triangle_tex_color(
         stripe_y_end,
         buffer,
         width,
+        depth,
     );
 }
 
@@ -2180,13 +2741,15 @@ fn rasterize_triangle_tex_color_prepared(
     setup: RasterSetup,
     blend: BlendMode,
     texture_mask: bool,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     opaque: bool,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
+
+    depth: &mut DepthRows<'_>,
 ) {
     let [v0, v1, v2] = vertices;
     match (texture_mask, opaque) {
@@ -2202,6 +2765,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (false, true) => rasterize_triangle_tex_color_mode::<false, true>(
             v0,
@@ -2215,6 +2779,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (true, false) => rasterize_triangle_tex_color_mode::<true, false>(
             v0,
@@ -2228,6 +2793,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (true, true) => rasterize_triangle_tex_color_mode::<true, true>(
             v0,
@@ -2241,6 +2807,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
     }
 }
@@ -2253,16 +2820,18 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
     v2: &ScreenVertexTexColor,
     setup: RasterSetup,
     blend: BlendMode,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
+
+    depth: &mut DepthRows<'_>,
 ) {
-    match (sampler.filter, matches!(blend, BlendMode::Add)) {
-        (SamplerFilter::Nearest, true) => {
-            rasterize_triangle_tex_color_impl::<false, true, MASK, OPAQUE>(
+    match sampler.filter {
+        SamplerFilter::Nearest => {
+            rasterize_triangle_tex_color_impl::<false, MASK, OPAQUE>(
                 v0,
                 v1,
                 v2,
@@ -2272,11 +2841,13 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 width,
                 stripe_y_start,
                 stripe_y_end,
+                blend,
                 buffer,
+                depth,
             );
         }
-        (SamplerFilter::Nearest, false) => {
-            rasterize_triangle_tex_color_impl::<false, false, MASK, OPAQUE>(
+        SamplerFilter::Linear => {
+            rasterize_triangle_tex_color_impl::<true, MASK, OPAQUE>(
                 v0,
                 v1,
                 v2,
@@ -2286,35 +2857,9 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 width,
                 stripe_y_start,
                 stripe_y_end,
+                blend,
                 buffer,
-            );
-        }
-        (SamplerFilter::Linear, true) => {
-            rasterize_triangle_tex_color_impl::<true, true, MASK, OPAQUE>(
-                v0,
-                v1,
-                v2,
-                setup,
-                image,
-                sampler,
-                width,
-                stripe_y_start,
-                stripe_y_end,
-                buffer,
-            );
-        }
-        (SamplerFilter::Linear, false) => {
-            rasterize_triangle_tex_color_impl::<true, false, MASK, OPAQUE>(
-                v0,
-                v1,
-                v2,
-                setup,
-                image,
-                sampler,
-                width,
-                stripe_y_start,
-                stripe_y_end,
-                buffer,
+                depth,
             );
         }
     }
@@ -2330,7 +2875,7 @@ fn rasterize_triangle_color(
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
     let Some(setup) = triangle_setup_in_rows(
         [v0.x, v1.x, v2.x],
@@ -2360,33 +2905,21 @@ fn rasterize_triangle_color_prepared(
     blend: BlendMode,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
 ) {
     let [v0, v1, v2] = vertices;
-    if matches!(blend, BlendMode::Add) {
-        rasterize_triangle_color_impl::<true>(
-            v0,
-            v1,
-            v2,
-            setup,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        );
-    } else {
-        rasterize_triangle_color_impl::<false>(
-            v0,
-            v1,
-            v2,
-            setup,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        );
-    }
+    rasterize_triangle_color_impl(
+        v0,
+        v1,
+        v2,
+        setup,
+        width,
+        stripe_y_start,
+        stripe_y_end,
+        blend,
+        buffer,
+    );
 }
 
 #[inline(always)]
@@ -2414,6 +2947,14 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
             let m = max as i32;
             if m == 0 {
                 0
+            } else if i >= 0 && i < m {
+                // UVs are already wrapped; ordinary texels are in range.
+                i as usize
+            } else if i == m {
+                0
+            } else if i == -1 && m > 0 {
+                // Bilinear border texels wrap without integer division.
+                (m - 1) as usize
             } else {
                 let mut v = i % m;
                 if v < 0 {
@@ -2426,14 +2967,14 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
 }
 
 #[inline(always)]
-fn sample_tex_nearest<const OPAQUE: bool>(
-    tex_data: &[u8],
+fn sample_tex_nearest<const OPAQUE: bool, const CHANNELS: usize>(
+    tex_data: Texels<'_>,
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-) -> Option<[f32; 4]> {
+) -> Option<[f32; CHANNELS]> {
     let tx = wrap_index(
         (wrap_uv(u, sampler.wrap) * tex_w as f32) as i32,
         tex_w,
@@ -2444,212 +2985,250 @@ fn sample_tex_nearest<const OPAQUE: bool>(
         tex_h,
         sampler.wrap,
     );
-    let idx = (ty * tex_w + tx) * 4;
-    if idx + 3 >= tex_data.len() {
-        return None;
+    let mut color = tex_data.pixel::<CHANNELS>(ty * tex_w + tx)?;
+    if OPAQUE {
+        color[CHANNELS - 1] = 1.0;
     }
-    Some([
-        f32::from(tex_data[idx]) * U8_TO_F32,
-        f32::from(tex_data[idx + 1]) * U8_TO_F32,
-        f32::from(tex_data[idx + 2]) * U8_TO_F32,
-        if OPAQUE {
-            1.0
-        } else {
-            f32::from(tex_data[idx + 3]) * U8_TO_F32
-        },
-    ])
+    Some(color)
 }
 
 #[inline(always)]
 fn sample_alpha_nearest(
-    tex_data: &[u8],
+    tex_data: Texels<'_>,
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
 ) -> Option<f32> {
-    let tx = wrap_index(
-        (wrap_uv(u, sampler.wrap) * tex_w as f32) as i32,
-        tex_w,
-        sampler.wrap,
-    );
-    let ty = wrap_index(
-        (wrap_uv(v, sampler.wrap) * tex_h as f32) as i32,
-        tex_h,
-        sampler.wrap,
-    );
-    tex_data
-        .get((ty * tex_w + tx) * 4 + 3)
-        .map(|alpha| f32::from(*alpha) * U8_TO_F32)
+    sample_tex_nearest::<false, 1>(tex_data, tex_w, tex_h, u, v, sampler).map(|c| c[0])
 }
 
 #[inline(always)]
-fn sample_tex_linear<const OPAQUE: bool>(
-    tex_data: &[u8],
+fn sample_tex_linear<const OPAQUE: bool, const CHANNELS: usize>(
+    tex_data: Texels<'_>,
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-) -> Option<[f32; 4]> {
+) -> Option<[f32; CHANNELS]> {
     let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
     let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
-    let x0 = x.floor() as i32;
-    let y0 = y.floor() as i32;
-    let x1 = x0 + 1;
-    let y1 = y0 + 1;
-    let fx = clamp01(x - x0 as f32);
-    let fy = clamp01(y - y0 as f32);
-
-    let ix0 = wrap_index(x0, tex_w, sampler.wrap);
-    let ix1 = wrap_index(x1, tex_w, sampler.wrap);
-    let iy0 = wrap_index(y0, tex_h, sampler.wrap);
-    let iy1 = wrap_index(y1, tex_h, sampler.wrap);
-
-    let idx00 = (iy0 * tex_w + ix0) * 4;
-    let idx10 = (iy0 * tex_w + ix1) * 4;
-    let idx01 = (iy1 * tex_w + ix0) * 4;
-    let idx11 = (iy1 * tex_w + ix1) * 4;
-    if idx11 + 3 >= tex_data.len() {
-        return None;
-    }
-    if !OPAQUE
-        && tex_data[idx00 + 3] == 0
-        && tex_data[idx10 + 3] == 0
-        && tex_data[idx01 + 3] == 0
-        && tex_data[idx11 + 3] == 0
-    {
-        return None;
-    }
-
-    let lerp = |a: f32, b: f32, t: f32| (b - a).mul_add(t, a);
-    let c00 = [
-        f32::from(tex_data[idx00]) * U8_TO_F32,
-        f32::from(tex_data[idx00 + 1]) * U8_TO_F32,
-        f32::from(tex_data[idx00 + 2]) * U8_TO_F32,
-        if OPAQUE {
-            1.0
-        } else {
-            f32::from(tex_data[idx00 + 3]) * U8_TO_F32
-        },
-    ];
-    let c10 = [
-        f32::from(tex_data[idx10]) * U8_TO_F32,
-        f32::from(tex_data[idx10 + 1]) * U8_TO_F32,
-        f32::from(tex_data[idx10 + 2]) * U8_TO_F32,
-        if OPAQUE {
-            1.0
-        } else {
-            f32::from(tex_data[idx10 + 3]) * U8_TO_F32
-        },
-    ];
-    let c01 = [
-        f32::from(tex_data[idx01]) * U8_TO_F32,
-        f32::from(tex_data[idx01 + 1]) * U8_TO_F32,
-        f32::from(tex_data[idx01 + 2]) * U8_TO_F32,
-        if OPAQUE {
-            1.0
-        } else {
-            f32::from(tex_data[idx01 + 3]) * U8_TO_F32
-        },
-    ];
-    let c11 = [
-        f32::from(tex_data[idx11]) * U8_TO_F32,
-        f32::from(tex_data[idx11 + 1]) * U8_TO_F32,
-        f32::from(tex_data[idx11 + 2]) * U8_TO_F32,
-        if OPAQUE {
-            1.0
-        } else {
-            f32::from(tex_data[idx11 + 3]) * U8_TO_F32
-        },
-    ];
-
-    let r0 = lerp(c00[0], c10[0], fx);
-    let g0 = lerp(c00[1], c10[1], fx);
-    let b0 = lerp(c00[2], c10[2], fx);
-    let a0 = lerp(c00[3], c10[3], fx);
-    let r1 = lerp(c01[0], c11[0], fx);
-    let g1 = lerp(c01[1], c11[1], fx);
-    let b1 = lerp(c01[2], c11[2], fx);
-    let a1 = lerp(c01[3], c11[3], fx);
-    Some([
-        lerp(r0, r1, fy),
-        lerp(g0, g1, fy),
-        lerp(b0, b1, fy),
-        lerp(a0, a1, fy),
-    ])
-}
-
-#[inline(always)]
-fn sample_alpha_linear(
-    tex_data: &[u8],
-    tex_w: usize,
-    tex_h: usize,
-    u: f32,
-    v: f32,
-    sampler: SamplerDesc,
-) -> Option<f32> {
-    let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
-    let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
-    let x0 = x.floor() as i32;
-    let y0 = y.floor() as i32;
+    // Wrapped UVs put x/y in [-0.5, size - 0.5] (or NaN). Truncation
+    // already floors nonnegative values; only the negative edge needs -1.
+    let x0 = x as i32 - i32::from(x < 0.0);
+    let y0 = y as i32 - i32::from(y < 0.0);
     let fx = clamp01(x - x0 as f32);
     let fy = clamp01(y - y0 as f32);
     let ix0 = wrap_index(x0, tex_w, sampler.wrap);
     let ix1 = wrap_index(x0 + 1, tex_w, sampler.wrap);
     let iy0 = wrap_index(y0, tex_h, sampler.wrap);
     let iy1 = wrap_index(y0 + 1, tex_h, sampler.wrap);
-    let idx00 = (iy0 * tex_w + ix0) * 4 + 3;
-    let idx10 = (iy0 * tex_w + ix1) * 4 + 3;
-    let idx01 = (iy1 * tex_w + ix0) * 4 + 3;
-    let idx11 = (iy1 * tex_w + ix1) * 4 + 3;
-    if idx11 >= tex_data.len() {
+    let mut colors = [
+        tex_data.pixel::<CHANNELS>(iy0 * tex_w + ix0)?,
+        tex_data.pixel::<CHANNELS>(iy0 * tex_w + ix1)?,
+        tex_data.pixel::<CHANNELS>(iy1 * tex_w + ix0)?,
+        tex_data.pixel::<CHANNELS>(iy1 * tex_w + ix1)?,
+    ];
+    if OPAQUE {
+        for c in &mut colors {
+            c[CHANNELS - 1] = 1.0;
+        }
+    } else if colors.iter().all(|c| c[CHANNELS - 1] == 0.0) {
         return None;
     }
     let lerp = |a: f32, b: f32, t: f32| (b - a).mul_add(t, a);
-    let a00 = f32::from(tex_data[idx00]) * U8_TO_F32;
-    let a10 = f32::from(tex_data[idx10]) * U8_TO_F32;
-    let a01 = f32::from(tex_data[idx01]) * U8_TO_F32;
-    let a11 = f32::from(tex_data[idx11]) * U8_TO_F32;
-    Some(lerp(lerp(a00, a10, fx), lerp(a01, a11, fx), fy))
+    Some(std::array::from_fn(|i| {
+        lerp(
+            lerp(colors[0][i], colors[1][i], fx),
+            lerp(colors[2][i], colors[3][i], fx),
+            fy,
+        )
+    }))
 }
 
 #[inline(always)]
-fn blend_src_over(dst: u32, sr: f32, sg: f32, sb: f32, sa: f32) -> u32 {
-    if sa >= 1.0 {
-        return pack_rgba([sr, sg, sb, 1.0]);
+fn sample_alpha_linear(
+    tex_data: Texels<'_>,
+    tex_w: usize,
+    tex_h: usize,
+    u: f32,
+    v: f32,
+    sampler: SamplerDesc,
+) -> Option<f32> {
+    sample_tex_linear::<false, 1>(tex_data, tex_w, tex_h, u, v, sampler)
+        .map(|c| c[0])
+        .or(Some(0.0))
+}
+
+#[derive(Clone, Copy)]
+struct Texels<'a> {
+    bytes: &'a [u8],
+    half: &'a [u64],
+    width: usize,
+    height: usize,
+}
+
+impl Texture {
+    fn texels(&self) -> Texels<'_> {
+        Texels {
+            half: &self.half_pixels,
+            ..(&self.image).into()
+        }
     }
-    blend_src_over_general(dst, sr, sg, sb, sa)
 }
 
-#[inline(always)]
-fn blend_src_over_general(dst: u32, sr: f32, sg: f32, sb: f32, sa: f32) -> u32 {
-    let dr = ((dst >> 16) & 0xFF) as f32 * U8_TO_F32;
-    let dg = ((dst >> 8) & 0xFF) as f32 * U8_TO_F32;
-    let db = (dst & 0xFF) as f32 * U8_TO_F32;
-    let da = ((dst >> 24) & 0xFF) as f32 * U8_TO_F32;
-    let inv = 1.0 - sa;
-    pack_rgba([
-        sr.mul_add(sa, dr * inv),
-        sg.mul_add(sa, dg * inv),
-        sb.mul_add(sa, db * inv),
-        sa + da * inv,
-    ])
+impl<'a> From<&'a RgbaImage> for Texels<'a> {
+    fn from(image: &'a RgbaImage) -> Self {
+        Self {
+            bytes: image.as_raw(),
+            half: &[],
+            width: image.width() as usize,
+            height: image.height() as usize,
+        }
+    }
 }
 
-#[inline(always)]
-fn blend_add(dst: u32, sr: f32, sg: f32, sb: f32, sa: f32) -> u32 {
-    let dr = ((dst >> 16) & 0xFF) as f32 * U8_TO_F32;
-    let dg = ((dst >> 8) & 0xFF) as f32 * U8_TO_F32;
-    let db = (dst & 0xFF) as f32 * U8_TO_F32;
-    let da = ((dst >> 24) & 0xFF) as f32 * U8_TO_F32;
-    pack_rgba([
-        sr.mul_add(sa, dr).min(1.0),
-        sg.mul_add(sa, dg).min(1.0),
-        sb.mul_add(sa, db).min(1.0),
-        (da + sa).min(1.0),
-    ])
+impl Texels<'_> {
+    // Mask draws decode/interpolate only alpha; color draws retain all RGBA lanes.
+    fn pixel<const CHANNELS: usize>(self, index: usize) -> Option<[f32; CHANNELS]> {
+        if self.half.is_empty() {
+            let pixel = self.bytes.get(index * 4..index * 4 + 4)?;
+            Some(std::array::from_fn(|i| {
+                f32::from(pixel[4 - CHANNELS + i]) * U8_TO_F32
+            }))
+        } else {
+            self.half.get(index).map(|&pixel| {
+                std::array::from_fn(|i| decode_half((pixel >> ((4 - CHANNELS + i) * 16)) as u16))
+            })
+        }
+    }
+}
+
+// IEEE binary16 conversion, round to nearest with ties to even. Every
+// attachment write is rounded, so chained captures retain GPU precision.
+fn encode_half(value: f32) -> u16 {
+    let bits = value.to_bits();
+    let sign = ((bits >> 16) & 0x8000) as u16;
+    let magnitude = bits & 0x7fff_ffff;
+    // One unsigned check covers normal binary16 exponents: [2^-14, 2^16).
+    if magnitude.wrapping_sub(0x3880_0000) < 0x0f00_0000 {
+        let rounded = magnitude + 0x0fff + ((magnitude >> 13) & 1);
+        return sign | ((rounded >> 13) - 0x1c000) as u16;
+    }
+    if magnitude >= 0x4780_0000 {
+        return sign | 0x7c00 | if magnitude > 0x7f80_0000 { 0x0200 } else { 0 };
+    }
+    // Below 2^-25, even rounding cannot reach a subnormal.
+    if magnitude < 0x3300_0000 {
+        return sign;
+    }
+    let mantissa = (magnitude & 0x007f_ffff) | 0x0080_0000;
+    let shift = 126 - (magnitude >> 23);
+    let rounded = mantissa + ((1 << (shift - 1)) - 1) + ((mantissa >> shift) & 1);
+    sign | (rounded >> shift) as u16
+}
+
+// Exact byte quantization below one needs 15 KiB; larger encodings saturate or clear.
+static HALF_BYTE: [u8; 0x3c00] = {
+    let mut table = [0; 0x3c00];
+    let mut bits = 0;
+    while bits < table.len() {
+        table[bits] = if bits < 0x1800 {
+            0
+        } else {
+            let scaled = ((bits & 0x03ff) as u32 | 0x0400) * 255;
+            let shift = 25 - (bits >> 10);
+            ((scaled + (1 << (shift - 1))) >> shift) as u8
+        };
+        bits += 1;
+    }
+    table
+};
+
+fn decode_half(bits: u16) -> f32 {
+    let sign = u32::from(bits & 0x8000) << 16;
+    let exponent = bits & 0x7c00;
+    let magnitude = if exponent == 0 {
+        // All binary16 subnormals are normal f32 values: scale the integer
+        // significand exactly, including zero, instead of renormalizing bits.
+        (f32::from(bits & 0x03ff) * (1.0 / 16_777_216.0)).to_bits()
+    } else {
+        let normal = (u32::from(bits & 0x7fff) << 13) + 0x3800_0000;
+        normal | if exponent == 0x7c00 { 0x7f80_0000 } else { 0 }
+    };
+    f32::from_bits(sign | magnitude)
+}
+
+fn half_to_byte(bits: u16) -> u8 {
+    if bits >= 0x3c00 {
+        if bits <= 0x7c00 { 255 } else { 0 }
+    } else {
+        HALF_BYTE[bits as usize]
+    }
+}
+
+fn pack_half(color: [f32; 4]) -> u64 {
+    let [r, g, b, a] = color.map(encode_half).map(u64::from);
+    r | (g << 16) | (b << 32) | (a << 48)
+}
+
+fn unpack_half(pixel: u64) -> [f32; 4] {
+    std::array::from_fn(|i| decode_half((pixel >> (i * 16)) as u16))
+}
+
+fn blend_color(dst: [f32; 4], src: [f32; 4], mode: BlendMode) -> [f32; 4] {
+    let alpha = clamp01(src[3]);
+    let inv = 1.0 - alpha;
+    let mut color = std::array::from_fn(|i| match mode {
+        BlendMode::NoEffect => dst[i],
+        BlendMode::Alpha => src[i].mul_add(alpha, dst[i] * inv),
+        BlendMode::Add => src[i].mul_add(alpha, dst[i]),
+        BlendMode::Multiply => src[i] * dst[i],
+        BlendMode::Subtract => dst[i].mul_add(inv, -(src[i] * alpha)),
+    });
+    color[3] = if mode == BlendMode::NoEffect {
+        dst[3]
+    } else if mode == BlendMode::Subtract {
+        dst[3].mul_add(inv, -src[3])
+    } else {
+        src[3] + dst[3] * inv
+    };
+    color
+}
+
+fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    move |index, color, mode| {
+        if mode == BlendMode::Alpha && color[3] >= 1.0 {
+            buffer[index] = pack_rgba([color[0], color[1], color[2], 1.0]);
+            return;
+        }
+        if mode == BlendMode::NoEffect {
+            // Preserve the original bounds check while skipping color work.
+            let _ = buffer[index];
+            return;
+        }
+        let dst = buffer[index];
+        let dst = [
+            ((dst >> 16) & 255) as f32 * U8_TO_F32,
+            ((dst >> 8) & 255) as f32 * U8_TO_F32,
+            (dst & 255) as f32 * U8_TO_F32,
+            (dst >> 24) as f32 * U8_TO_F32,
+        ];
+        // Normalized attachments clamp fragment inputs before blending.
+        buffer[index] = pack_rgba(blend_color(dst, color.map(clamp01), mode));
+    }
+}
+
+fn half_writer(buffer: &mut [u64], alpha: bool) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    move |index, color, mode| {
+        let mut color = blend_color(unpack_half(buffer[index]), color, mode);
+        if !alpha {
+            color[3] = 1.0;
+        }
+        buffer[index] = pack_half(color);
+    }
 }
 
 #[inline(always)]
@@ -2663,10 +3242,16 @@ fn raster_bounds(
     stripe_y_start: usize,
     stripe_y_end: usize,
 ) -> Option<(i32, i32, i32, i32, i32)> {
+    let clip_x = (width - 1) as f32;
+    let clip_y = (height - 1) as f32;
+    // A ceiling at or below -1 cannot reach either nonnegative raster axis.
+    if (max_x <= -1.0) | (max_y <= -1.0) {
+        return None;
+    }
     let min_x = min_x.max(0.0) as i32;
-    let max_x = max_x.ceil().min((width - 1) as f32) as i32;
+    let max_x = max_x.ceil().min(clip_x) as i32;
     let mut min_y = min_y.max(0.0) as i32;
-    let mut max_y = max_y.ceil().min((height - 1) as f32) as i32;
+    let mut max_y = max_y.ceil().min(clip_y) as i32;
     if min_x > max_x || min_y > max_y {
         return None;
     }
@@ -2749,24 +3334,20 @@ impl RasterSetup {
 }
 
 #[inline(always)]
-fn rasterize_triangle_impl<
-    const LINEAR: bool,
-    const ADD: bool,
-    const MASK: bool,
-    const OPAQUE: bool,
->(
+fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
     v0: &ScreenVertex,
     v1: &ScreenVertex,
     v2: &ScreenVertex,
     inv_denom: f32,
     tint: [f32; 4],
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
     let Some((min_x, max_x, min_y, max_y, stripe_start)) = raster_bounds(
         v0.x.min(v1.x).min(v2.x),
@@ -2781,10 +3362,15 @@ fn rasterize_triangle_impl<
         return;
     };
 
-    let tex_w = image.width().max(1) as usize;
-    let tex_h = image.height().max(1) as usize;
-    let tex_data = image.as_raw();
+    let tex_w = image.width.max(1);
+    let tex_h = image.height.max(1);
+    let tex_data = image;
 
+    let edges = [
+        owns_edge(v1.x, v1.y, v2.x, v2.y, inv_denom),
+        owns_edge(v2.x, v2.y, v0.x, v0.y, inv_denom),
+        owns_edge(v0.x, v0.y, v1.x, v1.y, inv_denom),
+    ];
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -2793,7 +3379,7 @@ fn rasterize_triangle_impl<
             let w0 = edge_function(v1.x, v1.y, v2.x, v2.y, px, py) * inv_denom;
             let w1 = edge_function(v2.x, v2.y, v0.x, v0.y, px, py) * inv_denom;
             let w2 = 1.0 - w0 - w1;
-            if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+            if !covered([w0, w1, w2], edges) {
                 continue;
             }
 
@@ -2810,53 +3396,47 @@ fn rasterize_triangle_impl<
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_linear::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_nearest::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
                 continue;
             };
-            if sampled[3] <= 0.0 {
+            if sampled[3] == 0.0 && blend != BlendMode::Multiply {
                 continue;
             }
 
-            let sr = clamp01(if MASK { tint[0] } else { sampled[0] * tint[0] });
-            let sg = clamp01(if MASK { tint[1] } else { sampled[1] * tint[1] });
-            let sb = clamp01(if MASK { tint[2] } else { sampled[2] * tint[2] });
-            let sa = clamp01(sampled[3] * tint[3]);
-            if sa <= 0.0 {
+            let sr = if MASK { tint[0] } else { sampled[0] * tint[0] };
+            let sg = if MASK { tint[1] } else { sampled[1] * tint[1] };
+            let sb = if MASK { tint[2] } else { sampled[2] * tint[2] };
+            let sa = sampled[3] * tint[3];
+            if sa == 0.0 && blend != BlendMode::Multiply {
                 continue;
             }
 
             let dst_idx = row * width + x as usize;
-            buffer[dst_idx] = if ADD {
-                blend_add(buffer[dst_idx], sr, sg, sb, sa)
-            } else {
-                blend_src_over(buffer[dst_idx], sr, sg, sb, sa)
-            };
+            buffer(dst_idx, [sr, sg, sb, sa], blend);
         }
     }
 }
 
 #[inline(always)]
-fn rasterize_triangle_tex_color_impl<
-    const LINEAR: bool,
-    const ADD: bool,
-    const MASK: bool,
-    const OPAQUE: bool,
->(
+fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
     v0: &ScreenVertexTexColor,
     v1: &ScreenVertexTexColor,
     v2: &ScreenVertexTexColor,
     setup: RasterSetup,
-    image: &RgbaImage,
+    image: Texels<'_>,
     sampler: SamplerDesc,
     width: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
 ) {
     let Some((min_x, max_x, min_y, max_y, stripe_start)) =
         setup.stripe_bounds(stripe_y_start, stripe_y_end)
@@ -2864,10 +3444,15 @@ fn rasterize_triangle_tex_color_impl<
         return;
     };
     let inv_denom = setup.inv_denom;
-    let tex_w = image.width().max(1) as usize;
-    let tex_h = image.height().max(1) as usize;
-    let tex_data = image.as_raw();
+    let tex_w = image.width.max(1);
+    let tex_h = image.height.max(1);
+    let tex_data = image;
 
+    let edges = [
+        owns_edge(v1.x, v1.y, v2.x, v2.y, inv_denom),
+        owns_edge(v2.x, v2.y, v0.x, v0.y, inv_denom),
+        owns_edge(v0.x, v0.y, v1.x, v1.y, inv_denom),
+    ];
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -2876,7 +3461,7 @@ fn rasterize_triangle_tex_color_impl<
             let w0 = edge_function(v1.x, v1.y, v2.x, v2.y, px, py) * inv_denom;
             let w1 = edge_function(v2.x, v2.y, v0.x, v0.y, px, py) * inv_denom;
             let w2 = 1.0 - w0 - w1;
-            if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+            if !covered([w0, w1, w2], edges) {
                 continue;
             }
 
@@ -2893,43 +3478,43 @@ fn rasterize_triangle_tex_color_impl<
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_linear::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_nearest::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
                 continue;
             };
-            if sampled[3] <= 0.0 {
+            if sampled[3] == 0.0 && blend != BlendMode::Multiply {
                 continue;
             }
 
-            let cr = clamp01(v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1)));
-            let cg = clamp01(v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1)));
-            let cb = clamp01(v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1)));
-            let ca = clamp01(v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1)));
+            let ca = v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1));
 
-            let sr = clamp01(if MASK { cr } else { sampled[0] * cr });
-            let sg = clamp01(if MASK { cg } else { sampled[1] * cg });
-            let sb = clamp01(if MASK { cb } else { sampled[2] * cb });
-            let sa = clamp01(sampled[3] * ca);
-            if sa <= 0.0 {
+            let sa = sampled[3] * ca;
+            if sa <= 1.0 / 256.0 {
                 continue;
             }
 
             let dst_idx = row * width + x as usize;
-            buffer[dst_idx] = if ADD {
-                blend_add(buffer[dst_idx], sr, sg, sb, sa)
-            } else {
-                blend_src_over(buffer[dst_idx], sr, sg, sb, sa)
-            };
+            let z = v2.z.mul_add(w2, v0.z.mul_add(w0, v1.z * w1));
+            if !depth.test(dst_idx, z) {
+                continue;
+            }
+            let cr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
+            let cg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
+            let cb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
+            let sr = if MASK { cr } else { sampled[0] * cr };
+            let sg = if MASK { cg } else { sampled[1] * cg };
+            let sb = if MASK { cb } else { sampled[2] * cb };
+            buffer(dst_idx, [sr, sg, sb, sa], blend);
         }
     }
 }
 
 #[inline(always)]
-fn rasterize_triangle_color_impl<const ADD: bool>(
+fn rasterize_triangle_color_impl(
     v0: &ScreenVertexColor,
     v1: &ScreenVertexColor,
     v2: &ScreenVertexColor,
@@ -2937,7 +3522,8 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
     width: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
-    buffer: &mut [u32],
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
     let Some((min_x, max_x, min_y, max_y, stripe_start)) =
         setup.stripe_bounds(stripe_y_start, stripe_y_end)
@@ -2946,6 +3532,11 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
     };
     let inv_denom = setup.inv_denom;
 
+    let edges = [
+        owns_edge(v1.x, v1.y, v2.x, v2.y, inv_denom),
+        owns_edge(v2.x, v2.y, v0.x, v0.y, inv_denom),
+        owns_edge(v0.x, v0.y, v1.x, v1.y, inv_denom),
+    ];
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -2954,26 +3545,37 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
             let w0 = edge_function(v1.x, v1.y, v2.x, v2.y, px, py) * inv_denom;
             let w1 = edge_function(v2.x, v2.y, v0.x, v0.y, px, py) * inv_denom;
             let w2 = 1.0 - w0 - w1;
-            if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+            if !covered([w0, w1, w2], edges) {
                 continue;
             }
 
-            let sr = clamp01(v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1)));
-            let sg = clamp01(v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1)));
-            let sb = clamp01(v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1)));
-            let sa = clamp01(v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1)));
-            if sa <= 0.0 {
+            let sr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
+            let sg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
+            let sb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
+            let sa = v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1));
+            if sa == 0.0 && blend != BlendMode::Multiply {
                 continue;
             }
 
             let dst_idx = row * width + x as usize;
-            buffer[dst_idx] = if ADD {
-                blend_add(buffer[dst_idx], sr, sg, sb, sa)
-            } else {
-                blend_src_over(buffer[dst_idx], sr, sg, sb, sa)
-            };
+            buffer(dst_idx, [sr, sg, sb, sa], blend);
         }
     }
+}
+
+fn owns_edge(x0: f32, y0: f32, x1: f32, y1: f32, inv: f32) -> bool {
+    let dy = (y1 - y0) * inv;
+    let dx = (x1 - x0) * inv;
+    dy > 0.0 || (dy == 0.0 && dx < 0.0)
+}
+
+fn covered(weights: [f32; 3], edges: [bool; 3]) -> bool {
+    weights
+        .into_iter()
+        .zip(edges)
+        .fold(true, |inside, (w, edge)| {
+            inside & ((w > 0.0) | ((w == 0.0) & edge))
+        })
 }
 
 #[inline(always)]
@@ -2989,6 +3591,651 @@ fn triangle_inv_denom(v0: &ScreenVertex, v1: &ScreenVertex, v2: &ScreenVertex) -
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+
+    fn assert_depth_captures(state: &mut State) {
+        let textures = TestTextures {
+            texture: create_texture(
+                &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+                SamplerDesc::default(),
+            )
+            .unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let model = depth_frame();
+        let projection = Matrix4::from_scale(Vec3::new(1.0, 1.0, -1.0));
+        let mut frame = RenderFrame {
+            render_targets: vec![RenderTargetFrame {
+                texture_handle: deadlib_render_core::render_target_texture_handle(18),
+                width: 64,
+                height: 64,
+                viewport: [64, 64],
+                alpha: true,
+                depth: true,
+                preserve: false,
+                float_color: false,
+                cameras: vec![projection],
+                sprite_instances: vec![],
+                mesh_vertices: vec![],
+                tmesh_instances: model.tmesh_instances.clone(),
+                tmesh_geometries: model.tmesh_geometries.clone(),
+                ops: model.ops.clone(),
+            }],
+            ..model.clone()
+        };
+        let mut check = |frame: &RenderFrame, samples: &[(u32, u32, [u8; 3])], label: &str| {
+            draw_offscreen_targets(state, frame, &textures);
+            let target = &state.offscreen_targets[0];
+            for &(x, y, expected) in samples {
+                assert_eq!(
+                    target.texture.image.get_pixel(x, y).0[..3],
+                    expected,
+                    "{label}: {x},{y}"
+                );
+            }
+            assert_eq!(
+                target.depth.len(),
+                if frame.render_targets[0].depth {
+                    64 * 64
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                target.depth_image.len(),
+                if frame.render_targets[0].depth {
+                    64 * 64
+                } else {
+                    0
+                }
+            );
+        };
+        for float_color in [false, true] {
+            frame.render_targets[0].float_color = float_color;
+            for alpha in [false, true] {
+                frame.render_targets[0].alpha = alpha;
+                for depth in [true, false, true, false] {
+                    frame.render_targets[0].depth = depth;
+                    check(
+                        &frame,
+                        &[
+                            (20, 25, if depth { [0, 255, 0] } else { [255, 0, 0] }),
+                            (32, 32, [0, 0, 255]),
+                            (50, 32, [255, 0, 0]),
+                        ],
+                        "optional capture depth",
+                    );
+                }
+            }
+        }
+        drop(check);
+        let mut check = |frame: &RenderFrame, expected: [u8; 3], label: &str| {
+            draw_offscreen_targets(state, frame, &textures);
+            assert_eq!(
+                state.offscreen_targets[0].texture.image.get_pixel(20, 25).0[..3],
+                expected,
+                "{label}"
+            );
+            let target = &state.offscreen_targets[0];
+            (target.depth.as_ptr(), target.depth_image.as_ptr())
+        };
+        for float_color in [false, true] {
+            let target = &mut frame.render_targets[0];
+            target.texture_handle = deadlib_render_core::render_target_texture_handle(19);
+            target.float_color = float_color;
+            target.alpha = true;
+            target.depth = true;
+            target.preserve = true;
+            target.viewport = [64, 64];
+            target.tmesh_instances.clone_from(&model.tmesh_instances);
+            target.tmesh_geometries.clone_from(&model.tmesh_geometries);
+            target.ops = vec![model.ops[0].clone()];
+            target.mesh_vertices = [
+                [-1.0, -1.0],
+                [1.0, -1.0],
+                [1.0, 1.0],
+                [-1.0, -1.0],
+                [1.0, 1.0],
+                [-1.0, 1.0],
+            ]
+            .map(|pos| deadlib_render_core::MeshVertex {
+                pos,
+                color: [0.0, 0.0, 0.0, 1.0],
+            })
+            .to_vec();
+            check(&frame, [0, 255, 0], "first preserved capture");
+            frame.render_targets[0].ops = vec![model.ops[1].clone()];
+            // Both compact and physical depth buffers retain their allocations.
+            let pointers = check(&frame, [0, 255, 0], "depth retained across captures");
+            frame.render_targets[0].viewport = [32, 32];
+            frame.render_targets[0].ops = vec![DrawOp::Mesh(deadlib_render_core::MeshRun {
+                vertex_start: 0,
+                vertex_count: 6,
+                blend: BlendMode::Alpha,
+                camera: 0,
+            })];
+            check(&frame, [0, 0, 0], "color overwritten in reduced viewport");
+            frame.render_targets[0].viewport = [64, 64];
+            frame.render_targets[0].ops = vec![model.ops[1].clone()];
+            assert_eq!(
+                check(&frame, [0, 0, 0], "depth retained through viewport changes"),
+                pointers
+            );
+            let DrawOp::TexturedMesh(run) = &mut frame.render_targets[0].ops[0] else {
+                unreachable!()
+            };
+            run.clear_depth = true;
+            check(
+                &frame,
+                [255, 0, 0],
+                "explicit depth clear on preserved capture",
+            );
+            frame.render_targets[0].preserve = false;
+            frame.render_targets[0].ops = vec![model.ops[1].clone()];
+            check(&frame, [255, 0, 0], "nonpreserved depth clear");
+            let front = 1.0 - 2.0 * (20000.0 / 65535.0);
+            frame.render_targets[0].tmesh_instances[0].model_col3[2] = front - 0.4;
+            frame.render_targets[0].tmesh_instances[1].model_col3[2] = front - 0.000005;
+            frame.render_targets[0].ops = model.ops[..2].to_vec();
+            check(&frame, [255, 0, 0], "equal quantized capture depths");
+            // Clip planes still apply when no depth attachment is present.
+            frame.render_targets[0].depth = false;
+            frame.render_targets[0].ops = vec![model.ops[1].clone()];
+            for environment in [false, true] {
+                frame.render_targets[0].tmesh_geometries[1].vertices =
+                    TexturedMeshVertices::Shared(Arc::from(
+                        model.tmesh_geometries[1]
+                            .vertices
+                            .as_ref()
+                            .iter()
+                            .copied()
+                            .map(|mut vertex| {
+                                vertex.normal = if environment {
+                                    [0.0, 0.0, 1.0, 1.0]
+                                } else {
+                                    [0.0; 4]
+                                };
+                                vertex
+                            })
+                            .collect::<Vec<_>>(),
+                    ));
+                for z in [-2.0, 2.0, 0.0] {
+                    frame.render_targets[0].tmesh_instances[1].model_col3[2] = z;
+                    check(
+                        &frame,
+                        if z == 0.0 { [255, 0, 0] } else { [0, 0, 0] },
+                        "depth-disabled clip planes",
+                    );
+                }
+            }
+        }
+    }
+
+    fn assert_float_captures(state: &mut State) {
+        set_default_projection(state, Matrix4::IDENTITY);
+        let textures = test_textures();
+        let mut pixels = vec![0; 64 * 64];
+        state.depth.resize(64 * 64, 1.0);
+
+        let handle = deadlib_render_core::render_target_texture_handle(15);
+        let mut frame = RenderFrame {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            render_targets: vec![],
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: vec![],
+            mesh_vertices: vec![],
+            tmesh_instances: vec![],
+            tmesh_geometries: vec![],
+            ops: vec![],
+        };
+        frame.tmesh_instances = vec![TexturedMeshInstanceRaw::new(
+            Matrix4::IDENTITY,
+            [0.25, 0.25, 0.25, 1.0],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            false,
+        )];
+        frame.tmesh_geometries = vec![TexturedMeshGeometry {
+            cache_key: 0,
+            vertices: TexturedMeshVertices::Shared(Arc::from(
+                [
+                    [-1.0, -1.0, 0.0],
+                    [1.0, -1.0, 0.0],
+                    [1.0, 1.0, 0.0],
+                    [-1.0, -1.0, 0.0],
+                    [1.0, 1.0, 0.0],
+                    [-1.0, 1.0, 0.0],
+                ]
+                .map(|pos| TexturedMeshVertex {
+                    pos,
+                    normal: [0.0; 4],
+                    uv: [0.5; 2],
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                }),
+            )),
+        }];
+        frame.sprite_instances = vec![SpriteInstanceRaw {
+            center: [0.0; 4],
+            size: [2.0; 2],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [0.25, 0.25, 0.25, 1.0],
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            local_offset: [0.0; 2],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }];
+        frame.render_targets = vec![RenderTargetFrame {
+            texture_handle: handle,
+            width: 64,
+            height: 64,
+            viewport: [64, 64],
+            float_color: true,
+            alpha: false,
+            depth: true,
+            preserve: false,
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: vec![],
+            mesh_vertices: [
+                [-1.0, -1.0],
+                [1.0, -1.0],
+                [1.0, 1.0],
+                [-1.0, -1.0],
+                [1.0, 1.0],
+                [-1.0, 1.0],
+            ]
+            .map(|pos| MeshVertex {
+                pos,
+                color: [1.0, 0.0, 0.0, 1.0],
+            })
+            .to_vec(),
+            tmesh_instances: vec![],
+            tmesh_geometries: vec![],
+            ops: vec![
+                DrawOp::Mesh(MeshRun {
+                    vertex_start: 0,
+                    vertex_count: 6,
+                    blend: BlendMode::Add,
+                    camera: 0
+                });
+                2
+            ],
+        }];
+        // The float capture holds RGB=2 and uses native source-over alpha. Sampling it
+        // at lower intensity must recover those values, rather than a clamped 1.
+        // Toggle format on the same handle to verify cache identity, then redraw it.
+        for alpha in [false, true] {
+            frame.render_targets[0].alpha = alpha;
+            frame.sprite_instances[0].tint[3] = if alpha { 0.5 } else { 1.0 };
+            frame.tmesh_instances[0].tint[3] = if alpha { 0.5 } else { 1.0 };
+            for float_color in [true, false, true] {
+                frame.render_targets[0].float_color = float_color;
+                for textured in [false, true] {
+                    frame.ops = vec![if textured {
+                        DrawOp::TexturedMesh(TexturedMeshRun {
+                            sampler: None,
+                            additive_texture: 0,
+                            geometry: 0,
+                            instance_start: 0,
+                            instance_count: 1,
+                            blend: BlendMode::Add,
+                            texture_handle: handle,
+                            camera: 0,
+                            depth_test: false,
+                            depth_write: false,
+                            depth_test_on_fail: false,
+                            clear_depth: false,
+                        })
+                    } else {
+                        DrawOp::Sprite(SpriteRun {
+                            instance_start: 0,
+                            instance_count: 1,
+                            blend: BlendMode::Add,
+                            texture_handle: handle,
+                            camera: 0,
+                        })
+                    }];
+                    draw_offscreen_targets(state, &frame, &textures);
+                    if float_color {
+                        assert!(
+                            state.offscreen_targets[0]
+                                .texture
+                                .half_pixels
+                                .iter()
+                                .all(|&pixel| unpack_half(pixel) == [2.0, 0.0, 0.0, 1.0]),
+                            "quad diagonals must shade each capture pixel once per draw"
+                        );
+                    }
+                    let resolved = ResolvedTextures {
+                        external: &textures,
+                        targets: &state.offscreen_targets,
+                    };
+                    let fixed = prepare_objects(
+                        (&frame).into(),
+                        Matrix4::IDENTITY,
+                        &resolved,
+                        64,
+                        64,
+                        &mut state.prepared_objects,
+                        &mut state.prepared_mesh_triangles,
+                        &mut state.prepared_tmesh_triangles,
+                        true,
+                    );
+                    pixels.fill(pack_rgba(frame.clear_color));
+                    draw_rows(
+                        (&frame).into(),
+                        &state.prepared_objects,
+                        None,
+                        &state.prepared_mesh_triangles,
+                        &state.prepared_tmesh_triangles,
+                        &resolved,
+                        64,
+                        64,
+                        0,
+                        64,
+                        &mut byte_writer(&mut pixels),
+                        fixed,
+                        &mut state.depth,
+                    );
+                    let [a, r, g, b] = pixels[20 * 64 + 32].to_be_bytes();
+                    let pixel = [r, g, b, a];
+                    let red = if float_color {
+                        if alpha { 64 } else { 128 }
+                    } else if alpha {
+                        32
+                    } else {
+                        64
+                    };
+                    assert!(
+                        pixel[0].abs_diff(red) <= 1 && pixel[1] == 0 && pixel[2] == 0,
+                        "software: float={float_color}, alpha={alpha}, textured={textured}, pixel={pixel:?}, expected red={red}"
+                    );
+                    if float_color && !alpha && !textured {
+                        frame.sprite_instances[0].tint = [1.0, 1.0, 1.0, 0.5];
+                        let fixed = prepare_objects(
+                            (&frame).into(),
+                            Matrix4::IDENTITY,
+                            &resolved,
+                            64,
+                            64,
+                            &mut state.prepared_objects,
+                            &mut state.prepared_mesh_triangles,
+                            &mut state.prepared_tmesh_triangles,
+                            true,
+                        );
+                        pixels.fill(pack_rgba(frame.clear_color));
+                        draw_rows(
+                            (&frame).into(),
+                            &state.prepared_objects,
+                            None,
+                            &state.prepared_mesh_triangles,
+                            &state.prepared_tmesh_triangles,
+                            &resolved,
+                            64,
+                            64,
+                            0,
+                            64,
+                            &mut byte_writer(&mut pixels),
+                            fixed,
+                            &mut state.depth,
+                        );
+                        assert_eq!(
+                            pixels[20 * 64 + 32],
+                            0xff80_0000,
+                            "normalized fragment clamp"
+                        );
+                        frame.sprite_instances[0].tint = [0.25, 0.25, 0.25, 1.0];
+                    }
+                }
+            }
+        }
+        // RageDisplay_OGL uses ONE / ONE_MINUS_SRC_ALPHA for the alpha channel,
+        // independently of normal/additive RGB factors. Two half-alpha layers
+        // therefore retain 0.75 alpha, which must survive sampling the capture.
+        frame.render_targets[0].float_color = true;
+        frame.render_targets[0].alpha = true;
+        for vertex in &mut frame.render_targets[0].mesh_vertices {
+            vertex.color[3] = 0.5;
+        }
+        frame.sprite_instances[0].tint = [1.0; 4];
+        frame.ops = vec![DrawOp::Sprite(SpriteRun {
+            instance_start: 0,
+            instance_count: 1,
+            blend: BlendMode::Alpha,
+            texture_handle: handle,
+            camera: 0,
+        })];
+        for (blend, expected) in [(BlendMode::Alpha, 143_u8), (BlendMode::Add, 191)] {
+            for op in &mut frame.render_targets[0].ops {
+                let DrawOp::Mesh(run) = op else {
+                    unreachable!()
+                };
+                run.blend = blend;
+            }
+            draw_offscreen_targets(state, &frame, &textures);
+            let resolved = ResolvedTextures {
+                external: &textures,
+                targets: &state.offscreen_targets,
+            };
+            let fixed = prepare_objects(
+                (&frame).into(),
+                Matrix4::IDENTITY,
+                &resolved,
+                64,
+                64,
+                &mut state.prepared_objects,
+                &mut state.prepared_mesh_triangles,
+                &mut state.prepared_tmesh_triangles,
+                true,
+            );
+            pixels.fill(pack_rgba(frame.clear_color));
+            draw_rows(
+                (&frame).into(),
+                &state.prepared_objects,
+                None,
+                &state.prepared_mesh_triangles,
+                &state.prepared_tmesh_triangles,
+                &resolved,
+                64,
+                64,
+                0,
+                64,
+                &mut byte_writer(&mut pixels),
+                fixed,
+                &mut state.depth,
+            );
+            let [a, r, g, b] = pixels[20 * 64 + 32].to_be_bytes();
+            let pixel = [r, g, b, a];
+            assert!(
+                pixel[0].abs_diff(expected) <= 1 && pixel[1] == 0 && pixel[2] == 0,
+                "software: captured alpha, blend={blend:?}, pixel={pixel:?}, expected red={expected}"
+            );
+        }
+        // Float attachments also retain negative subtraction results. Subtracting
+        // twice gives -0.75, then adding one restores 0.25. An 8-bit target clips
+        // the intermediate negative result and incorrectly restores one instead.
+        frame.render_targets[0].alpha = false;
+        let red = frame.render_targets[0]
+            .mesh_vertices
+            .iter()
+            .copied()
+            .map(|mut vertex| {
+                vertex.color[3] = 1.0;
+                vertex
+            })
+            .collect::<Vec<_>>();
+        frame.render_targets[0].mesh_vertices.extend(red);
+        for (index, vertex) in frame.render_targets[0].mesh_vertices.iter_mut().enumerate() {
+            vertex.color = if index < 6 {
+                [0.8, 0.0, 0.0, 1.0]
+            } else {
+                [0.5, 0.0, 0.0, 0.5]
+            };
+        }
+        frame.render_targets[0].ops = vec![
+            DrawOp::Mesh(MeshRun {
+                vertex_start: 0,
+                vertex_count: 6,
+                blend: BlendMode::Alpha,
+                camera: 0,
+            }),
+            DrawOp::Mesh(MeshRun {
+                vertex_start: 6,
+                vertex_count: 6,
+                blend: BlendMode::Multiply,
+                camera: 0,
+            }),
+        ];
+        for float_color in [true, false] {
+            frame.render_targets[0].float_color = float_color;
+            draw_offscreen_targets(state, &frame, &textures);
+            let pixel = state.offscreen_targets[0].texture.image.get_pixel(32, 20).0;
+            assert_eq!(pixel, [102, 0, 0, 255], "multiply float={float_color}");
+        }
+        for (index, vertex) in frame.render_targets[0].mesh_vertices.iter_mut().enumerate() {
+            vertex.color = [1.0, 0.0, 0.0, if index < 6 { 0.5 } else { 1.0 }];
+        }
+        frame.render_targets[0].ops = vec![
+            DrawOp::Mesh(MeshRun {
+                vertex_start: 0,
+                vertex_count: 6,
+                blend: BlendMode::Subtract,
+                camera: 0,
+            }),
+            DrawOp::Mesh(MeshRun {
+                vertex_start: 0,
+                vertex_count: 6,
+                blend: BlendMode::Subtract,
+                camera: 0,
+            }),
+            DrawOp::Mesh(MeshRun {
+                vertex_start: 6,
+                vertex_count: 6,
+                blend: BlendMode::Add,
+                camera: 0,
+            }),
+        ];
+        for float_color in [true, false] {
+            frame.render_targets[0].float_color = float_color;
+            draw_offscreen_targets(state, &frame, &textures);
+            let resolved = ResolvedTextures {
+                external: &textures,
+                targets: &state.offscreen_targets,
+            };
+            let fixed = prepare_objects(
+                (&frame).into(),
+                Matrix4::IDENTITY,
+                &resolved,
+                64,
+                64,
+                &mut state.prepared_objects,
+                &mut state.prepared_mesh_triangles,
+                &mut state.prepared_tmesh_triangles,
+                true,
+            );
+            pixels.fill(pack_rgba(frame.clear_color));
+            draw_rows(
+                (&frame).into(),
+                &state.prepared_objects,
+                None,
+                &state.prepared_mesh_triangles,
+                &state.prepared_tmesh_triangles,
+                &resolved,
+                64,
+                64,
+                0,
+                64,
+                &mut byte_writer(&mut pixels),
+                fixed,
+                &mut state.depth,
+            );
+            let [a, r, g, b] = pixels[20 * 64 + 32].to_be_bytes();
+            let pixel = [r, g, b, a];
+            let expected = if float_color { 64_u8 } else { 255 };
+            assert!(
+                pixel[0].abs_diff(expected) <= 1 && pixel[1] == 0 && pixel[2] == 0,
+                "software: negative color, float={float_color}, pixel={pixel:?}, expected red={expected}"
+            );
+        }
+        let pass = &mut frame.render_targets[0];
+        pass.float_color = true;
+        pass.viewport = [40, 24];
+        pass.ops = vec![DrawOp::Mesh(MeshRun {
+            vertex_start: 0,
+            vertex_count: 6,
+            blend: BlendMode::Alpha,
+            camera: 0,
+        })];
+        for vertex in &mut pass.mesh_vertices[..6] {
+            vertex.color = [2.0, -0.5, 0.25, 0.5];
+        }
+        for alpha in [false, true] {
+            frame.render_targets[0].alpha = alpha;
+            frame.render_targets[0].preserve = false;
+            draw_offscreen_targets(state, &frame, &textures);
+            let target = &state.offscreen_targets[0];
+            let expected = target.texture.half_pixels.clone();
+            let buffers = (
+                target.half_pixels.as_ptr(),
+                target.depth.as_ptr(),
+                target.texture.half_pixels.as_ptr(),
+                target.texture.image.as_ptr(),
+            );
+            let color = [1.0, -0.25, 0.125, if alpha { 0.5 } else { 1.0 }];
+            let clear = [0.0, 0.0, 0.0, if alpha { 0.0 } else { 1.0 }];
+            for (index, &pixel) in expected.iter().enumerate() {
+                assert_eq!(
+                    unpack_half(pixel),
+                    if index % 64 < 40 && index / 64 < 24 {
+                        color
+                    } else {
+                        clear
+                    }
+                );
+            }
+            frame.render_targets[0].ops.clear();
+            frame.render_targets[0].preserve = true;
+            for viewport in [[20, 16], [60, 48], [40, 24]] {
+                frame.render_targets[0].viewport = viewport;
+                draw_offscreen_targets(state, &frame, &textures);
+                let target = &state.offscreen_targets[0];
+                assert_eq!(
+                    target.texture.half_pixels, expected,
+                    "preserve {viewport:?}"
+                );
+                assert_eq!(
+                    (
+                        target.half_pixels.as_ptr(),
+                        target.depth.as_ptr(),
+                        target.texture.half_pixels.as_ptr(),
+                        target.texture.image.as_ptr()
+                    ),
+                    buffers
+                );
+                assert!(target.half_pixels.capacity() >= 64 * 64);
+            }
+            frame.render_targets[0].preserve = false;
+            draw_offscreen_targets(state, &frame, &textures);
+            assert!(
+                state.offscreen_targets[0]
+                    .texture
+                    .half_pixels
+                    .iter()
+                    .all(|&pixel| unpack_half(pixel) == clear),
+                "clear includes padding"
+            );
+            frame.render_targets[0].ops = vec![DrawOp::Mesh(MeshRun {
+                vertex_start: 0,
+                vertex_count: 6,
+                blend: BlendMode::Alpha,
+                camera: 0,
+            })];
+        }
+    }
+
     use super::*;
     use deadlib_render_core::{
         INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, SpriteInstanceRaw, SpriteRun,
@@ -3043,6 +4290,8 @@ mod tests {
                 texture_handle: deadlib_render_core::render_target_texture_handle(1),
                 width: 40,
                 height: 24,
+                viewport: [40, 24],
+                float_color: false,
                 alpha: false,
                 depth: false,
                 preserve: false,
@@ -3080,6 +4329,7 @@ mod tests {
         for (width, height) in [(40, 24), (80, 16)] {
             frame.render_targets[0].width = width;
             frame.render_targets[0].height = height;
+            frame.render_targets[0].viewport = [width, height];
             // Explicit cameras change coverage; absent and invalid indices use the default.
             for (cameras, camera, inset) in [
                 (vec![], 0, 4),
@@ -3110,11 +4360,185 @@ mod tests {
                 }
             }
         }
+        let pass = &mut frame.render_targets[0];
+        pass.width = 128;
+        pass.height = 64;
+        pass.viewport = [80, 48];
+        pass.alpha = true;
+        pass.cameras = vec![projection];
+        let DrawOp::Mesh(run) = &mut pass.ops[0] else {
+            panic!("mesh fixture");
+        };
+        run.camera = 0;
+        draw_offscreen_targets(&mut state, &frame, &test_textures());
+        let target = &state.offscreen_targets[0];
+        let expected = target.texture.image.clone();
+        for (x, y, pixel) in expected.enumerate_pixels() {
+            let inside = (20..60).contains(&x) && (12..36).contains(&y);
+            assert_eq!(
+                pixel.0,
+                if inside { [255; 4] } else { [0; 4] },
+                "padded capture at {x},{y}"
+            );
+        }
+        let buffers = (
+            target.pixels.as_ptr(),
+            target.depth.as_ptr(),
+            target.texture.image.as_ptr(),
+        );
+        frame.render_targets[0].ops.clear();
+        frame.render_targets[0].preserve = true;
+        for viewport in [[40, 24], [80, 48]] {
+            frame.render_targets[0].viewport = viewport;
+            draw_offscreen_targets(&mut state, &frame, &test_textures());
+            let target = &state.offscreen_targets[0];
+            assert_eq!(target.texture.image, expected, "preserve {viewport:?}");
+            assert_eq!(
+                (
+                    target.pixels.as_ptr(),
+                    target.depth.as_ptr(),
+                    target.texture.image.as_ptr(),
+                ),
+                buffers,
+                "viewport change reallocates backing storage"
+            );
+        }
+        frame.render_targets[0].preserve = false;
+        for alpha in [true, false] {
+            frame.render_targets[0].alpha = alpha;
+            draw_offscreen_targets(&mut state, &frame, &test_textures());
+            for pixel in state.offscreen_targets[0].texture.image.pixels() {
+                assert_eq!(pixel.0, if alpha { [0; 4] } else { [0, 0, 0, 255] });
+            }
+        }
+        assert_float_captures(&mut state);
+        assert_depth_captures(&mut state);
     }
 
     struct TestTextures {
         texture: Texture,
         lookups: AtomicUsize,
+    }
+
+    #[test]
+    fn sphere_material_rotation_and_alpha_match_gl_stages() {
+        let texture = |image| Texture {
+            image,
+            sampler: SamplerDesc::default(),
+            opaque: false,
+            yuv420: false,
+            half_pixels: Vec::new(),
+        };
+        let gradient = texture(RgbaImage::from_fn(128, 128, |x, y| {
+            image::Rgba([(x * 2) as u8, (y * 2) as u8, 0, 255])
+        }));
+        let base = texture(RgbaImage::from_pixel(1, 1, image::Rgba([40, 60, 80, 128])));
+        let reflection = texture(RgbaImage::from_pixel(1, 1, image::Rgba([80, 40, 20, 128])));
+        let vertices = [
+            [-0.8, -0.8, 0.0],
+            [0.8, -0.8, 0.0],
+            [0.8, 0.8, 0.0],
+            [-0.8, -0.8, 0.0],
+            [0.8, 0.8, 0.0],
+            [-0.8, 0.8, 0.0],
+        ]
+        .map(|pos| deadlib_render_core::TexturedMeshVertex {
+            pos,
+            normal: [0.0, 0.0, 1.0, 1.0],
+            color: [1.0; 4],
+            uv: [0.1, 0.2],
+            ..Default::default()
+        });
+        let mut instance = TexturedMeshInstanceRaw::new(
+            Matrix4::IDENTITY,
+            [1.0; 4],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            false,
+        );
+        let mut pixels = vec![0; 64 * 64];
+        for (angle, expected) in [
+            (0.0_f32, [127, 127, 0]),
+            (45.0, [218, 127, 0]),
+            (-45.0, [37, 127, 0]),
+        ] {
+            let mut eye = Matrix4::from_rotation_y(angle.to_radians());
+            eye.w_axis.z = -1000.0;
+            instance.sphere_rows = [
+                eye.row(0).to_array(),
+                eye.row(1).to_array(),
+                eye.row(2).to_array(),
+            ];
+            pixels.fill(0xff14_283c);
+            rasterize_environment(
+                &Matrix4::IDENTITY,
+                &vertices,
+                instance,
+                BlendMode::Alpha,
+                &gradient,
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..gradient.sampler
+                },
+                None,
+                64,
+                64,
+                0,
+                64,
+                &mut byte_writer(&mut pixels),
+                &mut DepthRows {
+                    pixels: &mut [],
+                    unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
+                },
+            );
+            let actual = pixels[32 * 64 + 32];
+            for (i, expected) in expected.into_iter().enumerate() {
+                assert!(
+                    (((actual >> (16 - i * 8)) & 255) as u8).abs_diff(expected) <= 3,
+                    "{angle}: {actual:08x}"
+                );
+            }
+        }
+        let vertices = vertices.map(|mut v| {
+            v.normal[3] = 6.0;
+            v
+        });
+        instance.tint = [0.5, 0.75, 1.0, 0.5];
+        for (mask, expected) in [(0.0, [30, 46, 65]), (1.0, [47, 78, 109])] {
+            instance.texture_mask = mask;
+            pixels.fill(0xff14_283c);
+            rasterize_environment(
+                &Matrix4::IDENTITY,
+                &vertices,
+                instance,
+                BlendMode::Alpha,
+                &base,
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..base.sampler
+                },
+                Some(&reflection),
+                64,
+                64,
+                0,
+                64,
+                &mut byte_writer(&mut pixels),
+                &mut DepthRows {
+                    pixels: &mut [],
+                    unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
+                },
+            );
+            let actual = pixels[32 * 64 + 32];
+            for (i, expected) in expected.into_iter().enumerate() {
+                assert!(
+                    (((actual >> (16 - i * 8)) & 255) as u8).abs_diff(expected) <= 3,
+                    "mask={mask}: {actual:08x}"
+                );
+            }
+        }
     }
 
     impl TextureLookup for TestTextures {
@@ -3125,26 +4549,25 @@ mod tests {
     }
 
     #[test]
-    fn opaque_src_over_matches_general_blend_exactly() {
-        let destinations = [0, 0x1020_3040, 0x7f83_4127, 0xffff_ffff];
-        let channels = [0.0, 0.125, 0.5, 0.875, 1.0];
-        for dst in destinations {
-            for &sr in &channels {
-                for &sg in &channels {
-                    for &sb in &channels {
-                        assert_eq!(
-                            blend_src_over(dst, sr, sg, sb, 1.0),
-                            blend_src_over_general(dst, sr, sg, sb, 1.0)
-                        );
-                    }
-                }
+    fn half_values_and_rounding() {
+        for bits in 0u16..=u16::MAX {
+            if bits & 0x7c00 == 0x7c00 && bits & 0x03ff != 0 {
+                continue;
             }
+            assert_eq!(encode_half(decode_half(bits)), bits, "half {bits:04x}");
         }
-        for &sa in &[0.0, 0.125, 0.5, 0.875, 0.999] {
-            assert_eq!(
-                blend_src_over(0x7f83_4127, 0.17, 0.43, 0.91, sa),
-                blend_src_over_general(0x7f83_4127, 0.17, 0.43, 0.91, sa)
-            );
+        for (value, bits) in [
+            (1.0, 0x3c00),
+            (-0.75, 0xba00),
+            (65504.0, 0x7bff),
+            (65520.0, 0x7c00),
+            (2.0_f32.powi(-24), 1),
+            (2.0_f32.powi(-25), 0),
+            (3.0 * 2.0_f32.powi(-25), 2),
+            (1.0 + 2.0_f32.powi(-11), 0x3c00),
+            (1.0 + 3.0 * 2.0_f32.powi(-11), 0x3c02),
+        ] {
+            assert_eq!(encode_half(value), bits, "value {value}");
         }
     }
 
@@ -3164,16 +4587,21 @@ mod tests {
     fn offscreen_copy_preserves_pixels_across_alpha_mode_changes() {
         for (width, height) in [(1, 1), (17, 17)] {
             for modes in [[false, false], [false, true], [true, false], [true, true]] {
-                let mut target = create_offscreen_target(7, width, height);
+                let mut target =
+                    create_offscreen_target(7, width, height, [width, height], false, false);
                 for (index, pixel) in target.pixels.iter_mut().enumerate() {
                     *pixel = u32::from_be_bytes([index as u8, 17, (index * 31) as u8, 209]);
                 }
                 let mut expected = target.pixels.clone();
                 for alpha in modes {
                     // Each pass blends over the retained previous pass.
-                    for (pixel, expected) in target.pixels.iter_mut().zip(&mut expected) {
-                        *pixel = blend_src_over(*pixel, 0.2, 0.4, 0.7, 0.3);
-                        *expected = blend_src_over(*expected, 0.2, 0.4, 0.7, 0.3);
+                    for index in 0..expected.len() {
+                        byte_writer(&mut target.pixels)(
+                            index,
+                            [0.2, 0.4, 0.7, 0.3],
+                            BlendMode::Alpha,
+                        );
+                        byte_writer(&mut expected)(index, [0.2, 0.4, 0.7, 0.3], BlendMode::Alpha);
                     }
                     if !alpha {
                         for pixel in &mut expected {
@@ -3304,23 +4732,23 @@ mod tests {
             };
             for [u, v] in coordinates {
                 assert_eq!(
-                    sample_tex_nearest::<true>(opaque.as_raw(), 8, 8, u, v, sampler),
-                    sample_tex_nearest::<false>(opaque.as_raw(), 8, 8, u, v, sampler),
+                    sample_tex_nearest::<true, 4>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_nearest::<false, 4>((&opaque).into(), 8, 8, u, v, sampler),
                 );
                 assert_eq!(
-                    sample_tex_linear::<true>(opaque.as_raw(), 8, 8, u, v, sampler),
-                    sample_tex_linear::<false>(opaque.as_raw(), 8, 8, u, v, sampler),
+                    sample_tex_linear::<true, 4>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_linear::<false, 4>((&opaque).into(), 8, 8, u, v, sampler),
                 );
 
-                let nearest = sample_tex_nearest::<false>(mixed.as_raw(), 8, 8, u, v, sampler)
+                let nearest = sample_tex_nearest::<false, 4>((&mixed).into(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
                 assert_eq!(
-                    sample_alpha_nearest(mixed.as_raw(), 8, 8, u, v, sampler),
+                    sample_alpha_nearest((&mixed).into(), 8, 8, u, v, sampler),
                     Some(nearest[3]),
                 );
-                let alpha = sample_alpha_linear(mixed.as_raw(), 8, 8, u, v, sampler)
+                let alpha = sample_alpha_linear((&mixed).into(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
-                match sample_tex_linear::<false>(mixed.as_raw(), 8, 8, u, v, sampler) {
+                match sample_tex_linear::<false, 4>((&mixed).into(), 8, 8, u, v, sampler) {
                     Some(sample) => assert_eq!(alpha, sample[3]),
                     None => assert_eq!(alpha, 0.0),
                 }
@@ -3394,14 +4822,14 @@ mod tests {
                 [0.63, 0.72, 0.81, 0.68],
                 texture_mask,
                 blend,
-                image,
+                image.into(),
                 sampler,
                 opaque,
                 WIDTH,
                 HEIGHT,
                 0,
                 HEIGHT,
-                &mut pixels,
+                &mut byte_writer(&mut pixels),
             );
             pixels
         };
@@ -3452,11 +4880,11 @@ mod tests {
             };
             for [u, v] in [[0.0, 0.0], [0.5, 0.5], [1.0, 1.0], [-1.25, 2.75]] {
                 assert_eq!(
-                    sample_tex_linear::<false>(image.as_raw(), 2, 2, u, v, sampler),
+                    sample_tex_linear::<false, 4>((&image).into(), 2, 2, u, v, sampler),
                     None,
                 );
                 assert_eq!(
-                    sample_alpha_linear(image.as_raw(), 2, 2, u, v, sampler),
+                    sample_alpha_linear((&image).into(), 2, 2, u, v, sampler),
                     Some(0.0),
                 );
             }
@@ -3489,6 +4917,650 @@ mod tests {
         assert_eq!(clipped[3].color, [0.75, 0.65, 0.55, 0.45]);
     }
 
+    fn depth_frame() -> RenderFrame {
+        let geometries =
+            [(0.5, 0.4), (0.8, 0.0), (0.15, -0.4)].map(|(r, z)| TexturedMeshGeometry {
+                cache_key: 0,
+                vertices: TexturedMeshVertices::Shared(Arc::from(
+                    [
+                        [-r, -r, z],
+                        [r, -r, z],
+                        [r, r, z],
+                        [-r, -r, z],
+                        [r, r, z],
+                        [-r, r, z],
+                    ]
+                    .map(|pos| TexturedMeshVertex {
+                        normal: [0.0; 4],
+                        pos,
+                        uv: [0.5; 2],
+                        color: [1.0; 4],
+                        tex_matrix_scale: [1.0; 2],
+                    }),
+                )),
+            });
+        RenderFrame {
+            clear_color: [0.0; 4],
+            render_targets: vec![],
+            cameras: vec![],
+            sprite_instances: vec![],
+            mesh_vertices: vec![],
+            tmesh_geometries: geometries.to_vec(),
+            tmesh_instances: [
+                [0.0, 1.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 1.0],
+            ]
+            .map(|tint| {
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    tint,
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                )
+            })
+            .to_vec(),
+            ops: (0..3)
+                .map(|i| {
+                    DrawOp::TexturedMesh(TexturedMeshRun {
+                        sampler: None,
+                        additive_texture: 0,
+                        geometry: i,
+                        instance_start: i,
+                        instance_count: 1,
+                        texture_handle: TEXTURE_HANDLE,
+                        blend: BlendMode::Alpha,
+                        camera: 0,
+                        depth_test: true,
+                        depth_write: true,
+                        depth_test_on_fail: false,
+                        // Runs 0 and 1 share depth; run 2 is isolated from them.
+                        clear_depth: i == 2,
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn independent_depth_modes_preserve_painter_order() {
+        let textures = TestTextures {
+            texture: create_texture(&RgbaImage::from_pixel(1, 1, Rgba([255; 4])), SamplerDesc::default()).unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        for mode in deadlib_render_core::DepthMode::ALL {
+            let mut frame = depth_frame();
+            let expected = if mode.on_fail() {
+                frame.tmesh_geometries.swap(1, 2);
+                let DrawOp::TexturedMesh(rear) = &mut frame.ops[1] else { unreachable!() };
+                rear.depth_test_on_fail = true;
+                rear.depth_write = mode.writes();
+                let DrawOp::TexturedMesh(middle) = &mut frame.ops[2] else { unreachable!() };
+                middle.clear_depth = false;
+                if mode.writes() { 0x0000ff } else { 0xff0000 }
+            } else {
+                frame.ops.truncate(2);
+                let DrawOp::TexturedMesh(sky) = &mut frame.ops[0] else { unreachable!() };
+                sky.depth_test = mode.tests();
+                sky.depth_write = mode.writes();
+                if mode.writes() { 0x00ff00 } else { 0xff0000 }
+            };
+            for staged in [false, true] {
+                let mut prepared = Vec::new();
+                let mut mesh = Vec::new();
+                let mut tmesh = Vec::new();
+                let fixed = prepare_objects((&frame).into(), Matrix4::from_scale(Vec3::new(1.0, 1.0, -1.0)),
+                    &textures, WIDTH, HEIGHT, &mut prepared, &mut mesh, &mut tmesh, staged);
+                let mut bins = StripeBins::warmed();
+                bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+                for indexed in [false, true] {
+                    let mut pixels = vec![0; WIDTH * HEIGHT];
+                    for (index, stripe) in pixels.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK).enumerate() {
+                        let start = index * SOFTWARE_ROW_CHUNK;
+                        let end = start + stripe.len() / WIDTH;
+                        let mut depth = vec![1.0; stripe.len()];
+                        draw_rows((&frame).into(), &prepared, indexed.then(|| bins.stripe(index)),
+                            &mesh, &tmesh, &textures, WIDTH, HEIGHT, start, end,
+                            &mut byte_writer(stripe), fixed, &mut depth);
+                    }
+                    assert_eq!(pixels[HEIGHT / 2 * WIDTH + WIDTH / 2] & 0xffffff, expected,
+                        "{mode:?}, staged={staged}, indexed={indexed}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn model_depth_groups() {
+        let textures = TestTextures {
+            texture: create_texture(
+                &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+                SamplerDesc::default(),
+            )
+            .unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let mut frame = depth_frame();
+        // Positive Z is nearer. The green foreground comes first in authored order;
+        // the blue foreground belongs to a later note despite being farther away.
+        let projection = Matrix4::from_scale(Vec3::new(1.0, 1.0, -1.0));
+        let mut overlay = TexturedMeshInstanceRaw::new(
+            Matrix4::IDENTITY,
+            [1.0, 1.0, 0.0, 1.0],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            false,
+        );
+        overlay.model_col3[2] = -0.8;
+        frame.tmesh_instances.push(overlay);
+        for (transparent, overlay) in [(false, false), (true, false), (false, true)] {
+            frame.ops.truncate(3);
+            if overlay {
+                frame.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
+                    additive_texture: 0,
+                    geometry: 1,
+                    instance_start: 3,
+                    instance_count: 1,
+                    texture_handle: TEXTURE_HANDLE,
+                    blend: BlendMode::Alpha,
+                    camera: 0,
+                    depth_test: true,
+                    depth_write: true,
+                    depth_test_on_fail: false,
+                    clear_depth: true,
+                }));
+            }
+            frame.tmesh_instances[0].tint[3] = if transparent { 0.0 } else { 1.0 };
+            for staged in [false, true] {
+                let mut prepared = Vec::new();
+                let mut mesh = Vec::with_capacity(16);
+                let mut tmesh = Vec::with_capacity(16);
+                let fixed = prepare_objects(
+                    (&frame).into(),
+                    projection,
+                    &textures,
+                    WIDTH,
+                    HEIGHT,
+                    &mut prepared,
+                    &mut mesh,
+                    &mut tmesh,
+                    staged,
+                );
+                let mut bins = StripeBins::warmed();
+                bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+                for indexed in [false, true] {
+                    let mut pixels = vec![0; WIDTH * HEIGHT];
+                    for (stripe_index, stripe) in
+                        pixels.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK).enumerate()
+                    {
+                        let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                        let end = start + stripe.len() / WIDTH;
+                        // Stale depth nearer than every model; rows reset it first.
+                        let mut depth = vec![0.0; stripe.len()];
+                        draw_rows(
+                            (&frame).into(),
+                            &prepared,
+                            indexed.then(|| bins.stripe(stripe_index)),
+                            &mesh,
+                            &tmesh,
+                            &textures,
+                            WIDTH,
+                            HEIGHT,
+                            start,
+                            end,
+                            &mut byte_writer(stripe),
+                            fixed,
+                            &mut depth,
+                        );
+                    }
+                    for (x, expected) in [
+                        (WIDTH / 3, if transparent { 0xff0000 } else { 0x00ff00 }),
+                        (WIDTH / 2, 0x0000ff),
+                        (WIDTH * 4 / 5, 0xff0000),
+                    ] {
+                        assert_eq!(
+                            pixels[HEIGHT / 2 * WIDTH + x] & 0xffffff,
+                            if overlay { 0xffff00 } else { expected },
+                            "staged={staged}, indexed={indexed}, transparent={transparent}, x={x}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn model_sampler_pixels_match_in_every_raster_path() {
+        use deadlib_render_core::MeshSampler;
+        let image = RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                Rgba([255, 0, 0, 255])
+            } else {
+                Rgba([0, 0, 255, 255])
+            }
+        });
+        let textures = TestTextures {
+            texture: create_texture(&image, SamplerDesc::default()).unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let cases = [
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Linear,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [128, 0, 128],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Clamp,
+                }),
+                1.25,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                1.25,
+                [255, 0, 0],
+            ),
+            (None, 0.5, [128, 0, 128]),
+        ];
+        for staged in [false, true] {
+            for indexed in [false, true] {
+                for environment in [false, true] {
+                    for (sampler, u, expected) in cases {
+                        let vertices = [
+                            [-1.0, -1.0],
+                            [1.0, -1.0],
+                            [1.0, 1.0],
+                            [-1.0, -1.0],
+                            [1.0, 1.0],
+                            [-1.0, 1.0],
+                        ]
+                        .map(|[x, y]| TexturedMeshVertex {
+                            normal: [0.0, 0.0, 1.0, if environment { 2.0 } else { 0.0 }],
+                            pos: [x, y, 0.0],
+                            uv: [u, 0.5],
+                            tex_matrix_scale: [1.0; 2],
+                            color: [1.0; 4],
+                        });
+                        let frame = RenderFrame {
+                            clear_color: [0.0; 4],
+                            render_targets: vec![],
+                            cameras: vec![Matrix4::IDENTITY],
+                            sprite_instances: vec![],
+                            mesh_vertices: vec![],
+                            tmesh_geometries: vec![TexturedMeshGeometry {
+                                cache_key: 0,
+                                vertices: TexturedMeshVertices::Shared(Arc::from(vertices)),
+                            }],
+                            tmesh_instances: vec![TexturedMeshInstanceRaw::new(
+                                Matrix4::IDENTITY,
+                                [1.0; 4],
+                                [1.0; 2],
+                                [0.0; 2],
+                                [0.0; 2],
+                                false,
+                            )],
+                            ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                                sampler,
+                                additive_texture: 0,
+                                geometry: 0,
+                                instance_start: 0,
+                                instance_count: 1,
+                                texture_handle: TEXTURE_HANDLE,
+                                blend: BlendMode::Alpha,
+                                camera: 0,
+                                depth_test: false,
+                                depth_write: false,
+                                depth_test_on_fail: false,
+                                clear_depth: false,
+                            })],
+                        };
+                        let mut prepared = Vec::new();
+                        let mut mesh = Vec::with_capacity(16);
+                        let mut tmesh = Vec::with_capacity(16);
+                        let fixed = prepare_objects(
+                            (&frame).into(),
+                            Matrix4::IDENTITY,
+                            &textures,
+                            64,
+                            64,
+                            &mut prepared,
+                            &mut mesh,
+                            &mut tmesh,
+                            staged,
+                        );
+                        let mut bins = StripeBins::warmed();
+                        bins.build(&prepared, &mesh, &tmesh, 64);
+                        let mut pixels = vec![0; 64 * 64];
+                        for (stripe_index, stripe) in
+                            pixels.chunks_mut(64 * SOFTWARE_ROW_CHUNK).enumerate()
+                        {
+                            let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                            draw_rows(
+                                (&frame).into(),
+                                &prepared,
+                                indexed.then(|| bins.stripe(stripe_index)),
+                                &mesh,
+                                &tmesh,
+                                &textures,
+                                64,
+                                64,
+                                start,
+                                start + stripe.len() / 64,
+                                &mut byte_writer(stripe),
+                                fixed,
+                                &mut [],
+                            );
+                        }
+                        let actual = pixels[32 * 64 + 32];
+                        for (channel, expected) in expected.into_iter().enumerate() {
+                            let value = ((actual >> (16 - channel * 8)) & 255) as u8;
+                            assert!(
+                                value.abs_diff(expected) <= 1,
+                                "staged={staged} indexed={indexed} environment={environment} sampler={sampler:?} u={u}: {actual:08x}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn depth_resets_skip_rows_without_depth_draws() {
+        let textures = TestTextures {
+            texture: create_texture(
+                &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+                SamplerDesc::default(),
+            )
+            .unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let quad = |[x0, y0, x1, y1]: [f32; 4]| TexturedMeshGeometry {
+            cache_key: 0,
+            vertices: TexturedMeshVertices::Shared(Arc::from(
+                [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]].map(|[x, y]| {
+                    TexturedMeshVertex {
+                        normal: [0.0; 4],
+                        pos: [x, y, 0.0],
+                        uv: [0.5; 2],
+                        color: [1.0; 4],
+                        tex_matrix_scale: [1.0; 2],
+                    }
+                }),
+            )),
+        };
+        let run = |geometry, instance_start, depth_test, clear_depth| {
+            DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
+                additive_texture: 0,
+                geometry,
+                instance_start,
+                instance_count: 1,
+                texture_handle: TEXTURE_HANDLE,
+                blend: BlendMode::Alpha,
+                camera: 0,
+                depth_test,
+                depth_write: depth_test,
+                depth_test_on_fail: false,
+                clear_depth,
+            })
+        };
+        // A near green model in the first stripe, a full-screen blue quad that
+        // ignores depth, and a farther red model that must pass its reset.
+        let frame = RenderFrame {
+            clear_color: [0.0; 4],
+            render_targets: vec![],
+            cameras: vec![],
+            sprite_instances: vec![],
+            mesh_vertices: vec![],
+            tmesh_geometries: vec![quad([-0.5, 0.5, 0.5, 0.9]), quad([-1.0, -1.0, 1.0, 1.0])],
+            tmesh_instances: [
+                ([1.0, 0.0, 0.0, 1.0], 0.2),
+                ([0.0, 0.0, 1.0, 1.0], 0.0),
+                ([0.0, 1.0, 0.0, 1.0], -0.4),
+            ]
+            .map(|(tint, z)| {
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::from_translation(Vec3::new(0.0, 0.0, z)),
+                    tint,
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                )
+            })
+            .to_vec(),
+            ops: vec![
+                run(0, 2, true, false),
+                run(1, 1, false, false),
+                run(0, 0, true, true),
+            ],
+        };
+        for staged in [false, true] {
+            let mut prepared = Vec::new();
+            let mut mesh = Vec::with_capacity(16);
+            let mut tmesh = Vec::with_capacity(16);
+            let fixed = prepare_objects(
+                (&frame).into(),
+                Matrix4::IDENTITY,
+                &textures,
+                WIDTH,
+                HEIGHT,
+                &mut prepared,
+                &mut mesh,
+                &mut tmesh,
+                staged,
+            );
+            let mut bins = StripeBins::warmed();
+            bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+            let mut pixels = vec![0; WIDTH * HEIGHT];
+            // Stale depth rejects both models unless their rows are reset.
+            let mut depth = vec![0.25; WIDTH * HEIGHT];
+            for (stripe_index, (stripe, depth)) in pixels
+                .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
+                .zip(depth.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK))
+                .enumerate()
+            {
+                let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                draw_rows(
+                    (&frame).into(),
+                    &prepared,
+                    Some(bins.stripe(stripe_index)),
+                    &mesh,
+                    &tmesh,
+                    &textures,
+                    WIDTH,
+                    HEIGHT,
+                    start,
+                    start + stripe.len() / WIDTH,
+                    &mut byte_writer(stripe),
+                    fixed,
+                    depth,
+                );
+            }
+            let (inside, outside) = (12 * WIDTH + WIDTH / 2, 12 * WIDTH + 4);
+            assert_eq!(pixels[inside] & 0xffffff, 0xff0000, "staged={staged}");
+            assert_eq!(pixels[outside] & 0xffffff, 0x0000ff, "staged={staged}");
+            assert!((depth[inside] - 0.6).abs() < 1e-5, "staged={staged}");
+            assert_eq!(depth[outside], 1.0, "staged={staged}");
+            // Whole-object direct meshes visit every stripe; staged triangles
+            // reach only the first, so the others never touch depth.
+            let untouched = &depth[SOFTWARE_ROW_CHUNK * WIDTH..];
+            assert_eq!(
+                untouched.iter().all(|&z| z == 0.25),
+                staged,
+                "staged={staged}"
+            );
+        }
+    }
+
+    #[test]
+    fn face_culling_preserves_selected_winding() {
+        // A green front and a white rear, authored last, reproduce a closed
+        // model without depending on any installed noteskin or its texture.
+        let mut vertices = Vec::new();
+        for (points, uv) in [
+            (
+                [[-0.8, -0.8, 0.2], [0.8, -0.8, 0.2], [0.0, 0.8, 0.2]],
+                [0.25, 0.5],
+            ),
+            (
+                [[-0.8, -0.8, -0.2], [0.0, 0.8, -0.2], [0.8, -0.8, -0.2]],
+                [0.75, 0.5],
+            ),
+        ] {
+            for pos in points {
+                vertices.push(TexturedMeshVertex {
+                    normal: [0.0; 4],
+                    pos,
+                    uv,
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                });
+            }
+        }
+        let image = RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                Rgba([0, 255, 0, 255])
+            } else {
+                Rgba([255; 4])
+            }
+        });
+        let sampler = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+            mipmaps: false,
+        };
+        for (mvp, expected) in [
+            (Matrix4::IDENTITY, 0x00ff00),
+            (
+                Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                0x00ff00,
+            ),
+            (Matrix4::from_rotation_y(std::f32::consts::PI), 0xffffff),
+        ] {
+            for cull in [0.0, 1.0, 2.0] {
+                let mut direct = vec![0; WIDTH * HEIGHT];
+                rasterize_textured_mesh_triangles(
+                    &mvp,
+                    &vertices,
+                    [1.0; 4],
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                    BlendMode::Alpha,
+                    (&image).into(),
+                    sampler,
+                    true,
+                    WIDTH,
+                    HEIGHT,
+                    0,
+                    HEIGHT,
+                    &mut byte_writer(&mut direct),
+                    cull,
+                    &mut DepthRows {
+                        pixels: &mut [],
+                        unorm16: false,
+                        mode: deadlib_render_core::DepthMode::TestWrite,
+                    },
+                );
+                let mut prepared = Vec::with_capacity(4);
+                prepare_tmesh_triangles(
+                    &mut prepared,
+                    0,
+                    &mvp,
+                    [1.0; 4],
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    &vertices,
+                    WIDTH,
+                    HEIGHT,
+                    cull,
+                )
+                .unwrap();
+                let mut retained = vec![0; WIDTH * HEIGHT];
+                rasterize_prepared_tmesh(
+                    &prepared,
+                    false,
+                    BlendMode::Alpha,
+                    (&image).into(),
+                    sampler,
+                    true,
+                    0,
+                    HEIGHT,
+                    &mut byte_writer(&mut retained),
+                    WIDTH,
+                    &mut DepthRows {
+                        pixels: &mut [],
+                        unorm16: false,
+                        mode: deadlib_render_core::DepthMode::TestWrite,
+                    },
+                );
+                assert_eq!(retained, direct, "staged and direct culling must agree");
+                assert_eq!(
+                    direct[HEIGHT / 2 * WIDTH + WIDTH / 2] & 0xffffff,
+                    if cull == 0.0 {
+                        0xffffff
+                    } else if cull == 1.0 {
+                        expected
+                    } else if expected == 0x00ff00 {
+                        0xffffff
+                    } else {
+                        0x00ff00
+                    }
+                );
+                assert_eq!(prepared.len(), if cull > 0.0 { 1 } else { 2 });
+            }
+        }
+        // Clipping preserves the facing test; it must not depend on any
+        // triangle being wholly in front of the homogeneous near plane.
+        vertices[2].pos[2] = -2.0;
+        assert!(
+            project_tmesh_polygon(
+                &Matrix4::IDENTITY,
+                [1.0; 4],
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                &vertices[..3],
+                WIDTH,
+                HEIGHT,
+                1.0
+            )
+            .is_some()
+        );
+    }
+
     #[test]
     fn visible_textured_mesh_projects_without_changing_vertices() {
         let vertices = [
@@ -3505,6 +5577,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
+            0.0,
         )
         .expect("fully visible triangle projects");
 
@@ -3548,6 +5621,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
+            0.0,
         )
         .expect("crossing triangle projects after clipping");
         assert_eq!(start, 0);
@@ -3564,13 +5638,18 @@ mod tests {
             &prepared,
             false,
             BlendMode::Alpha,
-            &textures.texture.image,
+            textures.texture.texels(),
             textures.texture.sampler,
             textures.texture.opaque,
             0,
             HEIGHT,
-            &mut retained,
+            &mut byte_writer(&mut retained),
             WIDTH,
+            &mut DepthRows {
+                pixels: &mut [],
+                unorm16: false,
+                mode: deadlib_render_core::DepthMode::TestWrite,
+            },
         );
         assert_eq!(
             rasterize_textured_mesh_triangles(
@@ -3582,14 +5661,20 @@ mod tests {
                 [0.0; 2],
                 false,
                 BlendMode::Alpha,
-                &textures.texture.image,
+                textures.texture.texels(),
                 textures.texture.sampler,
                 textures.texture.opaque,
                 WIDTH,
                 HEIGHT,
                 0,
                 HEIGHT,
-                &mut direct,
+                &mut byte_writer(&mut direct),
+                0.0,
+                &mut DepthRows {
+                    pixels: &mut [],
+                    unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
+                },
             ),
             3
         );
@@ -3824,8 +5909,9 @@ mod tests {
                     HEIGHT,
                     y_start,
                     y_end,
-                    stripe,
+                    &mut byte_writer(stripe),
                     fixed_vertices,
+                    &mut [],
                 )
             })
             .sum()
@@ -3861,8 +5947,9 @@ mod tests {
                     HEIGHT,
                     y_start,
                     y_end,
-                    stripe,
+                    &mut byte_writer(stripe),
                     fixed_vertices,
+                    &mut [],
                 )
             })
             .sum()
@@ -3961,6 +6048,8 @@ mod tests {
                     camera: 0,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
+                    additive_texture: 0,
                     geometry: 0,
                     instance_start: 0,
                     instance_count: 1,
@@ -3968,8 +6057,13 @@ mod tests {
                     texture_handle: TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
+                    clear_depth: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
+                    additive_texture: 0,
                     geometry: 0,
                     instance_start: 1,
                     instance_count: 1,
@@ -3977,6 +6071,9 @@ mod tests {
                     texture_handle: MISSING_TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
+                    clear_depth: false,
                 }),
                 DrawOp::Sprite(SpriteRun {
                     instance_start: 3,
@@ -3991,6 +6088,7 @@ mod tests {
 
     fn textured_vertex(pos: [f32; 3], uv: [f32; 2]) -> TexturedMeshVertex {
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos,
             uv,
             color: [0.9, 0.8, 0.7, 0.85],
@@ -4032,8 +6130,16 @@ mod tests {
                 },
                 opaque: false,
                 yuv420: false,
+                half_pixels: Vec::new(),
             },
             lookups: AtomicUsize::new(0),
         }
     }
 }
+
+#[cfg(test)]
+mod offscreen_perf_tests;
+
+#[cfg(test)]
+#[path = "environment_performance.rs"]
+mod environment_performance;

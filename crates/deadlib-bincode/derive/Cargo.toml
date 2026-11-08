@@ -15,9 +15,6 @@ keywords = ["binary", "encode", "decode", "serialization"]
 name = "bincode_derive"
 path = "src/lib.rs"
 proc-macro = true
-# Embedded Virtue docs describe its former standalone public API; bincode's
-# derive behavior is covered by this crate's unit tests and the parent suite.
-doctest = false
 
 [dev-dependencies]
 proc-macro2 = "1.0.107"

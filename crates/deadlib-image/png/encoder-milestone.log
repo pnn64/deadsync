@@ -1,0 +1,41 @@
+cargo :    Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+At line:2 char:77
++ ... ference.rs; cargo test -p deadlib-image-png --release --test encoder_ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...dlib-image\png):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 19.44s
+     Running tests\encoder_boundaries.rs (target\release\deps\encoder_boundaries-c3afb39037cf89e0.exe)
+
+running 3 tests
+Encoder image/frame validation: 687 malformed native inputs, both writers reject before output
+test native_image_animation_and_frame_storage_errors_reject_before_output ... ok
+Encoder APNG rectangle audit: 450 valid / 2430 invalid inputs, both default roles and all native formats; both writers, plain/Adam7, independent CRC/control/zlib answers
+test frame_rectangles_and_integer_edges_have_literal_controls_and_exact_frame_streams ... ok
+Encoder writer audit: 2616 exact prefix/failure offsets with short and Interrupted writes; invalid byte counts rejected
+test every_output_byte_failure_short_writes_and_invalid_writer_counts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\encoder_fields.rs (target\release\deps\encoder_fields-f27c0042b87da372.exe)
+
+running 3 tests
+Encoder native boundary audit: 308033 invalid inputs rejected by both writers before any output
+test native_palette_transparency_and_option_boundaries_reject_before_writing ... ok
+Encoder ordering audit: 49419 independently modeled pairs, both writers, exact literal output or rejection before output
+test metadata_placement_multiplicity_and_pairs_follow_table_seven_when_writing ... ok
+Encoder scalar audit: 109376 exact literal files, 82396 rejected inputs, 15576 malformed wire lengths unrepresentable by the native API; each checked through both encoders
+test scalar_input_fields_and_exact_wire_values_for_both_encoders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+
+     Running tests\encoder_reference.rs (target\release\deps\encoder_reference-eeff3eb1f75b57da.exe)
+
+running 2 tests
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ENCODER
+Cross-encoder APNG audit: 8640 native files, 2160 Rust png animations and 180 static reference encodings; exact native samples, palettes, transparency and controls
+test rust_encoder_and_both_native_writers_preserve_static_and_apng_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.87s
+

@@ -1,0 +1,146 @@
+{
+  "timestamp_utc": "2026-10-28T22:22:39Z",
+  "scope": "current goal: completed WAV decoding, passing tests and accurate interoperability; performance excluded by user",
+  "driver_sha256": "7aa72e8f12cb41a418022b8d2f240612dc9451f2441f52c6effdbde46b620d42",
+  "implementation_commit": "718de57ab0cce72e3936988cee4fc78de43467d8",
+  "production_sources": {
+    "src/adpcm.rs": "bb79782fe721861269bea7db3545c22fa92dd073535d38d81dbcc7248519db6d",
+    "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+    "src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+    "src/adpcm_reader.rs": "56529b1d5ceff0ea1548dc027d6b53684fbc922152e1e5e0d775e64a546241c3",
+    "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+    "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+    "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+    "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+    "src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+    "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+    "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+    "src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+    "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+    "src/reader.rs": "d31fa7675453d2a4b60fc3bd159690656b9d8091635647bc28e3b50c9bc56135",
+    "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+    "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+    "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+    "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a"
+  },
+  "reports": [
+    {
+      "file": "ms-narrow-checks.json",
+      "sha256": "255656807d5ccb03f31933bc681cdd3a08f8df3c9c33501f80f601d8c1d733c7",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "decoding-final-checks.json",
+      "sha256": "7bfb0b526e10ea8314c1a2d8cfb2793cd0c185fe668cad6ba07aa6e239a4a49f",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "decoding-final-pcm.json",
+      "sha256": "dd347e3fc867d3aed4f078bc8dd41d5bf6166667980b883afe9d41e969231d5d",
+      "total": 460,
+      "passed": 460,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "decoding-final-adpcm.json",
+      "sha256": "984614365beee3c19a9aed93a8b9206c5c84a4b0970cee0367948ae0150f3291",
+      "total": 40,
+      "passed": 40,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "decoding-final-encoded.json",
+      "sha256": "e82aeca3b1f6600e0682f4a74af2f6c46cb79fee3da4861a5fb6b2ebf9917148",
+      "total": 144,
+      "passed": 144,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-native.json",
+      "sha256": "8265d149645e11ef5ce14e30c239564a7d81f60a221c484559c9f252191d3350",
+      "total": 708,
+      "passed": 708,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-wavl.json",
+      "sha256": "bb88edc423956f0875c709c9ff0069c030f74626fdaaf6a0efcc570912b7af85",
+      "total": 216,
+      "passed": 216,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ima3-references.json",
+      "sha256": "3cf45e8422a8df9cf3c75a6bd207270a6302b649eca584f1f4696d3d147bda3e",
+      "total": 122,
+      "passed": 122,
+      "current_production_sources_checked": false
+    },
+    {
+      "file": "ima-extensible-references-repro.json",
+      "sha256": "e8c27a831dc2e50b5c91e526d5ea90bb88bba830c738d8ffc02f0cb227005581",
+      "total": 416,
+      "passed": 416,
+      "current_production_sources_checked": false
+    },
+    {
+      "file": "ms-narrow-mutation-x64.json",
+      "sha256": "81899b7f04b6a64a0c2a981004913a2ece4c4c15b9358871765c8a27cade531c",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-mutation-i686.json",
+      "sha256": "4f4659881388d1e9a75c1e057ee97b4acd1e1cfaa2381cf3e296ebdcbc81d2a7",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-prior-replay.json",
+      "sha256": "5ee16e9b59c552b103971a6a4692d585f3e98875980f1ab2038968674d98bbc7",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-asan.json",
+      "sha256": "7a92c57272f4a60d30eef78c359ec69a37dc237554fb0ab0145a87d9e90d4fff",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": true
+    },
+    {
+      "file": "ms-narrow-boundary.json",
+      "sha256": "63f65013d27e4baeca77997faa0670658920a65c07d62309245e7f529361c783",
+      "total": null,
+      "passed": null,
+      "current_production_sources_checked": false
+    }
+  ],
+  "conclusion": "all applicable correctness gates pass; no unresolved decoding defect identified; known external rounding/support differences remain documented",
+  "tests": {
+    "x64_debug": 95,
+    "x64_release": 95,
+    "i686_debug": 95,
+    "clippy_both_architectures": "pass"
+  },
+  "direct_native_gates": 460,
+  "all_four_reference_core_gates": 24,
+  "direct_adpcm_gates": 40,
+  "direct_encoded_file_decoding_gates": 144,
+  "native_replay_gates": 708,
+  "compressed_sequence_gates": 216,
+  "production_dependencies": [],
+  "external_workspace_consumers": []
+}

@@ -1,0 +1,8 @@
+type-sizes inflater 3904 -> 3392; stream-decoder 4696 -> 4184
+inflater-owned-zero 3912 -> 3400
+reader-c2-d8-513x257-i0-f0-stored-buffered: cycles/op 2259339.23 -> 2262439.66; ns/op 1110150.00 -> 1095532.81; CPU throughput 0.999x
+reader-c2-d8-513x257-i0-f0-stored-reader: cycles/op 897370.87 -> 896657.55; ns/op 832476.56 -> 816303.12; CPU throughput 1.001x
+reader-c2-d8-513x257-i0-f0-fast-buffered: cycles/op 345168.90 -> 344844.80; ns/op 314000.00 -> 314007.03; CPU throughput 1.001x
+reader-c2-d8-513x257-i0-f0-fast-reader: cycles/op 492652.31 -> 506614.58; ns/op 443851.56 -> 465977.34; CPU throughput 0.972x
+reader-c6-d8-4097x257-i0-f0-stored-buffered: cycles/op 31373446.00 -> 32476780.75; ns/op 28593200.00 -> 29526825.00; CPU throughput 0.966x
+reader-c6-d8-4097x257-i0-f0-stored-reader: cycles/op 13951932.50 -> 14241269.25; ns/op 6374891.67 -> 6510525.00; CPU throughput 0.980x

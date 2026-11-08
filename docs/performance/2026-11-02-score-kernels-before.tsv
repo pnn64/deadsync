@@ -1,0 +1,17 @@
+run	stage	workload	cycles_per_op	ns_per_op	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes
+0	before	ghost/tie/64	238.96	126.93	0	0	0	0	0	0
+0	before	ghost/worse/64	164.26	87.62	0	0	0	0	0	0
+0	before	ghost/better/64	203.41	109.54	0	0	0	0	0	0
+0	before	ghost/invalid/64	88.57	47.01	0	0	0	0	0	0
+0	before	ghost/tie/4096	9112.91	4933.6	0	0	0	0	0	0
+0	before	ghost/worse/4096	9097.95	5117.13	0	0	0	0	0	0
+0	before	ghost/better/4096	13035.77	7151.56	0	0	0	0	0	0
+0	before	ghost/invalid/4096	4605.27	2559.22	0	0	0	0	0	0
+0	before	itl/common/128	6351.0	3376.0	0	0	0	0	0	0
+0	before	itl/overflow/128	15196.02	8188.0	0	0	0	0	0	0
+0	before	itl/unicode/128	5999.06	3192.4	0	0	0	0	0	0
+0	before	itl/missing/128	4520.56	2401.0	0	0	0	0	0	0
+0	before	gs/common/128	41339.39	21997.0	0	0	0	0	0	0
+0	before	gs/overflow/128	42469.21	23289.33	0	0	0	0	0	0
+0	before	gs/unicode/128	34861.54	18551.33	0	0	0	0	0	0
+0	before	gs/empty/128	4762.71	2529.67	0	0	0	0	0	0

@@ -1,0 +1,288 @@
+{
+  "passed": true,
+  "records": [
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "frames",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "/tmp/deadlib-flac-pipelines-audit-v2/input.oga"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t13497092\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "startup\t2\t123255\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream\t2\t16092632\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream-md5\t2\t32539029\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "symphonia-new",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new\t2\t15118824\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "symphonia-new-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-crc\t2\t15495197\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "ogg-stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream\t2\t15455521\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "ogg-stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream-md5\t2\t32955265\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "symphonia-new-ogg",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg\t2\t14775793\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "symphonia-new-ogg-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg-crc\t2\t15563265\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "symphonia-new-startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-startup\t2\t154344\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac\t2\t10788422\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-md5\t2\t16419406\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new\t2\t11612956\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-md5\t2\t16521500\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-ogg",
+        "/tmp/deadlib-flac-pipelines-audit-v2/input.oga",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg\t2\t11803306\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-ogg-md5",
+        "/tmp/deadlib-flac-pipelines-audit-v2/input.oga",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg-md5\t2\t17032945\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-startup\t2\t146909\t16384\t17179869042\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "frames",
+        "/tmp/deadlib-flac-pipelines-audit-v2/corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t12926499\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "stream-md5",
+        "/tmp/deadlib-flac-pipelines-audit-v2/corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (555520) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:251:61:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-pipelines-baseline",
+        "ogg-stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "/tmp/deadlib-flac-pipelines-audit-v2/corrupt-md5.oga"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (555521) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:237:22:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+        "libflac-new-ogg-md5",
+        "/tmp/deadlib-flac-pipelines-audit-v2/corrupt-md5.oga",
+        "/tmp/deadlib-flac-pipelines-audit-v2/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    }
+  ],
+  "sha256": {
+    "native": "eb3faa6ee68558000304c15e03b930c89b5445d098f5ebd4c754ea7f711adcc7",
+    "oracle": "e0b7d8e4a6234108ed43dbe3d9b683ad10df7ba8395883f5c9ef3b27421b4f7e",
+    "input": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f"
+  }
+}

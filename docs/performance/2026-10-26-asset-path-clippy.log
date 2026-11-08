@@ -1,0 +1,126 @@
+    Checking num-integer v0.1.47
+    Checking deadlib-render-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-core)
+    Checking serde_json v1.0.154
+   Compiling deadlib-render-backend-vulkan v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-vulkan)
+    Checking deadlib-platform v0.1.0 (C:\GitHub\deadsync\crates\deadlib-platform)
+    Checking wgpu-hal v30.0.1
+    Checking num-bigint v0.4.8
+    Checking num-rational v0.4.2
+    Checking av1-grain v0.2.5
+    Checking av-scenechange v0.14.1
+    Checking rav1e v0.8.1
+    Checking wgpu-core-deps-windows-linux-android v30.0.1
+    Checking wgpu-core v30.0.1
+    Checking ravif v0.13.0
+    Checking image v0.25.10
+    Checking wgpu v30.0.1
+    Checking deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+    Checking deadlib-render-backend-gl v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-gl)
+    Checking deadlib-present v0.1.0 (C:\GitHub\deadsync\crates\deadlib-present)
+    Checking deadlib-video v0.1.0 (C:\GitHub\deadsync\crates\deadlib-video)
+    Checking deadlib-render-backend-wgpu v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-wgpu)
+    Checking deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+    Checking deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+warning: file is loaded as a module multiple times: `crates\deadlib-assets\src\decode\..\..\..\..\tests\support\kernel_bench.rs`
+  |
+  = help: replace all but one `mod` item with `use` items
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#duplicate_mod
+  = note: `#[warn(clippy::duplicate_mod)]` on by default
+
+warning: this `if` statement can be collapsed
+   --> crates\deadlib-assets\src\decode.rs:237:5
+    |
+237 | /     if &signature[..2] == b"BM" {
+238 | |         if let Some(image) = decode_indexed_bmp(path, color_key)? {
+239 | |             return Ok(image);
+240 | |         }
+241 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+    = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+    |
+237 ~     if &signature[..2] == b"BM"
+238 ~         && let Some(image) = decode_indexed_bmp(path, color_key)? {
+239 |             return Ok(image);
+240 ~         }
+    |
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\decode.rs:296:14
+    |
+296 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> crates\deadlib-assets\src\decode.rs:296:14
+    |
+296 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+    = note: `#[warn(clippy::chunks_exact_to_as_chunks)]` on by default
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\decode.rs:490:14
+    |
+490 |             .chunks_exact(3)
+    |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadlib-assets\src\present_dsl.rs:121:1
+    |
+121 | / fn build_sprite(
+122 | |     texture_key: impl Into<Arc<str>>,
+123 | |     x: f32,
+124 | |     y: f32,
+...   |
+129 | |     uv: Option<[f32; 4]>,
+130 | | ) -> Actor {
+    | |__________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: `deadlib-assets` (lib) generated 4 warnings (run `cargo clippy --fix --lib -p deadlib-assets -- --no-deps` to apply 2 suggestions)
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\texture_pixels_original.rs:34:14
+   |
+34 |             .chunks_exact(3)
+   |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\texture_pixels_original.rs:107:14
+    |
+107 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> crates\deadlib-assets\src\texture_pixels_original.rs:107:14
+    |
+107 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\indexed_pixels_original.rs:152:14
+    |
+152 |             .chunks_exact(3)
+    |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\decode\..\preparation_original.rs:44:14
+   |
+44 |             .chunks_exact(3)
+   |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: `deadlib-assets` (lib test) generated 9 warnings (4 duplicates) (run `cargo clippy --fix --lib -p deadlib-assets --tests -- --no-deps` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.21s

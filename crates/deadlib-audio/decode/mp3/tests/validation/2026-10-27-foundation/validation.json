@@ -1,0 +1,71 @@
+{
+  "passed": true,
+  "timestamp_utc": "2026-10-27T21:28:18Z",
+  "scope": "Foundation only: bit fields, frame/side information, MPEG CRC, free-format inference, reservoir, ID3/VBR metadata framing. Native PCM decoding and encoding are not implemented.",
+  "integration_tests": 8,
+  "LAME_fixtures": 84,
+  "reference_frames": 732,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--target-dir",
+        "target/deadlib-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-mp3",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "Cargo.toml": "dbe8fce81c33370989bf6747ef274afed81c60c13b9252e0cb09b9d59b38cc71",
+    "examples/inspect.rs": "b907772d58aac18d48371315332cc526dab9f057dbb54ef63526e7aaf0c3655e",
+    "src/bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+    "src/checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+    "src/frame.rs": "7428ee4e2c3294ad234366cd81a5d18234dfedeba898f8cb35284ec62ad90e30",
+    "src/lib.rs": "ffbc9d76e3bd77a4a855f1033a0ebdeb0cd8372610212557069f5cf532069084",
+    "src/reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+    "src/side.rs": "6f1ad3b2d2ee65b3093d233accd8128b2766789c3a0fed1c99e63d0401dcc4f4",
+    "src/tags.rs": "4cf2b0d700d373766a09a8a76a0974a9271ffc409177ed6675cc9b4a8e423da3",
+    "tests/foundation.rs": "c09f1976dcfb57b05cd17efa20363a06875cd1ff26941429bb50f2ccad72385a",
+    "tests/reference_framing.py": "c22e22919b4d9a7fc35e4bfa7d7dd32e1c57daa972b4facc4b1914a3b9a9edf2",
+    "tests/oracle/inspect.c": "8792a155a47f752fbfa8bbf3ae6f8190b9161c24df8e1ac17015083f4034ba82"
+  },
+  "report_sha256": {
+    "gate-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gate-1.log": "331bf49abbb06039508799bbcb860d10f27d9691bd2e3d14b840d73998e8816c",
+    "gate-2.log": "d463bb03c47fcc2e61ef0902ad8a6917b72590026b1dcd2a476776c66d033780",
+    "reference-framing.json": "18f23d4df765ec2b7662587dbe08be5059b516dfc145c63296417599b8cac042",
+    "reference-provenance.json": "f0e763775c08759adf0b7aacb72fe689477f4b87433029c7acfeea3b35917978",
+    "standards.json": "d03e4e5dddf7329e02ccc4d1c4eba74a164b10c732b19d0a1e04ce39c6b501ec"
+  },
+  "notes": "Documentation finalized after the gates; compiled Rust, reference driver, fixture generator and package manifest hashes are unchanged."
+}

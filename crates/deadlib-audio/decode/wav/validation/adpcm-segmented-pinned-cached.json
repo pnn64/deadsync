@@ -1,0 +1,142 @@
+{
+  "timestamp_utc": "2026-10-28T19:55:48Z",
+  "source_report": "target/wav/adpcm-flat-pinned-cached.json",
+  "source_report_sha256": "19367eba79d2ef0dd80f5175d49489a1b7a23492e21579d662d90be5badd80b5",
+  "builds": {
+    "baseline": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+      "binary_sha256": "c16d781123a463436ae0edc0d96dede3ce4e7085172b907061945844912f20a9",
+      "sources": {
+        "Cargo.toml": "f988f75c64603e43a0749a1ed4fe5504262b49ad46d07a1d4643a1fb8530875e",
+        "benches/adpcm_file.rs": "70708f9e706ac02de6c461b632f1040c067a946d1c110df71e1da76eddc8da6d",
+        "benches/support/affinity.rs": "ffa31bd867cf3dbc58c223c310dc54d52e4fabc8fd44ede9b3d7413470897c56",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+        "src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+        "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+        "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+        "README.md": "52d25aff479908e48358beb9bc115433c5c53d37c149b4f7700fd8e27e533da3"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "880e6d42cf09f840db29e7a771f830cc89cd76717eb0ee22a3ec693f20d1f4b4",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "adpcm_file",
+        "--no-run",
+        "--message-format=json"
+      ]
+    },
+    "current": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+      "binary_sha256": "e3cd8c816e42deb64899c70fd84c70167826860d3caf5f7a77d2cbee13f51382",
+      "sources": {
+        "Cargo.toml": "f988f75c64603e43a0749a1ed4fe5504262b49ad46d07a1d4643a1fb8530875e",
+        "benches/adpcm_file.rs": "70708f9e706ac02de6c461b632f1040c067a946d1c110df71e1da76eddc8da6d",
+        "benches/support/affinity.rs": "ffa31bd867cf3dbc58c223c310dc54d52e4fabc8fd44ede9b3d7413470897c56",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+        "src/adpcm_reader.rs": "53b65ea239c66308b8e32e9fa1dc2ac2c56a7d4e0970b26b162d66776b0f6513",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "1357f59a26c90c6df885e4a5af3bd8201e8c6b3d04439a3b24d18d47857862f2",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+        "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+        "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+        "README.md": "52d25aff479908e48358beb9bc115433c5c53d37c149b4f7700fd8e27e533da3"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "b13cb54c2a0d20a5338c2b808420732029402679f11714f5aae0697ac556f81b",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "adpcm_file",
+        "--no-run",
+        "--message-format=json"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "label": "control1",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--pin-thread"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "a1530245a40e6451379cc2a043c966349599072451767a39eff7da92705b76a0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current1",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--pin-thread"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "92502e29ca705a9a278f9859a44362309da7c2f176e69e82395c03051f8a3ce3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "control2",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--pin-thread"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "dc0e61cb5f929acbbdafe48117ca2e1f98ef0e23981c2adde7bfba8f0c8836a3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current2",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-flat-pinned-cached-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--pin-thread"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "b3e6d15c7aedafb71089ea33f62630862c456b7a9b02c34c7256d59d5a6590a3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles"
+}

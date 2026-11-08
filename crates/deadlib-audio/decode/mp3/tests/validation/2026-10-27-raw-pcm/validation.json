@@ -1,0 +1,109 @@
+{
+  "passed": true,
+  "scope": "Raw PCM milestone; universal stereo parity remains unresolved and its failed survey is archived explicitly. File/streaming, gapless, seeking, fuzzing, encoding and performance are unfinished.",
+  "timestamp_utc": "2026-10-27T22:47:24Z",
+  "integration_tests": 25,
+  "generated_files": 84,
+  "legacy_vectors": 18,
+  "dsp_frames": 4032,
+  "stereo_survey_files": 90,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--target-dir",
+        "target/deadlib-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-mp3",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "Cargo.toml": "dbe8fce81c33370989bf6747ef274afed81c60c13b9252e0cb09b9d59b38cc71",
+    "examples/decode.rs": "0c598b913258f00876ce77e1705e3714c14fe23faf74a844884ce779391d9ee3",
+    "examples/dsp.rs": "24b88108731fea036fa1b923d248439e9afd3c6dff99c347e4295e71045acada",
+    "examples/inspect.rs": "2c4042ca498e6e99bbbbccfee9db2023182df2ef09525206df76d42dedd332a3",
+    "scripts/generate_dsp.py": "006b729d20db3228bc88a59d25f7a1d97ebd1c6c98a036dac488f1c13232688a",
+    "scripts/generate_huffman.py": "caea54b7d6d439219c91685cdbc4fdf24ff71743d29adee821cc0479602a3ea3",
+    "src/bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+    "src/bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+    "src/checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+    "src/decoder.rs": "f269a10b969556fe2cccd97d2e0bceb63bff92e73d662eae4d866d3f119a7133",
+    "src/dsp_tables.rs": "09d9a0d3b735b1cff73dda46bc5260fe75b12951f4b20fe5ee45e1ff49a3c5da",
+    "src/frame.rs": "25dbd80c1108c1aeb7ad511dacec4b6d5b4acebcdfb793c5bc1bff3ae06d9206",
+    "src/huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+    "src/huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+    "src/lib.rs": "3043933f46de2fa00701df4bfff28a0c9b5dfad6f2446a3a113a03ddd0a493b0",
+    "src/reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+    "src/scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+    "src/side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+    "src/spectral.rs": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2",
+    "src/synthesis.rs": "9ee6f7f70823f886f7a676e68a69cc8174855bf1bf663623a5c0e98b3e3579ef",
+    "src/tags.rs": "4cf2b0d700d373766a09a8a76a0974a9271ffc409177ed6675cc9b4a8e423da3",
+    "tests/decoder.rs": "51a50d08949b702a27505805547c3ea3c8a91815b3b74fa84adcae7e41875837",
+    "tests/fetch_iso.py": "75bf571b33851c1039fe1bebcf428db2313d0b181eaff768be045e6f5cf54385",
+    "tests/foundation.rs": "0f0d45ff24a073ba7e9bd3052d00377efe4ea1e4d62c6a99f000c16362a320f5",
+    "tests/huffman.rs": "cd7858fbb1dcb69967fd11a5b5f843ed5047609af1dccdcb5a350fd6a5fe2bff",
+    "tests/reference_dsp.py": "b36181006b7c6a4621983130506f66aa5cf22fa2778edae3d62015e9e5a21741",
+    "tests/reference_framing.py": "3c09a01192a34920ee65cee8dde6f3d4e1c8ff332f5b8f23bd45197f1dd72f42",
+    "tests/reference_huffman.py": "c917efba39e0e1f7fbb5db5def4aecfdaf954917309dc159be8ae9756731a83b",
+    "tests/reference_iso.py": "cf9f3435f6f3cb444c79a04aa9e16ac5d76de466b414296b27c1c9db0e9056b6",
+    "tests/reference_pcm.py": "7dbfb45093c9826b60193616490a01be245adfb929ecb5c9a747b3a3c0b14a58",
+    "tests/reference_stereo.py": "35f0047d78d384dd892d049e96073311513e412ae6d2c8cd96c3b4f571ec5ccc",
+    "tests/scalefactors.rs": "e4f2452030ced15a2bbf41ae61d2c1dc7c523d7e68a52d2f823f59e3769de98d",
+    "tests/spectral.rs": "63ad02b9ae3d40356851735d59154dae6004c2f27e1091dab20d8827ac1025d0",
+    "tests/synthesis.rs": "5e5d2cecb1a54e87d4f55fb3176a54976832ee5843d7904ad524e5c6f50cff16",
+    "tests/data/bands.json": "a291732bebc1754f25335219cc3380fe86661a03eeaac99987d39a7e3388d963",
+    "tests/data/dsp.json": "2f95c1442665900d71443e113ccaa6bef6611ede6c6bee08f3d9cae39048db96",
+    "tests/data/huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "tests/data/huffman.json": "9bfd7a46a027eb55a4fcb78eb375e178e876219190cd563de1ba66514ae76c3e",
+    "tests/data/iso-vectors.json": "7c6becef0a9d72a7d97a03e3038307dadf4924047688b7350a9146b294461cd3",
+    "tests/oracle/decode.c": "b1ac4f000705e2c490b03cc8949e2b5b599a0b72b8ed46c727ddc179a8175acd",
+    "tests/oracle/dsp.c": "ecc76bafa92e7cfa46fa116a5436971c2f540d87d6b11c4be0c9085c0ac8c113",
+    "tests/oracle/hybrid.c": "b60511e08ea78682bd81a9e088ca3f61ca4bc94ddbf4e027fdf01f3c379a7902",
+    "tests/oracle/inspect.c": "8792a155a47f752fbfa8bbf3ae6f8190b9161c24df8e1ac17015083f4034ba82"
+  },
+  "report_sha256": {
+    "gate-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gate-1.log": "2376cada2040cf18392bcfd860a902a0a1d1f2a497792980dc884ca2f7962e5c",
+    "gate-2.log": "4e85f7b68e918fbbbe26d58b2d3a94ed6cb461786b5f769838a238ef35d6106d",
+    "independent-validation.json": "2c9b625510e600c1090a47dac050b3be21150d699147f9f5cd3851bf3ee12fae",
+    "linux-build.log": "3daa7ceaeb1558e2aa2b4e02c606e3863d5dc8e8029efd064ac6db6cf5764039",
+    "reference-dsp.json": "087c986bb9f9e5076ceb2b4d8a825b64b1462fe70e1c92886a2ccfdee9949d6f",
+    "reference-iso-provenance.json": "fff60adf67e7194f4923002ea13d8996daac77dd48258f1efa046df8e468a422",
+    "reference-iso.json": "44d4cb89bc140769c5cb91d56ad8b0f2f13ab7b9f36c78513b9131065c048cf5",
+    "reference-pcm-provenance.json": "8313566786672efd13ae27fdf274842a1363fe864b6abba5bc8f62b673dc41c3",
+    "reference-pcm.json": "c456da70ab060cced5d61fbc928d7c859e7a918bc4710952358a0495c4b47931",
+    "stereo-survey-provenance.json": "b7780ab27d71e014e59823154e4771af50232e8812c834f04c4c5e01f2d72531",
+    "stereo-survey.json": "444ab2c5094611b79207c8cc6b63ebdfc3f461a4674ae63a2dbb7dee0fd94f23"
+  }
+}

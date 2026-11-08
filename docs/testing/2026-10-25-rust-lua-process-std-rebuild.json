@@ -1,0 +1,35 @@
+{
+  "commands": [
+    [
+      "rustc",
+      "--edition=2024",
+      "--crate-name",
+      "deadlib_lua",
+      "--crate-type=rlib",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "C:\\GitHub\\deadsync\\target\\lua-process-std-snapshot\\crates\\deadlib-lua\\src\\lib.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-process-std-snapshot\\libdeadlib_lua.rlib"
+    ],
+    [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "--extern",
+      "deadlib_lua=C:\\GitHub\\deadsync\\target\\lua-process-std-snapshot\\libdeadlib_lua.rlib",
+      "C:\\GitHub\\deadsync\\target\\lua-process-std-snapshot\\crates\\deadlib-lua\\src\\bin\\deadlua.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-process-std-snapshot\\deadlua-std.exe"
+    ]
+  ],
+  "source_archive": "2026-10-25-rust-lua-process-std-source.zip",
+  "source_archive_sha256": "e9e68de54b7daf2fc301e5d831ba95e7bc1ec3a77fac02f3902d33293a8cdbf5",
+  "binary_sha256": "4ea6cdd371577e0f6c7f8b738c3e81df96d4af2839aa1a9f07171047f9588ae9",
+  "purpose": "Compatibility observations only; benchmark timings use the retained Cargo release run, not this direct-rustc executable."
+}

@@ -1,0 +1,1496 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 36.52s
+     Running unittests src\lib.rs (target\release\deps\deadlib_audio_decode_ogg-4d05e9f0a17ea9b6.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compatibility.rs (target\release\deps\compatibility-cf2ad0887b42eae7.exe)
+
+running 3 tests
+test capture_and_reset_preserve_the_selected_validation_flags ... ok
+test final_decrease_is_explicit_and_excluded_from_ordered_landmarks ... ok
+test zero_span_granule_is_explicit_and_never_updates_the_timeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\container.rs (target\release\deps\container-109cce08fed00649.exe)
+
+running 13 tests
+test borrowed_packets_do_not_copy_and_finish_emits_nil_eos ... ok
+test multiplexed_groups_and_chains_and_nil_eos ... ok
+test recovery_finds_capture_inside_false_page_and_after_crc_error ... ok
+test continued_zero_terminator_and_granule_on_last_complete_packet ... ok
+test crc_matches_independent_bitwise_polynomial ... ok
+test page_and_physical_validation_reject_malformed_data ... ok
+test recovery_scans_batches_and_preserves_split_captures_and_read_latency ... ok
+test unfinished_input_limits_and_terminal_error_states ... ok
+test native_writer_packets_and_metadata_match_reference_reader ... ok
+test reference_writer_packets_match_native_reader ... ok
+test incremental_every_header_split_and_small_body_chunks ... ok
+test partial_interrupted_reads_and_writes ... ok
+test deterministic_random_packets_differential ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\libogg.rs (target\release\deps\libogg-5a25c936ded5e17b.exe)
+
+running 2 tests
+test libogg_bidirectional_packet_and_page_parity ... ok
+libogg parity: 38 files, 8733 pages, 119144 packets
+test libogg_local_corpus ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+
+     Running tests\seeking.rs (target\release\deps\seeking-111a024cdf310079.exe)
+
+running 13 tests
+test capture_at_empty_continued_page_keeps_skipping_until_packet_end ... ok
+test paused_capture_counts_compatibility_once_at_page_completion ... ok
+test paused_capture_rejects_changed_pages_and_validates_tail_before_output ... ok
+test current_page_reborrows_verified_storage_and_is_cleared_on_seek_or_eof ... ok
+test index_and_capture_reject_corruption_truncation_holes_and_limits ... ok
+test indexless_search_uses_absolute_64_bit_offsets_and_fenced_reads ... ok
+test unindexed_capture_discards_only_unavailable_initial_fragment ... ok
+test indexed_granules_and_packet_boundaries_match_complete_demux ... ok
+test every_indexed_page_capture_and_repeated_seek_returns_exact_suffix ... ok
+test paused_capture_matches_demux_from_every_page_including_spans_and_mux ... ok
+test indexless_bisection_matches_linear_landmarks_in_all_streams ... ok
+test libogg_capture_at_every_generated_page_boundary ... ok
+libogg indexed captures: 38 files, 8733 indexed pages, 114 seeks, 181245 returned packets
+test libogg_local_corpus_indexed_captures ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.10s
+
+     Running unittests src\lib.rs (target\release\deps\deadlib_audio_decode_vorbis-17b6eaa9e9409f34.exe)
+
+running 12 tests
+test decoder::tests::inverse_coupling_covers_all_signs_and_channel_orders ... ok
+test floor::tests::floor0_odd_even_products_match_closed_form_at_dc ... ok
+test decoder::tests::windows_obey_complementary_slopes_and_hybrid_bounds ... ok
+test setup::tests::floor1_sixty_five_point_limit_is_a_format_constraint ... ok
+test floor::tests::render_integer_line_and_prediction_use_spec_rounding ... ok
+test residue::tests::residue_interleaves_clips_and_propagates_truncation ... ok
+test codebook::prefix_tests::prefix_memory_is_optional_and_logical_node_limits_are_unchanged ... ok
+test encoder::tests::first_stage_words_decode_all_entries_with_exact_lengths ... ok
+test transform::tests::analysis_window_and_synthesis_overlap_reconstruct_unquantized_pcm ... ok
+test codebook::prefix_tests::lookup_matches_tree_at_every_prefix_alignment_and_packet_tail ... ok
+test transform::tests::fft_imdct_matches_direct_cosine_for_all_vorbis_sizes ... ok
+test transform::tests::fft_mdct_matches_direct_analysis_at_every_legal_size ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\allocations.rs (target\release\deps\allocations-4ca07afc7f684b96.exe)
+
+running 1 test
+test repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\encoding.rs (target\release\deps\encoding-09a92fb5ecb9e030.exe)
+
+running 9 tests
+test raw_encoder_argument_errors_callback_failures_limits_and_reset ... ok
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 1 samples, peak error 2.980232239e-8, RMS 2.980232239e-8, signal peak 0.242081
+native encoding/Symphonia: 133 samples, peak error 1.192092896e-7, RMS 3.815099227e-8, signal peak 0.625133
+test ogg_encoder_seek_positions_and_write_failures_are_explicit ... ok
+native encoding/Symphonia: 519 samples, peak error 1.788139343e-7, RMS 5.356316914e-8, signal peak 0.569406
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 1 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239630
+native encoding/Symphonia: 133 samples, peak error 1.192092896e-7, RMS 3.960729516e-8, signal peak 0.576842
+native encoding/Symphonia: 519 samples, peak error 2.086162567e-7, RMS 4.825905571e-8, signal peak 0.684029
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 1 samples, peak error 1.490116119e-8, RMS 1.490116119e-8, signal peak 0.239679
+native encoding/Symphonia: 133 samples, peak error 1.788139343e-7, RMS 4.324808796e-8, signal peak 0.563840
+native encoding/Symphonia: 519 samples, peak error 1.788139343e-7, RMS 4.855928272e-8, signal peak 0.686702
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 1 samples, peak error 1.490116119e-8, RMS 1.490116119e-8, signal peak 0.239693
+native encoding/Symphonia: 133 samples, peak error 1.192092896e-7, RMS 4.383521192e-8, signal peak 0.564521
+native encoding/Symphonia: 519 samples, peak error 1.788139343e-7, RMS 4.671497423e-8, signal peak 0.687413
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 2 samples, peak error 2.980232239e-8, RMS 2.107342426e-8, signal peak 0.242081
+native encoding/Symphonia: 266 samples, peak error 1.192092896e-7, RMS 3.524586071e-8, signal peak 0.631917
+native encoding/Symphonia: 1038 samples, peak error 1.788139343e-7, RMS 4.837899164e-8, signal peak 0.573698
+forward MDCT/libvorbis: 32 samples, peak error 5.960464478e-8, RMS 3.129299286e-8, signal peak 0.765281
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 2 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239630
+native encoding/Symphonia: 266 samples, peak error 1.490116119e-7, RMS 4.094360670e-8, signal peak 0.571833
+native encoding/Symphonia: 1038 samples, peak error 1.788139343e-7, RMS 4.914586329e-8, signal peak 0.671211
+spanning native encoding/Symphonia: 131208 samples, peak error 3.576278687e-7, RMS 6.324176552e-8, signal peak 0.774918
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 2 samples, peak error 1.490116119e-8, RMS 1.053671213e-8, signal peak 0.239679
+native encoding/Symphonia: 266 samples, peak error 1.788139343e-7, RMS 4.901920258e-8, signal peak 0.578459
+native encoding/Symphonia: 1038 samples, peak error 2.086162567e-7, RMS 4.906748831e-8, signal peak 0.666665
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 2 samples, peak error 2.980232239e-8, RMS 2.356080458e-8, signal peak 0.239693
+native encoding/Symphonia: 266 samples, peak error 1.788139343e-7, RMS 4.276885086e-8, signal peak 0.577765
+native encoding/Symphonia: 1038 samples, peak error 2.980232239e-7, RMS 5.036120485e-8, signal peak 0.667233
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+forward MDCT/libvorbis: 64 samples, peak error 5.960464478e-8, RMS 2.244975233e-8, signal peak 0.338657
+native encoding/Symphonia: 3 samples, peak error 2.980232239e-8, RMS 1.923731638e-8, signal peak 0.242081
+native encoding/Symphonia: 399 samples, peak error 1.192092896e-7, RMS 3.288130983e-8, signal peak 0.571372
+native encoding/Symphonia: 1557 samples, peak error 1.788139343e-7, RMS 4.683291673e-8, signal peak 0.602821
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 3 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239630
+native encoding/Symphonia: 399 samples, peak error 1.192092896e-7, RMS 3.777069029e-8, signal peak 0.583877
+native encoding/Symphonia: 1557 samples, peak error 2.384185791e-7, RMS 5.037291558e-8, signal peak 0.672143
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 3 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.239679
+native encoding/Symphonia: 399 samples, peak error 1.788139343e-7, RMS 4.277925814e-8, signal peak 0.579799
+native encoding/Symphonia: 1557 samples, peak error 2.086162567e-7, RMS 4.987381786e-8, signal peak 0.674640
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 3 samples, peak error 2.980232239e-8, RMS 1.923731638e-8, signal peak 0.239693
+native encoding/Symphonia: 399 samples, peak error 1.192092896e-7, RMS 4.121570843e-8, signal peak 0.579475
+native encoding/Symphonia: 1557 samples, peak error 2.384185791e-7, RMS 5.243134884e-8, signal peak 0.675008
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 4 samples, peak error 2.980232239e-8, RMS 1.825012075e-8, signal peak 0.242081
+native encoding/libvorbis: 1 samples, peak error 1.490116119e-8, RMS 1.490116119e-8, signal peak 0.241487
+native encoding/Symphonia: 532 samples, peak error 1.192092896e-7, RMS 3.572999538e-8, signal peak 0.576447
+native encoding/Symphonia: 2076 samples, peak error 1.788139343e-7, RMS 4.479024890e-8, signal peak 0.590824
+test native_encoded_setup_pcm_lengths_chunking_and_precision ... ok
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 4 samples, peak error 1.490116119e-8, RMS 7.450580597e-9, signal peak 0.239630
+native encoding/Symphonia: 532 samples, peak error 1.192092896e-7, RMS 4.379132037e-8, signal peak 0.574656
+native encoding/Symphonia: 2076 samples, peak error 2.086162567e-7, RMS 4.948983489e-8, signal peak 0.736062
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 4 samples, peak error 1.490116119e-8, RMS 7.450580597e-9, signal peak 0.239679
+native encoding/Symphonia: 532 samples, peak error 1.788139343e-7, RMS 4.240731071e-8, signal peak 0.572177
+native encoding/Symphonia: 2076 samples, peak error 2.384185791e-7, RMS 5.117870345e-8, signal peak 0.739918
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 4 samples, peak error 2.980232239e-8, RMS 1.825012075e-8, signal peak 0.239693
+native encoding/Symphonia: 532 samples, peak error 1.788139343e-7, RMS 4.285103640e-8, signal peak 0.571986
+native encoding/Symphonia: 2076 samples, peak error 2.384185791e-7, RMS 5.274555422e-8, signal peak 0.740263
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 5 samples, peak error 2.980232239e-8, RMS 1.763129170e-8, signal peak 0.242081
+native encoding/libvorbis: 65 samples, peak error 1.192092896e-7, RMS 4.484653509e-8, signal peak 0.556950
+native encoding/Symphonia: 665 samples, peak error 1.192092896e-7, RMS 3.959011798e-8, signal peak 0.578708
+native encoding/Symphonia: 2595 samples, peak error 2.086162567e-7, RMS 4.397214679e-8, signal peak 0.591452
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 5 samples, peak error 1.490116119e-8, RMS 9.424321831e-9, signal peak 0.239630
+native encoding/Symphonia: 665 samples, peak error 1.788139343e-7, RMS 4.272086809e-8, signal peak 0.568559
+native encoding/Symphonia: 2595 samples, peak error 2.384185791e-7, RMS 4.950192393e-8, signal peak 0.704056
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 5 samples, peak error 1.490116119e-8, RMS 6.664001875e-9, signal peak 0.239679
+test native_encoder_codebooks_match_libvorbis_for_every_entry ... ok
+native encoding/Symphonia: 665 samples, peak error 2.384185791e-7, RMS 4.225162738e-8, signal peak 0.576810
+native encoding/Symphonia: 2595 samples, peak error 2.086162567e-7, RMS 5.063670265e-8, signal peak 0.688899
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+test encoder_handles_channel_range_silence_dc_impulses_and_precision_stages ... ok
+oggpcmraw: 131208 samples, peak error 4.470348358e-7, RMS 1.035322924e-7, signal peak 0.774918
+native encoding/Symphonia: 5 samples, peak error 2.980232239e-8, RMS 1.632340424e-8, signal peak 0.239693
+native encoding/Symphonia: 665 samples, peak error 1.788139343e-7, RMS 4.325356140e-8, signal peak 0.576923
+native encoding/libvorbis: 273 samples, peak error 1.192092896e-7, RMS 3.204853820e-8, signal peak 0.537604
+native encoding/Symphonia: 2595 samples, peak error 2.384185791e-7, RMS 4.960219780e-8, signal peak 0.689293
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 6 samples, peak error 2.980232239e-8, RMS 1.720637885e-8, signal peak 0.242081
+native encoding/Symphonia: 798 samples, peak error 1.192092896e-7, RMS 3.651066246e-8, signal peak 0.610573
+native encoding/Symphonia: 3114 samples, peak error 1.788139343e-7, RMS 4.358515483e-8, signal peak 0.602821
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 6 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.239630
+native encoding/Symphonia: 798 samples, peak error 1.490116119e-7, RMS 3.983406122e-8, signal peak 0.582502
+native encoding/Symphonia: 3114 samples, peak error 2.384185791e-7, RMS 4.737496035e-8, signal peak 0.667424
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 6 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.239679
+native encoding/Symphonia: 798 samples, peak error 1.490116119e-7, RMS 4.273517701e-8, signal peak 0.575569
+native encoding/Symphonia: 3114 samples, peak error 2.384185791e-7, RMS 4.924555652e-8, signal peak 0.666093
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 6 samples, peak error 2.980232239e-8, RMS 1.490116119e-8, signal peak 0.239693
+native encoding/Symphonia: 798 samples, peak error 1.788139343e-7, RMS 4.093144399e-8, signal peak 0.575727
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 3114 samples, peak error 2.086162567e-7, RMS 4.918163320e-8, signal peak 0.665635
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 7 samples, peak error 2.980232239e-8, RMS 1.593001139e-8, signal peak 0.242081
+native encoding/Symphonia: 931 samples, peak error 1.192092896e-7, RMS 3.625037058e-8, signal peak 0.579902
+native encoding/Symphonia: 3633 samples, peak error 2.384185791e-7, RMS 4.303241494e-8, signal peak 0.592328
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 7 samples, peak error 1.490116119e-8, RMS 7.965005693e-9, signal peak 0.239630
+native encoding/Symphonia: 931 samples, peak error 1.788139343e-7, RMS 4.556465909e-8, signal peak 0.585928
+native encoding/Symphonia: 3633 samples, peak error 2.384185791e-7, RMS 5.163883774e-8, signal peak 0.730525
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 7 samples, peak error 1.490116119e-8, RMS 9.755099873e-9, signal peak 0.239679
+native encoding/Symphonia: 931 samples, peak error 2.384185791e-7, RMS 4.346931802e-8, signal peak 0.577903
+native encoding/Symphonia: 3633 samples, peak error 2.682209015e-7, RMS 4.766175457e-8, signal peak 0.737822
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 1 samples, peak error 1.490116119e-8, RMS 1.490116119e-8, signal peak 0.239669
+native encoding/Symphonia: 7 samples, peak error 2.980232239e-8, RMS 1.379579454e-8, signal peak 0.239693
+native encoding/Symphonia: 931 samples, peak error 1.192092896e-7, RMS 4.089126703e-8, signal peak 0.577858
+native encoding/Symphonia: 3633 samples, peak error 1.788139343e-7, RMS 4.834773989e-8, signal peak 0.737204
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 8 samples, peak error 2.980232239e-8, RMS 1.580506819e-8, signal peak 0.242081
+native encoding/Symphonia: 1064 samples, peak error 1.192092896e-7, RMS 3.647202368e-8, signal peak 0.576059
+native encoding/Symphonia: 4152 samples, peak error 1.788139343e-7, RMS 4.269692336e-8, signal peak 0.591118
+oggpcm: 98440 samples, peak error 4.470348358e-7, RMS 1.075245589e-7, signal peak 0.774918
+test libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages ... ok
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 8 samples, peak error 1.490116119e-8, RMS 7.450580597e-9, signal peak 0.239630
+native encoding/Symphonia: 1064 samples, peak error 2.384185791e-7, RMS 4.123661999e-8, signal peak 0.585101
+native encoding/Symphonia: 4152 samples, peak error 2.384185791e-7, RMS 4.798295394e-8, signal peak 0.704049
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 8 samples, peak error 1.490116119e-8, RMS 1.053671213e-8, signal peak 0.239679
+native encoding/libvorbis: 65 samples, peak error 1.192092896e-7, RMS 3.864052070e-8, signal peak 0.575566
+native encoding/Symphonia: 1064 samples, peak error 1.490116119e-7, RMS 3.879593369e-8, signal peak 0.579654
+native encoding/Symphonia: 4152 samples, peak error 2.384185791e-7, RMS 5.027967990e-8, signal peak 0.702711
+native encoding/Symphonia: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/Symphonia: 8 samples, peak error 2.980232239e-8, RMS 1.393875996e-8, signal peak 0.239693
+native encoding/Symphonia: 1064 samples, peak error 1.788139343e-7, RMS 4.009982033e-8, signal peak 0.579872
+native encoding/Symphonia: 4152 samples, peak error 2.384185791e-7, RMS 5.117738076e-8, signal peak 0.702243
+test native_generated_packets_match_symphonia_without_channel_coupling ... ok
+native encoding/libvorbis: 273 samples, peak error 1.341104507e-7, RMS 4.299230550e-8, signal peak 0.695691
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+forward MDCT/libvorbis: 128 samples, peak error 8.195638657e-8, RMS 2.289659586e-8, signal peak 0.286116
+native encoding/libvorbis: 1 samples, peak error 2.980232239e-8, RMS 2.980232239e-8, signal peak 0.239687
+forward MDCT/libvorbis: 256 samples, peak error 4.842877388e-8, RMS 1.576487128e-8, signal peak 0.264550
+native encoding/libvorbis: 65 samples, peak error 1.192092896e-7, RMS 4.864486560e-8, signal peak 0.564884
+forward MDCT/libvorbis: 512 samples, peak error 3.352761269e-8, RMS 1.160202263e-8, signal peak 0.141945
+native encoding/libvorbis: 273 samples, peak error 2.384185791e-7, RMS 4.928808189e-8, signal peak 0.686684
+forward MDCT/libvorbis: 1024 samples, peak error 4.097819328e-8, RMS 9.316319646e-9, signal peak 0.131038
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+forward MDCT/libvorbis: 2048 samples, peak error 2.980232239e-8, RMS 7.400281690e-9, signal peak 0.096540
+native encoding/libvorbis: 1 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239694
+forward MDCT/libvorbis: 4096 samples, peak error 2.235174179e-8, RMS 5.531174828e-9, signal peak 0.077541
+test forward_mdct_matches_libvorbis_at_all_legal_sizes ... ok
+native encoding/libvorbis: 65 samples, peak error 1.192092896e-7, RMS 4.141611490e-8, signal peak 0.564513
+native encoding/libvorbis: 273 samples, peak error 1.788139343e-7, RMS 4.365019549e-8, signal peak 0.687499
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 2 samples, peak error 1.490116119e-8, RMS 1.053671213e-8, signal peak 0.241487
+native encoding/libvorbis: 130 samples, peak error 8.940696716e-8, RMS 2.307552909e-8, signal peak 0.537790
+native encoding/libvorbis: 546 samples, peak error 1.490116119e-7, RMS 3.785923436e-8, signal peak 0.567425
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 2 samples, peak error 2.980232239e-8, RMS 2.356080458e-8, signal peak 0.239669
+native encoding/libvorbis: 130 samples, peak error 1.192092896e-7, RMS 3.092485053e-8, signal peak 0.583426
+native encoding/libvorbis: 546 samples, peak error 1.490116119e-7, RMS 4.513394850e-8, signal peak 0.609066
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 2 samples, peak error 2.980232239e-8, RMS 2.107342426e-8, signal peak 0.239687
+native encoding/libvorbis: 130 samples, peak error 8.940696716e-8, RMS 2.593657163e-8, signal peak 0.577693
+native encoding/libvorbis: 546 samples, peak error 1.490116119e-7, RMS 4.747242750e-8, signal peak 0.590523
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 2 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239694
+native encoding/libvorbis: 130 samples, peak error 1.192092896e-7, RMS 3.011467113e-8, signal peak 0.577748
+native encoding/libvorbis: 546 samples, peak error 1.192092896e-7, RMS 4.330060725e-8, signal peak 0.590498
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 3 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.241487
+native encoding/libvorbis: 195 samples, peak error 1.192092896e-7, RMS 2.505826255e-8, signal peak 0.541518
+native encoding/libvorbis: 819 samples, peak error 1.490116119e-7, RMS 3.631221962e-8, signal peak 0.596745
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 3 samples, peak error 2.980232239e-8, RMS 2.107342426e-8, signal peak 0.239669
+native encoding/libvorbis: 195 samples, peak error 1.192092896e-7, RMS 3.715340291e-8, signal peak 0.571598
+native encoding/libvorbis: 819 samples, peak error 1.788139343e-7, RMS 4.892524821e-8, signal peak 0.634631
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 3 samples, peak error 2.980232239e-8, RMS 2.433349433e-8, signal peak 0.239687
+native encoding/libvorbis: 195 samples, peak error 1.192092896e-7, RMS 3.058246691e-8, signal peak 0.579833
+native encoding/libvorbis: 819 samples, peak error 1.490116119e-7, RMS 4.449557247e-8, signal peak 0.634236
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 3 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.239694
+native encoding/libvorbis: 195 samples, peak error 1.192092896e-7, RMS 2.930699028e-8, signal peak 0.579484
+native encoding/libvorbis: 819 samples, peak error 1.788139343e-7, RMS 4.567638184e-8, signal peak 0.634617
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 6 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.241487
+native encoding/libvorbis: 390 samples, peak error 1.192092896e-7, RMS 3.235282766e-8, signal peak 0.579934
+native encoding/libvorbis: 1638 samples, peak error 1.788139343e-7, RMS 4.120566189e-8, signal peak 0.583429
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 6 samples, peak error 2.980232239e-8, RMS 2.017626764e-8, signal peak 0.239669
+native encoding/libvorbis: 390 samples, peak error 1.788139343e-7, RMS 3.830814259e-8, signal peak 0.571320
+native encoding/libvorbis: 1638 samples, peak error 1.788139343e-7, RMS 4.764995195e-8, signal peak 0.654552
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 6 samples, peak error 2.980232239e-8, RMS 2.107342426e-8, signal peak 0.239687
+native encoding/libvorbis: 390 samples, peak error 1.192092896e-7, RMS 3.572432954e-8, signal peak 0.571359
+native encoding/libvorbis: 1638 samples, peak error 2.086162567e-7, RMS 5.070769593e-8, signal peak 0.644317
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 6 samples, peak error 1.490116119e-8, RMS 8.603189427e-9, signal peak 0.239694
+native encoding/libvorbis: 390 samples, peak error 1.192092896e-7, RMS 3.852270325e-8, signal peak 0.571645
+native encoding/libvorbis: 1638 samples, peak error 2.384185791e-7, RMS 5.417418556e-8, signal peak 0.645117
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 1.490116119e-8, RMS 1.053671213e-8, signal peak 0.241487
+native encoding/libvorbis: 520 samples, peak error 1.788139343e-7, RMS 3.439907823e-8, signal peak 0.580887
+native encoding/libvorbis: 2184 samples, peak error 1.788139343e-7, RMS 4.168713858e-8, signal peak 0.584787
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 2.980232239e-8, RMS 1.825012075e-8, signal peak 0.239669
+native encoding/libvorbis: 520 samples, peak error 1.192092896e-7, RMS 3.777327462e-8, signal peak 0.577418
+native encoding/libvorbis: 2184 samples, peak error 2.086162567e-7, RMS 4.916885668e-8, signal peak 0.705724
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 2.980232239e-8, RMS 1.825012075e-8, signal peak 0.239687
+native encoding/libvorbis: 520 samples, peak error 1.192092896e-7, RMS 3.714063369e-8, signal peak 0.574838
+native encoding/libvorbis: 2184 samples, peak error 2.384185791e-7, RMS 5.152078198e-8, signal peak 0.702293
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 1.490116119e-8, RMS 9.125060375e-9, signal peak 0.239694
+native encoding/libvorbis: 520 samples, peak error 1.788139343e-7, RMS 3.489521058e-8, signal peak 0.575119
+native encoding/libvorbis: 2184 samples, peak error 2.384185791e-7, RMS 5.134882659e-8, signal peak 0.702196
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 2.980232239e-8, RMS 1.971238338e-8, signal peak 0.241673
+native encoding/libvorbis: 32776 samples, peak error 4.172325134e-7, RMS 6.783999984e-8, signal peak 0.627684
+native encoding/libvorbis: 131208 samples, peak error 4.172325134e-7, RMS 9.589613118e-8, signal peak 0.619956
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 2.980232239e-8, RMS 1.490116119e-8, signal peak 0.239705
+native encoding/libvorbis: 32776 samples, peak error 3.129243851e-7, RMS 6.949884404e-8, signal peak 0.758182
+native encoding/libvorbis: 131208 samples, peak error 4.768371582e-7, RMS 1.004131530e-7, signal peak 0.820887
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 1.490116119e-8, RMS 1.178040229e-8, signal peak 0.239691
+native encoding/libvorbis: 32776 samples, peak error 3.576278687e-7, RMS 7.069905651e-8, signal peak 0.765658
+native encoding/libvorbis: 131208 samples, peak error 5.066394806e-7, RMS 1.026892965e-7, signal peak 0.774879
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 8 samples, peak error 2.980232239e-8, RMS 1.290478414e-8, signal peak 0.239693
+native encoding/libvorbis: 32776 samples, peak error 3.576278687e-7, RMS 7.011169848e-8, signal peak 0.765301
+native encoding/libvorbis: 131208 samples, peak error 4.470348358e-7, RMS 1.035322924e-7, signal peak 0.774918
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 16 samples, peak error 5.960464478e-8, RMS 2.107342426e-8, signal peak 0.263915
+native encoding/libvorbis: 1040 samples, peak error 1.639127731e-7, RMS 3.480642331e-8, signal peak 0.623413
+native encoding/libvorbis: 4368 samples, peak error 1.788139343e-7, RMS 4.051989643e-8, signal peak 0.614681
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 16 samples, peak error 2.980232239e-8, RMS 1.707142478e-8, signal peak 0.262791
+native encoding/libvorbis: 1040 samples, peak error 1.490116119e-7, RMS 3.980574418e-8, signal peak 0.582082
+native encoding/libvorbis: 4368 samples, peak error 2.384185791e-7, RMS 4.733847585e-8, signal peak 0.675637
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 16 samples, peak error 2.980232239e-8, RMS 1.707142478e-8, signal peak 0.262643
+native encoding/libvorbis: 1040 samples, peak error 1.788139343e-7, RMS 4.023376448e-8, signal peak 0.579008
+native encoding/libvorbis: 4368 samples, peak error 2.384185791e-7, RMS 4.854008814e-8, signal peak 0.670657
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 16 samples, peak error 1.490116119e-8, RMS 7.450580597e-9, signal peak 0.262634
+native encoding/libvorbis: 1040 samples, peak error 1.788139343e-7, RMS 4.021613846e-8, signal peak 0.578739
+native encoding/libvorbis: 4368 samples, peak error 2.384185791e-7, RMS 4.984279471e-8, signal peak 0.671207
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.725691165e-8, signal peak 0.282072
+native encoding/libvorbis: 16575 samples, peak error 2.086162567e-7, RMS 4.435698322e-8, signal peak 0.680740
+native encoding/libvorbis: 69615 samples, peak error 2.980232239e-7, RMS 5.457958299e-8, signal peak 0.701318
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.337691402e-8, signal peak 0.279983
+native encoding/libvorbis: 16575 samples, peak error 2.086162567e-7, RMS 4.579320636e-8, signal peak 0.584757
+native encoding/libvorbis: 69615 samples, peak error 3.576278687e-7, RMS 5.890644726e-8, signal peak 0.775547
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.453883614e-8, signal peak 0.279813
+native encoding/libvorbis: 16575 samples, peak error 2.682209015e-7, RMS 4.577306552e-8, signal peak 0.580200
+native encoding/libvorbis: 69615 samples, peak error 3.576278687e-7, RMS 5.911107994e-8, signal peak 0.769430
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.432008112e-8, signal peak 0.279819
+native encoding/libvorbis: 16575 samples, peak error 2.384185791e-7, RMS 4.632026705e-8, signal peak 0.579716
+native encoding/libvorbis: 69615 samples, peak error 2.980232239e-7, RMS 5.889653344e-8, signal peak 0.769795
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.378564684e-8, signal peak 0.282049
+native encoding/libvorbis: 65535 samples, peak error 2.384185791e-7, RMS 5.081726812e-8, signal peak 0.662322
+native encoding/libvorbis: 265455 samples, peak error 4.172325134e-7, RMS 6.677712116e-8, signal peak 0.665376
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.331983458e-8, signal peak 0.279741
+native encoding/libvorbis: 65535 samples, peak error 2.384185791e-7, RMS 5.399634098e-8, signal peak 0.762970
+native encoding/libvorbis: 265455 samples, peak error 4.172325134e-7, RMS 7.179306679e-8, signal peak 0.782229
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.292164213e-8, signal peak 0.279823
+native encoding/libvorbis: 65535 samples, peak error 2.682209015e-7, RMS 5.377189541e-8, signal peak 0.770915
+native encoding/libvorbis: 265455 samples, peak error 4.172325134e-7, RMS 7.224763893e-8, signal peak 0.779912
+native encoding/libvorbis: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+native encoding/libvorbis: 255 samples, peak error 5.960464478e-8, RMS 1.409793214e-8, signal peak 0.279819
+native encoding/libvorbis: 65535 samples, peak error 2.533197403e-7, RMS 5.405561540e-8, signal peak 0.769830
+native encoding/libvorbis: 265455 samples, peak error 4.470348358e-7, RMS 7.233772930e-8, signal peak 0.779544
+test native_encoding_is_accepted_by_libvorbis_with_exact_counts_and_pcm_parity ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.84s
+
+     Running tests\headers.rs (target\release\deps\headers-f0898ad297439d78.exe)
+
+running 2 tests
+test generated_stereo_and_eight_channel_headers_match_symphonia ... ok
+C:\GitHub\deadsync\assets\music\Beanmania IIDX (loop).ogg
+C:\GitHub\deadsync\assets\music\Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg
+C:\GitHub\deadsync\assets\music\ECS15 (loop).ogg
+C:\GitHub\deadsync\assets\music\ECS15-GameOver.ogg
+C:\GitHub\deadsync\assets\music\Mystical Wheelbarrow Journey (loop).ogg
+C:\GitHub\deadsync\assets\music\Quaq (loop).ogg
+C:\GitHub\deadsync\assets\music\SRPG10 (loop).ogg
+C:\GitHub\deadsync\assets\music\SRPG10-GameOver.ogg
+C:\GitHub\deadsync\assets\music\SRPG9 (loop).ogg
+C:\GitHub\deadsync\assets\music\Shooting Star - faux VRC6 remix (loop).ogg
+C:\GitHub\deadsync\assets\music\Spooky Scary Chiptunes (loop).ogg
+C:\GitHub\deadsync\assets\music\Xuxa fami VRC6 (loop).ogg
+C:\GitHub\deadsync\assets\music\credits.ogg
+C:\GitHub\deadsync\assets\music\halcyon farms (loop).ogg
+C:\GitHub\deadsync\assets\music\in_two (loop).ogg
+C:\GitHub\deadsync\assets\music\select_course (loop).ogg
+C:\GitHub\deadsync\assets\music\vrtuous faults (loop).ogg
+C:\GitHub\deadsync\assets\sounds\assist_tick.ogg
+C:\GitHub\deadsync\assets\sounds\boom.ogg
+C:\GitHub\deadsync\assets\sounds\change.ogg
+C:\GitHub\deadsync\assets\sounds\change_value.ogg
+C:\GitHub\deadsync\assets\sounds\common_invalid.ogg
+C:\GitHub\deadsync\assets\sounds\easier.ogg
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_failed.ogg
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_passed.ogg
+C:\GitHub\deadsync\assets\sounds\evaluation_nice\nice.ogg
+C:\GitHub\deadsync\assets\sounds\expand.ogg
+C:\GitHub\deadsync\assets\sounds\harder.ogg
+C:\GitHub\deadsync\assets\sounds\next_row.ogg
+C:\GitHub\deadsync\assets\sounds\prev_row.ogg
+C:\GitHub\deadsync\assets\sounds\prompt.ogg
+C:\GitHub\deadsync\assets\sounds\screen_edit_marker.ogg
+C:\GitHub\deadsync\assets\sounds\screen_edit_snap.ogg
+C:\GitHub\deadsync\assets\sounds\screenshot.ogg
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_failed.ogg
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_passed.ogg
+C:\GitHub\deadsync\assets\sounds\start.ogg
+C:\GitHub\deadsync\assets\sounds\unjoin.ogg
+Symphonia setup/header parity: 38 files, 1611 codebooks, 119030 audio packet prefixes
+test local_corpus_headers_match_symphonia ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running tests\legacy.rs (target\release\deps\legacy-31c80cdb7af308c6.exe)
+
+running 3 tests
+floor0/vorbis_floor_type_0.ogg
+test zero_span_header_quirk_works_in_streaming_indexed_and_reset_paths ... ok
+test indexed_endpoint_policy_clips_across_packets_and_preceding_pages ... ok
+floor0/vorbis_floor_type_0.ogg: 12525572 samples, peak error 2.521276474e-5, RMS 1.509311687e-6, signal peak 0.671671
+legacy/native seek: 57346 samples, peak error 9.149312973e-6, RMS 9.650554716e-7, signal peak 0.312970
+legacy/Lumme-Badloop.ogg
+legacy/Lumme-Badloop.ogg: 35725824 samples, peak error 3.725290298e-7, RMS 2.988794441e-8, signal peak 0.891307
+legacy/native seek: 57346 samples, peak error 1.192092896e-7, RMS 9.072024716e-9, signal peak 0.274783
+itgmania/goin-under.ogg
+itgmania/goin-under.ogg: 10886400 samples, peak error 7.152557373e-7, RMS 7.273434138e-8, signal peak 1.221433
+legacy/native seek: 57346 samples, peak error 5.960464478e-7, RMS 9.292268605e-8, signal peak 1.157328
+itgmania/mecha-tribe-assault.ogg
+itgmania/mecha-tribe-assault.ogg: 9261000 samples, peak error 7.152557373e-7, RMS 8.176303353e-8, signal peak 1.350101
+legacy/native seek: 57346 samples, peak error 3.576278687e-7, RMS 6.858172607e-8, signal peak 0.954946
+test historical_and_itg_song_pcm_counts_and_native_seeks ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.00s
+
+     Running tests\libvorbis.rs (target\release\deps\libvorbis-36d608638a6107e1.exe)
+
+running 2 tests
+C:\GitHub\deadsync\assets\music\Beanmania IIDX (loop).ogg
+38 books, 3171 entries, max VQ error 0
+C:\GitHub\deadsync\assets\music\Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg
+32 books, 3478 entries, max VQ error 0
+test libvorbis_generated_header_codebook_vq_and_huffman_parity ... ok
+C:\GitHub\deadsync\assets\music\ECS15 (loop).ogg
+C:\GitHub\deadsync\assets\music\ECS15-GameOver.ogg
+C:\GitHub\deadsync\assets\music\Mystical Wheelbarrow Journey (loop).ogg
+C:\GitHub\deadsync\assets\music\Quaq (loop).ogg
+C:\GitHub\deadsync\assets\music\SRPG10 (loop).ogg
+C:\GitHub\deadsync\assets\music\SRPG10-GameOver.ogg
+C:\GitHub\deadsync\assets\music\SRPG9 (loop).ogg
+C:\GitHub\deadsync\assets\music\Shooting Star - faux VRC6 remix (loop).ogg
+C:\GitHub\deadsync\assets\music\Spooky Scary Chiptunes (loop).ogg
+C:\GitHub\deadsync\assets\music\Xuxa fami VRC6 (loop).ogg
+C:\GitHub\deadsync\assets\music\credits.ogg
+C:\GitHub\deadsync\assets\music\halcyon farms (loop).ogg
+C:\GitHub\deadsync\assets\music\in_two (loop).ogg
+C:\GitHub\deadsync\assets\music\select_course (loop).ogg
+C:\GitHub\deadsync\assets\music\vrtuous faults (loop).ogg
+C:\GitHub\deadsync\assets\sounds\assist_tick.ogg
+C:\GitHub\deadsync\assets\sounds\boom.ogg
+C:\GitHub\deadsync\assets\sounds\change.ogg
+C:\GitHub\deadsync\assets\sounds\change_value.ogg
+C:\GitHub\deadsync\assets\sounds\common_invalid.ogg
+C:\GitHub\deadsync\assets\sounds\easier.ogg
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_failed.ogg
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_passed.ogg
+C:\GitHub\deadsync\assets\sounds\evaluation_nice\nice.ogg
+C:\GitHub\deadsync\assets\sounds\expand.ogg
+C:\GitHub\deadsync\assets\sounds\harder.ogg
+C:\GitHub\deadsync\assets\sounds\next_row.ogg
+C:\GitHub\deadsync\assets\sounds\prev_row.ogg
+C:\GitHub\deadsync\assets\sounds\prompt.ogg
+C:\GitHub\deadsync\assets\sounds\screen_edit_marker.ogg
+C:\GitHub\deadsync\assets\sounds\screen_edit_snap.ogg
+C:\GitHub\deadsync\assets\sounds\screenshot.ogg
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_failed.ogg
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_passed.ogg
+C:\GitHub\deadsync\assets\sounds\start.ogg
+C:\GitHub\deadsync\assets\sounds\unjoin.ogg
+libvorbis parity: 38 files, 1611 codebooks, 155478 entries, max VQ error 0
+test libvorbis_local_corpus_headers_codebooks_and_huffman ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.81s
+
+     Running tests\lifecycle.rs (target\release\deps\lifecycle-60636e381dfcaad9.exe)
+
+running 4 tests
+test window_transitions_produce_exact_raw_frame_positions ... ok
+test rejected_packets_preserve_overlap_and_limits_fail_before_use ... ok
+test every_short_packet_prefix_is_bounded_and_reset_restores_synthesis ... ok
+test seeded_malformed_packets_cannot_escape_buffers_or_emit_nonfinite_pcm ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\ogg_mapping.rs (target\release\deps\ogg_mapping-046905179f6977f1.exe)
+
+running 12 tests
+test invalid_mapping_headers_and_granules_are_terminal ... ok
+test fragmented_io_truncation_terminal_errors_and_limits ... ok
+Symphonia/full file: 7680 samples, peak error 8.940696716e-8, RMS 1.953745613e-8, signal peak 0.256902
+Symphonia/known undiscarded prefix: 9204 samples, peak error 8.940696716e-8, RMS 1.824957619e-8, signal peak 0.256902
+test symphonia_0_6_1_retains_negative_timestamp_initial_samples ... ok
+test comment_truncation_is_nonfatal_and_large_comments_span_pages ... ok
+Symphonia/full file: 640 samples, peak error 8.940696716e-8, RMS 2.364761714e-8, signal peak 0.341457
+test original_fixtures_trim_to_exact_source_sample_counts ... ok
+C:\GitHub\deadsync\assets\music\Beanmania IIDX (loop).ogg
+Symphonia/edited: 9278 samples, peak error 8.940696716e-8, RMS 1.822826435e-8, signal peak 0.256902
+test chains_and_multiplexing_keep_independent_rates_layouts_and_overlaps ... ok
+test push_boundaries_and_reset_match_pull_output ... ok
+Vorbisfile/original: 7680 samples, peak error 1.341104507e-7, RMS 3.154629992e-8, signal peak 0.256902
+Symphonia/edited: 9278 samples, peak error 8.940696716e-8, RMS 1.822826435e-8, signal peak 0.256902
+test symphonia_full_file_counts_pcm_and_timestamps ... ok
+test empty_and_single_page_audio_have_unambiguous_tail_counts ... ok
+test initial_trim_broadcast_offset_and_final_trim_preserve_correct_pcm ... ok
+Vorbisfile/original: 640 samples, peak error 1.192092896e-7, RMS 4.040044427e-8, signal peak 0.341457
+Vorbisfile/original: 23040 samples, peak error 7.450580597e-8, RMS 1.790692248e-8, signal peak 0.106527
+Vorbisfile/edited: 9270 samples, peak error 1.341104507e-7, RMS 3.008001148e-8, signal peak 0.256902
+Vorbisfile/edited: 9212 samples, peak error 1.341104507e-7, RMS 3.017431658e-8, signal peak 0.256902
+Vorbisfile/edited: 7222 samples, peak error 1.341104507e-7, RMS 3.158108910e-8, signal peak 0.256902
+Vorbisfile/edited: 9344 samples, peak error 1.341104507e-7, RMS 3.000525749e-8, signal peak 0.256902
+Vorbisfile/edited: 9286 samples, peak error 1.341104507e-7, RMS 3.009857855e-8, signal peak 0.256902
+Vorbisfile/edited: 7296 samples, peak error 1.341104507e-7, RMS 3.147497414e-8, signal peak 0.256902
+Vorbisfile/edited: 9344 samples, peak error 1.341104507e-7, RMS 3.000525749e-8, signal peak 0.256902
+Vorbisfile/edited: 9286 samples, peak error 1.341104507e-7, RMS 3.009857855e-8, signal peak 0.256902
+Vorbisfile/edited: 7296 samples, peak error 1.341104507e-7, RMS 3.147497414e-8, signal peak 0.256902
+Vorbisfile/nil EOS: 9344 samples, peak error 1.341104507e-7, RMS 3.000525749e-8, signal peak 0.256902
+Vorbisfile/chain: 8320 samples, peak error 1.341104507e-7, RMS 3.231363652e-8, signal peak 0.341457
+Vorbisfile/short: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Vorbisfile/short: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Vorbisfile/short: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Vorbisfile/short: 2 samples, peak error 2.048909664e-8, RMS 1.520368058e-8, signal peak 0.001712
+Vorbisfile/short: 1152 samples, peak error 1.192092896e-7, RMS 3.742084977e-8, signal peak 0.256337
+Vorbisfile/short: 1152 samples, peak error 1.192092896e-7, RMS 3.742084977e-8, signal peak 0.256337
+Vorbisfile/full initial trim: 8192 samples, peak error 1.341104507e-7, RMS 2.880976122e-8, signal peak 0.256902
+test libvorbisfile_original_edited_and_chained_streams ... ok
+Vorbisfile: 4671560 samples, peak error 5.960464478e-7, RMS 7.647088632e-8, signal peak 1.034190
+Symphonia: 4671560 samples, peak error 4.172325134e-7, RMS 5.122176500e-8, signal peak 1.034190
+C:\GitHub\deadsync\assets\music\Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg
+Vorbisfile: 6977162 samples, peak error 7.152557373e-7, RMS 1.165928713e-7, signal peak 1.170575
+Symphonia: 6977162 samples, peak error 5.960464478e-7, RMS 7.791585635e-8, signal peak 1.170575
+C:\GitHub\deadsync\assets\music\ECS15 (loop).ogg
+Vorbisfile: 3686400 samples, peak error 5.960464478e-7, RMS 7.432989635e-8, signal peak 1.035954
+Symphonia: 3686400 samples, peak error 4.172325134e-7, RMS 4.968535892e-8, signal peak 1.035954
+C:\GitHub\deadsync\assets\music\ECS15-GameOver.ogg
+Vorbisfile: 7241728 samples, peak error 5.960464478e-7, RMS 7.548332988e-8, signal peak 1.034378
+Symphonia: 7241728 samples, peak error 4.768371582e-7, RMS 4.982314576e-8, signal peak 1.034378
+C:\GitHub\deadsync\assets\music\Mystical Wheelbarrow Journey (loop).ogg
+Vorbisfile: 5806080 samples, peak error 5.960464478e-7, RMS 7.159507781e-8, signal peak 1.122967
+Symphonia: 5806080 samples, peak error 3.576278687e-7, RMS 4.538292332e-8, signal peak 1.122967
+C:\GitHub\deadsync\assets\music\Quaq (loop).ogg
+Vorbisfile: 8533350 samples, peak error 6.556510925e-7, RMS 9.108503703e-8, signal peak 1.208280
+Symphonia: 8533350 samples, peak error 5.364418030e-7, RMS 5.875419494e-8, signal peak 1.208280
+C:\GitHub\deadsync\assets\music\SRPG10 (loop).ogg
+Vorbisfile: 16033794 samples, peak error 2.151355147e-7, RMS 1.750090234e-8, signal peak 0.491503
+Symphonia: 16033794 samples, peak error 1.490116119e-7, RMS 1.080408888e-8, signal peak 0.491503
+C:\GitHub\deadsync\assets\music\SRPG10-GameOver.ogg
+Vorbisfile: 14816932 samples, peak error 7.152557373e-7, RMS 3.586951166e-8, signal peak 1.071247
+Symphonia: 14816932 samples, peak error 4.172325134e-7, RMS 2.139725181e-8, signal peak 1.071247
+C:\GitHub\deadsync\assets\music\SRPG9 (loop).ogg
+Vorbisfile: 16500190 samples, peak error 5.066394806e-7, RMS 5.196408541e-8, signal peak 0.945604
+Symphonia: 16500190 samples, peak error 4.172325134e-7, RMS 3.277333345e-8, signal peak 0.945604
+C:\GitHub\deadsync\assets\music\Shooting Star - faux VRC6 remix (loop).ogg
+Vorbisfile: 10886348 samples, peak error 5.960464478e-7, RMS 7.103927650e-8, signal peak 1.089673
+Symphonia: 10886348 samples, peak error 4.172325134e-7, RMS 4.464460427e-8, signal peak 1.089673
+C:\GitHub\deadsync\assets\music\Spooky Scary Chiptunes (loop).ogg
+Vorbisfile: 4233600 samples, peak error 6.556510925e-7, RMS 7.239975813e-8, signal peak 1.139816
+Symphonia: 4233600 samples, peak error 5.364418030e-7, RMS 4.722363982e-8, signal peak 1.139816
+C:\GitHub\deadsync\assets\music\Xuxa fami VRC6 (loop).ogg
+Vorbisfile: 10054800 samples, peak error 5.066394806e-7, RMS 5.293098427e-8, signal peak 1.607983
+Symphonia: 10054800 samples, peak error 3.576278687e-7, RMS 3.370541699e-8, signal peak 1.607984
+C:\GitHub\deadsync\assets\music\credits.ogg
+Vorbisfile: 5784278 samples, peak error 4.768371582e-7, RMS 4.898411543e-8, signal peak 1.468250
+Symphonia: 5784278 samples, peak error 3.576278687e-7, RMS 3.097055017e-8, signal peak 1.468250
+C:\GitHub\deadsync\assets\music\halcyon farms (loop).ogg
+Vorbisfile: 7526400 samples, peak error 6.258487701e-7, RMS 8.266572245e-8, signal peak 1.020105
+Symphonia: 7526400 samples, peak error 4.768371582e-7, RMS 5.423539998e-8, signal peak 1.020105
+C:\GitHub\deadsync\assets\music\in_two (loop).ogg
+Vorbisfile: 8890472 samples, peak error 6.556510925e-7, RMS 7.725617878e-8, signal peak 1.020739
+Symphonia: 8890472 samples, peak error 5.364418030e-7, RMS 5.112070193e-8, signal peak 1.020739
+C:\GitHub\deadsync\assets\music\select_course (loop).ogg
+Vorbisfile: 4032000 samples, peak error 4.172325134e-7, RMS 5.656727998e-8, signal peak 0.995287
+Symphonia: 4032000 samples, peak error 3.576278687e-7, RMS 3.666312413e-8, signal peak 0.995287
+C:\GitHub\deadsync\assets\music\vrtuous faults (loop).ogg
+Vorbisfile: 3822088 samples, peak error 5.960464478e-7, RMS 6.711126206e-8, signal peak 1.005013
+Symphonia: 3822088 samples, peak error 4.172325134e-7, RMS 4.830247715e-8, signal peak 1.005014
+C:\GitHub\deadsync\assets\sounds\assist_tick.ogg
+Vorbisfile: 9401 samples, peak error 2.980232239e-7, RMS 3.698263287e-8, signal peak 1.078352
+Symphonia: 9401 samples, peak error 2.384185791e-7, RMS 2.396392213e-8, signal peak 1.078352
+C:\GitHub\deadsync\assets\sounds\boom.ogg
+Vorbisfile: 17152 samples, peak error 5.960464478e-7, RMS 9.903386791e-8, signal peak 1.098666
+Symphonia: 17152 samples, peak error 3.576278687e-7, RMS 6.499088623e-8, signal peak 1.098667
+C:\GitHub\deadsync\assets\sounds\change.ogg
+Vorbisfile: 18086 samples, peak error 1.266598701e-7, RMS 2.102380907e-8, signal peak 0.177111
+Symphonia: 18086 samples, peak error 6.705522537e-8, RMS 1.009668696e-8, signal peak 0.177111
+C:\GitHub\deadsync\assets\sounds\change_value.ogg
+Vorbisfile: 11264 samples, peak error 1.043081284e-7, RMS 1.911546952e-8, signal peak 0.178876
+Symphonia: 11264 samples, peak error 8.940696716e-8, RMS 1.251165705e-8, signal peak 0.178876
+C:\GitHub\deadsync\assets\sounds\common_invalid.ogg
+Vorbisfile: 17054 samples, peak error 4.172325134e-7, RMS 5.400572503e-8, signal peak 1.020546
+Symphonia: 17054 samples, peak error 2.980232239e-7, RMS 3.786036981e-8, signal peak 1.020546
+C:\GitHub\deadsync\assets\sounds\easier.ogg
+Vorbisfile: 4131 samples, peak error 1.266598701e-7, RMS 2.668281928e-8, signal peak 0.365926
+Symphonia: 4131 samples, peak error 8.940696716e-8, RMS 1.867822051e-8, signal peak 0.365926
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_failed.ogg
+Vorbisfile: 32879 samples, peak error 3.129243851e-7, RMS 2.176189034e-8, signal peak 0.939563
+Symphonia: 32879 samples, peak error 2.384185791e-7, RMS 1.385580410e-8, signal peak 0.939563
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_passed.ogg
+Vorbisfile: 292120 samples, peak error 1.788139343e-7, RMS 5.123628744e-9, signal peak 0.880550
+Symphonia: 292120 samples, peak error 1.490116119e-7, RMS 3.566085759e-9, signal peak 0.880550
+C:\GitHub\deadsync\assets\sounds\evaluation_nice\nice.ogg
+Vorbisfile: 31007 samples, peak error 2.384185791e-7, RMS 2.803815110e-8, signal peak 0.676489
+Symphonia: 31007 samples, peak error 1.490116119e-7, RMS 1.805500627e-8, signal peak 0.676489
+C:\GitHub\deadsync\assets\sounds\expand.ogg
+Vorbisfile: 16893 samples, peak error 2.980232239e-7, RMS 3.263481908e-8, signal peak 0.717032
+Symphonia: 16893 samples, peak error 2.086162567e-7, RMS 2.109591712e-8, signal peak 0.717032
+C:\GitHub\deadsync\assets\sounds\harder.ogg
+Vorbisfile: 4131 samples, peak error 2.384185791e-7, RMS 3.465928716e-8, signal peak 0.368096
+Symphonia: 4131 samples, peak error 1.192092896e-7, RMS 2.076845554e-8, signal peak 0.368096
+C:\GitHub\deadsync\assets\sounds\next_row.ogg
+Vorbisfile: 18086 samples, peak error 2.533197403e-7, RMS 3.965521833e-8, signal peak 0.317788
+Symphonia: 18086 samples, peak error 1.490116119e-7, RMS 1.849905440e-8, signal peak 0.317788
+C:\GitHub\deadsync\assets\sounds\prev_row.ogg
+Vorbisfile: 15146 samples, peak error 1.639127731e-7, RMS 3.730562755e-8, signal peak 0.306389
+Symphonia: 15146 samples, peak error 1.192092896e-7, RMS 2.154162814e-8, signal peak 0.306389
+C:\GitHub\deadsync\assets\sounds\prompt.ogg
+Vorbisfile: 50944 samples, peak error 2.980232239e-7, RMS 2.571688419e-8, signal peak 0.661159
+Symphonia: 50944 samples, peak error 2.235174179e-7, RMS 1.560329222e-8, signal peak 0.661159
+C:\GitHub\deadsync\assets\sounds\screen_edit_marker.ogg
+Vorbisfile: 64898 samples, peak error 2.458691597e-7, RMS 1.252870045e-8, signal peak 0.656950
+Symphonia: 64898 samples, peak error 1.490116119e-7, RMS 6.326820597e-9, signal peak 0.656950
+C:\GitHub\deadsync\assets\sounds\screen_edit_snap.ogg
+Vorbisfile: 17622 samples, peak error 1.192092896e-7, RMS 1.953953387e-8, signal peak 0.372615
+Symphonia: 17622 samples, peak error 7.450580597e-8, RMS 1.371181448e-8, signal peak 0.372615
+C:\GitHub\deadsync\assets\sounds\screenshot.ogg
+Vorbisfile: 17682 samples, peak error 1.043081284e-7, RMS 2.149717713e-8, signal peak 0.155104
+Symphonia: 17682 samples, peak error 5.960464478e-8, RMS 1.339430209e-8, signal peak 0.155104
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_failed.ogg
+Vorbisfile: 372706 samples, peak error 1.322478056e-7, RMS 1.124993525e-8, signal peak 0.291177
+Symphonia: 372706 samples, peak error 8.940696716e-8, RMS 7.290752350e-9, signal peak 0.291178
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_passed.ogg
+Vorbisfile: 268800 samples, peak error 1.490116119e-7, RMS 8.937215022e-9, signal peak 0.416690
+Symphonia: 268800 samples, peak error 1.192092896e-7, RMS 5.749070958e-9, signal peak 0.416690
+C:\GitHub\deadsync\assets\sounds\start.ogg
+Vorbisfile: 12708 samples, peak error 1.862645149e-7, RMS 2.496291341e-8, signal peak 0.447358
+Symphonia: 12708 samples, peak error 1.192092896e-7, RMS 1.635782491e-8, signal peak 0.447358
+C:\GitHub\deadsync\assets\sounds\unjoin.ogg
+Vorbisfile: 42984 samples, peak error 3.278255463e-7, RMS 1.569344070e-8, signal peak 0.882710
+Symphonia: 42984 samples, peak error 1.788139343e-7, RMS 1.014750613e-8, signal peak 0.882710
+all 38 files: 140832876 samples, peak error 7.152557373e-7, RMS 6.566112047e-8, signal peak 1.607983
+all 38 files/Symphonia: 140832876 samples, peak error 5.960464478e-7, RMS 4.276095447e-8, signal peak 1.607984
+test libvorbisfile_local_corpus_final_counts_and_pcm ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.39s
+
+     Running tests\pcm.rs (target\release\deps\pcm-ed76bc193954bfd7.exe)
+
+running 6 tests
+8ch libvorbis golden: 29184 samples, peak error 7.450580597e-8, RMS 1.654163580e-8, signal peak 0.106527
+stereo: 9344 samples, peak error 8.940696716e-8, RMS 1.816395600e-8, signal peak 0.256902
+test symphonia_061_dependent_coupling_disagreement_is_explicit ... ok
+8ch silence: 12800 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+8ch native/libvorbis golden: 29184 samples, peak error 7.450580597e-8, RMS 1.654163580e-8, signal peak 0.106527
+8 kHz mono: 768 samples, peak error 8.940696716e-8, RMS 2.216512265e-8, signal peak 0.341457
+C:\GitHub\deadsync\assets\music\Beanmania IIDX (loop).ogg
+test generated_pcm_matches_symphonia_including_priming_and_reset ... ok
+stereo: 9344 samples, peak error 1.341104507e-7, RMS 3.000525749e-8, signal peak 0.256902
+MDCT 64: 64 samples, peak error 1.192092896e-7, RMS 4.490795543e-8, signal peak 0.752497
+8ch silence: 12800 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+MDCT 128: 128 samples, peak error 1.192092896e-7, RMS 4.733753904e-8, signal peak 0.776599
+MDCT 256: 256 samples, peak error 2.235174179e-7, RMS 5.893036272e-8, signal peak 0.811085
+8ch tones: 29184 samples, peak error 7.450580597e-8, RMS 1.654163580e-8, signal peak 0.106527
+MDCT 512: 512 samples, peak error 2.086162567e-7, RMS 6.708909550e-8, signal peak 1.041584
+8 kHz mono: 768 samples, peak error 1.192092896e-7, RMS 3.737638960e-8, signal peak 0.341457
+test generated_pcm_matches_libvorbis ... ok
+MDCT 1024: 1024 samples, peak error 2.980232239e-7, RMS 6.910321965e-8, signal peak 0.884256
+MDCT 2048: 2048 samples, peak error 2.980232239e-7, RMS 7.586502839e-8, signal peak 1.022034
+MDCT 4096: 4096 samples, peak error 3.576278687e-7, RMS 8.311227956e-8, signal peak 1.205558
+MDCT 8192: 8192 samples, peak error 3.874301910e-7, RMS 8.903887505e-8, signal peak 1.415881
+test mdct_matches_libvorbis_at_all_sizes ... ok
+libvorbis: 4671744 samples, peak error 5.960464478e-7, RMS 7.646943233e-8, signal peak 1.034190
+Symphonia: 4671744 samples, peak error 4.172325134e-7, RMS 5.122081459e-8, signal peak 1.034190
+C:\GitHub\deadsync\assets\music\Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg
+libvorbis: 6977280 samples, peak error 7.152557373e-7, RMS 1.165921093e-7, signal peak 1.170575
+Symphonia: 6977280 samples, peak error 5.960464478e-7, RMS 7.791535556e-8, signal peak 1.170575
+C:\GitHub\deadsync\assets\music\ECS15 (loop).ogg
+libvorbis: 3686400 samples, peak error 5.960464478e-7, RMS 7.432989635e-8, signal peak 1.035954
+Symphonia: 3686400 samples, peak error 4.172325134e-7, RMS 4.968535892e-8, signal peak 1.035954
+C:\GitHub\deadsync\assets\music\ECS15-GameOver.ogg
+floor0 raw: libvorbis peak=0.000025212764739990234 rms=0.0000015093042159510956; Symphonia peak=0.000022590160369873047 rms=0.0000015805914313527226
+historical floor0/libvorbis: 12525696 samples, peak error 2.521276474e-5, RMS 1.509304216e-6, signal peak 0.671671
+historical floor0/Symphonia: 12525696 samples, peak error 2.259016037e-5, RMS 1.580591431e-6, signal peak 0.671668
+test historical_floor0_raw_pcm_matches_independent_decoders ... ok
+libvorbis: 7241728 samples, peak error 5.960464478e-7, RMS 7.548332988e-8, signal peak 1.034378
+Symphonia: 7241728 samples, peak error 4.768371582e-7, RMS 4.982314576e-8, signal peak 1.034378
+C:\GitHub\deadsync\assets\music\Mystical Wheelbarrow Journey (loop).ogg
+libvorbis: 5806080 samples, peak error 5.960464478e-7, RMS 7.159507781e-8, signal peak 1.122967
+Symphonia: 5806080 samples, peak error 3.576278687e-7, RMS 4.538292332e-8, signal peak 1.122967
+C:\GitHub\deadsync\assets\music\Quaq (loop).ogg
+libvorbis: 8533504 samples, peak error 6.556510925e-7, RMS 9.108431264e-8, signal peak 1.208280
+Symphonia: 8533504 samples, peak error 5.364418030e-7, RMS 5.875377666e-8, signal peak 1.208280
+C:\GitHub\deadsync\assets\music\SRPG10 (loop).ogg
+libvorbis: 16034048 samples, peak error 2.151355147e-7, RMS 1.750076489e-8, signal peak 0.491503
+Symphonia: 16034048 samples, peak error 1.490116119e-7, RMS 1.080400436e-8, signal peak 0.491503
+C:\GitHub\deadsync\assets\music\SRPG10-GameOver.ogg
+libvorbis: 14818176 samples, peak error 7.152557373e-7, RMS 3.586800599e-8, signal peak 1.071247
+Symphonia: 14818176 samples, peak error 4.172325134e-7, RMS 2.139635363e-8, signal peak 1.071247
+C:\GitHub\deadsync\assets\music\SRPG9 (loop).ogg
+libvorbis: 16500352 samples, peak error 5.066394806e-7, RMS 5.196383032e-8, signal peak 0.945604
+Symphonia: 16500352 samples, peak error 4.172325134e-7, RMS 3.277317257e-8, signal peak 0.945604
+C:\GitHub\deadsync\assets\music\Shooting Star - faux VRC6 remix (loop).ogg
+libvorbis: 10886400 samples, peak error 5.960464478e-7, RMS 7.103914407e-8, signal peak 1.089673
+Symphonia: 10886400 samples, peak error 4.172325134e-7, RMS 4.464451483e-8, signal peak 1.089673
+C:\GitHub\deadsync\assets\music\Spooky Scary Chiptunes (loop).ogg
+libvorbis: 4233728 samples, peak error 6.556510925e-7, RMS 7.239870434e-8, signal peak 1.139816
+Symphonia: 4233728 samples, peak error 5.364418030e-7, RMS 4.722296039e-8, signal peak 1.139816
+C:\GitHub\deadsync\assets\music\Xuxa fami VRC6 (loop).ogg
+libvorbis: 10056576 samples, peak error 5.066394806e-7, RMS 5.292631024e-8, signal peak 1.607983
+Symphonia: 10056576 samples, peak error 3.576278687e-7, RMS 3.370244066e-8, signal peak 1.607984
+C:\GitHub\deadsync\assets\music\credits.ogg
+libvorbis: 5785984 samples, peak error 4.768371582e-7, RMS 4.897689340e-8, signal peak 1.468250
+Symphonia: 5785984 samples, peak error 3.576278687e-7, RMS 3.096598399e-8, signal peak 1.468250
+C:\GitHub\deadsync\assets\music\halcyon farms (loop).ogg
+libvorbis: 7526400 samples, peak error 6.258487701e-7, RMS 8.266572245e-8, signal peak 1.020105
+Symphonia: 7526400 samples, peak error 4.768371582e-7, RMS 5.423539998e-8, signal peak 1.020105
+C:\GitHub\deadsync\assets\music\in_two (loop).ogg
+libvorbis: 8890624 samples, peak error 6.556510925e-7, RMS 7.725551935e-8, signal peak 1.020739
+Symphonia: 8890624 samples, peak error 5.364418030e-7, RMS 5.112026547e-8, signal peak 1.020739
+C:\GitHub\deadsync\assets\music\select_course (loop).ogg
+libvorbis: 4032000 samples, peak error 4.172325134e-7, RMS 5.656727998e-8, signal peak 0.995287
+Symphonia: 4032000 samples, peak error 3.576278687e-7, RMS 3.666312413e-8, signal peak 0.995287
+C:\GitHub\deadsync\assets\music\vrtuous faults (loop).ogg
+libvorbis: 3822336 samples, peak error 5.960464478e-7, RMS 6.710926473e-8, signal peak 1.005013
+Symphonia: 3822336 samples, peak error 4.172325134e-7, RMS 4.830097805e-8, signal peak 1.005014
+C:\GitHub\deadsync\assets\sounds\assist_tick.ogg
+libvorbis: 9920 samples, peak error 2.980232239e-7, RMS 3.600243673e-8, signal peak 1.078352
+Symphonia: 9920 samples, peak error 2.384185791e-7, RMS 2.332868439e-8, signal peak 1.078352
+C:\GitHub\deadsync\assets\sounds\boom.ogg
+libvorbis: 17152 samples, peak error 5.960464478e-7, RMS 9.903386791e-8, signal peak 1.098666
+Symphonia: 17152 samples, peak error 3.576278687e-7, RMS 6.499088623e-8, signal peak 1.098667
+C:\GitHub\deadsync\assets\sounds\change.ogg
+libvorbis: 20096 samples, peak error 1.266598701e-7, RMS 1.994474555e-8, signal peak 0.177111
+Symphonia: 20096 samples, peak error 6.705522537e-8, RMS 9.578475530e-9, signal peak 0.177111
+C:\GitHub\deadsync\assets\sounds\change_value.ogg
+libvorbis: 11392 samples, peak error 1.043081284e-7, RMS 1.900795862e-8, signal peak 0.178876
+Symphonia: 11392 samples, peak error 8.940696716e-8, RMS 1.244127604e-8, signal peak 0.178876
+C:\GitHub\deadsync\assets\sounds\common_invalid.ogg
+libvorbis: 17600 samples, peak error 4.172325134e-7, RMS 5.316144774e-8, signal peak 1.020546
+Symphonia: 17600 samples, peak error 2.980232239e-7, RMS 3.726848826e-8, signal peak 1.020546
+C:\GitHub\deadsync\assets\sounds\easier.ogg
+libvorbis: 4672 samples, peak error 1.266598701e-7, RMS 2.512563367e-8, signal peak 0.365926
+Symphonia: 4672 samples, peak error 8.940696716e-8, RMS 1.758601151e-8, signal peak 0.365926
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_failed.ogg
+libvorbis: 33600 samples, peak error 3.129243851e-7, RMS 2.152713726e-8, signal peak 0.939563
+Symphonia: 33600 samples, peak error 2.384185791e-7, RMS 1.370633671e-8, signal peak 0.939563
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_passed.ogg
+libvorbis: 293760 samples, peak error 1.788139343e-7, RMS 5.109306658e-9, signal peak 0.880550
+Symphonia: 293760 samples, peak error 1.490116119e-7, RMS 3.556117475e-9, signal peak 0.880550
+C:\GitHub\deadsync\assets\sounds\evaluation_nice\nice.ogg
+libvorbis: 31936 samples, peak error 2.384185791e-7, RMS 2.762740847e-8, signal peak 0.676489
+Symphonia: 31936 samples, peak error 1.490116119e-7, RMS 1.779052444e-8, signal peak 0.676489
+C:\GitHub\deadsync\assets\sounds\expand.ogg
+libvorbis: 16960 samples, peak error 2.980232239e-7, RMS 3.257031381e-8, signal peak 0.717032
+Symphonia: 16960 samples, peak error 2.086162567e-7, RMS 2.105423347e-8, signal peak 0.717032
+C:\GitHub\deadsync\assets\sounds\harder.ogg
+libvorbis: 4672 samples, peak error 2.384185791e-7, RMS 3.259088746e-8, signal peak 0.368096
+Symphonia: 4672 samples, peak error 1.192092896e-7, RMS 1.952904225e-8, signal peak 0.368096
+C:\GitHub\deadsync\assets\sounds\next_row.ogg
+libvorbis: 20096 samples, peak error 2.533197403e-7, RMS 3.761988457e-8, signal peak 0.317788
+Symphonia: 20096 samples, peak error 1.490116119e-7, RMS 1.754958931e-8, signal peak 0.317788
+C:\GitHub\deadsync\assets\sounds\prev_row.ogg
+libvorbis: 15488 samples, peak error 1.639127731e-7, RMS 3.689234273e-8, signal peak 0.306389
+Symphonia: 15488 samples, peak error 1.192092896e-7, RMS 2.130285210e-8, signal peak 0.306389
+C:\GitHub\deadsync\assets\sounds\prompt.ogg
+libvorbis: 52864 samples, peak error 2.980232239e-7, RMS 2.524558021e-8, signal peak 0.661159
+Symphonia: 52864 samples, peak error 2.235174179e-7, RMS 1.531732989e-8, signal peak 0.661159
+C:\GitHub\deadsync\assets\sounds\screen_edit_marker.ogg
+libvorbis: 66944 samples, peak error 2.458691597e-7, RMS 1.233575834e-8, signal peak 0.656950
+Symphonia: 66944 samples, peak error 1.490116119e-7, RMS 6.229387500e-9, signal peak 0.656950
+C:\GitHub\deadsync\assets\sounds\screen_edit_snap.ogg
+libvorbis: 17792 samples, peak error 1.192092896e-7, RMS 1.944596148e-8, signal peak 0.372615
+Symphonia: 17792 samples, peak error 7.450580597e-8, RMS 1.364615014e-8, signal peak 0.372615
+C:\GitHub\deadsync\assets\sounds\screenshot.ogg
+libvorbis: 18112 samples, peak error 1.043081284e-7, RMS 2.124081006e-8, signal peak 0.155104
+Symphonia: 18112 samples, peak error 5.960464478e-8, RMS 1.323450203e-8, signal peak 0.155104
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_failed.ogg
+libvorbis: 374400 samples, peak error 1.322478056e-7, RMS 1.122445584e-8, signal peak 0.291177
+Symphonia: 374400 samples, peak error 8.940696716e-8, RMS 7.274239886e-9, signal peak 0.291178
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_passed.ogg
+libvorbis: 269696 samples, peak error 1.490116119e-7, RMS 8.922356798e-9, signal peak 0.416690
+Symphonia: 269696 samples, peak error 1.192092896e-7, RMS 5.739513061e-9, signal peak 0.416690
+C:\GitHub\deadsync\assets\sounds\start.ogg
+libvorbis: 13248 samples, peak error 1.862645149e-7, RMS 2.444905731e-8, signal peak 0.447358
+Symphonia: 13248 samples, peak error 1.192092896e-7, RMS 1.602110783e-8, signal peak 0.447358
+C:\GitHub\deadsync\assets\sounds\unjoin.ogg
+libvorbis: 43072 samples, peak error 3.278255463e-7, RMS 1.567740094e-8, signal peak 0.882710
+Symphonia: 43072 samples, peak error 1.788139343e-7, RMS 1.013713470e-8, signal peak 0.882710
+all 38 files/libvorbis: 140856832 samples, peak error 7.152557373e-7, RMS 6.565557664e-8, signal peak 1.607983
+all 38 files/Symphonia: 140856832 samples, peak error 5.960464478e-7, RMS 4.275734900e-8, signal peak 1.607984
+test local_corpus_pcm_matches_libvorbis_and_symphonia ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 46.18s
+
+     Running tests\primitives.rs (target\release\deps\primitives-4ec7b74ad32e79c6.exe)
+
+running 9 tests
+test bitpacking_known_wire_values_and_sticky_end_of_packet ... ok
+test codebook_lookup_types_and_sequence_vectors ... ok
+test comments_preserve_duplicates_binary_vectors_and_limits ... ok
+test bitpacking_matches_independent_bit_indexer_for_all_widths_and_alignments ... ok
+test huffman_entry_order_matches_specification_example ... ok
+test huffman_sparse_singleton_deep_and_invalid_trees ... ok
+test identification_ranges_hints_and_channel_order ... ok
+test setup_both_floors_all_residues_modes_and_truncation ... ok
+test huffman_assignment_matches_exhaustive_prefix_oracle ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\seeking.rs (target\release\deps\seeking-1b53a62c99e35295.exe)
+
+running 16 tests
+test one_sample_stream_has_exact_seek_boundaries ... ok
+test raw_packet_seek_preroll_preserves_absolute_untrimmed_positions ... ok
+test terminal_io_errors_recover_by_seek_including_after_stream_switch ... ok
+test empty_stream_end_seeks_and_argument_and_resource_errors ... ok
+Symphonia/accurate seek: 3586 samples, peak error 7.823109627e-8, RMS 1.937600792e-8, signal peak 0.256337
+test seeking_preserves_nonfatal_and_spanning_metadata ... ok
+Symphonia/accurate seek: 1410 samples, peak error 8.940696716e-8, RMS 2.268176336e-8, signal peak 0.341457
+C:\GitHub\deadsync\assets\music\Beanmania IIDX (loop).ogg
+Symphonia/accurate seek: 3586 samples, peak error 8.940696716e-8, RMS 1.965354058e-8, signal peak 0.320948
+Symphonia/accurate seek: 3586 samples, peak error 8.940696716e-8, RMS 1.937362036e-8, signal peak 0.320948
+test symphonia_accurate_seek_with_packet_preroll_and_timestamp_discard ... ok
+test chained_multiplexed_streams_can_be_selected_in_arbitrary_order ... ok
+test packet_mode_preroll_handles_spanning_audio_and_exact_index_budgets ... ok
+test libvorbisfile_1_3_7_broadcast_seek_reports_incorrect_position ... ok
+libvorbisfile/seek fixture: 206620 samples, peak error 1.341104507e-7, RMS 3.074397586e-8, signal peak 0.256902
+test packet_reads_and_mixed_page_reads_preserve_exact_suffixes_and_reset_pauses ... ok
+libvorbisfile/seek fixture: 14993 samples, peak error 1.192092896e-7, RMS 3.952305555e-8, signal peak 0.341457
+libvorbisfile/seek: 393218 samples, peak error 4.470348358e-7, RMS 7.555778624e-8, signal peak 1.023277
+C:\GitHub\deadsync\assets\music\Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg
+libvorbisfile/seek fixture: 650016 samples, peak error 7.450580597e-8, RMS 1.761212336e-8, signal peak 0.106527
+libvorbisfile/seek one sample: 40 samples, peak error 2.048909664e-8, RMS 1.520368058e-8, signal peak 0.001712
+libvorbisfile/seek: 393218 samples, peak error 6.854534149e-7, RMS 1.144039077e-7, signal peak 1.101742
+C:\GitHub\deadsync\assets\music\ECS15 (loop).ogg
+test compact_packet_modes_reduce_preroll_and_preserve_both_index_strategies ... ok
+libvorbisfile/seek edited: 393218 samples, peak error 1.341104507e-7, RMS 2.810612928e-8, signal peak 0.342688
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 7.673079821e-8, signal peak 1.024433
+C:\GitHub\deadsync\assets\music\ECS15-GameOver.ogg
+libvorbisfile/seek edited: 393218 samples, peak error 1.341104507e-7, RMS 2.812243287e-8, signal peak 0.342688
+libvorbisfile/seek: 393218 samples, peak error 5.215406418e-7, RMS 7.906611813e-8, signal peak 1.006259
+C:\GitHub\deadsync\assets\music\Mystical Wheelbarrow Journey (loop).ogg
+libvorbisfile/seek chain: 222813 samples, peak error 1.341104507e-7, RMS 3.151977767e-8, signal peak 0.341457
+test libvorbisfile_repeated_seeks_fixtures_edits_and_mixed_rate_chains ... ok
+libvorbisfile/seek: 391564 samples, peak error 5.364418030e-7, RMS 5.931420171e-8, signal peak 1.046769
+C:\GitHub\deadsync\assets\music\Quaq (loop).ogg
+test edited_offsets_long_spans_discarded_packets_and_nil_eos_seek_exactly ... ok
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 9.766998674e-8, signal peak 1.129156
+C:\GitHub\deadsync\assets\music\SRPG10 (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 1.657754183e-7, RMS 1.571334396e-8, signal peak 0.356160
+C:\GitHub\deadsync\assets\music\SRPG10-GameOver.ogg
+floor-zero/50 seeks: 393218 samples, peak error 1.764297485e-5, RMS 1.352369674e-6, signal peak 0.658206
+test historical_floor0_repacketized_into_strict_ogg_seeks_correctly ... ok
+libvorbisfile/seek: 393218 samples, peak error 2.682209015e-7, RMS 2.100802024e-8, signal peak 0.518747
+C:\GitHub\deadsync\assets\music\SRPG9 (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 4.172325134e-7, RMS 4.623138027e-8, signal peak 0.801794
+C:\GitHub\deadsync\assets\music\Shooting Star - faux VRC6 remix (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 8.170483188e-8, signal peak 1.031328
+C:\GitHub\deadsync\assets\music\Spooky Scary Chiptunes (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 7.831071420e-8, signal peak 1.060616
+C:\GitHub\deadsync\assets\music\Xuxa fami VRC6 (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 4.172325134e-7, RMS 6.254335498e-8, signal peak 1.243129
+C:\GitHub\deadsync\assets\music\credits.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.172325134e-7, RMS 5.845445806e-8, signal peak 1.342908
+C:\GitHub\deadsync\assets\music\halcyon farms (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 5.066394806e-7, RMS 8.508539087e-8, signal peak 1.010488
+C:\GitHub\deadsync\assets\music\in_two (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 5.960464478e-7, RMS 8.337414118e-8, signal peak 1.016719
+C:\GitHub\deadsync\assets\music\select_course (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 3.725290298e-7, RMS 5.906950103e-8, signal peak 0.988241
+C:\GitHub\deadsync\assets\music\vrtuous faults (loop).ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 7.254235085e-8, signal peak 0.996061
+C:\GitHub\deadsync\assets\sounds\assist_tick.ogg
+test every_frame_of_short_fixtures_matches_sequential_output ... ok
+libvorbisfile/seek: 167098 samples, peak error 2.980232239e-7, RMS 3.022672837e-8, signal peak 1.078352
+C:\GitHub\deadsync\assets\sounds\boom.ogg
+libvorbisfile/seek: 180708 samples, peak error 5.960464478e-7, RMS 1.133543395e-7, signal peak 1.098666
+C:\GitHub\deadsync\assets\sounds\change.ogg
+libvorbisfile/seek: 318522 samples, peak error 1.266598701e-7, RMS 1.983459855e-8, signal peak 0.177111
+C:\GitHub\deadsync\assets\sounds\change_value.ogg
+libvorbisfile/seek: 294194 samples, peak error 1.043081284e-7, RMS 1.768832962e-8, signal peak 0.178876
+C:\GitHub\deadsync\assets\sounds\common_invalid.ogg
+libvorbisfile/seek: 176843 samples, peak error 4.172325134e-7, RMS 6.713751078e-8, signal peak 1.020546
+C:\GitHub\deadsync\assets\sounds\easier.ogg
+libvorbisfile/seek: 108123 samples, peak error 1.266598701e-7, RMS 2.483062846e-8, signal peak 0.365926
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_failed.ogg
+libvorbisfile/seek: 186053 samples, peak error 3.129243851e-7, RMS 2.854070492e-8, signal peak 0.939563
+C:\GitHub\deadsync\assets\sounds\ecs15_eval_passed.ogg
+libvorbisfile/seek: 382196 samples, peak error 1.788139343e-7, RMS 1.079660006e-8, signal peak 0.880550
+C:\GitHub\deadsync\assets\sounds\evaluation_nice\nice.ogg
+libvorbisfile/seek: 193464 samples, peak error 2.384185791e-7, RMS 2.838979532e-8, signal peak 0.676489
+C:\GitHub\deadsync\assets\sounds\expand.ogg
+libvorbisfile/seek: 183275 samples, peak error 2.980232239e-7, RMS 2.502366521e-8, signal peak 0.717032
+C:\GitHub\deadsync\assets\sounds\harder.ogg
+libvorbisfile/seek: 108123 samples, peak error 2.384185791e-7, RMS 3.071620670e-8, signal peak 0.368096
+C:\GitHub\deadsync\assets\sounds\next_row.ogg
+libvorbisfile/seek: 318522 samples, peak error 2.533197403e-7, RMS 3.733705675e-8, signal peak 0.317788
+C:\GitHub\deadsync\assets\sounds\prev_row.ogg
+libvorbisfile/seek: 320820 samples, peak error 1.639127731e-7, RMS 3.908425576e-8, signal peak 0.306389
+C:\GitHub\deadsync\assets\sounds\prompt.ogg
+libvorbisfile/seek: 377550 samples, peak error 2.980232239e-7, RMS 2.435600309e-8, signal peak 0.661159
+C:\GitHub\deadsync\assets\sounds\screen_edit_marker.ogg
+libvorbisfile/seek: 372862 samples, peak error 2.458691597e-7, RMS 1.491532382e-8, signal peak 0.656950
+C:\GitHub\deadsync\assets\sounds\screen_edit_snap.ogg
+libvorbisfile/seek: 333804 samples, peak error 1.192092896e-7, RMS 2.015733048e-8, signal peak 0.372615
+C:\GitHub\deadsync\assets\sounds\screenshot.ogg
+libvorbisfile/seek: 179244 samples, peak error 1.043081284e-7, RMS 2.186820396e-8, signal peak 0.155104
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_failed.ogg
+libvorbisfile/seek: 393218 samples, peak error 1.322478056e-7, RMS 9.183835726e-9, signal peak 0.291177
+C:\GitHub\deadsync\assets\sounds\srpg10_eval_passed.ogg
+libvorbisfile/seek: 379424 samples, peak error 1.490116119e-7, RMS 1.848207125e-8, signal peak 0.416690
+C:\GitHub\deadsync\assets\sounds\start.ogg
+libvorbisfile/seek: 183347 samples, peak error 1.862645149e-7, RMS 2.611247865e-8, signal peak 0.447358
+C:\GitHub\deadsync\assets\sounds\unjoin.ogg
+libvorbisfile/seek: 192282 samples, peak error 3.278255463e-7, RMS 2.472387330e-8, signal peak 0.882710
+38 files, 1900 seeks: 12032724 samples, peak error 6.854534149e-7, RMS 5.861158973e-8, signal peak 1.342908
+test libvorbisfile_local_corpus_repeated_sample_accurate_seeks ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.21s
+
+     Running tests\upstream.rs (target\release\deps\upstream-bc1e22f88095912a.exe)
+
+running 1 test
+vorbis_1ch_q-0.5_44100.ogg: 2048 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_1ch_q0.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_1ch_q1.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_1ch_q2.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_1ch_q3.5_44100.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_1ch_q4.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_1ch_q5.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_1ch_q6.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_1ch_q7.5_44100.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_1ch_q8.5_44100.ogg: 2048 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_1ch_q9.5_44100.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_1ch_q-0.5_48000.ogg: 2048 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_1ch_q0.5_48000.ogg: 2048 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_1ch_q1.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_1ch_q2.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_1ch_q3.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_1ch_q4.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_1ch_q5.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_1ch_q6.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_1ch_q7.5_48000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_1ch_q8.5_48000.ogg: 2048 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_1ch_q9.5_48000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_1ch_q-0.5_32000.ogg: 2048 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_1ch_q0.5_32000.ogg: 2048 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_1ch_q1.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_1ch_q2.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_1ch_q3.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_1ch_q4.5_32000.ogg: 2048 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_1ch_q5.5_32000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_1ch_q6.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_1ch_q7.5_32000.ogg: 2048 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_1ch_q8.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_1ch_q9.5_32000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_1ch_q-0.5_22050.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_1ch_q0.5_22050.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_1ch_q1.5_22050.ogg: 2048 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_1ch_q2.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_1ch_q3.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_1ch_q4.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_1ch_q5.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_1ch_q6.5_22050.ogg: 2048 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_1ch_q7.5_22050.ogg: 2048 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_1ch_q8.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_1ch_q9.5_22050.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_1ch_q-0.5_16000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_1ch_q0.5_16000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_1ch_q1.5_16000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_1ch_q2.5_16000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_1ch_q3.5_16000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_1ch_q4.5_16000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_1ch_q5.5_16000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_1ch_q6.5_16000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_1ch_q7.5_16000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_1ch_q8.5_16000.ogg: 2048 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_1ch_q9.5_16000.ogg: 2048 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_1ch_q-0.5_96000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_1ch_q0.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_1ch_q1.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_1ch_q2.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_1ch_q3.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_1ch_q4.5_96000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_1ch_q5.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_1ch_q6.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_1ch_q7.5_96000.ogg: 2048 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_1ch_q8.5_96000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_1ch_q9.5_96000.ogg: 2048 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_2ch_q-0.5_44100.ogg: 4096 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_2ch_q0.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.029928411e-8, signal peak 0.917522
+vorbis_2ch_q1.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.355928336e-8, signal peak 0.982482
+vorbis_2ch_q2.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.251954953e-8, signal peak 0.937087
+vorbis_2ch_q3.5_44100.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_2ch_q4.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_2ch_q5.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_2ch_q6.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_2ch_q7.5_44100.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_2ch_q8.5_44100.ogg: 4096 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_2ch_q9.5_44100.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_2ch_q-0.5_48000.ogg: 4096 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_2ch_q0.5_48000.ogg: 4096 samples, peak error 3.278255463e-7, RMS 4.456354062e-8, signal peak 0.933399
+vorbis_2ch_q1.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.550754856e-8, signal peak 0.911274
+vorbis_2ch_q2.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.631808348e-8, signal peak 0.935548
+vorbis_2ch_q3.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_2ch_q4.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_2ch_q5.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_2ch_q6.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_2ch_q7.5_48000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_2ch_q8.5_48000.ogg: 4096 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_2ch_q9.5_48000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_2ch_q-0.5_32000.ogg: 4096 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_2ch_q0.5_32000.ogg: 4096 samples, peak error 2.682209015e-7, RMS 5.542911501e-8, signal peak 0.959772
+vorbis_2ch_q1.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.617850597e-8, signal peak 0.940562
+vorbis_2ch_q2.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.344494677e-8, signal peak 0.941116
+vorbis_2ch_q3.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.241652888e-8, signal peak 0.931940
+vorbis_2ch_q4.5_32000.ogg: 4096 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_2ch_q5.5_32000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_2ch_q6.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_2ch_q7.5_32000.ogg: 4096 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_2ch_q8.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_2ch_q9.5_32000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_2ch_q-0.5_22050.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_2ch_q0.5_22050.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_2ch_q1.5_22050.ogg: 4096 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_2ch_q2.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_2ch_q3.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_2ch_q4.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_2ch_q5.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_2ch_q6.5_22050.ogg: 4096 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_2ch_q7.5_22050.ogg: 4096 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_2ch_q8.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_2ch_q9.5_22050.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_2ch_q-0.5_16000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_2ch_q0.5_16000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_2ch_q1.5_16000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_2ch_q2.5_16000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_2ch_q3.5_16000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_2ch_q4.5_16000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_2ch_q5.5_16000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_2ch_q6.5_16000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_2ch_q7.5_16000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_2ch_q8.5_16000.ogg: 4096 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_2ch_q9.5_16000.ogg: 4096 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_2ch_q-0.5_96000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_2ch_q0.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_2ch_q1.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_2ch_q2.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_2ch_q3.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_2ch_q4.5_96000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_2ch_q5.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_2ch_q6.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_2ch_q7.5_96000.ogg: 4096 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_2ch_q8.5_96000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_2ch_q9.5_96000.ogg: 4096 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_3ch_q-0.5_44100.ogg: 6144 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_3ch_q0.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_3ch_q1.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_3ch_q2.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_3ch_q3.5_44100.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_3ch_q4.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_3ch_q5.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_3ch_q6.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_3ch_q7.5_44100.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_3ch_q8.5_44100.ogg: 6144 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_3ch_q9.5_44100.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_3ch_q-0.5_48000.ogg: 6144 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_3ch_q0.5_48000.ogg: 6144 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_3ch_q1.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_3ch_q2.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_3ch_q3.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_3ch_q4.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_3ch_q5.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_3ch_q6.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_3ch_q7.5_48000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_3ch_q8.5_48000.ogg: 6144 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_3ch_q9.5_48000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_3ch_q-0.5_32000.ogg: 6144 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_3ch_q0.5_32000.ogg: 6144 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_3ch_q1.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_3ch_q2.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_3ch_q3.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_3ch_q4.5_32000.ogg: 6144 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_3ch_q5.5_32000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_3ch_q6.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_3ch_q7.5_32000.ogg: 6144 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_3ch_q8.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_3ch_q9.5_32000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_3ch_q-0.5_22050.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_3ch_q0.5_22050.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_3ch_q1.5_22050.ogg: 6144 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_3ch_q2.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_3ch_q3.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_3ch_q4.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_3ch_q5.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_3ch_q6.5_22050.ogg: 6144 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_3ch_q7.5_22050.ogg: 6144 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_3ch_q8.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_3ch_q9.5_22050.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_3ch_q-0.5_16000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_3ch_q0.5_16000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_3ch_q1.5_16000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_3ch_q2.5_16000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_3ch_q3.5_16000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_3ch_q4.5_16000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_3ch_q5.5_16000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_3ch_q6.5_16000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_3ch_q7.5_16000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_3ch_q8.5_16000.ogg: 6144 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_3ch_q9.5_16000.ogg: 6144 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_3ch_q-0.5_96000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_3ch_q0.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_3ch_q1.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_3ch_q2.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_3ch_q3.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_3ch_q4.5_96000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_3ch_q5.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_3ch_q6.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_3ch_q7.5_96000.ogg: 6144 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_3ch_q8.5_96000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_3ch_q9.5_96000.ogg: 6144 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_4ch_q-0.5_44100.ogg: 8192 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_4ch_q0.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_4ch_q1.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_4ch_q2.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_4ch_q3.5_44100.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_4ch_q4.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_4ch_q5.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_4ch_q6.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_4ch_q7.5_44100.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_4ch_q8.5_44100.ogg: 8192 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_4ch_q9.5_44100.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_4ch_q-0.5_48000.ogg: 8192 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_4ch_q0.5_48000.ogg: 8192 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_4ch_q1.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_4ch_q2.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_4ch_q3.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_4ch_q4.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_4ch_q5.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_4ch_q6.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_4ch_q7.5_48000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_4ch_q8.5_48000.ogg: 8192 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_4ch_q9.5_48000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_4ch_q-0.5_32000.ogg: 8192 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_4ch_q0.5_32000.ogg: 8192 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_4ch_q1.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_4ch_q2.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_4ch_q3.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_4ch_q4.5_32000.ogg: 8192 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_4ch_q5.5_32000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_4ch_q6.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_4ch_q7.5_32000.ogg: 8192 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_4ch_q8.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_4ch_q9.5_32000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_4ch_q-0.5_22050.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_4ch_q0.5_22050.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_4ch_q1.5_22050.ogg: 8192 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_4ch_q2.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_4ch_q3.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_4ch_q4.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_4ch_q5.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_4ch_q6.5_22050.ogg: 8192 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_4ch_q7.5_22050.ogg: 8192 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_4ch_q8.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_4ch_q9.5_22050.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_4ch_q-0.5_16000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_4ch_q0.5_16000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_4ch_q1.5_16000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_4ch_q2.5_16000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_4ch_q3.5_16000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_4ch_q4.5_16000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_4ch_q5.5_16000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_4ch_q6.5_16000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_4ch_q7.5_16000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_4ch_q8.5_16000.ogg: 8192 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_4ch_q9.5_16000.ogg: 8192 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_4ch_q-0.5_96000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_4ch_q0.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_4ch_q1.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_4ch_q2.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_4ch_q3.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_4ch_q4.5_96000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_4ch_q5.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_4ch_q6.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_4ch_q7.5_96000.ogg: 8192 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_4ch_q8.5_96000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_4ch_q9.5_96000.ogg: 8192 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_5ch_q-0.5_44100.ogg: 10240 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_5ch_q0.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_5ch_q1.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_5ch_q2.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_5ch_q3.5_44100.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_5ch_q4.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_5ch_q5.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_5ch_q6.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_5ch_q7.5_44100.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_5ch_q8.5_44100.ogg: 10240 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_5ch_q9.5_44100.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_5ch_q-0.5_48000.ogg: 10240 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_5ch_q0.5_48000.ogg: 10240 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_5ch_q1.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_5ch_q2.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_5ch_q3.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_5ch_q4.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_5ch_q5.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_5ch_q6.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_5ch_q7.5_48000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_5ch_q8.5_48000.ogg: 10240 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_5ch_q9.5_48000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_5ch_q-0.5_32000.ogg: 10240 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_5ch_q0.5_32000.ogg: 10240 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_5ch_q1.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_5ch_q2.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_5ch_q3.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_5ch_q4.5_32000.ogg: 10240 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_5ch_q5.5_32000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_5ch_q6.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_5ch_q7.5_32000.ogg: 10240 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_5ch_q8.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_5ch_q9.5_32000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_5ch_q-0.5_22050.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_5ch_q0.5_22050.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_5ch_q1.5_22050.ogg: 10240 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_5ch_q2.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_5ch_q3.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_5ch_q4.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_5ch_q5.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_5ch_q6.5_22050.ogg: 10240 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_5ch_q7.5_22050.ogg: 10240 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_5ch_q8.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_5ch_q9.5_22050.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_5ch_q-0.5_16000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_5ch_q0.5_16000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_5ch_q1.5_16000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_5ch_q2.5_16000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_5ch_q3.5_16000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_5ch_q4.5_16000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_5ch_q5.5_16000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_5ch_q6.5_16000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_5ch_q7.5_16000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_5ch_q8.5_16000.ogg: 10240 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_5ch_q9.5_16000.ogg: 10240 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_5ch_q-0.5_96000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_5ch_q0.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_5ch_q1.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_5ch_q2.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_5ch_q3.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_5ch_q4.5_96000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_5ch_q5.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_5ch_q6.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_5ch_q7.5_96000.ogg: 10240 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_5ch_q8.5_96000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_5ch_q9.5_96000.ogg: 10240 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_6ch_q-0.5_44100.ogg: 12288 samples, peak error 1.946464181e-7, RMS 4.538102689e-8, signal peak 0.928922
+vorbis_6ch_q0.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.591818626e-8, signal peak 0.917522
+vorbis_6ch_q1.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.889437936e-8, signal peak 0.982482
+vorbis_6ch_q2.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.794545061e-8, signal peak 0.937087
+vorbis_6ch_q3.5_44100.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.488039888e-8, signal peak 0.973596
+vorbis_6ch_q4.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.727950152e-8, signal peak 0.946593
+vorbis_6ch_q5.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.779908049e-8, signal peak 0.933748
+vorbis_6ch_q6.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.839106760e-8, signal peak 0.954790
+vorbis_6ch_q7.5_44100.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.500743312e-8, signal peak 0.954811
+vorbis_6ch_q8.5_44100.ogg: 12288 samples, peak error 2.584420145e-7, RMS 4.716125059e-8, signal peak 0.951809
+vorbis_6ch_q9.5_44100.ogg: 12288 samples, peak error 2.980232239e-7, RMS 3.868354974e-8, signal peak 0.953135
+vorbis_6ch_q-0.5_48000.ogg: 12288 samples, peak error 1.937150955e-7, RMS 4.682270788e-8, signal peak 0.924206
+vorbis_6ch_q0.5_48000.ogg: 12288 samples, peak error 3.278255463e-7, RMS 4.068233651e-8, signal peak 0.933399
+vorbis_6ch_q1.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.154440301e-8, signal peak 0.911274
+vorbis_6ch_q2.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.228412525e-8, signal peak 0.935548
+vorbis_6ch_q3.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.901160587e-8, signal peak 0.981896
+vorbis_6ch_q4.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.450776917e-8, signal peak 0.951334
+vorbis_6ch_q5.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.069955308e-8, signal peak 0.940221
+vorbis_6ch_q6.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.738835597e-8, signal peak 0.951414
+vorbis_6ch_q7.5_48000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.873673813e-8, signal peak 0.947494
+vorbis_6ch_q8.5_48000.ogg: 12288 samples, peak error 3.576278687e-7, RMS 5.343540383e-8, signal peak 0.950350
+vorbis_6ch_q9.5_48000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.083568857e-8, signal peak 0.960625
+vorbis_6ch_q-0.5_32000.ogg: 12288 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_6ch_q0.5_32000.ogg: 12288 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_6ch_q1.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_6ch_q2.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_6ch_q3.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_6ch_q4.5_32000.ogg: 12288 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_6ch_q5.5_32000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_6ch_q6.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_6ch_q7.5_32000.ogg: 12288 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_6ch_q8.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_6ch_q9.5_32000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_6ch_q-0.5_22050.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_6ch_q0.5_22050.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_6ch_q1.5_22050.ogg: 12288 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_6ch_q2.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_6ch_q3.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_6ch_q4.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_6ch_q5.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_6ch_q6.5_22050.ogg: 12288 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_6ch_q7.5_22050.ogg: 12288 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_6ch_q8.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_6ch_q9.5_22050.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_6ch_q-0.5_16000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_6ch_q0.5_16000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_6ch_q1.5_16000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_6ch_q2.5_16000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_6ch_q3.5_16000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_6ch_q4.5_16000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_6ch_q5.5_16000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_6ch_q6.5_16000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_6ch_q7.5_16000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_6ch_q8.5_16000.ogg: 12288 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_6ch_q9.5_16000.ogg: 12288 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_6ch_q-0.5_96000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_6ch_q0.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_6ch_q1.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_6ch_q2.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_6ch_q3.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_6ch_q4.5_96000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_6ch_q5.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_6ch_q6.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_6ch_q7.5_96000.ogg: 12288 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_6ch_q8.5_96000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_6ch_q9.5_96000.ogg: 12288 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_7ch_q-0.5_44100.ogg: 14336 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_7ch_q0.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_7ch_q1.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_7ch_q2.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_7ch_q3.5_44100.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_7ch_q4.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_7ch_q5.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_7ch_q6.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_7ch_q7.5_44100.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_7ch_q8.5_44100.ogg: 14336 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_7ch_q9.5_44100.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_7ch_q-0.5_48000.ogg: 14336 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_7ch_q0.5_48000.ogg: 14336 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_7ch_q1.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_7ch_q2.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_7ch_q3.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_7ch_q4.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_7ch_q5.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_7ch_q6.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_7ch_q7.5_48000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_7ch_q8.5_48000.ogg: 14336 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_7ch_q9.5_48000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_7ch_q-0.5_32000.ogg: 14336 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_7ch_q0.5_32000.ogg: 14336 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_7ch_q1.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_7ch_q2.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_7ch_q3.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_7ch_q4.5_32000.ogg: 14336 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_7ch_q5.5_32000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_7ch_q6.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_7ch_q7.5_32000.ogg: 14336 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_7ch_q8.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_7ch_q9.5_32000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_7ch_q-0.5_22050.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_7ch_q0.5_22050.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_7ch_q1.5_22050.ogg: 14336 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_7ch_q2.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_7ch_q3.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_7ch_q4.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_7ch_q5.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_7ch_q6.5_22050.ogg: 14336 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_7ch_q7.5_22050.ogg: 14336 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_7ch_q8.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_7ch_q9.5_22050.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_7ch_q-0.5_16000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_7ch_q0.5_16000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_7ch_q1.5_16000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_7ch_q2.5_16000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_7ch_q3.5_16000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_7ch_q4.5_16000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_7ch_q5.5_16000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_7ch_q6.5_16000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_7ch_q7.5_16000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_7ch_q8.5_16000.ogg: 14336 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_7ch_q9.5_16000.ogg: 14336 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_7ch_q-0.5_96000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_7ch_q0.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_7ch_q1.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_7ch_q2.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_7ch_q3.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_7ch_q4.5_96000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_7ch_q5.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_7ch_q6.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_7ch_q7.5_96000.ogg: 14336 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_7ch_q8.5_96000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_7ch_q9.5_96000.ogg: 14336 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+vorbis_8ch_q-0.5_44100.ogg: 16384 samples, peak error 1.946464181e-7, RMS 4.951751906e-8, signal peak 0.928922
+vorbis_8ch_q0.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.033458511e-8, signal peak 0.917522
+vorbis_8ch_q1.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.357327475e-8, signal peak 0.982482
+vorbis_8ch_q2.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.250184729e-8, signal peak 0.937087
+vorbis_8ch_q3.5_44100.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.912610544e-8, signal peak 0.973596
+vorbis_8ch_q4.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.176454274e-8, signal peak 0.946593
+vorbis_8ch_q5.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.233490413e-8, signal peak 0.933748
+vorbis_8ch_q6.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.297339767e-8, signal peak 0.954790
+vorbis_8ch_q7.5_44100.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.924726046e-8, signal peak 0.954811
+vorbis_8ch_q8.5_44100.ogg: 16384 samples, peak error 2.584420145e-7, RMS 5.160097744e-8, signal peak 0.951809
+vorbis_8ch_q9.5_44100.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.166892994e-8, signal peak 0.953135
+vorbis_8ch_q-0.5_48000.ogg: 16384 samples, peak error 1.937150955e-7, RMS 5.108375704e-8, signal peak 0.924206
+vorbis_8ch_q0.5_48000.ogg: 16384 samples, peak error 3.278255463e-7, RMS 4.449856439e-8, signal peak 0.933399
+vorbis_8ch_q1.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.558445730e-8, signal peak 0.911274
+vorbis_8ch_q2.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.631861615e-8, signal peak 0.935548
+vorbis_8ch_q3.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.366044385e-8, signal peak 0.981896
+vorbis_8ch_q4.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.872432775e-8, signal peak 0.951334
+vorbis_8ch_q5.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.550957126e-8, signal peak 0.940221
+vorbis_8ch_q6.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.187424940e-8, signal peak 0.951414
+vorbis_8ch_q7.5_48000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.334298955e-8, signal peak 0.947494
+vorbis_8ch_q8.5_48000.ogg: 16384 samples, peak error 3.576278687e-7, RMS 5.850751284e-8, signal peak 0.950350
+vorbis_8ch_q9.5_48000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.401572388e-8, signal peak 0.960625
+vorbis_8ch_q-0.5_32000.ogg: 16384 samples, peak error 2.048909664e-7, RMS 5.985938469e-8, signal peak 0.979096
+vorbis_8ch_q0.5_32000.ogg: 16384 samples, peak error 2.682209015e-7, RMS 5.545262135e-8, signal peak 0.959772
+vorbis_8ch_q1.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.618803291e-8, signal peak 0.940562
+vorbis_8ch_q2.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.344547290e-8, signal peak 0.941116
+vorbis_8ch_q3.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.241733004e-8, signal peak 0.931940
+vorbis_8ch_q4.5_32000.ogg: 16384 samples, peak error 3.250315785e-7, RMS 5.672905100e-8, signal peak 0.937760
+vorbis_8ch_q5.5_32000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.140810595e-8, signal peak 0.969197
+vorbis_8ch_q6.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.023358237e-8, signal peak 0.953895
+vorbis_8ch_q7.5_32000.ogg: 16384 samples, peak error 2.621673048e-7, RMS 5.293682051e-8, signal peak 0.948521
+vorbis_8ch_q8.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.015034679e-8, signal peak 0.958141
+vorbis_8ch_q9.5_32000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.282409128e-8, signal peak 0.953579
+vorbis_8ch_q-0.5_22050.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.532194608e-8, signal peak 0.983156
+vorbis_8ch_q0.5_22050.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.328097569e-8, signal peak 0.971916
+vorbis_8ch_q1.5_22050.ogg: 16384 samples, peak error 2.384185791e-7, RMS 3.728524773e-8, signal peak 0.969229
+vorbis_8ch_q2.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.883347652e-8, signal peak 0.986580
+vorbis_8ch_q3.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.694303292e-8, signal peak 0.970327
+vorbis_8ch_q4.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.751131795e-8, signal peak 0.957773
+vorbis_8ch_q5.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.945322937e-8, signal peak 0.937830
+vorbis_8ch_q6.5_22050.ogg: 16384 samples, peak error 3.576278687e-7, RMS 4.868857417e-8, signal peak 0.953410
+vorbis_8ch_q7.5_22050.ogg: 16384 samples, peak error 3.576278687e-7, RMS 4.654635091e-8, signal peak 0.957399
+vorbis_8ch_q8.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.784365742e-8, signal peak 0.948986
+vorbis_8ch_q9.5_22050.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.519139255e-8, signal peak 0.952253
+vorbis_8ch_q-0.5_16000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.261743582e-8, signal peak 0.972240
+vorbis_8ch_q0.5_16000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.321264498e-8, signal peak 0.962586
+vorbis_8ch_q1.5_16000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.476210115e-8, signal peak 0.956930
+vorbis_8ch_q2.5_16000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.409427263e-8, signal peak 0.940110
+vorbis_8ch_q3.5_16000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.634996669e-8, signal peak 0.951833
+vorbis_8ch_q4.5_16000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.175365949e-8, signal peak 0.963938
+vorbis_8ch_q5.5_16000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.587918344e-8, signal peak 0.947512
+vorbis_8ch_q6.5_16000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.861224643e-8, signal peak 0.949514
+vorbis_8ch_q7.5_16000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.858304320e-8, signal peak 0.949166
+vorbis_8ch_q8.5_16000.ogg: 16384 samples, peak error 3.576278687e-7, RMS 4.613556214e-8, signal peak 0.952651
+vorbis_8ch_q9.5_16000.ogg: 16384 samples, peak error 3.576278687e-7, RMS 4.857976501e-8, signal peak 0.947482
+vorbis_8ch_q-0.5_96000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 6.408156532e-8, signal peak 0.965773
+vorbis_8ch_q0.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.212571019e-8, signal peak 0.867799
+vorbis_8ch_q1.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.291624442e-8, signal peak 0.910658
+vorbis_8ch_q2.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 4.979106516e-8, signal peak 0.936169
+vorbis_8ch_q3.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.163451803e-8, signal peak 0.974842
+vorbis_8ch_q4.5_96000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.088448391e-8, signal peak 0.970337
+vorbis_8ch_q5.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.519042134e-8, signal peak 0.938998
+vorbis_8ch_q6.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.271275361e-8, signal peak 0.946345
+vorbis_8ch_q7.5_96000.ogg: 16384 samples, peak error 2.384185791e-7, RMS 5.266558802e-8, signal peak 0.955853
+vorbis_8ch_q8.5_96000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 5.507347701e-8, signal peak 0.956225
+vorbis_8ch_q9.5_96000.ogg: 16384 samples, peak error 2.980232239e-7, RMS 4.524848765e-8, signal peak 0.957988
+all 528 pinned Xiph upstream vectors: 4866048 samples, peak error 3.576278687e-7, RMS 4.967690677e-8, signal peak 0.986580
+test xiph_upstream_coded_grid_pcm_streaming_and_seeks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.67s
+
+   Doc-tests deadlib_audio_decode_ogg
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_audio_decode_vorbis
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

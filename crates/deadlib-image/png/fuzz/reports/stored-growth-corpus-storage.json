@@ -1,0 +1,19 @@
+{
+  "reason": "Free /tmp tmpfs inodes by relocating one completed mutable fuzz corpus after verifying every archive entry; preserve binaries, logs, manifests, invocation records and object audits.",
+  "source": "/tmp/deadlib-image-row-reuse-asan-20261027-a/corpus",
+  "prior_evidence": "fuzz/reports/row-reuse-source.json",
+  "prior_evidence_sha256": "6ac5fc031844a3bf7b01821afc1668f43986e9362aee5c08060851b046ab3baf",
+  "archive": "target/png-fuzz-corpus-row-reuse-20261027.zip",
+  "archive_sha256": "4ebb07b5100f4f5f0fbd0f89dc34dc1aa8ef502d6e78a5ddab154c749e6a9b4d",
+  "archive_bytes": 20902664,
+  "files": 55508,
+  "source_bytes": 15871457,
+  "tree_sha256": "2daef2fa0812615046cea4255b4bec9622ea40e788514f2e03bbee41beabe956",
+  "hash_method": "Ascending literal UTF-8 relative filename bytes, NUL, contents",
+  "all_archive_entries_match_original": true,
+  "before_free_inodes": 25633,
+  "runner_sha256": "33f6e96571156b620e21a55c83340ab68552006d83c811b4874953d2d4104e20",
+  "temporary_corpus_removed_after_verification": true,
+  "after_free_inodes": 81144,
+  "wall_seconds": 59.599
+}

@@ -1,0 +1,20 @@
+{
+  "fixture": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+  "fixture_sha256": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+  "mutation": "Replace raw packet index 4 (second audio packet) with an empty packet; retain the remaining original sequence.",
+  "request_sha256": "e9f73c95a1c03e22d22ac4b0a0e88ffccbf83857f2563f64c83dc95c5b7fcad6",
+  "oracle_binary_sha256": "86cd127b62e6dbf9bb63b66094cd698068a2591533376fa6ba3508fcb853ff5c",
+  "oracle_source_sha256": "d09fcd053c4093de5e3f04edda1bb4e651eb95d89905107c85d166ee0f65a407",
+  "mode": "pcm",
+  "golden_sha256": "4dcfe5c6f93fa8a05bef655ccf779b2fb16558166cd8800ffe692185b0a7c965",
+  "golden_bytes": 29234,
+  "references": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "final_oracle_verification": {
+    "binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+    "source_sha256": "a8ac922da115d04fbdbc786538a578bd7e69f0b2df3c9279e236495b8714b35d",
+    "pcm_bytes_identical": true
+  }
+}

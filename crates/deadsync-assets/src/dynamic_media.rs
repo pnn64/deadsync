@@ -876,10 +876,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         }

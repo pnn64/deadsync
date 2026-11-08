@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "floor0/vorbis_floor_type_0.ogg",
+      "group": "floor0",
+      "url": "https://samples.ffmpeg.org/A-codecs/vorbis/floor_type_0/vorbis_floor_type_0.ogg",
+      "bytes": 3735193,
+      "sha256": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+      "notes": "Historical floor-zero stream; unfinished setup page at byte 4310 incorrectly has granule zero."
+    },
+    {
+      "path": "legacy/Lumme-Badloop.ogg",
+      "group": "legacy",
+      "url": "https://samples.ffmpeg.org/A-codecs/vorbis/Lumme-Badloop.ogg",
+      "bytes": 5856908,
+      "sha256": "ebecc57582463db3346625c1da4a51c594b6a3ec2dbebf9d94c2b9b5f1e72f44",
+      "notes": "Xiph.Org libVorbis I 20020713; strict validation target."
+    },
+    {
+      "path": "itgmania/goin-under.ogg",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/Goin%27%20Under/Goin%27%20Under.ogg",
+      "bytes": 2350139,
+      "sha256": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483",
+      "notes": "NegaRen - Goin' Under; shipped song audio paired with the pinned SSC chart."
+    },
+    {
+      "path": "itgmania/goin-under.ssc",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/Goin%27%20Under/Goin%27%20Under.ssc",
+      "bytes": 46482,
+      "sha256": "bc995e4cf36dd6074e85299ed7cfc82400e884f9bb70c164f5e622c6383c17f5"
+    },
+    {
+      "path": "itgmania/mecha-tribe-assault.ogg",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/MechaTribe%20Assault/Mecha-Tribe%20Assault.ogg",
+      "bytes": 2126581,
+      "sha256": "6eb052cf8081ebb01d4b30e8db34e9eeca692635e2c1ed3ba7f7bd131c1b65c3",
+      "notes": "Kommisar - Mecha-Tribe Assault; shipped song audio paired with the pinned SSC chart."
+    },
+    {
+      "path": "itgmania/mecha-tribe-assault.ssc",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/MechaTribe%20Assault/Mecha-Tribe%20Assault.ssc",
+      "bytes": 54720,
+      "sha256": "ce6662cb58e3bce72f551e6c7c6a6ae7b3a7f3da85c87cbdc5e4d36a2a4b7831"
+    },
+    {
+      "path": "ffmpeg/coyote.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/coyote.ogg",
+      "bytes": 1536315,
+      "sha256": "42f09baa7dcdd15af07d0a3312d0eae12a2d6058bc795ca6bc293be04edb0680",
+      "notes": "Xiphophorus libVorbis I 20001031, stereo 48 kHz floor zero; strict target."
+    },
+    {
+      "path": "ffmpeg/test6.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/test6.ogg",
+      "bytes": 52301,
+      "sha256": "27c5d4cfaeaede1e234542fe0252a7550872605aef35d3a798521541b6b58aa0",
+      "notes": "AO; aoTuV b2 [20040420], six channels at 48 kHz; strict target."
+    },
+    {
+      "path": "ffmpeg/1sec.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/1sec.ogg",
+      "bytes": 15912,
+      "sha256": "f3fec39afbd0f03ef5ed077cd73b5642db15f51342149ce73550a88f854f1fb9",
+      "notes": "Lavf55.37.100, stereo 44.1 kHz; EOS exceeds zero-origin raw PCM by 11 but the second audio packet does not flush its page for a nonzero offset; strict rejection target."
+    },
+    {
+      "path": "ffmpeg/virginradio-three-consecutive-chains.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/virginradio-three-consecutive-chains.ogg",
+      "bytes": 530260,
+      "sha256": "7dfe83e1c7f3c84ea9368be7c191a3b84a3036f3ec4b5a9296cf9e38d639d646",
+      "notes": "First audio page jumps from sequence 2 to 1007; strict and explicit compatibility policies reject the packet hole."
+    },
+    {
+      "path": "ffmpeg/mgs1-sample1.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/MetalGearSolid/mgs1-sample1.ogg",
+      "bytes": 524288,
+      "sha256": "595af854b994dcf94f2312aeb2ebcf55f3cc76e0edef119ffafecd7a4451ed34",
+      "notes": "Game sample with invalid audio-page CRC; rejection target; see upstream readme.txt."
+    },
+    {
+      "path": "ffmpeg/mgs1-sample2.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/MetalGearSolid/mgs1-sample2.ogg",
+      "bytes": 524288,
+      "sha256": "706b5a96b147a5340356d02dcf8a03099ab2f78ca0ca1edc322141ea0d00a307",
+      "notes": "Game sample with invalid audio-page CRC; rejection target; see upstream readme.txt."
+    },
+    {
+      "path": "ffmpeg/mgs1-sample3.ogg",
+      "group": "ffmpeg",
+      "url": "https://samples.ffmpeg.org/ogg/Vorbis/MetalGearSolid/mgs1-sample3.ogg",
+      "bytes": 524288,
+      "sha256": "830047fe4bd8d515f41cebfda8dccb2b32c8d7eb60f007d7e5ecef6a9f085514",
+      "notes": "Game sample with invalid audio-page CRC; rejection target; see upstream readme.txt."
+    }
+  ]
+}

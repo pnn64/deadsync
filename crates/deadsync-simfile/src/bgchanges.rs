@@ -47,10 +47,10 @@ impl<'a> Iterator for BgChangeSets<'a> {
         let mut fields = BgChangeFields::new();
         let mut pnum = 0u8;
         loop {
-            let matched_entry_end = matches!(pnum, 1 | 7)
-                .then(|| match_bgchange_entry_end(self.changes, self.start, self.entries))
+            let matched_entry = matches!(pnum, 1 | 7)
+                .then(|| match_bgchange_entry(self.changes, self.start, self.entries))
                 .flatten();
-            let (end, delimiter) = if let Some(end) = matched_entry_end {
+            let (end, delimiter) = if let Some((end, _)) = matched_entry {
                 (end, self.changes.as_bytes().get(end).copied())
             } else if let Some((end, delimiter)) = next_bgchange_delimiter(self.changes, self.start)
             {
@@ -64,7 +64,13 @@ impl<'a> Iterator for BgChangeSets<'a> {
                 self.done = true;
                 return Some(fields);
             };
-            fields.push(bgchange_field_range(self.changes, self.start, end));
+            // Native ParseBGChangesString stores the matched filesystem entry,
+            // including its spelling, rather than the authored filename slice.
+            fields.push(if let Some((_, entry)) = matched_entry {
+                Cow::Borrowed(entry)
+            } else {
+                bgchange_field_range(self.changes, self.start, end)
+            });
             self.start = end;
             if let Some(delimiter) = delimiter {
                 self.start += 1;
@@ -86,9 +92,7 @@ impl<'a> Iterator for BgChangeSets<'a> {
 
 #[inline]
 fn next_bgchange_delimiter(changes: &str, start: usize) -> Option<(usize, u8)> {
-    changes.as_bytes()[start..]
-        .iter()
-        .position(|byte| matches!(byte, b'=' | b','))
+    memchr::memchr2(b'=', b',', &changes.as_bytes()[start..])
         .map(|offset| {
             let index = start + offset;
             (index, changes.as_bytes()[index])
@@ -104,7 +108,11 @@ fn bgchange_field_range(changes: &str, start: usize, end: usize) -> Cow<'_, str>
     }
 }
 
-fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> Option<usize> {
+fn match_bgchange_entry<'a>(
+    changes: &str,
+    start: usize,
+    entries: &'a [String],
+) -> Option<(usize, &'a str)> {
     if entries.is_empty() {
         return None;
     }
@@ -133,23 +141,23 @@ fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> 
         {
             return (matches!(input.get(expected.len()), None | Some(b'=') | Some(b','))
                 && prefix.eq_ignore_ascii_case(expected))
-            .then_some(start + expected.len());
+            .then_some((start + expected.len(), entry.as_str()));
         }
-        match_bgchange_entry_end_one(changes, start, entry)
+        match_bgchange_entry_end_one(changes, start, entry).map(|end| (end, entry.as_str()))
     })
 }
 
 // Keep the legacy scan in its own loop so the ordinary-name fast path does not
 // increase its register pressure or prevent inlining the per-entry matcher.
 #[inline(never)]
-fn match_bgchange_entries_with_newlines(
+fn match_bgchange_entries_with_newlines<'a>(
     changes: &str,
     start: usize,
-    entries: &[String],
-) -> Option<usize> {
-    entries
-        .iter()
-        .find_map(|entry| match_bgchange_entry_end_one(changes, start, entry))
+    entries: &'a [String],
+) -> Option<(usize, &'a str)> {
+    entries.iter().find_map(|entry| {
+        match_bgchange_entry_end_one(changes, start, entry).map(|end| (end, entry.as_str()))
+    })
 }
 
 #[inline(always)]
@@ -181,15 +189,19 @@ fn skip_newline_sequence(input: &[u8], index: &mut usize) {
 
 #[must_use]
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
-    contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
-}
-
-#[inline]
-fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+    let bytes = field.as_bytes();
+    if bytes.len() < 32 {
+        return bytes.windows(4).any(|window| {
+            window[0] == b'.'
+                && (window[1..].eq_ignore_ascii_case(b"ini")
+                    || window[1..].eq_ignore_ascii_case(b"xml"))
+        });
+    }
+    memchr::memchr_iter(b'.', bytes).any(|index| {
+        bytes.get(index + 1..index + 4).is_some_and(|suffix| {
+            suffix.eq_ignore_ascii_case(b"ini") || suffix.eq_ignore_ascii_case(b"xml")
+        })
+    })
 }
 
 #[must_use]
@@ -331,6 +343,31 @@ mod tests {
     }
 
     #[test]
+    fn matched_filenames_retain_directory_entry_spelling() {
+        let entries = vec!["foregrounds/fgc".into(), "other=Part,Two.lua".into()];
+        let sets = split_bgchange_sets_like_itg(
+            "0=Foregrounds/FGC=1=0=0=0=0=OTHER=part,two.LUA",
+            &entries,
+        );
+        assert_eq!(sets[0][1], "foregrounds/fgc");
+        assert_eq!(sets[0][7], "other=Part,Two.lua");
+        let sets = split_bgchange_sets_like_itg("0=./Foregrounds/FGC=1", &entries);
+        assert_eq!(
+            sets[0][1], "./Foregrounds/FGC",
+            "unmatched authored paths retain their spelling"
+        );
+    }
+
+    #[test]
+    fn matched_filename_spelling_survives_newline_removal() {
+        let entries = vec!["foregrounds/fgc".into()];
+        for text in ["0=Fore\ngrounds/FGC=1", "0=Fore\r\ngrounds/FGC\n=1"] {
+            let sets = split_bgchange_sets_like_itg(text, &entries);
+            assert_eq!(sets[0][1], "foregrounds/fgc");
+        }
+    }
+
+    #[test]
     fn parses_bgchange_rate_defaults_and_invalid_values() {
         assert_eq!(parse_bgchange_rate(None), 1.0);
         assert_eq!(parse_bgchange_rate(Some(" 1.5 ")), 1.5);
@@ -385,3 +422,11 @@ mod tests {
         assert!(!bgchange_field_rejects_non_media("movie.mp4"));
     }
 }
+
+#[cfg(test)]
+mod parse_perf {
+    include!("bgchanges_parse_perf.rs");
+}
+
+#[cfg(test)]
+mod delimiter_perf;

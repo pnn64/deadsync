@@ -1,0 +1,24 @@
+{
+  "reason": "Initial strict lint rejects duplicate allow(dead_code) on the new seed-export module and inside its helper. Remove only the outer duplicate before full validation. No normal suite, C audit or seed export had run.",
+  "initial_seed_patch": "experiments/huffman-permutations-initial-seed.patch",
+  "initial_seed_patch_sha256": "98e2092986f959e3375dcd3b0c12a28b435a678c0f5cbdab038b66338baa2d12",
+  "initial_seed_source_sha256": "cb3682b1963f07880732855c9df3b654b5bd06df5a5e152037eaa0a2b087dbab",
+  "initial_evidence": [
+    {
+      "path": "experiments/huffman-permutations-initial-validation.json",
+      "sha256": "f47014e22861e357c677a712e873605255bb6c69de877cd1542279125676e36a"
+    },
+    {
+      "path": "experiments/huffman-permutations-initial-validation.log",
+      "sha256": "fae43e19261d88a1719a77f09eb504e11fb0ef76edad6d78d87c422a0f9323d4",
+      "as_run_sha256": "0bc196bfe6f6d4ba7f467172c0cceae56606751997b25358e18081aa1a502ce1",
+      "normalization": "CRLF to LF and terminal empty separator removal only"
+    },
+    {
+      "path": "experiments/huffman-permutations-validation-runner-before.py",
+      "sha256": "a74754ad25def2e6d229e4730919a3d2ba4865600c274fedef5f6746f8864f36"
+    }
+  ],
+  "corrected_seed_source_sha256": "c0e9624fb46de6a1f9c82db6424239c72e18b09183c6a06774f6e500bfb7211b",
+  "only_source_correction": "Remove the duplicate outer allow(dead_code); keep helper-level allowance."
+}

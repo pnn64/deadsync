@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+project(deadlib_vorbis_seek_trace C)
+add_executable(deadlib_vorbis_seek_trace oracle-snapshot.c vorbisfile-traced.c)
+target_include_directories(deadlib_vorbis_seek_trace PRIVATE "C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis/include" "C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis/lib" "C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/include")
+target_link_libraries(deadlib_vorbis_seek_trace PRIVATE "C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis-oracle-build/vorbis/lib/Release/vorbis.lib" "C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis-oracle-build/ogg/Release/ogg.lib")

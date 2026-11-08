@@ -133,6 +133,9 @@ fn closest_standard_chart_ix(
         };
         let distance = diff_ix.abs_diff(preferred);
         if distance < best_distance {
+            if distance == 0 {
+                return Some(chart_ix);
+            }
             best = Some(chart_ix);
             best_distance = distance;
         }
@@ -487,15 +490,9 @@ mod tests {
     };
     use deadsync_rules::timing::{TimingData, TimingSegments};
 
-    mod performance {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/cabinet_lights.rs"
-        ));
-    }
-
     fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
         ParsedNote {
+            player: 0,
             row_index,
             column,
             note_type,
@@ -747,10 +744,12 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
             normalized_bpms: "120.000".to_string(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: vec![
                 test_chart_with("dance-single", "Hard", hashes[0]),
@@ -767,6 +766,7 @@ mod tests {
             description: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats::default(),
@@ -797,5 +797,8 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
         }
+    }
+    mod perf {
+        include!("cabinet_chart_perf.rs");
     }
 }

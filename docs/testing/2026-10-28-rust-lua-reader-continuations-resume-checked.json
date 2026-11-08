@@ -1,0 +1,263 @@
+{
+  "checked_reference_report_sha256": "2423cdb77711c2a6855c4216d9ac72dcde6e03aeba71320d60482183fa23e419",
+  "runs": {
+    "completed-empty-1-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-empty-1-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-empty-3-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-empty-3-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-empty-1000-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-empty-1000-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-text-1-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "3009300932093009310931300966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-text-1-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "300930093009300931093130096e696c0973757370656e6465640d0a",
+      "stderr_hex": "4c55415f415353455254204c2d3e746f70203d3d204c2d3e63692d3e746f70207c7c206c7561475f636865636b6f70656e6f7028692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3430350d0a"
+    },
+    "completed-text-3-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109340966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-text-3-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "3009300930093009310934096e696c0973757370656e6465640d0a",
+      "stderr_hex": "4c55415f415353455254204c2d3e746f70203d3d204c2d3e63692d3e746f70207c7c206c7561475f636865636b6f70656e6f7028692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3430350d0a"
+    },
+    "completed-text-1000-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-text-1000-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return 17',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "320930093109300930093209737472696e6709646561640d0a617474656d707420746f207969656c64206163726f7373206d6574616d6574686f642f432d63616c6c20626f756e646172790d0a726573756d656409320966616c736509737472696e670963616e6e6f7420726573756d65206465616420636f726f7574696e6509646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-syntax-1-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "33093009310930093109313709737472696e670973757370656e6465640d0a7265616465722d6f6e63653a313a203c6e616d653e206f7220272e2e2e27206578706563746564206e65617220273c656f663e270d0a",
+      "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+    },
+    "completed-syntax-1-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "33093009310930093109313709737472696e670973757370656e6465640d0a7265616465722d6f6e63653a313a203c6e616d653e206f7220272e2e2e27206578706563746564206e65617220273c656f663e270d0a",
+      "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+    },
+    "completed-syntax-3-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "330930093109300931093709737472696e670973757370656e6465640d0a7265616465722d6f6e63653a313a203c6e616d653e206f7220272e2e2e27206578706563746564206e65617220273c656f663e270d0a",
+      "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+    },
+    "completed-syntax-3-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "330930093109300931093709737472696e670973757370656e6465640d0a7265616465722d6f6e63653a313a203c6e616d653e206f7220272e2e2e27206578706563746564206e65617220273c656f663e270d0a",
+      "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+    },
+    "completed-syntax-1000-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 86,
+      "stdout_hex": "330930093109300931093209737472696e670973757370656e6465640d0a7265616465722d6f6e63653a313a203c6e616d653e206f7220272e2e2e27206578706563746564206e65617220273c656f663e270d0a",
+      "stderr_hex": "4c55415f41535345525420282828286369292d3e66756e63292d3e747429203d3d20362920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c646f2e633a3339350d0a"
+    },
+    "completed-syntax-1000-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,'return function(',function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "320930093109300930093209737472696e6709646561640d0a617474656d707420746f207969656c64206163726f7373206d6574616d6574686f642f432d63616c6c20626f756e646172790d0a726573756d656409320966616c736509737472696e670963616e6e6f7420726573756d65206465616420636f726f7574696e6509646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-1-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "300930093209300931093130320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-1-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "300930093209300931093130320966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-3-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "3009300932093009310933340966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-3-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',3);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "3009300932093009310933340966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-1000-1": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==1 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009320930093109310966756e6374696f6e0973757370656e6465640d0a726573756d656409310974727565096e696c0909646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "completed-binary-1000-2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local co=coroutine.create(function()end);coroutine.resume(co);local s,b,a,old,new,n,result=m.load_thread(co,string.dump(assert(loadstring('return 17','=reader-wire'))),function(i)if i==2 then coroutine.yield(29)end end,'=reader-once',1000);print(s,b,a,old,new,n,type(result),coroutine.status(co));if type(result)=='string'then print(result)end;local function pack(...)return select('#',...),{...}end;collectgarbage();local n,v=pack(coroutine.resume(co,41,43));print('resumed',n,v[1],type(v[2]),type(v[2])=='string'and v[2]or '',coroutine.status(co));collectgarbage();print('usable',17+29)"
+      ],
+      "returncode": 0,
+      "stdout_hex": "30093009310930093009310966756e6374696f6e09646561640d0a726573756d656409320966616c736509737472696e670963616e6e6f7420726573756d65206465616420636f726f7574696e6509646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    }
+  },
+  "shared_corpus": {
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\lua.exe",
+      "-e",
+      "local m=assert(package.loadlib('./native.dll','luaopen_native'))('checked');boundary_thread_load=m.load_thread",
+      "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\continuations.lua"
+    ],
+    "returncode": 86,
+    "stdout_hex": "66726573682d656d7074790931093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d656d7074790931093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d656d7074790933093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d656d7074790933093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d656d7074790931303030093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d656d7074790931303030093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d746578740931093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d746578740931093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d746578740933093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d746578740933093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d746578740931303030093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d746578740931303030093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d73796e7461780931093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d73796e7461780931093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d73796e7461780933093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d73796e7461780933093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d73796e7461780931303030093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d73796e7461780931303030093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d62696e6172790931093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d62696e6172790931093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d62696e6172790933093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d62696e6172790933093209320931093209300930093209737472696e670973757370656e6465640d0a66726573682d62696e6172790931303030093109320931093209300930093109737472696e670973757370656e6465640d0a66726573682d62696e617279093130303009320930093109320930093009310966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093109310930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093109320930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093309310930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093309320930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093130303009310930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d656d707479093130303009320930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d7465787409310931093009300932093009310931300966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d746578740931093209300930093009300931093130096e696c0973757370656e6465640d0a636f6d706c657465642d74657874093309310930093009320930093109340966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d7465787409330932093009300930093009310934096e696c0973757370656e6465640d0a636f6d706c657465642d74657874093130303009310930093009320930093109320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d746578740931303030093209320930093109300930093209737472696e6709646561640d0a636f6d706c657465642d73796e746178093109310933093009310930093109313709737472696e670973757370656e6465640d0a636f6d706c657465642d73796e746178093109320933093009310930093109313709737472696e670973757370656e6465640d0a636f6d706c657465642d73796e7461780933093109330930093109300931093709737472696e670973757370656e6465640d0a636f6d706c657465642d73796e7461780933093209330930093109300931093709737472696e670973757370656e6465640d0a636f6d706c657465642d73796e7461780931303030093109330930093109300931093209737472696e670973757370656e6465640d0a636f6d706c657465642d73796e7461780931303030093209320930093109300930093209737472696e6709646561640d0a636f6d706c657465642d62696e6172790931093109300930093209300931093130320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d62696e6172790931093209300930093209300931093130320966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d62696e61727909330931093009300932093009310933340966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d62696e61727909330932093009300932093009310933340966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d62696e617279093130303009310930093009320930093109310966756e6374696f6e0973757370656e6465640d0a636f6d706c657465642d62696e617279093130303009320930093009310930093009310966756e6374696f6e09646561640d0a7969656c6465642d656d707479093109310930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d656d707479093109320930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d656d707479093309310930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d656d707479093309320930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d656d707479093130303009310930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d656d707479093130303009320930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d7465787409310931093009300932093109310931300966756e6374696f6e0973757370656e6465640d0a7969656c6465642d746578740931093209300930093009310931093130096e696c0973757370656e6465640d0a7969656c6465642d74657874093309310930093009320931093109340966756e6374696f6e0973757370656e6465640d0a7969656c6465642d7465787409330932093009300930093109310934096e696c0973757370656e6465640d0a7969656c6465642d74657874093130303009310930093009320931093109320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d746578740931303030093209320930093109310931093209737472696e670973757370656e6465640d0a7969656c6465642d73796e746178093109310933093009310931093109313709737472696e670973757370656e6465640d0a7969656c6465642d73796e746178093109320933093009310931093109313709737472696e670973757370656e6465640d0a7969656c6465642d73796e7461780933093109330930093109310931093709737472696e670973757370656e6465640d0a7969656c6465642d73796e7461780933093209330930093109310931093709737472696e670973757370656e6465640d0a7969656c6465642d73796e7461780931303030093109330930093109310931093209737472696e670973757370656e6465640d0a7969656c6465642d73796e7461780931303030093209320930093109310931093209737472696e670973757370656e6465640d0a7969656c6465642d62696e6172790931093109300930093209310931093130320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d62696e6172790931093209300930093209310931093130320966756e6374696f6e0973757370656e6465640d0a7969656c6465642d62696e61727909330931093009300932093109310933340966756e6374696f6e0973757370656e6465640d0a7969656c6465642d62696e61727909330932093009300932093109310933340966756e6374696f6e0973757370656e6465640d0a7969656c6465642d62696e617279093130303009310930093009320931093109310966756e6374696f6e0973757370656e6465640d0a7969656c6465642d62696e617279093130303009320930093009310931093109310966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093109310930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093109320930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093309310930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093309320930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093130303009310930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d656d707479093130303009320930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d7465787409310931093009320932093209310931300966756e6374696f6e0973757370656e6465640d0a6661696c65642d746578740931093209300932093009320931093130096e696c0973757370656e6465640d0a6661696c65642d74657874093309310930093209320932093109340966756e6374696f6e0973757370656e6465640d0a6661696c65642d7465787409330932093009320930093209310934096e696c0973757370656e6465640d0a6661696c65642d74657874093130303009310930093209320932093109320966756e6374696f6e0973757370656e6465640d0a6661696c65642d746578740931303030093209320932093309320932093209737472696e6709646561640d0a6661696c65642d73796e746178093109310933093209330932093109313709737472696e670973757370656e6465640d0a6661696c65642d73796e746178093109320933093209330932093109313709737472696e670973757370656e6465640d0a6661696c65642d73796e7461780933093109330932093309320931093709737472696e670973757370656e6465640d0a6661696c65642d73796e7461780933093209330932093309320931093709737472696e670973757370656e6465640d0a6661696c65642d73796e7461780931303030093109330932093309320931093209737472696e670973757370656e6465640d0a6661696c65642d73796e7461780931303030093209320932093309320932093209737472696e6709646561640d0a6661696c65642d62696e6172790931093109300932093209320931093130320966756e6374696f6e0973757370656e6465640d0a6661696c65642d62696e6172790931093209300932093209320931093130320966756e6374696f6e0973757370656e6465640d0a6661696c65642d62696e61727909330931093009320932093209310933340966756e6374696f6e0973757370656e6465640d0a6661696c65642d62696e61727909330932093009320932093209310933340966756e6374696f6e0973757370656e6465640d0a6661696c65642d62696e617279093130303009310930093209320932093109310966756e6374696f6e0973757370656e6465640d0a6661696c65642d62696e617279093130303009320930093209330932093209310966756e6374696f6e09646561640d0a7265616465722d726573756d6509656d707479093109310931097472756509656d70747909646561640d0a7265616465722d726573756d6509656d707479093109320931097472756509656d70747909646561640d0a7265616465722d726573756d6509656d707479093309310931097472756509656d70747909646561640d0a7265616465722d726573756d6509656d707479093309320931097472756509656d70747909646561640d0a7265616465722d726573756d6509656d707479093130303009310931097472756509656d70747909646561640d0a7265616465722d726573756d6509656d707479093130303009320931097472756509656d70747909646561640d0a7265616465722d726573756d650974657874093109310931097472756509656d70747909646561640d0a",
+    "stderr_hex": "4c55415f415353455254204c2d3e746f70203d3d204c2d3e63692d3e746f70207c7c206c7561475f636865636b6f70656e6f7028692920433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c766d2e633a3430350d0a"
+  },
+  "fixtures": {
+    "crates/deadlib-lua/tests/native-boundary/reader-continuations.lua": "3c03a711ceb1cc434cb5de64a7631e3f2866c66e6f22e66bb15c15df5897cd24",
+    "crates/deadlib-lua/tests/native-boundary/reader-environments.lua": "32f9e4a8ceef2e6cfccf42fcfaf9e1158e4d66fc467b8f9080a61ccbf59696d9"
+  },
+  "source": "C:\\GitHub\\deadsync\\target\\lua-reader-environment-checked-1793174006692525900\\continuations.lua",
+  "source_sha256": "ce732ac015f23de7fced7a905423a2af603129629a5413b6d93e4d4eb488c465",
+  "instrumentation": "Unmodified official Lua source files with a force-included noninteractive assertion handler."
+}

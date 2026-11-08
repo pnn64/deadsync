@@ -1,0 +1,110 @@
+{
+  "sources": {
+    "fresh-1": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"fresh\";local visit=1;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "fresh-2": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"fresh\";local visit=2;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "completed-1": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"completed\";local visit=1;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "completed-2": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"completed\";local visit=2;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "yielded-1": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"yielded\";local visit=1;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "yielded-2": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"yielded\";local visit=2;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "failed-1": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"failed\";local visit=1;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)",
+    "failed-2": "io.stdout:setvbuf('no');local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');local kind=\"failed\";local visit=2;local original=getfenv(coroutine.yield);debug.setfenv(coroutine.yield,{marker=37});local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield()end end);if kind~='fresh'then coroutine.resume(co)end;local globals={marker=31};debug.setfenv(co,globals);local env={};local s,b,a,old,new,n,result=m.load_thread(co,'return marker',function(i)if i==visit then coroutine.yield(29)end end,'=reader-environment',3,env);debug.setfenv(coroutine.yield,original);print(s,b,a,old,new,n,type(result),#env);for i,e in ipairs(env)do print('env',i,e.marker)end;if type(result)=='function'then print('compiled',getfenv(result)==globals,result())end;collectgarbage();print('usable',46)"
+  },
+  "runs": {
+    "fresh-1": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "320931093209300930093109737472696e6709300d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "320931093209300930093109737472696e6709300d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "fresh-2": {
+      "reference": {
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "320931093209300930093209737472696e6709310d0a656e7609310933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "completed-1": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "30093009320930093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "30093009320930093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "completed-2": {
+      "reference": {
+        "returncode": 3221225477,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "3009300930093009310936096e696c09360d0a656e7609310933310d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "yielded-1": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "30093009320931093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "30093009320931093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "yielded-2": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "3009300930093109310936096e696c09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "3009300930093109310936096e696c09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "failed-1": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "30093209320932093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "30093209320932093109360966756e6374696f6e09360d0a656e7609310933370d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a636f6d70696c656409747275650933310d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    },
+    "failed-2": {
+      "reference": {
+        "returncode": 0,
+        "stdout_hex": "3009320930093209310936096e696c09360d0a656e760931096e696c0d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "returncode": 0,
+        "stdout_hex": "3009320930093209310936096e696c09360d0a656e760931096e696c0d0a656e7609320933370d0a656e7609330933370d0a656e7609340933370d0a656e7609350933370d0a656e7609360933370d0a757361626c650934360d0a",
+        "stderr_hex": ""
+      }
+    }
+  }
+}

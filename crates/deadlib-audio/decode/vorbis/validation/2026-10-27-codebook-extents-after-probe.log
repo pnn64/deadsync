@@ -1,0 +1,7 @@
+     Locking 2 packages to highest Rust 1.99.1 compatible versions
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling extent-after-probe v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\codebook-extents-before-after-20261027\after\probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.73s
+     Running `target\deadlib-audio-reference\codebook-extents-before-after-20261027\after\target\debug\extent-after-probe.exe C:\GitHub\deadsync\target\deadlib-audio-reference\codebook-extents-20261027\default-rejection.bin`
+accepted=false consumed=64 exhausted=false

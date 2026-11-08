@@ -1,0 +1,31 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "encode",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "score",
+      "path": "buffers-paired-1-score.tsv",
+      "sha256": "af13676e3b7ff36e1d10b16856a1f76bfb6fff62ab6f5dac0ab1833ff0a88449",
+      "source_manifest_sha256": "d3402897fd3cff552db01843a696efbf17587e87af89c7187518bdd81e564212",
+      "executable_sha256": "f5bbe3f4e336e69003df157a741428a25dabe62dfca634b6904d5a1dd7d7a0c7"
+    },
+    {
+      "round": 1,
+      "label": "buffers",
+      "path": "buffers-paired-1-buffers.tsv",
+      "sha256": "962ae2d6bfde4b68753d4ecd8aca812dd0f6f790adf54bcc25bdccd48d85356d",
+      "source_manifest_sha256": "71f245ff2d312b49f6a24f648afc101503a9f1e63490d68b3469f0658af89add",
+      "executable_sha256": "d05a72379fd95aa317115a51f2b3208242effcb24e73377dabbbdc93dfc4da0b"
+    },
+    {
+      "round": 2,
+      "label": "buffers",
+      "path": "buffers-paired-2-buffers.tsv",
+      "sha256": "100b56794ad5ff1e1ca961b7cf659ac4696cc9af69d0191b8e40813bb0b23478",
+      "source_manifest_sha256": "71f245ff2d312b49f6a24f648afc101503a9f1e63490d68b3469f0658af89add",
+      "executable_sha256": "d05a72379fd95aa317115a51f2b3208242effcb24e73377dabbbdc93dfc4da0b"
+    }
+  ]
+}

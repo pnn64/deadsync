@@ -1,0 +1,207 @@
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -50,72 +50,19 @@
+ }
+ 
+ fn paeth(a: u8, b: u8, c: u8) -> u8 {
+-    // Equivalent nearest-neighbor regions, including the prescribed ties.
+-    // The threshold is in -510..=765, so all arithmetic fits in i16.
+-    let low = i16::from(a.min(b));
+-    let high = i16::from(a.max(b));
+-    let threshold = 3 * i16::from(c) - i16::from(a) - i16::from(b);
+-    if threshold <= low {
+-        high as u8
+-    } else if threshold >= high {
+-        low as u8
++    let a = i32::from(a);
++    let b = i32::from(b);
++    let c = i32::from(c);
++    let p = a + b - c;
++    let pa = (p - a).abs();
++    let pb = (p - b).abs();
++    let pc = (p - c).abs();
++    if pa <= pb && pa <= pc {
++        a as u8
++    } else if pb <= pc {
++        b as u8
+     } else {
+-        c
+-    }
+-}
+-
+-fn unfilter_pixels<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8]) {
+-    let prev = &prev[..row.len()];
+-    let (pixels, tail) = row.as_chunks_mut::<N>();
+-    let (above, above_tail) = prev.as_chunks::<N>();
+-    let mut left = [0; N];
+-    let mut upper_left = [0; N];
+-    for (pixel, up) in pixels.iter_mut().zip(above) {
+-        for n in 0..N {
+-            let predictor = if PAETH {
+-                paeth(left[n], up[n], upper_left[n])
+-            } else {
+-                ((u16::from(left[n]) + u16::from(up[n])) / 2) as u8
+-            };
+-            pixel[n] = pixel[n].wrapping_add(predictor);
+-        }
+-        left = *pixel;
+-        upper_left = *up;
+-    }
+-    for (n, (value, &up)) in tail.iter_mut().zip(above_tail).enumerate() {
+-        let predictor = if PAETH {
+-            paeth(left[n], up, upper_left[n])
+-        } else {
+-            ((u16::from(left[n]) + u16::from(up)) / 2) as u8
+-        };
+-        *value = value.wrapping_add(predictor);
+-    }
+-}
+-
+-fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize) {
+-    // A fixed pixel width makes its byte lanes independent and keeps the
+-    // preceding pixel in registers instead of indexing reconstructed bytes.
+-    match bpp {
+-        1 => unfilter_pixels::<1, PAETH>(row, prev),
+-        2 => {
+-            let prefix = 2.min(row.len());
+-            for (value, &up) in row[..prefix].iter_mut().zip(prev) {
+-                *value = value.wrapping_add(if PAETH { up } else { up / 2 });
+-            }
+-            for n in 2..row.len() {
+-                let predictor = if PAETH {
+-                    paeth(row[n - 2], prev[n], prev[n - 2])
+-                } else {
+-                    ((u16::from(row[n - 2]) + u16::from(prev[n])) / 2) as u8
+-                };
+-                row[n] = row[n].wrapping_add(predictor);
+-            }
+-        }
+-        3 => unfilter_pixels::<3, PAETH>(row, prev),
+-        4 => unfilter_pixels::<4, PAETH>(row, prev),
+-        6 => unfilter_pixels::<6, PAETH>(row, prev),
+-        8 => unfilter_pixels::<8, PAETH>(row, prev),
+-        _ => unreachable!("validated PNG byte stride"),
++        c as u8
+     }
+ }
+ 
+@@ -132,8 +79,18 @@
+                 *v = v.wrapping_add(up);
+             }
+         }
+-        3 => unfilter_neighbors::<false>(row, prev, bpp),
+-        4 => unfilter_neighbors::<true>(row, prev, bpp),
++        3 | 4 => {
++            for n in 0..row.len() {
++                let left = if n >= bpp { row[n - bpp] } else { 0 };
++                let ul = if n >= bpp { prev[n - bpp] } else { 0 };
++                let predictor = if filter == 3 {
++                    ((u16::from(left) + u16::from(prev[n])) / 2) as u8
++                } else {
++                    paeth(left, prev[n], ul)
++                };
++                row[n] = row[n].wrapping_add(predictor);
++            }
++        }
+         _ => return Err(Error::Invalid("scanline filter")),
+     }
+     Ok(())
+@@ -358,98 +315,3 @@
+     }
+     Ok(out)
+ }
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    // PNG Third Edition 9.4, expressed independently of the optimized regions.
+-    fn reference_paeth(a: u8, b: u8, c: u8) -> u8 {
+-        let p = i32::from(a) + i32::from(b) - i32::from(c);
+-        let distances = [
+-            (p - i32::from(a)).abs(),
+-            (p - i32::from(b)).abs(),
+-            (p - i32::from(c)).abs(),
+-        ];
+-        if distances[0] <= distances[1] && distances[0] <= distances[2] {
+-            a
+-        } else if distances[1] <= distances[2] {
+-            b
+-        } else {
+-            c
+-        }
+-    }
+-
+-    #[test]
+-    fn every_paeth_triplet_matches_the_specification() {
+-        for a in 0..=255 {
+-            for b in 0..=255 {
+-                for c in 0..=255 {
+-                    assert_eq!(paeth(a, b, c), reference_paeth(a, b, c), "{a} {b} {c}");
+-                }
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn independent_filter_bytes_scores_and_short_row_boundaries() {
+-        for bpp in [1, 2, 3, 4, 6, 8] {
+-            for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127] {
+-                for pattern in 0..5 {
+-                    let row: Vec<u8> = (0..len)
+-                        .map(|n| match pattern {
+-                            0 => 0,
+-                            1 => 255,
+-                            2 => n as u8,
+-                            _ => (n * 173 + n * n * 47 + 71) as u8,
+-                        })
+-                        .collect();
+-                    let prev: Vec<u8> = (0..len)
+-                        .map(|n| match pattern {
+-                            0 | 4 => 0,
+-                            1 => 255,
+-                            _ => (n * 59 + n * n * 113 + 219) as u8,
+-                        })
+-                        .collect();
+-                    for filter in 0..5 {
+-                        let expected: Vec<u8> = (0..len)
+-                            .map(|n| {
+-                                let a = if n < bpp { 0 } else { row[n - bpp] };
+-                                let c = if n < bpp { 0 } else { prev[n - bpp] };
+-                                let predictor = match filter {
+-                                    0 => 0,
+-                                    1 => a,
+-                                    2 => prev[n],
+-                                    3 => ((u16::from(a) + u16::from(prev[n])) / 2) as u8,
+-                                    _ => reference_paeth(a, prev[n], c),
+-                                };
+-                                row[n].wrapping_sub(predictor)
+-                            })
+-                            .collect();
+-                        let score: u64 = expected
+-                            .iter()
+-                            .map(|&v| u64::from((v as i8).unsigned_abs()))
+-                            .sum();
+-                        let mut actual = vec![0xa5; len];
+-                        assert_eq!(filter_into(&row, &prev, bpp, filter, &mut actual), score);
+-                        assert_eq!(actual, expected);
+-                        unfilter(&mut actual, &prev, bpp, filter).unwrap();
+-                        assert_eq!(actual, row);
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn invalid_filter_bytes_do_not_change_the_row() {
+-        for filter in 5..=255 {
+-            let mut row = [0xa5; 17];
+-            assert_eq!(
+-                unfilter(&mut row, &[0; 17], 3, filter),
+-                Err(Error::Invalid("scanline filter"))
+-            );
+-            assert_eq!(row, [0xa5; 17]);
+-        }
+-    }
+-}

@@ -58,6 +58,14 @@ pub const fn gameplay_play_style_from_profile(
         deadsync_profile::PlayStyle::PumpDouble => {
             deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
         }
+        deadsync_profile::PlayStyle::Couple => deadsync_gameplay::GameplayInputPlayStyle::Couple,
+        deadsync_profile::PlayStyle::Routine => deadsync_gameplay::GameplayInputPlayStyle::Routine,
+        deadsync_profile::PlayStyle::PumpCouple => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpCouple
+        }
+        deadsync_profile::PlayStyle::PumpRoutine => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine
+        }
     }
 }
 
@@ -283,6 +291,9 @@ const fn gameplay_target_score_setting(
         deadsync_profile::TargetScoreSetting::MachineBest => {
             deadsync_gameplay::GameplayTargetScoreSetting::MachineBest
         }
+        deadsync_profile::TargetScoreSetting::GhostData => {
+            deadsync_gameplay::GameplayTargetScoreSetting::GhostData
+        }
         deadsync_profile::TargetScoreSetting::PersonalBest => {
             deadsync_gameplay::GameplayTargetScoreSetting::PersonalBest
         }
@@ -398,8 +409,14 @@ pub const fn song_lua_compile_play_style(
             deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
         deadsync_gameplay::GameplayInputPlayStyle::Double
-        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => {
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
+        | deadsync_gameplay::GameplayInputPlayStyle::Routine
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Double
+        }
+        deadsync_gameplay::GameplayInputPlayStyle::Couple
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
     }
 }
@@ -413,15 +430,47 @@ fn song_lua_compile_player_screen_x(
     player_side: deadsync_gameplay::GameplayInputPlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
-    deadsync_gameplay::song_lua_compile_player_screen_x(
-        num_players,
-        player_index,
-        viewport,
-        song_lua_compile_play_style(play_style),
-        deadsync_gameplay::gameplay_is_single_p2_side(play_style, player_side),
-        profile.note_field_offset_x as f32,
-        center_1player_notefield,
-    )
+    let style = song_lua_compile_play_style(play_style);
+    let centered = num_players == 1 && (style == deadsync_gameplay::SongLuaCompilePlayStyle::Double
+        || (style == deadsync_gameplay::SongLuaCompilePlayStyle::Single && center_1player_notefield));
+    if centered { return viewport.center_x(); }
+    let p2 = if num_players == 1 {
+        deadsync_gameplay::gameplay_is_single_p2_side(play_style, player_side)
+    } else { player_index == 1 };
+    // _fallback GameplayMargins uses a fake width of 272 to recover the
+    // legacy Simply Love X metrics. GameplayHelpers::GetNotefieldMargins
+    // truncates the outer and combined center margins via SafeFArg<int>,
+    // before ScreenGameplay positions the actual Player actor.
+    let half_screen = viewport.width() * 0.5;
+    let spacing = viewport.width().clamp(640.0, 854.0) * 0.25;
+    let p1_center = viewport.center_x() - spacing;
+    let p2_center = viewport.center_x() + spacing - half_screen;
+    let mut p1_left = p1_center - 136.0;
+    let mut p1_right = half_screen - p1_center - 136.0;
+    let mut p2_left = p2_center - 136.0;
+    let mut p2_right = half_screen - p2_center - 136.0;
+    if num_players == 1 {
+        if p2 { p1_left = p2_right; p1_right = p2_left; }
+        else { p2_left = p1_right; p2_right = p1_left; }
+    }
+    let center_margin = (p1_right + p2_left).trunc() * 0.5;
+    let (edge, left, right) = if p2 {
+        (half_screen, center_margin, p2_right.trunc())
+    } else { (0.0, p1_left.trunc(), center_margin) };
+    let offset_sign = if p2 { 1.0 } else { -1.0 };
+    edge + left + (half_screen - left - right) * 0.5
+        + offset_sign * (profile.note_field_offset_x as f32).clamp(0.0, 50.0)
+}
+
+/// Resolve native catalog note times using the preferences at catalog loading.
+/// Later game-mode preference changes do not alter Song's stored bounds.
+#[must_use]
+pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32, sync_offset: f32) -> [f32; 2] {
+    let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
+    let first = (song.precise_first_second() - sync_offset) - rate * offset;
+    let last = song.precise_note_last_second_seconds
+        .map(|seconds| (seconds - sync_offset) - rate * offset).unwrap_or(-1.0).max(specified_last);
+    [if first < last { first } else { 0.0 }, last]
 }
 
 #[must_use]
@@ -446,11 +495,19 @@ pub fn song_lua_compile_context(
             .unwrap_or_default(),
         song.title.clone(),
     );
+    context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+    context.song_banner_path.clone_from(&song.banner_path);
+    context.player_step_indices = std::array::from_fn(|player| {
+        song.charts.iter().position(|chart| chart.chart_type == charts[player].chart_type
+            && chart.difficulty == charts[player].difficulty
+            && chart.description == charts[player].description)
+    });
     context.song_display_bpms = song.display_bpm_pair_or(
         charts.first().map(std::convert::AsRef::as_ref),
         [60.0, 60.0],
     );
     let timing_bpms = deadsync_song_lua::parse_song_timing_bpms(&song.normalized_bpms);
+    context.song_timing = song.song_timing.clone();
     if !timing_bpms.is_empty() {
         context.song_timing_bpms = timing_bpms;
     }
@@ -460,6 +517,9 @@ pub fn song_lua_compile_context(
         1.0
     };
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
+    // The scan applies native chart eligibility and includes hold tails.
+    // Neither audio EOF nor its rounded display length defines these bounds.
+    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, machine_global_offset_seconds, 1.0, 0.0));
     context.style_name = match play_style {
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
         deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",
@@ -467,6 +527,10 @@ pub fn song_lua_compile_context(
         deadsync_gameplay::GameplayInputPlayStyle::PumpSingle => "pump-single",
         deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => "pump-versus",
         deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => "pump-double",
+        deadsync_gameplay::GameplayInputPlayStyle::Couple => "couple",
+        deadsync_gameplay::GameplayInputPlayStyle::Routine => "routine",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => "pump-couple",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => "pump-routine",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
@@ -479,6 +543,7 @@ pub fn song_lua_compile_context(
     context.amod_available = false;
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
+        autoplay: 0.0,
         difficulty: if player < num_players {
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {
@@ -494,10 +559,19 @@ pub fn song_lua_compile_context(
         } else {
             deadsync_song_lua::SongLuaSpeedMod::default()
         },
+        mini: if player < num_players {
+            player_profiles[player].mini_percent as f32 / 100.0
+        } else { 0.0 },
         noteskin_name: if player < num_players {
             player_profiles[player].noteskin.to_string()
         } else {
             deadsync_profile::NoteSkin::default().to_string()
+        },
+        perspective: if player < num_players {
+            let (tilt, skew) = player_profiles[player].perspective.tilt_skew();
+            deadsync_gameplay::PerspectiveEffects { tilt, skew }
+        } else {
+            deadsync_gameplay::PerspectiveEffects::default()
         },
         screen_x: song_lua_compile_player_screen_x(
             num_players,
@@ -509,6 +583,17 @@ pub fn song_lua_compile_context(
             center_1player_notefield,
         ),
         screen_y: viewport.center_y(),
+        judgment_texture: None,
+        column_cues: player < num_players && player_profiles[player].column_cues,
+        background_filter_percent: if player < num_players {
+            player_profiles[player].background_filter.percent()
+        } else { 0 },
+        hide_lifebar: player >= num_players || player_profiles[player].hide_lifebar,
+        hide_danger: player_profiles[player].hide_danger,
+        life_meter_type: player_profiles[player].lifemeter_type.to_string(),
+        nps_graph_at_top: player < num_players && player_profiles[player].nps_graph_at_top,
+        step_statistics_enabled: player < num_players && !player_profiles[player].step_statistics.is_empty(),
+        timing_windows: player_profiles[player].timing_windows.disabled_windows().map(|disabled| !disabled),
     });
     context
 }
@@ -523,6 +608,8 @@ pub fn song_lua_play_context(
     music_rate: f32,
     viewport: deadsync_gameplay::GameplayViewport,
     display_size: (u32, u32),
+    display_aspect_ratio: f32,
+    autoplay: f32,
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
@@ -548,6 +635,18 @@ pub fn song_lua_play_context(
         config.center_1player_notefield,
     );
     let (display_width, display_height) = display_size;
+    // These timings enter Lua before the core applies the cabinet/group offsets.
+    // Match runtime_init's settings without substituting selected chart timing
+    // for the global SongPosition maintained by ITGmania.
+    let sync_offset = if config.machine_pack_ini_offsets {
+        deadsync_chart::song::sync_pref_offset(gameplay_pack_data(song, None, None).sync_pref,
+            config.machine_default_sync_pref)
+    } else { 0.0 };
+    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, config.global_offset_seconds, 1.0, sync_offset));
+    if let Some(timing) = &mut context.song_timing {
+        timing.shift_group_offset_seconds(sync_offset);
+        timing.set_global_offset_seconds(config.global_offset_seconds);
+    }
     context.player_timing = std::array::from_fn(|player| {
         let source = if session.p2_runtime_player() {
             1
@@ -556,15 +655,33 @@ pub fn song_lua_play_context(
         };
         context.players[player]
             .enabled
-            .then(|| timing[source].clone())
+            .then(|| {
+                let mut value = timing[source].clone();
+                value.shift_group_offset_seconds(sync_offset);
+                let player_offset = if config.machine_allow_per_player_global_offsets {
+                    runtime_profiles[player].global_offset_shift_ms.clamp(-100, 100) as f32 / 1000.0
+                } else { 0.0 };
+                value.set_global_offset_seconds(config.global_offset_seconds + player_offset);
+                value
+            })
     });
-    context.display_width = display_width.max(1) as f32;
-    context.display_height = display_height.max(1) as f32;
+    context.display_width = display_width as f32;
+    context.display_height = display_height as f32;
+    context.display_aspect_ratio = display_aspect_ratio;
+    for player in &mut context.players {
+        player.autoplay = if player.enabled { autoplay } else { 0.0 };
+    }
     // `VideoRenderers` is a legacy capability preference used by mod charts to
     // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
     // semantics above every physical backend, so advertise the compatibility
     // renderer first while retaining the actual backend for diagnostics.
-    context.video_renderers = format!("opengl,{video_renderer}");
+    // Native null captures have no physical display or render targets.
+    context.render_to_texture = !video_renderer.eq_ignore_ascii_case("null");
+    context.video_renderers = if context.render_to_texture {
+        format!("opengl,{video_renderer}")
+    } else {
+        video_renderer.to_string()
+    };
     context
 }
 
@@ -663,7 +780,8 @@ where
         ),
         deadsync_score::GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
-            lua_submit_allowed: deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
+            lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+                || deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
             song_completed_naturally: outcome.song_completed_naturally,
             is_failing: outcome.is_failing,
             life: outcome.life,
@@ -776,6 +894,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn appearance_mask_bits(&self) -> u8 {
         self.appearance_effects_active_mask.bits()
+    }
+
+    fn accel_mask_bits(&self) -> u8 {
+        self.accel_effects_active_mask.bits()
     }
 
     fn visual_mask_bits(&self) -> u16 {
@@ -952,6 +1074,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn crossover_cue_brackets(&self) -> bool {
         self.crossover_cue_brackets
+    }
+
+    fn golf_scoring_enabled(&self) -> bool {
+        self.show_golf_score || self.show_golf_results
     }
 
     fn nps_graph_at_top(&self) -> bool {
@@ -1561,6 +1687,36 @@ where
     }
 }
 
+/// FillInRoutineHighScore: the Routine score that both participants share,
+/// saved once for the master player.
+fn routine_local_score_player_from_runtime<'a, RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &'a deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    profile_id: String,
+    scoring_counts: &'a deadsync_rules::judgment::JudgeCounts,
+) -> deadsync_score::LocalScoreGameplayPlayer<'a>
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    // Init appends the second participant's notes right after the first's.
+    let (start, first_end) = gs.note_range_for_player(0);
+    let (second_start, end) = gs.note_range_for_player(1);
+    debug_assert_eq!(first_end, second_start);
+    deadsync_score::routine_shared_local_score_player(
+        local_score_player_from_runtime(gs, 0, profile_id),
+        local_score_player_from_runtime(gs, 1, String::new()),
+        scoring_counts,
+        &gs.notes()[start..end],
+        &gs.note_time_cache_ns()[start..end],
+        &gs.hold_end_time_cache_ns()[start..end],
+    )
+}
+
 pub fn save_local_scores_from_runtime<
     RuntimeProfile,
     OverlayActor,
@@ -1590,10 +1746,25 @@ pub fn save_local_scores_from_runtime<
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
-    let players = (0..gs.num_players()).filter_map(|player_idx| {
-        let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
-        Some(local_score_player_from_runtime(gs, player_idx, profile_id))
+    // StageStats::CommitScores fills only the master player's high score in
+    // Routine, from the shared stats both participants earned together.
+    let routine_counts = gs.setup.session.play_style.is_routine().then(|| {
+        let [first, second] = [&gs.players()[0].scoring_counts, &gs.players()[1].scoring_counts];
+        std::array::from_fn(|ix| first[ix].saturating_add(second[ix]))
     });
+    let players: Vec<_> = if let Some(counts) = routine_counts.as_ref() {
+        active_profile_id_for_player(gs.num_players(), 0)
+            .map(|profile_id| routine_local_score_player_from_runtime(gs, profile_id, counts))
+            .into_iter()
+            .collect()
+    } else {
+        (0..gs.num_players())
+            .filter_map(|player_idx| {
+                let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
+                Some(local_score_player_from_runtime(gs, player_idx, profile_id))
+            })
+            .collect()
+    };
     deadsync_score::save_local_gameplay_scores(
         played_at_ms,
         gs.music_rate(),
@@ -1615,6 +1786,29 @@ pub fn save_local_scores_from_app_runtime<RuntimeProfile, OverlayActor, Captured
     RuntimeProfile:
         Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
 {
+    for player in 0..gs.num_players() {
+        let Some(histories) = gs.ghost_history_for_save(player) else {
+            continue;
+        };
+        let Some((_, id)) =
+            deadsync_profile::app_runtime::active_local_profile_id_for_gameplay_player(
+                gs.num_players(),
+                player,
+            )
+        else {
+            continue;
+        };
+        let Some(chart) = gs.chart(player) else {
+            continue;
+        };
+        let dir = deadsync_profile::app_runtime::local_profile_dir(&id);
+        if let Err(error) = deadsync_score::ghost::save_best(&dir, &chart.short_hash, histories) {
+            log::warn!(
+                "Could not save ghost history for {}: {error}",
+                chart.short_hash
+            );
+        }
+    }
     save_local_scores_from_runtime(
         gs,
         |num_players, player_idx| {

@@ -1,0 +1,50 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index 246d84738..3dec0727b 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -331,6 +331,16 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+     score
+ }
+ 
++fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
++    for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
++        let mut byte = 0;
++        for (n, &value) in values.iter().enumerate() {
++            byte |= value << (8 - DEPTH - n as u8 * DEPTH);
++        }
++        *out = byte;
++    }
++}
++
+ pub(crate) fn pack_row(
+     image: &Image,
+     y: usize,
+@@ -346,7 +356,6 @@ pub(crate) fn pack_row(
+         match &image.samples {
+             Samples::U8(v) if depth == 8 => {
+                 row.copy_from_slice(&v[start..start + width * channels]);
+-                return;
+             }
+             Samples::U16(v) => {
+                 for (out, value) in row
+@@ -357,10 +366,18 @@ pub(crate) fn pack_row(
+                 {
+                     *out = value.to_be_bytes();
+                 }
+-                return;
+             }
+-            _ => (),
++            Samples::U8(v) => {
++                let samples = &v[start..start + width * channels];
++                match depth {
++                    1 => pack_bits::<1>(samples, row),
++                    2 => pack_bits::<2>(samples, row),
++                    4 => pack_bits::<4>(samples, row),
++                    _ => unreachable!("validated packed PNG depth"),
++                }
++            }
+         }
++        return;
+     }
+     row.fill(0);
+     for pixel in 0..width {

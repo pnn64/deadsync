@@ -1,0 +1,3 @@
+path	engine	median_ns	min_ns	max_ns	mad_ns	header_ns	clear_floor_ns	residue_ns	coupling_ns	floor_gain_ns	imdct_finite_ns	window_ns	overlap_copy_ns
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	798973000.0	750477100.0	820319200.0	17075400.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	817524300.0	794509300.0	883059900.0	20128900.0	824500.0	547980100.0	111106500.0	324000.0	9894700.0	112586300.0	4595100.0	25923800.0

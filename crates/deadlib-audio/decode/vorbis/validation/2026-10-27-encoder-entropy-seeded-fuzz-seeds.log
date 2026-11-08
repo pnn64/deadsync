@@ -1,0 +1,3 @@
+    Finished `release` profile [optimized] target(s) in 0.26s
+     Running `crates\deadlib-audio\decode\fuzz\target\release\seed.exe C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-encoder-entropy-streams-20261027\corpus C:\GitHub\deadsync\target\deadlib-audio-reference\encoding-entropy-20261027\output-0-native-1.ogg C:\GitHub\deadsync\target\deadlib-audio-reference\encoding-entropy-20261027\output-1-native-4.ogg C:\GitHub\deadsync\target\deadlib-audio-reference\encoding-entropy-20261027\output-2-native-4.ogg C:\GitHub\deadsync\target\deadlib-audio-reference\encoding-entropy-20261027\output-3-native-1.ogg`
+Fuzz seeds retained at C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-encoder-entropy-streams-20261027\corpus

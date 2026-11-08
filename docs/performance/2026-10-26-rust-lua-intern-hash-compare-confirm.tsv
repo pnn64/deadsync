@@ -1,0 +1,543 @@
+sample	intern_hit_0	parent	0	200000	11	0	0	0
+sample	intern_hit_0	current	0	200000	9	0	0	0
+sample	intern_hit_0	current	1	200000	9	0	0	0
+sample	intern_hit_0	parent	1	200000	11	0	0	0
+sample	intern_hit_0	parent	2	200000	12	0	0	0
+sample	intern_hit_0	current	2	200000	9	0	0	0
+sample	intern_hit_0	current	3	200000	9	0	0	0
+sample	intern_hit_0	parent	3	200000	10	0	0	0
+sample	intern_hit_0	parent	4	200000	11	0	0	0
+sample	intern_hit_0	current	4	200000	9	0	0	0
+sample	intern_hit_0	current	5	200000	9	0	0	0
+sample	intern_hit_0	parent	5	200000	11	0	0	0
+sample	intern_hit_0	parent	6	200000	11	0	0	0
+sample	intern_hit_0	current	6	200000	9	0	0	0
+sample	intern_hit_0	current	7	200000	9	0	0	0
+sample	intern_hit_0	parent	7	200000	10	0	0	0
+sample	intern_hit_0	parent	8	200000	11	0	0	0
+sample	intern_hit_0	current	8	200000	9	0	0	0
+heap	intern_hit_0	parent	17420	22508	22508	0	0
+heap	intern_hit_0	current	17420	22508	22508	0	0
+sample	intern_hit_1	parent	0	200000	10	0	0	0
+sample	intern_hit_1	current	0	200000	9	0	0	0
+sample	intern_hit_1	current	1	200000	8	0	0	0
+sample	intern_hit_1	parent	1	200000	10	0	0	0
+sample	intern_hit_1	parent	2	200000	10	0	0	0
+sample	intern_hit_1	current	2	200000	8	0	0	0
+sample	intern_hit_1	current	3	200000	8	0	0	0
+sample	intern_hit_1	parent	3	200000	10	0	0	0
+sample	intern_hit_1	parent	4	200000	10	0	0	0
+sample	intern_hit_1	current	4	200000	9	0	0	0
+sample	intern_hit_1	current	5	200000	9	0	0	0
+sample	intern_hit_1	parent	5	200000	10	0	0	0
+sample	intern_hit_1	parent	6	200000	10	0	0	0
+sample	intern_hit_1	current	6	200000	8	0	0	0
+sample	intern_hit_1	current	7	200000	8	0	0	0
+sample	intern_hit_1	parent	7	200000	10	0	0	0
+sample	intern_hit_1	parent	8	200000	11	0	0	0
+sample	intern_hit_1	current	8	200000	9	0	0	0
+heap	intern_hit_1	parent	17421	22509	22509	0	0
+heap	intern_hit_1	current	17421	22509	22509	0	0
+sample	intern_hit_3	parent	0	200000	10	0	0	0
+sample	intern_hit_3	current	0	200000	10	0	0	0
+sample	intern_hit_3	current	1	200000	9	0	0	0
+sample	intern_hit_3	parent	1	200000	10	0	0	0
+sample	intern_hit_3	parent	2	200000	10	0	0	0
+sample	intern_hit_3	current	2	200000	10	0	0	0
+sample	intern_hit_3	current	3	200000	12	0	0	0
+sample	intern_hit_3	parent	3	200000	10	0	0	0
+sample	intern_hit_3	parent	4	200000	10	0	0	0
+sample	intern_hit_3	current	4	200000	9	0	0	0
+sample	intern_hit_3	current	5	200000	9	0	0	0
+sample	intern_hit_3	parent	5	200000	10	0	0	0
+sample	intern_hit_3	parent	6	200000	10	0	0	0
+sample	intern_hit_3	current	6	200000	11	0	0	0
+sample	intern_hit_3	current	7	200000	10	0	0	0
+sample	intern_hit_3	parent	7	200000	10	0	0	0
+sample	intern_hit_3	parent	8	200000	10	0	0	0
+sample	intern_hit_3	current	8	200000	10	0	0	0
+heap	intern_hit_3	parent	17423	22511	22511	0	0
+heap	intern_hit_3	current	17423	22511	22511	0	0
+sample	intern_hit_4	parent	0	200000	11	0	0	0
+sample	intern_hit_4	current	0	200000	11	0	0	0
+sample	intern_hit_4	current	1	200000	15	0	0	0
+sample	intern_hit_4	parent	1	200000	11	0	0	0
+sample	intern_hit_4	parent	2	200000	11	0	0	0
+sample	intern_hit_4	current	2	200000	12	0	0	0
+sample	intern_hit_4	current	3	200000	12	0	0	0
+sample	intern_hit_4	parent	3	200000	11	0	0	0
+sample	intern_hit_4	parent	4	200000	13	0	0	0
+sample	intern_hit_4	current	4	200000	17	0	0	0
+sample	intern_hit_4	current	5	200000	12	0	0	0
+sample	intern_hit_4	parent	5	200000	11	0	0	0
+sample	intern_hit_4	parent	6	200000	11	0	0	0
+sample	intern_hit_4	current	6	200000	12	0	0	0
+sample	intern_hit_4	current	7	200000	13	0	0	0
+sample	intern_hit_4	parent	7	200000	11	0	0	0
+sample	intern_hit_4	parent	8	200000	11	0	0	0
+sample	intern_hit_4	current	8	200000	11	0	0	0
+heap	intern_hit_4	parent	17424	22512	22512	0	0
+heap	intern_hit_4	current	17424	22512	22512	0	0
+sample	intern_hit_7	parent	0	200000	27	0	0	0
+sample	intern_hit_7	current	0	200000	16	0	0	0
+sample	intern_hit_7	current	1	200000	15	0	0	0
+sample	intern_hit_7	parent	1	200000	27	0	0	0
+sample	intern_hit_7	parent	2	200000	27	0	0	0
+sample	intern_hit_7	current	2	200000	16	0	0	0
+sample	intern_hit_7	current	3	200000	15	0	0	0
+sample	intern_hit_7	parent	3	200000	27	0	0	0
+sample	intern_hit_7	parent	4	200000	29	0	0	0
+sample	intern_hit_7	current	4	200000	15	0	0	0
+sample	intern_hit_7	current	5	200000	15	0	0	0
+sample	intern_hit_7	parent	5	200000	27	0	0	0
+sample	intern_hit_7	parent	6	200000	29	0	0	0
+sample	intern_hit_7	current	6	200000	17	0	0	0
+sample	intern_hit_7	current	7	200000	21	0	0	0
+sample	intern_hit_7	parent	7	200000	32	0	0	0
+sample	intern_hit_7	parent	8	200000	35	0	0	0
+sample	intern_hit_7	current	8	200000	18	0	0	0
+heap	intern_hit_7	parent	17427	22515	22515	0	0
+heap	intern_hit_7	current	17427	22515	22515	0	0
+sample	intern_hit_8	parent	0	200000	41	0	0	0
+sample	intern_hit_8	current	0	200000	11	0	0	0
+sample	intern_hit_8	current	1	200000	11	0	0	0
+sample	intern_hit_8	parent	1	200000	38	0	0	0
+sample	intern_hit_8	parent	2	200000	41	0	0	0
+sample	intern_hit_8	current	2	200000	11	0	0	0
+sample	intern_hit_8	current	3	200000	10	0	0	0
+sample	intern_hit_8	parent	3	200000	38	0	0	0
+sample	intern_hit_8	parent	4	200000	37	0	0	0
+sample	intern_hit_8	current	4	200000	12	0	0	0
+sample	intern_hit_8	current	5	200000	12	0	0	0
+sample	intern_hit_8	parent	5	200000	39	0	0	0
+sample	intern_hit_8	parent	6	200000	40	0	0	0
+sample	intern_hit_8	current	6	200000	13	0	0	0
+sample	intern_hit_8	current	7	200000	11	0	0	0
+sample	intern_hit_8	parent	7	200000	40	0	0	0
+sample	intern_hit_8	parent	8	200000	40	0	0	0
+sample	intern_hit_8	current	8	200000	10	0	0	0
+heap	intern_hit_8	parent	17428	22516	22516	0	0
+heap	intern_hit_8	current	17428	22516	22516	0	0
+sample	intern_hit_15	parent	0	200000	47	0	0	0
+sample	intern_hit_15	current	0	200000	33	0	0	0
+sample	intern_hit_15	current	1	200000	31	0	0	0
+sample	intern_hit_15	parent	1	200000	43	0	0	0
+sample	intern_hit_15	parent	2	200000	48	0	0	0
+sample	intern_hit_15	current	2	200000	33	0	0	0
+sample	intern_hit_15	current	3	200000	33	0	0	0
+sample	intern_hit_15	parent	3	200000	48	0	0	0
+sample	intern_hit_15	parent	4	200000	48	0	0	0
+sample	intern_hit_15	current	4	200000	33	0	0	0
+sample	intern_hit_15	current	5	200000	31	0	0	0
+sample	intern_hit_15	parent	5	200000	48	0	0	0
+sample	intern_hit_15	parent	6	200000	46	0	0	0
+sample	intern_hit_15	current	6	200000	29	0	0	0
+sample	intern_hit_15	current	7	200000	34	0	0	0
+sample	intern_hit_15	parent	7	200000	48	0	0	0
+sample	intern_hit_15	parent	8	200000	42	0	0	0
+sample	intern_hit_15	current	8	200000	31	0	0	0
+heap	intern_hit_15	parent	17435	22523	22523	0	0
+heap	intern_hit_15	current	17435	22523	22523	0	0
+sample	intern_hit_16	parent	0	200000	37	0	0	0
+sample	intern_hit_16	current	0	200000	36	0	0	0
+sample	intern_hit_16	current	1	200000	42	0	0	0
+sample	intern_hit_16	parent	1	200000	34	0	0	0
+sample	intern_hit_16	parent	2	200000	35	0	0	0
+sample	intern_hit_16	current	2	200000	34	0	0	0
+sample	intern_hit_16	current	3	200000	34	0	0	0
+sample	intern_hit_16	parent	3	200000	32	0	0	0
+sample	intern_hit_16	parent	4	200000	31	0	0	0
+sample	intern_hit_16	current	4	200000	33	0	0	0
+sample	intern_hit_16	current	5	200000	32	0	0	0
+sample	intern_hit_16	parent	5	200000	31	0	0	0
+sample	intern_hit_16	parent	6	200000	32	0	0	0
+sample	intern_hit_16	current	6	200000	32	0	0	0
+sample	intern_hit_16	current	7	200000	33	0	0	0
+sample	intern_hit_16	parent	7	200000	32	0	0	0
+sample	intern_hit_16	parent	8	200000	33	0	0	0
+sample	intern_hit_16	current	8	200000	32	0	0	0
+heap	intern_hit_16	parent	17436	22524	22524	0	0
+heap	intern_hit_16	current	17436	22524	22524	0	0
+sample	intern_hit_17	parent	0	200000	22	0	0	0
+sample	intern_hit_17	current	0	200000	21	0	0	0
+sample	intern_hit_17	current	1	200000	20	0	0	0
+sample	intern_hit_17	parent	1	200000	21	0	0	0
+sample	intern_hit_17	parent	2	200000	21	0	0	0
+sample	intern_hit_17	current	2	200000	24	0	0	0
+sample	intern_hit_17	current	3	200000	23	0	0	0
+sample	intern_hit_17	parent	3	200000	26	0	0	0
+sample	intern_hit_17	parent	4	200000	23	0	0	0
+sample	intern_hit_17	current	4	200000	21	0	0	0
+sample	intern_hit_17	current	5	200000	22	0	0	0
+sample	intern_hit_17	parent	5	200000	23	0	0	0
+sample	intern_hit_17	parent	6	200000	25	0	0	0
+sample	intern_hit_17	current	6	200000	23	0	0	0
+sample	intern_hit_17	current	7	200000	21	0	0	0
+sample	intern_hit_17	parent	7	200000	26	0	0	0
+sample	intern_hit_17	parent	8	200000	23	0	0	0
+sample	intern_hit_17	current	8	200000	20	0	0	0
+heap	intern_hit_17	parent	17437	22525	22525	0	0
+heap	intern_hit_17	current	17437	22525	22525	0	0
+sample	intern_hit_31	parent	0	200000	54	0	0	0
+sample	intern_hit_31	current	0	200000	21	0	0	0
+sample	intern_hit_31	current	1	200000	21	0	0	0
+sample	intern_hit_31	parent	1	200000	57	0	0	0
+sample	intern_hit_31	parent	2	200000	63	0	0	0
+sample	intern_hit_31	current	2	200000	21	0	0	0
+sample	intern_hit_31	current	3	200000	23	0	0	0
+sample	intern_hit_31	parent	3	200000	53	0	0	0
+sample	intern_hit_31	parent	4	200000	57	0	0	0
+sample	intern_hit_31	current	4	200000	21	0	0	0
+sample	intern_hit_31	current	5	200000	23	0	0	0
+sample	intern_hit_31	parent	5	200000	53	0	0	0
+sample	intern_hit_31	parent	6	200000	54	0	0	0
+sample	intern_hit_31	current	6	200000	21	0	0	0
+sample	intern_hit_31	current	7	200000	24	0	0	0
+sample	intern_hit_31	parent	7	200000	54	0	0	0
+sample	intern_hit_31	parent	8	200000	54	0	0	0
+sample	intern_hit_31	current	8	200000	21	0	0	0
+heap	intern_hit_31	parent	17451	22539	22539	0	0
+heap	intern_hit_31	current	17451	22539	22539	0	0
+sample	intern_hit_32	parent	0	200000	54	0	0	0
+sample	intern_hit_32	current	0	200000	12	0	0	0
+sample	intern_hit_32	current	1	200000	12	0	0	0
+sample	intern_hit_32	parent	1	200000	55	0	0	0
+sample	intern_hit_32	parent	2	200000	55	0	0	0
+sample	intern_hit_32	current	2	200000	12	0	0	0
+sample	intern_hit_32	current	3	200000	12	0	0	0
+sample	intern_hit_32	parent	3	200000	55	0	0	0
+sample	intern_hit_32	parent	4	200000	53	0	0	0
+sample	intern_hit_32	current	4	200000	13	0	0	0
+sample	intern_hit_32	current	5	200000	12	0	0	0
+sample	intern_hit_32	parent	5	200000	55	0	0	0
+sample	intern_hit_32	parent	6	200000	55	0	0	0
+sample	intern_hit_32	current	6	200000	12	0	0	0
+sample	intern_hit_32	current	7	200000	12	0	0	0
+sample	intern_hit_32	parent	7	200000	54	0	0	0
+sample	intern_hit_32	parent	8	200000	55	0	0	0
+sample	intern_hit_32	current	8	200000	12	0	0	0
+heap	intern_hit_32	parent	17452	22540	22540	0	0
+heap	intern_hit_32	current	17452	22540	22540	0	0
+sample	intern_hit_33	parent	0	200000	40	0	0	0
+sample	intern_hit_33	current	0	200000	16	0	0	0
+sample	intern_hit_33	current	1	200000	15	0	0	0
+sample	intern_hit_33	parent	1	200000	41	0	0	0
+sample	intern_hit_33	parent	2	200000	41	0	0	0
+sample	intern_hit_33	current	2	200000	16	0	0	0
+sample	intern_hit_33	current	3	200000	15	0	0	0
+sample	intern_hit_33	parent	3	200000	42	0	0	0
+sample	intern_hit_33	parent	4	200000	39	0	0	0
+sample	intern_hit_33	current	4	200000	16	0	0	0
+sample	intern_hit_33	current	5	200000	15	0	0	0
+sample	intern_hit_33	parent	5	200000	40	0	0	0
+sample	intern_hit_33	parent	6	200000	42	0	0	0
+sample	intern_hit_33	current	6	200000	15	0	0	0
+sample	intern_hit_33	current	7	200000	15	0	0	0
+sample	intern_hit_33	parent	7	200000	41	0	0	0
+sample	intern_hit_33	parent	8	200000	39	0	0	0
+sample	intern_hit_33	current	8	200000	15	0	0	0
+heap	intern_hit_33	parent	17453	22541	22541	0	0
+heap	intern_hit_33	current	17453	22541	22541	0	0
+sample	intern_hit_63	parent	0	200000	93	0	0	0
+sample	intern_hit_63	current	0	200000	26	0	0	0
+sample	intern_hit_63	current	1	200000	25	0	0	0
+sample	intern_hit_63	parent	1	200000	92	0	0	0
+sample	intern_hit_63	parent	2	200000	94	0	0	0
+sample	intern_hit_63	current	2	200000	25	0	0	0
+sample	intern_hit_63	current	3	200000	25	0	0	0
+sample	intern_hit_63	parent	3	200000	92	0	0	0
+sample	intern_hit_63	parent	4	200000	92	0	0	0
+sample	intern_hit_63	current	4	200000	25	0	0	0
+sample	intern_hit_63	current	5	200000	25	0	0	0
+sample	intern_hit_63	parent	5	200000	91	0	0	0
+sample	intern_hit_63	parent	6	200000	95	0	0	0
+sample	intern_hit_63	current	6	200000	28	0	0	0
+sample	intern_hit_63	current	7	200000	26	0	0	0
+sample	intern_hit_63	parent	7	200000	91	0	0	0
+sample	intern_hit_63	parent	8	200000	92	0	0	0
+sample	intern_hit_63	current	8	200000	25	0	0	0
+heap	intern_hit_63	parent	17483	22571	22571	0	0
+heap	intern_hit_63	current	17483	22571	22571	0	0
+sample	intern_hit_64	parent	0	200000	95	0	0	0
+sample	intern_hit_64	current	0	200000	16	0	0	0
+sample	intern_hit_64	current	1	200000	18	0	0	0
+sample	intern_hit_64	parent	1	200000	94	0	0	0
+sample	intern_hit_64	parent	2	200000	94	0	0	0
+sample	intern_hit_64	current	2	200000	16	0	0	0
+sample	intern_hit_64	current	3	200000	17	0	0	0
+sample	intern_hit_64	parent	3	200000	95	0	0	0
+sample	intern_hit_64	parent	4	200000	94	0	0	0
+sample	intern_hit_64	current	4	200000	16	0	0	0
+sample	intern_hit_64	current	5	200000	16	0	0	0
+sample	intern_hit_64	parent	5	200000	95	0	0	0
+sample	intern_hit_64	parent	6	200000	95	0	0	0
+sample	intern_hit_64	current	6	200000	16	0	0	0
+sample	intern_hit_64	current	7	200000	16	0	0	0
+sample	intern_hit_64	parent	7	200000	94	0	0	0
+sample	intern_hit_64	parent	8	200000	96	0	0	0
+sample	intern_hit_64	current	8	200000	17	0	0	0
+heap	intern_hit_64	parent	17484	22572	22572	0	0
+heap	intern_hit_64	current	17484	22572	22572	0	0
+sample	intern_hit_65	parent	0	200000	97	0	0	0
+sample	intern_hit_65	current	0	200000	18	0	0	0
+sample	intern_hit_65	current	1	200000	17	0	0	0
+sample	intern_hit_65	parent	1	200000	101	0	0	0
+sample	intern_hit_65	parent	2	200000	95	0	0	0
+sample	intern_hit_65	current	2	200000	18	0	0	0
+sample	intern_hit_65	current	3	200000	18	0	0	0
+sample	intern_hit_65	parent	3	200000	97	0	0	0
+sample	intern_hit_65	parent	4	200000	94	0	0	0
+sample	intern_hit_65	current	4	200000	18	0	0	0
+sample	intern_hit_65	current	5	200000	18	0	0	0
+sample	intern_hit_65	parent	5	200000	94	0	0	0
+sample	intern_hit_65	parent	6	200000	96	0	0	0
+sample	intern_hit_65	current	6	200000	18	0	0	0
+sample	intern_hit_65	current	7	200000	18	0	0	0
+sample	intern_hit_65	parent	7	200000	94	0	0	0
+sample	intern_hit_65	parent	8	200000	100	0	0	0
+sample	intern_hit_65	current	8	200000	20	0	0	0
+heap	intern_hit_65	parent	17485	22573	22573	0	0
+heap	intern_hit_65	current	17485	22573	22573	0	0
+sample	intern_hit_512	parent	0	32768	653	0	0	0
+sample	intern_hit_512	current	0	32768	67	0	0	0
+sample	intern_hit_512	current	1	32768	71	0	0	0
+sample	intern_hit_512	parent	1	32768	641	0	0	0
+sample	intern_hit_512	parent	2	32768	631	0	0	0
+sample	intern_hit_512	current	2	32768	63	0	0	0
+sample	intern_hit_512	current	3	32768	63	0	0	0
+sample	intern_hit_512	parent	3	32768	656	0	0	0
+sample	intern_hit_512	parent	4	32768	641	0	0	0
+sample	intern_hit_512	current	4	32768	64	0	0	0
+sample	intern_hit_512	current	5	32768	63	0	0	0
+sample	intern_hit_512	parent	5	32768	659	0	0	0
+sample	intern_hit_512	parent	6	32768	637	0	0	0
+sample	intern_hit_512	current	6	32768	63	0	0	0
+sample	intern_hit_512	current	7	32768	65	0	0	0
+sample	intern_hit_512	parent	7	32768	636	0	0	0
+sample	intern_hit_512	parent	8	32768	630	0	0	0
+sample	intern_hit_512	current	8	32768	63	0	0	0
+heap	intern_hit_512	parent	17932	23020	23020	0	0
+heap	intern_hit_512	current	17932	23020	23020	0	0
+sample	intern_hit_4096	parent	0	4096	4961	0	0	0
+sample	intern_hit_4096	current	0	4096	426	0	0	0
+sample	intern_hit_4096	current	1	4096	382	0	0	0
+sample	intern_hit_4096	parent	1	4096	4964	0	0	0
+sample	intern_hit_4096	parent	2	4096	5081	0	0	0
+sample	intern_hit_4096	current	2	4096	370	0	0	0
+sample	intern_hit_4096	current	3	4096	383	0	0	0
+sample	intern_hit_4096	parent	3	4096	5033	0	0	0
+sample	intern_hit_4096	parent	4	4096	5029	0	0	0
+sample	intern_hit_4096	current	4	4096	371	0	0	0
+sample	intern_hit_4096	current	5	4096	390	0	0	0
+sample	intern_hit_4096	parent	5	4096	5068	0	0	0
+sample	intern_hit_4096	parent	6	4096	5018	0	0	0
+sample	intern_hit_4096	current	6	4096	371	0	0	0
+sample	intern_hit_4096	current	7	4096	373	0	0	0
+sample	intern_hit_4096	parent	7	4096	5011	0	0	0
+sample	intern_hit_4096	parent	8	4096	5074	0	0	0
+sample	intern_hit_4096	current	8	4096	415	0	0	0
+heap	intern_hit_4096	parent	21516	26604	26604	0	0
+heap	intern_hit_4096	current	21516	26604	26604	0	0
+sample	intern_hit_65536	parent	0	256	81408	0	0	0
+sample	intern_hit_65536	current	0	256	7192	0	0	0
+sample	intern_hit_65536	current	1	256	7103	0	0	0
+sample	intern_hit_65536	parent	1	256	84326	0	0	0
+sample	intern_hit_65536	parent	2	256	82565	0	0	0
+sample	intern_hit_65536	current	2	256	7089	0	0	0
+sample	intern_hit_65536	current	3	256	8037	0	0	0
+sample	intern_hit_65536	parent	3	256	80842	0	0	0
+sample	intern_hit_65536	parent	4	256	83122	0	0	0
+sample	intern_hit_65536	current	4	256	7312	0	0	0
+sample	intern_hit_65536	current	5	256	7240	0	0	0
+sample	intern_hit_65536	parent	5	256	84726	0	0	0
+sample	intern_hit_65536	parent	6	256	80601	0	0	0
+sample	intern_hit_65536	current	6	256	7289	0	0	0
+sample	intern_hit_65536	current	7	256	7246	0	0	0
+sample	intern_hit_65536	parent	7	256	81753	0	0	0
+sample	intern_hit_65536	parent	8	256	80909	0	0	0
+sample	intern_hit_65536	current	8	256	7107	0	0	0
+heap	intern_hit_65536	parent	82956	88044	88044	0	0
+heap	intern_hit_65536	current	82956	88044	88044	0	0
+sample	intern_hit_1048576	parent	0	16	1353781	0	0	0
+sample	intern_hit_1048576	current	0	16	126600	0	0	0
+sample	intern_hit_1048576	current	1	16	131712	0	0	0
+sample	intern_hit_1048576	parent	1	16	1299268	0	0	0
+sample	intern_hit_1048576	parent	2	16	1330137	0	0	0
+sample	intern_hit_1048576	current	2	16	126331	0	0	0
+sample	intern_hit_1048576	current	3	16	123387	0	0	0
+sample	intern_hit_1048576	parent	3	16	1332750	0	0	0
+sample	intern_hit_1048576	parent	4	16	1309531	0	0	0
+sample	intern_hit_1048576	current	4	16	128775	0	0	0
+sample	intern_hit_1048576	current	5	16	124231	0	0	0
+sample	intern_hit_1048576	parent	5	16	1310318	0	0	0
+sample	intern_hit_1048576	parent	6	16	1320706	0	0	0
+sample	intern_hit_1048576	current	6	16	126387	0	0	0
+sample	intern_hit_1048576	current	7	16	123518	0	0	0
+sample	intern_hit_1048576	parent	7	16	1334631	0	0	0
+sample	intern_hit_1048576	parent	8	16	1304862	0	0	0
+sample	intern_hit_1048576	current	8	16	128400	0	0	0
+heap	intern_hit_1048576	parent	1065996	1071084	1071084	0	0
+heap	intern_hit_1048576	current	1065996	1071084	1071084	0	0
+sample	intern_miss_32	parent	0	128	417	129	3	16448
+sample	intern_miss_32	current	0	128	278	129	3	16448
+sample	intern_miss_32	current	1	128	275	129	3	16448
+sample	intern_miss_32	parent	1	128	447	129	3	16448
+sample	intern_miss_32	parent	2	128	413	129	3	16448
+sample	intern_miss_32	current	2	128	311	129	3	16448
+sample	intern_miss_32	current	3	128	243	129	3	16448
+sample	intern_miss_32	parent	3	128	275	129	3	16448
+sample	intern_miss_32	parent	4	128	285	129	3	16448
+sample	intern_miss_32	current	4	128	155	129	3	16448
+sample	intern_miss_32	current	5	128	206	129	3	16448
+sample	intern_miss_32	parent	5	128	276	129	3	16448
+sample	intern_miss_32	parent	6	128	289	129	3	16448
+sample	intern_miss_32	current	6	128	157	129	3	16448
+sample	intern_miss_32	current	7	128	185	129	3	16448
+sample	intern_miss_32	parent	7	128	288	129	3	16448
+sample	intern_miss_32	parent	8	128	285	129	3	16448
+sample	intern_miss_32	current	8	128	178	129	3	16448
+heap	intern_miss_32	parent	24572	32780	32780	0	0
+heap	intern_miss_32	current	24572	32780	32780	0	0
+sample	intern_miss_512	parent	0	128	2065	129	3	77888
+sample	intern_miss_512	current	0	128	708	129	3	77888
+sample	intern_miss_512	current	1	128	573	129	3	77888
+sample	intern_miss_512	parent	1	128	2067	129	3	77888
+sample	intern_miss_512	parent	2	128	1688	129	3	77888
+sample	intern_miss_512	current	2	128	662	129	3	77888
+sample	intern_miss_512	current	3	128	628	129	3	77888
+sample	intern_miss_512	parent	3	128	2028	129	3	77888
+sample	intern_miss_512	parent	4	128	1667	129	3	77888
+sample	intern_miss_512	current	4	128	888	129	3	77888
+sample	intern_miss_512	current	5	128	529	129	3	77888
+sample	intern_miss_512	parent	5	128	2018	129	3	77888
+sample	intern_miss_512	parent	6	128	2007	129	3	77888
+sample	intern_miss_512	current	6	128	537	129	3	77888
+sample	intern_miss_512	current	7	128	521	129	3	77888
+sample	intern_miss_512	parent	7	128	2011	129	3	77888
+sample	intern_miss_512	parent	8	128	1707	129	3	77888
+sample	intern_miss_512	current	8	128	624	129	3	77888
+heap	intern_miss_512	parent	86012	94220	94220	0	0
+heap	intern_miss_512	current	86012	94220	94220	0	0
+sample	intern_miss_4096	parent	0	128	13154	129	3	536640
+sample	intern_miss_4096	current	0	128	2260	129	3	536640
+sample	intern_miss_4096	current	1	128	2472	129	3	536640
+sample	intern_miss_4096	parent	1	128	12575	129	3	536640
+sample	intern_miss_4096	parent	2	128	12271	129	3	536640
+sample	intern_miss_4096	current	2	128	2360	129	3	536640
+sample	intern_miss_4096	current	3	128	2673	129	3	536640
+sample	intern_miss_4096	parent	3	128	12607	129	3	536640
+sample	intern_miss_4096	parent	4	128	12074	129	3	536640
+sample	intern_miss_4096	current	4	128	2301	129	3	536640
+sample	intern_miss_4096	current	5	128	2727	129	3	536640
+sample	intern_miss_4096	parent	5	128	13247	129	3	536640
+sample	intern_miss_4096	parent	6	128	11982	129	3	536640
+sample	intern_miss_4096	current	6	128	2389	129	3	536640
+sample	intern_miss_4096	current	7	128	2419	129	3	536640
+sample	intern_miss_4096	parent	7	128	12136	129	3	536640
+sample	intern_miss_4096	parent	8	128	12405	129	3	536640
+sample	intern_miss_4096	current	8	128	2275	129	3	536640
+heap	intern_miss_4096	parent	544764	552972	552972	0	0
+heap	intern_miss_4096	current	544764	552972	552972	0	0
+sample	intern_miss_65536	parent	0	128	210978	129	3	8400960
+sample	intern_miss_65536	current	0	128	44227	129	3	8400960
+sample	intern_miss_65536	current	1	128	53680	129	3	8400960
+sample	intern_miss_65536	parent	1	128	203607	129	3	8400960
+sample	intern_miss_65536	parent	2	128	218348	129	3	8400960
+sample	intern_miss_65536	current	2	128	51960	129	3	8400960
+sample	intern_miss_65536	current	3	128	52601	129	3	8400960
+sample	intern_miss_65536	parent	3	128	227815	129	3	8400960
+sample	intern_miss_65536	parent	4	128	219924	129	3	8400960
+sample	intern_miss_65536	current	4	128	54335	129	3	8400960
+sample	intern_miss_65536	current	5	128	42803	129	3	8400960
+sample	intern_miss_65536	parent	5	128	209992	129	3	8400960
+sample	intern_miss_65536	parent	6	128	207592	129	3	8400960
+sample	intern_miss_65536	current	6	128	50724	129	3	8400960
+sample	intern_miss_65536	current	7	128	46765	129	3	8400960
+sample	intern_miss_65536	parent	7	128	211784	129	3	8400960
+sample	intern_miss_65536	parent	8	128	205253	129	3	8400960
+sample	intern_miss_65536	current	8	128	54421	129	3	8400960
+heap	intern_miss_65536	parent	8409084	8417292	8417292	0	0
+heap	intern_miss_65536	current	8409084	8417292	8417292	0	0
+sample	intern_middle_4096	parent	0	128	14792	129	3	536640
+sample	intern_middle_4096	current	0	128	2454	129	3	536640
+sample	intern_middle_4096	current	1	128	2298	129	3	536640
+sample	intern_middle_4096	parent	1	128	12197	129	3	536640
+sample	intern_middle_4096	parent	2	128	13190	129	3	536640
+sample	intern_middle_4096	current	2	128	2401	129	3	536640
+sample	intern_middle_4096	current	3	128	2540	129	3	536640
+sample	intern_middle_4096	parent	3	128	12852	129	3	536640
+sample	intern_middle_4096	parent	4	128	12840	129	3	536640
+sample	intern_middle_4096	current	4	128	2264	129	3	536640
+sample	intern_middle_4096	current	5	128	2694	129	3	536640
+sample	intern_middle_4096	parent	5	128	14216	129	3	536640
+sample	intern_middle_4096	parent	6	128	13169	129	3	536640
+sample	intern_middle_4096	current	6	128	2245	129	3	536640
+sample	intern_middle_4096	current	7	128	2493	129	3	536640
+sample	intern_middle_4096	parent	7	128	12469	129	3	536640
+sample	intern_middle_4096	parent	8	128	12704	129	3	536640
+sample	intern_middle_4096	current	8	128	2284	129	3	536640
+heap	intern_middle_4096	parent	544764	552972	552972	0	0
+heap	intern_middle_4096	current	544764	552972	552972	0	0
+layout	gsub_callback_wide	29	10
+sample	gsub_callback_wide	parent	0	100	642796	10003	27	138424
+sample	gsub_callback_wide	current	0	100	288174	10003	27	138424
+sample	gsub_callback_wide	current	1	100	285548	10000	0	40000
+sample	gsub_callback_wide	parent	1	100	635096	10000	0	40000
+sample	gsub_callback_wide	parent	2	100	638680	10000	0	40000
+sample	gsub_callback_wide	current	2	100	285669	10000	0	40000
+sample	gsub_callback_wide	current	3	100	284070	10000	0	40000
+sample	gsub_callback_wide	parent	3	100	651258	10000	0	40000
+sample	gsub_callback_wide	parent	4	100	633779	10000	0	40000
+sample	gsub_callback_wide	current	4	100	283911	10000	0	40000
+sample	gsub_callback_wide	current	5	100	286312	10000	0	40000
+sample	gsub_callback_wide	parent	5	100	642632	10000	0	40000
+sample	gsub_callback_wide	parent	6	100	637329	10000	0	40000
+sample	gsub_callback_wide	current	6	100	282559	10000	0	40000
+sample	gsub_callback_wide	current	7	100	290106	10000	0	40000
+sample	gsub_callback_wide	parent	7	100	662200	10000	0	40000
+sample	gsub_callback_wide	parent	8	100	660180	10000	0	40000
+sample	gsub_callback_wide	current	8	100	286044	10000	0	40000
+heap	gsub_callback_wide	parent	43754	91946	94678	107	90833
+heap	gsub_callback_wide	current	43754	91946	94678	107	90833
+layout	long_concat	21	8
+sample	long_concat	parent	0	50	5618408	100000	50000	614450000
+sample	long_concat	current	0	50	965116	100000	50000	614450000
+sample	long_concat	current	1	50	949470	100000	50000	614450000
+sample	long_concat	parent	1	50	5703828	100000	50000	614450000
+sample	long_concat	parent	2	50	5711572	100000	50000	614450000
+sample	long_concat	current	2	50	948492	100000	50000	614450000
+sample	long_concat	current	3	50	952670	100000	50000	614450000
+sample	long_concat	parent	3	50	5654256	100000	50000	614450000
+sample	long_concat	parent	4	50	5615896	100000	50000	614450000
+sample	long_concat	current	4	50	979484	100000	50000	614450000
+sample	long_concat	current	5	50	976956	100000	50000	614450000
+sample	long_concat	parent	5	50	5637274	100000	50000	614450000
+sample	long_concat	parent	6	50	5763558	100000	50000	614450000
+sample	long_concat	current	6	50	962348	100000	50000	614450000
+sample	long_concat	current	7	50	1039014	100000	50000	614450000
+sample	long_concat	parent	7	50	6709622	100000	50000	614450000
+sample	long_concat	parent	8	50	6447606	100000	50000	614450000
+sample	long_concat	current	8	50	982758	100000	50000	614450000
+heap	long_concat	parent	31886	37262	37262	0	0
+heap	long_concat	current	31886	37262	37262	0	0
+layout	long_rep	18	8
+sample	long_rep	parent	0	50	28273234	0	0	0
+sample	long_rep	current	0	50	22353050	0	0	0
+sample	long_rep	current	1	50	22457062	0	0	0
+sample	long_rep	parent	1	50	27588042	0	0	0
+sample	long_rep	parent	2	50	28216936	0	0	0
+sample	long_rep	current	2	50	22673196	0	0	0
+sample	long_rep	current	3	50	25680442	0	0	0
+sample	long_rep	parent	3	50	29825216	0	0	0
+sample	long_rep	parent	4	50	27788602	0	0	0
+sample	long_rep	current	4	50	22241808	0	0	0
+sample	long_rep	current	5	50	22736492	0	0	0
+sample	long_rep	parent	5	50	27965454	0	0	0
+sample	long_rep	parent	6	50	28073066	0	0	0
+sample	long_rep	current	6	50	21164292	0	0	0
+sample	long_rep	current	7	50	21488590	0	0	0
+sample	long_rep	parent	7	50	26475942	0	0	0
+sample	long_rep	parent	8	50	26853466	0	0	0
+sample	long_rep	current	8	50	21207488	0	0	0
+heap	long_rep	parent	154918	160326	160326	0	0
+heap	long_rep	current	154918	160326	160326	0	0

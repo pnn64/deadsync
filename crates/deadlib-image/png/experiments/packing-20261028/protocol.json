@@ -1,0 +1,47 @@
+{
+  "source_base": "ae44814be",
+  "benchmark_stage": "rows",
+  "cases_per_process": 99,
+  "timing": "Windows thread cycles on logical CPU 2; three warmups, separate untimed allocation probe, seven batches per process, four alternating processes per version. Host workloads/frequency are uncontrolled.",
+  "original_checkpoints": [
+    "baseline",
+    "packed",
+    "gather",
+    "first"
+  ],
+  "original_comparisons": [
+    "packed-paired",
+    "gather-paired",
+    "first-paired",
+    "selected-paired"
+  ],
+  "original_harness": "exploratory-benchmark.rs",
+  "original_limitations": "Three iterations per batch made short reader measurements sensitive to noise. The generic 16-bit gather showed no benefit, and scalar first-row Average regressed. These implementations were refined rather than selected.",
+  "refined_checkpoints": [
+    "baseline64",
+    "packed64",
+    "gather8",
+    "lanes",
+    "scalar2"
+  ],
+  "refined_comparisons": [
+    "packed64-paired",
+    "gather8-paired",
+    "scalar2-paired",
+    "accepted-paired"
+  ],
+  "refined_minimum_iterations": {
+    "decode_reader_up_to_65536_native_bytes": 64,
+    "other_outputs_under_4096_bytes": 2048,
+    "other_cases": 3
+  },
+  "reader_fingerprint": "Fingerprint of the input PNG file; every decoded image is independently compared with the generated native image before timing.",
+  "encoder_fingerprint": "Fingerprint of independently modeled complete filtered pass bytes. Both encoders are checked through independent flate2 inflation and native image decoding before timing.",
+  "refinements": "Keep whole-pixel 8-bit gathers, remove the generic 16-bit gather kernels, and reconstruct first rows with constant shifts and register-carried pixel lanes. Unused zero-predictor clearing is removed from the streaming path.",
+  "intermediate_refined_comparisons": [
+    "lanes-paired",
+    "final64-paired"
+  ],
+  "final_refinement": "Reuse existing Sub reconstruction and retain scalar recurrence for two-byte first rows; register lanes remain for other Paeth/Average strides.",
+  "selected_checkpoint": "scalar2"
+}

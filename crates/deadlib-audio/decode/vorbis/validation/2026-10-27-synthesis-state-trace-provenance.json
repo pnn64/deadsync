@@ -1,0 +1,137 @@
+{
+  "original_source_sha256": "cbb0f6b604846b31847a9c0c438b617dd7ec85dbf1a22bb1d4327f8792ff1f5d",
+  "patched_source_sha256": "a48c1d5b57c4a7d9a8d08d4d437295e99562fae778b17098056f8d0a61a60bbe",
+  "oracle_source_sha256": "521b6110b913555bc74fed796e7bb6a23004c267fc4b57bb9ef268b77fb6541b",
+  "script_sha256": "402506c89d33a45e87787e9fd6b0342dd5fd17f2a84b9fd0c857139702d4a7e1",
+  "binary_sha256": "7ffcb1d031431ac68bda1a101c4ce4ba0ef0253360070719a6a0b9271b31f991",
+  "commands": [
+    [
+      "cmake",
+      "-S",
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\seek-reference-20261027\\trace-final",
+      "-B",
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\seek-reference-20261027\\trace-final\\build",
+      "-A",
+      "x64"
+    ],
+    [
+      "cmake",
+      "--build",
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\seek-reference-20261027\\trace-final\\build",
+      "--config",
+      "Release"
+    ]
+  ],
+  "hooks": [
+    {
+      "scope": null,
+      "before": "#include \"misc.h\"",
+      "after": "#include \"misc.h\"\n\n#include \"codec_internal.h\"\nstatic void deadlib_seek_trace(const char *tag,OggVorbis_File *v,\n                               ogg_int64_t a,ogg_int64_t b,ogg_int64_t c){\n  vorbis_dsp_state *d=&v->vd;\n  ogg_int64_t count=d->backend_state?((private_state*)d->backend_state)->sample_count:-1;\n  if(!getenv(\"DEADLIB_SEEK_TRACE\"))return;\n  fprintf(stderr,\"%s\\t%lld\\t%lld\\t%d\\t%lld\\t%lld\\t%lld\\t%d\\t%d\\t%lld\\t%lld\\t%lld\\t%lld\\t%d\\t%ld\\t%ld\\t%d\\t%d\\n\",\n    tag,(long long)v->offset,(long long)v->pcm_offset,v->current_link,\n    (long long)d->sequence,(long long)d->granulepos,(long long)count,\n    d->pcm_returned,d->pcm_current,(long long)v->os.packetno,\n    (long long)a,(long long)b,(long long)c,d->centerW,d->W,d->lW,\n    d->pcm_returned>=0&&d->pcm_current>d->pcm_returned?d->pcm_current-d->pcm_returned:0,d->eofflag!=0);\n}\nstatic void deadlib_seek_packet(const char *tag,OggVorbis_File *v,ogg_packet *op){\n  long i;if(!getenv(\"DEADLIB_SEEK_TRACE\"))return;\n  deadlib_seek_trace(tag,v,op->packetno,op->granulepos,op->e_o_s);\n  fprintf(stderr,\"payload\\t%ld\\t\",op->bytes);\n  for(i=0;i<op->bytes;++i)fprintf(stderr,\"%02x\",(unsigned char)op->packet[i]);\n  fputc('\\n',stderr);\n}\n"
+    },
+    {
+      "scope": null,
+      "before": "vf->offset+=more;\n        return(ret);",
+      "after": "vf->offset+=more;\n        deadlib_seek_trace(\"page\",vf,ret,ogg_page_granulepos(og),ogg_page_eos(og));\n        return(ret);"
+    },
+    {
+      "scope": "all three restart calls",
+      "before": "vorbis_synthesis_restart(&vf->vd);",
+      "after": "same call followed by an integer state snapshot"
+    },
+    {
+      "scope": null,
+      "before": "  vf->ready_state=INITSET;",
+      "after": "  vf->ready_state=INITSET;\n  deadlib_seek_trace(\"init\",vf,0,0,0);"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek_page(",
+        "int ov_pcm_seek("
+      ],
+      "before": "    ogg_page og;\n\n    /* if we have only one page",
+      "after": "    ogg_page og;\n    deadlib_seek_trace(\"bounds\",vf,begin,end,target);\n\n    /* if we have only one page"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek_page(",
+        "int ov_pcm_seek("
+      ],
+      "before": "        vf->pcm_offset=total;",
+      "after": "        vf->pcm_offset=total;\n        deadlib_seek_trace(\"first-anchor\",vf,begin,ogg_page_granulepos(&og),total);"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek_page(",
+        "int ov_pcm_seek("
+      ],
+      "before": "  /* verify result */",
+      "after": "  deadlib_seek_trace(\"page-ready\",vf,pos,0,0);\n  /* verify result */"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "  int ret=ov_pcm_seek_page(vf,pos);",
+      "after": "  int ret;\n  deadlib_seek_trace(\"seek-start\",vf,pos,0,0);\n  ret=ov_pcm_seek_page(vf,pos);"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "      thisblock=vorbis_packet_blocksize(vf->vi+vf->current_link,&op);",
+      "after": "      thisblock=vorbis_packet_blocksize(vf->vi+vf->current_link,&op);\n      deadlib_seek_trace(\"peek\",vf,op.packetno,thisblock,op.granulepos);"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "vorbis_synthesis_blockin(&vf->vd,&vf->vb);\n\n      /* end of logical",
+      "after": "vorbis_synthesis_blockin(&vf->vd,&vf->vb);\n      deadlib_seek_packet(\"tracked\",vf,&op);\n\n      /* end of logical"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "      lastblock=thisblock;",
+      "after": "      deadlib_seek_trace(\"track-cursor\",vf,op.packetno,thisblock,op.granulepos);\n      lastblock=thisblock;"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "      vf->pcm_offset+=samples<<hs;",
+      "after": "      vf->pcm_offset+=samples<<hs;\n      deadlib_seek_trace(\"discard\",vf,samples,target,pos);"
+    },
+    {
+      "scope": [
+        "int ov_pcm_seek(",
+        "int ov_time_seek("
+      ],
+      "before": "  return 0;\n}",
+      "after": "  deadlib_seek_trace(\"seek-done\",vf,pos,0,0);\n  return 0;\n}"
+    },
+    {
+      "scope": null,
+      "before": "              vorbis_synthesis_blockin(&vf->vd,&vf->vb);",
+      "after": "              vorbis_synthesis_blockin(&vf->vd,&vf->vb);\n              deadlib_seek_packet(\"decoded\",vf,op_ptr);"
+    },
+    {
+      "scope": null,
+      "before": "              vf->pcm_offset=granulepos;",
+      "after": "              vf->pcm_offset=granulepos;\n              deadlib_seek_trace(\"fetch-cursor\",vf,op_ptr->packetno,op_ptr->granulepos,samples);"
+    },
+    {
+      "scope": [
+        "long ov_read_float(",
+        "extern const float *vorbis_window("
+      ],
+      "before": "        vf->pcm_offset+=samples<<hs;",
+      "after": "        vf->pcm_offset+=samples<<hs;\n        deadlib_seek_trace(\"read\",vf,samples,length,0);"
+    }
+  ]
+}

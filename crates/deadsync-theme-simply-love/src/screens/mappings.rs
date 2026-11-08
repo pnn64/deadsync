@@ -1172,10 +1172,10 @@ fn format_binding_for_display(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("{code:?}"),
         // Any-pad bindings
-        InputBinding::PadDir(dir) => format!("Dir {dir:?}"),
+        InputBinding::PadDir(dir) => crate::i18n::tr_fmt("UiMessages", "DirDir", &[("dir", &format!("{:?}", dir))]).to_string(),
         // Device-specific bindings, aligned with "Pad N Btn 0x.." style.
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad {device} Dir {dir:?}")
+            crate::i18n::tr_fmt("UiMessages", "PadDeviceDirDir", &[("device", &(device).to_string()), ("dir", &format!("{:?}", dir))]).to_string()
         }
         InputBinding::GamepadCode(binding) => {
             // Prefer a friendly SMX label (e.g. "SMX[40ea] R") when the binding
@@ -1196,7 +1196,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             while hex.len() > 1 && hex.starts_with('0') {
                 hex.remove(0);
             }
-            let mut label = format!("Pad {dev} Btn 0x{hex}");
+            let mut label = crate::i18n::tr_fmt("UiMessages", "PadDevBtn0xHex", &[("dev", &(dev).to_string()), ("hex", &(hex).to_string())]).to_string();
             // Soft max-width to avoid overflowing the column; in practice the
             // cropped code is short so this rarely triggers.
             const MAX_LABEL_CHARS: usize = 18;
@@ -1274,7 +1274,7 @@ pub fn push_actors(
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         visual_policy,
-        title: "KEYBOARD/PAD MAPPINGS",
+        title: &crate::i18n::tr_ui("KEYBOARD/PAD MAPPINGS"),
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -1444,7 +1444,7 @@ pub fn push_actors(
         xy(p1_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Player 1"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("OptionsInput", "SmxSinglePadPlayerP1")):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1452,7 +1452,7 @@ pub fn push_actors(
         xy(p2_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Player 2"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("OptionsInput", "SmxSinglePadPlayerP2")):
         horizalign(center)
     ));
 
@@ -1466,7 +1466,7 @@ pub fn push_actors(
         xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Primary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Mappings", "Primary")):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1474,7 +1474,7 @@ pub fn push_actors(
         xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Secondary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Mappings", "Secondary")):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1482,7 +1482,7 @@ pub fn push_actors(
         xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Default"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Common", "Default")):
         horizalign(center)
     ));
 
@@ -1492,7 +1492,7 @@ pub fn push_actors(
         xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Primary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Mappings", "Primary")):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1500,7 +1500,7 @@ pub fn push_actors(
         xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Secondary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Mappings", "Secondary")):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1508,7 +1508,7 @@ pub fn push_actors(
         xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Default"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext(crate::i18n::tr("Common", "Default")):
         horizalign(center)
     ));
 

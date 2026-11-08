@@ -1,0 +1,71 @@
+{
+  "passed": true,
+  "timestamp_utc": "2026-10-27T21:39:21Z",
+  "integration_tests": 11,
+  "LAME_fixtures": 84,
+  "part2_fields": 1422,
+  "scope": "MPEG-1 and MPEG-2/2.5 scalefactor syntax and bit consumption only; 6144 LSF combinations, all MPEG-1 compression/shape and SCFSI masks. No complete spectral/PCM parity claim.",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--target-dir",
+        "target/deadlib-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-mp3",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "Cargo.toml": "dbe8fce81c33370989bf6747ef274afed81c60c13b9252e0cb09b9d59b38cc71",
+    "examples/inspect.rs": "2c4042ca498e6e99bbbbccfee9db2023182df2ef09525206df76d42dedd332a3",
+    "src/bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+    "src/checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+    "src/frame.rs": "7428ee4e2c3294ad234366cd81a5d18234dfedeba898f8cb35284ec62ad90e30",
+    "src/lib.rs": "271ec55e27c3fd6209e9b0a76829dcfde5b81baf36cb46c31221f52bfbc4d1c1",
+    "src/reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+    "src/scalefactors.rs": "c7158a2fb7e4397597cb2c3e5ccdf34f4afa5487b23640cfa7f3937872c34d62",
+    "src/side.rs": "6f1ad3b2d2ee65b3093d233accd8128b2766789c3a0fed1c99e63d0401dcc4f4",
+    "src/tags.rs": "4cf2b0d700d373766a09a8a76a0974a9271ffc409177ed6675cc9b4a8e423da3",
+    "tests/foundation.rs": "c09f1976dcfb57b05cd17efa20363a06875cd1ff26941429bb50f2ccad72385a",
+    "tests/reference_framing.py": "3c09a01192a34920ee65cee8dde6f3d4e1c8ff332f5b8f23bd45197f1dd72f42",
+    "tests/scalefactors.rs": "e4f2452030ced15a2bbf41ae61d2c1dc7c523d7e68a52d2f823f59e3769de98d",
+    "tests/oracle/inspect.c": "8792a155a47f752fbfa8bbf3ae6f8190b9161c24df8e1ac17015083f4034ba82"
+  },
+  "report_sha256": {
+    "gate-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gate-1.log": "084eedfc9fc2e9fec2334d074a71959bd1f34521b74d08067f62f08cf0a858e7",
+    "gate-2.log": "85a09568fd379a55866aecd55b83e4ac44642f41c39667f1ae26c65fdf019f25",
+    "reference-parts.json": "2fefb8ecd7e76f6da1ec5c3ee1b25bdff28f447f49e4ab7def1c4b6868c99557",
+    "reference-provenance.json": "ff6ac5ed0730d79f1115a56c43c3c303cc38973049aba41aeacf2e50f3f6466d"
+  }
+}

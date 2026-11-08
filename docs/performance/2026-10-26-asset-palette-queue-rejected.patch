@@ -1,0 +1,22 @@
+--- a/crates/deadlib-assets/src/upload.rs
++++ b/crates/deadlib-assets/src/upload.rs
+@@ -132,2 +132 @@
+-        self.push(handle, image, sampler);
+-        self.entries.get_mut(&handle).expect("queued upload").source_size = Some(source_size);
++        self.push_inner(handle, UploadImage::Shared(image), sampler, None).source_size = Some(source_size);
+@@ -172 +171 @@
+-    ) {
++    ) -> &mut PendingTextureUpload {
+@@ -181 +180 @@
+-        match self.entries.entry(handle) {
++        let entry = match self.entries.entry(handle) {
+@@ -184,0 +184 @@
++                entry.into_mut()
+@@ -188 +188 @@
+-                entry.insert(upload);
++                entry.insert(upload)
+@@ -190 +190 @@
+-        }
++        };
+@@ -191,0 +192 @@
++        entry

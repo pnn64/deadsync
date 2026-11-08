@@ -1,0 +1,15 @@
+{
+  "scope": "Generate and lint the diagnostic decoder copy only; no timing run.",
+  "command": [
+    "cargo",
+    "clippy",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-extents-instrumenter-20261027\\Cargo.toml",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "source_sha256": "c09452cc502714d8bdc762fd054945faf1f9a2294029399f1ce14d8aa0d97a34",
+  "script_sha256": "e1e8a92a2048773c07b5b977854cc277d9cbe2b58420887b4c78cfe485ea2e76"
+}

@@ -1,0 +1,463 @@
+{
+  "baseline_revision": "a59bb2f10",
+  "source_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "478419892960c5bcfb8e0b56cd5f095356709a36c8c20b03e0d392bb64a4d0c9",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "7d96f9747207b9aed83931634c9498bf54807bc97f51d5772d2c30d238c1ff25",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "22872899007e49e12cc0a734390345158829830e43f16c143f5d03185390547d",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "13cf42449067c65029e3dbc7dae071c9fc418259983f6a74f7c78329b533c30f",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "90c5c0cbd1940cdbc7e926b7e52998526fad5396bad93d82ae818c1fcb8b5765"
+  },
+  "tests_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\compatibility.rs": "f8024be128779b8e8f19f8a7a7e6d3ee7f6787bfe2c838c54f259a861edc0694",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\container.rs": "8456afc5fc6a6533193dff764b6d751d3062acdc1a4d9ccd10e6892694dbf6d6",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\libogg.rs": "3b75b7067c505b0af951babe26a3d3388df6b851f59b4d49843132acbbbc81fe",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\seeking.rs": "d66e647e8fded339056f8361a1f81ebe9e7f7e08be4ff7cb05df361c6b15cbdc",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\synchronization.rs": "b39f1dee10df0eba488accdcb5e93aa88e459c5ae8822a5eab1995d373d2e035"
+  },
+  "environment": {
+    "DEADLIB_LIBOGG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\ogg-oracle-build\\Release\\deadlib_ogg_oracle.exe",
+    "DEADLIB_OGG_CORPUS": "C:\\GitHub\\deadsync\\assets",
+    "DEADLIB_OGG_EXTERNAL_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\corpus"
+  },
+  "checks": [
+    {
+      "label": "ogg-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "--include-ignored",
+        "--skip",
+        "regenerate_sync_state_golden",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-ogg-tests.log",
+      "log_sha256": "d6239f69b19dd2dc5f3253673bd60c19f1459e8c41737d27b89352c99cb3f88b"
+    },
+    {
+      "label": "vorbis-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-vorbis-tests.log",
+      "log_sha256": "26863ac08d939a34cb5765f4699240f0d0afae53f19553fcfb8c79195bf0924c"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--all-features",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-clippy.log",
+      "log_sha256": "cfee2a7cc32e3e67649389389087ceeeef7afeca46d2d2b9b89df58b09e1fde4"
+    },
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_ogg_kernels.py"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-python.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "probe-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-probe.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-probe-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-summary-paired.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-demux-summary-paired-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "tested_source_unchanged": true,
+  "oracle_sha256": "364bab1990fa7c276f3bb54483c53458f8c45af66d08b4065a9060a82f779f48",
+  "protocol_record_sha256": "ad653cbce254a0c22e1ff4ad4fc4c559fb14f0fd72daed3161b49904a2bc4037",
+  "baseline_matches_revision": true,
+  "source_diffs": {
+    "baseline->metadata": [
+      "demux.rs",
+      "index.rs"
+    ],
+    "metadata->short": [
+      "page.rs"
+    ],
+    "short->bounded": [
+      "demux.rs"
+    ]
+  },
+  "final_worker_source_matches": true,
+  "build_and_dependency_controls_match": true,
+  "saved_workers_unchanged": true,
+  "benchmark_control_sha256": {
+    "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+    "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+    "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+    "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+    "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+    "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+    "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+    "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+    "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+    "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+    "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+    "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\container.rs": "95de98f357e80218fff47d296f0d62a0769240db503dabd09cbde017d40bbae8",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\kernels.rs": "f548cf82d3c442c7b32690b37bce90e2a619df695dba85189b8d1bec28b0fc0b"
+  },
+  "benchmark_runner_sha256": "d9de7c81b49a68ab94b2e048889204375d11aff1e81d5c9f31f8ab14cedf0965",
+  "measurements": {
+    "rows": 6208,
+    "json_sha256": "58f8e03d60a0930a41b6db0a4b59b65e9d10b601362ea8b18c14c43086eb74ed",
+    "tsv_sha256": "7f7ce52352c10ae92ec14451ce69a8b1571a4cc79a313e801c9f1e307b378777",
+    "heap_counters_never_increase": true,
+    "later_stage_counters_identical": true,
+    "summary_recomputed": true
+  },
+  "focused_measurements": {
+    "rows": 200,
+    "summary_recomputed": true,
+    "json_sha256": "8a6db429f002a452fd0034b3e0601019c1daad92ba675ca8da98c5b23bbecc70",
+    "sources_and_workers_verified": true
+  },
+  "test_counts": {
+    "ogg-tests": {
+      "passed": 56,
+      "failed": 0,
+      "ignored": 0
+    },
+    "vorbis-tests": {
+      "passed": 113,
+      "failed": 0,
+      "ignored": 87
+    }
+  },
+  "reference_revision": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+  "reference_source_clean": true,
+  "production_line_delta": 14,
+  "heap_changes": {
+    "chained-index/0": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 10,
+        "frees": 5,
+        "allocated_bytes": 327953,
+        "freed_bytes": 327953,
+        "peak_bytes": 164406
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 10,
+        "frees": 4,
+        "allocated_bytes": 327921,
+        "freed_bytes": 327921,
+        "peak_bytes": 164374
+      }
+    },
+    "chained-index/512": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 35,
+        "frees": 5,
+        "allocated_bytes": 916753,
+        "freed_bytes": 916753,
+        "peak_bytes": 458806
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 27,
+        "frees": 4,
+        "allocated_bytes": 900401,
+        "freed_bytes": 900401,
+        "peak_bytes": 450614
+      }
+    },
+    "chained-index/64": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 26,
+        "frees": 5,
+        "allocated_bytes": 687377,
+        "freed_bytes": 687377,
+        "peak_bytes": 344118
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 21,
+        "frees": 4,
+        "allocated_bytes": 685361,
+        "freed_bytes": 685361,
+        "peak_bytes": 343094
+      }
+    },
+    "dense-index/0": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 5,
+        "frees": 5,
+        "allocated_bytes": 5675,
+        "freed_bytes": 5675,
+        "peak_bytes": 3354
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 5,
+        "frees": 4,
+        "allocated_bytes": 5643,
+        "freed_bytes": 5643,
+        "peak_bytes": 3322
+      }
+    },
+    "dense-index/1": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 6239,
+        "freed_bytes": 6239,
+        "peak_bytes": 3636
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 6,
+        "frees": 4,
+        "allocated_bytes": 6207,
+        "freed_bytes": 6207,
+        "peak_bytes": 3604
+      }
+    },
+    "dense-index/17": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 10292,
+        "freed_bytes": 10292,
+        "peak_bytes": 7689
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 6,
+        "frees": 4,
+        "allocated_bytes": 10260,
+        "freed_bytes": 10260,
+        "peak_bytes": 7657
+      }
+    },
+    "mux-index/128/false": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 27,
+        "frees": 5,
+        "allocated_bytes": 1342737,
+        "freed_bytes": 1342737,
+        "peak_bytes": 671798
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 22,
+        "frees": 4,
+        "allocated_bytes": 1340721,
+        "freed_bytes": 1340721,
+        "peak_bytes": 670774
+      }
+    },
+    "mux-index/128/true": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 27,
+        "frees": 5,
+        "allocated_bytes": 1342737,
+        "freed_bytes": 1342737,
+        "peak_bytes": 671798
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 22,
+        "frees": 4,
+        "allocated_bytes": 1340721,
+        "freed_bytes": 1340721,
+        "peak_bytes": 670774
+      }
+    },
+    "mux-index/16/false": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 15,
+        "frees": 5,
+        "allocated_bytes": 167185,
+        "freed_bytes": 167185,
+        "peak_bytes": 84022
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 13,
+        "frees": 4,
+        "allocated_bytes": 166961,
+        "freed_bytes": 166961,
+        "peak_bytes": 83894
+      }
+    },
+    "mux-index/16/true": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 15,
+        "frees": 5,
+        "allocated_bytes": 167185,
+        "freed_bytes": 167185,
+        "peak_bytes": 84022
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 13,
+        "frees": 4,
+        "allocated_bytes": 166961,
+        "freed_bytes": 166961,
+        "peak_bytes": 83894
+      }
+    },
+    "mux-index/2/false": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 20753,
+        "freed_bytes": 20753,
+        "peak_bytes": 10806
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 6,
+        "frees": 4,
+        "allocated_bytes": 20721,
+        "freed_bytes": 20721,
+        "peak_bytes": 10774
+      }
+    },
+    "mux-index/2/true": {
+      "baseline": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 20753,
+        "freed_bytes": 20753,
+        "peak_bytes": 10806
+      },
+      "after": {
+        "allocs": 4,
+        "reallocs": 6,
+        "frees": 4,
+        "allocated_bytes": 20721,
+        "freed_bytes": 20721,
+        "peak_bytes": 10774
+      }
+    },
+    "span-index/130050": {
+      "baseline": {
+        "allocs": 21,
+        "reallocs": 38,
+        "frees": 21,
+        "allocated_bytes": 6976402,
+        "freed_bytes": 6976402,
+        "peak_bytes": 326049
+      },
+      "after": {
+        "allocs": 20,
+        "reallocs": 38,
+        "frees": 20,
+        "allocated_bytes": 6976370,
+        "freed_bytes": 6976370,
+        "peak_bytes": 326017
+      }
+    },
+    "span-index/65025": {
+      "baseline": {
+        "allocs": 6,
+        "reallocs": 6,
+        "frees": 6,
+        "allocated_bytes": 136007,
+        "freed_bytes": 136007,
+        "peak_bytes": 133404
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 135975,
+        "freed_bytes": 135975,
+        "peak_bytes": 133372
+      }
+    }
+  },
+  "audit_passed": true,
+  "source_commits": {
+    "metadata": "98a4ff10ab1d8f079e6c49e61db029135a9d1862",
+    "short": "8f9fe720ba2c1b92b57771aaa19420f72cfdcdf8",
+    "bounded": "1a2d2af46e24859a1066951fa1156ad367df1589"
+  },
+  "commit_sources_match_workers": true
+}

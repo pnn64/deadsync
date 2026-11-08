@@ -1,0 +1,94 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 92.40180536290016,
+      "deadlib-image-png/decode-reader": 86.19371898516549,
+      "deadlib-image-png/inflate": 122.38732538302129,
+      "deadlib-image-png/inflate-stream": 95.63568101603637,
+      "flate2-1.1.10/inflate": 123.31987949397312,
+      "png-0.18.1/decode": 175.56451811698054
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-before-photos-a-manifest.json",
+        "sha256": "5d51d7189fd87a069d5fbe20a649c8b85f30c0f60e2500ccc2b5ffe1fdd38d21"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-before-photos-a-run1.tsv",
+        "sha256": "d76ab54e4b169126df3cfc62e7d78f1c2087abe0ddfb16ef0b3dbc9434bf062f"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-before-photos-a-run2.tsv",
+        "sha256": "a6ff46c4d4d50f7a2dca1d0b6d85fc0bf2a0b011fa461f8a2ae2ced9e5c70169"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-before-photos-a-run3.tsv",
+        "sha256": "d3a8c0b093c9155149ee1d0e3eeadf110c147a0ef2c4e9f9f1d7abe95ccbe823"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 105.42769826633365,
+      "deadlib-image-png/decode-reader": 97.37231222485289,
+      "deadlib-image-png/inflate": 129.7107798848331,
+      "deadlib-image-png/inflate-stream": 104.97272911028423,
+      "flate2-1.1.10/inflate": 137.2053437430677,
+      "png-0.18.1/decode": 196.06420425904898
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-trial-photos-a-manifest.json",
+        "sha256": "ac736e5529b46007074f8ad5c672f0dcbbfe7364ccf5b44813697e3cbaab47be"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-trial-photos-a-run1.tsv",
+        "sha256": "7e8eb83886af7aefd164ff592e5810c1dbb398bac82466f4e87a86a49963bf98"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-trial-photos-a-run2.tsv",
+        "sha256": "4e63b1de1412ce02fb4877daeb9f8dbfe44895b228dc62abfb53b81930ebef8d"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-trial-photos-a-run3.tsv",
+        "sha256": "73137726d1baa1ae30180ed47d7bc481e5dabb23ff68ff040f617b425636be8b"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 92.40180536290016,
+      "after_mib_s": 105.42769826633365,
+      "absolute_change_percent": 14.097011256734016,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 2.167485776291045
+    },
+    "decode-reader": {
+      "before_mib_s": 86.19371898516549,
+      "after_mib_s": 97.37231222485289,
+      "absolute_change_percent": 12.969150619445147,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 1.1575497196965046
+    },
+    "inflate": {
+      "before_mib_s": 122.38732538302129,
+      "after_mib_s": 129.7107798848331,
+      "absolute_change_percent": 5.9838340930259415,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -4.741948876742952
+    },
+    "inflate-stream": {
+      "before_mib_s": 95.63568101603637,
+      "after_mib_s": 104.97272911028423,
+      "absolute_change_percent": 9.763142788393186,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -1.3451140292899955
+    }
+  },
+  "case_count": 24,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

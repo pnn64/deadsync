@@ -1,0 +1,28 @@
+{
+  "archive_sha256": "f7d83bb9fda5bc31bd4e58ae50c7aee7a6317b9aa24c50f938338413717e289e",
+  "initial_corpora": [
+    {
+      "target": "png_stream",
+      "files": 27867,
+      "bytes": 6368086,
+      "maximum_file_bytes": 63435,
+      "sha256": "2889a6947392f977fabcaf9e7c3d570175e7000bb01532ae928db05d8e278e3d"
+    },
+    {
+      "target": "inflate_stream",
+      "files": 5379,
+      "bytes": 1067326,
+      "maximum_file_bytes": 32985,
+      "sha256": "e12961b975e74473f19d86862dbd06ae25ebf2aa4eeeafa83e04c21c5d8cd1b5"
+    },
+    {
+      "target": "decoder_limits",
+      "files": 6376,
+      "bytes": 2622048,
+      "maximum_file_bytes": 1176,
+      "sha256": "e9aaba5c951bc4b2848d79568eb6683dcc03c29917b4644a11edb08249caa483"
+    }
+  ],
+  "runner_sha256": "2bc898efb8a5a3b59bcacec3addfdc2a0a5a9487b27a78e4904322430fd38909",
+  "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+}

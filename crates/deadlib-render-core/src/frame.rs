@@ -38,6 +38,11 @@ pub struct RenderTargetFrame {
     pub texture_handle: TextureHandle,
     pub width: u32,
     pub height: u32,
+    /// Drawing viewport at the texture's logical top left; allocation and
+    /// attachment clears still use width/height, including padding.
+    pub viewport: [u32; 2],
+    /// Store color in a 16-bit float attachment instead of normalized bytes.
+    pub float_color: bool,
     /// Whether the target stores child alpha. RGB targets sample as opaque.
     pub alpha: bool,
     pub depth: bool,
@@ -76,6 +81,8 @@ pub struct MeshRun {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexturedMeshRun {
+    pub sampler: Option<crate::MeshSampler>,
+    pub additive_texture: TextureHandle,
     pub geometry: u32,
     pub instance_start: u32,
     pub instance_count: u32,
@@ -83,6 +90,12 @@ pub struct TexturedMeshRun {
     pub texture_handle: TextureHandle,
     pub camera: u8,
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
+    /// Clear depth before this depth-tested draw to isolate it from earlier
+    /// models. Passes start with cleared depth, so the first depth-tested draw
+    /// never needs this.
+    pub clear_depth: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +103,12 @@ pub enum DrawOp {
     Sprite(SpriteRun),
     Mesh(MeshRun),
     TexturedMesh(TexturedMeshRun),
+}
+
+impl TexturedMeshRun {
+    pub const fn depth_mode(&self) -> crate::DepthMode {
+        crate::DepthMode::from_flags(self.depth_test, self.depth_write, self.depth_test_on_fail)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -381,6 +400,7 @@ mod tests {
 
     fn vertex(x: f32) -> TexturedMeshVertex {
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: [x, 0.0, 0.0],
             ..TexturedMeshVertex::default()
         }

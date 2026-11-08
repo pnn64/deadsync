@@ -1,0 +1,6 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\ogg\Release\ogg.lib
+  vorbis.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\vorbis\lib\Release\vorbis.lib
+  vorbisfile.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\vorbis\lib\Release\vorbisfile.lib
+  deadlib_vorbis_oracle.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\Release\deadlib_vorbis_oracle.exe

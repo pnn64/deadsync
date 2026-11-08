@@ -1,0 +1,108 @@
+{
+  "started_utc": "2026-10-26T20:27:29.000552+00:00",
+  "git_head": "cdd2943b94ab378e02a179a70556c46b3991d304",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cmake": "cmake version 4.2.1",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_cpus": 44,
+  "reference_pins": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "seed": 1337,
+  "repeats": 5,
+  "min_seconds": 0.15,
+  "binary_sha256": {
+    "rust": "63974bd5f2acd1ee3ecec02888853e6a66a3145c590764a272af78cc337eae68",
+    "libvorbis": "332ef368313dce3cb00c5c58b70dc54d40629abf3413fa7d67fa3402f2f2a441"
+  },
+  "input_sha256": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg": "4fcf854ba1c654b4581e5d98f6df570dd940d716d4f7411712e62491c08cc943",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483"
+  },
+  "source_sha256": {
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "aea879469f863ab0e751236bfea55815a71cbedb84a735cb95bfa9a2e2077b79",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "3f5846d37455d3491cecc63c10ea6e7f1d44dd1614234896857444e21bc63d04",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "f30f13b2f4cfb288cd59923910ed049ed868934391a2772764dca3b311ade383",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "da628fc86c7f66240045e0807de1ceb61eee9f1b58426feb63ec0464dec6cd38",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "2ea169ccb23a57ed15f676c5c1d9dacf84cd5c6dcc69711560f1b54ec7d7669e",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "2f316bd0102940d77666fd770eaba0a675332af78369a8eb538082675133016a",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "5d2a81af48c1566bd551a451e95ffe204f8e22e61c481141c06864a99b4c110e",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "492cf37d6f017b1e1e3c977ba8253a5906468f48e7a9d619d5659ef9c834c57e",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "90f270c7627c5944e171d8ef2325f6f9b8f1cc6a42bfa120e123123872b420f0",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "3e6a9a1c2046d71f7f7d9d195febdb7a59b8d49dc06a6001092194420fb7a1db",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "1780d259a1a73c883eaf5c53dec8dc4d7f66b8a7fd82a54beaa521ae942e81b3",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "5d479af544338dadb1ab99627b4fe1c2581c40e0cb41bc491c7b3ee1b1ab6c77",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "0b6bfd852a4c019d3e6755dc599c29a074eee2095f886dd4340dea079b8c3678",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "cf9d97a231095e94ccc789772ce0660c964ebef4c67de1ca3c2d75ee23750515",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "30171937ef5cf0524e6dd9dc928609919a6d5362eac59fd656c0b185a04bfca8",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "bffb083d351c58d498492dfe8dc424a42bdda798782f37f150b952e8a9f68ec7",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "0f284dc7a8d5542fed0e2e5b0cce79f2a98b23de5ef957a6d6efb60e5eaaa76b",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "2feb46c700afc04f84983ca1948536d755b066ec825bb189af7c18a4865b1a39"
+  },
+  "timer": "Rust Instant / C++ steady_clock; resident input; no process/file-load time",
+  "io": "forward-only Read callbacks; full and startup uncapped, stream4096 capped at 4096 bytes/read",
+  "cargo_artifact_profile": {
+    "opt_level": "3",
+    "debuginfo": 1,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "rust_release_profile": {
+    "opt-level": 3,
+    "overflow-checks": false,
+    "debug-assertions": false,
+    "lto": true,
+    "panic": "abort"
+  },
+  "rust_bench_profile": {
+    "debug": 1
+  },
+  "cmake_release_flags": [
+    "CMAKE_CXX_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_C_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=/INCREMENTAL:NO"
+  ],
+  "provenance_note": "Build artifact profile was extracted from the retained build log. Release/bench profile and CMake flags were recorded after timing; the profile settings were unchanged during this run. Repository Cargo configuration and the unchanged build-flag environment were also recorded after timing.",
+  "cargo_config": {
+    "target": {
+      "cfg(target_os = \"macos\")": {
+        "rustflags": [
+          "-L",
+          "native=/opt/homebrew/lib",
+          "-L",
+          "native=/opt/homebrew/opt/vulkan-loader/lib",
+          "-L",
+          "native=/usr/local/lib",
+          "-L",
+          "native=/usr/local/opt/vulkan-loader/lib"
+        ]
+      },
+      "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+        "rustflags": [
+          "-C",
+          "target-feature=+crt-static"
+        ]
+      }
+    },
+    "env": {
+      "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+    }
+  },
+  "rustflags_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null
+  }
+}

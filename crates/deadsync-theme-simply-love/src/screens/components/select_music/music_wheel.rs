@@ -52,9 +52,10 @@ const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
 // Upper bound on actors emitted per wheel slot with every feature enabled and
 // both player sides joined (box + art + title + BG art, plus per-side grades,
 // lamps, event rank/rate/score and favorite heart). A single joined side
-// measures ~6 actors/slot, so 16 leaves headroom for two sides and avoids any
+// measures ~6 actors/slot; 18 also accommodates two optional golf par badges and avoids any
 // mid-build Vec reallocation regardless of config.
-const MAX_ACTORS_PER_WHEEL_SLOT: usize = 16;
+const MAX_ACTORS_PER_WHEEL_SLOT: usize = 18;
+const GOLF_PAR_MAX_WIDTH: f32 = 90.0;
 const WHEEL_ACTOR_CAPACITY: usize = NUM_WHEEL_SLOTS * MAX_ACTORS_PER_WHEEL_SLOT + 1;
 const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
@@ -321,6 +322,7 @@ fn song_select_bg_sprite(
 }
 
 thread_local! {
+    static GOLF_PAR_TEXT: RefCell<TextCache<(u64, u8, u64)>> = RefCell::new(text_cache_with_capacity(128));
     static ITL_RANK_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(text_cache_with_capacity(256));
     static WHEEL_SCORE_TEXT_CACHE: RefCell<TextCache<u32>> =
@@ -554,6 +556,19 @@ fn chart_for_difficulty<'a>(
     })
 }
 
+/// Which chart's par a wheel row shows, matching the theme's `Golf.ChooseSteps`:
+/// the chart at the player's current difficulty when the song has one, else the
+/// song's last playable chart. Golf holes normally carry a single chart, so a
+/// player browsing at any other difficulty still sees that hole's par.
+fn wheel_golf_par(song: &SongData, chart_type: &str, chart: Option<&ChartData>) -> Option<f64> {
+    let chart = chart.or_else(|| {
+        song.charts
+            .iter()
+            .rfind(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
+    })?;
+    deadsync_chart::golf::par(&song.simfile_path, &chart.difficulty)
+}
+
 const NO_CHART_INDEX: usize = usize::MAX;
 const EDIT_DIFFICULTY_SLOT: usize = STANDARD_DIFFICULTY_COUNT;
 const WHEEL_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_COUNT + 1;
@@ -641,8 +656,34 @@ fn meter_indices(
             insert(chart_index);
         }
     }
-    for chart_index in song.edit_chart_indices_sorted(chart_type) {
-        insert(chart_index);
+    // Sorting all edits only to overwrite equal meters is unnecessary. Keep
+    // the last edit in that ordering directly, including source-order ties.
+    for (chart_index, chart) in song.charts.iter().enumerate() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type)
+            || !chart.difficulty.eq_ignore_ascii_case("edit")
+        {
+            continue;
+        }
+        if let Some((_, existing)) = indices.iter_mut().find(|(meter, _)| *meter == chart.meter) {
+            let previous = &song.charts[*existing];
+            if !previous.difficulty.eq_ignore_ascii_case("edit")
+                || chart
+                    .stats
+                    .total_steps
+                    .cmp(&previous.stats.total_steps)
+                    .then_with(|| {
+                        profile_data::favorites_view::unicode_case_insensitive_cmp(
+                            &chart.description,
+                            &previous.description,
+                        )
+                    })
+                    .is_ge()
+            {
+                *existing = chart_index;
+            }
+        } else {
+            indices.push((chart.meter, chart_index));
+        }
     }
     indices.sort_unstable_by_key(|&(meter, _)| meter);
     indices
@@ -749,6 +790,7 @@ pub(crate) fn runtime_slot_requests<'a>(
                 });
                 MusicWheelSlotRuntimeRequest::Song {
                     song,
+                    golf_pars: charts.map(|chart| wheel_golf_par(song, target_chart_type, chart)),
                     chart_hashes,
                     lua_submit_allowed: chart_hashes.map(|chart_hash| {
                         chart_hash.is_some_and(score_data::lua_chart_submit_allowed)
@@ -799,6 +841,7 @@ pub struct MusicWheelParams<'a> {
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
     pub show_pack_sync: bool,
+    pub show_golf_pars: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
@@ -1051,7 +1094,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
                         actors.push(act!(text:
                             font("miso"):
-                            settext("NEW"):
+                            settext(crate::i18n::tr("SelectMusic", "NewBadge")):
                             align(1.0, 0.5):
                             xy(highlight_left_world + pack_count_x_local - widescale(30.0, 40.0), y_center_item):
                             zoom(0.6):
@@ -1149,10 +1192,14 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     } else {
                         f32::INFINITY
                     };
-                    let title_max_w = (title_max_w_local * 0.85).min(score_title_max_w);
-                    let subtitle_max_w = (title_max_w_local * 0.7).min(score_title_max_w);
                     let has_edit = runtime_slot.has_edit;
                     let has_lua = info.has_lua;
+                    let golf_visible = p.show_golf_pars && (0..2).any(|side| p.runtime.joined[side] && runtime_slot.golf_pars[side].is_some());
+                    let golf_badge_right = (badge_right_x_local - badge_gap_x * (u8::from(has_lua) + u8::from(has_edit)) as f32)
+                        .min(if has_percentage { wheel_score_x - WHEEL_SCORE_MAX_WIDTH - WHEEL_SCORE_TITLE_GAP } else { f32::INFINITY });
+                    let golf_title_max_w = if golf_visible { (golf_badge_right - GOLF_PAR_MAX_WIDTH - 8.0 - title_x_local).max(0.0) } else { f32::INFINITY };
+                    let title_max_w = (title_max_w_local * 0.85).min(score_title_max_w).min(golf_title_max_w);
+                    let subtitle_max_w = (title_max_w_local * 0.7).min(score_title_max_w).min(golf_title_max_w);
                     let lua_submit_allowed = lua_badge_submit_allowed(
                         has_lua,
                         [p1_joined, p2_joined],
@@ -1225,6 +1272,24 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                             z(53)
                         ));
+                    }
+                    if golf_visible {
+                        let pars: [Option<f64>; 2] = std::array::from_fn(|side| p.runtime.joined[side].then_some(runtime_slot.golf_pars[side]).flatten());
+                        let both = matches!(pars, [Some(a), Some(b)] if a != b);
+                        for (side, par) in pars.into_iter().enumerate().filter_map(|(side, par)| par.map(|par| (side, par))) {
+                            let label_side = if both { side as u8 + 1 } else { 0 };
+                            let text = cached_text(&GOLF_PAR_TEXT, (par.to_bits(), label_side, crate::i18n::revision()), 512, || {
+                                let label = crate::i18n::tr("Golf", "Par").to_uppercase();
+                                let par = crate::screens::components::gameplay::golf::format_par(Some(par));
+                                if both { format!("P{} {label} {par}", side + 1) } else { format!("{label} {par}") }
+                            });
+                            actors.push(act!(text: font("miso"): settext(text): align(1.0, 0.5):
+                                xy(highlight_left_world + golf_badge_right, y_center_item + if both { side as f32 * 12.0 - 6.0 } else { 0.0 }):
+                                maxwidth(GOLF_PAR_MAX_WIDTH):
+                                zoom(0.5): diffuse(0.2, 0.9, 0.3, 1.0): z(54)
+                            ));
+                            if !both { break; }
+                        }
                     }
                     if has_lua {
                         let lua_x = if has_edit {
@@ -1672,10 +1737,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         })
@@ -1694,6 +1761,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: short_hash.to_string(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -1759,6 +1827,56 @@ mod tests {
     }
 
     #[test]
+    fn golf_wheel_badges_are_optional_and_reserve_title_and_score_space() {
+        use super::{MusicWheelParams, push};
+        use crate::views::{MusicWheelRuntimeView, MusicWheelScoreView};
+        use deadlib_present::actors::Actor;
+        crate::i18n::init_for_tests();
+        let mut song = song_with_art(None, None);
+        Arc::make_mut(&mut song).has_lua = true;
+        let entries = [MusicWheelEntry::Song(song)];
+        for width in [640.0, 854.0] {
+            set_current_metrics(Metrics::centered(width, 480.0));
+            let mut runtime = MusicWheelRuntimeView { joined: [true, true], ..Default::default() };
+            let center = &mut runtime.slots[MUSIC_WHEEL_SLOT_COUNT / 2];
+            center.has_edit = true;
+            center.golf_pars = [Some(2.1), Some(3.0)];
+            center.sides[0].percentage = Some(MusicWheelScoreView { hundredths: 9200, score_type: SelectMusicWheelScoreType::Itg, failed: false, itl_points: None });
+            for enabled in [false, true] {
+                let mut actors = Vec::new();
+                push(&mut actors, MusicWheelParams {
+                    machine_font: Default::default(), entries: &entries, selected_index: 0,
+                    position_offset_from_selection: 0.0, selection_animation_timer: 0.0, selection_animation_beat: 0.0,
+                    color_pack_headers: false, pack_color_indices: None, song_box_color: None, song_text_color: None,
+                    song_text_color_overrides: None, show_pack_sync: false, show_golf_pars: enabled,
+                    show_music_wheel_grades: false, show_music_wheel_lamps: false, itl_rank_mode: SelectMusicItlRankMode::None,
+                    show_itl_points: false, song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
+                    song_select_bg_paths: &[], song_select_bg_texture_keys: &[], expanded_series_name: None,
+                    expanded_pack_name: None, new_pack_names: None, default_sync_offset: Default::default(), runtime: &runtime,
+                });
+                let prefix = format!("P1 {}", crate::i18n::tr("Golf", "Par").to_uppercase());
+                let badge = actors.iter().find_map(|actor| match actor {
+                    Actor::Text { content, offset, max_width, .. } if content.as_str().starts_with(&prefix) => Some((offset[0], max_width.unwrap())),
+                    _ => None,
+                });
+                assert_eq!(badge.is_some(), enabled);
+                if let Some((right, badge_width)) = badge {
+                    let title_right = actors.iter().find_map(|actor| match actor {
+                        Actor::Text { content, offset, max_width: Some(max_width), .. } if content.as_str() == "Song" && offset[1] == 240.0 => Some(offset[0] + max_width),
+                        _ => None,
+                    }).unwrap();
+                    assert!(title_right <= right - badge_width - 7.9, "golf badges must not overlap titles");
+                    let score_right = actors.iter().find_map(|actor| match actor {
+                        Actor::Text { content, offset, .. } if content.as_str() == "92.00" => Some(offset[0]),
+                        _ => None,
+                    }).unwrap();
+                    assert!(right <= score_right - super::WHEEL_SCORE_MAX_WIDTH - super::WHEEL_SCORE_TITLE_GAP + 0.01);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn wheel_renders_only_joined_players_percentages_and_pass_points() {
         use super::{MusicWheelParams, push};
         use crate::views::{MusicWheelRuntimeView, MusicWheelScoreView};
@@ -1800,6 +1918,7 @@ mod tests {
                         song_text_color: None,
                         song_text_color_overrides: None,
                         show_pack_sync: false,
+                        show_golf_pars: false,
                         show_music_wheel_grades: false,
                         show_music_wheel_lamps: false,
                         itl_rank_mode: SelectMusicItlRankMode::None,
@@ -2052,6 +2171,91 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn golf_pars_fall_back_to_a_songs_only_chart_like_the_theme() {
+        fn slot_golf_pars(slots: &[MusicWheelSlotRuntimeRequest<'_>], slot: usize) -> [Option<f64>; 2] {
+            match slots[slot] {
+                MusicWheelSlotRuntimeRequest::Song { golf_pars, .. } => golf_pars,
+                _ => panic!("expected a song slot"),
+            }
+        }
+
+        let pack = std::path::Path::new("songs/Golf Fallback Pack");
+        deadsync_chart::golf::replace_pack(
+            pack,
+            deadsync_chart::golf::GolfPars::parse(
+                "[Hole 1]\nPar=7\n[Hole 2]\nPar=3\n[Hole 2:Challenge]\nPar=5\n",
+            ),
+        );
+
+        let mut selected = (*song_with_art(None, None)).clone();
+        selected.simfile_path = pack.join("Selected/selected.ssc");
+        selected.charts =
+            vec![chart_with_difficulty("dance-single", "Hard", "selected-hard", true)];
+        let selected = Arc::new(selected);
+
+        // A hole with a single Challenge chart, like every song in the beta golf packs.
+        let mut hole_1 = (*song_with_art(None, None)).clone();
+        hole_1.simfile_path = pack.join("Hole 1/hole.ssc");
+        hole_1.charts =
+            vec![chart_with_difficulty("dance-single", "Challenge", "hole-1-x", true)];
+        let hole_1 = Arc::new(hole_1);
+
+        // Two charts: Hard carries the song-wide par, Challenge its own override.
+        let mut hole_2 = (*song_with_art(None, None)).clone();
+        hole_2.simfile_path = pack.join("Hole 2/hole.ssc");
+        hole_2.charts = vec![
+            chart_with_difficulty("dance-single", "Hard", "hole-2-h", true),
+            chart_with_difficulty("dance-single", "Challenge", "hole-2-x", true),
+        ];
+        let hole_2 = Arc::new(hole_2);
+
+        let entries = vec![
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(Arc::clone(&hole_1)),
+            MusicWheelEntry::Song(Arc::clone(&hole_2)),
+        ];
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+
+        // Browsing at Hard.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [Some(&selected.charts[0]), Some(&selected.charts[0])],
+            [3, 3],
+            profile_data::PlayStyle::Single,
+            None,
+            None,
+        );
+        assert_eq!(
+            slot_golf_pars(&slots, center + 1),
+            [Some(7.0), Some(7.0)],
+            "a single-chart hole shows its par at any difficulty"
+        );
+        assert_eq!(
+            slot_golf_pars(&slots, center + 2),
+            [Some(3.0), Some(3.0)],
+            "the chart at the current difficulty wins when it exists"
+        );
+
+        // Browsing at Beginner, which neither hole has: fall back to the last chart.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+            None,
+            None,
+        );
+        assert_eq!(slot_golf_pars(&slots, center + 1), [Some(7.0), Some(7.0)]);
+        assert_eq!(
+            slot_golf_pars(&slots, center + 2),
+            [Some(5.0), Some(5.0)],
+            "the last chart's own override applies"
+        );
     }
 
     #[test]
@@ -2409,5 +2613,8 @@ mod tests {
             SelectMusicSongSelectBgMode::Off,
             &[],
         ));
+    }
+    mod direct_scan_perf {
+        include!("../../../../../../tests/perf/wheel_meters.rs");
     }
 }

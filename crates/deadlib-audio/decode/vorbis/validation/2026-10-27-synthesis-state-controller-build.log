@@ -1,0 +1,12 @@
+cargo :      Locking 2 packages to highest Rust 1.99.1 compatible versions
+At line:2 char:1
++ cargo build --offline --release --manifest-path target/deadlib-audio- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (     Locking 2 ...atible versions:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling deadlib-seek-reference-model v0.0.0
+(C:\GitHub\deadsync\target\deadlib-audio-reference\seek-reference-model-20261027)
+    Finished `release` profile [optimized] target(s) in 4.46s

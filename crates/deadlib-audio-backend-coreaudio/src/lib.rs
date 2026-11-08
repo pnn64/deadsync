@@ -145,7 +145,8 @@ pub fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
 struct CoreAudioHostClock {
     numer: u32,
     denom: u32,
-    offset_nanos: i128,
+    offset_nanos: u64,
+    mach_ahead: bool,
 }
 
 impl CoreAudioHostClock {
@@ -171,7 +172,8 @@ impl CoreAudioHostClock {
         Ok(Self {
             numer: info.numer,
             denom: info.denom,
-            offset_nanos: i128::from(mach_nanos) - i128::from(host_mid),
+            offset_nanos: mach_nanos.abs_diff(host_mid),
+            mach_ahead: mach_nanos >= host_mid,
         })
     }
 
@@ -182,9 +184,12 @@ impl CoreAudioHostClock {
             return (now_nanos(), OutputTimingQuality::Fallback);
         }
         let mach_nanos = scale_mach_time(mach_time, self.numer, self.denom);
-        let host_nanos = i128::from(mach_nanos) - self.offset_nanos;
-        let clamped = host_nanos.clamp(0, i128::from(u64::MAX)) as u64;
-        (clamped, OutputTimingQuality::Trusted)
+        let host_nanos = if self.mach_ahead {
+            mach_nanos.saturating_sub(self.offset_nanos)
+        } else {
+            mach_nanos.saturating_add(self.offset_nanos)
+        };
+        (host_nanos, OutputTimingQuality::Trusted)
     }
 }
 
@@ -235,8 +240,8 @@ pub fn start(
     let host_clock = CoreAudioHostClock::calibrate()?;
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
+    let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));
-    let device_name = prep.device_name.clone();
 
     type Args = render_callback::Args<data::Interleaved<f32>>;
     let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);
@@ -258,14 +263,19 @@ pub fn start(
             let buffered_frames = buffer_frames.max(period_frames);
             let latency_frames = buffered_frames
                 .saturating_add(nanos_to_frames(sample_rate_hz, downstream_latency_ns));
-            let period_ns = frames_to_nanos(sample_rate_hz, period_frames);
-            let latency_ns = frames_to_nanos(sample_rate_hz, buffered_frames)
+            let period_ns = if period_frames == buffer_frames {
+                buffer_ns
+            } else {
+                frames_to_nanos(sample_rate_hz, period_frames)
+            };
+            let latency_ns = buffer_ns
+                .max(period_ns)
                 .saturating_add(downstream_latency_ns);
             publish_output_timing(
                 sample_rate_hz,
                 period_ns,
                 latency_ns,
-                buffer_frames.max(period_frames),
+                buffered_frames,
                 0,
                 latency_frames,
                 latency_ns,
@@ -301,7 +311,6 @@ pub fn start(
         sample_rate_hz,
         initial_downstream_latency_ns,
     ));
-    let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
     let output_latency_ns = buffer_ns.saturating_add(initial_downstream_latency_ns);
     publish_output_timing(
         sample_rate_hz,
@@ -315,7 +324,7 @@ pub fn start(
     publish_output_timing_quality(OutputTimingQuality::Trusted);
     info!(
         "CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).",
-        device_name,
+        prep.device_name,
         sample_rate_hz,
         prep.channels,
         buffer_frames,
@@ -393,11 +402,14 @@ impl OutputChangeListener {
         }
         let event = (device_id != previous_device_id)
             .then(|| get_device_name(device_id).ok())
-            .flatten()
-            .map_or_else(
-                || "CoreAudio latency compensation".to_owned(),
-                |name| format!("CoreAudio output changed to '{name}'; latency compensation"),
-            );
+            .flatten();
+        let event = std::fmt::from_fn(|f| match event.as_deref() {
+            Some(name) => write!(
+                f,
+                "CoreAudio output changed to '{name}'; latency compensation"
+            ),
+            None => f.write_str("CoreAudio latency compensation"),
+        });
         warn!(
             "{event} changed: {:.1} ms ({previous_frames} frames at {previous_rate_hz} Hz) -> {:.1} ms ({} frames at {} Hz).",
             nanos_to_ms(previous_ns),
@@ -560,33 +572,48 @@ fn device_nominal_sample_rate_hz(device_id: AudioDeviceID) -> Result<u32, String
 }
 
 fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> Vec<u32> {
-    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES_HZ.len() + 3);
-    if default_rate_hz > 0 {
-        sample_rates_hz.push(default_rate_hz);
-    }
     let ranges = match get_available_sample_rates(device_id) {
         Ok(ranges) => ranges,
         Err(err) => {
             warn!("failed to query CoreAudio sample rates for device {device_id}: {err}");
-            sample_rates_hz.sort_unstable();
-            sample_rates_hz.dedup();
-            return sample_rates_hz;
+            Vec::new()
         }
     };
+    if ranges.is_empty() {
+        return if default_rate_hz > 0 {
+            vec![default_rate_hz]
+        } else {
+            Vec::new()
+        };
+    }
+    let mut sample_rates_hz =
+        Vec::with_capacity(ranges.len() * 2 + COMMON_SAMPLE_RATES_HZ.len() + 1);
+    if default_rate_hz > 0 {
+        sample_rates_hz.push(default_rate_hz);
+    }
     let supported_ranges: Vec<_> = ranges
         .into_iter()
         .map(|range| (range.mMinimum, range.mMaximum))
         .collect();
     for &(min_rate_hz, max_rate_hz) in &supported_ranges {
         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);
-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);
+        if max_rate_hz != min_rate_hz {
+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);
+        }
     }
-    for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {
-        let rate = f64::from(sample_rate_hz);
-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {
-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz
-        }) {
-            sample_rates_hz.push(sample_rate_hz);
+    // Skip range probes when every common rate is already an endpoint or default.
+    if sample_rates_hz.len() < COMMON_SAMPLE_RATES_HZ.len()
+        || !COMMON_SAMPLE_RATES_HZ
+            .iter()
+            .all(|rate| sample_rates_hz.contains(rate))
+    {
+        for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {
+            let rate = f64::from(sample_rate_hz);
+            if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {
+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz
+            }) {
+                sample_rates_hz.push(sample_rate_hz);
+            }
         }
     }
     sample_rates_hz.sort_unstable();
@@ -685,6 +712,17 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
 
 #[inline(always)]
 fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {
+    // Constant small timebase divisors avoid hardware division.
+    if denom == 1 {
+        return mach_time.saturating_mul(u64::from(numer));
+    }
+    if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {
+        return if denom == 3 {
+            nanos / 3
+        } else {
+            nanos / u64::from(denom)
+        };
+    }
     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))
         as u64
 }
@@ -699,8 +737,11 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
 
 #[inline(always)]
 fn nanos_to_frames(sample_rate_hz: u32, nanos: u64) -> u32 {
-    ((u128::from(nanos) * u128::from(sample_rate_hz)) / 1_000_000_000).min(u128::from(u32::MAX))
-        as u32
+    match nanos.checked_mul(u64::from(sample_rate_hz)) {
+        Some(frames) => (frames / 1_000_000_000).min(u64::from(u32::MAX)) as u32,
+        // An overflowing product divided by 1e9 still exceeds u32::MAX.
+        None => u32::MAX,
+    }
 }
 
 #[cfg(test)]

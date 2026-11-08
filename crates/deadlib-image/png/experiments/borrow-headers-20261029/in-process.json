@@ -1,0 +1,93 @@
+{
+  "source_base": "7fdecb9d4",
+  "driver_sha256": "4e62d946876048636edd3e0961650b9aac3fb13515634fd0a15445589122886d",
+  "baseline_sha256": {
+    "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+    "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+    "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+    "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+    "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+    "crates/deadlib-image/png/src/stream/decode.rs": "195a06d0cc4e65a84ec28ba8cc6d2fbf31500d45c574d84c207e302e86fd99ec",
+    "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+    "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+    "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+    "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "crates/deadlib-image/png/src/zlib.rs": "3a3f3470ac357282088fcd517bab81f0b22b9ccec2a8fb324344897261a92885",
+    "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "crates/deadlib-image/png/src/zlib/inflate.rs": "350b9cfb4dd800c0deeb8946e8cb2c3e54916301561136729db9eb3517f0f6f5",
+    "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+  },
+  "selected_sha256": {
+    "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+    "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+    "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+    "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+    "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+    "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+    "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+    "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+    "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+    "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "crates/deadlib-image/png/src/zlib/inflate.rs": "6f9c091eae942ffa404a3ce7f9a9411c55958e201619356d2c992b2466bd9b76",
+    "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+    "crates/deadlib-image/png/src/zlib.rs": "aad0419aeb3e232b1b8495c2c5833de0f48b97fa867323181123f88f8436c4c7"
+  },
+  "shared_image_sha256": "fa534cee7f3e761cd30469741872a94a8dbe15637aeb4ee7460cf42cc4ee96ed",
+  "harness_sha256": "59c5e1b92a55adc68fed0309abac7fe60792bb160599db4ac89b5dc0042ffd13",
+  "cpu_sha256": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+  "chunks_sha256": "e6800bf3d51a7d3e83bf421a65c391b818b99fb0f7c3bb9119b0e435ec8206e0",
+  "generated_source_sha256": "7a950cc673622a7ab8cc170316a52dd0273f079f774396e3d90aa94efdce03db",
+  "profile": {
+    "opt-level": 3,
+    "overflow-checks": false,
+    "debug-assertions": false,
+    "lto": true,
+    "debug": 1,
+    "panic": "abort"
+  },
+  "command": [
+    "cargo",
+    "build",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-borrow-headers-20261029\\in-process\\Cargo.toml",
+    "--profile",
+    "bench",
+    "--target-dir",
+    "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-borrow-headers-20261029\\in-process\\build",
+    "--message-format",
+    "json"
+  ],
+  "executable": "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-borrow-headers-20261029\\in-process\\png-lane-compare.exe",
+  "executable_sha256": "7d3bdd1530e316951f33400af8764bc640e27370b07cf4ef20be2c2d2a115c78",
+  "build_log_sha256": "42814fd2a68d7ee04d5c7464259831848c882ce3b92595da481e370b7acd9138",
+  "outputs": [
+    {
+      "path": "in-process-run1.log",
+      "sha256": "9279dd4ad8649d06cac1da62ecc397ba1b1e46254937f282a5ea28d653f74a18"
+    },
+    {
+      "path": "in-process-run2.log",
+      "sha256": "6ecbc1f984411075f5666a6dc0259880a5dfdf52ab780520fa2d301f50ec5f4b"
+    },
+    {
+      "path": "in-process-run3.log",
+      "sha256": "b586f7e6a05b39e0fc2432162edca16a6778952bd642d177723970a797fc5329"
+    }
+  ]
+}

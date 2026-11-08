@@ -6,9 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::actor as noteskin_actor;
+use crate::{Quantization, actor as noteskin_actor};
 
-pub const CACHE_SCHEMA_VERSION: u32 = 6;
+pub const CACHE_SCHEMA_VERSION: u32 = 7;
 pub const ACTOR_RECURSION_MAX_DEPTH: usize = 24;
 pub const ACTOR_FILE_RECURSION_MAX_DEPTH: usize = 48;
 static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -25,6 +25,8 @@ pub struct CompiledLoader {
 pub struct CompiledLoaderEntry {
     pub button: String,
     pub element: String,
+    /// None is the default (4th); only differing color variants are stored.
+    pub color: Option<Quantization>,
     pub load_button: String,
     pub load_element: String,
     pub blank: bool,
@@ -101,7 +103,31 @@ impl CompiledLoader {
         button: &'a str,
         element: &'a str,
     ) -> ItgLoadRequestRef<'a> {
-        if let Some(entry) = self.find(button, element) {
+        self.load_request_color_ref(button, element, None)
+    }
+
+    #[must_use]
+    pub fn load_request_color_ref<'a>(
+        &'a self,
+        button: &'a str,
+        element: &'a str,
+        color: Option<Quantization>,
+    ) -> ItgLoadRequestRef<'a> {
+        let variant = color
+            .filter(|color| *color != Quantization::Q4th)
+            .and_then(|color| {
+                let index = self.entries.partition_point(|entry| {
+                    compiled_loader_entry_cmp(entry, button, element)
+                        .then_with(|| entry.color.cmp(&Some(color)))
+                        == CmpOrdering::Less
+                });
+                self.entries.get(index).filter(|entry| {
+                    entry.color == Some(color)
+                        && entry.button.eq_ignore_ascii_case(button)
+                        && entry.element.eq_ignore_ascii_case(element)
+                })
+            });
+        if let Some(entry) = variant.or_else(|| self.find(button, element)) {
             return ItgLoadRequestRef {
                 blank: entry.blank,
                 load_button: &entry.load_button,
@@ -122,6 +148,10 @@ impl CompiledLoader {
             rotation_z: None,
             init_command: None,
         }
+    }
+
+    pub fn has_color_variants(&self) -> bool {
+        self.entries.iter().any(|entry| entry.color.is_some())
     }
 }
 
@@ -185,22 +215,8 @@ impl CompiledActors {
         button: Option<&str>,
         color: Option<crate::Quantization>,
     ) -> Option<noteskin_actor::ItgLuaActorDecl> {
-        let key = actor_manifest_key(search_dirs, path)?;
-        if let Some(color) = color {
-            let color = color.color_name();
-            let file = button
-                .and_then(|button| self.find(&format!("{key}|{button}|color={color}")))
-                .or_else(|| self.find(&format!("{key}|color={color}")));
-            if let Some(file) = file {
-                return Some(file.decl.clone());
-            }
-        }
-        if let Some(button) = button {
-            if let Some(file) = self.find(&format!("{key}|{button}")) {
-                return Some(file.decl.clone());
-            }
-        }
-        self.find(&key).map(|file| file.decl.clone())
+        self.find_for_path(search_dirs, path, button, color)
+            .map(|file| file.decl.clone())
     }
 
     pub fn has_color_variants(&self) -> bool {
@@ -214,8 +230,65 @@ impl CompiledActors {
         search_dirs: &[PathBuf],
         path: &Path,
     ) -> Option<&noteskin_actor::ItgLuaActorDecl> {
-        let key = actor_manifest_key(search_dirs, path)?;
-        self.find(&key).map(|file| &file.decl)
+        self.find_for_path(search_dirs, path, None, None)
+            .map(|file| &file.decl)
+    }
+
+    fn find_for_path(
+        &self,
+        search_dirs: &[PathBuf],
+        path: &Path,
+        button: Option<&str>,
+        color: Option<crate::Quantization>,
+    ) -> Option<&CompiledActorFile> {
+        let dir = search_dirs.iter().find(|dir| path.starts_with(dir))?;
+        let game = dir.parent()?.file_name()?.to_str()?;
+        let skin = dir.file_name()?.to_str()?;
+        let filename = path.file_name()?.to_str()?;
+        let color = color.map(crate::Quantization::color_name);
+        let base_len = game.len() + 1 + skin.len() + 1 + filename.len();
+        let capacity = base_len
+            + button.map_or(0, |button| 1 + button.len())
+            + color.map_or(0, |color| "|color=".len() + color.len());
+        // Normal manifest keys stay inline. Reuse the same buffer for every
+        // fallback; unusually long user-supplied names may spill once.
+        let mut key = smallvec::SmallVec::<[u8; 256]>::with_capacity(capacity);
+        for part in [game, "/", skin, "/", filename] {
+            key.extend_from_slice(part.as_bytes());
+        }
+        let find = |key: &[u8]| {
+            self.files
+                .iter()
+                .find(|file| file.key.as_bytes().eq_ignore_ascii_case(key))
+        };
+        if let Some(color) = color {
+            if let Some(button) = button {
+                for part in ["|", button, "|color=", color] {
+                    key.extend_from_slice(part.as_bytes());
+                }
+                if let Some(file) = find(&key) {
+                    return Some(file);
+                }
+                key.truncate(base_len);
+            }
+            for part in ["|color=", color] {
+                key.extend_from_slice(part.as_bytes());
+            }
+            if let Some(file) = find(&key) {
+                return Some(file);
+            }
+            key.truncate(base_len);
+        }
+        if let Some(button) = button {
+            for part in ["|", button] {
+                key.extend_from_slice(part.as_bytes());
+            }
+            if let Some(file) = find(&key) {
+                return Some(file);
+            }
+            key.truncate(base_len);
+        }
+        find(&key)
     }
 }
 
@@ -378,6 +451,7 @@ mod tests {
             entries: vec![CompiledLoaderEntry {
                 button: "Down".to_string(),
                 element: "Hold Explosion".to_string(),
+                color: None,
                 load_button: "Left".to_string(),
                 load_element: "Roll Explosion".to_string(),
                 blank: true,

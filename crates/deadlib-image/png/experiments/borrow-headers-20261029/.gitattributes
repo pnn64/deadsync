@@ -1,0 +1,2 @@
+# Preserve exact recorded source/binary identities and measurement bytes.
+* -text -whitespace

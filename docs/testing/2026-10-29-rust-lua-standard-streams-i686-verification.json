@@ -1,0 +1,36 @@
+{
+  "reports": {
+    "standard-streams-i686-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-standard-streams-i686-current.json",
+      "sha256": "d41886fddd3a57a985210f36f9e8443cb49075a79905eb28610aff9c6f8237a7",
+      "observations": 13
+    },
+    "standard-streams-i686-current-c": {
+      "path": "docs/testing/2026-10-29-rust-lua-standard-streams-i686-current-c.json",
+      "sha256": "bf09d0bc34e19df5db02626d99f13b8779167cf20f68099bbe3cf6c23978ead0",
+      "observations": 13
+    },
+    "standard-streams-files-i686-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-standard-streams-files-i686-current.json",
+      "sha256": "14bef640b83b01c5d32ebaea0e0c262c6464ead12d3c7fff87d21f244ef89229",
+      "observations": 26
+    },
+    "standard-streams-native-i686-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-standard-streams-native-i686-current.json",
+      "sha256": "1e7ab7f8124e07e8dac18cbff2e9d04f27c0cf3956bb23a3a83d720ed79986f4",
+      "observations": 47
+    }
+  },
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_checks": 16,
+  "checked_references_enabled": true,
+  "observations": 99,
+  "standard_streams_verified": true,
+  "signed_ftell_verified": true,
+  "exit_processes": 12,
+  "suite_report": "docs/testing/2026-10-29-rust-lua-standard-streams-i686-suite.json",
+  "suite_report_sha256": "cfc09f1336deae998286fe8bf3e657b41ea2f10ae8c1f0d405eb5e75d2a75ad7",
+  "audit_script_sha256": "e6b66bc499d0f659be2dd18ff67e038cdeb9ffeeb1e325f23d9eaa7fd79f8a91"
+}

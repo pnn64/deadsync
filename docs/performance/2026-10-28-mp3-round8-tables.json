@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "book1_prefix_and_bound_checks": 192,
+  "other_pair_words": 4958,
+  "reachable_nodes": 1334,
+  "prefix_exhaustive_unit_cases": 5701633,
+  "generic_read_and_flag_source_unchanged": true,
+  "csv_unchanged": true,
+  "generation_byte_reproducible": true,
+  "command": [
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py",
+    "--input",
+    "target/deadlib-mp3-reference/huffcode",
+    "--crate",
+    "target\\mp3-perf-20261028\\round8-regenerated"
+  ],
+  "sha256": {
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py": "b130dc1a61ef86e29f274d35b3ba9f27b2902979fd95fca092683285a2f7578f",
+    "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "79767f4d05f03fa427aaf605b1fdcc86df35e2e1fdd44df99b9831cbfc066ac8",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.json": "d77bb3978e3cc8b74d42f6537242b687cc37cf083898a81b87fd5d3691214312",
+    "target\\deadlib-mp3-reference\\huffcode": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7"
+  },
+  "table_element_bytes": {
+    "ROOTS": 48,
+    "PAIR1": 128,
+    "LINBITS": 32,
+    "COUNT1": 64,
+    "ESCAPE_PREFIX": 64,
+    "NODES": 5336,
+    "SIGN_LAYOUT": 32,
+    "COUNT1_SIGNS": 648
+  },
+  "total_bytes": 6352,
+  "baseline_table_bytes": 6236,
+  "tests": {
+    "passed": 66,
+    "log": "target\\mp3-perf-20261028\\round8-fused-tests.log",
+    "encoding": "UTF-16",
+    "sha256": "44d538215189452a55656b7dc8b12310d8e1d8189799bce6279e9034b4ac1ab7"
+  },
+  "benchmark_images": {
+    "round8-final-base": {
+      "bytes": 592384,
+      "sha256": "ce83170b3fe4eb7f63dd2976f130e067989d88e697be4752f0a842867762a0d1"
+    },
+    "round8-fused-book1": {
+      "bytes": 592896,
+      "sha256": "0e48ae03195b05a26ec657fb2035a97e3348816db03017299e18474ab8799c0a"
+    },
+    "round8-fused-prefixes": {
+      "bytes": 593408,
+      "sha256": "7897fccde22268a6273529751a6af055651fe6c9f27d328626a31b19b64de6f5"
+    },
+    "round8-fused-final": {
+      "bytes": 590848,
+      "sha256": "42baf2f27432663a625598320c2c1d31f74503498212cc94aedbd42085b47a11"
+    }
+  }
+}

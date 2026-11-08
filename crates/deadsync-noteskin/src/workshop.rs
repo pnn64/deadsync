@@ -240,7 +240,7 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
     if files.is_empty() {
         return Ok(Vec::new());
     }
-    let mut groups = BTreeMap::<(String, String), Choice>::new();
+    let mut groups = BTreeMap::<(&str, String), Choice>::new();
     let other = if family == "Cel" { "Metal" } else { "Cel" };
     let mut label = String::new();
     let mut folder_text = String::new();
@@ -249,19 +249,25 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             .strip_prefix(root)
             .map_err(|e| Error::Invalid(e.to_string()))?
             .to_str()
-            .ok_or_else(|| Error::Invalid("non-UTF8 workshop path".into()))?
-            .replace('\\', "/");
-        let mut parts = relative.splitn(3, '/');
+            .ok_or_else(|| Error::Invalid("non-UTF8 workshop path".into()))?;
+        let mut parts = relative.splitn(3, ['\\', '/']);
         parts.next();
         let category = parts.next();
-        let Some((folders, filename)) = parts.next().and_then(|rest| rest.rsplit_once('/')) else {
-            return Err(Error::Invalid(format!("invalid customization: {relative}")));
+        let Some((folders, filename)) = parts.next().and_then(|rest| rest.rsplit_once(['\\', '/']))
+        else {
+            return Err(Error::Invalid(format!(
+                "invalid customization: {}",
+                relative.replace('\\', "/")
+            )));
         };
-        if folders.split('/').any(|folder| folder.contains(other)) {
+        if folders
+            .split(['\\', '/'])
+            .any(|folder| folder.contains(other))
+        {
             continue;
         }
         label.clear();
-        for folder in folders.split('/') {
+        for folder in folders.split(['\\', '/']) {
             folder_text.clear();
             for part in folder.split(family) {
                 folder_text.push_str(part);
@@ -274,7 +280,6 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
                 label.push_str(trimmed);
             }
         }
-        let inactive = filename.to_lowercase().contains("inactive");
         let slot = match category.expect("three path components were present") {
             "Arrows" => "arrows",
             "Receptors" => "receptors",
@@ -284,14 +289,14 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             "Mine Size" => "mine_size",
             "Lifts" => "lifts",
             "Holds" => {
-                if inactive {
+                if filename.to_lowercase().contains("inactive") {
                     "hold_inactive"
                 } else {
                     "hold_active"
                 }
             }
             "Rolls" => {
-                if inactive {
+                if filename.to_lowercase().contains("inactive") {
                     "roll_inactive"
                 } else {
                     "roll_active"
@@ -301,10 +306,10 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
         };
         let id = slug(&label);
         let choice = groups
-            .entry((slot.into(), id.clone()))
-            .or_insert_with(|| Choice {
+            .entry((slot, id))
+            .or_insert_with_key(|(_, id)| Choice {
                 slot: slot.into(),
-                id,
+                id: id.clone(),
                 label: label.clone(),
                 cell: 0,
                 files: vec![],
@@ -315,13 +320,16 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
         }
         choice.files.push(FileSwap {
             target: filename.into(),
-            source: relative,
+            source: relative.replace('\\', "/"),
         });
     }
     let mut choices: Vec<_> = groups.into_values().collect();
     for choice in &mut choices {
+        if choice.slot != "arrows" {
+            continue;
+        }
         let label = choice.label.to_lowercase();
-        if choice.slot == "arrows" && (label.contains("rgb") || label.contains("ddr vivid")) {
+        if label.contains("rgb") || label.contains("ddr vivid") {
             choice.metrics.push(MetricSwap {
                 section: "NoteDisplay".into(),
                 key: "TapNoteAnimationLength".into(),
@@ -391,10 +399,6 @@ fn thumbnail_frame(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
     let frame = imageops::crop_imm(image, 0, 0, width, height);
     imageops::thumbnail(&*frame, CELL - 4, CELL - 4)
 }
-
-#[cfg(test)]
-#[path = "../tests/thumbnail_loading/mod.rs"]
-mod thumbnail_loading;
 
 #[cfg(test)]
 mod tests {
@@ -478,52 +482,8 @@ mod tests {
         });
         assert!(matches!(result, Err(Error::Invalid(message)) if message == "bad PNG"));
     }
-
-    #[test]
-    #[ignore = "requires DEADSYNC_WORKSHOP_FIXTURE; decodes the installed Workshop twice"]
-    fn workshop_atlas_benchmark() {
-        let root =
-            PathBuf::from(std::env::var_os("DEADSYNC_WORKSHOP_FIXTURE").expect("fixture path"));
-        let pack = InstalledPack::load(&root).unwrap();
-        let started = std::time::Instant::now();
-        let mut old = Vec::new();
-        let mut count = 0;
-        for skin in &pack.manifest.skins {
-            let mut atlas = RgbaImage::new(ATLAS, ATLAS);
-            for choice in &skin.options {
-                let fallback = format!("{}/_mine tex.png", skin.base);
-                let path = choice
-                    .files
-                    .iter()
-                    .find(|swap| swap.source.to_lowercase().ends_with(".png"))
-                    .map_or(fallback.as_str(), |swap| swap.source.as_str());
-                let tile = thumbnail(&root.join(path)).unwrap();
-                let x =
-                    (u32::from(choice.cell) % (ATLAS / CELL)) * CELL + (CELL - tile.width()) / 2;
-                let y =
-                    (u32::from(choice.cell) / (ATLAS / CELL)) * CELL + (CELL - tile.height()) / 2;
-                imageops::overlay(&mut atlas, &tile, i64::from(x), i64::from(y));
-                count += 1;
-            }
-            old.push(atlas);
-        }
-        let old_time = started.elapsed();
-        let started = std::time::Instant::now();
-        let new = build_atlases(&root, &pack.manifest.skins, |_, _| true).unwrap();
-        let new_time = started.elapsed();
-        assert_eq!(
-            old, new,
-            "parallel/deduplicated atlases preserve every pixel"
-        );
-        eprintln!(
-            "Workshop atlas: old {count} decodes {:.3}s; new {} decodes {:.3}s",
-            old_time.as_secs_f64(),
-            thumbnail_sources(&pack.manifest.skins).len(),
-            new_time.as_secs_f64()
-        );
-    }
 }
 
 #[cfg(test)]
-#[path = "../tests/workshop_preparation/mod.rs"]
-mod workshop_preparation;
+#[path = "workshop_perf.rs"]
+mod direct_data_perf;

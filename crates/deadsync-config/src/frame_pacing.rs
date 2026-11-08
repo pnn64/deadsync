@@ -46,12 +46,7 @@ pub const fn queued_input_allowed(
 #[inline(always)]
 #[must_use]
 pub fn seconds_to_us_u32(seconds: f32) -> u32 {
-    let micros = (seconds * 1_000_000.0).max(0.0);
-    if micros > u32::MAX as f32 {
-        u32::MAX
-    } else {
-        micros as u32
-    }
+    (seconds * 1_000_000.0) as u32
 }
 
 /// Slow-decay "worst recent frame" hold for max readouts and graph scale.
@@ -274,7 +269,10 @@ impl StutterSampleRing {
             expected_seconds,
             severity,
         };
-        self.cursor = (self.cursor + 1) % STUTTER_SAMPLE_COUNT;
+        self.cursor += 1;
+        if self.cursor == STUTTER_SAMPLE_COUNT {
+            self.cursor = 0;
+        }
     }
 
     #[must_use]
@@ -342,7 +340,14 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
             return;
         }
         self.samples[self.cursor] = sample;
-        self.cursor = (self.cursor + 1) % N;
+        let next = self.cursor + 1;
+        self.cursor = if N.is_power_of_two() {
+            next & (N - 1)
+        } else if next == N {
+            0
+        } else {
+            next
+        };
         self.len = self.len.saturating_add(1).min(N);
     }
 
@@ -372,13 +377,16 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
             return;
         }
         let start = self.cursor.saturating_add(N).saturating_sub(self.len) % N;
-        for i in 0..self.len {
-            let sample = self.samples[(start + i) % N];
-            let sample_time = timestamp(sample);
-            if sample_time != 0 && now_host_nanos.saturating_sub(sample_time) <= window_ns {
-                out.push(sample);
-            }
-        }
+        let first_len = self.len.min(N - start);
+        self.samples[start..start + first_len]
+            .iter()
+            .chain(&self.samples[..self.len - first_len])
+            .for_each(|&sample| {
+                let sample_time = timestamp(sample);
+                if sample_time != 0 && now_host_nanos.saturating_sub(sample_time) <= window_ns {
+                    out.push(sample);
+                }
+            });
     }
 }
 
@@ -523,4 +531,9 @@ mod tests {
                 < EPS
         );
     }
+}
+
+#[cfg(test)]
+mod frame_kernels {
+    include!("frame_kernels.rs");
 }

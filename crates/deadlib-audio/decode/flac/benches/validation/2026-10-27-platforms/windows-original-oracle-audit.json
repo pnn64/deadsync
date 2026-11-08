@@ -1,0 +1,288 @@
+{
+  "passed": true,
+  "records": [
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "frames",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\input.oga"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t12300900\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "startup",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "startup\t2\t275100\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "stream",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream\t2\t13447000\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "stream-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream-md5\t2\t19115300\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "symphonia-new",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new\t2\t15363200\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "symphonia-new-crc",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-crc\t2\t16089500\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "ogg-stream",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream\t2\t12970500\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "ogg-stream-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream-md5\t2\t19221600\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "symphonia-new-ogg",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg\t2\t15995300\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "symphonia-new-ogg-crc",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg-crc\t2\t15973700\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "symphonia-new-startup",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-startup\t2\t324800\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac\t2\t16733100\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-md5\t2\t23427000\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new\t2\t15115000\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-md5\t2\t21797800\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-ogg",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\input.oga",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg\t2\t16620500\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-ogg-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\input.oga",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg-md5\t2\t22775300\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-startup",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-startup\t2\t257800\t16384\t17179869042\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "frames",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t11682300\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "stream-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (5060) panicked at crates\\deadlib-audio\\decode\\flac\\benches\\decode.rs:251:61:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+        "ogg-stream-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+        "2",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\corrupt-md5.oga"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (27888) panicked at crates\\deadlib-audio\\decode\\flac\\benches\\decode.rs:237:22:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle\\Release\\flac_decode_benchmark.exe",
+        "libflac-new-ogg-md5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\corrupt-md5.oga",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\oracle-audit\\frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    }
+  ],
+  "sha256": {
+    "native": "7339d970d26330211c87a1f4b58fe634bd8d16a081a023fa19f56616d5e9e249",
+    "oracle": "1c747cf51cb97c2295631029a334cf2f2ce082685608a993c623a61432c2afdb",
+    "input": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f"
+  }
+}

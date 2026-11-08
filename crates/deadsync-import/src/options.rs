@@ -282,6 +282,11 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(font) = sl_enum::<ComboFont>(map, "ComboFont") {
         out.combo_font = font;
     }
+    if let Some(animation) =
+        sl_enum::<deadsync_profile::JudgmentAnimation>(map, "JudgmentAnimation")
+    {
+        out.judgment_animation = animation;
+    }
     if let Some(x) = sl_str(map, "NoteFieldOffsetX").and_then(leading_i32) {
         out.note_field_offset_x = x;
     }
@@ -676,6 +681,28 @@ mod tests {
     }
 
     #[test]
+    fn imports_arrow_cloud_judgment_animation() {
+        use deadsync_profile::JudgmentAnimation;
+        let base = PlayerOptionsData {
+            judgment_animation: JudgmentAnimation::Still,
+            ..Default::default()
+        };
+        for (value, expected) in [
+            ("Default", JudgmentAnimation::Default),
+            ("Still", JudgmentAnimation::Still),
+            ("ITG", JudgmentAnimation::Itg),
+            ("unknown", JudgmentAnimation::Still),
+        ] {
+            let out = translate_player_options(&sl(&[("JudgmentAnimation", value)]), &base);
+            assert_eq!(out.judgment_animation, expected);
+        }
+        assert_eq!(
+            translate_player_options(&sl(&[]), &base).judgment_animation,
+            JudgmentAnimation::Still
+        );
+    }
+
+    #[test]
     fn ignores_unknown_custom_graphics() {
         let mut base = PlayerOptionsData::default();
         base.judgment_graphic = JudgmentGraphic::new("Wendy");
@@ -824,17 +851,7 @@ mod tests {
         let missing = translate_player_options(&sl(&[]), &base);
         assert_eq!(missing.target_score, base.target_score);
         assert_eq!(missing.target_score_percent, base.target_score_percent);
-        for raw in [
-            "",
-            " ",
-            "0",
-            "19",
-            "-1",
-            "255",
-            "1.5",
-            "17foo",
-            "Ghost Data",
-        ] {
+        for raw in ["", " ", "0", "19", "-1", "255", "1.5", "17foo"] {
             let out = translate_player_options(&sl(&[("TargetScore", raw)]), &base);
             assert_eq!(out.target_score, base.target_score, "TargetScore={raw:?}");
             assert_eq!(out.target_score_percent, base.target_score_percent);
@@ -858,7 +875,7 @@ mod tests {
         let pb = translate_player_options(&sl(&[("TargetScore", "Personal best")]), &base);
         assert_eq!(pb.target_score, TargetScoreSetting::PersonalBest);
 
-        // Numeric targets import directly; ghost data still requires replay support.
+        // Numeric and ghost targets preserve the selected Arrow Cloud option.
         let specified = translate_player_options(
             &sl(&[
                 ("TargetScore", "SpecifiedValue"),
@@ -874,7 +891,7 @@ mod tests {
             TargetScoreMissPolicy::RestartSong
         );
         let ghost = translate_player_options(&sl(&[("TargetScore", "Ghost Data")]), &base);
-        assert_eq!(ghost.target_score, base.target_score);
+        assert_eq!(ghost.target_score, TargetScoreSetting::GhostData);
     }
 
     #[test]

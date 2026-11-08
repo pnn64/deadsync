@@ -13,7 +13,7 @@ mod dynamic_media;
 mod frame_pacing_trace;
 mod frame_stats;
 mod frame_stutter;
-mod gameplay_entry;
+pub mod gameplay_entry;
 mod gameplay_prewarm;
 mod gameplay_runtime;
 mod graphics;
@@ -23,6 +23,7 @@ mod input_backend;
 mod input_trace;
 mod interaction;
 mod latest_worker_value;
+mod twitch;
 mod lighting;
 pub mod live_case;
 mod local_profiles;
@@ -97,3 +98,32 @@ mod tests {
 
 #[cfg(test)]
 mod gameplay_regression_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_support.rs"]
+mod owned_perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_added_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_added_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_support.rs"]
+mod course_perf;

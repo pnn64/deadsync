@@ -1,0 +1,16 @@
+[
+  {
+    "url": "https://assets.vde-verlag.de/iec-normen/preview-pdf/info_isoiec11172-3%7Bed1.0%7Den.pdf",
+    "local_name": "mpeg1-vde-preview.pdf",
+    "bytes": 302827,
+    "sha256": "d0933629f4e063c7b7efb56b7be74ee55af4c356cbe76efa657ed3a68ef6eefc",
+    "scope": "Published 1993 cover, contents, foreword and introduction only; 7 PDF pages."
+  },
+  {
+    "url": "https://assets.vde-verlag.de/iec-normen/preview-pdf/info_isoiec13818-3%7Bed2.0%7Den.pdf",
+    "local_name": "mpeg2-vde-preview.pdf",
+    "bytes": 61767,
+    "sha256": "d4739c0fa9eecd8695a293b919cf3e5be994b97e10f47e4d1785ccffc61d0063",
+    "scope": "Published 1998 cover, contents, foreword and introduction; 11 PDF pages; technical-change list inspected."
+  }
+]

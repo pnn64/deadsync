@@ -58,7 +58,7 @@ pub fn compile_song_lua(
         entry_path,
         context,
         song_lua_noteskin_resolver(),
-        crate::noteskin::load_itg_model_slots_from_path,
+        crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,
         |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )
@@ -74,7 +74,7 @@ pub fn compile_song_lua_layers(
         primary_index,
         context,
         song_lua_noteskin_resolver(),
-        crate::noteskin::load_itg_model_slots_from_path,
+        crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,
         |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )
@@ -91,7 +91,16 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     }
 }
 
-fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
+pub fn reload_song_lua(
+    scene: deadsync_song_lua::SongLuaLiveScene,
+) -> Result<Vec<CompiledSongLua>, String> {
+    deadsync_song_lua::reload_song_lua_with_default_host(
+        scene, crate::noteskin::load_itg_model_slots, model_layer_from_slot,
+        |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
+    )
+}
+
+pub fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }
 
@@ -105,7 +114,7 @@ fn model_layer_from_slot_frame(
     }
     let uv_rect = slot.uv_for_frame_at(frame_index, 0.0);
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
-    Some(SongLuaOverlayModelLayer::new(
+    let mut layer = SongLuaOverlayModelLayer::new(
         slot.texture_key_shared(),
         crate::noteskin::build_model_geometry(slot),
         model.size(),
@@ -115,7 +124,57 @@ fn model_layer_from_slot_frame(
         slot.uv_velocity,
         slot.uv_cycle_seconds,
         song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
-    ))
+    );
+    layer.material = model.material;
+    layer.texture_frames = slot
+        .model_texture_states
+        .iter()
+        .enumerate()
+        .map(|(index, state)| {
+            let base = slot.uv_for_frame(index);
+            let (scale, offset, shift) = slot.model_uv_params(base);
+            let glow = deadsync_song_lua::SongLuaModelTextureUv {
+                scale,
+                offset,
+                shift,
+            };
+            let mut diffuse = glow;
+            for axis in 0..2 {
+                let shift = (slot.uv_offset[axis] + state.translation[axis]) * scale[axis];
+                diffuse.offset[axis] += shift;
+                diffuse.shift[axis] += shift;
+            }
+            deadsync_song_lua::SongLuaModelTextureFrame {
+                texture_key: slot.model_texture_keys.get(index).cloned(),
+                delay: state.delay,
+                diffuse,
+                glow,
+            }
+        })
+        .collect();
+    if let Some(texture) = &slot.model_additive {
+        layer.additive = Some(texture.texture_key_shared());
+        layer.additive_frames = texture
+            .model_texture_states
+            .iter()
+            .enumerate()
+            .map(|(index, state)| {
+                let rect = texture.uv_for_frame(index);
+                let uv = deadsync_song_lua::SongLuaModelTextureUv {
+                    scale: [rect[2] - rect[0], rect[3] - rect[1]],
+                    offset: [rect[0], rect[1]],
+                    shift: [0.0; 2],
+                };
+                deadsync_song_lua::SongLuaModelTextureFrame {
+                    texture_key: texture.model_texture_keys.get(index).cloned(),
+                    delay: state.delay,
+                    diffuse: uv,
+                    glow: uv,
+                }
+            })
+            .collect();
+    }
+    Some(layer)
 }
 
 const fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
@@ -171,6 +230,7 @@ fn multitap_arrow_visual_spec(
             texture_path: PathBuf::from(texture_key.as_ref()),
             texture_key,
             states: [].into(),
+            textures: [].into(),
         },
         state,
     ))

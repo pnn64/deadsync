@@ -1,0 +1,11 @@
+path	engine	median_ns	min_ns	max_ns	mad_ns
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	1554794.9494949495	1325596.9696969697	1632091.9191919193	42057.57575757592
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	1432423.9130434783	1342554.347826087	1540111.956521739	69042.3913043479
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	7754716.666666667	7466727.777777778	8995600.0	236311.111111111
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	7491544.444444444	7325416.666666667	8342911.111111111	166127.77777777705
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	16037155.555555556	15829988.888888888	18960744.444444444	207166.6666666679
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	16062822.222222222	15404555.555555556	18870211.111111112	511233.33333333395
+assets/music/in_two (loop).ogg	native	15963490.0	15146370.0	17393800.0	280750.0
+assets/music/in_two (loop).ogg	native-baseline	15767930.0	14344080.0	16899200.0	385830.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	11775084.615384616	11303615.384615384	13346300.0	385984.6153846141
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	12102500.0	10979846.153846154	13453284.615384616	450861.53846153803

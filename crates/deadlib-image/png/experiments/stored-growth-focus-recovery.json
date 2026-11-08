@@ -1,0 +1,126 @@
+{
+  "reason": "Nested saved-source metadata collided with inherited control_of/control_manifest_sha256/control_runner_sha256 after three baseline processes. Add-Member now replaces those lineage fields with the immediate parent and current runner. Original parent files preserve earlier ancestry. No native benchmark failed.",
+  "failed_log": "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus.log",
+  "failed_log_sha256": "5619750edb2c4d154bab49ab88a8bfbf17b3376f67e40011bc1707020254cda6",
+  "original_runner": "experiments/stored-growth-benchmark-saved-before.ps1",
+  "original_runner_sha256": "78e7c215edcaadf3693fa1b20adc6a08e85744c566fc494d532ec19503023df0",
+  "fixed_runner": "scripts/benchmark_saved.ps1",
+  "fixed_runner_sha256": "28ee0d0b7f969cbfa4f3ce51037e1be43cdfebbc768c1fcab3ad01aed0bb7bc2",
+  "excluded_partial_outputs": [
+    {
+      "path": "benchmark-stored-growth-focus-before-a-run1.tsv",
+      "sha256": "56628118a8ba6fc5edfcdc4843b8194516f93c0501ee97949c0733442646388d"
+    },
+    {
+      "path": "benchmark-stored-growth-focus-before-a-run2.tsv",
+      "sha256": "e45fa62ac5e380c9b962a310591dc333beb00bf2e744ea53ef4590c5953686ca"
+    },
+    {
+      "path": "benchmark-stored-growth-focus-before-a-run3.tsv",
+      "sha256": "05c94449e3ff223db20102970fe8c5806dd825af9be4320bd04b4e1803492b91"
+    }
+  ],
+  "partial_scope": "Three successful process stdout files lack their final as-run timing manifest. They are preserved but excluded from every final timing comparison.",
+  "final_prefix_suffix": "b",
+  "commands": [
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\stored-growth-focus-baseline-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-trial\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-focus-before-b",
+        "-Iterations",
+        "4096",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\stored-growth-focus-candidate-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-trial\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-focus-trial-b",
+        "-Iterations",
+        "4096",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\stored-growth-focus-candidate-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-trial\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-focus-repeat-b",
+        "-Iterations",
+        "4096",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1",
+        "-Manifest",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\stored-growth-focus-baseline-source.json",
+        "-Executable",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-trial\\decode_bench.exe",
+        "-CorpusDirectory",
+        "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-a",
+        "-LogPrefix",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-focus-control-b",
+        "-Iterations",
+        "4096",
+        "-Runs",
+        "3"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "completed": true,
+  "recovery_log": "C:\\GitHub\\deadsync\\target\\png-stored-growth-focus-resume.log",
+  "recovery_log_sha256": "199ebfff34f3d766fa02325d3bac9d8c9171adf0ab0e3a8c6dea0e482fba0978",
+  "failed_log_repository": {
+    "path": "experiments/stored-growth-focus-failed.log",
+    "as_run_sha256": "5619750edb2c4d154bab49ab88a8bfbf17b3376f67e40011bc1707020254cda6",
+    "sha256": "e21413c632a6d7d1d36b9def9042edf352c369e4365c9fc184812f800efef39c",
+    "normalization": "CRLF to LF and terminal empty separator removal only; original whitespace retained."
+  },
+  "recovery_log_repository": {
+    "path": "experiments/stored-growth-focus-resume.log",
+    "as_run_sha256": "199ebfff34f3d766fa02325d3bac9d8c9171adf0ab0e3a8c6dea0e482fba0978",
+    "sha256": "bd7526746073afbbda2c920de10d45e44047e9d9ca2db565f873a4f2a2d44df0",
+    "normalization": "CRLF to LF and terminal empty separator removal only; original whitespace retained."
+  }
+}

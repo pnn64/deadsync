@@ -1,0 +1,901 @@
+[
+  {
+    "file": "22050-1-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.2782554626464844e-07
+      }
+    }
+  },
+  {
+    "file": "22050-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "22050-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "22050-3-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.76837158203125e-07
+      }
+    }
+  },
+  {
+    "file": "24000-1-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.2782554626464844e-07
+      }
+    }
+  },
+  {
+    "file": "24000-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "24000-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "24000-3-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.76837158203125e-07
+      }
+    }
+  },
+  {
+    "file": "16000-1-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.2782554626464844e-07
+      }
+    }
+  },
+  {
+    "file": "16000-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "16000-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "16000-3-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.76837158203125e-07
+      }
+    }
+  },
+  {
+    "file": "44100-1-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.129243850708008e-07
+      }
+    }
+  },
+  {
+    "file": "44100-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "44100-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "44100-3-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.618188202381134e-07
+      }
+    }
+  },
+  {
+    "file": "48000-1-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.129243850708008e-07
+      }
+    }
+  },
+  {
+    "file": "48000-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "48000-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "48000-3-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.618188202381134e-07
+      }
+    }
+  },
+  {
+    "file": "32000-1-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.129243850708008e-07
+      }
+    }
+  },
+  {
+    "file": "32000-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "32000-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "32000-3-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.618188202381134e-07
+      }
+    }
+  },
+  {
+    "file": "11025-1-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.2782554626464844e-07
+      }
+    }
+  },
+  {
+    "file": "11025-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "11025-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "11025-3-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.76837158203125e-07
+      }
+    }
+  },
+  {
+    "file": "12000-1-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.2782554626464844e-07
+      }
+    }
+  },
+  {
+    "file": "12000-2-0.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1920928955078125e-07
+      }
+    }
+  },
+  {
+    "file": "12000-2-1.mp3",
+    "bound": 36,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1029362678527832
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.651487410068512
+      }
+    }
+  },
+  {
+    "file": "12000-3-0.mp3",
+    "bound": 54,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.4901161193847656e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.76837158203125e-07
+      }
+    }
+  },
+  {
+    "file": "8000-1-0.mp3",
+    "bound": 108,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 9.033828973770142e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 3.3155083656311035e-07
+      }
+    }
+  },
+  {
+    "file": "8000-2-0.mp3",
+    "bound": 72,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 8.940696716308594e-08
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.6391277313232422e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.7881393432617188e-07
+      }
+    }
+  },
+  {
+    "file": "8000-2-1.mp3",
+    "bound": 72,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 1,
+        "stderr": "libmad at 0: Huffman data overrun\n"
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.1039612889289856
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 0.6514756083488464
+      }
+    }
+  },
+  {
+    "file": "8000-3-0.mp3",
+    "bound": 108,
+    "results": {
+      "native": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "mad": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 1.043081283569336e-07
+      },
+      "mpg123": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 2.086162567138672e-07
+      },
+      "symphonia": {
+        "exit_code": 0,
+        "stderr": "",
+        "max": 4.172325134277344e-07
+      }
+    }
+  }
+]

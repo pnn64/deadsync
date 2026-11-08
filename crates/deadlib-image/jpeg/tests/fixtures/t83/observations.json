@@ -1,0 +1,24 @@
+{
+  "tools": {
+    "native": "394d30da712c756b5eaa38dc2f403cc9808008026c0cd5087e23b95608a2124c",
+    "ijg": "aaeb9b39be7ee5d9536fc973273a1c87572b17fd20cde139bc42a59303c73207",
+    "turbo": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "moz8": "85fba3d580c8dea6678d74ece9fff5995b80ff6a7b166411ee71f0e346a05bda",
+    "moz12": "fe01075ad5ee18979854fe5b1f650b62e8522847e7c43b7e190d28cfe59ed11b",
+    "reference": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+  },
+  "files": [
+    {
+      "file": "observed-8.coef",
+      "sha256": "5d95bb300ed4d0b79311a829f5da42691b2e0a5ac06e942dc1ccf88798909e77",
+      "precision": 8,
+      "meaning": "Exact native and configured C entropy-decoder observation; not official DREF data"
+    },
+    {
+      "file": "observed-12.coef",
+      "sha256": "5010702ca805b61487e635fcbce1a88e3b89e7e8186af5c49097da9d62c57a1d",
+      "precision": 12,
+      "meaning": "Exact native and configured C entropy-decoder observation; not official DREF data"
+    }
+  ]
+}

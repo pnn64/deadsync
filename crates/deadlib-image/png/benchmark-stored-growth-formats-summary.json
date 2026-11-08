@@ -1,0 +1,126 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 265.83881968586877,
+      "deadlib-image-png/decode-reader": 248.39954065877455,
+      "deadlib-image-png/inflate": 1025.7487215271121,
+      "deadlib-image-png/inflate-stream": 519.757262241292,
+      "flate2-1.1.10/inflate": 567.0841488949239,
+      "png-0.18.1/decode": 312.23937099111726
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-stored-growth-before-formats-a-manifest.json",
+        "sha256": "5edf14901b41e4097f3834c0dbd9881d698e75d0d2ba8f0e7cd167061da08125"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-before-formats-a-run1.tsv",
+        "sha256": "1d883c735a4fb66b68ee853d152a482980779f384059403a09704411829831c3"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-before-formats-a-run2.tsv",
+        "sha256": "c9bbe49ffc3e9bd51f192502c770fbaa16ef79f84893f753aebb64b1634fd675"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-before-formats-a-run3.tsv",
+        "sha256": "d34d66ed9b0ef54dc3f5ddb54b34bed0fc21d21ffdc134a1ed60cda7f88f0e7b"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-stored-growth-control-formats-a-manifest.json",
+        "sha256": "463da51ac691f55988143f4d0d90a609f6ffd716dfd20da71dade6eaa3065776"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-control-formats-a-run1.tsv",
+        "sha256": "0da9856f7d33c85561bd0cee59c6fcbba4c08a9f5957c9dc16f1289cf20e770e"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-control-formats-a-run2.tsv",
+        "sha256": "ce506a5b3ed55e58c4823c3731b04658496ff93dc10fa82151d6e03b68b2f226"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-control-formats-a-run3.tsv",
+        "sha256": "204fcef36da08efba1bd9c0c241f26fa3cf605a19ec556b06393e97148a7efb8"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 262.1080893196946,
+      "deadlib-image-png/decode-reader": 246.81273882789188,
+      "deadlib-image-png/inflate": 1025.7642967134364,
+      "deadlib-image-png/inflate-stream": 528.1744935787955,
+      "flate2-1.1.10/inflate": 552.945463503374,
+      "png-0.18.1/decode": 309.8094269395242
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-stored-growth-trial-formats-a-manifest.json",
+        "sha256": "c6f2c1faf331048a4c127d686ee8d3a44d21f75116f3354fead0bf0e89c295d3"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-trial-formats-a-run1.tsv",
+        "sha256": "39673c5681473946166d90e6100b6923a1c4c472ec97d54a768de3c04b469b06"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-trial-formats-a-run2.tsv",
+        "sha256": "c89db5cc2cfc179e03b87a747794c446fe6d754b762ef11c5cc9a445e3f5666b"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-trial-formats-a-run3.tsv",
+        "sha256": "9975ac1f123e1e8500374a8abc5eb7bd2d2f0fc815ccada08db0c2ba36cd73d0"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-stored-growth-repeat-formats-a-manifest.json",
+        "sha256": "68a5a670c71f002558c0075f253fd26435f85aa5c9df2e187560ca305238a36c"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-repeat-formats-a-run1.tsv",
+        "sha256": "dc868f855e63f89abf34a24ccbed3bc7d90490dad51f69f16f917702e189a42e"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-repeat-formats-a-run2.tsv",
+        "sha256": "8b32c61ef9698296ff987e82d68e8acd82a13e6349fff66514c3c0885e5f2438"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stored-growth-repeat-formats-a-run3.tsv",
+        "sha256": "65192f55858cad0308a1e5cfd77efac22e61fd1241f552c8e8ad1cdc504ef998"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 265.83881968586877,
+      "after_mib_s": 262.1080893196946,
+      "absolute_change_percent": -1.4033805787215803,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -0.6300526937806028
+    },
+    "decode-reader": {
+      "before_mib_s": 248.39954065877455,
+      "after_mib_s": 246.81273882789188,
+      "absolute_change_percent": -0.6388102919491545,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 0.14051438604851807
+    },
+    "inflate": {
+      "before_mib_s": 1025.7487215271121,
+      "after_mib_s": 1025.7642967134364,
+      "absolute_change_percent": 0.0015184212270868969,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": 2.558533716509248
+    },
+    "inflate-stream": {
+      "before_mib_s": 519.757262241292,
+      "after_mib_s": 528.1744935787955,
+      "absolute_change_percent": 1.619454300880152,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": 4.217839835898407
+    }
+  },
+  "case_count": 60,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

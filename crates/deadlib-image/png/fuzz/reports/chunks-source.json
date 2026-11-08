@@ -1,0 +1,205 @@
+{
+  "date": "2026-10-27",
+  "production_checkpoint": "cafedc93d",
+  "production_change": "Documentation only; runtime logic unchanged",
+  "commands": [
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "decode",
+        "/tmp/deadlib-image-chunks-corpus-20261027-a/decode",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/chunks-decode-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 16.659
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "png_stream",
+        "/tmp/deadlib-image-chunks-corpus-20261027-a/png_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/chunks-png_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 18.572
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "decode",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 2069,
+        "bytes": 383803,
+        "maximum_file_bytes": 63435,
+        "sha256": "9ae8b766342c663fe2a28f6f57a83857657928cea179c9f5b366adc935f36503",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes (case-sensitive), each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/decode",
+      "binary_sha256": "d4fef379f85759ea70cf59b1f10e8cda4bf918c899c753f3344b6fb34bcddaa1",
+      "asan_init_defined": true,
+      "peak_rss_mib": 249,
+      "fuzz_seconds": 4
+    },
+    {
+      "target": "png_stream",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 2069,
+        "bytes": 383803,
+        "maximum_file_bytes": 63435,
+        "sha256": "9ae8b766342c663fe2a28f6f57a83857657928cea179c9f5b366adc935f36503",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes (case-sensitive), each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/png_stream",
+      "binary_sha256": "26d07d127a9f96fca06d350219bfb9a3da1e511a84a3759beb492a2781072ce5",
+      "asan_init_defined": true,
+      "peak_rss_mib": 422,
+      "fuzz_seconds": 16
+    }
+  ],
+  "source_sha256": [
+    {
+      "path": "png/examples/seed_fuzz.rs",
+      "sha256": "94188bfec5975d49474fe29d796a26ce2db46cd62f3c3b71f5456dc9ef241860"
+    },
+    {
+      "path": "png/fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "png/fuzz/Cargo.toml",
+      "sha256": "870c158287e62a44170276bee45f67c402b49b5e17cf1bbbbf94b0d6b9efbc36"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/decode.rs",
+      "sha256": "d69c8beb34bb9fa0baceb99c91e2c3222b4c76d26aea6d39f345dce1c2acb86d"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "5e65dd22d767e757d5634f55b1f45d33b5d2aa63738de3ed0f56b83b2ed2e773"
+    },
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "4d2004134299397ba9fd691f41ce5d0a17ae90115aa7ed92dd8627cd9c4c916a"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "scope": "40,000 fresh seeded ASan smoke executions, not a completeness claim; native-only fuzz coverage remains open.",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "clang": "Debian clang version 19.1.7 (3+b1)",
+  "environment": {
+    "CC": "/usr/bin/clang",
+    "CFLAGS": "-fsanitize=address",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

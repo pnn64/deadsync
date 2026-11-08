@@ -1,0 +1,362 @@
+{
+  "checked_at": "2026-10-26T13:53:14.026679+00:00",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode",
+        "--",
+        "--test-threads=1"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "400e0ccd8b52df5f01ea98b3b0098774f71debd114d6852ba24594a69a32524c",
+      "stderr_sha256": "ce606601e07dabfdcb69eed03df875939c7729d2a9aa7083a820deeb19864c71",
+      "test_results": [
+        "test result: ok. 32 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 10.17s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 13 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 10.93s",
+        "test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+        "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.84s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.81s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "warnings": []
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode",
+        "--all-targets"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "1f0be384d935953ffef8ddd29dc7822977d68ffcf99a0235dab8135128160b09",
+      "test_results": [],
+      "warnings": [
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: file is loaded as a module multiple times: `crates\\deadlib-audio-decode\\src\\..\\..\\..\\tests\\support\\paired_bench.rs`",
+        "warning: `deadlib-audio-decode` (lib) generated 2 warnings",
+        "warning: `deadlib-audio-decode` (lib test) generated 3 warnings (2 duplicates)",
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: `deadlib-audio-decode` (test \"wav_format_kernel\") generated 1 warning",
+        "warning: `deadlib-audio-decode` (test \"wav_float_kernel\") generated 1 warning (1 duplicate)",
+        "warning: `deadlib-audio-decode` (test \"metadata_probes\") generated 1 warning (1 duplicate)"
+      ]
+    },
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates/deadlib-audio-decode/src/wav.rs",
+        "crates/deadlib-audio-decode/src/mp3.rs",
+        "crates/deadlib-audio-decode/tests/metadata_probes.rs"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_results": [],
+      "warnings": []
+    },
+    {
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "py_compile",
+        "scripts/benchmark_audio_decode.py"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_results": [],
+      "warnings": []
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "Cargo.lock",
+        "crates/deadlib-audio-decode",
+        "scripts/benchmark_audio_decode.py"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "88151951323a5767dc34111ab2161686ccc0b4009f4375cda6448b0edb01b923",
+      "test_results": [],
+      "warnings": [
+        "warning: in the working copy of 'Cargo.lock', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of 'crates/deadlib-audio-decode/src/mp3.rs', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of 'crates/deadlib-audio-decode/src/wav.rs', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of 'scripts/benchmark_audio_decode.py', LF will be replaced by CRLF the next time Git touches it"
+      ]
+    }
+  ],
+  "release": [
+    {
+      "stage": "before-final",
+      "binary": "wav_format_kernel.exe",
+      "binary_sha256": "19c10b1d5d33440e6245f03d54c067008456fa8f9d0eb184b40ae49461380661",
+      "stdout_sha256": "0b8fd5f85fdf611a829ad4bbc77c5eecf38589a697a816c7f2cc8dc81b23cb5a",
+      "reused_identical_binary_result": false,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "before-final",
+      "binary": "metadata_probes.exe",
+      "binary_sha256": "6f2c8f8f91ec28db740f1f6af338e9eea78508f84fc0e6c941b67efed4c14976",
+      "stdout_sha256": "e92ae3434bd66c66adb1b8dd15af1a633c521afda5b3e9dddaad2761dbb4e162",
+      "reused_identical_binary_result": false,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 5
+    },
+    {
+      "stage": "walk-final",
+      "binary": "wav_format_kernel.exe",
+      "binary_sha256": "4324412af76de0346a45502178e9e5f4fcc61030d6b683c9146ec7be1fb484ed",
+      "stdout_sha256": "28c8c6c58e0a461d6165483eb732aa8514b93577ddc51561834ed7161292eadb",
+      "reused_identical_binary_result": false,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "walk-final",
+      "binary": "metadata_probes.exe",
+      "binary_sha256": "1a9c02bb617372cd560981e724c7918085ec9e98d1c29ea6a58aa35b1d109d32",
+      "stdout_sha256": "f4ecb1761ec85e8016d4c96a7c6af81412aa3c7ab82e47f20437a9c13eb70019",
+      "reused_identical_binary_result": false,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 5
+    },
+    {
+      "stage": "tail-final",
+      "binary": "wav_format_kernel.exe",
+      "binary_sha256": "212dbfaeb2a29a01e6620e3da2ca40973eb22c8f57c1d25e2b4608f3b0a25cf6",
+      "stdout_sha256": "b9a17a53fdbef86d3b6bca0f51b02f60d9f49ee5d9bc5a5aa9d592087dfdd23c",
+      "reused_identical_binary_result": false,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "tail-final",
+      "binary": "metadata_probes.exe",
+      "binary_sha256": "5608dc96c03f02e096ad141a999f6aca887fd2e9c766dee5a945ae4618f9c4ca",
+      "stdout_sha256": "383850e6abc3d3fd4a8c681ae676e6e516131dfe672b8e0470859291f6145824",
+      "reused_identical_binary_result": false,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 5
+    },
+    {
+      "stage": "after-checks",
+      "binary": "fade_equivalence.exe",
+      "binary_sha256": "8ab6984d465734b36a5f744bfce4fe0e16cfaf3c72413f6ac8526609ca4c94a9",
+      "stdout_sha256": "9d23548ea907bc2bb47b2a6e8900d6ec4ea36edaccc10a9f116f003552123298",
+      "reused_identical_binary_result": false,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "stage": "after-checks",
+      "binary": "wav_float_kernel.exe",
+      "binary_sha256": "8249de7dfb59dbe9e2b68d1adb9143a9218fa8ecada2e2fc48cecc41ac574c7b",
+      "stdout_sha256": "34a01416fb99e3adccf3ec0912e61919c46690196ecff5be35acb2f55b191906",
+      "reused_identical_binary_result": false,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "after-checks",
+      "binary": "wav_format_kernel.exe",
+      "binary_sha256": "822909452d1b430b67b53ae3cebceb6e45f8d78ce4ca13c0b393bab90cef6a33",
+      "stdout_sha256": "74f575d84875d44ffaef3dc9e5706df364321c4730c87a4df8a51ee3fd615dad",
+      "reused_identical_binary_result": false,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "after-checks",
+      "binary": "mapped_output_kernel.exe",
+      "binary_sha256": "89b2d290cbe3afc5cb18226af1dee3078ca330865255643cc38dec14266b9058",
+      "stdout_sha256": "deb3001e943ae795ff098d78d5f5e1baeee0aee9b68ffbc66b7009c1e118988f",
+      "reused_identical_binary_result": false,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "stage": "after-checks",
+      "binary": "resampler_output_kernel.exe",
+      "binary_sha256": "45c5d8f685fd67c23afc2fbb4bfd76c913594d7bfe2fd393f603f8a215d91cc9",
+      "stdout_sha256": "80516719b77df3a79f4051411f12e850f9255ed6ab7c0245d74db19a77e63c2d",
+      "reused_identical_binary_result": false,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "stage": "after-checks",
+      "binary": "planar_kernel.exe",
+      "binary_sha256": "4cac057d431e69dcb7df7d17d53bc1e96055a0c886b889cb2e10a39b6d14fbfa",
+      "stdout_sha256": "913415330fdb50ed19ef8fc812afda16f38f406b93881f70c1c55fa05320deb8",
+      "reused_identical_binary_result": false,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "after-checks",
+      "binary": "slice_kernels.exe",
+      "binary_sha256": "e41bec9cefe54085d7bf403c6992ff09d3d4c71f00ac6af740dd065b5e2bee49",
+      "stdout_sha256": "e8dee52d6229ad3880fcb1d980583960cab488c4f7bd747eb79ed99206e84d35",
+      "reused_identical_binary_result": false,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "stage": "after-checks",
+      "binary": "deadlib_audio_decode.exe",
+      "binary_sha256": "e029971bb2196da7a2347f0be0f3ff979a47da5f89f7b3a39d0e924a44cc4266",
+      "stdout_sha256": "8c1a0b40d80429c0099de0d21b8739ded267d704bfac51bef7411ad2b7826070",
+      "reused_identical_binary_result": false,
+      "passed": 32,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "stage": "after-checks",
+      "binary": "metadata_probes.exe",
+      "binary_sha256": "8d312bf9adf0c64c3709e77a9adbc9790ccad2216f0dac67cdb697fdc3df4ee4",
+      "stdout_sha256": "b4a9cbf34547f03d808ff7602a22928f7c40e475a6e3062012979c3b54a2bd31",
+      "reused_identical_binary_result": false,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 5
+    }
+  ],
+  "measurement_rows": 1008,
+  "unique_workloads": 42,
+  "source_sha256": {
+    "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+    "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+    "crates/deadlib-audio-decode/src/mp3.rs": "50e25914b20a5134a5a9ca4aa36a9a6eae96de5551ce4e37e4bb85e5a121f7d8",
+    "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+    "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+    "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+    "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+    "crates/deadlib-audio-decode/src/wav.rs": "1f796fcc5f824ab4a6a789d3780f89763bb90237e85c161f76917a22a53f85ae",
+    "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+    "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+    "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+    "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+    "crates/deadlib-audio-decode/tests/metadata_probes.rs": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+    "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+    "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+    "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+    "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+    "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+    "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+    "Cargo.lock": "b3de8d26138feeb7010030c07978a6149583b626aacb96efae548891f2113688",
+    "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+    "crates/deadlib-audio-decode/Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+  },
+  "harness_cleanup": {
+    "changed_calls": 3,
+    "timing_code_unchanged": true,
+    "measured_sha256": "73f102e9a5dbc1ae92d04f8774fd470e49de26460f9987d50614b704d8dfc7a5",
+    "committed_sha256": "bf0c0ab16057caf00ee56638fdcd990a1c9d52d6b0a8629e9a52a3a003edd81f",
+    "checks": [
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\release\\deps\\metadata_probes-df7d122674ea447e.exe",
+          "--test-threads=1"
+        ],
+        "return_code": 0,
+        "stdout_sha256": "e48498beebe5ff45bfce5df55a9c50f0c888f8425177956b5a6bb750c850ff57",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test_results": [
+          "test result: ok. 13 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 2.86s"
+        ],
+        "warnings": []
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "-p",
+          "deadlib-audio-decode",
+          "--all-targets"
+        ],
+        "return_code": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "1f0be384d935953ffef8ddd29dc7822977d68ffcf99a0235dab8135128160b09",
+        "test_results": [],
+        "warnings": [
+          "warning: very complex type used. Consider factoring parts into `type` definitions",
+          "warning: very complex type used. Consider factoring parts into `type` definitions",
+          "warning: file is loaded as a module multiple times: `crates\\deadlib-audio-decode\\src\\..\\..\\..\\tests\\support\\paired_bench.rs`",
+          "warning: `deadlib-audio-decode` (lib) generated 2 warnings",
+          "warning: `deadlib-audio-decode` (lib test) generated 3 warnings (2 duplicates)",
+          "warning: very complex type used. Consider factoring parts into `type` definitions",
+          "warning: `deadlib-audio-decode` (test \"wav_format_kernel\") generated 1 warning",
+          "warning: `deadlib-audio-decode` (test \"wav_float_kernel\") generated 1 warning (1 duplicate)",
+          "warning: `deadlib-audio-decode` (test \"metadata_probes\") generated 1 warning (1 duplicate)"
+        ]
+      },
+      {
+        "command": [
+          "rustfmt",
+          "--edition",
+          "2024",
+          "--check",
+          "crates\\deadlib-audio-decode\\tests\\metadata_probes.rs"
+        ],
+        "return_code": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test_results": [],
+        "warnings": []
+      }
+    ]
+  },
+  "audit": {
+    "unique_measurements": 1008,
+    "workloads": 42,
+    "process_runs": 6,
+    "final_release_tests": 66,
+    "final_debug_tests": 66,
+    "intermediate_tests_per_stage": 19,
+    "extension_allocations_removed": [
+      4096,
+      16385
+    ],
+    "final_production_sources_match_measured_archive": true,
+    "only_harness_difference_is_three_untimed_borrows": true,
+    "identical_harness_sources": true,
+    "cached_dependencies_unchanged": true,
+    "runner_sha256": "eb1ab2cc31d0daf2ee5caef57c005ecf588555f107274e141bb00ebf25c6b4d2"
+  }
+}

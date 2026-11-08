@@ -1,0 +1,42 @@
+[
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 43.52686728481916,
+    "min_ns_per_unit": 43.35283541258295,
+    "max_ns_per_unit": 44.98342001141513,
+    "median_ns_per_iteration": 1008485131.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 38.393031610510064,
+    "min_ns_per_unit": 37.81118275873856,
+    "max_ns_per_unit": 84.13632315167997,
+    "median_ns_per_iteration": 889537978.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 25.07426725312198,
+    "min_ns_per_unit": 24.679530840351543,
+    "max_ns_per_unit": 30.61748551615123,
+    "median_ns_per_iteration": 580952117.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 25.852214805689055,
+    "min_ns_per_unit": 25.77573246201777,
+    "max_ns_per_unit": 26.046583325765834,
+    "median_ns_per_iteration": 598976583.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "symphonia",
+    "median_ns_per_unit": 20.147088969969516,
+    "min_ns_per_unit": 19.890395962649816,
+    "max_ns_per_unit": 20.569006747562373,
+    "median_ns_per_iteration": 466793062.0
+  }
+]

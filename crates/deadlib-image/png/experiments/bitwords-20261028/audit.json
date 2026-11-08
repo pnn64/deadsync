@@ -1,0 +1,23 @@
+{
+  "selected_checkpoint": "adaptive-nibble",
+  "source_base": "2414ec857",
+  "canonical_comparisons": [
+    "words-final-paired",
+    "steps-final-paired",
+    "checksum-final-paired",
+    "accepted-paired",
+    "accepted-replay"
+  ],
+  "canonical_pipeline_processes": 40,
+  "total_pipeline_processes": 88,
+  "microbenchmark_processes": 6,
+  "cases_per_pipeline_process": 102,
+  "verified_build_measurement_validation_logs": 117,
+  "final_source_hashes_match": true,
+  "all_pipeline_fingerprints_match_baseline": true,
+  "all_allocation_requests_match_baseline": true,
+  "selected_validation_sha256": "b779a4a905225ce29ffa52fa9d5eded365b370689e1268ee0867a231e2f735ce",
+  "library_validation_sha256": "8aff4e0363232ac330f18774bd8e7521cde0ab34b5db6a604f9faa0d881ea5db",
+  "protocol_sha256": "0583f4446bfeeb6f7f4206c7c3a434b509f97dacab29d53bb0e1faac4c0e635b",
+  "report_sha256": "30dddee43395d91228b12efea602e307e9b6365a619526fb4c5c3268ecfab073"
+}

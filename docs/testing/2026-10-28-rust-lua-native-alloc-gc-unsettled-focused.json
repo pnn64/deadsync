@@ -1,0 +1,149 @@
+{
+  "runs": {
+    "reference": {
+      "absent": {
+        "command": [
+          "./lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,0);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\reference\\lua.exe",
+        "returncode": 1,
+        "stdout_hex": "",
+        "stderr_hex": "2e2f6c75612e6578653a2028636f6d6d616e64206c696e65293a313a2070616e69632072657475726e65640d0a737461636b2074726163656261636b3a0d0a095b435d3a20696e2066756e6374696f6e20276572726f72270d0a0928636f6d6d616e64206c696e65293a313a20696e206d61696e206368756e6b0d0a095b435d3a203f0d0a"
+      },
+      "returning": {
+        "command": [
+          "./lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,3);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\reference\\lua.exe",
+        "returncode": 1,
+        "stdout_hex": "",
+        "stderr_hex": "2e2f6c75612e6578653a2028636f6d6d616e64206c696e65293a313a2070616e69632072657475726e65640d0a737461636b2074726163656261636b3a0d0a095b435d3a20696e2066756e6374696f6e20276572726f72270d0a0928636f6d6d616e64206c696e65293a313a20696e206d61696e206368756e6b0d0a095b435d3a203f0d0a"
+      }
+    },
+    "rust": {
+      "absent": {
+        "command": [
+          "./lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,0);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\rust\\lua.exe",
+        "returncode": 1,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "returning": {
+        "command": [
+          "./lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,3);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\rust\\lua.exe",
+        "returncode": 1,
+        "stdout_hex": "70616e69632d72657475726e093209310d0a",
+        "stderr_hex": ""
+      }
+    }
+  },
+  "matched": {
+    "absent": false,
+    "returning": false
+  },
+  "strict_equal": false,
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\reference\\lua.exe": "41a7b92c086e3987d6484bfb1fd3680b81aef4e2742b588ccb42e64e71a5d9a4",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\reference\\lua51.dll": "cc7c2fffbea04ed8cbc76b194bfa6e9986fa2c03cd3ce99dca240eda5c42b63e",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\reference\\native.dll": "c438dcc13cea5f614301071b3c20e8e97ce15dc67814d5598c2cfbfc723aa3ca",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\rust\\lua.exe": "31287a0d1521a5a7c45b8e431dab1de3633e4fb241ee71ddc2b35ce6d89ba1e6",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-alloc-gc-unsettled\\rust\\native.dll": "68883a0e9791ec574019327e9b7737cc9515888c9262730b7950ab125bff90f4"
+  },
+  "reference": {
+    "url": "https://www.lua.org/ftp/lua-5.1.5.tar.gz",
+    "archive_sha256": "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333",
+    "source_hashes": {
+      "lapi.c": "6aa0d9fdd88b13fe46568ad6722ecf44164fb84476cfdf6480cf05b5704935f8",
+      "lapi.h": "4aea4c1b975d43184f4f1fd1a42c79cf11d74d2801315740cec07fe9abebb56d",
+      "lauxlib.c": "b564650bf4aca2757b9966311d32c8d5fea8803f6f33d72a856448d3b5d6d992",
+      "lauxlib.h": "c741f9c1587f29fd08a79acbe0c46884768a47f89bee4147669f774c5cf50fc0",
+      "lbaselib.c": "b14c49fae6fa4690662185bf842cb05d87756585d2f5bdd8495251fde83ef331",
+      "lcode.c": "027030bbef34115588bd4a64cf4c8c18236a56936835475a154277478767bac5",
+      "lcode.h": "97d5a37f3b1b19eda1ef39607b3358aa0f7e917568ccd27ed0f14bc6a70d4b17",
+      "ldblib.c": "eb8b056711f037e764f746d989f4e40621d8f9ff45add3336790c389849ed0ab",
+      "ldebug.c": "afa5840195befaec55177273c8168748026b38df3243767fc740cc7ced0c4c8f",
+      "ldebug.h": "d036f0dbb996bdecd48d505746f72c31b82fb2fc38f111b780568338d4ed9e9c",
+      "ldo.c": "d5942081ba661286327e30e22af5d11a1f4308d1f029a203c342b5f541cfa9b6",
+      "ldo.h": "591ad9a90098d3fbf06839da3de752d2c2585cbf5801dde4cdaffe12b23a182e",
+      "ldump.c": "30d83d766351bb053b3d20793a6bcd2ef0210e8fad76a7032abbe574bafa0ca3",
+      "lfunc.c": "525681d79098958530e5c937f7cbe94a4dafa679746ffdb16258f82b7ece29ce",
+      "lfunc.h": "3cea0071ffda94eac378adb5f1ecb467ef2ffafff4315459e4ccdf05b5119da4",
+      "lgc.c": "35be212ad0e4d89336f50f11cd0e991c04fe59b023ec03a626bf3f98e69fd1dc",
+      "lgc.h": "fbab2b989515377729d4c029dd58b3b6242877a88a7c4cfa703ea0deeb069a1e",
+      "linit.c": "c0c97c45862f6c978620a9682cd2201f0fc29c2afbcab824ba20d26cc1745e56",
+      "liolib.c": "a40f1d2c4aed9835885264cc6caf81c3bd2d5db93af3d313cc0478db37d93169",
+      "llex.c": "f1ade23f957e69f164ff28e133b201dff5d81726c390b060110b60907831e79b",
+      "llex.h": "0f3715d22b025727ef11debd641600a123b81718d195cd8445ac6378814458e6",
+      "llimits.h": "1910669296681d9d2814ca46c325063724bb634c0428dae4e5ff59be54e0b758",
+      "lmathlib.c": "e2933a56332d567cdd69f0fe514d638a8f82da6878754ff259e77cf2157263c3",
+      "lmem.c": "e63c50cb1c75356bd4123c9ca05f77bd0cd99e05c099cf6d1bf472086761e9c5",
+      "lmem.h": "abd1258418486c69bf5a93ceea3a1b9f8af2c7497a4fa6c27b442ffec2c5bbb1",
+      "loadlib.c": "b01bc465bb2e280fb45d24aea98d5ddd9dfd0999f44422e1151aafa1d7f5385c",
+      "lobject.c": "d704915c79c721556cc5850d741ed3bef1611221356f0e3a2f0ee5cfd5fd3632",
+      "lobject.h": "274c18373fbbad71bfebd534cae4b2d2e49934abf6672f44735edc6646fb6a8b",
+      "lopcodes.c": "63cd74edc75970092a8ce078c4ab970efa1ee18de960d00eb826d49fe98d8a76",
+      "lopcodes.h": "a15fe349da7c1e73b563e8c3249fe7d535eccc844cb30ec80b4e335b0699279b",
+      "loslib.c": "f0d5892f152cf7e1001b086e48774ccb6e567d11f1bf521f27050c15d9a0f040",
+      "lparser.c": "3590f24bab5763af673182e40d33194a7de6f5eabe5432c02a548d44225d2b63",
+      "lparser.h": "84512d6540b83ab599cd8de5a1c8c4deaf71ff353f8e4fbc2e4ca135ba4e9ef0",
+      "lstate.c": "c36d6b9354aaa30b5323b4984f3172783f69e0deb3186c2ef6f16a8281c59c29",
+      "lstate.h": "dc64ea7ec74d7c1efaeaf6a9e2257f0b7856a5c988747948af2e76cf079d20fe",
+      "lstring.c": "aa7e934c435d870b9d937ac2fb03dbfa15d367012d46e7e995a2ad8d440f2f6d",
+      "lstring.h": "c0e8af4eb33e3357be79f906e7e1191ba53a3a790d36ca15b50471d3a339e1f0",
+      "lstrlib.c": "e8048c79ae34be0fd29aa8db1a341cd600f5e09b9133b5810910e07b855a32d5",
+      "ltable.c": "3a853ce89bf5e834ec53f2a0dd2386eb8b84accbe5fdc18dabd7515b819f0f7c",
+      "ltable.h": "219e6ac2bf43aaa93093c6bcd571c012660325e6b87ea3d6c1b40679a0acfd64",
+      "ltablib.c": "e934dc4b2fc117a501c717302a00147f7b44eea978ef87a58a3e40e9bfe45d20",
+      "ltm.c": "9759ae5d1aa3b11e1c7faa6c0f65e05c7126417f7f8f3f989d82fc170b07f891",
+      "ltm.h": "54f4c2fa76b8ed8d48163e31807a19999f5d65b009ae862cb757e0773f2aa485",
+      "lua.c": "eb9ad1894926f0f807934ae52147cf9767ede0fbd01e9a1044dc4847caa9b73d",
+      "lua.h": "470551c185f058360f8d0f9e5c54a29a3950f78af6a93f3fe9e4039a380c7b87",
+      "luac.c": "b22ad97edb37c2a4b117ef81489bfc6eee15d58d4476ea149abbef7aabf8773d",
+      "luaconf.h": "0410ff22f66c275ba8fcee1fa87a0749d26d7952ed30d3bc9161688b39775464",
+      "lualib.h": "13f880e9dd997a0f7fd0b17ccd949c98f33e95bd120f084de66084e888217413",
+      "lundump.c": "55ccb55abde44e94e6c4d0bafc94f5870d2674d1944e9a81f6537d9ac92e8ebc",
+      "lundump.h": "9f3a2924d1585620993a70eea6cf3def34acb8322b2d9c3629bcdacc037edc64",
+      "lvm.c": "b560aad0a1b8bfc4e4b732b2393e8f8ecc68b6c772e6d25763d6ef71c38ab709",
+      "lvm.h": "db4b79dc7f4e7656078aa527350fbf14b2fde5d136ccf1cb4f3dc397def5fb67",
+      "lzio.c": "892bc24d898c19cbedceba419c68f910b99321c0b462be2c2c00b9d763563173",
+      "lzio.h": "0ec77d0179bf29c1ccab97028fed761944d5c21c02808e10cd7b5883b58b2ca6",
+      "print.c": "3c3b1c1dd17896e428b9742614c90ec10776ced65813eb648f02dee649892f2f"
+    },
+    "command": [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-cli-reference\\lua-5.1.5\\src",
+      "C:\\GitHub\\deadsync\\target\\lua-cli-reference\\lua-5.1.5\\src\\lua.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua51.lib",
+      "/link",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe"
+    ],
+    "platform": "win32",
+    "binary_sha256": "41a7b92c086e3987d6484bfb1fd3680b81aef4e2742b588ccb42e64e71a5d9a4",
+    "binary_path": "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+    "link_mode": "CLI and module share lua51.dll"
+  },
+  "rust_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+    "sha256": "31287a0d1521a5a7c45b8e431dab1de3633e4fb241ee71ddc2b35ce6d89ba1e6",
+    "prebuilt": true
+  },
+  "module_provenance_report_sha256": "55d02f7c71e892d2e5b3c75c487dde93836fd252002c92ba8341e8779bdf38db",
+  "same_relative_program_name": true
+}

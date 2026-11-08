@@ -22,7 +22,7 @@ pub use bindings::{
     write_default_keymap_ini_section, write_keymap_ini_section,
 };
 pub use keymap::{
-    InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,
+    InputBinding, Keymap, PhysicalInput, any_player_has_dedicated_menu_buttons_for_mode,
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
     set_keymap, with_keymap,
 };
@@ -122,14 +122,29 @@ pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
 
 fn write_gamepad_code_binding_token(s: &mut String, binding: GamepadCodeBinding) {
     use std::fmt::Write;
-    let _ = write!(s, "PadCode[0x{:08X}]", binding.code_u32);
+    const CODE_HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut hex = [0u8; 8];
+    for (pair, byte) in hex
+        .as_chunks_mut::<2>()
+        .0
+        .iter_mut()
+        .zip(binding.code_u32.to_be_bytes())
+    {
+        pair[0] = CODE_HEX[usize::from(byte >> 4)];
+        pair[1] = CODE_HEX[usize::from(byte & 15)];
+    }
+    s.push_str("PadCode[0x");
+    s.push_str(std::str::from_utf8(&hex).expect("hex digits are ASCII"));
+    s.push(']');
     if let Some(device) = binding.device {
         let _ = write!(s, "@{device}");
     }
     if let Some(uuid) = binding.uuid {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
         s.push('#');
-        for b in &uuid {
-            let _ = write!(s, "{b:02X}");
+        for &byte in &uuid {
+            s.push(char::from(HEX[usize::from(byte >> 4)]));
+            s.push(char::from(HEX[usize::from(byte & 15)]));
         }
     }
 }
@@ -167,20 +182,16 @@ pub fn parse_gamepad_code_binding(t: &str) -> Option<GamepadCodeBinding> {
             let hex_len = rest.bytes().take_while(u8::is_ascii_hexdigit).count();
             if hex_len == 32 {
                 let mut bytes = [0u8; 16];
-                let mut ok = true;
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    let start = i * 2;
-                    let end = start + 2;
-                    if let Ok(parsed) = u8::from_str_radix(&rest[start..end], 16) {
-                        *byte = parsed;
-                    } else {
-                        ok = false;
-                        break;
-                    }
+                // The scan validated all 32 ASCII hex digits. Their low nibble
+                // plus nine for a letter is the hex value, in either case.
+                let digit = |byte: u8| (byte & 15) + 9 * (byte >> 6);
+                for (byte, pair) in bytes
+                    .iter_mut()
+                    .zip(rest.as_bytes()[..32].as_chunks::<2>().0)
+                {
+                    *byte = (digit(pair[0]) << 4) | digit(pair[1]);
                 }
-                if ok {
-                    uuid = Some(bytes);
-                }
+                uuid = Some(bytes);
             }
             tail = &rest[hex_len..];
             continue;
@@ -581,6 +592,16 @@ pub const fn lane_from_column(column: usize) -> Option<Lane> {
         7 => Some(Lane::P2Right),
         8 => Some(Lane::Col8),
         9 => Some(Lane::Col9),
+        10 => Some(Lane::Col10),
+        11 => Some(Lane::Col11),
+        12 => Some(Lane::Col12),
+        13 => Some(Lane::Col13),
+        14 => Some(Lane::Col14),
+        15 => Some(Lane::Col15),
+        16 => Some(Lane::Col16),
+        17 => Some(Lane::Col17),
+        18 => Some(Lane::Col18),
+        19 => Some(Lane::Col19),
         _ => None,
     }
 }
@@ -898,7 +919,10 @@ mod tests {
         assert_eq!(lane_from_column(7), Some(Lane::P2Right));
         assert_eq!(lane_from_column(8), Some(Lane::Col8));
         assert_eq!(lane_from_column(9), Some(Lane::Col9));
-        assert_eq!(lane_from_column(10), None);
+        // Routine's second field occupies the columns after the pads' own.
+        assert_eq!(lane_from_column(10), Some(Lane::Col10));
+        assert_eq!(lane_from_column(19), Some(Lane::Col19));
+        assert_eq!(lane_from_column(20), None);
     }
 
     #[test]
@@ -955,8 +979,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;

@@ -1,0 +1,92 @@
+{
+  "runs": {
+    "reference": {
+      "command": [
+        "./lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('count audit');for _,kind in ipairs{'fresh','completed','yielded','failed','partial'}do collectgarbage();collectgarbage('stop');local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;for _,mode in ipairs{3,4}do local n,b,a,old,new=m.gc_thread(co,mode,0);assert(n>=0 and n==math.floor(n)and(mode==3 or n<1024));assert(a==b and old==new);print('gc-count',kind,mode,n,b,a,old,new)end end"
+      ],
+      "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\puc51\\lua.exe",
+      "returncode": 0,
+      "stdout_hex": "67632d636f756e74096672657368093309333609310931093009300d0a67632d636f756e7409667265736809340931343209310931093009300d0a67632d636f756e7409636f6d706c65746564093309333809300930093009300d0a67632d636f756e7409636f6d706c6574656409340931313609300930093009300d0a67632d636f756e74097969656c646564093309333809300930093109310d0a67632d636f756e74097969656c64656409340931343209300930093109310d0a67632d636f756e74096661696c6564093309333809320932093209320d0a67632d636f756e74096661696c656409340933323309320932093209320d0a67632d636f756e74097061727469616c093309333809300930093109310d0a67632d636f756e74097061727469616c09340931343209300930093109310d0a",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "command": [
+        "./lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('count audit');for _,kind in ipairs{'fresh','completed','yielded','failed','partial'}do collectgarbage();collectgarbage('stop');local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;for _,mode in ipairs{3,4}do local n,b,a,old,new=m.gc_thread(co,mode,0);assert(n>=0 and n==math.floor(n)and(mode==3 or n<1024));assert(a==b and old==new);print('gc-count',kind,mode,n,b,a,old,new)end end"
+      ],
+      "executable": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\rust5\\lua.exe",
+      "returncode": 0,
+      "stdout_hex": "67632d636f756e74096672657368093309343009310931093009300d0a67632d636f756e7409667265736809340938383909310931093009300d0a67632d636f756e7409636f6d706c65746564093309343009300930093009300d0a67632d636f756e7409636f6d706c6574656409340939333509300930093009300d0a67632d636f756e74097969656c646564093309343009300930093109310d0a67632d636f756e74097969656c646564093409323509300930093109310d0a67632d636f756e74096661696c6564093309343009320932093209320d0a67632d636f756e74096661696c656409340939373309320932093209320d0a67632d636f756e74097061727469616c093309343009300930093109310d0a67632d636f756e74097061727469616c0934093909300930093109310d0a",
+      "stderr_hex": ""
+    }
+  },
+  "source": "local m=assert(package.loadlib('./native.dll','luaopen_native'))('count audit');for _,kind in ipairs{'fresh','completed','yielded','failed','partial'}do collectgarbage();collectgarbage('stop');local co=coroutine.create(function()if kind=='failed'then error('old')end;if kind=='yielded'then coroutine.yield(17)end;if kind=='partial'then return m.yield_tail(11,13,17)end end);if kind~='fresh'then coroutine.resume(co)end;for _,mode in ipairs{3,4}do local n,b,a,old,new=m.gc_thread(co,mode,0);assert(n>=0 and n==math.floor(n)and(mode==3 or n<1024));assert(a==b and old==new);print('gc-count',kind,mode,n,b,a,old,new)end end",
+  "strict_equal": false,
+  "raw_count_rows_per_engine": {
+    "reference": 10,
+    "rust": 10
+  },
+  "mismatches": [
+    {
+      "reference": "gc-count\tfresh\t3\t36\t1\t1\t0\t0",
+      "rust": "gc-count\tfresh\t3\t40\t1\t1\t0\t0"
+    },
+    {
+      "reference": "gc-count\tfresh\t4\t142\t1\t1\t0\t0",
+      "rust": "gc-count\tfresh\t4\t889\t1\t1\t0\t0"
+    },
+    {
+      "reference": "gc-count\tcompleted\t3\t38\t0\t0\t0\t0",
+      "rust": "gc-count\tcompleted\t3\t40\t0\t0\t0\t0"
+    },
+    {
+      "reference": "gc-count\tcompleted\t4\t116\t0\t0\t0\t0",
+      "rust": "gc-count\tcompleted\t4\t935\t0\t0\t0\t0"
+    },
+    {
+      "reference": "gc-count\tyielded\t3\t38\t0\t0\t1\t1",
+      "rust": "gc-count\tyielded\t3\t40\t0\t0\t1\t1"
+    },
+    {
+      "reference": "gc-count\tyielded\t4\t142\t0\t0\t1\t1",
+      "rust": "gc-count\tyielded\t4\t25\t0\t0\t1\t1"
+    },
+    {
+      "reference": "gc-count\tfailed\t3\t38\t2\t2\t2\t2",
+      "rust": "gc-count\tfailed\t3\t40\t2\t2\t2\t2"
+    },
+    {
+      "reference": "gc-count\tfailed\t4\t323\t2\t2\t2\t2",
+      "rust": "gc-count\tfailed\t4\t973\t2\t2\t2\t2"
+    },
+    {
+      "reference": "gc-count\tpartial\t3\t38\t0\t0\t1\t1",
+      "rust": "gc-count\tpartial\t3\t40\t0\t0\t1\t1"
+    },
+    {
+      "reference": "gc-count\tpartial\t4\t142\t0\t0\t1\t1",
+      "rust": "gc-count\tpartial\t4\t9\t0\t0\t1\t1"
+    }
+  ],
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\puc51\\lua.exe": "41a7b92c086e3987d6484bfb1fd3680b81aef4e2742b588ccb42e64e71a5d9a4",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\puc51\\lua51.dll": "cc7c2fffbea04ed8cbc76b194bfa6e9986fa2c03cd3ce99dca240eda5c42b63e",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\puc51\\native.dll": "de7275732fcfc50e9066d4e8a470c764a44ad7b0b9dcc5cd64504366e857e086",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\rust5\\lua.exe": "7b4a97844f3a05bd6f5c24620dd465ea286497d354538ce59b6ca5fb96b79155",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts\\rust5\\native.dll": "6eda0ccd7cff5a212101fa690401c7548fc2571d80f6751ec92ccdfe1aa2b101"
+  },
+  "public_module_report": "docs\\testing\\2026-10-28-rust-lua-gc-integers-gc-current.json",
+  "public_module_report_sha256": "21890576acbefc926182a39a0fa3400ae8f57bc41b3190dae1b9dd4642af0778",
+  "rust_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\deadlua.exe",
+    "sha256": "7b4a97844f3a05bd6f5c24620dd465ea286497d354538ce59b6ca5fb96b79155",
+    "matches_source_built_stdlib_report": true
+  },
+  "same_relative_program_name": true,
+  "equal_length_run_directory_names": true,
+  "empty_search_path_environment": true,
+  "exact_heap_count_parity_proven": false
+}

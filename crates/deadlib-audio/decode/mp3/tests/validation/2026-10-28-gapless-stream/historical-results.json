@@ -1,0 +1,181 @@
+{
+  "method": "Non-seekable gapless output against pinned independently verified file PCM.",
+  "records": [
+    {
+      "file": "01 - Charity Case.mp3",
+      "input_sha256": "937858498fd1e92eaa1c47238f7cf4a67bc5eb8b8428d0358845b07d85a38469",
+      "reference_sha256": "f16730e108f02753aa0f13dd6016214fa29eade195efdd0eb02ae757c7178745",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/01 - Charity Case-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            8486016,
+            8489088,
+            7369,
+            0
+          ],
+          "comparison": {
+            "sample_values": 16972032,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "55887aeccd84c33448fc1969d6211cf6500cd48889d55ab502122c1bfa63c680"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/01 - Charity Case-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            8486016,
+            8489088,
+            7369,
+            0
+          ],
+          "comparison": {
+            "sample_values": 16972032,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "55887aeccd84c33448fc1969d6211cf6500cd48889d55ab502122c1bfa63c680"
+        },
+        {
+          "chunk": 17,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/01 - Charity Case-17.bin",
+            "17"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            8486016,
+            8489088,
+            7369,
+            0
+          ],
+          "comparison": {
+            "sample_values": 16972032,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "55887aeccd84c33448fc1969d6211cf6500cd48889d55ab502122c1bfa63c680"
+        }
+      ]
+    },
+    {
+      "file": "Silent_Light.mp3",
+      "input_sha256": "10793142947d5bdb77165b6c94bae67f077a7c39c1b9a6327d5906f370913bc3",
+      "reference_sha256": "fd323920d529cde5924827c1bb6d65b078262d70591ae372ae7e46da0a3cb0ef",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/Silent_Light-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            11619072,
+            11619072,
+            10086,
+            0
+          ],
+          "comparison": {
+            "sample_values": 23238144,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd323920d529cde5924827c1bb6d65b078262d70591ae372ae7e46da0a3cb0ef"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/Silent_Light-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            11619072,
+            11619072,
+            10086,
+            0
+          ],
+          "comparison": {
+            "sample_values": 23238144,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd323920d529cde5924827c1bb6d65b078262d70591ae372ae7e46da0a3cb0ef"
+        },
+        {
+          "chunk": 17,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Silent_Light.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-historical-initial/Silent_Light-17.bin",
+            "17"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            11619072,
+            11619072,
+            10086,
+            0
+          ],
+          "comparison": {
+            "sample_values": 23238144,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd323920d529cde5924827c1bb6d65b078262d70591ae372ae7e46da0a3cb0ef"
+        }
+      ]
+    }
+  ]
+}

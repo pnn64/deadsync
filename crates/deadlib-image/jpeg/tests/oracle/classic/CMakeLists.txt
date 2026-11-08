@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(deadlib_classic_jpeg_oracle C)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+find_path(JPEG_INCLUDE_DIR jpeglib.h REQUIRED)
+find_library(JPEG_LIBRARY NAMES jpeg-static jpeg libjpeg REQUIRED)
+add_executable(classic-oracle ../classic_oracle.c)
+target_include_directories(classic-oracle PRIVATE "${JPEG_CONFIG_DIR}" "${JPEG_INCLUDE_DIR}")
+target_link_libraries(classic-oracle PRIVATE "${JPEG_LIBRARY}")

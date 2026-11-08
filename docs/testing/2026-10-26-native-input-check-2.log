@@ -1,0 +1,21 @@
+    Checking windows v0.62.2
+    Checking deadlib-platform v0.1.0 (C:\GitHub\deadsync\crates\deadlib-platform)
+    Checking deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+error: field assignment outside of initializer for an instance created with Default::default()
+   --> crates\deadlib-input-native\src\backend\w32_raw_input.rs:456:9
+    |
+456 |         info.cbSize = size_of::<RID_DEVICE_INFO>() as u32;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `windows::Win32::UI::Input::RID_DEVICE_INFO { cbSize: size_of::<RID_DEVICE_INFO>() as u32, ..Default::default() }` and removing relevant reassignments
+   --> crates\deadlib-input-native\src\backend\w32_raw_input.rs:455:9
+    |
+455 |         let mut info = RID_DEVICE_INFO::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#field_reassign_with_default
+    = note: `-D clippy::field-reassign-with-default` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::field_reassign_with_default)]`
+
+error: could not compile `deadlib-input-native` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `deadlib-input-native` (lib test) due to 1 previous error

@@ -484,12 +484,20 @@ pub fn set_enable_arrowcloud(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.enable_arrowcloud, enabled)
 }
 
+pub fn set_enable_golf(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.enable_golf, enabled)
+}
+
 pub fn set_submit_arrowcloud_fails(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.submit_arrowcloud_fails, enabled)
 }
 
 pub fn set_show_arrowcloud_result_dialogs(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_arrowcloud_result_dialogs, enabled)
+}
+
+pub fn set_share_rips(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.share_rips, enabled)
 }
 
 pub fn set_auto_download_unlocks(cfg: &mut Config, enabled: bool) -> bool {
@@ -908,4 +916,14 @@ mod tests {
         assert!(set_select_music_last_sort(&mut cfg, SelectMusicSort::Title));
         assert_eq!(cfg.select_music_last_sort, SelectMusicSort::Title);
     }
+}
+
+pub fn set_select_music_scorebox_cycle_golf(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_scorebox_cycle_golf, enabled)
+}
+pub fn set_select_music_scorebox_events_first(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_scorebox_events_first, enabled)
+}
+pub fn set_select_music_show_golf_pars(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_show_golf_pars, enabled)
 }

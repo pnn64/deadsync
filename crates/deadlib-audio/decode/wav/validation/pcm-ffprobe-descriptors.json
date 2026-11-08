@@ -1,0 +1,57 @@
+{
+  "ffprobe_version": "ffprobe version 7.1-full_build-www.gyan.dev Copyright (c) 2007-2024 the FFmpeg developers",
+  "binary_sha256": "5de9d7a6e30b24d84f7a8d98a01698b2592463f75660853d182d1b00fb8c2ddc",
+  "cases": [
+    {
+      "fixture": "rifx-i16-1-17-v16",
+      "fixture_sha256": "ca0484fb2716b27c17330ed6ebcb24e61722ac188dfa810b9b8c902d74edef65",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1-full_build\\bin\\ffprobe.EXE",
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_name,sample_fmt,bits_per_sample,bits_per_raw_sample,channels",
+        "-of",
+        "json",
+        "target\\wav\\pcm-canonical-final.json-corpus\\rifx-i16-1-17-v16.wav"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n    \"programs\": [\n\n    ],\n    \"stream_groups\": [\n\n    ],\n    \"streams\": [\n        {\n            \"codec_name\": \"pcm_s16le\",\n            \"sample_fmt\": \"s16\",\n            \"channels\": 1,\n            \"bits_per_sample\": 16\n        }\n    ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "riff-i32-1-37-v24",
+      "fixture_sha256": "e72a9297a26f9aa065cd95dc4bc840b8adb4353dc998d7504ebf1b5642c251fd",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1-full_build\\bin\\ffprobe.EXE",
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_name,sample_fmt,bits_per_sample,bits_per_raw_sample,channels",
+        "-of",
+        "json",
+        "target\\wav\\pcm-canonical-final.json-corpus\\riff-i32-1-37-v24.wav"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n    \"programs\": [\n\n    ],\n    \"stream_groups\": [\n\n    ],\n    \"streams\": [\n        {\n            \"codec_name\": \"pcm_f24le\",\n            \"sample_fmt\": \"flt\",\n            \"channels\": 1,\n            \"bits_per_sample\": 32\n        }\n    ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "riff-i32-1-37-v1",
+      "fixture_sha256": "14a44f038f412665641d179510d87caa45f5ebd1e1c7dacba812db1dcef269c7",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1-full_build\\bin\\ffprobe.EXE",
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_name,sample_fmt,bits_per_sample,bits_per_raw_sample,channels",
+        "-of",
+        "json",
+        "target\\wav\\pcm-canonical-final.json-corpus\\riff-i32-1-37-v1.wav"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n    \"programs\": [\n\n    ],\n    \"stream_groups\": [\n\n    ],\n    \"streams\": [\n        {\n            \"codec_name\": \"pcm_u8\",\n            \"sample_fmt\": \"u8\",\n            \"channels\": 1,\n            \"bits_per_sample\": 8\n        }\n    ]\n}\n",
+      "stderr": ""
+    }
+  ]
+}

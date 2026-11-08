@@ -47,7 +47,12 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
     ) {
         if let Some(options) = context.player_options {
             match options.play_style {
-                PlayStyle::Versus | PlayStyle::PumpVersus => {
+                PlayStyle::Versus
+                | PlayStyle::PumpVersus
+                | PlayStyle::Couple
+                | PlayStyle::PumpCouple
+                | PlayStyle::Routine
+                | PlayStyle::PumpRoutine => {
                     for (index, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                         commands.push(Command::UpdateScrollSpeed {
                             side,

@@ -69,6 +69,7 @@ pub(crate) struct FieldLayoutRequest {
     pub num_players: usize,
     pub single_style: bool,
     pub double_style: bool,
+    pub shared_sides: bool,
     pub center_one_player: bool,
     pub screen_width: f32,
     pub screen_center_x: f32,
@@ -177,10 +178,11 @@ struct NotefieldCameraKey {
     tilt: u32,
     skew: u32,
     reverse: bool,
+    wrapper: [u32; 16],
 }
 
 impl NotefieldCameraKey {
-    const fn new(
+    fn new(
         screen_w: f32,
         screen_h: f32,
         playfield_center_x: f32,
@@ -188,6 +190,7 @@ impl NotefieldCameraKey {
         tilt: f32,
         skew: f32,
         reverse: bool,
+        wrapper: Matrix4,
     ) -> Self {
         Self {
             screen_w: screen_w.to_bits(),
@@ -197,6 +200,7 @@ impl NotefieldCameraKey {
             tilt: tilt.to_bits(),
             skew: skew.to_bits(),
             reverse,
+            wrapper: wrapper.to_cols_array().map(f32::to_bits),
         }
     }
 }
@@ -215,15 +219,21 @@ pub struct NotefieldCameraCacheStats {
 /// changes rebuild one bounded matrix synchronously, while stable frames copy
 /// the retained matrix. Screen destruction releases the two inline entries.
 /// Counters expose hits and rebuilds; worst-case miss work is one call to
-/// [`notefield_view_proj`].
+/// [`notefield_camera`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NotefieldCameraCache {
     key: Option<NotefieldCameraKey>,
     camera: Option<Matrix4>,
+    view: Option<Matrix4>,
     stats: NotefieldCameraCacheStats,
+    wrapper: Matrix4,
 }
 
 impl NotefieldCameraCache {
+    pub fn set_wrapper(&mut self, wrapper: Matrix4) {
+        self.wrapper = wrapper;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn resolve(
         &mut self,
@@ -243,12 +253,13 @@ impl NotefieldCameraCache {
             tilt,
             skew,
             reverse,
+            self.wrapper,
         );
         if self.key == Some(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return self.camera;
         }
-        let camera = notefield_view_proj(
+        let camera = notefield_camera(
             screen_w,
             screen_h,
             playfield_center_x,
@@ -256,11 +267,57 @@ impl NotefieldCameraCache {
             tilt,
             skew,
             reverse,
+            self.wrapper,
         );
         self.key = Some(key);
-        self.camera = camera;
+        self.camera = camera.map(|(projection, _)| projection);
+        self.view = camera.map(|(_, view)| view);
         self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
-        camera
+        self.camera
+    }
+
+    pub(crate) fn eye_camera(&self) -> Option<(Matrix4, Matrix4)> {
+        self.camera.zip(self.view)
+    }
+
+    /// Player::Draw installs a fresh menu camera using that draw's GetX/GetY.
+    /// Return the native screen-space camera and the local field tilt separately:
+    /// the caller/player matrix precedes tilt, but follows camera projection.
+    #[must_use]
+    pub fn draw_camera(&self, position: [f32; 2]) -> Option<(Matrix4, Matrix4)> {
+        let key = self.key?;
+        let width = f32::from_bits(key.screen_w);
+        let height = f32::from_bits(key.screen_h);
+        let center_offset = f32::from_bits(key.center_y) - 0.5 * height;
+        let vanish_x = sm_scale(f32::from_bits(key.skew), 0.1, 1.0, position[0], 0.5 * width);
+        let (projection, view) = menu_camera(width, height, vanish_x, position[1] + center_offset)?;
+        let reverse = if key.reverse { -1.0 } else { 1.0 };
+        let tilt = f32::from_bits(key.tilt).clamp(-1.0, 1.0);
+        let zoom = 0.1f32.mul_add(-tilt.abs(), 1.0);
+        let y_offset = if tilt > 0.0 {
+            -45.0 * tilt
+        } else {
+            20.0 * tilt
+        } * reverse;
+        // Actor::BeginDraw uses Y-down rotations. Conjugating the established
+        // world-space tilt flips X rotation while retaining native translation.
+        let field = Matrix4::from_translation(Vector3::new(0.0, y_offset + center_offset, 0.0))
+            * Matrix4::from_rotation_x((30.0 * tilt * reverse).to_radians())
+            * Matrix4::from_scale(Vector3::splat(zoom))
+            * Matrix4::from_translation(Vector3::new(0.0, -center_offset, 0.0));
+        Some((projection * view, self.wrapper * field))
+    }
+
+    /// Conjugate the native local wrapper into the field's Y-up world space.
+    #[must_use]
+    pub fn wrapper_model(&self) -> Option<Matrix4> {
+        let key = self.key?;
+        if self.wrapper == Matrix4::IDENTITY { return None; }
+        let x = f32::from_bits(key.playfield_center_x) - 0.5 * f32::from_bits(key.screen_w);
+        let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+        Some(Matrix4::from_translation(Vector3::new(x, 0.0, 0.0))
+            * flip * self.wrapper * flip
+            * Matrix4::from_translation(Vector3::new(-x, 0.0, 0.0)))
     }
 
     #[must_use]
@@ -275,7 +332,7 @@ impl NotefieldCameraCache {
     }
 }
 
-pub(crate) fn notefield_view_proj(
+pub(crate) fn notefield_camera(
     screen_w: f32,
     screen_h: f32,
     playfield_center_x: f32,
@@ -283,44 +340,12 @@ pub(crate) fn notefield_view_proj(
     tilt: f32,
     skew: f32,
     reverse: bool,
-) -> Option<Matrix4> {
-    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
-        return None;
-    }
-
+    wrapper: Matrix4,
+) -> Option<(Matrix4, Matrix4)> {
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
-
-    let fov_deg = 45.0_f32;
-    let theta = (0.5 * fov_deg).to_radians();
-    let tan_theta = theta.tan();
-    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
-        return None;
-    }
-    let dist = half_w / tan_theta;
-    if !dist.is_finite() || dist <= 0.0 {
-        return None;
-    }
-
     let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
-    let vanish_y = center_y;
-
-    let near = 1.0_f32;
-    let far = dist + 1000.0_f32;
-
-    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
-    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
-    vp_x -= half_w;
-    vp_y -= half_h;
-    let l = (vp_x - half_w) / dist;
-    let r = (vp_x + half_w) / dist;
-    let b = (vp_y + half_h) / dist;
-    let t = (vp_y - half_h) / dist;
-    let proj = rage_frustum(l, r, b, t, near, far);
-
-    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
+    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, center_y)?;
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
     let tilt = tilt.clamp(-1.0, 1.0);
@@ -348,11 +373,61 @@ pub(crate) fn notefield_view_proj(
         * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
-    Some((proj * view) * world_to_screen * field)
+    let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    let wrapper = Matrix4::from_translation(Vector3::new(pivot_x, 0.0, 0.0))
+        * flip * wrapper * flip
+        * Matrix4::from_translation(Vector3::new(-pivot_x, 0.0, 0.0));
+    let eye = view * world_to_screen * wrapper * field;
+    Some((proj * eye, eye))
+}
+
+fn menu_camera(
+    screen_w: f32,
+    screen_h: f32,
+    vanish_x: f32,
+    vanish_y: f32,
+) -> Option<(Matrix4, Matrix4)> {
+    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
+        return None;
+    }
+
+    let half_w = 0.5 * screen_w;
+    let half_h = 0.5 * screen_h;
+
+    let fov_deg = 45.0_f32;
+    let theta = (0.5 * fov_deg).to_radians();
+    let tan_theta = theta.tan();
+    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
+        return None;
+    }
+    let dist = half_w / tan_theta;
+    if !dist.is_finite() || dist <= 0.0 {
+        return None;
+    }
+
+    let near = 1.0_f32;
+    let far = dist + 1000.0_f32;
+
+    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
+    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
+    vp_x -= half_w;
+    vp_y -= half_h;
+    let l = (vp_x - half_w) / dist;
+    let r = (vp_x + half_w) / dist;
+    let b = (vp_y + half_h) / dist;
+    let t = (vp_y - half_h) / dist;
+    let proj = rage_frustum(l, r, b, t, near, far);
+
+    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
+
+    Some((proj, view))
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {
-    if !mini.is_finite() || mini <= 0.0 {
+    // Positive finite, nonzero encodings form one unsigned interval.
+    if mini.to_bits().wrapping_sub(1) >= f32::INFINITY.to_bits() - 1 {
         1.0
     } else {
         0.5_f32.powf(mini)
@@ -375,7 +450,12 @@ pub(crate) fn effective_mini_value(
     mini_percent / 100.0
 }
 
+#[inline(always)]
 pub(crate) fn average_error_bar_mini_scale(mini: f32) -> f32 {
+    // Both signs of zero produce exactly 1.1 through the fused expression.
+    if mini.to_bits() & 0x7fff_ffff == 0 {
+        return 1.1;
+    }
     0.545f32.mul_add(-mini, 1.1).max(0.0)
 }
 
@@ -517,7 +597,9 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     };
     let centered_one_side =
         request.num_players == 1 && request.single_style && request.center_one_player;
-    let centered_both_sides = request.num_players == 1 && request.double_style;
+    // ScreenGameplay centers both TwoPlayersSharedSides fields.
+    let centered_both_sides =
+        (request.num_players == 1 && request.double_style) || request.shared_sides;
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
@@ -526,8 +608,7 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
-    let layout_center_x = if request.num_players == 1 && (centered_both_sides || centered_one_side)
-    {
+    let layout_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
         playfield_center_x
@@ -670,7 +751,7 @@ mod tests {
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
         LayoutMiniIndicatorPosition, NotefieldCameraCache, ZmodLayoutParams, field_layout,
-        notefield_view_proj,
+        notefield_camera,
     };
     use deadsync_core::input::MAX_COLS;
     use deadsync_theme::{
@@ -686,7 +767,8 @@ mod tests {
     #[test]
     fn field_camera_cache_reuses_exact_inputs() {
         let mut cache = NotefieldCameraCache::default();
-        let expected = notefield_view_proj(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
+        let expected = notefield_camera(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection);
 
         let first = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
         let second = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
@@ -695,6 +777,24 @@ mod tests {
         assert_eq!(matrix_bits(second), matrix_bits(expected));
         assert_eq!(cache.stats().rebuilds, 1);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_cache_tracks_wrapper_pose() {
+        let mut cache = NotefieldCameraCache::default();
+        let original = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false);
+        let pose = glam::Mat4::from_rotation_z(0.2);
+        cache.set_wrapper(pose);
+        let changed = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false);
+        assert_ne!(matrix_bits(original), matrix_bits(changed));
+        assert_eq!(cache.generation(), 2);
+        assert_eq!(matrix_bits(changed), matrix_bits(cache.resolve(
+            854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false)));
+        assert_eq!(cache.generation(), 2);
+        cache.set_wrapper(glam::Mat4::IDENTITY);
+        assert_eq!(matrix_bits(original), matrix_bits(cache.resolve(
+            854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false)));
+        assert_eq!(cache.generation(), 3);
     }
 
     #[test]
@@ -716,7 +816,8 @@ mod tests {
             let resolved =
                 cache.resolve(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
             let expected =
-                notefield_view_proj(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
+                notefield_camera(screen_w, screen_h, center_x, center_y, tilt, skew, reverse, glam::Mat4::IDENTITY)
+                    .map(|(projection, _)| projection);
             assert_eq!(matrix_bits(resolved), matrix_bits(expected));
             assert_eq!(cache.stats().rebuilds, index as u64 + 1);
             assert_eq!(cache.stats().hits, 0);
@@ -954,6 +1055,7 @@ mod tests {
             num_players: 1,
             single_style: true,
             double_style: false,
+            shared_sides: false,
             center_one_player: false,
             screen_width: 854.0,
             screen_center_x: 427.0,

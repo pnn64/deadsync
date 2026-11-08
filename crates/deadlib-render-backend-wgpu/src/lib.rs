@@ -1,10 +1,10 @@
 use deadlib_render_core::{
-    BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
+    BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshSampler, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
     TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
-    render_target_base_handle, render_target_uses_nearest,
-    resolve_render_target_textured_mesh_geometries, resolve_textured_meshes,
+    render_target_base_handle, resolve_render_target_textured_mesh_geometries,
+    resolve_textured_meshes, texture_sampler_desc, texture_sampler_variants,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -103,6 +103,10 @@ struct TexturedMeshInstanceRaw {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     texture_mask: f32,
+    cull_mode: f32,
+    sphere_rows: [[f32; 4]; 3],
+    additive_uv: [f32; 4],
+    additive_texture: TextureHandle,
 }
 
 struct PipelineSet {
@@ -110,6 +114,7 @@ struct PipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 impl PipelineSet {
@@ -120,6 +125,7 @@ impl PipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -129,6 +135,7 @@ struct MeshPipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -141,6 +148,7 @@ impl MeshPipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -162,10 +170,8 @@ enum ProjState {
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    bind_group: wgpu::BindGroup,
-    bind_group_repeat: wgpu::BindGroup,
-    nearest_bind_group: Option<wgpu::BindGroup>,
-    nearest_bind_group_repeat: Option<wgpu::BindGroup>,
+    sampler_desc: SamplerDesc,
+    groups: SamplerCache<wgpu::BindGroup>,
 }
 
 impl Texture {
@@ -218,10 +224,21 @@ struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
     texture: Texture,
-    _depth_texture: wgpu::Texture,
-    depth_view: wgpu::TextureView,
+    depth: Option<(wgpu::Texture, wgpu::TextureView)>,
     initialized: bool,
+}
+
+// Backend-lifetime pipelines for RGBA16F captures, built before any song frame.
+// Fixed two alpha modes/four blends; draw recording only indexes existing sets.
+struct CapturePipelines {
+    sprites: [PipelineSet; 2],
+    video: [PipelineSet; 2],
+    meshes: [MeshPipelineSet; 2],
+    textured: [PipelineSet; 2],
+    depth: Option<[[PipelineSet; 6]; 2]>,
+    depth_clear: Option<wgpu::RenderPipeline>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -240,7 +257,7 @@ enum InstanceBinding {
 #[derive(Debug, Default)]
 struct DrawBindingCache {
     camera: Option<u8>,
-    texture: Option<(u64, bool)>,
+    texture: Option<(u64, SamplerDesc)>,
     instance: Option<InstanceBinding>,
     index_bound: bool,
 }
@@ -257,8 +274,8 @@ impl DrawBindingCache {
     }
 
     #[inline(always)]
-    fn texture_required(&mut self, texture: u64, repeat: bool) -> bool {
-        update_binding(&mut self.texture, (texture, repeat))
+    fn texture_required(&mut self, texture: u64, sampler: SamplerDesc) -> bool {
+        update_binding(&mut self.texture, (texture, sampler))
     }
 
     #[inline(always)]
@@ -423,22 +440,14 @@ pub struct State {
     bind_layout: wgpu::BindGroupLayout,
     rgba_conversion: wgpu::Buffer,
     samplers: SamplerCache<wgpu::Sampler>,
-    shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
-    alpha_pipelines: PipelineSet,
-    yuv_shader: wgpu::ShaderModule,
     yuv_pipelines: PipelineSet,
-    alpha_yuv_pipelines: PipelineSet,
-    mesh_shader: wgpu::ShaderModule,
-    mesh_pipeline_layout: wgpu::PipelineLayout,
     mesh_pipelines: MeshPipelineSet,
-    alpha_mesh_pipelines: MeshPipelineSet,
-    tmesh_shader: wgpu::ShaderModule,
     tmesh_pipelines: PipelineSet,
-    tmesh_depth_pipelines: PipelineSet,
-    alpha_tmesh_pipelines: PipelineSet,
-    alpha_tmesh_depth_pipelines: PipelineSet,
+    tmesh_depth_pipelines: [PipelineSet; 6],
+    depth_clear_pipeline: wgpu::RenderPipeline,
+    capture_pipelines: [[CapturePipelines; 2]; 2],
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
@@ -634,8 +643,12 @@ fn init(
         desired_maximum_frame_latency: 0,
     };
     surface.configure(&device, &config);
-    let (depth_texture, depth_view) =
-        create_depth_target(&device, config.width.max(1), config.height.max(1));
+    let (depth_texture, depth_view) = create_depth_target(
+        &device,
+        config.width.max(1),
+        config.height.max(1),
+        DEPTH_FORMAT,
+    );
 
     let proj = if use_immediates {
         ProjState::Immediates
@@ -707,19 +720,87 @@ fn init(
     });
 
     let pipeline_layout = build_texture_pipeline_layout(&device, &proj, &bind_layout);
-    let (shader, pipelines, alpha_pipelines) =
-        build_pipeline_set(&device, &proj, &pipeline_layout, format, false);
-    let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) =
+    let (shader, pipelines) = build_pipeline_set(&device, &proj, &pipeline_layout, format, false);
+    let (yuv_shader, yuv_pipelines) =
         build_pipeline_set(&device, &proj, &pipeline_layout, format, true);
-    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
+    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
-    let (
-        tmesh_shader,
-        tmesh_pipelines,
-        tmesh_depth_pipelines,
-        alpha_tmesh_pipelines,
-        alpha_tmesh_depth_pipelines,
-    ) = build_textured_mesh_pipeline_set(&device, &proj, &pipeline_layout, format);
+    let (tmesh_shader, tmesh_pipelines, tmesh_depth_pipelines) =
+        build_textured_mesh_pipeline_set(&device, &proj, &pipeline_layout, format);
+
+    let depth_clear_pipeline = build_depth_clear(&device, format, DEPTH_FORMAT);
+    // Render-thread/backend-lifetime storage: four format/depth groups and
+    // two alpha modes, eagerly built at initialization. Recording only selects
+    // handles; no pipeline compilation, pruning or allocation on song frames.
+    let capture_pipelines = [
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Rgba16Float,
+    ]
+    .map(|format| {
+        [None, Some(wgpu::TextureFormat::Depth16Unorm)].map(|depth_format| {
+            let writes = [surface_write_mask(), wgpu::ColorWrites::ALL];
+            CapturePipelines {
+                sprites: writes.map(|write| {
+                    build_pipelines(
+                        &device,
+                        &pipeline_layout,
+                        format,
+                        &shader,
+                        write,
+                        depth_format,
+                    )
+                }),
+                video: writes.map(|write| {
+                    build_pipelines(
+                        &device,
+                        &pipeline_layout,
+                        format,
+                        &yuv_shader,
+                        write,
+                        depth_format,
+                    )
+                }),
+                meshes: writes.map(|write| {
+                    build_mesh_pipelines(
+                        &device,
+                        &mesh_pipeline_layout,
+                        format,
+                        &mesh_shader,
+                        write,
+                        depth_format,
+                    )
+                }),
+                textured: writes.map(|write| {
+                    build_tmesh_pipelines(
+                        &device,
+                        &pipeline_layout,
+                        format,
+                        &tmesh_shader,
+                        deadlib_render_core::DepthMode::Off,
+                        write,
+                        depth_format,
+                    )
+                }),
+                depth: depth_format.map(|format_depth| {
+                    writes.map(|write| {
+                        deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
+                        build_tmesh_pipelines(
+                            &device,
+                            &pipeline_layout,
+                            format,
+                            &tmesh_shader,
+                                depth_mode,
+                            write,
+                            Some(format_depth),
+                        )
+                        })
+                    })
+                }),
+                depth_clear: depth_format
+                    .map(|format_depth| build_depth_clear(&device, format, format_depth)),
+            }
+        })
+    });
 
     let vertex_data = [
         Vertex {
@@ -800,23 +881,15 @@ fn init(
         bind_layout,
         rgba_conversion,
         samplers: SamplerCache::default(),
-        shader,
         pipeline_layout,
         pipelines,
-        alpha_pipelines,
-        yuv_shader,
         yuv_pipelines,
-        alpha_yuv_pipelines,
-        mesh_shader,
-        mesh_pipeline_layout,
         mesh_pipelines,
-        alpha_mesh_pipelines,
-        tmesh_shader,
         tmesh_pipelines,
         tmesh_depth_pipelines,
-        alpha_tmesh_pipelines,
-        alpha_tmesh_depth_pipelines,
+        depth_clear_pipeline,
         depth_texture,
+        capture_pipelines,
         depth_view,
         vertex_buffer,
         index_buffer,
@@ -1075,8 +1148,7 @@ pub fn create_texture(
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let (bind_group, bind_group_repeat) =
-        create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
+    let groups = create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
 
     // Native wgpu resolves these immediately, without waiting for GPU work.
     // Report allocation failure before secondary invalid-resource errors.
@@ -1093,10 +1165,8 @@ pub fn create_texture(
             texture,
             _view: view,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: None,
-        nearest_bind_group_repeat: None,
+        sampler_desc,
+        groups,
     })
 }
 
@@ -1105,69 +1175,43 @@ fn create_texture_groups(
     sampler_desc: SamplerDesc,
     views: [&wgpu::TextureView; 3],
     conversion: Option<&wgpu::Buffer>,
-) -> (wgpu::BindGroup, wgpu::BindGroup) {
-    let sampler = get_sampler(state, sampler_desc);
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
-    let conversion = conversion.unwrap_or(&state.rgba_conversion);
-    let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("wgpu texture bind group"),
-        layout: &state.bind_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(views[0]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(views[1]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(views[2]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: conversion.as_entire_binding(),
-            },
-        ],
-    });
-    let bind_group_repeat = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("wgpu texture bind group repeat"),
-        layout: &state.bind_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler_repeat),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(views[0]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(views[1]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(views[2]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: conversion.as_entire_binding(),
-            },
-        ],
-    });
-    (bind_group, bind_group_repeat)
+) -> SamplerCache<wgpu::BindGroup> {
+    let mut groups = SamplerCache::default();
+    for desc in texture_sampler_variants(sampler_desc) {
+        if groups.get(desc).is_some() {
+            continue;
+        }
+        let sampler = get_sampler(state, desc);
+        let conversion = conversion.unwrap_or(&state.rgba_conversion);
+        let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("wgpu texture bind group"),
+            layout: &state.bind_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(views[0]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(views[1]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(views[2]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: conversion.as_entire_binding(),
+                },
+            ],
+        });
+        groups.insert(desc, bind_group);
+    }
+    groups
 }
 
 #[inline(always)]
@@ -1268,7 +1312,7 @@ pub fn create_yuv420_texture(
             contents: cast_slice(&params),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-    let (bind_group, bind_group_repeat) = create_texture_groups(
+    let groups = create_texture_groups(
         state,
         sampler_desc,
         [&y_view, &u_view, &v_view],
@@ -1294,10 +1338,8 @@ pub fn create_yuv420_texture(
             conversion,
             params,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: None,
-        nearest_bind_group_repeat: None,
+        sampler_desc,
+        groups,
     })
 }
 
@@ -1305,6 +1347,7 @@ fn create_depth_target(
     device: &wgpu::Device,
     width: u32,
     height: u32,
+    format: wgpu::TextureFormat,
 ) -> (wgpu::Texture, wgpu::TextureView) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("wgpu depth texture"),
@@ -1316,7 +1359,7 @@ fn create_depth_target(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: DEPTH_FORMAT,
+        format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
     });
@@ -1329,6 +1372,8 @@ fn create_offscreen_target(
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
+    with_depth: bool,
 ) -> OffscreenTarget {
     let width = width.max(1);
     let height = height.max(1);
@@ -1342,50 +1387,45 @@ fn create_offscreen_target(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: state.config.format,
+        format: if float_color {
+            wgpu::TextureFormat::Rgba16Float
+        } else {
+            wgpu::TextureFormat::Rgba8Unorm
+        },
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
     let view = raw.create_view(&wgpu::TextureViewDescriptor::default());
-    let (bind_group, bind_group_repeat) = create_texture_groups(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Linear,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-        [&view, &view, &view],
-        None,
-    );
-    let (nearest_bind_group, nearest_bind_group_repeat) = create_texture_groups(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-        [&view, &view, &view],
-        None,
-    );
+    let sampler_desc = SamplerDesc {
+        filter: SamplerFilter::Linear,
+        wrap: SamplerWrap::Clamp,
+        mipmaps: false,
+    };
+    let groups = create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
     let texture = Texture {
         id: next_texture_id(state),
         images: TextureImages::Rgba {
             texture: raw,
             _view: view,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: Some(nearest_bind_group),
-        nearest_bind_group_repeat: Some(nearest_bind_group_repeat),
+        sampler_desc,
+        groups,
     };
-    let (depth_texture, depth_view) = create_depth_target(&state.device, width, height);
+    let depth = with_depth.then(|| {
+        create_depth_target(
+            &state.device,
+            width,
+            height,
+            wgpu::TextureFormat::Depth16Unorm,
+        )
+    });
     OffscreenTarget {
         handle,
         width,
         height,
+        float_color,
         texture,
-        _depth_texture: depth_texture,
-        depth_view,
+        depth,
         initialized: false,
     }
 }
@@ -1396,11 +1436,20 @@ fn ensure_offscreen_targets(state: &mut State, frame: &RenderFrame) {
             target.handle == pass.texture_handle
                 && target.width == pass.width.max(1)
                 && target.height == pass.height.max(1)
+                && target.float_color == pass.float_color
+                && target.depth.is_some() == pass.depth
         });
         if matches {
             continue;
         }
-        let target = create_offscreen_target(state, pass.texture_handle, pass.width, pass.height);
+        let target = create_offscreen_target(
+            state,
+            pass.texture_handle,
+            pass.width,
+            pass.height,
+            pass.float_color,
+            pass.depth,
+        );
         if index < state.offscreen_targets.len() {
             state.offscreen_targets[index] = target;
         } else {
@@ -1426,24 +1475,17 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
 }
 
 #[inline(always)]
-fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) -> &wgpu::BindGroup {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture
-            .nearest_bind_group
-            .as_ref()
-            .unwrap_or(&texture.bind_group),
-        (true, true) => texture
-            .nearest_bind_group_repeat
-            .as_ref()
-            .unwrap_or(&texture.bind_group_repeat),
-        (false, false) => &texture.bind_group,
-        (false, true) => &texture.bind_group_repeat,
-    }
-}
-
-#[inline(always)]
-const fn texture_binding_id(texture: &Texture, handle: TextureHandle) -> u64 {
-    texture.id ^ ((render_target_uses_nearest(handle) as u64) << 63)
+fn texture_bind_group(
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> &wgpu::BindGroup {
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    texture
+        .groups
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
 }
 
 struct PassDrawData<'a> {
@@ -1475,7 +1517,9 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     data: PassDrawData<'pass>,
     textures: &'pass T,
     write_alpha: bool,
+    capture: Option<&'pass CapturePipelines>,
 ) -> u32 {
+    let has_depth = capture.is_none_or(|p| p.depth.is_some());
     let camera_count = data.cameras.len();
     let texture_group = match state.proj {
         ProjState::Immediates => 0,
@@ -1487,33 +1531,51 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     let mut last_sprite_yuv = None;
     let mut bindings = DrawBindingCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-    let mut last_tmesh_depth_test = false;
-    let pipelines = if write_alpha {
-        &state.alpha_pipelines
+    let mut last_tmesh_depth = None;
+    let pipelines = if let Some(capture) = capture {
+        &capture.sprites[write_alpha as usize]
     } else {
         &state.pipelines
     };
-    let yuv_pipelines = if write_alpha {
-        &state.alpha_yuv_pipelines
+    let yuv_pipelines = if let Some(capture) = capture {
+        &capture.video[write_alpha as usize]
     } else {
         &state.yuv_pipelines
     };
-    let mesh_pipelines = if write_alpha {
-        &state.alpha_mesh_pipelines
+    let mesh_pipelines = if let Some(capture) = capture {
+        &capture.meshes[write_alpha as usize]
     } else {
         &state.mesh_pipelines
     };
-    let tmesh_pipelines = if write_alpha {
-        &state.alpha_tmesh_pipelines
+    let tmesh_pipelines = if let Some(capture) = capture {
+        &capture.textured[write_alpha as usize]
     } else {
         &state.tmesh_pipelines
     };
-    let tmesh_depth_pipelines = if write_alpha {
-        &state.alpha_tmesh_depth_pipelines
+    let tmesh_depth_pipelines = if let Some(capture) = capture {
+        capture
+            .depth
+            .as_ref()
+            .map(|p| &p[write_alpha as usize])
     } else {
-        &state.tmesh_depth_pipelines
+        Some(&state.tmesh_depth_pipelines)
     };
     for op in data.ops {
+        if has_depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            pass.set_pipeline(if let Some(capture) = capture {
+                capture
+                    .depth_clear
+                    .as_ref()
+                    .expect("depth capture has a clear pipeline")
+            } else {
+                &state.depth_clear_pipeline
+            });
+            pass.draw(0..3, 0..1);
+            last_kind = None;
+            last_blend = None;
+            bindings = DrawBindingCache::default();
+            tmesh_buffer_cache.reset();
+        }
         match op {
             DrawOp::Sprite(run) => {
                 let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
@@ -1562,10 +1624,20 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_binding,
                     );
                 }
-                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false) {
+                if bindings.texture_required(
+                    tex.id,
+                    texture_sampler_desc(tex.sampler_desc, run.texture_handle, false, None),
+                ) {
                     pass.set_bind_group(
                         texture_group,
-                        Some(texture_bind_group(tex, run.texture_handle, false)),
+                        Some(texture_bind_group(tex, run.texture_handle, false, None)),
+                        &[],
+                    );
+                    // Sprites share the mesh layout to retain immediate camera
+                    // data. Wgpu requires its unused material group to be bound.
+                    pass.set_bind_group(
+                        texture_group + 1,
+                        Some(texture_bind_group(tex, run.texture_handle, false, None)),
                         &[],
                     );
                 }
@@ -1638,14 +1710,21 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     last_blend = None;
                     tmesh_buffer_cache.reset();
                 }
-                if last_blend != Some(run.blend) || last_tmesh_depth_test != run.depth_test {
-                    pass.set_pipeline(if run.depth_test {
-                        tmesh_depth_pipelines.get(run.blend)
+                let depth_mode = if has_depth {
+                    run.depth_mode()
+                } else {
+                    deadlib_render_core::DepthMode::Off
+                };
+                if last_blend != Some(run.blend)
+                    || last_tmesh_depth != Some(depth_mode)
+                {
+                    pass.set_pipeline(if let Some(pipelines) = tmesh_depth_pipelines {
+                        pipelines[depth_mode as usize].get(run.blend)
                     } else {
                         tmesh_pipelines.get(run.blend)
                     });
                     last_blend = Some(run.blend);
-                    last_tmesh_depth_test = run.depth_test;
+                    last_tmesh_depth = Some(depth_mode);
                 }
                 if bindings.camera_required(run.camera) {
                     set_camera(
@@ -1658,13 +1737,33 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_binding,
                     );
                 }
-                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true) {
+                if bindings.texture_required(
+                    tex.id,
+                    texture_sampler_desc(tex.sampler_desc, run.texture_handle, true, run.sampler),
+                ) {
                     pass.set_bind_group(
                         texture_group,
-                        Some(texture_bind_group(tex, run.texture_handle, true)),
+                        Some(texture_bind_group(
+                            tex,
+                            run.texture_handle,
+                            true,
+                            run.sampler,
+                        )),
                         &[],
                     );
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(tex);
+                pass.set_bind_group(
+                    texture_group + 1,
+                    Some(texture_bind_group(
+                        additive,
+                        run.additive_texture,
+                        true,
+                        None,
+                    )),
+                    &[],
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
@@ -2005,6 +2104,7 @@ pub fn draw(
             },
             textures,
             false,
+            None,
         );
     }
 
@@ -2327,18 +2427,35 @@ fn draw_offscreen_targets(
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &target.depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Discard,
-                }),
-                stencil_ops: None,
+            depth_stencil_attachment: target.depth.as_ref().map(|(_, view)| {
+                wgpu::RenderPassDepthStencilAttachment {
+                    view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: if target_frame.preserve && target.initialized {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(1.0)
+                        },
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }
             }),
             occlusion_query_set: None,
             timestamp_writes: None,
             multiview_mask: None,
         });
+        let [viewport_width, viewport_height] =
+            deadlib_render_core::render_target_viewport(target_frame);
+        pass.set_viewport(
+            0.0,
+            0.0,
+            viewport_width as f32,
+            viewport_height as f32,
+            0.0,
+            1.0,
+        );
+        pass.set_scissor_rect(0, 0, viewport_width, viewport_height);
         vertices = vertices.saturating_add(record_draw_ops(
             &mut pass,
             state,
@@ -2362,6 +2479,10 @@ fn draw_offscreen_targets(
             },
             textures,
             target_frame.alpha,
+            Some(
+                &state.capture_pipelines[target_frame.float_color as usize]
+                    [target_frame.depth as usize],
+            ),
         ));
         drop(pass);
         state.offscreen_targets[index].initialized = true;
@@ -2725,6 +2846,7 @@ fn reconfigure_surface(state: &mut State) {
         &state.device,
         state.config.width.max(1),
         state.config.height.max(1),
+        DEPTH_FORMAT,
     );
 
     if matches!(state.proj, ProjState::Uniform { .. }) {
@@ -2745,49 +2867,35 @@ fn reconfigure_surface(state: &mut State) {
     }
 
     if format_changed {
-        let (shader, pipelines, alpha_pipelines) = build_pipeline_set(
+        let (_, pipelines) = build_pipeline_set(
             &state.device,
             &state.proj,
             &state.pipeline_layout,
             state.config.format,
             false,
         );
-        let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) = build_pipeline_set(
+        let (_, yuv_pipelines) = build_pipeline_set(
             &state.device,
             &state.proj,
             &state.pipeline_layout,
             state.config.format,
             true,
         );
-        let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
+        let (_, _, mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
-        let (
-            tmesh_shader,
-            tmesh_pipelines,
-            tmesh_depth_pipelines,
-            alpha_tmesh_pipelines,
-            alpha_tmesh_depth_pipelines,
-        ) = build_textured_mesh_pipeline_set(
+        let (_, tmesh_pipelines, tmesh_depth_pipelines) = build_textured_mesh_pipeline_set(
             &state.device,
             &state.proj,
             &state.pipeline_layout,
             state.config.format,
         );
-        state.shader = shader;
         state.pipelines = pipelines;
-        state.alpha_pipelines = alpha_pipelines;
-        state.yuv_shader = yuv_shader;
         state.yuv_pipelines = yuv_pipelines;
-        state.alpha_yuv_pipelines = alpha_yuv_pipelines;
-        state.mesh_shader = mesh_shader;
-        state.mesh_pipeline_layout = mesh_pipeline_layout;
         state.mesh_pipelines = mesh_pipelines;
-        state.alpha_mesh_pipelines = alpha_mesh_pipelines;
-        state.tmesh_shader = tmesh_shader;
         state.tmesh_pipelines = tmesh_pipelines;
         state.tmesh_depth_pipelines = tmesh_depth_pipelines;
-        state.alpha_tmesh_pipelines = alpha_tmesh_pipelines;
-        state.alpha_tmesh_depth_pipelines = alpha_tmesh_depth_pipelines;
+        state.depth_clear_pipeline =
+            build_depth_clear(&state.device, state.config.format, DEPTH_FORMAT);
     }
 }
 
@@ -2896,6 +3004,18 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
         operation: op,
     };
     match mode {
+        BlendMode::NoEffect => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
         BlendMode::Alpha => Some(wgpu::BlendState {
             color: comp(
                 wgpu::BlendFactor::SrcAlpha,
@@ -2903,7 +3023,7 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
                 wgpu::BlendOperation::Add,
             ),
             alpha: comp(
-                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::One,
                 wgpu::BlendFactor::OneMinusSrcAlpha,
                 wgpu::BlendOperation::Add,
             ),
@@ -2915,8 +3035,8 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
                 wgpu::BlendOperation::Add,
             ),
             alpha: comp(
-                wgpu::BlendFactor::SrcAlpha,
                 wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
                 wgpu::BlendOperation::Add,
             ),
         }),
@@ -2927,20 +3047,20 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
                 wgpu::BlendOperation::Add,
             ),
             alpha: comp(
-                wgpu::BlendFactor::DstAlpha,
-                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
                 wgpu::BlendOperation::Add,
             ),
         }),
         BlendMode::Subtract => Some(wgpu::BlendState {
             color: comp(
-                wgpu::BlendFactor::One,
-                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
                 wgpu::BlendOperation::ReverseSubtract,
             ),
             alpha: comp(
                 wgpu::BlendFactor::One,
-                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
                 wgpu::BlendOperation::ReverseSubtract,
             ),
         }),
@@ -2956,7 +3076,7 @@ fn build_texture_pipeline_layout(
 ) -> wgpu::PipelineLayout {
     match proj {
         ProjState::Immediates => {
-            let layouts = [Some(bind_layout)];
+            let layouts = [Some(bind_layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -2964,7 +3084,7 @@ fn build_texture_pipeline_layout(
             })
         }
         ProjState::Uniform { layout, .. } => {
-            let layouts = [Some(layout), Some(bind_layout)];
+            let layouts = [Some(layout), Some(bind_layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -2980,7 +3100,7 @@ fn build_pipeline_set(
     pipeline_layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
     yuv420: bool,
-) -> (wgpu::ShaderModule, PipelineSet, PipelineSet) {
+) -> (wgpu::ShaderModule, PipelineSet) {
     let shader_src = match (proj, yuv420) {
         (ProjState::Immediates, false) => SHADER_IMM,
         (ProjState::Uniform { .. }, false) => SHADER_UBO,
@@ -2998,16 +3118,10 @@ fn build_pipeline_set(
         format,
         &shader,
         surface_write_mask(),
-    );
-    let alpha_pipelines = build_pipelines(
-        device,
-        pipeline_layout,
-        format,
-        &shader,
-        wgpu::ColorWrites::ALL,
+        Some(DEPTH_FORMAT),
     );
 
-    (shader, pipelines, alpha_pipelines)
+    (shader, pipelines)
 }
 
 fn build_pipelines(
@@ -3016,10 +3130,27 @@ fn build_pipelines(
     format: wgpu::TextureFormat,
     shader: &wgpu::ShaderModule,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> PipelineSet {
     PipelineSet {
-        alpha: build_pipeline(device, layout, format, BlendMode::Alpha, shader, write_mask),
-        add: build_pipeline(device, layout, format, BlendMode::Add, shader, write_mask),
+        alpha: build_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Alpha,
+            shader,
+            write_mask,
+            depth_format,
+        ),
+        add: build_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Add,
+            shader,
+            write_mask,
+            depth_format,
+        ),
         multiply: build_pipeline(
             device,
             layout,
@@ -3027,6 +3158,7 @@ fn build_pipelines(
             BlendMode::Multiply,
             shader,
             write_mask,
+            depth_format,
         ),
         subtract: build_pipeline(
             device,
@@ -3035,6 +3167,16 @@ fn build_pipelines(
             BlendMode::Subtract,
             shader,
             write_mask,
+            depth_format,
+        ),
+        no_effect: build_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
         ),
     }
 }
@@ -3043,12 +3185,7 @@ fn build_mesh_pipeline_set(
     device: &wgpu::Device,
     proj: &ProjState,
     format: wgpu::TextureFormat,
-) -> (
-    wgpu::ShaderModule,
-    wgpu::PipelineLayout,
-    MeshPipelineSet,
-    MeshPipelineSet,
-) {
+) -> (wgpu::ShaderModule, wgpu::PipelineLayout, MeshPipelineSet) {
     let shader_src = match proj {
         ProjState::Immediates => MESH_SHADER_IMM,
         ProjState::Uniform { .. } => MESH_SHADER_UBO,
@@ -3080,16 +3217,10 @@ fn build_mesh_pipeline_set(
         format,
         &shader,
         surface_write_mask(),
-    );
-    let alpha_pipelines = build_mesh_pipelines(
-        device,
-        &pipeline_layout,
-        format,
-        &shader,
-        wgpu::ColorWrites::ALL,
+        Some(DEPTH_FORMAT),
     );
 
-    (shader, pipeline_layout, pipelines, alpha_pipelines)
+    (shader, pipeline_layout, pipelines)
 }
 
 fn build_mesh_pipelines(
@@ -3098,10 +3229,27 @@ fn build_mesh_pipelines(
     format: wgpu::TextureFormat,
     shader: &wgpu::ShaderModule,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> MeshPipelineSet {
     MeshPipelineSet {
-        alpha: build_mesh_pipeline(device, layout, format, BlendMode::Alpha, shader, write_mask),
-        add: build_mesh_pipeline(device, layout, format, BlendMode::Add, shader, write_mask),
+        alpha: build_mesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Alpha,
+            shader,
+            write_mask,
+            depth_format,
+        ),
+        add: build_mesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Add,
+            shader,
+            write_mask,
+            depth_format,
+        ),
         multiply: build_mesh_pipeline(
             device,
             layout,
@@ -3109,6 +3257,7 @@ fn build_mesh_pipelines(
             BlendMode::Multiply,
             shader,
             write_mask,
+            depth_format,
         ),
         subtract: build_mesh_pipeline(
             device,
@@ -3117,6 +3266,16 @@ fn build_mesh_pipelines(
             BlendMode::Subtract,
             shader,
             write_mask,
+            depth_format,
+        ),
+        no_effect: build_mesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
         ),
     }
 }
@@ -3126,13 +3285,7 @@ fn build_textured_mesh_pipeline_set(
     proj: &ProjState,
     pipeline_layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
-) -> (
-    wgpu::ShaderModule,
-    PipelineSet,
-    PipelineSet,
-    PipelineSet,
-    PipelineSet,
-) {
+) -> (wgpu::ShaderModule, PipelineSet, [PipelineSet; 6]) {
     let shader_src = match proj {
         ProjState::Immediates => TMESH_SHADER_IMM,
         ProjState::Uniform { .. } => TMESH_SHADER_UBO,
@@ -3147,41 +3300,23 @@ fn build_textured_mesh_pipeline_set(
         pipeline_layout,
         format,
         &shader,
-        false,
+        deadlib_render_core::DepthMode::Off,
         surface_write_mask(),
+        Some(DEPTH_FORMAT),
     );
-    let depth_pipelines = build_tmesh_pipelines(
+    let depth_pipelines = deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
+        build_tmesh_pipelines(
         device,
         pipeline_layout,
         format,
         &shader,
-        true,
+            depth_mode,
         surface_write_mask(),
-    );
-    let alpha_pipelines = build_tmesh_pipelines(
-        device,
-        pipeline_layout,
-        format,
-        &shader,
-        false,
-        wgpu::ColorWrites::ALL,
-    );
-    let alpha_depth_pipelines = build_tmesh_pipelines(
-        device,
-        pipeline_layout,
-        format,
-        &shader,
-        true,
-        wgpu::ColorWrites::ALL,
-    );
+        Some(DEPTH_FORMAT),
+        )
+    });
 
-    (
-        shader,
-        pipelines,
-        depth_pipelines,
-        alpha_pipelines,
-        alpha_depth_pipelines,
-    )
+    (shader, pipelines, depth_pipelines)
 }
 
 fn build_tmesh_pipelines(
@@ -3189,8 +3324,9 @@ fn build_tmesh_pipelines(
     layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
     shader: &wgpu::ShaderModule,
-    use_depth: bool,
+    depth_mode: deadlib_render_core::DepthMode,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> PipelineSet {
     PipelineSet {
         alpha: build_tmesh_pipeline(
@@ -3199,8 +3335,9 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Alpha,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
+            depth_format,
         ),
         add: build_tmesh_pipeline(
             device,
@@ -3208,8 +3345,9 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Add,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
+            depth_format,
         ),
         multiply: build_tmesh_pipeline(
             device,
@@ -3217,8 +3355,9 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Multiply,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
+            depth_format,
         ),
         subtract: build_tmesh_pipeline(
             device,
@@ -3226,8 +3365,19 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Subtract,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
+            depth_format,
+        ),
+        no_effect: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            depth_mode,
+            write_mask,
+            depth_format,
         ),
     }
 }
@@ -3239,6 +3389,7 @@ fn build_pipeline(
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu pipeline"),
@@ -3268,8 +3419,8 @@ fn build_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
+        depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+            format,
             depth_write_enabled: Some(false),
             depth_compare: Some(wgpu::CompareFunction::Always),
             stencil: wgpu::StencilState::default(),
@@ -3288,6 +3439,7 @@ fn build_mesh_pipeline(
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu mesh pipeline"),
@@ -3317,8 +3469,8 @@ fn build_mesh_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
+        depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+            format,
             depth_write_enabled: Some(false),
             depth_compare: Some(wgpu::CompareFunction::Always),
             stencil: wgpu::StencilState::default(),
@@ -3330,14 +3482,66 @@ fn build_mesh_pipeline(
     })
 }
 
+// One prebuilt, buffer-free triangle resets depth without splitting the color pass.
+fn build_depth_clear(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    depth_format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("model depth reset"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+            r#"
+            @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+                let p = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+                return vec4(p[i], 1.0, 1.0);
+            }
+            @fragment fn fs_main() -> @location(0) vec4<f32> { return vec4(0.0); }
+        "#,
+        )),
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("model depth reset"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::empty(),
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_format,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: Default::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
 fn build_tmesh_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
-    use_depth: bool,
+    depth_mode: deadlib_render_core::DepthMode,
     write_mask: wgpu::ColorWrites,
+    depth_format: Option<wgpu::TextureFormat>,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu textured-mesh pipeline"),
@@ -3365,15 +3569,19 @@ fn build_tmesh_pipeline(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: use_depth.then_some(wgpu::Face::Back),
+            // Culling is selected per instance in the fragment shader.
+            // Hold strips use depth testing while remaining two-sided.
+            cull_mode: None,
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(use_depth),
-            depth_compare: Some(if use_depth {
+        depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+            format,
+            depth_write_enabled: Some(depth_mode.writes()),
+            depth_compare: Some(if depth_mode.on_fail() {
+                wgpu::CompareFunction::Greater
+            } else if depth_mode.tests() {
                 wgpu::CompareFunction::LessEqual
             } else {
                 wgpu::CompareFunction::Always
@@ -3437,23 +3645,19 @@ const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     1 => Float32x4, // color
 ];
 
-const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-    0 => Float32x3, // pos
-    1 => Float32x2, // uv
+const TMESH_ATTRS: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+    4 => Float32x4, // normal and texture generation modes
+    0 => Float32x3, // position
+    1 => Float32x2, // texture coordinates
     2 => Float32x4, // color
-    3 => Float32x2, // tex-matrix scale
+    3 => Float32x2, // texture-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
-    4 => Float32x4, // model column 0
-    5 => Float32x4, // model column 1
-    6 => Float32x4, // model column 2
-    7 => Float32x4, // model column 3
-    8 => Float32x4, // tint
-    9 => Float32x2, // uv scale
-    10 => Float32x2, // uv offset
-    11 => Float32x2, // uv texture-matrix shift
-    12 => Float32, // texture alpha-mask mode
+// Pack adjacent UV/control fields to stay within the 16-attribute device limit.
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
+    5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4,
+    9 => Float32x4, 10 => Float32x4, 11 => Float32x4,
+    12 => Float32x4, 13 => Float32x4, 14 => Float32x4, 15 => Float32x4,
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
@@ -3649,6 +3853,7 @@ mod tests {
         TMESH_SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, clamp_vertex_count,
         stage_offscreen_projection_upload, stage_projection_upload,
     };
+    use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -3678,6 +3883,150 @@ mod tests {
         }
     }
 
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires a Vulkan device and a window system"]
+    fn textured_backfaces_are_culled() {
+        use super::{
+            Api, PresentModePolicy, SamplerDesc, Texture, TextureLookup, Window, capture_frame,
+            create_texture, draw, init, request_screenshot,
+        };
+        use deadlib_render_core::{
+            BlendMode, DrawOp, RenderFrame, TexturedMeshGeometry, TexturedMeshInstanceRaw,
+            TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
+        };
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        struct Textures(Texture);
+        impl TextureLookup for Textures {
+            fn wgpu_texture(&self, _: deadlib_render_core::TextureHandle) -> Option<&Texture> {
+                Some(&self.0)
+            }
+        }
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("test event loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(64, 64)),
+            )
+            .expect("hidden test window");
+        let mut state = init(
+            Api::Vulkan,
+            Arc::new(window),
+            Matrix4::IDENTITY,
+            false,
+            PresentModePolicy::Immediate,
+            false,
+        )
+        .expect("wgpu backend");
+        let image = image::RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                image::Rgba([0, 255, 0, 255])
+            } else {
+                image::Rgba([255; 4])
+            }
+        });
+        let textures = Textures(
+            create_texture(&mut state, &image, SamplerDesc::default()).expect("fixture texture"),
+        );
+        let mut vertices = Vec::new();
+        for (points, uv) in [
+            (
+                [[-0.8, -0.8, 0.0], [0.8, -0.8, 0.0], [0.0, 0.8, 0.0]],
+                [0.25, 0.5],
+            ),
+            (
+                [[-0.8, -0.8, 0.0], [0.0, 0.8, 0.0], [0.8, -0.8, 0.0]],
+                [0.75, 0.5],
+            ),
+        ] {
+            for pos in points {
+                vertices.push(TexturedMeshVertex {
+                    normal: [0.0; 4],
+                    pos,
+                    uv,
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                });
+            }
+        }
+        let mut frame = RenderFrame {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            render_targets: Vec::new(),
+            cameras: Vec::new(),
+            sprite_instances: Vec::new(),
+            mesh_vertices: Vec::new(),
+            tmesh_instances: vec![TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                [1.0; 4],
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                false,
+            )],
+            tmesh_geometries: vec![TexturedMeshGeometry {
+                vertices: TexturedMeshVertices::Shared(vertices.into()),
+                cache_key: 0,
+            }],
+            ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
+                additive_texture: 0,
+                texture_handle: 1,
+                blend: BlendMode::Alpha,
+                camera: 0,
+                geometry: 0,
+                instance_start: 0,
+                instance_count: 1,
+                depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
+                clear_depth: false,
+            })],
+        };
+        // Depth testing must preserve the same per-instance cull choice.
+        for depth in [false, true] {
+            let DrawOp::TexturedMesh(run) = &mut frame.ops[0] else {
+                unreachable!()
+            };
+            run.depth_test = depth;
+            run.depth_write = depth;
+            for (transform, expected) in [
+                (Matrix4::IDENTITY, [0, 255, 0]),
+                (
+                    Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                    [0, 255, 0],
+                ),
+                (Matrix4::from_rotation_y(std::f32::consts::PI), [255; 3]),
+            ] {
+                for cull in [false, true] {
+                    let mut instance = TexturedMeshInstanceRaw::new(
+                        transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
+                    );
+                    instance.cull_mode = f32::from(cull);
+                    frame.tmesh_instances[0] = instance;
+                    request_screenshot(&mut state);
+                    draw(&mut state, &frame, &textures, false).expect("render fixture");
+                    let captured = capture_frame(&mut state).expect("read fixture pixels");
+                    assert_eq!(
+                        captured
+                            .get_pixel(captured.width() / 2, captured.height() / 2)
+                            .0[..3],
+                        if cull { expected } else { [255; 3] },
+                        "depth={depth} cull={cull} transform={transform:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn draw_binding_cache_keeps_exact_camera_and_texture_bindings() {
         let mut cache = DrawBindingCache::default();
@@ -3687,11 +4036,29 @@ mod tests {
         cache.reset_camera();
         assert!(cache.camera_required(2));
 
-        assert!(cache.texture_required(7, false));
-        assert!(!cache.texture_required(7, false));
-        assert!(cache.texture_required(7, true));
-        assert!(cache.texture_required(8, true));
-        assert!(!cache.texture_required(8, true));
+        assert!(cache.texture_required(7, SamplerDesc::default()));
+        assert!(!cache.texture_required(7, SamplerDesc::default()));
+        assert!(cache.texture_required(
+            7,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
+        assert!(cache.texture_required(
+            8,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
+        assert!(!cache.texture_required(
+            8,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
     }
 
     #[test]
@@ -3705,6 +4072,21 @@ mod tests {
         assert!(cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(cache.instance_required(InstanceBinding::Sprite));
+    }
+
+    #[test]
+    fn draw_binding_cache_rebinds_filter_on_the_same_image() {
+        let mut cache = DrawBindingCache::default();
+        let linear = SamplerDesc::default();
+        let nearest = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..linear
+        };
+        assert!(cache.texture_required(7, nearest));
+        assert!(!cache.texture_required(7, nearest));
+        assert!(cache.texture_required(7, linear));
+        assert!(cache.texture_required(7, nearest));
+        assert!(cache.texture_required(7, linear));
     }
 
     #[test]

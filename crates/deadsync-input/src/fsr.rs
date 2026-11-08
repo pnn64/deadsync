@@ -1,18 +1,17 @@
-use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 use std::sync::Arc;
 
-/// Maximum logical button groups exposed by one controller. Analog Dance Pad
-/// firmware reports up to sixteen HID buttons; SMX uses four named panels.
-pub const MAX_PAD_BUTTONS: usize = 16;
-/// Maximum hardware sensors exposed by one button. FSRIO owns twelve sensors
-/// total and may legally map all of them to one button.
-pub const MAX_BUTTON_SENSORS: usize = 12;
+/// Common controllers fit inline; custom serial firmware can expose more.
+pub const INLINE_PAD_BUTTONS: usize = 16;
+pub const INLINE_BUTTON_SENSORS: usize = 12;
 
 /// Which FSR backend owns a given pad, so edits can be routed back to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackendKind {
     Fsrio,
     Smx,
+    Teejusb,
+    Reflex,
 }
 
 /// Backend-defined transform from raw sensor units to a displayed bar height.
@@ -88,6 +87,10 @@ pub struct PadDeviceId {
 /// enable edits target.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorView {
+    /// Independently editable release threshold, in the same units as press.
+    pub release_threshold: Option<u16>,
+    /// Host-calibrated zero point; raw_value is pressure above this baseline.
+    pub baseline: Option<u16>,
     /// Index used when addressing this sensor for edits (`set_threshold` /
     /// `set_sensor_enabled`). May differ from the display position.
     pub firmware_index: usize,
@@ -103,9 +106,8 @@ pub struct SensorView {
     pub enabled: bool,
 }
 
-/// Bounded inline sensor storage. SMX always uses four entries; FSRIO uses at
-/// most twelve, so live pad snapshots never need a per-button heap allocation.
-pub type SensorViews = ArrayVec<SensorView, MAX_BUTTON_SENSORS>;
+/// Common pads stay inline; larger custom groups spill without truncation.
+pub type SensorViews = SmallVec<[SensorView; INLINE_BUTTON_SENSORS]>;
 
 /// Label shown for a logical controller button group.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +116,10 @@ pub enum ButtonLabel {
     Named(&'static str),
     /// A one-based HID button number from Analog Dance Pad firmware.
     Hid(u8),
+    /// Serial firmware exposes sensor indices, not HID button mappings.
+    Sensor(u16),
+    /// A user-configured group of serial sensors (not a claimed HID mapping).
+    Group(u16),
 }
 
 /// One logical controller button and the sensors that drive it.
@@ -140,20 +146,42 @@ pub struct ButtonView {
     pub release_threshold: Option<u16>,
 }
 
-/// Bounded inline button storage. SMX uses four entries; Analog Dance Pad
-/// firmware can expose up to sixteen logical HID button groups.
-pub type ButtonViews = ArrayVec<ButtonView, MAX_PAD_BUTTONS>;
+/// Inline for SMX/FSRio, with room to grow for custom serial controllers.
+pub type ButtonViews = SmallVec<[ButtonView; INLINE_PAD_BUTTONS]>;
+
+/// Controls for pads whose input detection and settings live on the computer.
+#[derive(Clone, Copy, Debug)]
+pub struct HostPadControls {
+    pub player: usize,
+    pub brightness: u8,
+    pub lights: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostPadAction {
+    Calibrate,
+    SwitchPlayer,
+    CycleLights,
+    Brightness(i16),
+    TestLights,
+}
 
 /// A single connected FSR pad, exposed to the config screen.
 #[derive(Clone, Debug)]
 pub struct PadView {
+    pub host_controls: Option<HostPadControls>,
     pub device_id: PadDeviceId,
     /// Immutable hardware label shared across live snapshots. Backends update
     /// this only when device identity changes, so cloning a frame never copies
     /// or reallocates the label text.
     pub device_name: Arc<str>,
-    /// Player side the pad maps to (P2 vs P1), used to filter by play style. Taken
-    /// from the device slot (slot 1 = P2 for SMX), not the hardware jumper.
+    /// A connected device may need an explicit protocol choice before writes.
+    pub thresholds_editable: bool,
+    /// Connection/configuration feedback, displayed by the shared editor.
+    pub status: Option<Arc<str>>,
+    /// Player side for SMX play-style filtering, taken from the device slot
+    /// (slot 1 = P2), not the hardware jumper. FSRio and serial controllers have
+    /// no side assignment; their placeholder value is ignored when filtering.
     pub is_p2_side: bool,
     pub buttons: ButtonViews,
     /// Whether the Advanced view is available for this pad. Load-cell pads are

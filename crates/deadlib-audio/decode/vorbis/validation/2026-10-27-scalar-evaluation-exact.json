@@ -1,0 +1,194 @@
+[
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 640,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 640,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 640,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 640,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7680,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7680,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7680,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7680,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7056,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7056,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7056,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 7056,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/sounds/boom.ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 17152,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/sounds/boom.ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 17152,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/sounds/boom.ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 17152,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/sounds/boom.ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 17152,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/music/in_two (loop).ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/music/in_two (loop).ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/music/in_two (loop).ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "assets/music/in_two (loop).ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "setting": "1",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "setting": "2",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "setting": "3",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  },
+  {
+    "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+    "setting": "4",
+    "libvorbis_bit_exact": true,
+    "samples_per_decoder": 441000,
+    "native_bit_exact": true,
+    "symphonia_bit_exact": true
+  }
+]

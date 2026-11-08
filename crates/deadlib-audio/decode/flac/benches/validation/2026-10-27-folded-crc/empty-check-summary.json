@@ -1,0 +1,26 @@
+[
+  {
+    "case": "subset/99 - empty.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 28.822577209797657,
+    "min_ns_per_unit": 28.822577209797657,
+    "max_ns_per_unit": 28.822577209797657,
+    "median_ns_per_iteration": 28.822577209797657
+  },
+  {
+    "case": "subset/99 - empty.flac",
+    "mode": "stream",
+    "median_ns_per_unit": 517.8213783403656,
+    "min_ns_per_unit": 517.8213783403656,
+    "max_ns_per_unit": 517.8213783403656,
+    "median_ns_per_iteration": 517.8213783403656
+  },
+  {
+    "case": "subset/99 - empty.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 73.45101781170483,
+    "min_ns_per_unit": 73.45101781170483,
+    "max_ns_per_unit": 73.45101781170483,
+    "median_ns_per_iteration": 73.45101781170483
+  }
+]

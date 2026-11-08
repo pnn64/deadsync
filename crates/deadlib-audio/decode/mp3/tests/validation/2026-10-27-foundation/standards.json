@@ -1,0 +1,14 @@
+[
+  {
+    "name": "mpeg1-draft.pdf",
+    "url": "https://ossrs.net/lts/zh-cn/assets/files/ISO_IEC_11172-3-MP3-1993-7e218e3ec360c25149d36152c4e02f08.pdf",
+    "sha256": "a91dff423d0958667d72d6646219f4a54c0d1f0094e73860b29503bd5b2c7cec",
+    "bytes": 403550
+  },
+  {
+    "name": "mpeg2-1997.pdf",
+    "url": "https://ossrs.net/lts/zh-cn/assets/files/ISO_IEC_13818-3-MP3-1997-8bbd47f7cd4e0325f23b9473f6932fa1.pdf",
+    "sha256": "25ebf438988fced761b79adcb108c0a59acc68a0f38be36017c334abb8582df5",
+    "bytes": 790675
+  }
+]

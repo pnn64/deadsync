@@ -134,6 +134,32 @@ pub trait NoteskinSlot: Sized {
 
     fn texture_key_shared(&self) -> Arc<str>;
     fn model(&self) -> Option<&ModelMesh>;
+    /// Immutable per-state image bindings, populated on the asset worker.
+    fn model_texture_keys(&self) -> &[Arc<str>] {
+        &[]
+    }
+    fn model_additive_keys(&self) -> &[Arc<str>] {
+        &[]
+    }
+    fn model_texture_at(&self, seconds: f32) -> Arc<str> {
+        self.model_texture_keys()
+            .get(self.frame_index(seconds, 0.0))
+            .cloned()
+            .unwrap_or_else(|| self.texture_key_shared())
+    }
+    fn model_seconds_from_phase(&self, phase: f32) -> f32 {
+        phase
+    }
+    fn model_texture_mode(&self) -> u8 {
+        0
+    }
+    fn model_additive(&self, _seconds: f32) -> Option<(Arc<str>, [f32; 4])> {
+        None
+    }
+    /// ITG Models cull backfaces; sprite cutouts retain two-sided drawing.
+    fn model_cull_back(&self) -> bool {
+        true
+    }
     fn base_rot_sin_cos(&self) -> [f32; 2];
 
     /// MilkShape materials use note animation phase; sprites use elapsed time,
@@ -167,8 +193,8 @@ pub trait NoteskinSlot: Sized {
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];
 
-    /// Converts authored texture translations to the backing texture's UV units.
-    /// Model animations packed from separate images use the selected frame's span.
+    /// Converts native texture translations to the uploaded image's UV units.
+    /// Sprites account for native allocation padding; Models may use a sheet.
     fn uv_translation_scale(&self) -> [f32; 2] {
         [1.0; 2]
     }
@@ -215,10 +241,12 @@ pub trait NoteskinSlot: Sized {
 pub fn model_vertex_for_sprite(def: &SpriteDefinition, mut vertex: ModelVertex) -> ModelVertex {
     if def.mirror_h {
         vertex.pos[0] = -vertex.pos[0];
+        vertex.normal[0] = -vertex.normal[0];
         vertex.uv[0] = 1.0 - vertex.uv[0];
     }
     if def.mirror_v {
         vertex.pos[1] = -vertex.pos[1];
+        vertex.normal[1] = -vertex.normal[1];
         vertex.uv[1] = 1.0 - vertex.uv[1];
     }
     vertex
@@ -554,7 +582,7 @@ pub fn itg_sprite_animation_slot_plan(
         SpriteAnimationCommandPlan::StateProperties(plan) => itg_state_properties_slot_plan(
             slot,
             plan.frame_count,
-            &plan.frame_delays,
+            plan.frame_delays,
             beat_based,
             &mut sprite_sheet_dims,
             &mut source_frame_dims,
@@ -568,7 +596,7 @@ pub fn itg_sprite_animation_slot_plan(
 fn itg_state_properties_slot_plan(
     slot: SpriteSlotPlan,
     frame_count: usize,
-    frame_delays: &[f32],
+    frame_delays: Vec<f32>,
     beat_based: bool,
     sprite_sheet_dims: &mut impl FnMut(&str) -> (u32, u32),
     source_frame_dims: &mut impl FnMut(&str, u32, u32) -> (u32, u32),
@@ -579,7 +607,7 @@ fn itg_state_properties_slot_plan(
         note_color_translate,
         ..
     } = slot;
-    let (texture_key, tex_dims) = match &source {
+    let (texture_key, tex_dims) = match source {
         SpriteSourcePlan::Atlas {
             texture_key,
             tex_dims,
@@ -588,10 +616,10 @@ fn itg_state_properties_slot_plan(
             texture_key,
             tex_dims,
             ..
-        } => (texture_key.clone(), *tex_dims),
+        } => (texture_key, tex_dims),
     };
     let (grid_x, grid_y) = sprite_sheet_dims(&texture_key);
-    let animation = sprite_state_properties_animation(
+    let animation = sprite_state_properties_animation_owned(
         [tex_dims.0, tex_dims.1],
         [grid_x as usize, grid_y as usize],
         def.src,
@@ -1199,6 +1227,70 @@ pub fn sprite_state_properties_animation(
     frame_delays: &[f32],
     beat_based: bool,
 ) -> Option<SpriteStatePropertiesAnimation> {
+    sprite_state_properties_animation_with(
+        tex_dims,
+        sheet_grid,
+        src,
+        frame_count,
+        beat_based,
+        |anim_frames| {
+            let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
+            let mut durations = Vec::with_capacity(anim_frames);
+            for idx in 0..anim_frames {
+                durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+            }
+            durations
+        },
+    )
+}
+
+/// Builds a state animation while reusing the supplied delay buffer.
+///
+/// The sheet and frame-count rules match [`sprite_state_properties_animation`].
+/// Delays are truncated or padded using the first delay (or 1.0 for an empty
+/// input), then clamped to zero. A new buffer is allocated only when the input
+/// capacity cannot hold the frame count.
+#[must_use]
+pub fn sprite_state_properties_animation_owned(
+    tex_dims: [u32; 2],
+    sheet_grid: [usize; 2],
+    src: [i32; 2],
+    frame_count: usize,
+    mut frame_delays: Vec<f32>,
+    beat_based: bool,
+) -> Option<SpriteStatePropertiesAnimation> {
+    sprite_state_properties_animation_with(
+        tex_dims,
+        sheet_grid,
+        src,
+        frame_count,
+        beat_based,
+        |anim_frames| {
+            let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
+            if frame_delays.capacity() < anim_frames {
+                let mut durations = Vec::with_capacity(anim_frames);
+                for idx in 0..anim_frames {
+                    durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+                }
+                return durations;
+            }
+            frame_delays.resize(anim_frames, fallback);
+            for delay in &mut frame_delays {
+                *delay = delay.max(0.0);
+            }
+            frame_delays
+        },
+    )
+}
+
+fn sprite_state_properties_animation_with(
+    tex_dims: [u32; 2],
+    sheet_grid: [usize; 2],
+    src: [i32; 2],
+    frame_count: usize,
+    beat_based: bool,
+    build_durations: impl FnOnce(usize) -> Vec<f32>,
+) -> Option<SpriteStatePropertiesAnimation> {
     let cols = sheet_grid[0].max(1);
     let rows = sheet_grid[1].max(1);
     let available = (cols * rows).max(1);
@@ -1222,11 +1314,7 @@ pub fn sprite_state_properties_animation(
         .saturating_add(col)
         .min(available - 1);
 
-    let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
-    let mut durations = Vec::with_capacity(anim_frames);
-    for idx in 0..anim_frames {
-        durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
-    }
+    let durations = build_durations(anim_frames);
     let default_delay = durations.first().copied().unwrap_or(1.0).max(1e-6);
     let rate = if beat_based {
         AnimationRate::FramesPerBeat(1.0 / default_delay)
@@ -1324,6 +1412,7 @@ mod tests {
     #[test]
     fn model_vertex_mirroring_preserves_depth_and_texture_scale() {
         let vertex = ModelVertex {
+            normal: [0.0, 0.0, 1.0],
             pos: [3.0, -5.0, 7.0],
             uv: [0.2, 0.75],
             tex_matrix_scale: [2.0, 4.0],
@@ -1802,5 +1891,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "../tests/perf/sprite_setup.rs"]
-mod preparation_perf;
+#[path = "sprite_perf_tests.rs"]
+mod sprite_perf_tests;

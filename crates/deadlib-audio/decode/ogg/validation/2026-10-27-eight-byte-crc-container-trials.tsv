@@ -1,0 +1,694 @@
+path	engine	phase	iterations	elapsed_ns	ns_per_run	pages	packets	payload_bytes	read_calls	bytes_read	checksum_sum	trial
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	99175400	2909.137308967176	102273	0	0	340910	93034339	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	133369300	9779.958935249688	40911	0	0	136370	37215373	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	115330700	2229.6897051715805	155175	0	0	103450	141157525	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	131948800	9675.793796289507	40911	0	0	136370	37215373	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	96501400	2830.700184799507	102273	0	0	340910	93034339	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	116322800	2248.8699855002415	155175	0	0	103450	141157525	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	95469300	2800.425332199114	102273	0	0	340910	93034339	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	114752300	2218.5074915418077	155175	0	0	103450	141157525	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	131417300	9636.818948449072	40911	0	0	136370	37215373	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	96095600	2818.7967498753337	102273	0	0	340910	93034339	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	133601900	9797.015472611278	40911	0	0	136370	37215373	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	114387400	2211.4528757854036	155175	0	0	103450	141157525	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	95697400	2807.1162476900063	102273	0	0	340910	93034339	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	120567000	2330.923151280812	155175	0	0	103450	141157525	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	134613900	9871.225342817335	40911	0	0	136370	37215373	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	131690300	9656.838014226003	40911	0	0	136370	37215373	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	94787000	2780.411252236661	102273	0	0	340910	93034339	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	120126400	2322.40502658289	155175	0	0	103450	141157525	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	pages	34091	100588200	2950.5793317884486	102273	0	0	340910	93034339	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	pages	13637	132190900	9693.546967808168	40911	0	0	136370	37215373	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	pages	51725	115019300	2223.6694055099083	155175	0	0	103450	141157525	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	94934000	3101.1008395126255	91839	214291	80573416	61226	83542877	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	136056700	10158.791906219667	40179	93751	35250376	133930	36549497	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	103480000	3311.36	93750	218750	82250000	312500	85281250	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	104213600	3334.8352	93750	218750	82250000	312500	85281250	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	136298000	10176.808780706338	40179	93751	35250376	133930	36549497	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	91581200	2991.5787410577204	91839	214291	80573416	61226	83542877	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	97900000	3197.98778296802	91839	214291	80573416	61226	83542877	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	143687300	10728.53729560218	40179	93751	35250376	133930	36549497	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	100032100	3201.0272	93750	218750	82250000	312500	85281250	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	100243400	3207.7888	93750	218750	82250000	312500	85281250	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	92806200	3031.594420670957	91839	214291	80573416	61226	83542877	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	135776900	10137.900395729112	40179	93751	35250376	133930	36549497	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	100097700	3203.1264	93750	218750	82250000	312500	85281250	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	134466600	10040.065705965802	40179	93751	35250376	133930	36549497	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	91045800	2974.089439127168	91839	214291	80573416	61226	83542877	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	135852000	10143.50780258344	40179	93751	35250376	133930	36549497	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	97988000	3135.616	93750	218750	82250000	312500	85281250	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	93807200	3064.2929474406296	91839	214291	80573416	61226	83542877	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	demux	30613	97998400	3201.2021036814426	91839	214291	80573416	61226	83542877	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	demux	31250	99116600	3171.7312	93750	218750	82250000	312500	85281250	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	demux	13393	135265400	10099.7088031061	40179	93751	35250376	133930	36549497	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	89880400	2996.0133333333333	90000	210000	78960000	60000	81870000	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	100076600	3135.723014256619	95745	223405	84000280	319150	87096035	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	137022600	10413.634290925673	39474	92106	34631856	131580	35908182	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	90661100	3022.036666666667	90000	210000	78960000	60000	81870000	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	136149900	10347.309621523027	39474	92106	34631856	131580	35908182	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	100669900	3154.3130189566036	95745	223405	84000280	319150	87096035	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	99340500	3112.6586244712516	95745	223405	84000280	319150	87096035	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	132399300	10062.266301869586	39474	92106	34631856	131580	35908182	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	89637300	2987.91	90000	210000	78960000	60000	81870000	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	99305600	3111.5650947830172	95745	223405	84000280	319150	87096035	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	131242800	9974.37300501596	39474	92106	34631856	131580	35908182	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	86496700	2883.2233333333334	90000	210000	78960000	60000	81870000	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	137605300	10457.919136646908	39474	92106	34631856	131580	35908182	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	91884000	3062.8	90000	210000	78960000	60000	81870000	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	101623600	3184.195519348269	95745	223405	84000280	319150	87096035	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	132988800	10107.067943456452	39474	92106	34631856	131580	35908182	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	100928100	3162.4032586558046	95745	223405	84000280	319150	87096035	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	88820500	2960.6833333333334	90000	210000	78960000	60000	81870000	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	stream4096	30000	89482400	2982.7466666666664	90000	210000	78960000	60000	81870000	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	stream4096	13158	134467200	10219.425444596443	39474	92106	34631856	131580	35908182	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	stream4096	31915	104850700	3285.310982296726	95745	223405	84000280	319150	87096035	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	71551900	715.519	100000	100000	3000000	300000	5800000	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	53032600	565.6810666666667	93750	93750	2812500	281250	5437500	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	39532800	658.88	60000	60000	1800000	60000	163740000	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	67880200	678.802	100000	100000	3000000	300000	5800000	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	52903500	564.304	93750	93750	2812500	281250	5437500	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	38746100	645.7683333333333	60000	60000	1800000	60000	163740000	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	69890200	698.902	100000	100000	3000000	300000	5800000	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	53025300	565.6032	93750	93750	2812500	281250	5437500	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	38424300	640.405	60000	60000	1800000	60000	163740000	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	69151400	691.514	100000	100000	3000000	300000	5800000	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	46130800	768.8466666666667	60000	60000	1800000	60000	163740000	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	52936500	564.656	93750	93750	2812500	281250	5437500	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	39316500	655.275	60000	60000	1800000	60000	163740000	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	55745100	594.6144	93750	93750	2812500	281250	5437500	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	72130600	721.306	100000	100000	3000000	300000	5800000	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	53226800	567.7525333333333	93750	93750	2812500	281250	5437500	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	38026200	633.77	60000	60000	1800000	60000	163740000	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	67426000	674.26	100000	100000	3000000	300000	5800000	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libogg	startup	60000	38405200	640.0866666666667	60000	60000	1800000	60000	163740000	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	startup	100000	69346200	693.462	100000	100000	3000000	300000	5800000	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	startup	93750	51993200	554.5941333333334	93750	93750	2812500	281250	5437500	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	127446200	3908.313655739213	97827	0	0	65218	161414550	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	117895500	4479.99316005472	78948	0	0	263160	130264200	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	142319600	17171.76640926641	24864	0	0	82880	41025600	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	143506700	17314.997586872585	24864	0	0	82880	41025600	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	118194800	4491.366469068247	78948	0	0	263160	130264200	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	130616300	4005.529148394615	97827	0	0	65218	161414550	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	118199100	4491.529867761058	78948	0	0	263160	130264200	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	145572100	17564.201254826254	24864	0	0	82880	41025600	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	133297900	4087.764114201601	97827	0	0	65218	161414550	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	143840800	17355.30888030888	24864	0	0	82880	41025600	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	126551800	3880.885645067313	97827	0	0	65218	161414550	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	116534100	4428.260373917009	78948	0	0	263160	130264200	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	146644400	17693.58108108108	24864	0	0	82880	41025600	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	116464500	4425.615595075239	78948	0	0	263160	130264200	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	128324300	3935.2418044098254	97827	0	0	65218	161414550	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	146274000	17648.889961389963	24864	0	0	82880	41025600	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	115370300	4384.036327709378	78948	0	0	263160	130264200	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	127531000	3910.9141648011287	97827	0	0	65218	161414550	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	pages	26316	119795300	4552.18498252014	78948	0	0	263160	130264200	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	pages	8288	146197700	17639.68388030888	24864	0	0	82880	41025600	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	pages	32609	131527900	4033.484620810206	97827	0	0	65218	161414550	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	112385000	4870.000433331889	69231	207693	111784988	230770	114231150	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	144583700	18216.416782159507	23811	71433	38446828	79370	39288150	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	106387500	4680.900211193241	68184	204552	110094432	45456	112503600	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	106844000	4700.98556846181	68184	204552	110094432	45456	112503600	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	145347200	18312.61181806728	23811	71433	38446828	79370	39288150	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	111084500	4813.645621181263	69231	207693	111784988	230770	114231150	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	114013900	4940.585864713784	69231	207693	111784988	230770	114231150	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	142248200	17922.162025954392	23811	71433	38446828	79370	39288150	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	109093500	4799.96040126716	68184	204552	110094432	45456	112503600	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	112171000	4860.727130909564	69231	207693	111784988	230770	114231150	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	143583000	18090.336399143252	23811	71433	38446828	79370	39288150	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	114676700	5045.613340373108	68184	204552	110094432	45456	112503600	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	112786500	4962.447201689546	68184	204552	110094432	45456	112503600	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	112627400	4880.504398318672	69231	207693	111784988	230770	114231150	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	141798800	17865.54113644954	23811	71433	38446828	79370	39288150	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	140110300	17652.803326193774	23811	71433	38446828	79370	39288150	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	114232400	4950.054166486112	69231	207693	111784988	230770	114231150	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	109065800	4798.741640267512	68184	204552	110094432	45456	112503600	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	demux	7937	143368000	18063.248078619126	23811	71433	38446828	79370	39288150	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	demux	22728	109452400	4815.7514959521295	68184	204552	110094432	45456	112503600	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	demux	23077	114479000	4960.74013086623	69231	207693	111784988	230770	114231150	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	106369400	4892.796688132475	65220	195660	105308560	65220	107613000	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	115719800	5014.507951640161	69231	207693	111784988	230770	114231150	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	146387300	18346.572252161925	23937	71811	38650276	79790	39496050	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	102835600	4730.248390064397	65220	195660	105308560	65220	107613000	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	143511900	17986.201278355682	23937	71811	38650276	79790	39496050	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	113201000	4905.360315465615	69231	207693	111784988	230770	114231150	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	117621800	5096.927676907743	69231	207693	111784988	230770	114231150	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	143708300	18010.815891715753	23937	71811	38650276	79790	39496050	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	103247600	4749.199632014719	65220	195660	105308560	65220	107613000	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	141386700	17719.852111793458	23937	71811	38650276	79790	39496050	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	101374400	4663.035878564858	65220	195660	105308560	65220	107613000	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	113697400	4926.870910430299	69231	207693	111784988	230770	114231150	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	116939600	5067.365775447415	69231	207693	111784988	230770	114231150	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	101045900	4647.9254829806805	65220	195660	105308560	65220	107613000	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	138280600	17330.567740318336	23937	71811	38650276	79790	39496050	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	138178000	17317.70898608848	23937	71811	38650276	79790	39496050	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	110049800	4768.808770637431	69231	207693	111784988	230770	114231150	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	101744600	4680.064397424103	65220	195660	105308560	65220	107613000	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	stream4096	23077	114786800	4974.078086406379	69231	207693	111784988	230770	114231150	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	stream4096	21740	161239300	7416.711131554738	65220	195660	105308560	65220	107613000	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	stream4096	7979	159538000	19994.736182479006	23937	71811	38650276	79790	39496050	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	58753400	665.8665397343487	88236	88236	2647080	264708	5117688	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	55715700	557.157	100000	100000	3000000	300000	5800000	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	38887000	699.9604003167975	55556	55556	1666680	55556	275002200	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	39910300	718.3796529627763	55556	55556	1666680	55556	275002200	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	62613300	709.6117231062151	88236	88236	2647080	264708	5117688	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	55820800	558.208	100000	100000	3000000	300000	5800000	0	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	57033400	570.334	100000	100000	3000000	300000	5800000	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	39831300	716.9576643386853	55556	55556	1666680	55556	275002200	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	60416200	684.7114556416882	88236	88236	2647080	264708	5117688	0	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	60756700	688.5704247699351	88236	88236	2647080	264708	5117688	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	41505000	747.0840233278134	55556	55556	1666680	55556	275002200	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	58756500	587.565	100000	100000	3000000	300000	5800000	0	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	56787500	567.875	100000	100000	3000000	300000	5800000	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	39663500	713.937288501692	55556	55556	1666680	55556	275002200	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	61808800	700.4941293802983	88236	88236	2647080	264708	5117688	0	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	109218200	1237.7963642957523	88236	88236	2647080	264708	5117688	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	116472600	1164.726	100000	100000	3000000	300000	5800000	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	82893500	1492.0710634314926	55556	55556	1666680	55556	275002200	0	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	startup	88236	110469300	1251.9753841969264	88236	88236	2647080	264708	5117688	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libogg	startup	55556	75148700	1352.6657786737705	55556	55556	1666680	55556	275002200	0	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	startup	100000	110236600	1102.366	100000	100000	3000000	300000	5800000	0	6
+assets/music/in_two (loop).ogg	native	pages	26	139734300	5374396.153846154	28184	0	0	84578	128414364	0	0
+assets/music/in_two (loop).ogg	libogg	pages	28	150807700	5385989.285714285	30352	0	0	16912	138292392	0	0
+assets/music/in_two (loop).ogg	native-baseline	pages	8	150821300	18852662.5	8672	0	0	26024	39512112	0	0
+assets/music/in_two (loop).ogg	native	pages	26	129545400	4982515.384615385	28184	0	0	84578	128414364	0	1
+assets/music/in_two (loop).ogg	native-baseline	pages	8	146932300	18366537.5	8672	0	0	26024	39512112	0	1
+assets/music/in_two (loop).ogg	libogg	pages	28	194044200	6930150.0	30352	0	0	16912	138292392	0	1
+assets/music/in_two (loop).ogg	native	pages	26	146168100	5621850.0	28184	0	0	84578	128414364	0	2
+assets/music/in_two (loop).ogg	native-baseline	pages	8	136231400	17028925.0	8672	0	0	26024	39512112	0	2
+assets/music/in_two (loop).ogg	libogg	pages	28	106185100	3792325.0	30352	0	0	16912	138292392	0	2
+assets/music/in_two (loop).ogg	native-baseline	pages	8	135152100	16894012.5	8672	0	0	26024	39512112	0	3
+assets/music/in_two (loop).ogg	libogg	pages	28	106910300	3818225.0	30352	0	0	16912	138292392	0	3
+assets/music/in_two (loop).ogg	native	pages	26	100056800	3848338.4615384615	28184	0	0	84578	128414364	0	3
+assets/music/in_two (loop).ogg	native	pages	26	101778100	3914542.3076923075	28184	0	0	84578	128414364	0	4
+assets/music/in_two (loop).ogg	native-baseline	pages	8	137217500	17152187.5	8672	0	0	26024	39512112	0	4
+assets/music/in_two (loop).ogg	libogg	pages	28	107168400	3827442.8571428573	30352	0	0	16912	138292392	0	4
+assets/music/in_two (loop).ogg	libogg	pages	28	111535500	3983410.714285714	30352	0	0	16912	138292392	0	5
+assets/music/in_two (loop).ogg	native	pages	26	102291400	3934284.6153846155	28184	0	0	84578	128414364	0	5
+assets/music/in_two (loop).ogg	native-baseline	pages	8	134398900	16799862.5	8672	0	0	26024	39512112	0	5
+assets/music/in_two (loop).ogg	native	pages	26	101516700	3904488.4615384615	28184	0	0	84578	128414364	0	6
+assets/music/in_two (loop).ogg	native-baseline	pages	8	133607300	16700912.5	8672	0	0	26024	39512112	0	6
+assets/music/in_two (loop).ogg	libogg	pages	28	108924300	3890153.5714285714	30352	0	0	16912	138292392	0	6
+assets/music/in_two (loop).ogg	libogg	demux	36	154867800	4301883.333333333	39024	372672	175928292	21744	177804504	0	0
+assets/music/in_two (loop).ogg	native-baseline	demux	9	155991600	17332400.0	9756	93168	43982073	29277	44451126	0	0
+assets/music/in_two (loop).ogg	native	demux	36	150282100	4174502.777777778	39024	372672	175928292	117108	177804504	0	0
+assets/music/in_two (loop).ogg	native	demux	36	150920800	4192244.4444444445	39024	372672	175928292	117108	177804504	0	1
+assets/music/in_two (loop).ogg	native-baseline	demux	9	155970600	17330066.666666668	9756	93168	43982073	29277	44451126	0	1
+assets/music/in_two (loop).ogg	libogg	demux	36	154758600	4298850.0	39024	372672	175928292	21744	177804504	0	1
+assets/music/in_two (loop).ogg	native-baseline	demux	9	157898500	17544277.777777776	9756	93168	43982073	29277	44451126	0	2
+assets/music/in_two (loop).ogg	libogg	demux	36	154669400	4296372.222222222	39024	372672	175928292	21744	177804504	0	2
+assets/music/in_two (loop).ogg	native	demux	36	150717400	4186594.4444444445	39024	372672	175928292	117108	177804504	0	2
+assets/music/in_two (loop).ogg	native-baseline	demux	9	154762000	17195777.777777776	9756	93168	43982073	29277	44451126	0	3
+assets/music/in_two (loop).ogg	native	demux	36	150237000	4173250.0	39024	372672	175928292	117108	177804504	0	3
+assets/music/in_two (loop).ogg	libogg	demux	36	152782900	4243969.444444444	39024	372672	175928292	21744	177804504	0	3
+assets/music/in_two (loop).ogg	native	demux	36	150560700	4182241.6666666665	39024	372672	175928292	117108	177804504	0	4
+assets/music/in_two (loop).ogg	native-baseline	demux	9	155196200	17244022.222222224	9756	93168	43982073	29277	44451126	0	4
+assets/music/in_two (loop).ogg	libogg	demux	36	152380400	4232788.888888889	39024	372672	175928292	21744	177804504	0	4
+assets/music/in_two (loop).ogg	native	demux	36	150662300	4185063.888888889	39024	372672	175928292	117108	177804504	0	5
+assets/music/in_two (loop).ogg	libogg	demux	36	152065200	4224033.333333333	39024	372672	175928292	21744	177804504	0	5
+assets/music/in_two (loop).ogg	native-baseline	demux	9	154540600	17171177.777777776	9756	93168	43982073	29277	44451126	0	5
+assets/music/in_two (loop).ogg	native	demux	36	149365200	4149033.3333333335	39024	372672	175928292	117108	177804504	0	6
+assets/music/in_two (loop).ogg	libogg	demux	36	153733900	4270386.111111111	39024	372672	175928292	21744	177804504	0	6
+assets/music/in_two (loop).ogg	native-baseline	demux	9	154285300	17142811.111111112	9756	93168	43982073	29277	44451126	0	6
+assets/music/in_two (loop).ogg	libogg	stream4096	32	141548200	4423381.25	34688	331264	156380704	38624	158048448	0	0
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	154555800	17172866.666666668	9756	93168	43982073	39006	44451126	0	0
+assets/music/in_two (loop).ogg	native	stream4096	35	151267800	4321937.142857143	37940	362320	171041395	151690	172865490	0	0
+assets/music/in_two (loop).ogg	native	stream4096	35	149777600	4279360.0	37940	362320	171041395	151690	172865490	0	1
+assets/music/in_two (loop).ogg	libogg	stream4096	32	143503900	4484496.875	34688	331264	156380704	38624	158048448	0	1
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	154799400	17199933.333333332	9756	93168	43982073	39006	44451126	0	1
+assets/music/in_two (loop).ogg	native	stream4096	35	150034900	4286711.428571428	37940	362320	171041395	151690	172865490	0	2
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	154027500	17114166.666666668	9756	93168	43982073	39006	44451126	0	2
+assets/music/in_two (loop).ogg	libogg	stream4096	32	133445400	4170168.75	34688	331264	156380704	38624	158048448	0	2
+assets/music/in_two (loop).ogg	libogg	stream4096	32	135103000	4221968.75	34688	331264	156380704	38624	158048448	0	3
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	156403500	17378166.666666668	9756	93168	43982073	39006	44451126	0	3
+assets/music/in_two (loop).ogg	native	stream4096	35	152209600	4348845.714285715	37940	362320	171041395	151690	172865490	0	3
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	155039100	17226566.666666668	9756	93168	43982073	39006	44451126	0	4
+assets/music/in_two (loop).ogg	native	stream4096	35	145857200	4167348.5714285714	37940	362320	171041395	151690	172865490	0	4
+assets/music/in_two (loop).ogg	libogg	stream4096	32	135364200	4230131.25	34688	331264	156380704	38624	158048448	0	4
+assets/music/in_two (loop).ogg	libogg	stream4096	32	147288900	4602778.125	34688	331264	156380704	38624	158048448	0	5
+assets/music/in_two (loop).ogg	native	stream4096	35	148705200	4248720.0	37940	362320	171041395	151690	172865490	0	5
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	152785700	16976188.888888888	9756	93168	43982073	39006	44451126	0	5
+assets/music/in_two (loop).ogg	libogg	stream4096	32	134995300	4218603.125	34688	331264	156380704	38624	158048448	0	6
+assets/music/in_two (loop).ogg	native	stream4096	35	147312700	4208934.285714285	37940	362320	171041395	151690	172865490	0	6
+assets/music/in_two (loop).ogg	native-baseline	stream4096	9	155347700	17260855.555555556	9756	93168	43982073	39006	44451126	0	6
+assets/music/in_two (loop).ogg	libogg	startup	4399	55171100	12541.73675835417	4399	4399	131970	4399	36036608	0	0
+assets/music/in_two (loop).ogg	native	startup	107143	60413200	563.8557815256246	107143	107143	3214290	321429	6214294	0	0
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	37630400	727.5089415176413	51725	51725	1551750	155175	3000050	0	0
+assets/music/in_two (loop).ogg	native	startup	107143	60230100	562.1468504708661	107143	107143	3214290	321429	6214294	0	1
+assets/music/in_two (loop).ogg	libogg	startup	4399	58353300	13265.128438281428	4399	4399	131970	4399	36036608	0	1
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	41929000	810.6138231029482	51725	51725	1551750	155175	3000050	0	1
+assets/music/in_two (loop).ogg	native	startup	107143	59722500	557.4092567876576	107143	107143	3214290	321429	6214294	0	2
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	34492800	666.8496858385694	51725	51725	1551750	155175	3000050	0	2
+assets/music/in_two (loop).ogg	libogg	startup	4399	55590000	12636.962946124118	4399	4399	131970	4399	36036608	0	2
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	34977700	676.2242629289511	51725	51725	1551750	155175	3000050	0	3
+assets/music/in_two (loop).ogg	libogg	startup	4399	61012800	13869.697658558764	4399	4399	131970	4399	36036608	0	3
+assets/music/in_two (loop).ogg	native	startup	107143	63163700	589.5270806305591	107143	107143	3214290	321429	6214294	0	3
+assets/music/in_two (loop).ogg	native	startup	107143	67671400	631.5988912014784	107143	107143	3214290	321429	6214294	0	4
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	35184700	680.2261962300628	51725	51725	1551750	155175	3000050	0	4
+assets/music/in_two (loop).ogg	libogg	startup	4399	56220500	12780.290975221642	4399	4399	131970	4399	36036608	0	4
+assets/music/in_two (loop).ogg	libogg	startup	4399	58984200	13408.547397135713	4399	4399	131970	4399	36036608	0	5
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	34474400	666.4939584340261	51725	51725	1551750	155175	3000050	0	5
+assets/music/in_two (loop).ogg	native	startup	107143	61455100	573.5801685597753	107143	107143	3214290	321429	6214294	0	5
+assets/music/in_two (loop).ogg	native-baseline	startup	51725	37741000	729.6471725471242	51725	51725	1551750	155175	3000050	0	6
+assets/music/in_two (loop).ogg	libogg	startup	4399	58561600	13312.480109115708	4399	4399	131970	4399	36036608	0	6
+assets/music/in_two (loop).ogg	native	startup	107143	58924200	549.9584667220444	107143	107143	3214290	321429	6214294	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	147992400	1804785.3658536586	45592	0	0	23616	192711398	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	148737100	1836260.4938271604	45036	0	0	135189	190361259	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	150336400	7912442.105263158	10564	0	0	31711	44652641	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	152700700	1862203.6585365853	45592	0	0	23616	192711398	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	149267600	1842809.87654321	45036	0	0	135189	190361259	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	152011100	8000584.2105263155	10564	0	0	31711	44652641	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	151574400	1871288.888888889	45036	0	0	135189	190361259	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	151581000	1848548.780487805	45592	0	0	23616	192711398	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	153013400	8053336.842105263	10564	0	0	31711	44652641	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	149141700	1818801.219512195	45592	0	0	23616	192711398	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	150315400	1855745.6790123456	45036	0	0	135189	190361259	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	152298100	8015689.47368421	10564	0	0	31711	44652641	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	150248900	7907836.842105263	10564	0	0	31711	44652641	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	150901500	1862981.4814814816	45036	0	0	135189	190361259	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	151640300	1849271.9512195121	45592	0	0	23616	192711398	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	150484400	7920231.578947368	10564	0	0	31711	44652641	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	150261700	1855082.7160493827	45036	0	0	135189	190361259	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	152804900	1863474.3902439023	45592	0	0	23616	192711398	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	pages	81	149714800	1848330.8641975308	45036	0	0	135189	190361259	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	pages	19	152669100	8035215.7894736845	10564	0	0	31711	44652641	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	pages	82	154687100	1886428.0487804879	45592	0	0	23616	192711398	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	150971100	2126353.5211267606	39476	760410	164707788	20448	166859869	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	157072000	2122594.5945945946	41144	792540	171667272	123506	173910286	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	155317500	8174605.263157895	10564	203490	44076732	31711	44652641	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	158089500	8320500.0	10564	203490	44076732	31711	44652641	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	151650000	2135915.4929577466	39476	760410	164707788	20448	166859869	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	154695200	2090475.6756756757	41144	792540	171667272	123506	173910286	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	148752000	2095098.5915492957	39476	760410	164707788	20448	166859869	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	155629500	2103101.3513513515	41144	792540	171667272	123506	173910286	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	156915900	8258731.578947368	10564	203490	44076732	31711	44652641	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	155835900	2105890.5405405406	41144	792540	171667272	123506	173910286	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	155969400	8208915.7894736845	10564	203490	44076732	31711	44652641	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	151967900	2140392.9577464787	39476	760410	164707788	20448	166859869	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	149043300	2099201.408450704	39476	760410	164707788	20448	166859869	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	151340900	2045147.2972972973	41144	792540	171667272	123506	173910286	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	153044200	8054957.894736842	10564	203490	44076732	31711	44652641	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	155117600	8164084.2105263155	10564	203490	44076732	31711	44652641	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	157408100	2217015.4929577466	39476	760410	164707788	20448	166859869	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	155079900	2095674.3243243243	41144	792540	171667272	123506	173910286	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	demux	19	154383300	8125436.842105263	10564	203490	44076732	31711	44652641	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	demux	71	148463400	2091033.8028169014	39476	760410	164707788	20448	166859869	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	demux	74	157024300	2121950.0	41144	792540	171667272	123506	173910286	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	155019100	8158900.0	10564	203490	44076732	42218	44652641	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	149745900	2109097.1830985914	39476	760410	164707788	40825	166859869	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	157101600	2122994.5945945946	41144	792540	171667272	164428	173910286	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	156406600	2113602.7027027025	41144	792540	171667272	164428	173910286	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	156908200	8258326.315789473	10564	203490	44076732	42218	44652641	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	149054600	2099360.563380282	39476	760410	164707788	40825	166859869	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	154242600	2084359.4594594594	41144	792540	171667272	164428	173910286	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	150230700	2115925.352112676	39476	760410	164707788	40825	166859869	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	153473800	8077568.421052632	10564	203490	44076732	42218	44652641	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	155492100	2101244.5945945946	41144	792540	171667272	164428	173910286	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	156144600	8218136.842105263	10564	203490	44076732	42218	44652641	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	148915900	2097407.0422535213	39476	760410	164707788	40825	166859869	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	153244500	2158373.23943662	39476	760410	164707788	40825	166859869	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	157726000	2131432.4324324327	41144	792540	171667272	164428	173910286	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	158349700	8334194.736842105	10564	203490	44076732	42218	44652641	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	155622900	2103012.1621621624	41144	792540	171667272	164428	173910286	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	155651800	8192200.0	10564	203490	44076732	42218	44652641	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	152016600	2141078.8732394367	39476	760410	164707788	40825	166859869	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	stream4096	71	150355800	2117687.323943662	39476	760410	164707788	40825	166859869	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	stream4096	74	154996400	2094545.945945946	41144	792540	171667272	164428	173910286	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	stream4096	19	153804400	8094968.421052632	10564	203490	44076732	42218	44652641	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	50132800	668.4373333333333	75000	75000	2250000	225000	4350000	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	54652100	12751.306579561362	4286	4286	128580	4286	35110912	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	60656700	566.1284451620731	107143	107143	3214290	321429	6214294	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	53498700	713.316	75000	75000	2250000	225000	4350000	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	59743100	557.6015231979691	107143	107143	3214290	321429	6214294	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	57083400	13318.572095193655	4286	4286	128580	4286	35110912	0	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	57548400	13427.064862342511	4286	4286	128580	4286	35110912	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	60618000	565.7672456436725	107143	107143	3214290	321429	6214294	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	54372800	724.9706666666667	75000	75000	2250000	225000	4350000	0	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	52753100	703.3746666666667	75000	75000	2250000	225000	4350000	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	52270700	12195.683621091926	4286	4286	128580	4286	35110912	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	60329500	563.0745825672233	107143	107143	3214290	321429	6214294	0	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	50643100	675.2413333333334	75000	75000	2250000	225000	4350000	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	57964500	13524.148390107326	4286	4286	128580	4286	35110912	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	61375100	572.8335028886628	107143	107143	3214290	321429	6214294	0	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	59431500	13866.425571628559	4286	4286	128580	4286	35110912	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	50288500	670.5133333333333	75000	75000	2250000	225000	4350000	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	59678000	556.9939240081013	107143	107143	3214290	321429	6214294	0	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	startup	75000	50368000	671.5733333333334	75000	75000	2250000	225000	4350000	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	startup	107143	61422000	573.2712356383524	107143	107143	3214290	321429	6214294	0	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libogg	startup	4286	59641600	13915.445636957536	4286	4286	128580	4286	35110912	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	149108700	6777668.181818182	5654	0	0	22660	185429288	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	174909300	29151550.0	1542	0	0	4632	50571624	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	150625500	6846613.636363637	5654	0	0	16984	185429288	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	145380600	6608209.090909091	5654	0	0	22660	185429288	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	172103600	28683933.333333332	1542	0	0	4632	50571624	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	149581600	6799163.636363637	5654	0	0	16984	185429288	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	149095700	6777077.2727272725	5654	0	0	16984	185429288	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	146607600	6663981.818181818	5654	0	0	22660	185429288	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	173811500	28968583.333333332	1542	0	0	4632	50571624	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	145810300	6627740.909090909	5654	0	0	22660	185429288	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	151198200	6872645.454545454	5654	0	0	16984	185429288	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	174753800	29125633.333333332	1542	0	0	4632	50571624	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	174943500	29157250.0	1542	0	0	4632	50571624	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	147082700	6685577.2727272725	5654	0	0	22660	185429288	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	149009300	6773150.0	5654	0	0	16984	185429288	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	178448700	29741450.0	1542	0	0	4632	50571624	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	150313100	6832413.636363637	5654	0	0	22660	185429288	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	149758600	6807209.090909091	5654	0	0	16984	185429288	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	pages	22	153292200	6967827.2727272725	5654	0	0	16984	185429288	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	pages	22	147887800	6722172.7272727275	5654	0	0	22660	185429288	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	pages	6	178262600	29710433.333333332	1542	0	0	4632	50571624	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	144997800	6904657.142857143	5397	5397	176161440	16212	177000684	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	174329000	29054833.333333332	1542	1542	50331840	4632	50571624	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	156960600	7474314.285714285	5397	5397	176161440	21630	177000684	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	173467100	28911183.333333332	1542	1542	50331840	4632	50571624	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	151729000	7225190.476190476	5397	5397	176161440	21630	177000684	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	145157200	6912247.619047619	5397	5397	176161440	16212	177000684	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	173480700	28913450.0	1542	1542	50331840	4632	50571624	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	146262500	6964880.952380952	5397	5397	176161440	16212	177000684	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	152410400	7257638.095238095	5397	5397	176161440	21630	177000684	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	173494000	28915666.666666668	1542	1542	50331840	4632	50571624	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	154621500	7362928.571428572	5397	5397	176161440	21630	177000684	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	148255400	7059780.952380952	5397	5397	176161440	16212	177000684	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	146581000	6980047.619047619	5397	5397	176161440	16212	177000684	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	175888300	29314716.666666668	1542	1542	50331840	4632	50571624	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	157743700	7511604.761904762	5397	5397	176161440	21630	177000684	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	146018600	6953266.666666667	5397	5397	176161440	16212	177000684	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	156347400	7445114.285714285	5397	5397	176161440	21630	177000684	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	172826900	28804483.333333332	1542	1542	50331840	4632	50571624	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	demux	6	174489500	29081583.333333332	1542	1542	50331840	4632	50571624	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	demux	21	157154400	7483542.857142857	5397	5397	176161440	21630	177000684	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	demux	21	149782200	7132485.714285715	5397	5397	176161440	16212	177000684	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	150902600	7545130.0	5140	5140	167772800	51280	168572080	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	144495300	7224765.0	5140	5140	167772800	41180	168572080	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	181927500	30321250.0	1542	1542	50331840	15384	50571624	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	149105800	7455290.0	5140	5140	167772800	51280	168572080	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	148082700	7404135.0	5140	5140	167772800	41180	168572080	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	177416500	29569416.666666668	1542	1542	50331840	15384	50571624	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	148804800	7440240.0	5140	5140	167772800	41180	168572080	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	177130500	29521750.0	1542	1542	50331840	15384	50571624	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	148239300	7411965.0	5140	5140	167772800	51280	168572080	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	177192200	29532033.333333332	1542	1542	50331840	15384	50571624	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	144399400	7219970.0	5140	5140	167772800	41180	168572080	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	151311900	7565595.0	5140	5140	167772800	51280	168572080	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	177421200	29570200.0	1542	1542	50331840	15384	50571624	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	143323700	7166185.0	5140	5140	167772800	41180	168572080	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	147049000	7352450.0	5140	5140	167772800	51280	168572080	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	150753100	7537655.0	5140	5140	167772800	51280	168572080	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	149165000	7458250.0	5140	5140	167772800	41180	168572080	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	177336000	29556000.0	1542	1542	50331840	15384	50571624	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	stream4096	20	147229600	7361480.0	5140	5140	167772800	51280	168572080	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	stream4096	6	179741700	29956950.0	1542	1542	50331840	15384	50571624	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	stream4096	20	144533700	7226685.0	5140	5140	167772800	41180	168572080	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	55868200	558.682	100000	100000	3200000	300000	6000000	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	55497000	12096.12031386225	4588	4588	146816	4588	37584896	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	56453100	715.0668794649642	78948	78948	2526336	236844	4736880	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	55297700	700.4319298778943	78948	78948	2526336	236844	4736880	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	57532100	12539.690496948562	4588	4588	146816	4588	37584896	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	56012200	560.122	100000	100000	3200000	300000	6000000	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	55573600	12112.8160418483	4588	4588	146816	4588	37584896	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	56606400	566.064	100000	100000	3200000	300000	6000000	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	53628300	679.2863657090743	78948	78948	2526336	236844	4736880	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	54876200	695.0929725895526	78948	78948	2526336	236844	4736880	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	57266000	12481.691368788142	4588	4588	146816	4588	37584896	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	55915200	559.152	100000	100000	3200000	300000	6000000	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	58955300	12849.89102005231	4588	4588	146816	4588	37584896	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	56296000	562.96	100000	100000	3200000	300000	6000000	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	54819100	694.369711708973	78948	78948	2526336	236844	4736880	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	57095800	723.2076810052187	78948	78948	2526336	236844	4736880	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	56603000	12337.1839581517	4588	4588	146816	4588	37584896	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	57324800	573.248	100000	100000	3200000	300000	6000000	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	libogg	startup	4588	56374600	12287.401918047079	4588	4588	146816	4588	37584896	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native	startup	100000	56455400	564.554	100000	100000	3200000	300000	6000000	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/bulk.ogg	native-baseline	startup	78948	57301800	725.8169934640523	78948	78948	2526336	236844	4736880	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	153866200	1411616.513761468	1308	0	0	4033	43933758	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	144422300	323816.81614349777	5352	0	0	16502	179765652	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	134365200	313937.38317757007	5136	0	0	21828	172510536	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	153674000	1409853.2110091744	1308	0	0	4033	43933758	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	131710100	307733.8785046729	5136	0	0	21828	172510536	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	147193500	330030.269058296	5352	0	0	16502	179765652	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	131807600	307961.68224299065	5136	0	0	21828	172510536	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	142829900	320246.41255605384	5352	0	0	16502	179765652	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	155481400	1426434.8623853212	1308	0	0	4033	43933758	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	142529000	319571.74887892377	5352	0	0	16502	179765652	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	135151100	315773.5981308411	5136	0	0	21828	172510536	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	155866400	1429966.9724770642	1308	0	0	4033	43933758	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	131570400	307407.476635514	5136	0	0	21828	172510536	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	156998600	1440354.128440367	1308	0	0	4033	43933758	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	141867700	318089.0134529148	5352	0	0	16502	179765652	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	134826300	315014.7196261682	5136	0	0	21828	172510536	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	144431100	323836.5470852018	5352	0	0	16502	179765652	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	156466400	1435471.5596330275	1308	0	0	4033	43933758	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	pages	446	143042200	320722.4215246637	5352	0	0	16502	179765652	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	pages	109	154473800	1417190.8256880734	1308	0	0	4033	43933758	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	pages	428	131850600	308062.14953271026	5136	0	0	21828	172510536	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	138995600	837322.891566265	1992	2656	66590900	6142	66908292	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	149166100	824122.0994475138	2172	2896	72608150	9231	72954222	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	146771900	1906128.5714285714	924	1232	30888550	2849	31035774	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	148221800	818904.9723756906	2172	2896	72608150	9231	72954222	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	150871500	1959370.12987013	924	1232	30888550	2849	31035774	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	142495800	858408.4337349398	1992	2656	66590900	6142	66908292	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	139469200	840175.9036144578	1992	2656	66590900	6142	66908292	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	145066500	1883980.5194805195	924	1232	30888550	2849	31035774	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	125291800	692219.8895027625	2172	2896	72608150	9231	72954222	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	145417500	1888538.961038961	924	1232	30888550	2849	31035774	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	144798900	872282.530120482	1992	2656	66590900	6142	66908292	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	149893500	828140.8839779006	2172	2896	72608150	9231	72954222	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	148923800	1934075.3246753246	924	1232	30888550	2849	31035774	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	150749900	832872.3756906077	2172	2896	72608150	9231	72954222	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	141486500	852328.313253012	1992	2656	66590900	6142	66908292	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	148333600	1926410.3896103897	924	1232	30888550	2849	31035774	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	144661600	871455.421686747	1992	2656	66590900	6142	66908292	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	152057500	840096.685082873	2172	2896	72608150	9231	72954222	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	demux	166	138783600	836045.7831325302	1992	2656	66590900	6142	66908292	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	demux	181	149995000	828701.6574585636	2172	2896	72608150	9231	72954222	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	demux	77	148152600	1924059.7402597403	924	1232	30888550	2849	31035774	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	123703600	819229.1390728477	1812	2416	60573650	15100	60862362	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	154520300	1981029.4871794872	936	1248	31289700	10062	31438836	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	145446900	938367.0967741936	1860	2480	62178250	19995	62474610	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	154834800	1985061.5384615385	936	1248	31289700	10062	31438836	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	121730700	806163.5761589404	1812	2416	60573650	15100	60862362	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	148282900	956663.8709677419	1860	2480	62178250	19995	62474610	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	142358900	918444.5161290322	1860	2480	62178250	19995	62474610	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	152964300	1961080.7692307692	936	1248	31289700	10062	31438836	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	126017900	834555.6291390728	1812	2416	60573650	15100	60862362	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	149344900	963515.4838709678	1860	2480	62178250	19995	62474610	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	154283700	1977996.1538461538	936	1248	31289700	10062	31438836	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	130465500	864009.9337748344	1812	2416	60573650	15100	60862362	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	122222200	809418.5430463576	1812	2416	60573650	15100	60862362	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	153626400	1969569.2307692308	936	1248	31289700	10062	31438836	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	150534100	971187.7419354839	1860	2480	62178250	19995	62474610	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	144929500	935029.0322580645	1860	2480	62178250	19995	62474610	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	153152600	1963494.8717948718	936	1248	31289700	10062	31438836	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	119619900	792184.7682119205	1812	2416	60573650	15100	60862362	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	stream4096	78	153374000	1966333.3333333333	936	1248	31289700	10062	31438836	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	stream4096	155	144846300	934492.2580645161	1860	2480	62178250	19995	62474610	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	stream4096	151	120722700	799488.0794701987	1812	2416	60573650	15100	60862362	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	20017100	4136.6191361851625	4839	4839	19356	4839	39641088	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	54669100	473.7972873423755	115385	115385	461540	346155	3692320	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	55830900	446.6472	125000	125000	500000	375000	4000000	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	54502600	436.0208	125000	125000	500000	375000	4000000	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	54676600	473.8622871257096	115385	115385	461540	346155	3692320	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	5659300	1169.5184955569332	4839	4839	19356	4839	39641088	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	56806700	454.4536	125000	125000	500000	375000	4000000	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	54599500	473.1940893530355	115385	115385	461540	346155	3692320	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	16912200	3494.978301301922	4839	4839	19356	4839	39641088	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	54629700	473.4558218139273	115385	115385	461540	346155	3692320	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	27615800	5706.922917958256	4839	4839	19356	4839	39641088	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	56460100	451.6808	125000	125000	500000	375000	4000000	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	55131100	477.8012739957533	115385	115385	461540	346155	3692320	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	24430100	5048.584418268238	4839	4839	19356	4839	39641088	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	55579800	444.6384	125000	125000	500000	375000	4000000	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	17355000	3586.4848109113454	4839	4839	19356	4839	39641088	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	55202100	478.4166052779824	115385	115385	461540	346155	3692320	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	55469700	443.7576	125000	125000	500000	375000	4000000	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native-baseline	startup	115385	55836100	483.91125362915454	115385	115385	461540	346155	3692320	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	libogg	startup	4839	28459900	5881.359785079562	4839	4839	19356	4839	39641088	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/span-mux-chain.ogg	native	startup	125000	55207100	441.6568	125000	125000	500000	375000	4000000	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	150845600	3771140.0	22280	0	0	23320	190594560	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	162411300	16241130.0	5570	0	0	16720	47648640	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	147208300	3774571.794871795	21723	0	0	65208	185829696	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	144616700	3708120.512820513	21723	0	0	65208	185829696	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	149179700	3729492.5	22280	0	0	23320	190594560	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	159745000	15974500.0	5570	0	0	16720	47648640	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	148552900	3713822.5	22280	0	0	23320	190594560	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	148036800	3795815.3846153845	21723	0	0	65208	185829696	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	164839500	16483950.0	5570	0	0	16720	47648640	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	151042500	3776062.5	22280	0	0	23320	190594560	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	148789600	3815117.9487179485	21723	0	0	65208	185829696	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	159856500	15985650.0	5570	0	0	16720	47648640	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	148723300	3718082.5	22280	0	0	23320	190594560	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	162479100	16247910.0	5570	0	0	16720	47648640	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	147407000	3779666.6666666665	21723	0	0	65208	185829696	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	151280600	3782015.0	22280	0	0	23320	190594560	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	144714100	3710617.9487179485	21723	0	0	65208	185829696	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	165116500	16511650.0	5570	0	0	16720	47648640	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	pages	39	149154100	3824464.1025641025	21723	0	0	65208	185829696	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	pages	10	161493400	16149340.0	5570	0	0	16720	47648640	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	pages	40	150652500	3766312.5	22280	0	0	23320	190594560	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	153500400	5116680.0	16710	3000030	138994740	50160	142945920	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	147348900	5080996.551724138	16153	2900029	134361582	16907	138181056	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	158161500	17573500.0	5013	900009	41698422	15048	42883776	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	158921600	17657955.555555556	5013	900009	41698422	15048	42883776	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	149243700	5146334.482758621	16153	2900029	134361582	16907	138181056	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	155675800	5189193.333333333	16710	3000030	138994740	50160	142945920	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	160589400	17843266.666666668	5013	900009	41698422	15048	42883776	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	147665300	5091906.8965517245	16153	2900029	134361582	16907	138181056	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	156106700	5203556.666666667	16710	3000030	138994740	50160	142945920	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	159759200	17751022.222222224	5013	900009	41698422	15048	42883776	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	152539300	5084643.333333333	16710	3000030	138994740	50160	142945920	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	148792500	5130775.862068965	16153	2900029	134361582	16907	138181056	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	159950500	17772277.777777776	5013	900009	41698422	15048	42883776	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	148584200	5123593.1034482755	16153	2900029	134361582	16907	138181056	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	151987500	5066250.0	16710	3000030	138994740	50160	142945920	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	158199900	17577766.666666668	5013	900009	41698422	15048	42883776	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	152949500	5098316.666666667	16710	3000030	138994740	50160	142945920	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	151256000	5215724.137931035	16153	2900029	134361582	16907	138181056	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	demux	9	161668100	17963122.222222224	5013	900009	41698422	15048	42883776	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	demux	29	151154800	5212234.482758621	16153	2900029	134361582	16907	138181056	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	demux	30	157216400	5240546.666666667	16710	3000030	138994740	50160	142945920	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	149578500	4985950.0	16710	3000030	138994740	34950	142945920	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	151631400	4891335.483870967	17267	3100031	143627898	86273	147710784	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	161841300	17982366.666666668	5013	900009	41698422	25047	42883776	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	152990500	5099683.333333333	16710	3000030	138994740	34950	142945920	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	160130800	5165509.677419355	17267	3100031	143627898	86273	147710784	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	154416400	17157377.777777776	5013	900009	41698422	25047	42883776	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	160285700	17809522.222222224	5013	900009	41698422	25047	42883776	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	160427100	5175067.741935484	17267	3100031	143627898	86273	147710784	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	156423500	5214116.666666667	16710	3000030	138994740	34950	142945920	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	157767000	5089258.064516129	17267	3100031	143627898	86273	147710784	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	163316000	18146222.222222224	5013	900009	41698422	25047	42883776	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	153431300	5114376.666666667	16710	3000030	138994740	34950	142945920	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	162046400	5227303.225806451	17267	3100031	143627898	86273	147710784	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	159681000	17742333.333333332	5013	900009	41698422	25047	42883776	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	154073200	5135773.333333333	16710	3000030	138994740	34950	142945920	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	159515700	5145667.741935484	17267	3100031	143627898	86273	147710784	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	161890100	17987788.888888888	5013	900009	41698422	25047	42883776	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	154181300	5139376.666666667	16710	3000030	138994740	34950	142945920	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	stream4096	9	159165200	17685022.222222224	5013	900009	41698422	25047	42883776	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	stream4096	30	153487800	5116260.0	16710	3000030	138994740	34950	142945920	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	stream4096	31	162930800	5255832.258064516	17267	3100031	143627898	86273	147710784	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	57474700	13179.247878926852	4361	4361	17444	4361	35725312	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	66922600	490.76442462820097	136364	136364	545456	409092	4363648	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	61526400	451.1923968202751	136364	136364	545456	409092	4363648	0	0
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	67526600	495.19374615001027	136364	136364	545456	409092	4363648	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	62192400	456.07638379630987	136364	136364	545456	409092	4363648	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	57316100	13142.880073377666	4361	4361	17444	4361	35725312	0	1
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	68685000	503.6886568302485	136364	136364	545456	409092	4363648	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	62359500	457.30178052858525	136364	136364	545456	409092	4363648	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	59525600	13649.529924329283	4361	4361	17444	4361	35725312	0	2
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	67164900	492.54128655656916	136364	136364	545456	409092	4363648	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	61871100	453.72019007949314	136364	136364	545456	409092	4363648	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	57806700	13255.3772070626	4361	4361	17444	4361	35725312	0	3
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	58995300	13527.929373996789	4361	4361	17444	4361	35725312	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	66674500	488.9450294799214	136364	136364	545456	409092	4363648	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	61454700	450.66659822240473	136364	136364	545456	409092	4363648	0	4
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	63013000	462.0941010823971	136364	136364	545456	409092	4363648	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	66326100	486.3901029597254	136364	136364	545456	409092	4363648	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	56524500	12961.362072919055	4361	4361	17444	4361	35725312	0	5
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native	startup	136364	62429900	457.8180458185445	136364	136364	545456	409092	4363648	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	libogg	startup	4361	61537000	14110.7544141252	4361	4361	17444	4361	35725312	0	6
+target/deadlib-audio-reference/ogg-eight-byte-20261027/generated/tiny.ogg	native-baseline	startup	136364	67151900	492.4459534774574	136364	136364	545456	409092	4363648	0	6
+crc:64	libogg	crc	500000	29986900	59.9738	0	0	0	0	32000000	1795379979500000	0
+crc:64	native	crc	53572	2090000	39.01291719554992	0	0	0	0	3428608	192364192523548	0
+crc:64	native-baseline	crc	250000	47601900	190.4076	0	0	0	0	16000000	897689989750000	0
+crc:64	native	crc	53572	2083900	38.89905174344807	0	0	0	0	3428608	192364192523548	1
+crc:64	libogg	crc	500000	30360600	60.7212	0	0	0	0	32000000	1795379979500000	1
+crc:64	native-baseline	crc	250000	47717200	190.8688	0	0	0	0	16000000	897689989750000	1
+crc:64	native	crc	53572	2400200	44.80325543194206	0	0	0	0	3428608	192364192523548	2
+crc:64	libogg	crc	500000	29852500	59.705	0	0	0	0	32000000	1795379979500000	2
+crc:64	native-baseline	crc	250000	49451100	197.8044	0	0	0	0	16000000	897689989750000	2
+crc:64	native-baseline	crc	250000	47662700	190.6508	0	0	0	0	16000000	897689989750000	3
+crc:64	native	crc	53572	2116200	39.50197864556112	0	0	0	0	3428608	192364192523548	3
+crc:64	libogg	crc	500000	30761900	61.5238	0	0	0	0	32000000	1795379979500000	3
+crc:64	native	crc	53572	2160200	40.32330321809901	0	0	0	0	3428608	192364192523548	4
+crc:64	native-baseline	crc	250000	48724000	194.896	0	0	0	0	16000000	897689989750000	4
+crc:64	libogg	crc	500000	29703100	59.4062	0	0	0	0	32000000	1795379979500000	4
+crc:64	native	crc	53572	2056700	38.39132382587919	0	0	0	0	3428608	192364192523548	5
+crc:64	native-baseline	crc	250000	49062200	196.2488	0	0	0	0	16000000	897689989750000	5
+crc:64	libogg	crc	500000	29321700	58.6434	0	0	0	0	32000000	1795379979500000	5
+crc:64	libogg	crc	500000	29336200	58.6724	0	0	0	0	32000000	1795379979500000	6
+crc:64	native-baseline	crc	250000	49366500	197.466	0	0	0	0	16000000	897689989750000	6
+crc:64	native	crc	53572	2147000	40.07690584633764	0	0	0	0	3428608	192364192523548	6
+crc:256	native-baseline	crc	150000	128204500	854.6966666666667	0	0	0	0	38400000	531016531050000	0
+crc:256	libogg	crc	500000	99953000	199.906	0	0	0	0	128000000	1770055103500000	0
+crc:256	native	crc	57693	10460500	181.31315757544243	0	0	0	0	14769408	204239578172451	0
+crc:256	native	crc	57693	10151900	175.9641550968055	0	0	0	0	14769408	204239578172451	1
+crc:256	libogg	crc	500000	97169900	194.3398	0	0	0	0	128000000	1770055103500000	1
+crc:256	native-baseline	crc	150000	127088500	847.2566666666667	0	0	0	0	38400000	531016531050000	1
+crc:256	native	crc	57693	10605100	183.81952749900336	0	0	0	0	14769408	204239578172451	2
+crc:256	libogg	crc	500000	99381100	198.7622	0	0	0	0	128000000	1770055103500000	2
+crc:256	native-baseline	crc	150000	126212800	841.4186666666667	0	0	0	0	38400000	531016531050000	2
+crc:256	libogg	crc	500000	93738400	187.4768	0	0	0	0	128000000	1770055103500000	3
+crc:256	native-baseline	crc	150000	126491000	843.2733333333333	0	0	0	0	38400000	531016531050000	3
+crc:256	native	crc	57693	9808500	170.01195985648172	0	0	0	0	14769408	204239578172451	3
+crc:256	native-baseline	crc	150000	126310600	842.0706666666666	0	0	0	0	38400000	531016531050000	4
+crc:256	native	crc	57693	10093300	174.9484339521259	0	0	0	0	14769408	204239578172451	4
+crc:256	libogg	crc	500000	101830500	203.661	0	0	0	0	128000000	1770055103500000	4
+crc:256	libogg	crc	500000	95105800	190.2116	0	0	0	0	128000000	1770055103500000	5
+crc:256	native	crc	57693	10449200	181.11729325914754	0	0	0	0	14769408	204239578172451	5
+crc:256	native-baseline	crc	150000	128131300	854.2086666666667	0	0	0	0	38400000	531016531050000	5
+crc:256	native-baseline	crc	150000	129430100	862.8673333333334	0	0	0	0	38400000	531016531050000	6
+crc:256	native	crc	57693	10669800	184.9409807082315	0	0	0	0	14769408	204239578172451	6
+crc:256	libogg	crc	500000	100256700	200.5134	0	0	0	0	128000000	1770055103500000	6
+crc:4096	native	crc	28847	85866600	2976.621485769751	0	0	0	0	118157312	4033765579935	0
+crc:4096	native-baseline	crc	11112	150267600	13523.002159827214	0	0	0	0	45514752	1553825462760	0
+crc:4096	libogg	crc	46875	139787400	2982.1312	0	0	0	0	192000000	6554676796875	0
+crc:4096	native	crc	28847	84820200	2940.347349811072	0	0	0	0	118157312	4033765579935	1
+crc:4096	native-baseline	crc	11112	149397000	13444.654427645788	0	0	0	0	45514752	1553825462760	1
+crc:4096	libogg	crc	46875	138297800	2950.3530666666666	0	0	0	0	192000000	6554676796875	1
+crc:4096	libogg	crc	46875	140840500	3004.597333333333	0	0	0	0	192000000	6554676796875	2
+crc:4096	native-baseline	crc	11112	150568200	13550.053995680346	0	0	0	0	45514752	1553825462760	2
+crc:4096	native	crc	28847	83917000	2909.0373349048427	0	0	0	0	118157312	4033765579935	2
+crc:4096	native	crc	28847	84878100	2942.3544909349325	0	0	0	0	118157312	4033765579935	3
+crc:4096	native-baseline	crc	11112	150835300	13574.091072714184	0	0	0	0	45514752	1553825462760	3
+crc:4096	libogg	crc	46875	139849300	2983.4517333333333	0	0	0	0	192000000	6554676796875	3
+crc:4096	native	crc	28847	84945700	2944.697888861927	0	0	0	0	118157312	4033765579935	4
+crc:4096	native-baseline	crc	11112	149249100	13431.344492440605	0	0	0	0	45514752	1553825462760	4
+crc:4096	libogg	crc	46875	140305000	2993.173333333333	0	0	0	0	192000000	6554676796875	4
+crc:4096	native-baseline	crc	11112	151359400	13621.25629949604	0	0	0	0	45514752	1553825462760	5
+crc:4096	native	crc	28847	82937000	2875.0649980933895	0	0	0	0	118157312	4033765579935	5
+crc:4096	libogg	crc	46875	138085700	2945.828266666667	0	0	0	0	192000000	6554676796875	5
+crc:4096	native	crc	28847	84164400	2917.6136166672445	0	0	0	0	118157312	4033765579935	6
+crc:4096	libogg	crc	46875	136980700	2922.254933333333	0	0	0	0	192000000	6554676796875	6
+crc:4096	native-baseline	crc	11112	148720600	13383.783297336213	0	0	0	0	45514752	1553825462760	6
+crc:65025	native	crc	3139	145205000	46258.36253583944	0	0	0	0	204113475	2678404030045	0
+crc:65025	native-baseline	crc	762	165696500	217449.4750656168	0	0	0	0	49549050	650189191110	0
+crc:65025	libogg	crc	3037	141033400	46438.39315113599	0	0	0	0	197480925	2591370831235	0
+crc:65025	native-baseline	crc	762	162897400	213776.1154855643	0	0	0	0	49549050	650189191110	1
+crc:65025	libogg	crc	3037	141910100	46727.06618373395	0	0	0	0	197480925	2591370831235	1
+crc:65025	native	crc	3139	143151100	45604.04587448232	0	0	0	0	204113475	2678404030045	1
+crc:65025	native	crc	3139	143619800	45753.36094297547	0	0	0	0	204113475	2678404030045	2
+crc:65025	libogg	crc	3037	137751500	45357.75436285808	0	0	0	0	197480925	2591370831235	2
+crc:65025	native-baseline	crc	762	165578100	217294.09448818897	0	0	0	0	49549050	650189191110	2
+crc:65025	libogg	crc	3037	143183900	47146.49324991768	0	0	0	0	197480925	2591370831235	3
+crc:65025	native-baseline	crc	762	165767600	217542.78215223097	0	0	0	0	49549050	650189191110	3
+crc:65025	native	crc	3139	145982700	46506.11659764256	0	0	0	0	204113475	2678404030045	3
+crc:65025	native	crc	3139	141981600	45231.47499203568	0	0	0	0	204113475	2678404030045	4
+crc:65025	native-baseline	crc	762	163399300	214434.77690288713	0	0	0	0	49549050	650189191110	4
+crc:65025	libogg	crc	3037	140614500	46300.46098123148	0	0	0	0	197480925	2591370831235	4
+crc:65025	native	crc	3139	145587300	46380.15291494106	0	0	0	0	204113475	2678404030045	5
+crc:65025	native-baseline	crc	762	165148300	216730.05249343833	0	0	0	0	49549050	650189191110	5
+crc:65025	libogg	crc	3037	140372400	46220.74415541653	0	0	0	0	197480925	2591370831235	5
+crc:65025	native-baseline	crc	762	163557700	214642.65091863516	0	0	0	0	49549050	650189191110	6
+crc:65025	libogg	crc	3037	138878200	45728.74547250576	0	0	0	0	197480925	2591370831235	6
+crc:65025	native	crc	3139	144725800	46105.70245301051	0	0	0	0	204113475	2678404030045	6
+crc:1048576	native-baseline	crc	44	154023500	3500534.090909091	0	0	0	0	46137344	45747564544	0
+crc:1048576	native	crc	181	134557700	743412.7071823204	0	0	0	0	189792256	188188845056	0
+crc:1048576	libogg	crc	187	140949000	753737.9679144385	0	0	0	0	196083712	194427149312	0
+crc:1048576	libogg	crc	187	138679500	741601.6042780748	0	0	0	0	196083712	194427149312	1
+crc:1048576	native-baseline	crc	44	152227000	3459704.5454545454	0	0	0	0	46137344	45747564544	1
+crc:1048576	native	crc	181	133257100	736227.0718232044	0	0	0	0	189792256	188188845056	1
+crc:1048576	native	crc	181	130800200	722653.0386740331	0	0	0	0	189792256	188188845056	2
+crc:1048576	native-baseline	crc	44	151199100	3436343.1818181816	0	0	0	0	46137344	45747564544	2
+crc:1048576	libogg	crc	187	139945300	748370.5882352941	0	0	0	0	196083712	194427149312	2
+crc:1048576	native-baseline	crc	44	150908100	3429729.5454545454	0	0	0	0	46137344	45747564544	3
+crc:1048576	libogg	crc	187	139510800	746047.0588235294	0	0	0	0	196083712	194427149312	3
+crc:1048576	native	crc	181	131565700	726882.320441989	0	0	0	0	189792256	188188845056	3
+crc:1048576	native-baseline	crc	44	153221800	3482313.6363636362	0	0	0	0	46137344	45747564544	4
+crc:1048576	native	crc	181	129305800	714396.685082873	0	0	0	0	189792256	188188845056	4
+crc:1048576	libogg	crc	187	135027100	722070.0534759358	0	0	0	0	196083712	194427149312	4
+crc:1048576	native	crc	181	133514700	737650.2762430939	0	0	0	0	189792256	188188845056	5
+crc:1048576	native-baseline	crc	44	147676900	3356293.1818181816	0	0	0	0	46137344	45747564544	5
+crc:1048576	libogg	crc	187	133589500	714382.3529411765	0	0	0	0	196083712	194427149312	5
+crc:1048576	native	crc	181	129034900	712900.0	0	0	0	0	189792256	188188845056	6
+crc:1048576	native-baseline	crc	44	148943700	3385084.090909091	0	0	0	0	46137344	45747564544	6
+crc:1048576	libogg	crc	187	133214000	712374.3315508021	0	0	0	0	196083712	194427149312	6

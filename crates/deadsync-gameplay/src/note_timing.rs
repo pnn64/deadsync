@@ -244,12 +244,13 @@ pub fn compute_end_times_ns(
     hold_end_time_cache_ns: &[SongTimeNs],
     rate: f32,
     audio_end_time_ns: SongTimeNs,
-    last_second_hint_ns: SongTimeNs,
+    song_last_second_ns: SongTimeNs,
 ) -> (SongTimeNs, SongTimeNs) {
     let mut last_judgable_time_ns = 0;
     // Like ITGmania's GetMusicEndTiming, apply the late-resolution window after
-    // the hint. Audio EOF and note transforms must not shorten this minimum.
-    let mut last_relevant_time_ns = last_second_hint_ns.max(0);
+    // the whole-song end (which includes its authored hint). Audio EOF and
+    // note transforms must not shorten this minimum.
+    let mut last_relevant_time_ns = song_last_second_ns.max(0);
     for (i, note) in notes.iter().enumerate() {
         let start_time_ns = note_time_cache_ns[i];
         if song_time_ns_invalid(start_time_ns) {
@@ -278,6 +279,8 @@ pub struct GameplayEndTimingState {
     notes_end_time_ns: SongTimeNs,
     music_end_time_ns: SongTimeNs,
     audio_end_time_ns: SongTimeNs,
+    song_last_second_ns: SongTimeNs,
+    music_fade_timing_ns: Option<[SongTimeNs; 2]>,
 }
 
 impl GameplayEndTimingState {
@@ -292,6 +295,8 @@ impl GameplayEndTimingState {
             notes_end_time_ns,
             music_end_time_ns,
             audio_end_time_ns,
+            song_last_second_ns: 0,
+            music_fade_timing_ns: None,
         }
     }
 
@@ -313,6 +318,37 @@ impl GameplayEndTimingState {
         self.audio_end_time_ns
     }
 
+    /// Retain the resolved whole-song bound through rate and player-offset
+    /// changes, just as native Song keeps its calculated last second.
+    pub const fn with_song_last_second_ns(mut self, seconds: SongTimeNs) -> Self {
+        self.song_last_second_ns = seconds;
+        self
+    }
+
+    #[must_use]
+    pub const fn song_last_second_ns(&self) -> SongTimeNs {
+        self.song_last_second_ns
+    }
+
+    pub const fn set_music_fade_timing_ns(&mut self, fade: SongTimeNs, transition: SongTimeNs) {
+        self.music_fade_timing_ns = Some([fade, transition]);
+    }
+
+    /// ScreenGameplay::GetMusicEndTiming aligns the music fade with the
+    /// declared transition length; the visual out tween advances separately.
+    pub fn apply_music_fade_timing(&self, note_end_ns: SongTimeNs, music_length: f32) -> SongTimeNs {
+        let Some([fade, transition]) = self.music_fade_timing_ns else { return note_end_ns; };
+        if !music_length.is_finite() || music_length <= 0.0 { return note_end_ns; }
+        let note_end = song_time_ns_to_seconds(note_end_ns) as f32;
+        let fade = song_time_ns_to_seconds(fade) as f32;
+        let transition = song_time_ns_to_seconds(transition) as f32;
+        let fade_start = if note_end + transition < music_length {
+            note_end + transition - fade
+        } else { music_length };
+        let end = note_end.max(fade_start.max(note_end) + fade - transition);
+        song_time_ns_from_seconds(end).max(note_end_ns)
+    }
+
     #[inline(always)]
     pub const fn set_note_and_music_end_times(
         &mut self,
@@ -327,7 +363,12 @@ impl GameplayEndTimingState {
 #[inline(always)]
 #[must_use]
 pub fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
-    let chart_end = song.precise_last_second();
+    // The scan's integer length can round above the native note endpoint.
+    // ScreenGameplay::GetMusicEndTiming starts with Song::GetLastSecond;
+    // audio EOF only constrains the later fade calculation, not that bound.
+    let chart_end = song.precise_note_last_second_seconds
+        .unwrap_or_else(|| song.precise_last_second())
+        .max(song.last_second_hint);
     let audio_len = song.music_length_seconds;
     let end_seconds = match (
         chart_end.is_finite() && chart_end > 0.0,
@@ -405,7 +446,7 @@ impl LaneSearchTimingCache {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CutoffRowsMemo {
-    cutoff_time_ns: SongTimeNs,
+    cutoff_time_bits: u32,
     active_players: usize,
     rows: [usize; MAX_PLAYERS],
 }
@@ -426,7 +467,7 @@ pub struct GameplayTimeToBeatCaches {
     display: BeatInfoCache,
     visible: [BeatInfoCache; MAX_PLAYERS],
     notefield_search: [BeatInfoCache; MAX_PLAYERS],
-    cutoff: [BeatInfoCache; MAX_PLAYERS],
+    cutoff: [SongPositionCache; MAX_PLAYERS],
     assist: BeatInfoCache,
     assist_future: BeatInfoCache,
     input: [LaneSearchTimingCache; MAX_PLAYERS],
@@ -446,7 +487,7 @@ impl GameplayTimeToBeatCaches {
             notefield_search: std::array::from_fn(|player| {
                 BeatInfoCache::new(timing_players[player])
             }),
-            cutoff: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
+            cutoff: std::array::from_fn(|player| SongPositionCache::new(timing_players[player])),
             assist: BeatInfoCache::new(timing),
             assist_future: BeatInfoCache::new(timing),
             input: std::array::from_fn(|player| LaneSearchTimingCache::new(timing_players[player])),
@@ -539,10 +580,14 @@ impl GameplayTimeToBeatCaches {
         music_time_ns: SongTimeNs,
         num_players: usize,
     ) -> [usize; MAX_PLAYERS] {
-        let cutoff_time_ns = music_time_ns.saturating_sub(step_resolution_distance_ns);
+        // Player::UpdateTapNotesMissedOlderThan subtracts in float seconds and
+        // queries native float timing, including pause-onset rounding.
+        let cutoff_seconds = song_time_ns_to_seconds(music_time_ns)
+            - song_time_ns_to_seconds(step_resolution_distance_ns);
+        let cutoff_time_bits = cutoff_seconds.to_bits();
         let active_players = num_players.min(MAX_PLAYERS);
         if let Some(memo) = self.cutoff_memo
-            && memo.cutoff_time_ns == cutoff_time_ns
+            && memo.cutoff_time_bits == cutoff_time_bits
             && memo.active_players == active_players
         {
             return memo.rows;
@@ -555,11 +600,11 @@ impl GameplayTimeToBeatCaches {
             .take(active_players)
             .enumerate()
         {
-            let info = timing_player.get_beat_info_from_time_ns_cached(cutoff_time_ns, cache);
+            let info = timing_player.get_song_position_cached(cutoff_seconds, cache);
             rows[player] = missed_note_cutoff_row_from_info(timing_player, info);
         }
         self.cutoff_memo = Some(CutoffRowsMemo {
-            cutoff_time_ns,
+            cutoff_time_bits,
             active_players,
             rows,
         });
@@ -663,7 +708,7 @@ fn missed_note_cutoff_row_from_info(timing: &TimingData, beat_info: BeatInfo) ->
 pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
     missed_note_cutoff_row_from_info(
         timing,
-        timing.get_beat_info_from_time_ns(cutoff_time_ns),
+        timing.get_song_position(song_time_ns_to_seconds(cutoff_time_ns)),
     )
 }
 
@@ -675,9 +720,9 @@ pub fn missed_note_cutoff_row_for_music_time(
     music_rate: f32,
     music_time_ns: SongTimeNs,
 ) -> usize {
-    let cutoff_time_ns =
-        music_time_ns.saturating_sub(max_step_distance_ns(timing_profile, music_rate));
-    missed_note_cutoff_row_for_timing(timing, cutoff_time_ns)
+    let cutoff_seconds = song_time_ns_to_seconds(music_time_ns)
+        - song_time_ns_to_seconds(max_step_distance_ns(timing_profile, music_rate));
+    missed_note_cutoff_row_from_info(timing, timing.get_song_position(cutoff_seconds))
 }
 
 #[must_use]
@@ -811,7 +856,6 @@ pub fn visible_notefield_time_ns(
 pub fn music_time_from_stream_position(
     stream_position_seconds: f32,
     lead_in_seconds: f32,
-    global_offset_seconds: f32,
     rate: f32,
 ) -> f32 {
     let rate = if rate.is_finite() && rate > 0.0 {
@@ -820,8 +864,9 @@ pub fn music_time_from_stream_position(
         1.0
     };
     let lead_in = lead_in_seconds.max(0.0);
-    let anchor = -global_offset_seconds;
-    (stream_position_seconds - lead_in).mul_add(rate, anchor * (1.0 - rate))
+    // Both clock paths report source music time. Hardware calibration belongs
+    // to the rate-scaled note timing, including before an audio map is ready.
+    (stream_position_seconds - lead_in) * rate
 }
 
 #[inline(always)]
@@ -1065,11 +1110,11 @@ pub fn compute_gameplay_time_bounds_ns(
     hold_end_time_cache_ns: &[SongTimeNs],
     rate: f32,
     audio_end_time_ns: SongTimeNs,
-    last_second_hint_ns: SongTimeNs,
+    song_last_second_ns: SongTimeNs,
 ) -> GameplayTimeBounds {
     let mut first_judgable_second: Option<f32> = None;
     let mut last_judgable_time_ns = 0;
-    let mut last_relevant_time_ns = last_second_hint_ns.max(0);
+    let mut last_relevant_time_ns = song_last_second_ns.max(0);
     for (index, note) in notes.iter().enumerate() {
         let start_time_ns = note_time_cache_ns[index];
         if note.can_be_judged {

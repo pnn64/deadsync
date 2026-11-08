@@ -1,0 +1,10 @@
+#TITLE:Queue Recurring;
+#BPMS:0=60;
+#LASTSECONDHINT:4;
+#BGCHANGES:0=queue-recurring.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+;

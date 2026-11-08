@@ -1,0 +1,78 @@
+diff --git a/crates/deadlib-audio/decode/vorbis/src/codebook.rs b/crates/deadlib-audio/decode/vorbis/src/codebook.rs
+index e0bed9d..727e5a6 100644
+--- a/crates/deadlib-audio/decode/vorbis/src/codebook.rs
++++ b/crates/deadlib-audio/decode/vorbis/src/codebook.rs
+@@ -389 +389,6 @@ impl Codebook {
+-        self.vector(self.decode_scalar(bits)?)
++        // A successful Huffman result is an active entry in this immutable
++        // book. The parser allocated a vector for every entry; the public
++        // random-entry accessor still validates caller-supplied indices.
++        let entry = self.decode_scalar(bits)? as usize;
++        let start = entry * self.dimensions();
++        Ok(&self.vectors[start..start + self.dimensions()])
+diff --git a/crates/deadlib-audio/decode/vorbis/tests/primitives.rs b/crates/deadlib-audio/decode/vorbis/tests/primitives.rs
+index 74e4493..c87a6a3 100644
+--- a/crates/deadlib-audio/decode/vorbis/tests/primitives.rs
++++ b/crates/deadlib-audio/decode/vorbis/tests/primitives.rs
+@@ -17,0 +18,3 @@ fn packed_book(lookup: u32, sequence: bool) -> Vec<u8> {
++    packed_book_lengths(lookup, sequence, &[2; 4])
++}
++fn packed_book_lengths(lookup: u32, sequence: bool, lengths: &[u8; 4]) -> Vec<u8> {
+@@ -23,4 +26,10 @@ fn packed_book(lookup: u32, sequence: bool) -> Vec<u8> {
+-    bits.write(0, 1).unwrap();
+-    for _ in 0..4 {
+-        bits.write(1, 5).unwrap();
+-    } // Four 2-bit codewords.
++    let sparse = lengths.contains(&0);
++    bits.write(sparse as u32, 1).unwrap();
++    for &length in lengths {
++        if sparse {
++            bits.write(u32::from(length != 0), 1).unwrap();
++        }
++        if length != 0 {
++            bits.write(length as u32 - 1, 5).unwrap();
++        }
++    }
+@@ -202,0 +212,42 @@ fn mixed_lookahead_and_reads_preserve_cache_carries_and_every_packet_tail() {
++#[test]
++fn direct_vq_decode_matches_checked_scalar_and_vector_at_every_tail() {
++    for lengths in [[2; 4], [0, 1, 0, 1], [0, 0, 0, 1], [1, 2, 3, 3]] {
++        for lookup in 0..=2 {
++            for sequence in [false, true] {
++                let wire = packed_book_lengths(lookup, sequence, &lengths);
++                let book = Codebook::read(&mut BitReader::new(&wire), &Limits::default()).unwrap();
++                for first in 0..=255u8 {
++                    let bytes = [first, 0xa5, 0x80, 0xff];
++                    for length in 0..=bytes.len() {
++                        for alignment in 0..8 {
++                            let mut actual = BitReader::new(&bytes[..length]);
++                            let mut expected = actual.clone();
++                            let _ = actual.read(alignment);
++                            let _ = expected.read(alignment);
++                            for _ in 0..12 {
++                                let reference = if lookup == 0 {
++                                    // VQ requires a lookup before reading any
++                                    // codeword, including after exhaustion.
++                                    book.vector(0)
++                                } else {
++                                    book.decode_scalar(&mut expected)
++                                        .and_then(|entry| book.vector(entry))
++                                };
++                                assert_eq!(book.decode_vector(&mut actual), reference);
++                                assert_eq!(
++                                    (actual.position(), actual.remaining(), actual.is_exhausted()),
++                                    (
++                                        expected.position(),
++                                        expected.remaining(),
++                                        expected.is_exhausted()
++                                    )
++                                );
++                            }
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++

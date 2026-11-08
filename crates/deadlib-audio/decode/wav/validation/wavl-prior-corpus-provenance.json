@@ -1,0 +1,15 @@
+{
+  "archives": [
+    {
+      "archive": "fuzz-asan-2m-corpus.zip",
+      "sha256": "5602a7542d48c759b734244b9c60770b559345228106d947840608947ae691ac",
+      "entries": 1474
+    },
+    {
+      "archive": "ima3-asan-corpus.zip",
+      "sha256": "0a8380ca8b9e12caaef5ff54205218ecbf6e495c938669e4fa5f49bca830a3f0",
+      "entries": 1211
+    }
+  ],
+  "unique_files": 2507
+}

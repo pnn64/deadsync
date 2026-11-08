@@ -1,0 +1,38 @@
+{
+  "rust_counted": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_counted.exe",
+    "sha256": "3a341cb93f84267a31adc716185c3871ba3aefd52e6e5e237b192363a792f6bd"
+  },
+  "rust_memory": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_memory.exe",
+    "sha256": "f439b3b799c14dee1bbab826f173ebd93d0fc286d98fa07f67223038e8e6a014"
+  },
+  "rust_timing": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_timing.exe",
+    "sha256": "20741a0683020330869e7d780b0054a47274f4c0b77df56298cd8703bb172b00"
+  },
+  "rust_baseline": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_baseline.exe",
+    "sha256": "da70b443725be6bb807f3549400ddb703b088838565af2c1e68d896b6852fcb8"
+  },
+  "rust_baseline_counted": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_baseline_counted.exe",
+    "sha256": "46d74eda9aebd550837588e9352e5ea0fa5f90e8e47d23f428e363ece33cbecd"
+  },
+  "rust_baseline_memory": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_baseline_memory.exe",
+    "sha256": "3fd1f76fa358d270bbd7855af20747c0487b1ef21eaa61be072ea95c29bbb1af"
+  },
+  "c_memory": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/c_memory.exe",
+    "sha256": "ca72e6366be5ed64f3ee55551e0b8562fb0c3744b74801891162d774856f3b37"
+  },
+  "c_counted": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/c_counted.exe",
+    "sha256": "7111b3cde44f72b948a69ce6edb10f549fb3721cc941e861456862af9fa80f66"
+  },
+  "oracle": {
+    "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/oracle.exe",
+    "sha256": "acd763718e5a8e17636a9e6b744485858f09e4835816641e19a279e2cf81db20"
+  }
+}

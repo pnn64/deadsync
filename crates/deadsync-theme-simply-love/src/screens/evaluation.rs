@@ -803,7 +803,7 @@ fn build_eval_density_graph_mesh(
         Some(0.5),
         0.5,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_scatter_mesh(
@@ -825,7 +825,7 @@ fn build_eval_scatter_mesh(
         scale,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_scatter_bg_mesh(
@@ -849,7 +849,7 @@ fn build_eval_scatter_bg_mesh(
         scale,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_timing_hist_mesh(
@@ -873,7 +873,7 @@ fn build_eval_timing_hist_mesh(
         smooth,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn course_graph_stripe_actors(
@@ -1365,6 +1365,7 @@ mod tests {
                 chart_name: String::new(),
                 meter: 10,
                 step_artist: String::new(),
+                music_file: String::new(),
                 music_path: None,
                 short_hash: String::new(),
                 stats: deadsync_chart::ArrowStats::default(),
@@ -2153,10 +2154,30 @@ mod tests {
             Some("evaluation/failed.png")
         );
     }
+
+    #[test]
+    fn ecs15_evaluation_uses_dedicated_pass_and_fail_cues() {
+        use super::entry_sfx;
+        use crate::visual_styles;
+        use deadsync_config::theme::{SrpgVariant, VisualStyle};
+        assert_eq!(
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(visual_styles::ECS15_EVAL_PASSED_SFX.into())
+        );
+        assert_eq!(
+            entry_sfx(true, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(visual_styles::ECS15_EVAL_FAILED_SFX.into())
+        );
+        assert_eq!(
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into())
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EvalPane {
+    Golf,
     Standard,
     FaPlus,
     HardEx,
@@ -2613,6 +2634,8 @@ pub struct State {
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    /// Routine's shared grade, shown for both participants.
+    routine_shared_grade: Option<score_data::Grade>,
     /// Immutable per-result Nice eligibility compiled with `score_info`.
     nice_scores: [bool; MAX_PLAYERS],
     result_text: [ResultText; MAX_PLAYERS],
@@ -2718,6 +2741,7 @@ impl Clone for State {
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            routine_shared_grade: self.routine_shared_grade,
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
             percentage_text: self.percentage_text.clone(),
@@ -2818,9 +2842,59 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
 }
 
+// Simply Love's Routine panes show the shared percent and grade, with each
+// participant's own percent beside its judgments.
+fn routine_shared_grade(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> Option<score_data::Grade> {
+    routine_shared_score_percent.map(|percent| {
+        let failed = score_info
+            .iter()
+            .flatten()
+            .any(|si| si.grade == score_data::Grade::Failed);
+        if failed {
+            score_data::Grade::Failed
+        } else {
+            score_data::score_to_grade(percent * 10000.0)
+        }
+    })
+}
+
+fn percentage_texts(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::PercentageText>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(|si| match routine_shared_score_percent {
+                Some(percent) => eval_panes::PercentageText::routine(si, percent),
+                None => eval_panes::PercentageText::new(si),
+            })
+    })
+}
+
+fn stats_presentations(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::StatsPanePresentation>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index].as_ref().map(|si| {
+            let presentation = eval_panes::StatsPanePresentation::new(si);
+            if routine_shared_score_percent.is_some() {
+                presentation.routine(si)
+            } else {
+                presentation
+            }
+        })
+    })
+}
+
 pub fn init(init_view: EvaluationInitView) -> State {
     let EvaluationInitView {
         score_info,
+        routine_shared_score_percent,
         stage_duration_seconds,
         fail_stream_progress,
         context,
@@ -2890,7 +2964,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::Itg,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_itg[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2915,7 +2989,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::Ex,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_ex[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2940,7 +3014,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::HardEx,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_hard_ex[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2964,7 +3038,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::Arrow,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             scatter_mesh_quant[player_idx] = {
@@ -2981,7 +3055,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::Quant,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             scatter_mesh_foot_parity[player_idx] = {
@@ -2998,7 +3072,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::FootParity,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh[player_idx] = {
@@ -3017,7 +3091,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh_ex[player_idx] = {
@@ -3036,7 +3110,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh_hard_ex[player_idx] = {
@@ -3055,12 +3129,16 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
         }
 
         match play_style {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => {
                 active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -3111,11 +3189,8 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::PercentageText::new)
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3126,11 +3201,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::StatsPanePresentation::new)
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3171,6 +3242,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_grade,
         nice_scores,
         result_text,
         percentage_text,
@@ -3246,6 +3318,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
 #[must_use]
 pub fn init_from_score_info(
     score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
     stage_duration_seconds: f32,
     context: EvaluationContextView,
 ) -> State {
@@ -3253,7 +3326,11 @@ pub fn init_from_score_info(
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -3429,11 +3506,8 @@ pub fn init_from_score_info(
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::PercentageText::new)
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3444,11 +3518,7 @@ pub fn init_from_score_info(
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::StatsPanePresentation::new)
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3489,6 +3559,7 @@ pub fn init_from_score_info(
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_grade,
         nice_scores,
         result_text,
         percentage_text,
@@ -3733,6 +3804,15 @@ pub fn entry_sfx(
                 visual_styles::SRPG10_EVAL_FAILED_SFX
             } else {
                 visual_styles::SRPG10_EVAL_PASSED_SFX
+            }
+            .into(),
+        )
+    } else if visual_styles::ecs15_active(visual_style, srpg_variant) {
+        Some(
+            if failed {
+                visual_styles::ECS15_EVAL_FAILED_SFX
+            } else {
+                visual_styles::ECS15_EVAL_PASSED_SFX
             }
             .into(),
         )
@@ -4078,7 +4158,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                     state.context.policy.enable_groovestats,
                 );
                 let player = &state.context.players[profile_data::player_side_index(gs_side)];
-                let panes = eval_pane_cycle(
+                let mut panes = eval_pane_cycle(
                     si.show_hard_ex_score,
                     false,
                     has_gs,
@@ -4093,6 +4173,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                     eval_has_test_input_pane(state.context.policy.only_dedicated_menu_buttons),
                     eval_has_arrow_timing_pane(si),
                 );
+                if si.golf_score.is_some() {
+                    panes.push(EvalPane::Golf);
+                }
                 let other_idx = 1 - controller_idx;
                 state.active_pane[controller_idx] = eval_pane_skip_duplicate(
                     state.active_pane[controller_idx],
@@ -5275,7 +5358,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             arrowcloud_linked[profile_data::player_side_index(gs_side)],
         );
 
-        let panes = eval_pane_cycle(
+        let mut panes = eval_pane_cycle(
             has_hard_ex,
             has_qr,
             has_gs,
@@ -5285,6 +5368,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             eval_has_test_input_pane(only_dedicated_menu_buttons),
             eval_has_arrow_timing_pane(si),
         );
+        if si.golf_score.is_some() {
+            panes.push(EvalPane::Golf);
+        }
         state.active_pane[controller_idx] =
             eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
@@ -5666,6 +5752,11 @@ pub fn push_actors(
     {
         let style_label = match play_style {
             profile_data::PlayStyle::Double => "Double",
+            // Simply Love's StepsType names for the partner styles.
+            profile_data::PlayStyle::Couple => "Half Couples",
+            profile_data::PlayStyle::Routine => "Couples",
+            profile_data::PlayStyle::PumpCouple => "Couple",
+            profile_data::PlayStyle::PumpRoutine => "Co-Op",
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => "Single",
             profile_data::PlayStyle::PumpDouble => "Pump Double",
             profile_data::PlayStyle::PumpSingle | profile_data::PlayStyle::PumpVersus => {
@@ -5753,10 +5844,10 @@ pub fn push_actors(
                 }
             }
 
-            // Letter Grade
+            // Letter Grade (Routine shows the shared stats' grade)
             eval_grades::push_actors(
                 actors,
-                si.grade,
+                state.routine_shared_grade.unwrap_or(si.grade),
                 eval_grades::EvalGradeParams {
                     x: 70.0f32.mul_add(dir, upper_origin_x),
                     y: cy - 134.0,
@@ -6037,7 +6128,7 @@ pub fn push_actors(
                         .unwrap_or_else(|| cached_str_ref(simple))
                 };
 
-                {
+                if !breakdown_text.trim().is_empty() {
                     let x = breakdown_x;
                     let y = if policy.zmod_rating_box_text {
                         cy - 97.0
@@ -6168,7 +6259,9 @@ pub fn push_actors(
                 state.active_pane[controller_idx]
             };
 
-            if let Some(text) = state.percentage_text[player_idx].as_ref() {
+            if pane != EvalPane::Golf
+                && let Some(text) = state.percentage_text[player_idx].as_ref()
+            {
                 eval_panes::push_pane_percentage_display_with_palette(
                     actors,
                     si,
@@ -6181,7 +6274,12 @@ pub fn push_actors(
                 );
             }
 
+            if pane == EvalPane::Golf {
+                push_golf_results(actors, si, controller, policy.machine_font);
+                continue;
+            }
             match pane {
+                EvalPane::Golf => unreachable!("golf pane rendered above"),
                 EvalPane::Timing => eval_panes::push_timing_pane_with_palette(
                     actors,
                     si,
@@ -7066,4 +7164,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
+}
+
+fn push_golf_results(
+    actors: &mut Vec<Actor>,
+    si: &ScoreInfo,
+    controller: profile_data::PlayerSide,
+    machine_font: deadsync_config::theme::MachineFont,
+) {
+    let Some(score) = si.golf_score else {
+        return;
+    };
+    let x = eval_panes::test_input_pane_origin_x(controller);
+    let y = screen_center_y() + 35.0;
+    let par_label = tr("Golf", "Par");
+    let par_text = format!(
+        "{par_label}: {}",
+        crate::screens::components::gameplay::golf::format_par(si.golf_par)
+    );
+    let delta = si.golf_par.map_or_else(
+        || tr("Golf", "LowerIsBetter").to_string(),
+        |par| format!("{:+.3}", score.displayed() - par),
+    );
+    let lines = [
+        tr("Golf", "ResultsTitle").to_string(),
+        format!("{:.2}", score.displayed()),
+        par_text,
+        delta,
+        format!("{}: {}", tr("Golf", "JudgedRows"), score.judged_rows),
+    ];
+    for (i, line) in lines.into_iter().enumerate() {
+        actors.push(act!(text:
+            font(machine_font_key(machine_font, FontRole::Normal)):
+            settext(line): align(0.5, 0.5): xy(x, y - 70.0 + i as f32 * 34.0):
+            zoom(if i == 1 { 1.2 } else { 0.75 }): diffuse(0.2, 0.85, 0.3, 1.0): z(130)
+        ));
+    }
 }

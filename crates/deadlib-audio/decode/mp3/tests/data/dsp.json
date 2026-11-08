@@ -1,0 +1,19 @@
+{
+  "dewindow_sha256": "0998ea42d245e615c4bac39afe80f5877bd28db084b3992cb0c95d8c66bf5819",
+  "method": "f64 MPEG cosine/long/start/stop/short window equations and normalized alias coefficients; original numeric dewindow input only.",
+  "matrices": {
+    "long": [
+      36,
+      18
+    ],
+    "short": [
+      12,
+      6
+    ],
+    "synthesis": [
+      64,
+      32
+    ]
+  },
+  "synthesis_window": 512
+}

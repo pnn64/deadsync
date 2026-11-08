@@ -1,0 +1,4 @@
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Checking deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.76s

@@ -1,0 +1,64 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cycles:Pu'
+# Event count (approx.): 16641950004
+#
+# Overhead  Command          Shared Object              Symbol
+# ........  ...............  .........................  .......................................................................................
+#
+    43.09%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+
+     8.72%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj6_EB6_
+            |
+             --8.60%--_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj6_EB6_
+
+     7.80%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor12short_scalarlKj3_EB4_
+
+     5.58%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj4_EB6_
+
+     5.55%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RNvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6footer
+            |
+            ---_RNvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6footer
+
+     5.54%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+
+     5.25%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+
+     4.57%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKjb_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKjb_EB6_
+
+     3.77%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj8_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj8_EB6_
+
+     3.29%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKjc_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKjc_EB6_
+
+     2.32%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj5_EB6_
+
+     1.78%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj9_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj9_EB6_
+
+
+
+#
+# (Tip: Print event counts in machine readable CSV format with: perf stat -x\;)
+#

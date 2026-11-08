@@ -1,0 +1,90 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "wgi-test": {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--release",
+        "--locked",
+        "--test",
+        "native_kernels",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": {
+        "crates/deadlib-input-native/src/backend.rs": "c497aa764d70b18fae33d43500a82f3b82c4e67cc85b779a80f18c89397f112f",
+        "crates/deadlib-input-native/src/launch.rs": "5376fc5bf0401635583fc623b2e991af911fde329a3822b9a9428eee6acb9cf3",
+        "crates/deadlib-input-native/src/lib.rs": "b3644e6f121764afed41dfdd0b4aef633e604e9405f2927fea75e0acb2cc75de",
+        "crates/deadlib-input-native/src/pad_order.rs": "25b5db14d4f87b33d67e1b23c363b6f4ef470b21cea52e9dfb0396078ae54043",
+        "crates/deadlib-input-native/tests/native_kernels.rs": "c7b0047f71c7d43645fad57e1d83c9887251f4db2fd610c13daf5782f7501fb3",
+        "crates/deadlib-input-native/src/backend/deferred_sample.rs": "cdd742119b652ba8c549098925609058f4aaa1b3f7dadea89f5c98c5052625d9",
+        "crates/deadlib-input-native/src/backend/devd.rs": "931f9875040e1b0cd0c96bd2950f52e76a1e164a104fa7be539ce2837faad9a8",
+        "crates/deadlib-input-native/src/backend/hidraw.rs": "f4331a4a06cb346dcdc94c688d97a3cd4adff06bfcc222a3302db6348b68282f",
+        "crates/deadlib-input-native/src/backend/hid_report_cache.rs": "1a473e20ae584a829bb8a715147dde7a448e9b0a1e35bbdf51774abafa25711c",
+        "crates/deadlib-input-native/src/backend/iohid.rs": "21791a1c0c50a8da713a6b097098be9c85c6f81686f8577523a58e9e6fa47a84",
+        "crates/deadlib-input-native/src/backend/iohid_filter.rs": "5cff9cc2948348b1c228ea7253206e27049a0c388281e12fd3985aaac302b898",
+        "crates/deadlib-input-native/src/backend/poll_registration.rs": "f71227e98942c2c7f4f86d12bce09c6bc116e222e6c3345c1dea0b2803509e92",
+        "crates/deadlib-input-native/src/backend/unix_time.rs": "d16afbae43785216a10e709b8c1149c1860654bdbcf4cd91a5eaa0e49005c3a3",
+        "crates/deadlib-input-native/src/backend/w32_raw_input.rs": "ec87f3df37b2969c4d6e1ff76f01d6f0551358bc3ba38406716ba644d135ede0",
+        "crates/deadlib-input-native/src/backend/wgi.rs": "6d35421704a942b479aea1bcff59f113d0c68b71ce5e843d786f00f44637eb73",
+        "crates/deadlib-input-native/src/backend/evdev/freebsd.rs": "fef571424177145da47460d1572d7c6334e518d572f593f32c9f550d9f48b6c9",
+        "crates/deadlib-input-native/src/backend/evdev/linux.rs": "9dc6acde5e0196f309d335873d89d1c3a6933cbbfb8a4b5b95feeb9fda87c3db",
+        "crates/deadlib-input-native/src/backend/evdev/mod.rs": "248f053391cd8440fe7e6b7890869ab29e5b44cbe9d3407964903b55ea8e8eee",
+        "crates/deadlib-input-native/Cargo.toml": "60cd0506c096ce1c515b05d4502683d9e54aa738fdecd232bef11bd0ab802afa",
+        "Cargo.lock": "e6874b1159561b22f63dcd6151625b07a98f4cbdbaad7b522cfbb70534743167",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "binary_sha256": "3afea0dbf2ed98607a34fe1758eac397b268d6e4e5a855624f35fba670284a3d"
+    },
+    "hid-guarded": {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--release",
+        "--locked",
+        "--test",
+        "native_kernels",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": {
+        "crates/deadlib-input-native/src/backend.rs": "c497aa764d70b18fae33d43500a82f3b82c4e67cc85b779a80f18c89397f112f",
+        "crates/deadlib-input-native/src/launch.rs": "5376fc5bf0401635583fc623b2e991af911fde329a3822b9a9428eee6acb9cf3",
+        "crates/deadlib-input-native/src/lib.rs": "b3644e6f121764afed41dfdd0b4aef633e604e9405f2927fea75e0acb2cc75de",
+        "crates/deadlib-input-native/src/pad_order.rs": "25b5db14d4f87b33d67e1b23c363b6f4ef470b21cea52e9dfb0396078ae54043",
+        "crates/deadlib-input-native/tests/native_kernels.rs": "0c18825e9ad78e58002efc66ce1fd2cfa577d92fa1c40c9015a5b8dddbc2d57c",
+        "crates/deadlib-input-native/src/backend/deferred_sample.rs": "cdd742119b652ba8c549098925609058f4aaa1b3f7dadea89f5c98c5052625d9",
+        "crates/deadlib-input-native/src/backend/devd.rs": "931f9875040e1b0cd0c96bd2950f52e76a1e164a104fa7be539ce2837faad9a8",
+        "crates/deadlib-input-native/src/backend/hidraw.rs": "f4331a4a06cb346dcdc94c688d97a3cd4adff06bfcc222a3302db6348b68282f",
+        "crates/deadlib-input-native/src/backend/hid_report_cache.rs": "1a473e20ae584a829bb8a715147dde7a448e9b0a1e35bbdf51774abafa25711c",
+        "crates/deadlib-input-native/src/backend/iohid.rs": "21791a1c0c50a8da713a6b097098be9c85c6f81686f8577523a58e9e6fa47a84",
+        "crates/deadlib-input-native/src/backend/iohid_filter.rs": "5cff9cc2948348b1c228ea7253206e27049a0c388281e12fd3985aaac302b898",
+        "crates/deadlib-input-native/src/backend/poll_registration.rs": "f71227e98942c2c7f4f86d12bce09c6bc116e222e6c3345c1dea0b2803509e92",
+        "crates/deadlib-input-native/src/backend/unix_time.rs": "d16afbae43785216a10e709b8c1149c1860654bdbcf4cd91a5eaa0e49005c3a3",
+        "crates/deadlib-input-native/src/backend/w32_raw_input.rs": "b9cd683d95ad91ff5f9377c3ab097dc9e2124c5b241cb9dbf8d5dd615d8e803a",
+        "crates/deadlib-input-native/src/backend/wgi.rs": "6d35421704a942b479aea1bcff59f113d0c68b71ce5e843d786f00f44637eb73",
+        "crates/deadlib-input-native/src/backend/evdev/freebsd.rs": "fef571424177145da47460d1572d7c6334e518d572f593f32c9f550d9f48b6c9",
+        "crates/deadlib-input-native/src/backend/evdev/linux.rs": "9dc6acde5e0196f309d335873d89d1c3a6933cbbfb8a4b5b95feeb9fda87c3db",
+        "crates/deadlib-input-native/src/backend/evdev/mod.rs": "248f053391cd8440fe7e6b7890869ab29e5b44cbe9d3407964903b55ea8e8eee",
+        "crates/deadlib-input-native/Cargo.toml": "60cd0506c096ce1c515b05d4502683d9e54aa738fdecd232bef11bd0ab802afa",
+        "Cargo.lock": "e6874b1159561b22f63dcd6151625b07a98f4cbdbaad7b522cfbb70534743167",
+        "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+        ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+        "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      },
+      "binary_sha256": "fa8360a151de61e80d49148f634d2c3482ee753fda3a68c2b266f00fef93acf8"
+    }
+  }
+}

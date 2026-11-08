@@ -1,0 +1,20 @@
+INFO: found LLVMFuzzerCustomMutator (00007FF65B081000). Disabling -len_control by default.
+Dictionary: 8 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1339
+INFO: Loaded 1 modules   (15113 inline 8-bit counters): 15113 [00007FF65B27BA48, 00007FF65B27F551),
+INFO: Loaded 1 PC tables (15113 PCs): 15113 [00007FF65B1D7E08,00007FF65B212E98),
+INFO:     2391 files found in C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-synthesis-state-final-20261027\corpus\vorbis_stream
+INFO: seed corpus: files: 2391 min: 54b max: 99237b total: 14873142b rss: 51Mb
+#256	pulse  cov: 3095 ft: 7509 corp: 104/47Kb exec/s: 128 rss: 74Mb
+#512	pulse  cov: 3187 ft: 8333 corp: 177/91Kb exec/s: 73 rss: 102Mb
+#1024	pulse  cov: 3320 ft: 9258 corp: 273/181Kb exec/s: 53 rss: 162Mb
+#2048	pulse  cov: 4151 ft: 12888 corp: 577/1631Kb exec/s: 10 rss: 619Mb
+#2394	INITED cov: 4244 ft: 13722 corp: 702/5071Kb exec/s: 7 rss: 659Mb
+#2394	DONE   cov: 4244 ft: 13722 corp: 702/5071Kb lim: 99237 exec/s: 7 rss: 659Mb
+Done 2394 runs in 305 second(s)
+stat::number_of_executed_units: 2394
+stat::average_exec_per_sec:     7
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              659

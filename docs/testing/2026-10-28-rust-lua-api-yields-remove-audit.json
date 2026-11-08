@@ -1,0 +1,14 @@
+{
+  "reference": {
+    "returncode": 0,
+    "stdout_hex": "31096e696c09737472696e67093209747275650d0a32096e696c09737472696e67093209747275650d0a33096e696c09737472696e6709323209747275650d0a34096e696c09737472696e6709323209747275650d0a35096e696c09737472696e6709323209747275650d0a36096e696c09737472696e6709323209747275650d0a",
+    "stderr_hex": "",
+    "source": "local path=\"C:/GitHub/deadsync/target/lua-native-hooks/remove-path-audit/reference/file.dat\";local f=assert(io.open(path,'wb'));f:close();for i,s in ipairs{'.missing/leaf','/leaf','/','*','?',':'}do local a,b,c=os.remove(path..s);local f=io.open(path,'rb');print(i,a,b and type(b),c,f~=nil);if f then f:close()end end"
+  },
+  "rust": {
+    "returncode": 0,
+    "stdout_hex": "31096e696c09737472696e67093209747275650d0a32096e696c09737472696e67093209747275650d0a33096e696c09737472696e6709323209747275650d0a34096e696c09737472696e6709323209747275650d0a35096e696c09737472696e6709323209747275650d0a36096e696c09737472696e6709323209747275650d0a",
+    "stderr_hex": "",
+    "source": "local path=\"C:/GitHub/deadsync/target/lua-native-hooks/remove-path-audit/rust/file.dat\";local f=assert(io.open(path,'wb'));f:close();for i,s in ipairs{'.missing/leaf','/leaf','/','*','?',':'}do local a,b,c=os.remove(path..s);local f=io.open(path,'rb');print(i,a,b and type(b),c,f~=nil);if f then f:close()end end"
+  }
+}

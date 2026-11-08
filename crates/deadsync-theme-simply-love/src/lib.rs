@@ -100,6 +100,10 @@ pub fn asset_manifest()
 pub mod screens;
 
 #[cfg(test)]
+#[path = "../../../tests/support/workshop_fixture.rs"]
+mod workshop_fixture;
+
+#[cfg(test)]
 mod tests {
     pub(crate) fn init_paths() {
         static INIT: std::sync::Once = std::sync::Once::new();
@@ -119,13 +123,9 @@ mod tests {
             };
             dirs.ensure_dirs_exist();
             let mut assets = dirs.asset_paths(None);
-            if let Some(root) = std::env::var_os("DEADSYNC_WORKSHOP_PACK") {
-                let root = std::path::PathBuf::from(root)
-                    .canonicalize()
-                    .expect("Workshop fixture exists");
-                assets.noteskin_pack_roots =
-                    vec![root.parent().expect("pack has a parent").to_path_buf()];
-            }
+            let packs = dirs.data_dir.join("fixture-packs");
+            crate::workshop_fixture::build_preview_workshop(&packs.join("workshop"), &dirs.exe_dir);
+            assets.noteskin_pack_roots = vec![packs];
             deadsync_assets::init_paths(assets).expect("initialize fixture assets");
             deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())
                 .expect("initialize fixture config");
@@ -171,3 +171,92 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+use resource_perf_support as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/menu_buffers_support.rs"]
+mod menu_buffers_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/select_data_support.rs"]
+mod select_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/data_paths_support.rs"]
+mod data_paths_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/preview_dataflows_support.rs"]
+mod preview_dataflows_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/resource_support.rs"]
+#[allow(dead_code)]
+mod resource_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_borrowed_state_support.rs"]
+mod ui_borrowed_state_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_data_support.rs"]
+mod course_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/string_pipelines_support.rs"]
+mod pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/transient_buffers_support.rs"]
+mod buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_pipelines_support.rs"]
+mod ui_pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/view_buffers_support.rs"]
+mod view_buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/overlay_support.rs"]
+mod overlay_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/option_support.rs"]
+mod option_perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
+
+#[cfg(test)]
+use resource_perf_support as scan_alloc;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/scan_support.rs"]
+mod scan_perf;

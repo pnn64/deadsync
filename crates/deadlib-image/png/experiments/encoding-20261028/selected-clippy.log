@@ -1,0 +1,29 @@
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+    Checking cfg-if v1.0.5
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+    Checking bitflags v2.13.2
+    Checking miniz_oxide v0.9.1
+    Checking fdeflate v0.3.7
+    Checking miniz_oxide v0.8.9
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Checking flate2 v1.1.10
+    Checking png v0.18.1
+error: function `filtered_with` is never used
+   --> crates\deadlib-image\png\tests\support\apng_recovery.rs:103:8
+    |
+103 | pub fn filtered_with(image: &Image, interlaced: bool, filter: Filter) -> Vec<u8> {
+    |        ^^^^^^^^^^^^^
+    |
+    = note: `-D dead-code` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: function `inflate_idat` is never used
+   --> crates\deadlib-image\png\tests\support\apng_recovery.rs:175:8
+    |
+175 | pub fn inflate_idat(bytes: &[u8]) -> Vec<u8> {
+    |        ^^^^^^^^^^^^
+
+error: could not compile `deadlib-image-png` (test "apng_recovery") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

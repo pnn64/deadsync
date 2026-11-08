@@ -19,6 +19,11 @@ members = [
     "crates/deadlib-audio-backend-jack",
     "crates/deadsync-audio-analysis",
     "crates/deadlib-audio",
+    "crates/deadlib-audio/decode/ogg",
+    "crates/deadlib-audio/decode/flac",
+    "crates/deadlib-audio/decode/mp3",
+    "crates/deadlib-audio/decode/vorbis",
+    "crates/deadlib-audio/decode/wav",
     "crates/deadlib-audio-backend-pipewire",
     "crates/deadlib-audio-backend-pulse",
     "crates/deadlib-audio-backend-wasapi",
@@ -33,6 +38,7 @@ members = [
     "crates/deadsync-import",
     "crates/deadsync-input",
     "crates/deadsync-input-fsr",
+    "crates/deadsync-reflex",
     "crates/deadlib-input-native",
     "crates/deadsync-assets",
     "crates/deadsync-lights",
@@ -42,6 +48,15 @@ members = [
     "crates/deadsync-online",
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
+    "crates/deadlib-image",
+    "crates/deadlib-image/png",
+    "crates/deadlib-image/gif",
+    "crates/deadlib-image/jpeg",
+    "crates/deadlib-lua",
+    "crates/deadlib-lua/capi",
+    "crates/deadlib-lua-legacy",
+    "crates/deadlib-lua-legacy/mlua-sys",
+    "crates/deadlib-lua-legacy/mlua_derive",
     "crates/deadlib-platform",
     "crates/deadlib-present",
     "crates/deadsync-profile",
@@ -72,11 +87,25 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1602"
+version = "0.5.2494"
 
 [[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
+
+[[test]]
+name = "full_song_lua"
+path = "tests/full_song_lua.rs"
+harness = false
+
+[[test]]
+name = "live_song_lua"
+path = "tests/live_song_lua.rs"
+harness = false
+
+[[example]]
+name = "song_lua_performance"
+path = "examples/song_lua_performance.rs"
 
 [dependencies]
 deadlib-audio = { path = "crates/deadlib-audio" }
@@ -99,22 +128,26 @@ deadlib-present = { path = "crates/deadlib-present", features = ["conformance"] 
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-gameplay = { path = "crates/deadsync-gameplay" }
+deadsync-input = { path = "crates/deadsync-input" }
 deadsync-noteskin = { path = "crates/deadsync-noteskin" }
 deadsync-profile-gameplay = { path = "crates/deadsync-profile-gameplay" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
-deadsync-song-lua = { path = "crates/deadsync-song-lua" }
+deadsync-song-lua = { path = "crates/deadsync-song-lua", features = ["test-support"] }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.11.0"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
 tar = "0.4.46"
 tempfile = "3.27.0"
-zstd = "0.14.0"
+zstd = "0.14.3"
 
 [patch.crates-io]
+# Native actor grids exceed Lua 5.1 C-stack storage used by mlua Rust handles.
+# Permit registry-sized ownership on idle auxiliary threads only.
+lua-src = { path = "vendor/lua-src" }
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is
 # unavailable on Windows 7. The local patch keeps the same backend but uses the
 # Win7-compatible overlapped wait sequence.
@@ -124,6 +157,8 @@ dirs-sys = { path = "vendor/dirs-sys-win7" }
 # windows-sys 0.61. Windows 7 only provides that API from ole32.dll, so the
 # local patch resolves it at runtime.
 rfd = { path = "vendor/rfd-win7" }
+# Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
+opusic-sys = { path = "vendor/opusic-sys" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
@@ -147,15 +182,37 @@ opt-level = 3
 [profile.dev.package.fdeflate]
 opt-level = 3
 
-# Modcharts replay their Lua update functions at 60 Hz during song loading.
-# Optimize this load-time compiler and its VM; retain debug symbols and checks.
-[profile.dev.package.deadsync-song-lua]
-opt-level = 1
-
-[profile.dev.package.mlua]
+# Song-Lua Sound actors can preload full-length music. Keep their decoder and
+# resampler optimized so development builds do not block loading for minutes.
+[profile.dev.package.deadlib-audio]
 opt-level = 3
 
-[profile.dev.package.mlua-sys]
+[profile.dev.package.deadlib-audio-decode]
+opt-level = 3
+
+[profile.dev.package.rubato]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-vorbis]
+opt-level = 3
+
+# Full-song fixtures verify large native traces and every archive member.
+# Keep SHA-256 fast when running the default cargo test profile.
+[profile.dev.package.sha2]
+opt-level = 3
+
+# Retained modcharts update dense meshes during gameplay. Keep the scene bridge
+# and its VM optimized while retaining development debug symbols and checks.
+[profile.dev.package.deadsync-song-lua]
+opt-level = 3
+
+[profile.dev.package.deadlib-lua-legacy]
+opt-level = 3
+
+[profile.dev.package.deadlib-lua-legacy-sys]
 opt-level = 3
 
 [profile.local]
@@ -175,5 +232,6 @@ perf = { level = "warn", priority = -1 }
 inline_always = "allow"
 
 [workspace.dependencies]
-serde_json = "1.0.151"
-windows-core = "0.62.2"
+mlua = { package = "deadlib-lua-legacy", version = "=0.12.2", path = "crates/deadlib-lua-legacy" }
+serde_json = "1.0.154"
+windows-core = "0.100.0"

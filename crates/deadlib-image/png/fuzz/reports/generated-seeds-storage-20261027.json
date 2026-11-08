@@ -1,0 +1,59 @@
+{
+  "reason": "The /tmp tmpfs exhausted its inode limit while regenerating a complete seed set. Relocate prior complete generated seed directories into individually verified ZIPs before removal.",
+  "before": {
+    "free_bytes": 5992423424,
+    "free_inodes": 0
+  },
+  "archives": [
+    {
+      "generated_root": "/tmp/deadlib-image-primary-pairs-full-20261027-a",
+      "prior_evidence": "fuzz/reports/primary-pairs-seed-build.json",
+      "prior_evidence_sha256": "0ffda92ecbe87cfd1314e91da70e16691a58b65d5933e5af75c238653514934a",
+      "archive": "/mnt/c/GitHub/deadsync/target/png-generated-seeds-primary-pairs-20261027.zip",
+      "archive_sha256": "7d305de56d132ce6da5c8053d2251e87762c12337074eec8f13b0101ea6f0dbd",
+      "archive_bytes": 30602660,
+      "files": 90935,
+      "source_bytes": 24709040,
+      "tree_sha256": "6c3dd195a65ffdf6c1dbcb9a5e6d6097193c03e4c7e504e0a86af7a0fcc8411a",
+      "hash_method": "Literal UTF-8 relative filename bytes, NUL, contents; ascending filename bytes",
+      "all_archive_entries_match_original": true,
+      "generated_directory_removed_after_verification": true,
+      "wall_seconds": 98.01
+    },
+    {
+      "generated_root": "/tmp/deadlib-image-animation-fields-full-20261027-a",
+      "prior_evidence": "fuzz/reports/animation-fields-seed-build.json",
+      "prior_evidence_sha256": "d1eae5f44cffb4890db9f965344388175e71923b6832a731133cd9c2e6a972e2",
+      "archive": "/mnt/c/GitHub/deadsync/target/png-generated-seeds-animation-fields-20261027.zip",
+      "archive_sha256": "2044e73bafea85488646ece69f360a5ad6e783cf07bda063309809f88dfe90d5",
+      "archive_bytes": 40456802,
+      "files": 112415,
+      "source_bytes": 31853182,
+      "tree_sha256": "6b7f32ee50e6e7604166d182872eeca31734638d17cb33651d0674e119eb088d",
+      "hash_method": "Literal UTF-8 relative filename bytes, NUL, contents; ascending filename bytes",
+      "all_archive_entries_match_original": true,
+      "generated_directory_removed_after_verification": true,
+      "wall_seconds": 114.781
+    },
+    {
+      "generated_root": "/tmp/deadlib-image-scalar-fields-full-reproduction-20261027-a",
+      "prior_evidence": "fuzz/reports/scalar-fields-reproduce.json",
+      "prior_evidence_sha256": "11a4ee843085fc7eb763f37802a235150af7fa75c4e8699637437c6436602f8c",
+      "archive": "/mnt/c/GitHub/deadsync/target/png-generated-seeds-scalar-fields-20261027.zip",
+      "archive_sha256": "b45cd52feec0b67a36d96e5f4d9f1fb17544fec51245f5f57ed1c6d008a0fb67",
+      "archive_bytes": 30390346,
+      "files": 89647,
+      "source_bytes": 24521752,
+      "tree_sha256": "2e72546d5e91e31352704e75a0dcbed7f9f835da398184ddacd893ff3a0e2dc4",
+      "hash_method": "Literal UTF-8 relative filename bytes, NUL, contents; ascending filename bytes",
+      "all_archive_entries_match_original": true,
+      "generated_directory_removed_after_verification": true,
+      "wall_seconds": 96.666
+    }
+  ],
+  "runner_sha256": "9f684a59922fe4672a42ca499a6d50b3d414ce3010cfec24c55b4b18383c6b3c",
+  "after": {
+    "free_bytes": 7556988928,
+    "free_inodes": 315357
+  }
+}

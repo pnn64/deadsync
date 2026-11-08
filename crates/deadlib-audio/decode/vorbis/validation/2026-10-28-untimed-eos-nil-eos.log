@@ -1,0 +1,15 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:139
++ ... .exe).Path; cargo test -p deadlib-audio-decode-vorbis --release --all ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 10.87s
+     Running tests\nil_eos.rs (target/vorbis-completion\release\deps\nil_eos-d20729ec069fb477.exe)
+
+running 2 tests
+test empty_eos_without_timestamp_uses_the_completed_audio_landmark ... ok
+test unknown_nil_eos_pcm_matches_reference_despite_zero_declared_duration ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s

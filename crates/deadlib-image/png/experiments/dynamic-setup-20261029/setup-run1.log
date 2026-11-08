@@ -1,0 +1,15 @@
+complete-max-1: cycles/op 770.08 -> 746.91; ns/op 351.31 -> 341.19; CPU throughput 1.031x
+complete-max-2: cycles/op 789.42 -> 788.36; ns/op 360.01 -> 359.79; CPU throughput 1.001x
+complete-max-3: cycles/op 829.95 -> 828.18; ns/op 378.93 -> 378.47; CPU throughput 1.002x
+complete-max-4: cycles/op 847.12 -> 852.76; ns/op 386.73 -> 1993.62; CPU throughput 0.993x
+complete-max-5: cycles/op 853.20 -> 867.65; ns/op 389.56 -> 1995.45; CPU throughput 0.983x
+complete-max-6: cycles/op 917.16 -> 926.63; ns/op 418.96 -> 423.17; CPU throughput 0.990x
+complete-max-7: cycles/op 902.68 -> 912.55; ns/op 2016.31 -> 416.10; CPU throughput 0.989x
+complete-max-8: cycles/op 933.80 -> 928.52; ns/op 526.75 -> 423.56; CPU throughput 1.006x
+complete-max-9: cycles/op 1044.29 -> 1134.16; ns/op 477.68 -> 1020.15; CPU throughput 0.921x
+complete-max-10: cycles/op 1093.93 -> 1053.29; ns/op 1002.96 -> 986.75; CPU throughput 1.039x
+complete-max-11: cycles/op 962.98 -> 964.75; ns/op 840.89 -> 843.20; CPU throughput 0.998x
+complete-max-12: cycles/op 974.55 -> 988.50; ns/op 947.23 -> 953.38; CPU throughput 0.986x
+complete-max-13: cycles/op 979.31 -> 985.64; ns/op 848.88 -> 952.02; CPU throughput 0.994x
+complete-max-14: cycles/op 989.65 -> 991.92; ns/op 953.68 -> 955.31; CPU throughput 0.998x
+complete-max-15: cycles/op 1001.94 -> 1031.67; ns/op 858.78 -> 974.30; CPU throughput 0.971x

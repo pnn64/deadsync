@@ -23,6 +23,7 @@ pub enum SubmenuKind {
     SmxConfig,
     Lights,
     OnlineScoring,
+    Streaming,
     NullOrDie,
     NullOrDieOptions,
     SyncPacks,
@@ -41,7 +42,7 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 24] = [
+    pub(super) const ALL: [Self; 25] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -51,6 +52,7 @@ impl SubmenuKind {
         Self::SmxConfig,
         Self::Lights,
         Self::OnlineScoring,
+        Self::Streaming,
         Self::NullOrDie,
         Self::NullOrDieOptions,
         Self::SyncPacks,
@@ -177,6 +179,9 @@ pub(super) enum SubmenuTransition {
 }
 
 pub struct State {
+    pub(super) twitch: config::streaming::TwitchOptions,
+    pub(super) twitch_channel_entry: Option<String>,
+    pub(super) twitch_channel_invalid: bool,
     pub(super) main_visible_items: Vec<&'static Item>,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
@@ -416,6 +421,9 @@ pub fn init(view: OptionsInitView) -> State {
         .unwrap_or(0);
     let main_visible_items = build_visible_items(updater_capabilities);
     let mut state = State {
+        twitch: cfg.twitch,
+        twitch_channel_entry: None,
+        twitch_channel_invalid: false,
         main_visible_items,
         app_paths,
         audio_options,
@@ -1471,6 +1479,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ShowGolfPars,
+        yes_no_choice_index(cfg.select_music_show_golf_pars),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::NewPackBadge,
         select_music_new_pack_mode_choice_index(cfg.select_music_new_pack_mode),
     );
@@ -1554,12 +1568,28 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::GsBoxLeaderboards,
-        scorebox_cycle_cursor_index(
-            cfg.select_music_scorebox_cycle_itg,
-            cfg.select_music_scorebox_cycle_ex,
-            cfg.select_music_scorebox_cycle_hard_ex,
-            cfg.select_music_scorebox_cycle_tournaments,
-        ),
+        if cfg.enable_golf
+            && cfg.select_music_scorebox_cycle_golf
+            && !(cfg.select_music_scorebox_cycle_itg
+                || cfg.select_music_scorebox_cycle_ex
+                || cfg.select_music_scorebox_cycle_hard_ex
+                || cfg.select_music_scorebox_cycle_tournaments)
+        {
+            4
+        } else {
+            scorebox_cycle_cursor_index(
+                cfg.select_music_scorebox_cycle_itg,
+                cfg.select_music_scorebox_cycle_ex,
+                cfg.select_music_scorebox_cycle_hard_ex,
+                cfg.select_music_scorebox_cycle_tournaments,
+            )
+        },
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::GsBoxEventsFirst,
+        yes_no_choice_index(cfg.select_music_scorebox_events_first),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
@@ -1612,6 +1642,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
         ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::EnableGolf,
+        yes_no_choice_index(cfg.enable_golf),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::ArrowCloudSubmitFails,
         yes_no_choice_index(cfg.submit_arrowcloud_fails),
     );
@@ -1633,6 +1669,12 @@ pub fn init(view: OptionsInitView) -> State {
         SubRowId::GrooveStatsQrLogin,
         groovestats_qr_login_when_choice_index(cfg.groovestats_qr_login_when),
     );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::OnlineScoring].choice_indices,
+        ONLINE_SCORING_OPTIONS_ROWS,
+        SubRowId::ShareRips,
+        yes_no_choice_index(cfg.share_rips),
+    );
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
     set_choice_by_id(
@@ -1641,6 +1683,19 @@ pub fn init(view: OptionsInitView) -> State {
         SubRowId::ScoreImportOnlyMissing,
         yes_no_choice_index(false),
     );
+    for (id, enabled) in [
+        (SubRowId::TwitchEnabled, cfg.twitch.enabled),
+        (SubRowId::TwitchBadges, cfg.twitch.show_badges),
+        (SubRowId::TwitchEmotes, cfg.twitch.show_emotes),
+        (SubRowId::TwitchGameplay, cfg.twitch.show_gameplay),
+    ] {
+        set_choice_by_id(
+            &mut state.sub[SubmenuKind::Streaming].choice_indices,
+            STREAMING_ROWS,
+            id,
+            yes_no_choice_index(enabled),
+        );
+    }
     sync_submenu_cursor_indices(&mut state);
     state
 }

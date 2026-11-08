@@ -1,0 +1,213 @@
+{
+  "timestamp_utc": "2026-10-28T20:48:05Z",
+  "build_command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--release",
+    "-p",
+    "deadlib-audio-decode-wav",
+    "--example",
+    "adpcm_io_probe",
+    "--target-dir",
+    "target/wav-io-probe"
+  ],
+  "binary_sha256": "793ccb5bd512ad05798cece778733de9741b74df5c890e022aab8288ccb42bbf",
+  "probe_source_sha256": "88f8692ad0148dbb150e4c36585e5b8869dc29886506908a86199bf91fe99165",
+  "source_report_sha256": "b10c9dabbd4b2758ebbfb79fa82cfe0b46507bb26e0e4a0ccd148b618e585b99",
+  "runs": [
+    {
+      "case": {
+        "name": "RIFF-ms-c2-ext0-rss-small",
+        "container": "RIFF",
+        "kind": "ms",
+        "channels": 2,
+        "frames": 8000,
+        "samples": 16000,
+        "bits": 4,
+        "valid_bits": 4,
+        "metadata_chunks": 1,
+        "memory_offset": 0,
+        "wire_bytes": 8192,
+        "file_bytes": 8308,
+        "data_offset": 102,
+        "fixture_sha256": "e75627a0e7522b4e46e85f915bef0a96eb3161659c9cdaedf4ef0e87b99f267a",
+        "period_sha256": "32d53db03f2ae85a294daf60d92ade11040c56f0901348e7f8fbb83dbc6fb578",
+        "sections": {
+          "header": "916b5dec74e5df46fc0fdbbbc1e1b3c6d683d61524e5c9af8919775a5277cc2c",
+          "wire": "87529e4f49f39881e3b36a22c49cff10357e32b8c5394f294bd944ac0f0e9098",
+          "tail": "e6f70b197fb1e8ad8340f4048074864f42b3c1cb305a190cd6b348c0c5f7cac7",
+          "period": "32d53db03f2ae85a294daf60d92ade11040c56f0901348e7f8fbb83dbc6fb578"
+        },
+        "wire_repetitions": 1,
+        "wire_tail_bytes": 0,
+        "block_bytes": 512,
+        "block_frames": 500,
+        "extensible": false
+      },
+      "command": [
+        "target\\wav-io-probe\\release\\examples\\adpcm_io_probe.exe",
+        "target\\wav\\symphonia-widths-full-fixtures\\RIFF-ms-c2-ext0-rss-small.wav"
+      ],
+      "counts": {
+        "encoded_bytes": 8192,
+        "samples": 16000,
+        "opening_reads": 6,
+        "opening_bytes": 41297,
+        "opening_seeks": 16,
+        "stream_reads": 16,
+        "stream_bytes": 69856,
+        "stream_seeks": 16,
+        "read_amplification": 8.52734375
+      },
+      "exit_code": 0,
+      "stdout": "{\"encoded_bytes\":8192,\"samples\":16000,\"opening_reads\":6,\"opening_bytes\":41297,\"opening_seeks\":16,\"stream_reads\":16,\"stream_bytes\":69856,\"stream_seeks\":16}\n",
+      "stdout_sha256": "5687f614d73794ef02a61f650e7754a2980d18fd8f61862c52d19c08e435c38e"
+    },
+    {
+      "case": {
+        "name": "RIFF-ms-c2-ext0-rss-large",
+        "container": "RIFF",
+        "kind": "ms",
+        "channels": 2,
+        "frames": 65536000,
+        "samples": 131072000,
+        "bits": 4,
+        "valid_bits": 4,
+        "metadata_chunks": 1,
+        "memory_offset": 0,
+        "wire_bytes": 67108864,
+        "file_bytes": 67108980,
+        "data_offset": 102,
+        "fixture_sha256": "63c39b97340413f5ec0f4ede93389e188c94b0ae6f64b5e044da3471a540ca4f",
+        "period_sha256": "32d53db03f2ae85a294daf60d92ade11040c56f0901348e7f8fbb83dbc6fb578",
+        "sections": {
+          "header": "6b4513cd19828821d233b2fdcf1c2a4ad68852d697fdc104da9dd03dca4e8214",
+          "wire": "87529e4f49f39881e3b36a22c49cff10357e32b8c5394f294bd944ac0f0e9098",
+          "tail": "e6f70b197fb1e8ad8340f4048074864f42b3c1cb305a190cd6b348c0c5f7cac7",
+          "period": "32d53db03f2ae85a294daf60d92ade11040c56f0901348e7f8fbb83dbc6fb578"
+        },
+        "wire_repetitions": 8192,
+        "wire_tail_bytes": 0,
+        "block_bytes": 512,
+        "block_frames": 500,
+        "extensible": false
+      },
+      "command": [
+        "target\\wav-io-probe\\release\\examples\\adpcm_io_probe.exe",
+        "target\\wav\\symphonia-widths-full-fixtures\\RIFF-ms-c2-ext0-rss-large.wav"
+      ],
+      "counts": {
+        "encoded_bytes": 67108864,
+        "samples": 131072000,
+        "opening_reads": 6,
+        "opening_bytes": 327694,
+        "opening_seeks": 16,
+        "stream_reads": 131072,
+        "stream_bytes": 8585774834,
+        "stream_seeks": 131072,
+        "read_amplification": 127.9380147755146
+      },
+      "exit_code": 0,
+      "stdout": "{\"encoded_bytes\":67108864,\"samples\":131072000,\"opening_reads\":6,\"opening_bytes\":327694,\"opening_seeks\":16,\"stream_reads\":131072,\"stream_bytes\":8585774834,\"stream_seeks\":131072}\n",
+      "stdout_sha256": "113f740f093a67a06f006604079f6592d3b41c2668bcbc2a17705f71c7858499"
+    },
+    {
+      "case": {
+        "name": "RIFF-ima4sign-c2-ext0-rss-small",
+        "container": "RIFF",
+        "kind": "ima4sign",
+        "channels": 2,
+        "frames": 8080,
+        "samples": 16160,
+        "bits": 4,
+        "valid_bits": 4,
+        "metadata_chunks": 1,
+        "memory_offset": 0,
+        "wire_bytes": 8192,
+        "file_bytes": 8278,
+        "data_offset": 72,
+        "fixture_sha256": "477f488843fa8e99bea521edee3632a859654ab103cd03863a91cdfcef4a68a7",
+        "period_sha256": "7e331141f9b47a98a49b73de56aaa792b467d8ac6ab70409f162e93924f84a30",
+        "sections": {
+          "header": "e7156a388199afc6e65282b353bc339088f2dac3c0b26a6f2826170c3b2e48ee",
+          "wire": "604947ee7d7a9881268363236865bd1fc5c96164cb686b91ab0695a14b64cfde",
+          "tail": "e6f70b197fb1e8ad8340f4048074864f42b3c1cb305a190cd6b348c0c5f7cac7",
+          "period": "7e331141f9b47a98a49b73de56aaa792b467d8ac6ab70409f162e93924f84a30"
+        },
+        "wire_repetitions": 1,
+        "wire_tail_bytes": 0,
+        "block_bytes": 512,
+        "block_frames": 505,
+        "extensible": false
+      },
+      "command": [
+        "target\\wav-io-probe\\release\\examples\\adpcm_io_probe.exe",
+        "target\\wav\\symphonia-widths-full-fixtures\\RIFF-ima4sign-c2-ext0-rss-small.wav"
+      ],
+      "counts": {
+        "encoded_bytes": 8192,
+        "samples": 16160,
+        "opening_reads": 6,
+        "opening_bytes": 41237,
+        "opening_seeks": 16,
+        "stream_reads": 16,
+        "stream_bytes": 69856,
+        "stream_seeks": 16,
+        "read_amplification": 8.52734375
+      },
+      "exit_code": 0,
+      "stdout": "{\"encoded_bytes\":8192,\"samples\":16160,\"opening_reads\":6,\"opening_bytes\":41237,\"opening_seeks\":16,\"stream_reads\":16,\"stream_bytes\":69856,\"stream_seeks\":16}\n",
+      "stdout_sha256": "0777215b5dbb9f586271fbbcd330d8bbde0af49222630ae70ac8240cd1730a7e"
+    },
+    {
+      "case": {
+        "name": "RIFF-ima4sign-c2-ext0-rss-large",
+        "container": "RIFF",
+        "kind": "ima4sign",
+        "channels": 2,
+        "frames": 66191360,
+        "samples": 132382720,
+        "bits": 4,
+        "valid_bits": 4,
+        "metadata_chunks": 1,
+        "memory_offset": 0,
+        "wire_bytes": 67108864,
+        "file_bytes": 67108950,
+        "data_offset": 72,
+        "fixture_sha256": "73e6688ad0edf0974305dc5f4396e32edba9476563c68d1196a4387dc3c65ac5",
+        "period_sha256": "7e331141f9b47a98a49b73de56aaa792b467d8ac6ab70409f162e93924f84a30",
+        "sections": {
+          "header": "9657847e863b5e45a97efb42edb48ef823ad31a695a3fefeb3ff5b402d799697",
+          "wire": "604947ee7d7a9881268363236865bd1fc5c96164cb686b91ab0695a14b64cfde",
+          "tail": "e6f70b197fb1e8ad8340f4048074864f42b3c1cb305a190cd6b348c0c5f7cac7",
+          "period": "7e331141f9b47a98a49b73de56aaa792b467d8ac6ab70409f162e93924f84a30"
+        },
+        "wire_repetitions": 8192,
+        "wire_tail_bytes": 0,
+        "block_bytes": 512,
+        "block_frames": 505,
+        "extensible": false
+      },
+      "command": [
+        "target\\wav-io-probe\\release\\examples\\adpcm_io_probe.exe",
+        "target\\wav\\symphonia-widths-full-fixtures\\RIFF-ima4sign-c2-ext0-rss-large.wav"
+      ],
+      "counts": {
+        "encoded_bytes": 67108864,
+        "samples": 132382720,
+        "opening_reads": 6,
+        "opening_bytes": 327694,
+        "opening_seeks": 16,
+        "stream_reads": 131072,
+        "stream_bytes": 8585774834,
+        "stream_seeks": 131072,
+        "read_amplification": 127.9380147755146
+      },
+      "exit_code": 0,
+      "stdout": "{\"encoded_bytes\":67108864,\"samples\":132382720,\"opening_reads\":6,\"opening_bytes\":327694,\"opening_seeks\":16,\"stream_reads\":131072,\"stream_bytes\":8585774834,\"stream_seeks\":131072}\n",
+      "stdout_sha256": "0158cfa38a81f88d73ba91385cfdb2eb66fcec65e62058f895e13ba3d8830c55"
+    }
+  ],
+  "scope": "Actual File read/seek counters below a 64 KiB BufReader; every produced sample checked against independent period; no throughput claim."
+}

@@ -1,0 +1,2560 @@
+
+/tmp/deadlib-image-profile-target/release/examples/decode_profile:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+00000000000392f0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter>:
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   392f0:	55                   	push   rbp
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:122
+   392f1:	41 57                	push   r15
+   392f3:	41 56                	push   r14
+   392f5:	41 55                	push   r13
+   392f7:	41 54                	push   r12
+   392f9:	53                   	push   rbx
+   392fa:	48 81 ec 88 00 00 00 	sub    rsp,0x88
+   39301:	0f b6 84 24 c0 00 00 	movzx  eax,BYTE PTR [rsp+0xc0]
+   39308:	00 
+   39309:	48 83 f8 04          	cmp    rax,0x4
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:123
+   3930d:	0f 87 cf 01 00 00    	ja     394e2 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1f2>
+   39313:	4c 8d 15 9a cf fc ff 	lea    r10,[rip+0xfffffffffffccf9a]        # 62b4 <__abi_tag+0x5fb8>
+   3931a:	49 63 04 82          	movsxd rax,DWORD PTR [r10+rax*4]
+   3931e:	4c 01 d0             	add    rax,r10
+   39321:	ff e0                	jmp    rax
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   39323:	49 39 d1             	cmp    r9,rdx
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39326:	0f 83 e5 0b 00 00    	jae    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:127
+   3932c:	4d 89 ca             	mov    r10,r9
+   3932f:	49 f7 d2             	not    r10
+   39332:	49 01 d2             	add    r10,rdx
+   39335:	4c 39 d2             	cmp    rdx,r10
+   39338:	4c 89 d0             	mov    rax,r10
+   3933b:	48 0f 42 c2          	cmovb  rax,rdx
+   3933f:	4c 89 c9             	mov    rcx,r9
+   39342:	48 83 f8 0f          	cmp    rax,0xf
+   39346:	76 77                	jbe    393bf <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xcf>
+   39348:	4e 8d 04 0e          	lea    r8,[rsi+r9*1]
+   3934c:	4c 39 d2             	cmp    rdx,r10
+   3934f:	4c 0f 42 d2          	cmovb  r10,rdx
+   39353:	4b 8d 0c 02          	lea    rcx,[r10+r8*1]
+   39357:	48 ff c1             	inc    rcx
+   3935a:	49 01 f2             	add    r10,rsi
+   3935d:	49 ff c2             	inc    r10
+   39360:	4d 39 d0             	cmp    r8,r10
+   39363:	41 0f 92 c2          	setb   r10b
+   39367:	48 39 ce             	cmp    rsi,rcx
+   3936a:	41 0f 92 c3          	setb   r11b
+   3936e:	4c 89 c9             	mov    rcx,r9
+   39371:	45 84 da             	test   r10b,r11b
+   39374:	75 49                	jne    393bf <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xcf>
+   39376:	48 ff c0             	inc    rax
+   39379:	89 c1                	mov    ecx,eax
+   3937b:	83 e1 0f             	and    ecx,0xf
+   3937e:	41 ba 10 00 00 00    	mov    r10d,0x10
+   39384:	4c 0f 45 d1          	cmovne r10,rcx
+   39388:	4c 29 d0             	sub    rax,r10
+   3938b:	49 8d 0c 01          	lea    rcx,[r9+rax*1]
+   3938f:	45 31 d2             	xor    r10d,r10d
+   39392:	66 66 66 66 66 2e 0f 	data16 data16 data16 data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39399:	1f 84 00 00 00 00 00 
+   393a0:	f3 43 0f 6f 04 10    	movdqu xmm0,XMMWORD PTR [r8+r10*1]
+   393a6:	f3 42 0f 6f 0c 16    	movdqu xmm1,XMMWORD PTR [rsi+r10*1]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   393ac:	66 0f fc c8          	paddb  xmm1,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:127
+   393b0:	f3 43 0f 7f 0c 10    	movdqu XMMWORD PTR [r8+r10*1],xmm1
+   393b6:	49 83 c2 10          	add    r10,0x10
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   393ba:	4c 39 d0             	cmp    rax,r10
+   393bd:	75 e1                	jne    393a0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xb0>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:127
+   393bf:	49 89 f0             	mov    r8,rsi
+   393c2:	4d 29 c8             	sub    r8,r9
+   393c5:	49 f7 d9             	neg    r9
+   393c8:	0f 1f 84 00 00 00 00 	nop    DWORD PTR [rax+rax*1+0x0]
+   393cf:	00 
+   393d0:	49 8d 04 09          	lea    rax,[r9+rcx*1]
+   393d4:	48 39 d0             	cmp    rax,rdx
+   393d7:	0f 83 73 17 00 00    	jae    3ab50 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1860>
+   393dd:	41 0f b6 04 08       	movzx  eax,BYTE PTR [r8+rcx*1]
+   393e2:	00 04 0e             	add    BYTE PTR [rsi+rcx*1],al
+_RNvMs9_NtCskADBYZwJmSU_4core3numj13unchecked_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1013
+   393e5:	48 ff c1             	inc    rcx
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   393e8:	48 39 ca             	cmp    rdx,rcx
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   393eb:	75 e3                	jne    393d0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xe0>
+   393ed:	e9 1f 0b 00 00       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:98
+   393f2:	41 ff c9             	dec    r9d
+   393f5:	41 83 f9 07          	cmp    r9d,0x7
+   393f9:	0f 87 39 17 00 00    	ja     3ab38 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1848>
+   393ff:	48 8d 05 c2 ce fc ff 	lea    rax,[rip+0xfffffffffffccec2]        # 62c8 <__abi_tag+0x5fcc>
+   39406:	4e 63 0c 88          	movsxd r9,DWORD PTR [rax+r9*4]
+   3940a:	49 01 c1             	add    r9,rax
+   3940d:	41 ff e1             	jmp    r9
+   39410:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39413:	0f 87 0b 17 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj1_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39419:	48 85 d2             	test   rdx,rdx
+   3941c:	0f 84 ef 0a 00 00    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb1_EB4_():
+   39422:	31 c0                	xor    eax,eax
+   39424:	45 31 c0             	xor    r8d,r8d
+   39427:	45 31 c9             	xor    r9d,r9d
+   3942a:	66 0f 1f 44 00 00    	nop    WORD PTR [rax+rax*1+0x0]
+   39430:	45 0f b6 d0          	movzx  r10d,r8b
+   39434:	47 8d 1c 52          	lea    r11d,[r10+r10*2]
+   39438:	0f b6 d8             	movzx  ebx,al
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   3943b:	46 0f b6 04 09       	movzx  r8d,BYTE PTR [rcx+r9*1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39440:	41 38 d8             	cmp    r8b,bl
+   39443:	89 d8                	mov    eax,ebx
+   39445:	41 0f 42 c0          	cmovb  eax,r8d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39449:	89 dd                	mov    ebp,ebx
+   3944b:	41 0f 47 e8          	cmova  ebp,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3944f:	44 0f b6 f0          	movzx  r14d,al
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39453:	44 01 c3             	add    ebx,r8d
+   39456:	41 29 db             	sub    r11d,ebx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39459:	40 0f b6 dd          	movzx  ebx,bpl
+   3945d:	66 41 39 db          	cmp    r11w,bx
+   39461:	41 0f 4c c2          	cmovl  eax,r10d
+   39465:	66 45 39 f3          	cmp    r11w,r14w
+   39469:	0f 4e c5             	cmovle eax,ebp
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3946c:	42 02 04 0e          	add    al,BYTE PTR [rsi+r9*1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39470:	42 88 04 0e          	mov    BYTE PTR [rsi+r9*1],al
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj1_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39474:	49 ff c1             	inc    r9
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39477:	4c 39 ca             	cmp    rdx,r9
+   3947a:	75 b4                	jne    39430 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x140>
+   3947c:	e9 90 0a 00 00       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvYjNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39481:	49 39 d0             	cmp    r8,rdx
+   39484:	49 0f 42 d0          	cmovb  rdx,r8
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39488:	48 85 d2             	test   rdx,rdx
+   3948b:	0f 84 80 0a 00 00    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   39491:	48 83 fa 04          	cmp    rdx,0x4
+   39495:	73 74                	jae    3950b <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x21b>
+   39497:	31 c0                	xor    eax,eax
+   39499:	e9 62 0a 00 00       	jmp    39f00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc10>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:98
+   3949e:	41 ff c9             	dec    r9d
+   394a1:	41 83 f9 07          	cmp    r9d,0x7
+   394a5:	0f 87 8d 16 00 00    	ja     3ab38 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1848>
+   394ab:	48 8d 05 36 ce fc ff 	lea    rax,[rip+0xfffffffffffcce36]        # 62e8 <__abi_tag+0x5fec>
+   394b2:	4e 63 0c 88          	movsxd r9,DWORD PTR [rax+r9*4]
+   394b6:	49 01 c1             	add    r9,rax
+   394b9:	41 ff e1             	jmp    r9
+   394bc:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   394bf:	0f 87 5f 16 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj1_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   394c5:	48 85 d2             	test   rdx,rdx
+   394c8:	0f 84 43 0a 00 00    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   394ce:	48 83 fa 01          	cmp    rdx,0x1
+   394d2:	0f 85 dd 15 00 00    	jne    3aab5 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x17c5>
+   394d8:	31 c0                	xor    eax,eax
+   394da:	45 31 c9             	xor    r9d,r9d
+   394dd:	e9 2d 16 00 00       	jmp    3ab0f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x181f>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:137
+   394e2:	48 b8 fc ff ff ff ff 	movabs rax,0x7ffffffffffffffc
+   394e9:	ff ff 7f 
+   394ec:	48 83 c0 05          	add    rax,0x5
+   394f0:	48 89 07             	mov    QWORD PTR [rdi],rax
+   394f3:	48 8d 05 4d 1f fd ff 	lea    rax,[rip+0xfffffffffffd1f4d]        # b447 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x4af>
+   394fa:	48 89 47 08          	mov    QWORD PTR [rdi+0x8],rax
+   394fe:	48 c7 47 10 0f 00 00 	mov    QWORD PTR [rdi+0x10],0xf
+   39505:	00 
+   39506:	e9 0d 0a 00 00       	jmp    39f18 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc28>
+   3950b:	49 b8 fc ff ff ff ff 	movabs r8,0x7ffffffffffffffc
+   39512:	ff ff 7f 
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39515:	48 83 fa 20          	cmp    rdx,0x20
+   39519:	0f 83 4a 09 00 00    	jae    39e69 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xb79>
+   3951f:	31 c0                	xor    eax,eax
+   39521:	e9 9c 09 00 00       	jmp    39ec2 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xbd2>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39526:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39529:	0f 87 f5 15 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvMNtCskADBYZwJmSU_4core5sliceSh22split_at_mut_uncheckedCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:2118
+   3952f:	89 d0                	mov    eax,edx
+   39531:	83 e0 03             	and    eax,0x3
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj4_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39534:	49 89 d0             	mov    r8,rdx
+   39537:	49 c1 e8 02          	shr    r8,0x2
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3953b:	0f 84 77 10 00 00    	je     3a5b8 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x12c8>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+   39541:	66 0f ef c9          	pxor   xmm1,xmm1
+   39545:	45 31 c9             	xor    r9d,r9d
+   39548:	66 0f 6f 15 d0 c5 fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcc5d0]        # 5b20 <__abi_tag+0x5824>
+   3954f:	ff 
+   39550:	66 0f ef db          	pxor   xmm3,xmm3
+   39554:	66 0f ef c0          	pxor   xmm0,xmm0
+   39558:	0f 1f 84 00 00 00 00 	nop    DWORD PTR [rax+rax*1+0x0]
+   3955f:	00 
+   39560:	4d 89 ca             	mov    r10,r9
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39563:	66 0f 6f e3          	movdqa xmm4,xmm3
+   39567:	66 0f 60 e1          	punpcklbw xmm4,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3956b:	66 0f d5 e2          	pmullw xmm4,xmm2
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3956f:	66 0f 6f e8          	movdqa xmm5,xmm0
+   39573:	66 0f 60 e9          	punpcklbw xmm5,xmm1
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39577:	49 ff c1             	inc    r9
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   3957a:	66 42 0f 6e 34 91    	movd   xmm6,DWORD PTR [rcx+r10*4]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39580:	66 0f 6f fe          	movdqa xmm7,xmm6
+   39584:	66 0f da f8          	pminub xmm7,xmm0
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39588:	66 0f de c6          	pmaxub xmm0,xmm6
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3958c:	66 0f 60 f1          	punpcklbw xmm6,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39590:	66 0f fd f5          	paddw  xmm6,xmm5
+   39594:	66 0f f9 e6          	psubw  xmm4,xmm6
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39598:	66 0f 6f e8          	movdqa xmm5,xmm0
+   3959c:	66 0f 60 e9          	punpcklbw xmm5,xmm1
+   395a0:	66 0f 65 ec          	pcmpgtw xmm5,xmm4
+   395a4:	66 0f 63 ed          	packsswb xmm5,xmm5
+   395a8:	66 0f db dd          	pand   xmm3,xmm5
+   395ac:	66 0f df ef          	pandn  xmm5,xmm7
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   395b0:	66 0f 60 f9          	punpcklbw xmm7,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   395b4:	66 0f 65 e7          	pcmpgtw xmm4,xmm7
+   395b8:	66 0f 63 e4          	packsswb xmm4,xmm4
+   395bc:	66 0f eb eb          	por    xmm5,xmm3
+   395c0:	66 0f db ec          	pand   xmm5,xmm4
+   395c4:	66 0f df e0          	pandn  xmm4,xmm0
+   395c8:	66 0f eb e5          	por    xmm4,xmm5
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   395cc:	66 42 0f 6e 04 96    	movd   xmm0,DWORD PTR [rsi+r10*4]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   395d2:	66 0f fc c4          	paddb  xmm0,xmm4
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   395d6:	66 42 0f 7e 04 96    	movd   DWORD PTR [rsi+r10*4],xmm0
+   395dc:	66 42 0f 6e 1c 91    	movd   xmm3,DWORD PTR [rcx+r10*4]
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   395e2:	4d 39 c8             	cmp    r8,r9
+   395e5:	0f 85 75 ff ff ff    	jne    39560 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x270>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+   395eb:	42 8b 1c 91          	mov    ebx,DWORD PTR [rcx+r10*4]
+   395ef:	41 89 d8             	mov    r8d,ebx
+   395f2:	41 c1 e8 10          	shr    r8d,0x10
+   395f6:	44 89 44 24 08       	mov    DWORD PTR [rsp+0x8],r8d
+   395fb:	41 89 da             	mov    r10d,ebx
+   395fe:	41 c1 ea 08          	shr    r10d,0x8
+   39602:	66 0f 7e c5          	movd   ebp,xmm0
+   39606:	41 89 eb             	mov    r11d,ebp
+   39609:	41 c1 eb 08          	shr    r11d,0x8
+   3960d:	41 89 e9             	mov    r9d,ebp
+   39610:	41 c1 e9 10          	shr    r9d,0x10
+   39614:	e9 b4 0f 00 00       	jmp    3a5cd <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x12dd>
+   39619:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   3961c:	0f 87 02 15 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvMNtCskADBYZwJmSU_4core5sliceSh22split_at_mut_uncheckedCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:2118
+   39622:	89 d0                	mov    eax,edx
+   39624:	83 e0 07             	and    eax,0x7
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj8_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39627:	49 89 d0             	mov    r8,rdx
+   3962a:	49 c1 e8 03          	shr    r8,0x3
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3962e:	0f 84 90 10 00 00    	je     3a6c4 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x13d4>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+   39634:	66 0f ef c0          	pxor   xmm0,xmm0
+   39638:	45 31 c9             	xor    r9d,r9d
+   3963b:	66 0f 28 0d 9d c5 fc 	movapd xmm1,XMMWORD PTR [rip+0xfffffffffffcc59d]        # 5be0 <__abi_tag+0x58e4>
+   39642:	ff 
+   39643:	66 0f 6f 15 b5 c7 fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcc7b5]        # 5e00 <__abi_tag+0x5b04>
+   3964a:	ff 
+   3964b:	66 0f 6f 1d bd c8 fc 	movdqa xmm3,XMMWORD PTR [rip+0xfffffffffffcc8bd]        # 5f10 <__abi_tag+0x5c14>
+   39652:	ff 
+   39653:	66 0f 6f 25 35 c5 fc 	movdqa xmm4,XMMWORD PTR [rip+0xfffffffffffcc535]        # 5b90 <__abi_tag+0x5894>
+   3965a:	ff 
+   3965b:	66 45 0f ef d2       	pxor   xmm10,xmm10
+   39660:	66 0f ef f6          	pxor   xmm6,xmm6
+   39664:	66 66 66 2e 0f 1f 84 	data16 data16 cs nop WORD PTR [rax+rax*1+0x0]
+   3966b:	00 00 00 00 00 
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39670:	66 41 0f 6f ea       	movdqa xmm5,xmm10
+   39675:	66 0f 60 e8          	punpcklbw xmm5,xmm0
+   39679:	66 0f 6f fe          	movdqa xmm7,xmm6
+   3967d:	66 0f 60 f8          	punpcklbw xmm7,xmm0
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   39681:	f3 46 0f 7e 04 c9    	movq   xmm8,QWORD PTR [rcx+r9*8]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39687:	66 45 0f 6f c8       	movdqa xmm9,xmm8
+   3968c:	66 44 0f da ce       	pminub xmm9,xmm6
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39691:	66 41 0f de f0       	pmaxub xmm6,xmm8
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39696:	66 44 0f 6f dd       	movdqa xmm11,xmm5
+   3969b:	66 45 0f fd db       	paddw  xmm11,xmm11
+   396a0:	66 44 0f fd dd       	paddw  xmm11,xmm5
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   396a5:	66 44 0f 60 c0       	punpcklbw xmm8,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   396aa:	66 44 0f fd c7       	paddw  xmm8,xmm7
+   396af:	66 45 0f f9 d8       	psubw  xmm11,xmm8
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   396b4:	66 0f 6f ee          	movdqa xmm5,xmm6
+   396b8:	66 0f 60 e8          	punpcklbw xmm5,xmm0
+   396bc:	66 41 0f 65 eb       	pcmpgtw xmm5,xmm11
+   396c1:	66 0f 63 ed          	packsswb xmm5,xmm5
+   396c5:	66 44 0f db d5       	pand   xmm10,xmm5
+   396ca:	66 41 0f df e9       	pandn  xmm5,xmm9
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   396cf:	66 44 0f 60 c8       	punpcklbw xmm9,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   396d4:	66 45 0f 65 d9       	pcmpgtw xmm11,xmm9
+   396d9:	66 45 0f 63 db       	packsswb xmm11,xmm11
+   396de:	66 41 0f eb ea       	por    xmm5,xmm10
+   396e3:	66 41 0f db eb       	pand   xmm5,xmm11
+   396e8:	66 44 0f df de       	pandn  xmm11,xmm6
+   396ed:	66 44 0f eb dd       	por    xmm11,xmm5
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   396f2:	f3 42 0f 7e 3c ce    	movq   xmm7,QWORD PTR [rsi+r9*8]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   396f8:	66 41 0f fc fb       	paddb  xmm7,xmm11
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   396fd:	66 42 0f d6 3c ce    	movq   QWORD PTR [rsi+r9*8],xmm7
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:82
+   39703:	66 0f 7f 7c 24 70    	movdqa XMMWORD PTR [rsp+0x70],xmm7
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:83
+   39709:	4e 8b 14 c9          	mov    r10,QWORD PTR [rcx+r9*8]
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   3970d:	4d 8d 49 01          	lea    r9,[r9+0x1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:82
+   39711:	0f b6 5c 24 70       	movzx  ebx,BYTE PTR [rsp+0x70]
+   39716:	66 0f 70 ef 44       	pshufd xmm5,xmm7,0x44
+   3971b:	66 44 0f 6f d7       	movdqa xmm10,xmm7
+   39720:	66 44 0f 6f cf       	movdqa xmm9,xmm7
+   39725:	66 44 0f 6f da       	movdqa xmm11,xmm2
+   3972a:	66 44 0f df df       	pandn  xmm11,xmm7
+   3972f:	66 0f 6f f4          	movdqa xmm6,xmm4
+   39733:	66 0f df f7          	pandn  xmm6,xmm7
+   39737:	66 0f 73 d7 08       	psrlq  xmm7,0x8
+   3973c:	66 44 0f 6f c5       	movdqa xmm8,xmm5
+   39741:	66 41 0f 73 d0 10    	psrlq  xmm8,0x10
+   39747:	f2 44 0f 10 c7       	movsd  xmm8,xmm7
+   3974c:	66 41 0f 73 d2 18    	psrlq  xmm10,0x18
+   39752:	66 0f 6f fd          	movdqa xmm7,xmm5
+   39756:	66 0f 73 d7 20       	psrlq  xmm7,0x20
+   3975b:	f2 41 0f 10 fa       	movsd  xmm7,xmm10
+   39760:	66 0f 54 f9          	andpd  xmm7,xmm1
+   39764:	66 44 0f 54 c1       	andpd  xmm8,xmm1
+   39769:	66 44 0f 67 c7       	packuswb xmm8,xmm7
+   3976e:	66 44 0f 67 c0       	packuswb xmm8,xmm0
+   39773:	66 44 0f 67 c0       	packuswb xmm8,xmm0
+   39778:	66 41 0f 73 d1 28    	psrlq  xmm9,0x28
+   3977e:	66 0f 73 d5 30       	psrlq  xmm5,0x30
+   39783:	f2 41 0f 10 e9       	movsd  xmm5,xmm9
+   39788:	66 0f 54 e9          	andpd  xmm5,xmm1
+   3978c:	66 0f 67 ed          	packuswb xmm5,xmm5
+   39790:	66 0f 67 ed          	packuswb xmm5,xmm5
+   39794:	66 0f 67 ed          	packuswb xmm5,xmm5
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:83
+   39798:	4d 89 d3             	mov    r11,r10
+   3979b:	49 c1 eb 38          	shr    r11,0x38
+   3979f:	66 4d 0f 6e d2       	movq   xmm10,r10
+   397a4:	66 45 0f 6f ca       	movdqa xmm9,xmm10
+   397a9:	66 41 0f 73 d1 18    	psrlq  xmm9,0x18
+   397af:	66 41 0f 70 fa 44    	pshufd xmm7,xmm10,0x44
+   397b5:	66 44 0f 6f e7       	movdqa xmm12,xmm7
+   397ba:	66 41 0f 73 d4 20    	psrlq  xmm12,0x20
+   397c0:	f2 45 0f 10 e1       	movsd  xmm12,xmm9
+   397c5:	66 45 0f 6f ea       	movdqa xmm13,xmm10
+   397ca:	66 41 0f 73 d5 08    	psrlq  xmm13,0x8
+   397d0:	66 44 0f 6f cf       	movdqa xmm9,xmm7
+   397d5:	66 41 0f 73 d1 10    	psrlq  xmm9,0x10
+   397db:	f2 45 0f 10 cd       	movsd  xmm9,xmm13
+   397e0:	66 44 0f 29 4c 24 40 	movapd XMMWORD PTR [rsp+0x40],xmm9
+   397e7:	66 44 0f 29 64 24 50 	movapd XMMWORD PTR [rsp+0x50],xmm12
+   397ee:	0f b6 6c 24 48       	movzx  ebp,BYTE PTR [rsp+0x48]
+   397f3:	44 0f b6 74 24 40    	movzx  r14d,BYTE PTR [rsp+0x40]
+   397f9:	44 0f b6 7c 24 58    	movzx  r15d,BYTE PTR [rsp+0x58]
+   397ff:	66 41 0f 73 d2 28    	psrlq  xmm10,0x28
+   39805:	66 0f 73 d7 30       	psrlq  xmm7,0x30
+   3980a:	f2 41 0f 10 fa       	movsd  xmm7,xmm10
+   3980f:	66 0f 29 7c 24 30    	movapd XMMWORD PTR [rsp+0x30],xmm7
+   39815:	44 0f b6 64 24 38    	movzx  r12d,BYTE PTR [rsp+0x38]
+   3981b:	44 8b 6c 24 30       	mov    r13d,DWORD PTR [rsp+0x30]
+   39820:	41 c1 e5 08          	shl    r13d,0x8
+   39824:	45 09 fd             	or     r13d,r15d
+   39827:	45 0f b6 fa          	movzx  r15d,r10b
+   3982b:	41 c1 e6 08          	shl    r14d,0x8
+   3982f:	45 09 fe             	or     r14d,r15d
+   39832:	c1 e5 10             	shl    ebp,0x10
+   39835:	44 09 f5             	or     ebp,r14d
+   39838:	44 8b 74 24 50       	mov    r14d,DWORD PTR [rsp+0x50]
+   3983d:	41 c1 e6 18          	shl    r14d,0x18
+   39841:	41 09 ee             	or     r14d,ebp
+   39844:	66 45 0f 6e d6       	movd   xmm10,r14d
+   39849:	66 45 0f c4 d5 02    	pinsrw xmm10,r13d,0x2
+   3984f:	41 c1 e3 08          	shl    r11d,0x8
+   39853:	45 09 e3             	or     r11d,r12d
+   39856:	66 45 0f c4 d3 03    	pinsrw xmm10,r11d,0x3
+   3985c:	66 45 0f 6f e8       	movdqa xmm13,xmm8
+   39861:	66 41 0f 73 f5 08    	psllq  xmm13,0x8
+   39867:	66 45 0f eb dd       	por    xmm11,xmm13
+   3986c:	66 44 0f db db       	pand   xmm11,xmm3
+   39871:	66 44 0f 6f ed       	movdqa xmm13,xmm5
+   39876:	66 41 0f 73 f5 28    	psllq  xmm13,0x28
+   3987c:	66 44 0f 6f f3       	movdqa xmm14,xmm3
+   39881:	66 45 0f df f5       	pandn  xmm14,xmm13
+   39886:	66 45 0f eb f3       	por    xmm14,xmm11
+   3988b:	66 44 0f db f4       	pand   xmm14,xmm4
+   39890:	66 41 0f eb f6       	por    xmm6,xmm14
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39895:	4d 39 c8             	cmp    r8,r9
+   39898:	0f 85 d2 fd ff ff    	jne    39670 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x380>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+   3989e:	66 44 0f 54 e1       	andpd  xmm12,xmm1
+   398a3:	66 44 0f 54 c9       	andpd  xmm9,xmm1
+   398a8:	66 45 0f 67 cc       	packuswb xmm9,xmm12
+   398ad:	66 44 0f 67 c8       	packuswb xmm9,xmm0
+   398b2:	66 44 0f 67 c8       	packuswb xmm9,xmm0
+   398b7:	66 0f 54 f9          	andpd  xmm7,xmm1
+   398bb:	66 0f 67 ff          	packuswb xmm7,xmm7
+   398bf:	66 0f 67 ff          	packuswb xmm7,xmm7
+   398c3:	66 0f 67 ff          	packuswb xmm7,xmm7
+   398c7:	66 45 0f 7e c7       	movd   r15d,xmm8
+   398cc:	44 89 fd             	mov    ebp,r15d
+   398cf:	c1 ed 08             	shr    ebp,0x8
+   398d2:	45 89 f8             	mov    r8d,r15d
+   398d5:	41 c1 e8 10          	shr    r8d,0x10
+   398d9:	44 89 44 24 28       	mov    DWORD PTR [rsp+0x28],r8d
+   398de:	45 89 f8             	mov    r8d,r15d
+   398e1:	41 c1 e8 18          	shr    r8d,0x18
+   398e5:	44 89 44 24 20       	mov    DWORD PTR [rsp+0x20],r8d
+   398ea:	66 41 0f 7e e8       	movd   r8d,xmm5
+   398ef:	44 89 44 24 18       	mov    DWORD PTR [rsp+0x18],r8d
+   398f4:	41 c1 e8 08          	shr    r8d,0x8
+   398f8:	44 89 44 24 10       	mov    DWORD PTR [rsp+0x10],r8d
+   398fd:	66 45 0f 7e ce       	movd   r14d,xmm9
+   39902:	45 89 f3             	mov    r11d,r14d
+   39905:	41 c1 eb 08          	shr    r11d,0x8
+   39909:	45 89 f0             	mov    r8d,r14d
+   3990c:	41 c1 e8 10          	shr    r8d,0x10
+   39910:	44 89 44 24 2c       	mov    DWORD PTR [rsp+0x2c],r8d
+   39915:	45 89 f0             	mov    r8d,r14d
+   39918:	41 c1 e8 18          	shr    r8d,0x18
+   3991c:	44 89 44 24 24       	mov    DWORD PTR [rsp+0x24],r8d
+   39921:	66 41 0f 7e f8       	movd   r8d,xmm7
+   39926:	44 89 44 24 1c       	mov    DWORD PTR [rsp+0x1c],r8d
+   3992b:	41 c1 e8 08          	shr    r8d,0x8
+   3992f:	44 89 44 24 14       	mov    DWORD PTR [rsp+0x14],r8d
+   39934:	e9 db 0d 00 00       	jmp    3a714 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1424>
+   39939:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   3993c:	0f 87 e2 11 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj6_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39942:	49 b8 ab aa aa aa aa 	movabs r8,0xaaaaaaaaaaaaaaab
+   39949:	aa aa aa 
+   3994c:	48 89 d0             	mov    rax,rdx
+   3994f:	49 89 d1             	mov    r9,rdx
+   39952:	49 f7 e0             	mul    r8
+   39955:	48 c1 ea 02          	shr    rdx,0x2
+   39959:	48 01 d2             	add    rdx,rdx
+   3995c:	48 8d 04 52          	lea    rax,[rdx+rdx*2]
+   39960:	4c 89 ca             	mov    rdx,r9
+   39963:	48 29 c2             	sub    rdx,rax
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj6_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39966:	49 83 f9 06          	cmp    r9,0x6
+   3996a:	0f 83 ba 05 00 00    	jae    39f2a <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc3a>
+   39970:	66 0f ef c0          	pxor   xmm0,xmm0
+   39974:	45 31 db             	xor    r11d,r11d
+   39977:	31 ed                	xor    ebp,ebp
+   39979:	31 db                	xor    ebx,ebx
+   3997b:	45 31 d2             	xor    r10d,r10d
+   3997e:	c7 44 24 08 00 00 00 	mov    DWORD PTR [rsp+0x8],0x0
+   39985:	00 
+   39986:	45 31 c9             	xor    r9d,r9d
+   39989:	e9 07 07 00 00       	jmp    3a095 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xda5>
+_RNvYjNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3998e:	4c 39 c2             	cmp    rdx,r8
+   39991:	4c 89 c0             	mov    rax,r8
+   39994:	48 0f 42 c2          	cmovb  rax,rdx
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39998:	48 85 c0             	test   rax,rax
+   3999b:	74 14                	je     399b1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x6c1>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:102
+   3999d:	44 0f b6 09          	movzx  r9d,BYTE PTR [rcx]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:103
+   399a1:	44 00 0e             	add    BYTE PTR [rsi],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   399a4:	48 83 f8 01          	cmp    rax,0x1
+   399a8:	74 07                	je     399b1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x6c1>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:102
+   399aa:	0f b6 41 01          	movzx  eax,BYTE PTR [rcx+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:103
+   399ae:	00 46 01             	add    BYTE PTR [rsi+0x1],al
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   399b1:	48 83 fa 03          	cmp    rdx,0x3
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   399b5:	0f 82 56 05 00 00    	jb     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:107
+   399bb:	49 83 f8 03          	cmp    r8,0x3
+   399bf:	41 b9 02 00 00 00    	mov    r9d,0x2
+   399c5:	b8 02 00 00 00       	mov    eax,0x2
+   399ca:	49 0f 43 c0          	cmovae rax,r8
+   399ce:	4c 8d 58 fe          	lea    r11,[rax-0x2]
+   399d2:	4c 8d 52 fd          	lea    r10,[rdx-0x3]
+   399d6:	4d 39 d3             	cmp    r11,r10
+   399d9:	4d 0f 42 d3          	cmovb  r10,r11
+   399dd:	49 83 fa 01          	cmp    r10,0x1
+   399e1:	0f 86 c9 00 00 00    	jbe    39ab0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x7c0>
+   399e7:	49 83 e2 fe          	and    r10,0xfffffffffffffffe
+   399eb:	4d 8d 4a 02          	lea    r9,[r10+0x2]
+   399ef:	45 31 db             	xor    r11d,r11d
+   399f2:	66 0f ef c0          	pxor   xmm0,xmm0
+   399f6:	66 0f 6f 0d 72 c4 fc 	movdqa xmm1,XMMWORD PTR [rip+0xfffffffffffcc472]        # 5e70 <__abi_tag+0x5b74>
+   399fd:	ff 
+   399fe:	66 90                	xchg   ax,ax
+   39a00:	42 0f b7 1c 1e       	movzx  ebx,WORD PTR [rsi+r11*1]
+   39a05:	66 0f 6e e3          	movd   xmm4,ebx
+   39a09:	42 0f b7 5c 19 02    	movzx  ebx,WORD PTR [rcx+r11*1+0x2]
+   39a0f:	66 0f 6e eb          	movd   xmm5,ebx
+   39a13:	42 0f b7 1c 19       	movzx  ebx,WORD PTR [rcx+r11*1]
+   39a18:	66 0f 6e d3          	movd   xmm2,ebx
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39a1c:	66 0f 6f f5          	movdqa xmm6,xmm5
+   39a20:	66 0f da f4          	pminub xmm6,xmm4
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39a24:	66 0f 6f dd          	movdqa xmm3,xmm5
+   39a28:	66 0f de dc          	pmaxub xmm3,xmm4
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39a2c:	66 0f 6f fa          	movdqa xmm7,xmm2
+   39a30:	66 0f 60 f8          	punpcklbw xmm7,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39a34:	66 0f d5 f9          	pmullw xmm7,xmm1
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39a38:	66 0f 60 e0          	punpcklbw xmm4,xmm0
+   39a3c:	66 0f 60 e8          	punpcklbw xmm5,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39a40:	66 0f fd ec          	paddw  xmm5,xmm4
+   39a44:	66 0f f9 fd          	psubw  xmm7,xmm5
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39a48:	66 0f 6f e3          	movdqa xmm4,xmm3
+   39a4c:	66 0f 60 e0          	punpcklbw xmm4,xmm0
+   39a50:	66 0f 65 e7          	pcmpgtw xmm4,xmm7
+   39a54:	66 0f 63 e4          	packsswb xmm4,xmm4
+   39a58:	66 0f db d4          	pand   xmm2,xmm4
+   39a5c:	66 0f df e6          	pandn  xmm4,xmm6
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39a60:	66 0f 60 f0          	punpcklbw xmm6,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39a64:	66 0f 65 fe          	pcmpgtw xmm7,xmm6
+   39a68:	66 0f 63 ff          	packsswb xmm7,xmm7
+   39a6c:	66 0f eb e2          	por    xmm4,xmm2
+   39a70:	66 0f db e7          	pand   xmm4,xmm7
+   39a74:	66 0f df fb          	pandn  xmm7,xmm3
+   39a78:	66 0f eb fc          	por    xmm7,xmm4
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39a7c:	42 0f b7 5c 1e 02    	movzx  ebx,WORD PTR [rsi+r11*1+0x2]
+   39a82:	66 0f 6e d3          	movd   xmm2,ebx
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39a86:	66 0f fc d7          	paddb  xmm2,xmm7
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39a8a:	66 0f 7e d3          	movd   ebx,xmm2
+   39a8e:	66 42 89 5c 1e 02    	mov    WORD PTR [rsi+r11*1+0x2],bx
+   39a94:	49 83 c3 02          	add    r11,0x2
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39a98:	4d 39 da             	cmp    r10,r11
+   39a9b:	0f 85 5f ff ff ff    	jne    39a00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x710>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+   39aa1:	66 66 66 66 66 66 2e 	data16 data16 data16 data16 data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39aa8:	0f 1f 84 00 00 00 00 
+   39aaf:	00 
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:107
+   39ab0:	4c 39 c8             	cmp    rax,r9
+   39ab3:	0f 84 ac 10 00 00    	je     3ab65 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1875>
+   39ab9:	46 0f b6 54 0e fe    	movzx  r10d,BYTE PTR [rsi+r9*1-0x2]
+   39abf:	46 0f b6 1c 09       	movzx  r11d,BYTE PTR [rcx+r9*1]
+   39ac4:	42 0f b6 5c 09 fe    	movzx  ebx,BYTE PTR [rcx+r9*1-0x2]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39aca:	45 38 d3             	cmp    r11b,r10b
+   39acd:	44 89 d5             	mov    ebp,r10d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39ad0:	45 89 d6             	mov    r14d,r10d
+   39ad3:	66 45 0f 47 f3       	cmova  r14w,r11w
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39ad8:	66 41 0f 42 eb       	cmovb  bp,r11w
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39add:	44 8d 3c 5b          	lea    r15d,[rbx+rbx*2]
+   39ae1:	45 01 d3             	add    r11d,r10d
+   39ae4:	45 29 df             	sub    r15d,r11d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39ae7:	66 45 39 f7          	cmp    r15w,r14w
+   39aeb:	0f 4d dd             	cmovge ebx,ebp
+   39aee:	66 41 39 ef          	cmp    r15w,bp
+   39af2:	44 0f 4f f3          	cmovg  r14d,ebx
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39af6:	46 00 34 0e          	add    BYTE PTR [rsi+r9*1],r14b
+_RNvMs9_NtCskADBYZwJmSU_4core3numj13unchecked_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1013
+   39afa:	49 ff c1             	inc    r9
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   39afd:	4c 39 ca             	cmp    rdx,r9
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39b00:	75 ae                	jne    39ab0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x7c0>
+   39b02:	e9 0a 04 00 00       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39b07:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39b0a:	0f 87 14 10 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvMNtCskADBYZwJmSU_4core5sliceSh22split_at_mut_uncheckedCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:2118
+   39b10:	89 d0                	mov    eax,edx
+   39b12:	83 e0 03             	and    eax,0x3
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj4_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39b15:	49 89 d0             	mov    r8,rdx
+   39b18:	49 c1 e8 02          	shr    r8,0x2
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39b1c:	0f 84 37 0e 00 00    	je     3a959 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1669>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+   39b22:	66 0f ef c0          	pxor   xmm0,xmm0
+   39b26:	45 31 c9             	xor    r9d,r9d
+   39b29:	f3 0f 7e 0d 6f c3 fc 	movq   xmm1,QWORD PTR [rip+0xfffffffffffcc36f]        # 5ea0 <__abi_tag+0x5ba4>
+   39b30:	ff 
+   39b31:	66 0f 6f 15 f7 c0 fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcc0f7]        # 5c30 <__abi_tag+0x5934>
+   39b38:	ff 
+   39b39:	66 0f ef db          	pxor   xmm3,xmm3
+   39b3d:	0f 1f 00             	nop    DWORD PTR [rax]
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39b40:	66 0f db d9          	pand   xmm3,xmm1
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   39b44:	66 42 0f 6e 24 89    	movd   xmm4,DWORD PTR [rcx+r9*4]
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39b4a:	66 0f 60 e0          	punpcklbw xmm4,xmm0
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   39b4e:	66 0f fd e3          	paddw  xmm4,xmm3
+   39b52:	66 0f 71 d4 01       	psrlw  xmm4,0x1
+   39b57:	66 0f db e2          	pand   xmm4,xmm2
+   39b5b:	66 0f 67 e4          	packuswb xmm4,xmm4
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39b5f:	66 42 0f 6e 1c 8e    	movd   xmm3,DWORD PTR [rsi+r9*4]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39b65:	66 0f fc dc          	paddb  xmm3,xmm4
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39b69:	66 42 0f 7e 1c 8e    	movd   DWORD PTR [rsi+r9*4],xmm3
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39b6f:	49 ff c1             	inc    r9
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39b72:	66 41 0f 7e da       	movd   r10d,xmm3
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:82
+   39b77:	45 89 d3             	mov    r11d,r10d
+   39b7a:	41 c1 eb 08          	shr    r11d,0x8
+   39b7e:	44 89 d5             	mov    ebp,r10d
+   39b81:	c1 ed 18             	shr    ebp,0x18
+   39b84:	66 0f c5 db 01       	pextrw ebx,xmm3,0x1
+   39b89:	66 41 0f c4 db 01    	pinsrw xmm3,r11d,0x1
+   39b8f:	66 0f c4 db 02       	pinsrw xmm3,ebx,0x2
+   39b94:	66 0f c4 dd 03       	pinsrw xmm3,ebp,0x3
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj4_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39b99:	4d 39 c8             	cmp    r8,r9
+   39b9c:	75 a2                	jne    39b40 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x850>
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39b9e:	45 0f b6 d2          	movzx  r10d,r10b
+   39ba2:	45 0f b6 cb          	movzx  r9d,r11b
+   39ba6:	44 0f b6 c3          	movzx  r8d,bl
+   39baa:	e9 b3 0d 00 00       	jmp    3a962 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1672>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+   39baf:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39bb2:	0f 87 6c 0f 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RNvMNtCskADBYZwJmSU_4core5sliceSh22split_at_mut_uncheckedCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:2118
+   39bb8:	89 d0                	mov    eax,edx
+   39bba:	83 e0 07             	and    eax,0x7
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj8_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39bbd:	49 89 d0             	mov    r8,rdx
+   39bc0:	49 c1 e8 03          	shr    r8,0x3
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39bc4:	0f 84 fe 0d 00 00    	je     3a9c8 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x16d8>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+   39bca:	66 0f ef c0          	pxor   xmm0,xmm0
+   39bce:	45 31 ed             	xor    r13d,r13d
+   39bd1:	66 0f 6f 0d a7 c2 fc 	movdqa xmm1,XMMWORD PTR [rip+0xfffffffffffcc2a7]        # 5e80 <__abi_tag+0x5b84>
+   39bd8:	ff 
+   39bd9:	66 0f 6f 15 4f c0 fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcc04f]        # 5c30 <__abi_tag+0x5934>
+   39be0:	ff 
+   39be1:	66 0f ef db          	pxor   xmm3,xmm3
+   39be5:	66 66 2e 0f 1f 84 00 	data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39bec:	00 00 00 00 
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39bf0:	66 0f db d9          	pand   xmm3,xmm1
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   39bf4:	f3 42 0f 7e 24 e9    	movq   xmm4,QWORD PTR [rcx+r13*8]
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39bfa:	66 0f 60 e0          	punpcklbw xmm4,xmm0
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   39bfe:	66 0f fd e3          	paddw  xmm4,xmm3
+   39c02:	66 0f 71 d4 01       	psrlw  xmm4,0x1
+   39c07:	66 0f db e2          	pand   xmm4,xmm2
+   39c0b:	66 0f 67 e4          	packuswb xmm4,xmm4
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39c0f:	f3 42 0f 7e 1c ee    	movq   xmm3,QWORD PTR [rsi+r13*8]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39c15:	66 0f fc dc          	paddb  xmm3,xmm4
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39c19:	66 42 0f d6 1c ee    	movq   QWORD PTR [rsi+r13*8],xmm3
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39c1f:	49 ff c5             	inc    r13
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39c22:	66 49 0f 7e df       	movq   r15,xmm3
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:82
+   39c27:	45 89 fb             	mov    r11d,r15d
+   39c2a:	41 c1 eb 08          	shr    r11d,0x8
+   39c2e:	4d 89 fa             	mov    r10,r15
+   39c31:	49 c1 ea 18          	shr    r10,0x18
+   39c35:	66 0f c5 db 01       	pextrw ebx,xmm3,0x1
+   39c3a:	4d 89 f9             	mov    r9,r15
+   39c3d:	49 c1 e9 28          	shr    r9,0x28
+   39c41:	66 44 0f c5 e3 02    	pextrw r12d,xmm3,0x2
+   39c47:	4c 89 fd             	mov    rbp,r15
+   39c4a:	48 c1 ed 38          	shr    rbp,0x38
+   39c4e:	66 44 0f c5 f3 03    	pextrw r14d,xmm3,0x3
+   39c54:	66 41 0f 6e e6       	movd   xmm4,r14d
+   39c59:	66 0f 6e ed          	movd   xmm5,ebp
+   39c5d:	66 0f 61 e5          	punpcklwd xmm4,xmm5
+   39c61:	66 41 0f 6e ec       	movd   xmm5,r12d
+   39c66:	66 41 0f 6e f1       	movd   xmm6,r9d
+   39c6b:	66 0f 61 ee          	punpcklwd xmm5,xmm6
+   39c6f:	66 0f 62 ec          	punpckldq xmm5,xmm4
+   39c73:	66 0f 6e e3          	movd   xmm4,ebx
+   39c77:	66 41 0f 6e f2       	movd   xmm6,r10d
+   39c7c:	66 0f 61 e6          	punpcklwd xmm4,xmm6
+   39c80:	66 41 0f 6e f3       	movd   xmm6,r11d
+   39c85:	66 0f 61 de          	punpcklwd xmm3,xmm6
+   39c89:	66 0f 62 dc          	punpckldq xmm3,xmm4
+   39c8d:	66 0f 6c dd          	punpcklqdq xmm3,xmm5
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj8_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39c91:	4d 39 e8             	cmp    r8,r13
+   39c94:	0f 85 56 ff ff ff    	jne    39bf0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x900>
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39c9a:	45 0f b6 ff          	movzx  r15d,r15b
+   39c9e:	41 0f b6 eb          	movzx  ebp,r11b
+   39ca2:	0f b6 db             	movzx  ebx,bl
+   39ca5:	45 0f b6 da          	movzx  r11d,r10b
+   39ca9:	45 0f b6 d4          	movzx  r10d,r12b
+   39cad:	45 0f b6 c9          	movzx  r9d,r9b
+   39cb1:	45 0f b6 c6          	movzx  r8d,r14b
+   39cb5:	e9 21 0d 00 00       	jmp    3a9db <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x16eb>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39cba:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39cbd:	0f 87 61 0e 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj3_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39cc3:	49 b8 ab aa aa aa aa 	movabs r8,0xaaaaaaaaaaaaaaab
+   39cca:	aa aa aa 
+   39ccd:	48 89 d0             	mov    rax,rdx
+   39cd0:	49 89 d1             	mov    r9,rdx
+   39cd3:	49 f7 e0             	mul    r8
+   39cd6:	48 d1 ea             	shr    rdx,1
+   39cd9:	48 8d 04 52          	lea    rax,[rdx+rdx*2]
+   39cdd:	4c 89 ca             	mov    rdx,r9
+   39ce0:	48 29 c2             	sub    rdx,rax
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj3_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39ce3:	49 83 f9 03          	cmp    r9,0x3
+   39ce7:	0f 83 45 05 00 00    	jae    3a232 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xf42>
+   39ced:	66 0f ef c0          	pxor   xmm0,xmm0
+   39cf1:	45 31 d2             	xor    r10d,r10d
+   39cf4:	45 31 c9             	xor    r9d,r9d
+   39cf7:	e9 4d 06 00 00       	jmp    3a349 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1059>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39cfc:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39cff:	0f 87 1f 0e 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj6_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39d05:	49 b8 ab aa aa aa aa 	movabs r8,0xaaaaaaaaaaaaaaab
+   39d0c:	aa aa aa 
+   39d0f:	48 89 d0             	mov    rax,rdx
+   39d12:	49 89 d1             	mov    r9,rdx
+   39d15:	49 f7 e0             	mul    r8
+   39d18:	48 c1 ea 02          	shr    rdx,0x2
+   39d1c:	48 01 d2             	add    rdx,rdx
+   39d1f:	48 8d 04 52          	lea    rax,[rdx+rdx*2]
+   39d23:	4c 89 ca             	mov    rdx,r9
+   39d26:	48 29 c2             	sub    rdx,rax
+   39d29:	66 0f ef c0          	pxor   xmm0,xmm0
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj6_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39d2d:	49 83 f9 06          	cmp    r9,0x6
+   39d31:	0f 83 b6 06 00 00    	jae    3a3ed <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x10fd>
+   39d37:	45 31 c0             	xor    r8d,r8d
+   39d3a:	e9 31 07 00 00       	jmp    3a470 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1180>
+_RNvYjNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39d3f:	4c 39 c2             	cmp    rdx,r8
+   39d42:	4c 89 c0             	mov    rax,r8
+   39d45:	48 0f 42 c2          	cmovb  rax,rdx
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39d49:	48 85 c0             	test   rax,rax
+   39d4c:	74 19                	je     39d67 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xa77>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:102
+   39d4e:	44 0f b6 09          	movzx  r9d,BYTE PTR [rcx]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:103
+   39d52:	41 d0 e9             	shr    r9b,1
+   39d55:	44 00 0e             	add    BYTE PTR [rsi],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39d58:	48 83 f8 01          	cmp    rax,0x1
+   39d5c:	74 09                	je     39d67 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xa77>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:102
+   39d5e:	0f b6 41 01          	movzx  eax,BYTE PTR [rcx+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:103
+   39d62:	d0 e8                	shr    al,1
+   39d64:	00 46 01             	add    BYTE PTR [rsi+0x1],al
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   39d67:	48 83 fa 03          	cmp    rdx,0x3
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39d6b:	0f 82 a0 01 00 00    	jb     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:109
+   39d71:	49 83 f8 03          	cmp    r8,0x3
+   39d75:	41 b9 02 00 00 00    	mov    r9d,0x2
+   39d7b:	b8 02 00 00 00       	mov    eax,0x2
+   39d80:	49 0f 43 c0          	cmovae rax,r8
+   39d84:	4c 8d 58 fe          	lea    r11,[rax-0x2]
+   39d88:	4c 8d 52 fd          	lea    r10,[rdx-0x3]
+   39d8c:	4d 39 d3             	cmp    r11,r10
+   39d8f:	4d 0f 42 d3          	cmovb  r10,r11
+   39d93:	49 83 fa 01          	cmp    r10,0x1
+   39d97:	76 67                	jbe    39e00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xb10>
+   39d99:	49 83 e2 fe          	and    r10,0xfffffffffffffffe
+   39d9d:	4d 8d 4a 02          	lea    r9,[r10+0x2]
+   39da1:	45 31 db             	xor    r11d,r11d
+   39da4:	66 0f 6f 05 84 bd fc 	movdqa xmm0,XMMWORD PTR [rip+0xfffffffffffcbd84]        # 5b30 <__abi_tag+0x5834>
+   39dab:	ff 
+   39dac:	0f 1f 40 00          	nop    DWORD PTR [rax+0x0]
+   39db0:	42 0f b7 1c 1e       	movzx  ebx,WORD PTR [rsi+r11*1]
+   39db5:	66 0f 6e cb          	movd   xmm1,ebx
+   39db9:	42 0f b7 5c 19 02    	movzx  ebx,WORD PTR [rcx+r11*1+0x2]
+   39dbf:	66 0f 6e d3          	movd   xmm2,ebx
+   39dc3:	66 0f 6f da          	movdqa xmm3,xmm2
+   39dc7:	66 0f db d9          	pand   xmm3,xmm1
+   39dcb:	66 0f ef d1          	pxor   xmm2,xmm1
+   39dcf:	66 0f 71 d2 01       	psrlw  xmm2,0x1
+   39dd4:	66 0f db d0          	pand   xmm2,xmm0
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39dd8:	42 0f b7 5c 1e 02    	movzx  ebx,WORD PTR [rsi+r11*1+0x2]
+   39dde:	66 0f 6e cb          	movd   xmm1,ebx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:109
+   39de2:	66 0f fc cb          	paddb  xmm1,xmm3
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39de6:	66 0f fc ca          	paddb  xmm1,xmm2
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39dea:	66 0f 7e cb          	movd   ebx,xmm1
+   39dee:	66 42 89 5c 1e 02    	mov    WORD PTR [rsi+r11*1+0x2],bx
+   39df4:	49 83 c3 02          	add    r11,0x2
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39df8:	4d 39 da             	cmp    r10,r11
+   39dfb:	75 b3                	jne    39db0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xac0>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+   39dfd:	0f 1f 00             	nop    DWORD PTR [rax]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:109
+   39e00:	4c 39 c8             	cmp    rax,r9
+   39e03:	0f 84 6e 0d 00 00    	je     3ab77 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1887>
+   39e09:	46 0f b6 54 0e fe    	movzx  r10d,BYTE PTR [rsi+r9*1-0x2]
+   39e0f:	46 0f b6 1c 09       	movzx  r11d,BYTE PTR [rcx+r9*1]
+   39e14:	45 01 d3             	add    r11d,r10d
+   39e17:	41 d1 eb             	shr    r11d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:111
+   39e1a:	46 00 1c 0e          	add    BYTE PTR [rsi+r9*1],r11b
+_RNvMs9_NtCskADBYZwJmSU_4core3numj13unchecked_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1013
+   39e1e:	49 ff c1             	inc    r9
+_RNvXsU_NtNtCskADBYZwJmSU_4core3cmp5implsjNtB7_10PartialOrd2lt():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:2144
+   39e21:	4c 39 ca             	cmp    rdx,r9
+_RNvXs3_NtNtCskADBYZwJmSU_4core4iter5rangeINtNtNtB9_3ops5range5RangejENtB5_17RangeIteratorImpl9spec_nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/range.rs:1100
+   39e24:	75 da                	jne    39e00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xb10>
+   39e26:	e9 e6 00 00 00       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+   39e2b:	4c 39 c2             	cmp    rdx,r8
+_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:1092
+   39e2e:	0f 87 f0 0c 00 00    	ja     3ab24 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1834>
+_RINvMNtCskADBYZwJmSU_4core5sliceSh23as_chunks_unchecked_mutKj3_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1508
+   39e34:	49 b8 ab aa aa aa aa 	movabs r8,0xaaaaaaaaaaaaaaab
+   39e3b:	aa aa aa 
+   39e3e:	48 89 d0             	mov    rax,rdx
+   39e41:	49 89 d1             	mov    r9,rdx
+   39e44:	49 f7 e0             	mul    r8
+   39e47:	48 d1 ea             	shr    rdx,1
+   39e4a:	48 8d 04 52          	lea    rax,[rdx+rdx*2]
+   39e4e:	4c 89 ca             	mov    rdx,r9
+   39e51:	48 29 c2             	sub    rdx,rax
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj3_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39e54:	49 83 f9 03          	cmp    r9,0x3
+   39e58:	0f 83 b3 06 00 00    	jae    3a511 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1221>
+   39e5e:	45 31 d2             	xor    r10d,r10d
+   39e61:	45 31 c0             	xor    r8d,r8d
+   39e64:	e9 13 07 00 00       	jmp    3a57c <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x128c>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39e69:	49 8d 40 e4          	lea    rax,[r8-0x1c]
+   39e6d:	48 21 d0             	and    rax,rdx
+   39e70:	45 31 c9             	xor    r9d,r9d
+   39e73:	66 66 66 66 2e 0f 1f 	data16 data16 data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39e7a:	84 00 00 00 00 00 
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:131
+   39e80:	f3 42 0f 6f 04 09    	movdqu xmm0,XMMWORD PTR [rcx+r9*1]
+   39e86:	f3 42 0f 6f 4c 09 10 	movdqu xmm1,XMMWORD PTR [rcx+r9*1+0x10]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39e8d:	f3 42 0f 6f 14 0e    	movdqu xmm2,XMMWORD PTR [rsi+r9*1]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39e93:	66 0f fc d0          	paddb  xmm2,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39e97:	f3 42 0f 6f 44 0e 10 	movdqu xmm0,XMMWORD PTR [rsi+r9*1+0x10]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39e9e:	66 0f fc c1          	paddb  xmm0,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39ea2:	f3 42 0f 7f 14 0e    	movdqu XMMWORD PTR [rsi+r9*1],xmm2
+   39ea8:	f3 42 0f 7f 44 0e 10 	movdqu XMMWORD PTR [rsi+r9*1+0x10],xmm0
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39eaf:	49 83 c1 20          	add    r9,0x20
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39eb3:	4c 39 c8             	cmp    rax,r9
+   39eb6:	75 c8                	jne    39e80 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xb90>
+   39eb8:	48 39 c2             	cmp    rdx,rax
+   39ebb:	74 54                	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39ebd:	f6 c2 1c             	test   dl,0x1c
+   39ec0:	74 3e                	je     39f00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc10>
+   39ec2:	49 21 d0             	and    r8,rdx
+   39ec5:	66 66 2e 0f 1f 84 00 	data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39ecc:	00 00 00 00 
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:131
+   39ed0:	66 0f 6e 04 01       	movd   xmm0,DWORD PTR [rcx+rax*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39ed5:	66 0f 6e 0c 06       	movd   xmm1,DWORD PTR [rsi+rax*1]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39eda:	66 0f fc c8          	paddb  xmm1,xmm0
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39ede:	66 0f 7e 0c 06       	movd   DWORD PTR [rsi+rax*1],xmm1
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39ee3:	48 83 c0 04          	add    rax,0x4
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39ee7:	49 39 c0             	cmp    r8,rax
+   39eea:	75 e4                	jne    39ed0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xbe0>
+   39eec:	4c 89 c0             	mov    rax,r8
+   39eef:	4c 39 c2             	cmp    rdx,r8
+   39ef2:	74 1d                	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   39ef4:	66 66 66 2e 0f 1f 84 	data16 data16 cs nop WORD PTR [rax+rax*1+0x0]
+   39efb:	00 00 00 00 00 
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:131
+   39f00:	44 0f b6 04 01       	movzx  r8d,BYTE PTR [rcx+rax*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:132
+   39f05:	44 00 04 06          	add    BYTE PTR [rsi+rax*1],r8b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   39f09:	48 ff c0             	inc    rax
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   39f0c:	48 39 c2             	cmp    rdx,rax
+   39f0f:	75 ef                	jne    39f00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc10>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   39f11:	48 c7 07 ff ff ff ff 	mov    QWORD PTR [rdi],0xffffffffffffffff
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:140
+   39f18:	48 81 c4 88 00 00 00 	add    rsp,0x88
+   39f1f:	5b                   	pop    rbx
+   39f20:	41 5c                	pop    r12
+   39f22:	41 5d                	pop    r13
+   39f24:	41 5e                	pop    r14
+   39f26:	41 5f                	pop    r15
+   39f28:	5d                   	pop    rbp
+   39f29:	c3                   	ret
+   39f2a:	66 0f ef c9          	pxor   xmm1,xmm1
+   39f2e:	45 31 c0             	xor    r8d,r8d
+   39f31:	66 0f 6f 15 e7 bb fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcbbe7]        # 5b20 <__abi_tag+0x5824>
+   39f38:	ff 
+   39f39:	45 31 db             	xor    r11d,r11d
+   39f3c:	31 db                	xor    ebx,ebx
+   39f3e:	45 31 c9             	xor    r9d,r9d
+   39f41:	45 31 d2             	xor    r10d,r10d
+   39f44:	66 0f ef ed          	pxor   xmm5,xmm5
+   39f48:	66 0f ef c0          	pxor   xmm0,xmm0
+   39f4c:	0f 1f 40 00          	nop    DWORD PTR [rax+0x0]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+   39f50:	66 0f 6f dd          	movdqa xmm3,xmm5
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   39f54:	42 0f b6 2c 01       	movzx  ebp,BYTE PTR [rcx+r8*1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39f59:	45 0f b6 f1          	movzx  r14d,r9b
+   39f5d:	44 38 f5             	cmp    bpl,r14b
+   39f60:	45 89 f1             	mov    r9d,r14d
+   39f63:	44 0f 42 cd          	cmovb  r9d,ebp
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39f67:	45 0f b6 f9          	movzx  r15d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39f6b:	45 89 f4             	mov    r12d,r14d
+   39f6e:	44 0f 47 e5          	cmova  r12d,ebp
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39f72:	45 0f b6 db          	movzx  r11d,r11b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39f76:	47 8d 2c 5b          	lea    r13d,[r11+r11*2]
+   39f7a:	41 01 ee             	add    r14d,ebp
+   39f7d:	45 29 f5             	sub    r13d,r14d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39f80:	41 0f b6 ec          	movzx  ebp,r12b
+   39f84:	66 41 39 ed          	cmp    r13w,bp
+   39f88:	45 0f 4c cb          	cmovl  r9d,r11d
+   39f8c:	66 45 39 fd          	cmp    r13w,r15w
+   39f90:	45 0f 4e cc          	cmovle r9d,r12d
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39f94:	46 02 0c 06          	add    r9b,BYTE PTR [rsi+r8*1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39f98:	46 88 0c 06          	mov    BYTE PTR [rsi+r8*1],r9b
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39f9c:	66 0f 6f e5          	movdqa xmm4,xmm5
+   39fa0:	66 0f 60 e1          	punpcklbw xmm4,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39fa4:	66 0f d5 e2          	pmullw xmm4,xmm2
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39fa8:	66 0f 6f f0          	movdqa xmm6,xmm0
+   39fac:	44 0f b6 db          	movzx  r11d,bl
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   39fb0:	42 0f b6 5c 01 05    	movzx  ebx,BYTE PTR [rcx+r8*1+0x5]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   39fb6:	41 0f b6 ea          	movzx  ebp,r10b
+   39fba:	40 38 eb             	cmp    bl,bpl
+   39fbd:	41 89 ea             	mov    r10d,ebp
+   39fc0:	44 0f 42 d3          	cmovb  r10d,ebx
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   39fc4:	41 89 ee             	mov    r14d,ebp
+   39fc7:	44 0f 47 f3          	cmova  r14d,ebx
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39fcb:	45 0f b6 fa          	movzx  r15d,r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   39fcf:	47 8d 24 5b          	lea    r12d,[r11+r11*2]
+   39fd3:	01 dd                	add    ebp,ebx
+   39fd5:	41 29 ec             	sub    r12d,ebp
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39fd8:	41 0f b6 ee          	movzx  ebp,r14b
+   39fdc:	66 41 39 ec          	cmp    r12w,bp
+   39fe0:	45 0f 4c d3          	cmovl  r10d,r11d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   39fe4:	66 0f 60 f1          	punpcklbw xmm6,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   39fe8:	66 45 39 fc          	cmp    r12w,r15w
+   39fec:	45 0f 4e d6          	cmovle r10d,r14d
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   39ff0:	46 02 54 06 05       	add    r10b,BYTE PTR [rsi+r8*1+0x5]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   39ff5:	46 88 54 06 05       	mov    BYTE PTR [rsi+r8*1+0x5],r10b
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:83
+   39ffa:	46 0f b6 1c 01       	movzx  r11d,BYTE PTR [rcx+r8*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   39fff:	66 42 0f 6e 6c 01 01 	movd   xmm5,DWORD PTR [rcx+r8*1+0x1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a006:	66 0f 6f fd          	movdqa xmm7,xmm5
+   3a00a:	66 0f da f8          	pminub xmm7,xmm0
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a00e:	66 0f de c5          	pmaxub xmm0,xmm5
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a012:	66 44 0f 6f c5       	movdqa xmm8,xmm5
+   3a017:	66 44 0f 60 c1       	punpcklbw xmm8,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a01c:	66 44 0f fd c6       	paddw  xmm8,xmm6
+   3a021:	66 41 0f f9 e0       	psubw  xmm4,xmm8
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a026:	66 0f 6f f0          	movdqa xmm6,xmm0
+   3a02a:	66 0f 60 f1          	punpcklbw xmm6,xmm1
+   3a02e:	66 0f 65 f4          	pcmpgtw xmm6,xmm4
+   3a032:	66 0f 63 f6          	packsswb xmm6,xmm6
+   3a036:	66 0f db de          	pand   xmm3,xmm6
+   3a03a:	66 0f df f7          	pandn  xmm6,xmm7
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a03e:	66 0f 60 f9          	punpcklbw xmm7,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a042:	66 0f 65 e7          	pcmpgtw xmm4,xmm7
+   3a046:	66 0f 63 e4          	packsswb xmm4,xmm4
+   3a04a:	66 0f eb f3          	por    xmm6,xmm3
+   3a04e:	66 0f db f4          	pand   xmm6,xmm4
+   3a052:	66 0f df e0          	pandn  xmm4,xmm0
+   3a056:	66 0f eb e6          	por    xmm4,xmm6
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a05a:	66 42 0f 6e 44 06 01 	movd   xmm0,DWORD PTR [rsi+r8*1+0x1]
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a061:	66 0f fc c4          	paddb  xmm0,xmm4
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a065:	66 42 0f 7e 44 06 01 	movd   DWORD PTR [rsi+r8*1+0x1],xmm0
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj6_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a06c:	49 83 c0 06          	add    r8,0x6
+   3a070:	4c 39 c0             	cmp    rax,r8
+   3a073:	0f 85 d7 fe ff ff    	jne    39f50 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc60>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+   3a079:	66 0f 7e ed          	movd   ebp,xmm5
+   3a07d:	89 eb                	mov    ebx,ebp
+   3a07f:	c1 eb 08             	shr    ebx,0x8
+   3a082:	41 89 ea             	mov    r10d,ebp
+   3a085:	41 c1 ea 10          	shr    r10d,0x10
+   3a089:	41 89 e8             	mov    r8d,ebp
+   3a08c:	41 c1 e8 18          	shr    r8d,0x18
+   3a090:	44 89 44 24 08       	mov    DWORD PTR [rsp+0x8],r8d
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a095:	48 85 d2             	test   rdx,rdx
+   3a098:	0f 84 73 fe ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a09e:	44 0f b6 34 01       	movzx  r14d,BYTE PTR [rcx+rax*1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a0a3:	45 0f b6 c9          	movzx  r9d,r9b
+   3a0a7:	45 38 ce             	cmp    r14b,r9b
+   3a0aa:	45 89 cf             	mov    r15d,r9d
+   3a0ad:	45 0f 42 fe          	cmovb  r15d,r14d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a0b1:	45 0f b6 e7          	movzx  r12d,r15b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a0b5:	45 89 cd             	mov    r13d,r9d
+   3a0b8:	45 0f 47 ee          	cmova  r13d,r14d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a0bc:	45 0f b6 db          	movzx  r11d,r11b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a0c0:	47 8d 04 5b          	lea    r8d,[r11+r11*2]
+   3a0c4:	45 01 f1             	add    r9d,r14d
+   3a0c7:	45 29 c8             	sub    r8d,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a0ca:	45 0f b6 cd          	movzx  r9d,r13b
+   3a0ce:	66 45 39 c8          	cmp    r8w,r9w
+   3a0d2:	45 0f 4c fb          	cmovl  r15d,r11d
+   3a0d6:	66 45 39 e0          	cmp    r8w,r12w
+   3a0da:	45 0f 4e fd          	cmovle r15d,r13d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a0de:	44 00 3c 06          	add    BYTE PTR [rsi+rax*1],r15b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a0e2:	48 83 fa 01          	cmp    rdx,0x1
+   3a0e6:	0f 84 25 fe ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a0ec:	44 0f b6 44 01 01    	movzx  r8d,BYTE PTR [rcx+rax*1+0x1]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a0f2:	66 41 0f 7e c1       	movd   r9d,xmm0
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a0f7:	45 38 c8             	cmp    r8b,r9b
+   3a0fa:	45 89 cb             	mov    r11d,r9d
+   3a0fd:	45 0f 42 d8          	cmovb  r11d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a101:	45 0f b6 f3          	movzx  r14d,r11b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a105:	45 89 cf             	mov    r15d,r9d
+   3a108:	45 0f 47 f8          	cmova  r15d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a10c:	44 0f b6 e5          	movzx  r12d,bpl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a110:	43 8d 2c 64          	lea    ebp,[r12+r12*2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a114:	45 0f b6 e9          	movzx  r13d,r9b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a118:	45 01 c5             	add    r13d,r8d
+   3a11b:	44 29 ed             	sub    ebp,r13d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a11e:	45 0f b6 c7          	movzx  r8d,r15b
+   3a122:	66 44 39 c5          	cmp    bp,r8w
+   3a126:	45 0f 4c dc          	cmovl  r11d,r12d
+   3a12a:	66 44 39 f5          	cmp    bp,r14w
+   3a12e:	45 0f 4e df          	cmovle r11d,r15d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a132:	44 00 5c 06 01       	add    BYTE PTR [rsi+rax*1+0x1],r11b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a137:	48 83 fa 02          	cmp    rdx,0x2
+   3a13b:	0f 84 d0 fd ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a141:	44 0f b6 44 01 02    	movzx  r8d,BYTE PTR [rcx+rax*1+0x2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a147:	45 89 cb             	mov    r11d,r9d
+   3a14a:	41 c1 eb 08          	shr    r11d,0x8
+   3a14e:	44 89 dd             	mov    ebp,r11d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a151:	45 38 d8             	cmp    r8b,r11b
+   3a154:	45 89 de             	mov    r14d,r11d
+   3a157:	45 0f 42 f0          	cmovb  r14d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a15b:	45 0f b6 fe          	movzx  r15d,r14b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a15f:	45 0f 47 d8          	cmova  r11d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a163:	0f b6 db             	movzx  ebx,bl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a166:	44 8d 24 5b          	lea    r12d,[rbx+rbx*2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a16a:	40 0f b6 ed          	movzx  ebp,bpl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a16e:	44 01 c5             	add    ebp,r8d
+   3a171:	41 29 ec             	sub    r12d,ebp
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a174:	45 0f b6 c3          	movzx  r8d,r11b
+   3a178:	66 45 39 c4          	cmp    r12w,r8w
+   3a17c:	44 0f 4c f3          	cmovl  r14d,ebx
+   3a180:	66 45 39 fc          	cmp    r12w,r15w
+   3a184:	45 0f 4e f3          	cmovle r14d,r11d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a188:	44 00 74 06 02       	add    BYTE PTR [rsi+rax*1+0x2],r14b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a18d:	48 83 fa 03          	cmp    rdx,0x3
+   3a191:	0f 84 7a fd ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a197:	44 0f b6 44 01 03    	movzx  r8d,BYTE PTR [rcx+rax*1+0x3]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a19d:	45 89 cb             	mov    r11d,r9d
+   3a1a0:	41 c1 eb 10          	shr    r11d,0x10
+   3a1a4:	44 89 db             	mov    ebx,r11d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a1a7:	45 38 d8             	cmp    r8b,r11b
+   3a1aa:	44 89 dd             	mov    ebp,r11d
+   3a1ad:	41 0f 42 e8          	cmovb  ebp,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a1b1:	44 0f b6 f5          	movzx  r14d,bpl
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a1b5:	45 0f 47 d8          	cmova  r11d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a1b9:	45 0f b6 d2          	movzx  r10d,r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a1bd:	47 8d 3c 52          	lea    r15d,[r10+r10*2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a1c1:	0f b6 db             	movzx  ebx,bl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a1c4:	44 01 c3             	add    ebx,r8d
+   3a1c7:	41 29 df             	sub    r15d,ebx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a1ca:	45 0f b6 c3          	movzx  r8d,r11b
+   3a1ce:	66 45 39 c7          	cmp    r15w,r8w
+   3a1d2:	41 0f 4c ea          	cmovl  ebp,r10d
+   3a1d6:	66 45 39 f7          	cmp    r15w,r14w
+   3a1da:	41 0f 4e eb          	cmovle ebp,r11d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a1de:	40 00 6c 06 03       	add    BYTE PTR [rsi+rax*1+0x3],bpl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a1e3:	48 83 fa 04          	cmp    rdx,0x4
+   3a1e7:	0f 84 24 fd ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a1ed:	0f b6 4c 01 04       	movzx  ecx,BYTE PTR [rcx+rax*1+0x4]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a1f2:	41 c1 e9 18          	shr    r9d,0x18
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a1f6:	44 38 c9             	cmp    cl,r9b
+   3a1f9:	44 89 ca             	mov    edx,r9d
+   3a1fc:	0f 42 d1             	cmovb  edx,ecx
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a1ff:	45 89 c8             	mov    r8d,r9d
+   3a202:	44 0f 47 c1          	cmova  r8d,ecx
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a206:	41 89 d2             	mov    r10d,edx
+   3a209:	44 0f b6 5c 24 08    	movzx  r11d,BYTE PTR [rsp+0x8]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a20f:	43 8d 1c 5b          	lea    ebx,[r11+r11*2]
+   3a213:	41 01 c9             	add    r9d,ecx
+   3a216:	44 29 cb             	sub    ebx,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a219:	66 44 39 c3          	cmp    bx,r8w
+   3a21d:	41 0f 4c d3          	cmovl  edx,r11d
+   3a221:	66 44 39 d3          	cmp    bx,r10w
+   3a225:	41 0f 4e d0          	cmovle edx,r8d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a229:	00 54 06 04          	add    BYTE PTR [rsi+rax*1+0x4],dl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a22d:	e9 df fc ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a232:	66 0f ef c9          	pxor   xmm1,xmm1
+   3a236:	45 31 c0             	xor    r8d,r8d
+   3a239:	66 0f 6f 15 2f bc fc 	movdqa xmm2,XMMWORD PTR [rip+0xfffffffffffcbc2f]        # 5e70 <__abi_tag+0x5b74>
+   3a240:	ff 
+   3a241:	45 31 d2             	xor    r10d,r10d
+   3a244:	45 31 c9             	xor    r9d,r9d
+   3a247:	66 0f ef e4          	pxor   xmm4,xmm4
+   3a24b:	66 0f ef c0          	pxor   xmm0,xmm0
+   3a24f:	90                   	nop
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a250:	66 0f 6f ec          	movdqa xmm5,xmm4
+   3a254:	66 0f 60 e9          	punpcklbw xmm5,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a258:	66 0f d5 ea          	pmullw xmm5,xmm2
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a25c:	66 0f 6f f0          	movdqa xmm6,xmm0
+   3a260:	66 0f 60 f1          	punpcklbw xmm6,xmm1
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   3a264:	46 0f b7 1c 01       	movzx  r11d,WORD PTR [rcx+r8*1]
+   3a269:	66 41 0f 6e db       	movd   xmm3,r11d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a26e:	66 0f 6f fb          	movdqa xmm7,xmm3
+   3a272:	66 0f da f8          	pminub xmm7,xmm0
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a276:	66 0f de c3          	pmaxub xmm0,xmm3
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a27a:	66 44 0f 6f c3       	movdqa xmm8,xmm3
+   3a27f:	66 44 0f 60 c1       	punpcklbw xmm8,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a284:	66 44 0f fd c6       	paddw  xmm8,xmm6
+   3a289:	66 41 0f f9 e8       	psubw  xmm5,xmm8
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a28e:	66 0f 6f f0          	movdqa xmm6,xmm0
+   3a292:	66 0f 60 f1          	punpcklbw xmm6,xmm1
+   3a296:	66 0f 65 f5          	pcmpgtw xmm6,xmm5
+   3a29a:	66 0f 63 f6          	packsswb xmm6,xmm6
+   3a29e:	66 0f db e6          	pand   xmm4,xmm6
+   3a2a2:	66 0f df f7          	pandn  xmm6,xmm7
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a2a6:	66 0f 60 f9          	punpcklbw xmm7,xmm1
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a2aa:	66 0f 65 ef          	pcmpgtw xmm5,xmm7
+   3a2ae:	66 0f 63 ed          	packsswb xmm5,xmm5
+   3a2b2:	66 0f eb f4          	por    xmm6,xmm4
+   3a2b6:	66 0f db f5          	pand   xmm6,xmm5
+   3a2ba:	66 0f df e8          	pandn  xmm5,xmm0
+   3a2be:	66 0f eb ee          	por    xmm5,xmm6
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a2c2:	46 0f b7 1c 06       	movzx  r11d,WORD PTR [rsi+r8*1]
+   3a2c7:	66 41 0f 6e c3       	movd   xmm0,r11d
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a2cc:	66 0f fc c5          	paddb  xmm0,xmm5
+   3a2d0:	66 0f 7f 44 24 60    	movdqa XMMWORD PTR [rsp+0x60],xmm0
+   3a2d6:	44 0f b7 5c 24 60    	movzx  r11d,WORD PTR [rsp+0x60]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a2dc:	66 46 89 1c 06       	mov    WORD PTR [rsi+r8*1],r11w
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a2e1:	45 0f b6 da          	movzx  r11d,r10b
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:76
+   3a2e5:	46 0f b6 54 01 02    	movzx  r10d,BYTE PTR [rcx+r8*1+0x2]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a2eb:	41 0f b6 d9          	movzx  ebx,r9b
+   3a2ef:	41 38 da             	cmp    r10b,bl
+   3a2f2:	41 89 d9             	mov    r9d,ebx
+   3a2f5:	45 0f 42 ca          	cmovb  r9d,r10d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a2f9:	41 0f b6 e9          	movzx  ebp,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a2fd:	41 89 de             	mov    r14d,ebx
+   3a300:	45 0f 47 f2          	cmova  r14d,r10d
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a304:	47 8d 3c 5b          	lea    r15d,[r11+r11*2]
+   3a308:	44 01 d3             	add    ebx,r10d
+   3a30b:	41 29 df             	sub    r15d,ebx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a30e:	41 0f b6 de          	movzx  ebx,r14b
+   3a312:	66 41 39 df          	cmp    r15w,bx
+   3a316:	45 0f 4c cb          	cmovl  r9d,r11d
+   3a31a:	66 41 39 ef          	cmp    r15w,bp
+   3a31e:	45 0f 4e ce          	cmovle r9d,r14d
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a322:	46 02 4c 06 02       	add    r9b,BYTE PTR [rsi+r8*1+0x2]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a327:	46 88 4c 06 02       	mov    BYTE PTR [rsi+r8*1+0x2],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj3_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a32c:	49 83 c0 03          	add    r8,0x3
+   3a330:	66 0f 6f e3          	movdqa xmm4,xmm3
+   3a334:	4c 39 c0             	cmp    rax,r8
+   3a337:	0f 85 13 ff ff ff    	jne    3a250 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xf60>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+   3a33d:	46 0f b6 54 01 fd    	movzx  r10d,BYTE PTR [rcx+r8*1-0x3]
+   3a343:	46 0f b6 4c 01 fe    	movzx  r9d,BYTE PTR [rcx+r8*1-0x2]
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a349:	48 85 d2             	test   rdx,rdx
+   3a34c:	0f 84 bf fb ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a352:	44 0f b6 1c 01       	movzx  r11d,BYTE PTR [rcx+rax*1]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a357:	66 41 0f 7e c0       	movd   r8d,xmm0
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a35c:	45 38 c3             	cmp    r11b,r8b
+   3a35f:	44 89 c3             	mov    ebx,r8d
+   3a362:	41 0f 42 db          	cmovb  ebx,r11d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a366:	0f b6 eb             	movzx  ebp,bl
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a369:	45 89 c6             	mov    r14d,r8d
+   3a36c:	45 0f 47 f3          	cmova  r14d,r11d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a370:	45 0f b6 d2          	movzx  r10d,r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a374:	47 8d 3c 52          	lea    r15d,[r10+r10*2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a378:	45 0f b6 e0          	movzx  r12d,r8b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a37c:	45 01 dc             	add    r12d,r11d
+   3a37f:	45 29 e7             	sub    r15d,r12d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a382:	45 0f b6 de          	movzx  r11d,r14b
+   3a386:	66 45 39 df          	cmp    r15w,r11w
+   3a38a:	41 0f 4c da          	cmovl  ebx,r10d
+   3a38e:	66 41 39 ef          	cmp    r15w,bp
+   3a392:	41 0f 4e de          	cmovle ebx,r14d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a396:	00 1c 06             	add    BYTE PTR [rsi+rax*1],bl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a399:	48 83 fa 01          	cmp    rdx,0x1
+   3a39d:	0f 84 6e fb ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a3a3:	0f b6 4c 01 01       	movzx  ecx,BYTE PTR [rcx+rax*1+0x1]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a3a8:	41 c1 e8 08          	shr    r8d,0x8
+   3a3ac:	44 89 c2             	mov    edx,r8d
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a3af:	44 38 c1             	cmp    cl,r8b
+   3a3b2:	45 89 c2             	mov    r10d,r8d
+   3a3b5:	44 0f 42 d1          	cmovb  r10d,ecx
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a3b9:	45 0f b6 da          	movzx  r11d,r10b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a3bd:	44 0f 47 c1          	cmova  r8d,ecx
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a3c1:	45 0f b6 c9          	movzx  r9d,r9b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a3c5:	43 8d 1c 49          	lea    ebx,[r9+r9*2]
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a3c9:	0f b6 d2             	movzx  edx,dl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a3cc:	01 ca                	add    edx,ecx
+   3a3ce:	29 d3                	sub    ebx,edx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a3d0:	41 0f b6 c8          	movzx  ecx,r8b
+   3a3d4:	66 39 cb             	cmp    bx,cx
+   3a3d7:	45 0f 4c d1          	cmovl  r10d,r9d
+   3a3db:	66 44 39 db          	cmp    bx,r11w
+   3a3df:	45 0f 4e d0          	cmovle r10d,r8d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a3e3:	44 00 54 06 01       	add    BYTE PTR [rsi+rax*1+0x1],r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a3e8:	e9 24 fb ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a3ed:	45 31 c0             	xor    r8d,r8d
+   3a3f0:	66 0f 6f 0d 38 b7 fc 	movdqa xmm1,XMMWORD PTR [rip+0xfffffffffffcb738]        # 5b30 <__abi_tag+0x5834>
+   3a3f7:	ff 
+   3a3f8:	45 31 c9             	xor    r9d,r9d
+   3a3fb:	45 31 d2             	xor    r10d,r10d
+   3a3fe:	66 90                	xchg   ax,ax
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a400:	46 0f b6 1c 01       	movzx  r11d,BYTE PTR [rcx+r8*1]
+   3a405:	45 0f b6 c9          	movzx  r9d,r9b
+   3a409:	45 01 d9             	add    r9d,r11d
+   3a40c:	41 d1 e9             	shr    r9d,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a40f:	46 02 0c 06          	add    r9b,BYTE PTR [rsi+r8*1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a413:	46 88 0c 06          	mov    BYTE PTR [rsi+r8*1],r9b
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a417:	66 42 0f 6e 54 01 01 	movd   xmm2,DWORD PTR [rcx+r8*1+0x1]
+   3a41e:	66 0f 6f da          	movdqa xmm3,xmm2
+   3a422:	66 0f db d8          	pand   xmm3,xmm0
+   3a426:	66 0f ef d0          	pxor   xmm2,xmm0
+   3a42a:	66 0f 71 d2 01       	psrlw  xmm2,0x1
+   3a42f:	66 0f db d1          	pand   xmm2,xmm1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a433:	66 42 0f 6e 44 06 01 	movd   xmm0,DWORD PTR [rsi+r8*1+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a43a:	66 0f fc c3          	paddb  xmm0,xmm3
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a43e:	66 0f fc c2          	paddb  xmm0,xmm2
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a442:	66 42 0f 7e 44 06 01 	movd   DWORD PTR [rsi+r8*1+0x1],xmm0
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a449:	46 0f b6 5c 01 05    	movzx  r11d,BYTE PTR [rcx+r8*1+0x5]
+   3a44f:	45 0f b6 d2          	movzx  r10d,r10b
+   3a453:	45 01 da             	add    r10d,r11d
+   3a456:	41 d1 ea             	shr    r10d,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a459:	46 02 54 06 05       	add    r10b,BYTE PTR [rsi+r8*1+0x5]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a45e:	46 88 54 06 05       	mov    BYTE PTR [rsi+r8*1+0x5],r10b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj6_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a463:	49 83 c0 06          	add    r8,0x6
+   3a467:	4c 39 c0             	cmp    rax,r8
+   3a46a:	75 94                	jne    3a400 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1110>
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a46c:	45 0f b6 c1          	movzx  r8d,r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a470:	48 85 d2             	test   rdx,rdx
+   3a473:	0f 84 98 fa ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a479:	44 0f b6 0c 01       	movzx  r9d,BYTE PTR [rcx+rax*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a47e:	45 0f b7 c0          	movzx  r8d,r8w
+   3a482:	45 01 c8             	add    r8d,r9d
+   3a485:	41 d1 e8             	shr    r8d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a488:	44 00 04 06          	add    BYTE PTR [rsi+rax*1],r8b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a48c:	48 83 fa 01          	cmp    rdx,0x1
+   3a490:	0f 84 7b fa ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a496:	44 0f b6 44 01 01    	movzx  r8d,BYTE PTR [rcx+rax*1+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a49c:	66 0f 7e c3          	movd   ebx,xmm0
+   3a4a0:	44 0f b6 cb          	movzx  r9d,bl
+   3a4a4:	45 01 c1             	add    r9d,r8d
+   3a4a7:	41 d1 e9             	shr    r9d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a4aa:	44 00 4c 06 01       	add    BYTE PTR [rsi+rax*1+0x1],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a4af:	48 83 fa 02          	cmp    rdx,0x2
+   3a4b3:	0f 84 58 fa ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a4b9:	44 0f b6 44 01 02    	movzx  r8d,BYTE PTR [rcx+rax*1+0x2]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a4bf:	0f b6 ef             	movzx  ebp,bh
+   3a4c2:	44 01 c5             	add    ebp,r8d
+   3a4c5:	d1 ed                	shr    ebp,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a4c7:	40 00 6c 06 02       	add    BYTE PTR [rsi+rax*1+0x2],bpl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a4cc:	48 83 fa 03          	cmp    rdx,0x3
+   3a4d0:	0f 84 3b fa ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a4d6:	44 0f b6 44 01 03    	movzx  r8d,BYTE PTR [rcx+rax*1+0x3]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a4dc:	41 89 d9             	mov    r9d,ebx
+   3a4df:	41 c1 e9 10          	shr    r9d,0x10
+   3a4e3:	45 0f b6 c9          	movzx  r9d,r9b
+   3a4e7:	45 01 c1             	add    r9d,r8d
+   3a4ea:	41 d1 e9             	shr    r9d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a4ed:	44 00 4c 06 03       	add    BYTE PTR [rsi+rax*1+0x3],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a4f2:	48 83 fa 04          	cmp    rdx,0x4
+   3a4f6:	0f 84 15 fa ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj6_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a4fc:	0f b6 4c 01 04       	movzx  ecx,BYTE PTR [rcx+rax*1+0x4]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a501:	c1 eb 18             	shr    ebx,0x18
+   3a504:	01 cb                	add    ebx,ecx
+   3a506:	d1 eb                	shr    ebx,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a508:	00 5c 06 04          	add    BYTE PTR [rsi+rax*1+0x4],bl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a50c:	e9 00 fa ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a511:	45 31 c0             	xor    r8d,r8d
+   3a514:	45 31 d2             	xor    r10d,r10d
+   3a517:	45 31 c9             	xor    r9d,r9d
+   3a51a:	45 31 db             	xor    r11d,r11d
+   3a51d:	0f 1f 00             	nop    DWORD PTR [rax]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a520:	42 0f b6 1c 01       	movzx  ebx,BYTE PTR [rcx+r8*1]
+   3a525:	45 0f b6 d2          	movzx  r10d,r10b
+   3a529:	41 01 da             	add    r10d,ebx
+   3a52c:	41 d1 ea             	shr    r10d,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a52f:	46 02 14 06          	add    r10b,BYTE PTR [rsi+r8*1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a533:	46 88 14 06          	mov    BYTE PTR [rsi+r8*1],r10b
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a537:	42 0f b6 5c 01 01    	movzx  ebx,BYTE PTR [rcx+r8*1+0x1]
+   3a53d:	45 0f b6 c9          	movzx  r9d,r9b
+   3a541:	41 01 d9             	add    r9d,ebx
+   3a544:	41 d1 e9             	shr    r9d,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a547:	46 02 4c 06 01       	add    r9b,BYTE PTR [rsi+r8*1+0x1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a54c:	46 88 4c 06 01       	mov    BYTE PTR [rsi+r8*1+0x1],r9b
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3a551:	42 0f b6 5c 01 02    	movzx  ebx,BYTE PTR [rcx+r8*1+0x2]
+   3a557:	45 0f b6 db          	movzx  r11d,r11b
+   3a55b:	41 01 db             	add    r11d,ebx
+   3a55e:	41 d1 eb             	shr    r11d,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3a561:	46 02 5c 06 02       	add    r11b,BYTE PTR [rsi+r8*1+0x2]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3a566:	46 88 5c 06 02       	mov    BYTE PTR [rsi+r8*1+0x2],r11b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj3_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a56b:	49 83 c0 03          	add    r8,0x3
+   3a56f:	4c 39 c0             	cmp    rax,r8
+   3a572:	75 ac                	jne    3a520 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x1230>
+_RNvXsW_NtNtCskADBYZwJmSU_4core7convert3numtINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a574:	45 0f b6 d2          	movzx  r10d,r10b
+   3a578:	45 0f b6 c1          	movzx  r8d,r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a57c:	48 85 d2             	test   rdx,rdx
+   3a57f:	0f 84 8c f9 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a585:	44 0f b6 0c 01       	movzx  r9d,BYTE PTR [rcx+rax*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a58a:	45 0f b7 d2          	movzx  r10d,r10w
+   3a58e:	45 01 ca             	add    r10d,r9d
+   3a591:	41 d1 ea             	shr    r10d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a594:	44 00 14 06          	add    BYTE PTR [rsi+rax*1],r10b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a598:	48 83 fa 01          	cmp    rdx,0x1
+   3a59c:	0f 84 6f f9 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj3_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a5a2:	0f b6 4c 01 01       	movzx  ecx,BYTE PTR [rcx+rax*1+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a5a7:	41 0f b7 d0          	movzx  edx,r8w
+   3a5ab:	01 ca                	add    edx,ecx
+   3a5ad:	d1 ea                	shr    edx,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a5af:	00 54 06 01          	add    BYTE PTR [rsi+rax*1+0x1],dl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a5b3:	e9 59 f9 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a5b8:	c7 44 24 08 00 00 00 	mov    DWORD PTR [rsp+0x8],0x0
+   3a5bf:	00 
+   3a5c0:	45 31 d2             	xor    r10d,r10d
+   3a5c3:	31 db                	xor    ebx,ebx
+   3a5c5:	45 31 c9             	xor    r9d,r9d
+   3a5c8:	45 31 db             	xor    r11d,r11d
+   3a5cb:	31 ed                	xor    ebp,ebp
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a5cd:	48 85 c0             	test   rax,rax
+   3a5d0:	0f 84 3b f9 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+   3a5d6:	49 be fc ff ff ff ff 	movabs r14,0x7ffffffffffffffc
+   3a5dd:	ff ff 7f 
+   3a5e0:	4c 21 f2             	and    rdx,r14
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a5e3:	44 0f b6 34 11       	movzx  r14d,BYTE PTR [rcx+rdx*1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a5e8:	40 0f b6 ed          	movzx  ebp,bpl
+   3a5ec:	41 38 ee             	cmp    r14b,bpl
+   3a5ef:	41 89 ef             	mov    r15d,ebp
+   3a5f2:	45 0f 42 fe          	cmovb  r15d,r14d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a5f6:	45 0f b6 e7          	movzx  r12d,r15b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a5fa:	41 89 ed             	mov    r13d,ebp
+   3a5fd:	45 0f 47 ee          	cmova  r13d,r14d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a601:	0f b6 db             	movzx  ebx,bl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a604:	44 8d 04 5b          	lea    r8d,[rbx+rbx*2]
+   3a608:	44 01 f5             	add    ebp,r14d
+   3a60b:	41 29 e8             	sub    r8d,ebp
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a60e:	41 0f b6 ed          	movzx  ebp,r13b
+   3a612:	66 41 39 e8          	cmp    r8w,bp
+   3a616:	44 0f 4c fb          	cmovl  r15d,ebx
+   3a61a:	66 45 39 e0          	cmp    r8w,r12w
+   3a61e:	45 0f 4e fd          	cmovle r15d,r13d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a622:	44 00 3c 16          	add    BYTE PTR [rsi+rdx*1],r15b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a626:	83 f8 01             	cmp    eax,0x1
+   3a629:	0f 84 e2 f8 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a62f:	44 0f b6 44 11 01    	movzx  r8d,BYTE PTR [rcx+rdx*1+0x1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a635:	45 0f b6 db          	movzx  r11d,r11b
+   3a639:	45 38 d8             	cmp    r8b,r11b
+   3a63c:	44 89 db             	mov    ebx,r11d
+   3a63f:	41 0f 42 d8          	cmovb  ebx,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a643:	0f b6 eb             	movzx  ebp,bl
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a646:	45 89 de             	mov    r14d,r11d
+   3a649:	45 0f 47 f0          	cmova  r14d,r8d
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a64d:	45 0f b6 d2          	movzx  r10d,r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a651:	47 8d 3c 52          	lea    r15d,[r10+r10*2]
+   3a655:	45 01 c3             	add    r11d,r8d
+   3a658:	45 29 df             	sub    r15d,r11d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a65b:	45 0f b6 c6          	movzx  r8d,r14b
+   3a65f:	66 45 39 c7          	cmp    r15w,r8w
+   3a663:	41 0f 4c da          	cmovl  ebx,r10d
+   3a667:	66 41 39 ef          	cmp    r15w,bp
+   3a66b:	41 0f 4e de          	cmovle ebx,r14d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a66f:	00 5c 16 01          	add    BYTE PTR [rsi+rdx*1+0x1],bl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a673:	83 f8 02             	cmp    eax,0x2
+   3a676:	0f 84 95 f8 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a67c:	0f b6 44 11 02       	movzx  eax,BYTE PTR [rcx+rdx*1+0x2]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a681:	41 0f b6 c9          	movzx  ecx,r9b
+   3a685:	38 c8                	cmp    al,cl
+   3a687:	41 89 c8             	mov    r8d,ecx
+   3a68a:	44 0f 42 c0          	cmovb  r8d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a68e:	45 0f b6 c8          	movzx  r9d,r8b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a692:	41 89 ca             	mov    r10d,ecx
+   3a695:	44 0f 47 d0          	cmova  r10d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a699:	44 0f b6 5c 24 08    	movzx  r11d,BYTE PTR [rsp+0x8]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a69f:	43 8d 1c 5b          	lea    ebx,[r11+r11*2]
+   3a6a3:	01 c1                	add    ecx,eax
+   3a6a5:	29 cb                	sub    ebx,ecx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a6a7:	41 0f b6 c2          	movzx  eax,r10b
+   3a6ab:	66 39 c3             	cmp    bx,ax
+   3a6ae:	45 0f 4c c3          	cmovl  r8d,r11d
+   3a6b2:	66 44 39 cb          	cmp    bx,r9w
+   3a6b6:	45 0f 4e c2          	cmovle r8d,r10d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a6ba:	44 00 44 16 02       	add    BYTE PTR [rsi+rdx*1+0x2],r8b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a6bf:	e9 4d f8 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a6c4:	c7 44 24 14 00 00 00 	mov    DWORD PTR [rsp+0x14],0x0
+   3a6cb:	00 
+   3a6cc:	c7 44 24 1c 00 00 00 	mov    DWORD PTR [rsp+0x1c],0x0
+   3a6d3:	00 
+   3a6d4:	c7 44 24 24 00 00 00 	mov    DWORD PTR [rsp+0x24],0x0
+   3a6db:	00 
+   3a6dc:	c7 44 24 2c 00 00 00 	mov    DWORD PTR [rsp+0x2c],0x0
+   3a6e3:	00 
+   3a6e4:	45 31 db             	xor    r11d,r11d
+   3a6e7:	45 31 f6             	xor    r14d,r14d
+   3a6ea:	45 31 d2             	xor    r10d,r10d
+   3a6ed:	c7 44 24 10 00 00 00 	mov    DWORD PTR [rsp+0x10],0x0
+   3a6f4:	00 
+   3a6f5:	c7 44 24 18 00 00 00 	mov    DWORD PTR [rsp+0x18],0x0
+   3a6fc:	00 
+   3a6fd:	c7 44 24 20 00 00 00 	mov    DWORD PTR [rsp+0x20],0x0
+   3a704:	00 
+   3a705:	c7 44 24 28 00 00 00 	mov    DWORD PTR [rsp+0x28],0x0
+   3a70c:	00 
+   3a70d:	31 ed                	xor    ebp,ebp
+   3a70f:	45 31 ff             	xor    r15d,r15d
+   3a712:	31 db                	xor    ebx,ebx
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a714:	48 85 c0             	test   rax,rax
+   3a717:	0f 84 f4 f7 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+   3a71d:	48 89 44 24 08       	mov    QWORD PTR [rsp+0x8],rax
+   3a722:	48 b8 fc ff ff ff ff 	movabs rax,0x7ffffffffffffffc
+   3a729:	ff ff 7f 
+   3a72c:	48 83 c0 fc          	add    rax,0xfffffffffffffffc
+   3a730:	48 21 c2             	and    rdx,rax
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a733:	0f b6 04 11          	movzx  eax,BYTE PTR [rcx+rdx*1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a737:	44 0f b6 c3          	movzx  r8d,bl
+   3a73b:	44 38 c0             	cmp    al,r8b
+   3a73e:	44 89 c3             	mov    ebx,r8d
+   3a741:	0f 42 d8             	cmovb  ebx,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a744:	44 0f b6 cb          	movzx  r9d,bl
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a748:	45 89 c4             	mov    r12d,r8d
+   3a74b:	44 0f 47 e0          	cmova  r12d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a74f:	45 0f b6 d2          	movzx  r10d,r10b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a753:	47 8d 2c 52          	lea    r13d,[r10+r10*2]
+   3a757:	41 01 c0             	add    r8d,eax
+   3a75a:	45 29 c5             	sub    r13d,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a75d:	41 0f b6 c4          	movzx  eax,r12b
+   3a761:	66 41 39 c5          	cmp    r13w,ax
+   3a765:	41 0f 4c da          	cmovl  ebx,r10d
+   3a769:	66 45 39 cd          	cmp    r13w,r9w
+   3a76d:	41 0f 4e dc          	cmovle ebx,r12d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a771:	00 1c 16             	add    BYTE PTR [rsi+rdx*1],bl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a774:	83 7c 24 08 01       	cmp    DWORD PTR [rsp+0x8],0x1
+   3a779:	0f 84 92 f7 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a77f:	0f b6 44 11 01       	movzx  eax,BYTE PTR [rcx+rdx*1+0x1]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a784:	45 0f b6 c7          	movzx  r8d,r15b
+   3a788:	44 38 c0             	cmp    al,r8b
+   3a78b:	45 89 c1             	mov    r9d,r8d
+   3a78e:	44 0f 42 c8          	cmovb  r9d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a792:	45 0f b6 d1          	movzx  r10d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a796:	44 89 c3             	mov    ebx,r8d
+   3a799:	0f 47 d8             	cmova  ebx,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a79c:	45 0f b6 f6          	movzx  r14d,r14b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a7a0:	47 8d 3c 76          	lea    r15d,[r14+r14*2]
+   3a7a4:	41 01 c0             	add    r8d,eax
+   3a7a7:	45 29 c7             	sub    r15d,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a7aa:	0f b6 c3             	movzx  eax,bl
+   3a7ad:	66 41 39 c7          	cmp    r15w,ax
+   3a7b1:	45 0f 4c ce          	cmovl  r9d,r14d
+   3a7b5:	66 45 39 d7          	cmp    r15w,r10w
+   3a7b9:	44 0f 4e cb          	cmovle r9d,ebx
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a7bd:	44 00 4c 16 01       	add    BYTE PTR [rsi+rdx*1+0x1],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a7c2:	83 7c 24 08 02       	cmp    DWORD PTR [rsp+0x8],0x2
+   3a7c7:	0f 84 44 f7 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a7cd:	0f b6 44 11 02       	movzx  eax,BYTE PTR [rcx+rdx*1+0x2]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a7d2:	44 0f b6 c5          	movzx  r8d,bpl
+   3a7d6:	44 38 c0             	cmp    al,r8b
+   3a7d9:	45 89 c1             	mov    r9d,r8d
+   3a7dc:	44 0f 42 c8          	cmovb  r9d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a7e0:	45 0f b6 d1          	movzx  r10d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a7e4:	44 89 c3             	mov    ebx,r8d
+   3a7e7:	0f 47 d8             	cmova  ebx,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a7ea:	45 0f b6 db          	movzx  r11d,r11b
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a7ee:	43 8d 2c 5b          	lea    ebp,[r11+r11*2]
+   3a7f2:	41 01 c0             	add    r8d,eax
+   3a7f5:	44 29 c5             	sub    ebp,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a7f8:	0f b6 c3             	movzx  eax,bl
+   3a7fb:	66 39 c5             	cmp    bp,ax
+   3a7fe:	45 0f 4c cb          	cmovl  r9d,r11d
+   3a802:	66 44 39 d5          	cmp    bp,r10w
+   3a806:	44 0f 4e cb          	cmovle r9d,ebx
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a80a:	44 00 4c 16 02       	add    BYTE PTR [rsi+rdx*1+0x2],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a80f:	83 7c 24 08 03       	cmp    DWORD PTR [rsp+0x8],0x3
+   3a814:	0f 84 f7 f6 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a81a:	0f b6 44 11 03       	movzx  eax,BYTE PTR [rcx+rdx*1+0x3]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a81f:	44 0f b6 44 24 28    	movzx  r8d,BYTE PTR [rsp+0x28]
+   3a825:	44 38 c0             	cmp    al,r8b
+   3a828:	45 89 c1             	mov    r9d,r8d
+   3a82b:	44 0f 42 c8          	cmovb  r9d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a82f:	45 0f b6 d1          	movzx  r10d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a833:	45 89 c3             	mov    r11d,r8d
+   3a836:	44 0f 47 d8          	cmova  r11d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a83a:	0f b6 5c 24 2c       	movzx  ebx,BYTE PTR [rsp+0x2c]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a83f:	8d 2c 5b             	lea    ebp,[rbx+rbx*2]
+   3a842:	41 01 c0             	add    r8d,eax
+   3a845:	44 29 c5             	sub    ebp,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a848:	41 0f b6 c3          	movzx  eax,r11b
+   3a84c:	66 39 c5             	cmp    bp,ax
+   3a84f:	44 0f 4c cb          	cmovl  r9d,ebx
+   3a853:	66 44 39 d5          	cmp    bp,r10w
+   3a857:	45 0f 4e cb          	cmovle r9d,r11d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a85b:	44 00 4c 16 03       	add    BYTE PTR [rsi+rdx*1+0x3],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a860:	83 7c 24 08 04       	cmp    DWORD PTR [rsp+0x8],0x4
+   3a865:	0f 84 a6 f6 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a86b:	0f b6 44 11 04       	movzx  eax,BYTE PTR [rcx+rdx*1+0x4]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a870:	44 0f b6 44 24 20    	movzx  r8d,BYTE PTR [rsp+0x20]
+   3a876:	44 38 c0             	cmp    al,r8b
+   3a879:	45 89 c1             	mov    r9d,r8d
+   3a87c:	44 0f 42 c8          	cmovb  r9d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a880:	45 0f b6 d1          	movzx  r10d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a884:	45 89 c3             	mov    r11d,r8d
+   3a887:	44 0f 47 d8          	cmova  r11d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a88b:	0f b6 5c 24 24       	movzx  ebx,BYTE PTR [rsp+0x24]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a890:	8d 2c 5b             	lea    ebp,[rbx+rbx*2]
+   3a893:	41 01 c0             	add    r8d,eax
+   3a896:	44 29 c5             	sub    ebp,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a899:	41 0f b6 c3          	movzx  eax,r11b
+   3a89d:	66 39 c5             	cmp    bp,ax
+   3a8a0:	4c 8b 74 24 08       	mov    r14,QWORD PTR [rsp+0x8]
+   3a8a5:	44 0f 4c cb          	cmovl  r9d,ebx
+   3a8a9:	66 44 39 d5          	cmp    bp,r10w
+   3a8ad:	45 0f 4e cb          	cmovle r9d,r11d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a8b1:	44 00 4c 16 04       	add    BYTE PTR [rsi+rdx*1+0x4],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a8b6:	41 83 fe 05          	cmp    r14d,0x5
+   3a8ba:	0f 84 51 f6 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a8c0:	0f b6 44 11 05       	movzx  eax,BYTE PTR [rcx+rdx*1+0x5]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a8c5:	44 0f b6 44 24 18    	movzx  r8d,BYTE PTR [rsp+0x18]
+   3a8cb:	44 38 c0             	cmp    al,r8b
+   3a8ce:	45 89 c1             	mov    r9d,r8d
+   3a8d1:	44 0f 42 c8          	cmovb  r9d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a8d5:	45 0f b6 d1          	movzx  r10d,r9b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a8d9:	45 89 c3             	mov    r11d,r8d
+   3a8dc:	44 0f 47 d8          	cmova  r11d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a8e0:	0f b6 5c 24 1c       	movzx  ebx,BYTE PTR [rsp+0x1c]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a8e5:	8d 2c 5b             	lea    ebp,[rbx+rbx*2]
+   3a8e8:	41 01 c0             	add    r8d,eax
+   3a8eb:	44 29 c5             	sub    ebp,r8d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a8ee:	41 0f b6 c3          	movzx  eax,r11b
+   3a8f2:	66 39 c5             	cmp    bp,ax
+   3a8f5:	44 0f 4c cb          	cmovl  r9d,ebx
+   3a8f9:	66 44 39 d5          	cmp    bp,r10w
+   3a8fd:	45 0f 4e cb          	cmovle r9d,r11d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a901:	44 00 4c 16 05       	add    BYTE PTR [rsi+rdx*1+0x5],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a906:	41 83 fe 06          	cmp    r14d,0x6
+   3a90a:	0f 84 01 f6 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a910:	0f b6 44 11 06       	movzx  eax,BYTE PTR [rcx+rdx*1+0x6]
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   3a915:	0f b6 4c 24 10       	movzx  ecx,BYTE PTR [rsp+0x10]
+   3a91a:	38 c8                	cmp    al,cl
+   3a91c:	41 89 c8             	mov    r8d,ecx
+   3a91f:	44 0f 42 c0          	cmovb  r8d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a923:	45 0f b6 c8          	movzx  r9d,r8b
+_RNvYhNtNtCskADBYZwJmSU_4core3cmp3Ord3maxCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1051
+   3a927:	41 89 ca             	mov    r10d,ecx
+   3a92a:	44 0f 47 d0          	cmova  r10d,eax
+_RNvXs1i_NtNtCskADBYZwJmSU_4core7convert3numsINtB8_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   3a92e:	44 0f b6 5c 24 14    	movzx  r11d,BYTE PTR [rsp+0x14]
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline5paeth():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:57
+   3a934:	43 8d 1c 5b          	lea    ebx,[r11+r11*2]
+   3a938:	01 c1                	add    ecx,eax
+   3a93a:	29 cb                	sub    ebx,ecx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:58
+   3a93c:	41 0f b6 c2          	movzx  eax,r10b
+   3a940:	66 39 c3             	cmp    bx,ax
+   3a943:	45 0f 4c c3          	cmovl  r8d,r11d
+   3a947:	66 44 39 cb          	cmp    bx,r9w
+   3a94b:	45 0f 4e c2          	cmovle r8d,r10d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a94f:	44 00 44 16 06       	add    BYTE PTR [rsi+rdx*1+0x6],r8b
+   3a954:	e9 b8 f5 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   3a959:	45 31 c0             	xor    r8d,r8d
+   3a95c:	45 31 c9             	xor    r9d,r9d
+   3a95f:	45 31 d2             	xor    r10d,r10d
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a962:	48 85 c0             	test   rax,rax
+   3a965:	0f 84 a6 f5 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+   3a96b:	49 bb fc ff ff ff ff 	movabs r11,0x7ffffffffffffffc
+   3a972:	ff ff 7f 
+   3a975:	4c 21 da             	and    rdx,r11
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a978:	44 0f b6 1c 11       	movzx  r11d,BYTE PTR [rcx+rdx*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a97d:	45 0f b7 d2          	movzx  r10d,r10w
+   3a981:	45 01 da             	add    r10d,r11d
+   3a984:	41 d1 ea             	shr    r10d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a987:	44 00 14 16          	add    BYTE PTR [rsi+rdx*1],r10b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a98b:	83 f8 01             	cmp    eax,0x1
+   3a98e:	0f 84 7d f5 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a994:	44 0f b6 54 11 01    	movzx  r10d,BYTE PTR [rcx+rdx*1+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a99a:	45 0f b7 c9          	movzx  r9d,r9w
+   3a99e:	45 01 d1             	add    r9d,r10d
+   3a9a1:	41 d1 e9             	shr    r9d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a9a4:	44 00 4c 16 01       	add    BYTE PTR [rsi+rdx*1+0x1],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a9a9:	83 f8 02             	cmp    eax,0x2
+   3a9ac:	0f 84 5f f5 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj4_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a9b2:	0f b6 44 11 02       	movzx  eax,BYTE PTR [rcx+rdx*1+0x2]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a9b7:	41 0f b7 c8          	movzx  ecx,r8w
+   3a9bb:	01 c1                	add    ecx,eax
+   3a9bd:	d1 e9                	shr    ecx,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3a9bf:	00 4c 16 02          	add    BYTE PTR [rsi+rdx*1+0x2],cl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3a9c3:	e9 49 f5 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3a9c8:	45 31 c0             	xor    r8d,r8d
+   3a9cb:	45 31 c9             	xor    r9d,r9d
+   3a9ce:	45 31 d2             	xor    r10d,r10d
+   3a9d1:	45 31 db             	xor    r11d,r11d
+   3a9d4:	31 db                	xor    ebx,ebx
+   3a9d6:	31 ed                	xor    ebp,ebp
+   3a9d8:	45 31 ff             	xor    r15d,r15d
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3a9db:	48 85 c0             	test   rax,rax
+   3a9de:	0f 84 2d f5 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+   3a9e4:	49 be fc ff ff ff ff 	movabs r14,0x7ffffffffffffffc
+   3a9eb:	ff ff 7f 
+   3a9ee:	49 83 c6 fc          	add    r14,0xfffffffffffffffc
+   3a9f2:	4c 21 f2             	and    rdx,r14
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3a9f5:	44 0f b6 34 11       	movzx  r14d,BYTE PTR [rcx+rdx*1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3a9fa:	45 0f b7 ff          	movzx  r15d,r15w
+   3a9fe:	45 01 f7             	add    r15d,r14d
+   3aa01:	41 d1 ef             	shr    r15d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa04:	44 00 3c 16          	add    BYTE PTR [rsi+rdx*1],r15b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa08:	83 f8 01             	cmp    eax,0x1
+   3aa0b:	0f 84 00 f5 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa11:	44 0f b6 74 11 01    	movzx  r14d,BYTE PTR [rcx+rdx*1+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aa17:	0f b7 ed             	movzx  ebp,bp
+   3aa1a:	44 01 f5             	add    ebp,r14d
+   3aa1d:	d1 ed                	shr    ebp,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa1f:	40 00 6c 16 01       	add    BYTE PTR [rsi+rdx*1+0x1],bpl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa24:	83 f8 02             	cmp    eax,0x2
+   3aa27:	0f 84 e4 f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa2d:	0f b6 6c 11 02       	movzx  ebp,BYTE PTR [rcx+rdx*1+0x2]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aa32:	0f b7 db             	movzx  ebx,bx
+   3aa35:	01 eb                	add    ebx,ebp
+   3aa37:	d1 eb                	shr    ebx,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa39:	00 5c 16 02          	add    BYTE PTR [rsi+rdx*1+0x2],bl
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa3d:	83 f8 03             	cmp    eax,0x3
+   3aa40:	0f 84 cb f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa46:	0f b6 5c 11 03       	movzx  ebx,BYTE PTR [rcx+rdx*1+0x3]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aa4b:	45 0f b7 db          	movzx  r11d,r11w
+   3aa4f:	41 01 db             	add    r11d,ebx
+   3aa52:	41 d1 eb             	shr    r11d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa55:	44 00 5c 16 03       	add    BYTE PTR [rsi+rdx*1+0x3],r11b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa5a:	83 f8 04             	cmp    eax,0x4
+   3aa5d:	0f 84 ae f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa63:	44 0f b6 5c 11 04    	movzx  r11d,BYTE PTR [rcx+rdx*1+0x4]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aa69:	45 0f b7 d2          	movzx  r10d,r10w
+   3aa6d:	45 01 da             	add    r10d,r11d
+   3aa70:	41 d1 ea             	shr    r10d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa73:	44 00 54 16 04       	add    BYTE PTR [rsi+rdx*1+0x4],r10b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa78:	83 f8 05             	cmp    eax,0x5
+   3aa7b:	0f 84 90 f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa81:	44 0f b6 54 11 05    	movzx  r10d,BYTE PTR [rcx+rdx*1+0x5]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aa87:	45 0f b7 c9          	movzx  r9d,r9w
+   3aa8b:	45 01 d1             	add    r9d,r10d
+   3aa8e:	41 d1 e9             	shr    r9d,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aa91:	44 00 4c 16 05       	add    BYTE PTR [rsi+rdx*1+0x5],r9b
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMuthEINtBZ_4IterhEEINtB5_7ZipImplBW_B1r_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aa96:	83 f8 06             	cmp    eax,0x6
+   3aa99:	0f 84 72 f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj8_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:85
+   3aa9f:	0f b6 44 11 06       	movzx  eax,BYTE PTR [rcx+rdx*1+0x6]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:89
+   3aaa4:	41 0f b7 c8          	movzx  ecx,r8w
+   3aaa8:	01 c1                	add    ecx,eax
+   3aaaa:	d1 e9                	shr    ecx,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:91
+   3aaac:	00 4c 16 06          	add    BYTE PTR [rsi+rdx*1+0x6],cl
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3aab0:	e9 5c f4 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj1_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3aab5:	49 b8 fc ff ff ff ff 	movabs r8,0x7ffffffffffffffc
+   3aabc:	ff ff 7f 
+   3aabf:	49 83 c8 02          	or     r8,0x2
+   3aac3:	49 21 d0             	and    r8,rdx
+   3aac6:	31 c0                	xor    eax,eax
+   3aac8:	45 31 c9             	xor    r9d,r9d
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb0_EB4_():
+   3aacb:	0f 1f 44 00 00       	nop    DWORD PTR [rax+rax*1+0x0]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3aad0:	46 0f b6 14 09       	movzx  r10d,BYTE PTR [rcx+r9*1]
+   3aad5:	0f b6 c0             	movzx  eax,al
+   3aad8:	44 01 d0             	add    eax,r10d
+   3aadb:	d1 e8                	shr    eax,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3aadd:	42 02 04 0e          	add    al,BYTE PTR [rsi+r9*1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3aae1:	42 88 04 0e          	mov    BYTE PTR [rsi+r9*1],al
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3aae5:	46 0f b6 54 09 01    	movzx  r10d,BYTE PTR [rcx+r9*1+0x1]
+   3aaeb:	0f b6 c0             	movzx  eax,al
+   3aaee:	44 01 d0             	add    eax,r10d
+   3aaf1:	d1 e8                	shr    eax,1
+_RNvMs4_NtCskADBYZwJmSU_4core3numh12wrapping_add():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/num/uint_macros.rs:2652
+   3aaf3:	42 02 44 0e 01       	add    al,BYTE PTR [rsi+r9*1+0x1]
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3aaf8:	42 88 44 0e 01       	mov    BYTE PTR [rsi+r9*1+0x1],al
+_RNvXs3_NtNtNtCskADBYZwJmSU_4core4iter8adapters3zipINtB5_3ZipINtNtNtBb_5slice4iter7IterMutAhj1_EINtBZ_4IterB1p_EEINtB5_7ZipImplBW_B1v_E4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:304
+   3aafd:	49 83 c1 02          	add    r9,0x2
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/adapters/zip.rs:300
+   3ab01:	4d 39 c8             	cmp    r8,r9
+   3ab04:	75 ca                	jne    3aad0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0x17e0>
+   3ab06:	f6 c2 01             	test   dl,0x1
+   3ab09:	0f 84 02 f4 ff ff    	je     39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline15unfilter_pixelsKj1_Kb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:78
+   3ab0f:	42 0f b6 0c 09       	movzx  ecx,BYTE PTR [rcx+r9*1]
+   3ab14:	0f b6 c0             	movzx  eax,al
+   3ab17:	01 c8                	add    eax,ecx
+   3ab19:	d1 e8                	shr    eax,1
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:80
+   3ab1b:	42 00 04 0e          	add    BYTE PTR [rsi+r9*1],al
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:139
+   3ab1f:	e9 ed f3 ff ff       	jmp    39f11 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter+0xc21>
+   3ab24:	48 8d 0d ad fd 04 00 	lea    rcx,[rip+0x4fdad]        # 8a8d8 <__frame_dummy_init_array_entry+0x428>
+   3ab2b:	31 ff                	xor    edi,edi
+   3ab2d:	48 89 d6             	mov    rsi,rdx
+   3ab30:	4c 89 c2             	mov    rdx,r8
+   3ab33:	e8 78 74 ff ff       	call   31fb0 <_RNvNtNtCskADBYZwJmSU_4core5slice5index16slice_index_fail>
+   3ab38:	48 8d 3d c5 08 fd ff 	lea    rdi,[rip+0xfffffffffffd08c5]        # b404 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x46c>
+   3ab3f:	48 8d 15 c2 fd 04 00 	lea    rdx,[rip+0x4fdc2]        # 8a908 <__frame_dummy_init_array_entry+0x458>
+   3ab46:	be 87 00 00 00       	mov    esi,0x87
+   3ab4b:	e8 b0 58 ff ff       	call   30400 <_RNvNtCskADBYZwJmSU_4core9panicking9panic_fmt>
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:127
+   3ab50:	48 8d 0d e9 fe 04 00 	lea    rcx,[rip+0x4fee9]        # 8aa40 <__frame_dummy_init_array_entry+0x590>
+   3ab57:	48 89 c7             	mov    rdi,rax
+   3ab5a:	48 89 d6             	mov    rsi,rdx
+   3ab5d:	48 89 ca             	mov    rdx,rcx
+   3ab60:	e8 2c 75 ff ff       	call   32091 <_RNvNtCskADBYZwJmSU_4core9panicking18panic_bounds_check>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb1_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:107
+   3ab65:	48 8d 15 b4 fd 04 00 	lea    rdx,[rip+0x4fdb4]        # 8a920 <__frame_dummy_init_array_entry+0x470>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   3ab6c:	48 89 c7             	mov    rdi,rax
+   3ab6f:	4c 89 c6             	mov    rsi,r8
+   3ab72:	e8 1a 75 ff ff       	call   32091 <_RNvNtCskADBYZwJmSU_4core9panicking18panic_bounds_check>
+_RINvNtCsbAPiY69f4r2_17deadlib_image_png8scanline18unfilter_neighborsKb0_EB4_():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs:109
+   3ab77:	48 8d 15 72 fd 04 00 	lea    rdx,[rip+0x4fd72]        # 8a8f0 <__frame_dummy_init_array_entry+0x440>
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8scanline8unfilter():
+   3ab7e:	48 89 c7             	mov    rdi,rax
+   3ab81:	4c 89 c6             	mov    rsi,r8
+   3ab84:	e8 08 75 ff ff       	call   32091 <_RNvNtCskADBYZwJmSU_4core9panicking18panic_bounds_check>
+
+Disassembly of section .init:
+
+Disassembly of section .fini:
+
+Disassembly of section .plt:

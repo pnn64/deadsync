@@ -1,0 +1,25 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 22.66s
+     Running tests\compositing.rs (target\png-pixels-20261028\build\release\deps\compositing-0f1dae3a20ee358a.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test separate_default_and_first_previous ... ok
+test source_over_and_disposal_known_answers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compositor_precision.rs (target\png-pixels-20261028\build\release\deps\compositor_precision-eae43670fcd8c69d.exe)
+
+running 6 tests
+test every_palette_size_transparency_length_and_expansion_boundary_matches_model ... ok
+test exact_canvas_and_previous_snapshot_limits_fail_before_advancing_and_reset_cleanly ... ok
+High-precision APNG: 240 independent wire files, 1920 displayed canvases, all six disposal/blend states and nine disposal transitions
+test all_native_formats_disposal_geometry_default_roles_and_adam7_match_rational_model ... ok
+test independent_libpng_and_python_fraction_canvases_retain_all_sixteen_bits ... ok
+test every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions ... ok
+Regenerated 240 independent libpng/Fraction precision animations at C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-compositor-goldens-17060-1793185765401946600
+test regenerate_precision_goldens_from_independent_c_frames_and_python_fractions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 43.09s
+

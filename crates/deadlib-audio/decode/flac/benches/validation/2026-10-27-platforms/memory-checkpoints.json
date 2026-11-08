@@ -1,0 +1,628 @@
+{
+  "records": [
+    {
+      "case": "01 - blocksize 4096.flac",
+      "mode": "frames",
+      "dense": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          586693
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          587013
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          587013
+        ]
+      ],
+      "current": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          586693
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          587013
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          587013
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "frames",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "stdout": "frames\t2\t12137670\t1234800\t833224094312\t549954\t76\t16\t2\n"
+    },
+    {
+      "case": "01 - blocksize 4096.flac",
+      "mode": "stream",
+      "dense": [
+        [
+          0,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          586693
+        ],
+        [
+          1,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587013
+        ],
+        [
+          2,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587013
+        ]
+      ],
+      "current": [
+        [
+          0,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          586693
+        ],
+        [
+          1,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587013
+        ],
+        [
+          2,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587013
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "stdout": "stream\t2\t12994931\t1234800\t833224094312\t549954\t76\t16\t2\n"
+    },
+    {
+      "case": "01 - blocksize 4096.flac",
+      "mode": "stream-md5",
+      "dense": [
+        [
+          0,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          586697
+        ],
+        [
+          1,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587017
+        ],
+        [
+          2,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587017
+        ]
+      ],
+      "current": [
+        [
+          0,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          586697
+        ],
+        [
+          1,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587017
+        ],
+        [
+          2,
+          9,
+          5,
+          4,
+          66042,
+          57456,
+          0,
+          587017
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "stdout": "stream-md5\t2\t19410854\t1234800\t833224094312\t549954\t76\t16\t2\n"
+    },
+    {
+      "case": "01 - blocksize 4096.flac",
+      "mode": "ogg-stream",
+      "dense": [
+        [
+          0,
+          18,
+          9,
+          9,
+          91197,
+          73162,
+          0,
+          1140009
+        ],
+        [
+          1,
+          18,
+          9,
+          9,
+          91197,
+          73162,
+          0,
+          1140329
+        ],
+        [
+          2,
+          18,
+          9,
+          9,
+          91197,
+          73162,
+          0,
+          1140329
+        ]
+      ],
+      "current": [
+        [
+          0,
+          18,
+          9,
+          9,
+          92573,
+          74538,
+          0,
+          1140009
+        ],
+        [
+          1,
+          18,
+          9,
+          9,
+          92573,
+          74538,
+          0,
+          1140329
+        ],
+        [
+          2,
+          18,
+          9,
+          9,
+          92573,
+          74538,
+          0,
+          1140329
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "ogg-stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "stdout": "ogg-stream\t2\t13113439\t1234800\t833224094312\t553296\t76\t16\t2\n"
+    },
+    {
+      "case": "43 - 8 channels (7.1).flac",
+      "mode": "frames",
+      "dense": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368599
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368919
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368919
+        ]
+      ],
+      "current": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368599
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368919
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          368919
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "frames",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+        "2"
+      ],
+      "stdout": "frames\t2\t7726254\t7016480\t936302901162\t233560\t108\t16\t8\n"
+    },
+    {
+      "case": "43 - 8 channels (7.1).flac",
+      "mode": "stream",
+      "dense": [
+        [
+          0,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368599
+        ],
+        [
+          1,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368919
+        ],
+        [
+          2,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368919
+        ]
+      ],
+      "current": [
+        [
+          0,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368599
+        ],
+        [
+          1,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368919
+        ],
+        [
+          2,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368919
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+        "2"
+      ],
+      "stdout": "stream\t2\t8111860\t7016480\t936302901162\t233560\t108\t16\t8\n"
+    },
+    {
+      "case": "43 - 8 channels (7.1).flac",
+      "mode": "stream-md5",
+      "dense": [
+        [
+          0,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368603
+        ],
+        [
+          1,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368923
+        ],
+        [
+          2,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368923
+        ]
+      ],
+      "current": [
+        [
+          0,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368603
+        ],
+        [
+          1,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368923
+        ],
+        [
+          2,
+          6,
+          2,
+          4,
+          139492,
+          139350,
+          0,
+          368923
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+        "2"
+      ],
+      "stdout": "stream-md5\t2\t45695890\t7016480\t936302901162\t233560\t108\t16\t8\n"
+    },
+    {
+      "case": "43 - 8 channels (7.1).flac",
+      "mode": "ogg-stream",
+      "dense": [
+        [
+          0,
+          17,
+          8,
+          9,
+          191592,
+          158168,
+          0,
+          603875
+        ],
+        [
+          1,
+          17,
+          8,
+          9,
+          191592,
+          158168,
+          0,
+          604195
+        ],
+        [
+          2,
+          17,
+          8,
+          9,
+          191592,
+          158168,
+          0,
+          604195
+        ]
+      ],
+      "current": [
+        [
+          0,
+          17,
+          8,
+          9,
+          192968,
+          159544,
+          0,
+          603875
+        ],
+        [
+          1,
+          17,
+          8,
+          9,
+          192968,
+          159544,
+          0,
+          604195
+        ],
+        [
+          2,
+          17,
+          8,
+          9,
+          192968,
+          159544,
+          0,
+          604195
+        ]
+      ],
+      "command": [
+        "/tmp/deadlib-flac-memory-checkpoints-rust/release/deadlib-flac-allocation-probe",
+        "ogg-stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/43 - 8 channels (7.1).flac",
+        "2"
+      ],
+      "stdout": "ogg-stream\t2\t8272395\t7016480\t936302901162\t235252\t108\t16\t8\n"
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-audio/decode/flac/src/bitstream.rs": "b6bb752fd629420541a85c2bd419ef613b0e971e1341f7fa6d8c86ea6c1d4d84",
+    "crates/deadlib-audio/decode/flac/src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+    "crates/deadlib-audio/decode/flac/src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "crates/deadlib-audio/decode/flac/src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "crates/deadlib-audio/decode/flac/src/frame.rs": "17ff70a782c633a952c3ba32744aecd64b8d44cb1c041a3051e628d42f4d16a5",
+    "crates/deadlib-audio/decode/flac/src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+    "crates/deadlib-audio/decode/flac/src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "crates/deadlib-audio/decode/flac/src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "crates/deadlib-audio/decode/flac/src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "crates/deadlib-audio/decode/flac/src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "crates/deadlib-audio/decode/flac/src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "crates/deadlib-audio/decode/flac/src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "crates/deadlib-audio/decode/flac/src/predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+    "crates/deadlib-audio/decode/flac/src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128"
+  },
+  "probe_sha256": {
+    "target/deadlib-flac-reference/allocator-probe.rs": "cb1778e8b855a119ffd0713f74cdba7834c0a75beff7221841efdf8686070638",
+    "target/deadlib-flac-reference/decode-shared-probe.rs": "6e054a7c2ecf2d1b03b67b777517793aa920e3fa1e9a18abdceb2b9dfd437522",
+    "target/deadlib-flac-reference/memory-probe/Cargo.toml": "6ffc378cba2ebc4e885d42759bf96b574ea559fae83b456919b718d0f6299260",
+    "target/deadlib-flac-reference/memory-probe/Cargo.lock": "e60e66b9dcf9c8985d5596dfe9d205d6a912004900ac11e2c3080971716b07ef"
+  },
+  "binary_sha256": "5a08f0f7dcaf3e849c0cb78072cafbae39e6f70427df5aeff13f9c1c03c56c71",
+  "note": "Requested-heap allocation counts only. No throughput, stack or RSS claim. Counting System allocator forwards every request. Fields: iteration, allocations, reallocations, frees, total requested, peak above baseline, final live delta, baseline live bytes."
+}

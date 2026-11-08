@@ -2,6 +2,7 @@ use crate::feedback::{hold_glow_color, itg_actor_glow_alpha};
 use crate::style::*;
 use crate::transforms::{
     NoteAlphaParams, NoteAppearanceCache, appearance_needs_rows, appearance_note_alpha_glow_cached,
+    visual_note_rotation_y,
 };
 use deadlib_present::actors::{
     FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SpriteSource,
@@ -35,7 +36,7 @@ pub(crate) struct HoldEntryPlanRequest<'a, T> {
     pub head_y: f32,
     pub tail_y: f32,
     pub receptor_y: f32,
-    pub screen_height: f32,
+    pub draw_bounds: [f32; 2],
     pub field_zoom: f32,
     pub lane_reverse: bool,
     pub engaged: bool,
@@ -81,6 +82,11 @@ pub(crate) struct HoldPathSample {
     pub center_x: f32,
     pub world_z: f32,
     pub arrow_px: f32,
+    pub position_offset: [f32; 3],
+    pub spline_derivative: [f32; 3],
+    pub spline_absolute: bool,
+    pub spline_step: f32,
+    pub cap_step: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -111,13 +117,17 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub target_arrow_px: f32,
     pub diffuse: [f32; 4],
     pub elapsed_s: f32,
+    /// Tipsy offset used by appearance; MoveY changes only geometry.
     pub lane_offset: f32,
+    /// Converts sampled screen travel to native travel before field zoom.
+    pub fade_travel_scale: f32,
     pub appearance: NoteAlphaParams,
     pub appearance_cache: NoteAppearanceCache,
     pub use_legacy_sprites: bool,
     pub rotation_y_deg: f32,
+    pub twirl: f32,
     pub depth_test: bool,
-    pub screen_height: f32,
+    pub draw_bounds: [f32; 2],
     pub body_z: i16,
     pub cap_z: i16,
     pub glow_z: i16,
@@ -140,7 +150,9 @@ struct RenderedHoldBody {
 }
 
 const HOLD_BODY_BUFFER_VERTICES: usize = 2048;
-const HOLD_CAP_BUFFER_VERTICES: usize = 6;
+// Curved caps use the same four/sixteen-pixel steps as NoteDisplay bodies.
+// Preallocate at song construction, including the same capacity as body strips.
+const HOLD_CAP_BUFFER_VERTICES: usize = HOLD_BODY_BUFFER_VERTICES;
 const HOLD_MESH_PAIRS_PER_FRAME: usize = MAX_COLS * 2;
 type HoldMeshBuffer = Arc<Vec<TexturedMeshVertex>>;
 type HoldMeshPair = [HoldMeshBuffer; 2];
@@ -246,7 +258,9 @@ impl HoldMeshBufferPool {
 /// as demand requires, while hold-free frames do no pool work. Normal frame
 /// work is bounded to one monotonic pass over the pool plus clearing two vectors
 /// per visible hold; empty diffuse/glow buffers are not shared with the renderer
-/// and retained capacity is not initialized.
+/// and retained capacity is not initialized. Each cap reserves 2,048 vertices
+/// and emits at most 341 quads. Curved caps use native four/sixteen-pixel rows;
+/// oversized caps use wider rows within that warm capacity and fixed work bound.
 pub struct HoldMeshScratch {
     bodies: HoldMeshBufferPool,
     caps: HoldMeshBufferPool,
@@ -413,7 +427,7 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
         body_flipped,
         y_head,
         y_tail,
-        draw_span: hold_draw_span(y_head, y_tail, request.screen_height),
+        draw_span: hold_draw_span(y_head, y_tail, request.draw_bounds),
         diffuse: [color_scale, color_scale, color_scale, 1.0],
         head_anchor_y,
         head_anchor_travel,
@@ -435,6 +449,8 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
 /// Concrete asset owners inject sprite sources and a path sampler. The sampler
 /// keeps theme/profile state outside this crate while canonical hold geometry,
 /// UV clipping, draw ordering, and glow passes remain shared by every theme.
+/// The sampler receives the row Y for ArrowEffects and a separate Y mapped to
+/// the spline beat. These differ on caps, whose spline beat stays at the end.
 pub(crate) fn compose_hold_body_caps<S, F, P>(
     draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
@@ -444,15 +460,28 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
 ) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
-    P: Fn(f32) -> HoldPathSample,
+    P: Fn(f32, f32) -> HoldPathSample,
 {
-    let rendered = compose_hold_body(draws, mesh_scratch, &request, sample_path, sprite_source);
+    let body_path = |y| sample_path(y, y);
+    let rendered = compose_hold_body(draws, mesh_scratch, &request, &body_path, sprite_source);
+    // DrawHoldPart advances ArrowEffects along each row, but uses the fixed
+    // endpoint beat for every spline component of a cap (position AND zoom).
+    let sample_top_cap = |y| {
+        let mut sample = sample_path(y, request.y_head);
+        sample.cap_step = sample.spline_step;
+        sample
+    };
+    let sample_bottom_cap = |y| {
+        let mut sample = sample_path(y, request.y_tail);
+        sample.cap_step = sample.spline_step;
+        sample
+    };
     compose_top_cap(
         draws,
         mesh_scratch,
         &request,
         &rendered,
-        sample_path,
+        &sample_top_cap,
         sprite_source,
     );
     compose_bottom_cap(
@@ -460,14 +489,16 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
         mesh_scratch,
         &request,
         &rendered,
-        sample_path,
+        &sample_bottom_cap,
         sprite_source,
     )
 }
 
 fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> (f32, f32) {
+    let y_offset = sample.adjusted_travel * request.fade_travel_scale;
     let (alpha, glow) = appearance_note_alpha_glow_cached(
-        sample.adjusted_travel + request.lane_offset,
+        y_offset + request.lane_offset,
+        y_offset,
         &request.appearance_cache,
     );
     (alpha, itg_actor_glow_alpha(glow))
@@ -478,13 +509,15 @@ fn hold_endpoint_alpha_glow(
     sample: HoldPathSample,
     cached_appearance: Option<(f32, f32)>,
     lane_offset: f32,
+    fade_travel_scale: f32,
     appearance_cache: &NoteAppearanceCache,
 ) -> (f32, f32) {
     if let Some(appearance) = cached_appearance {
         return appearance;
     }
+    let y_offset = sample.adjusted_travel * fade_travel_scale;
     let (alpha, glow) =
-        appearance_note_alpha_glow_cached(sample.adjusted_travel + lane_offset, appearance_cache);
+        appearance_note_alpha_glow_cached(y_offset + lane_offset, y_offset, appearance_cache);
     (alpha, itg_actor_glow_alpha(glow))
 }
 
@@ -536,6 +569,7 @@ fn compose_hold_sprite<S, F>(
         flip_y: v0 > v1,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: pass.rotation_y_deg,
         rot_z_deg: pass.rotation_z_deg,
         z: pass.diffuse_z,
@@ -619,9 +653,23 @@ where
     let phase = visible_top_distance / segment_height + phase_offset;
     let phase_end = visible_bottom_distance / segment_height + phase_offset;
     let uv = [body_uv[0], body_uv[2], body_uv[1], body_uv[3]];
+    let fade_lane_offset = if request.appearance.stealth_type {
+        0.0
+    } else {
+        request.lane_offset
+    };
+    let stealth_crosses_receptor = !request.appearance.stealth_past_receptors
+        && (request.appearance.stealth != 0.0 || request.appearance.stealth_col != 0.0)
+        && ((sample_path(body_top).adjusted_travel * request.fade_travel_scale + fade_lane_offset
+            < 0.0)
+            != (sample_path(body_bottom).adjusted_travel * request.fade_travel_scale
+                + fade_lane_offset
+                < 0.0));
     if request.use_legacy_sprites
         && allow_legacy_sprites
         && !appearance_needs_rows(request.appearance)
+        && !stealth_crosses_receptor
+        && request.twirl == 0.0
     {
         compose_legacy_hold_body(
             draws,
@@ -790,7 +838,8 @@ where
                         segment_size,
                     ],
                     uv: [u0, v0, u1, v1],
-                    rotation_y_deg: request.rotation_y_deg,
+                    rotation_y_deg: request.rotation_y_deg
+                        + visual_note_rotation_y(sample.adjusted_travel, request.twirl),
                     rotation_z_deg: 0.0,
                     diffuse: request.diffuse,
                     alpha,
@@ -831,7 +880,7 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let use_mesh = !is_model && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let use_mesh = !is_model;
     let mut pooled_pair = None;
     let mut owned_diffuse = Vec::new();
     let mut owned_glow = Vec::new();
@@ -1036,6 +1085,7 @@ where
                     top,
                     cached_top.and_then(|endpoint| endpoint.appearance),
                     request.lane_offset,
+                    request.fade_travel_scale,
                     &request.appearance_cache,
                 );
                 let bottom_appearance = hold_alpha_glow(request, bottom);
@@ -1084,7 +1134,8 @@ where
                             slice_height,
                         ],
                         uv: [u0, slice_v0, u1, slice_v1],
-                        rotation_y_deg: request.rotation_y_deg,
+                        rotation_y_deg: request.rotation_y_deg
+                            + visual_note_rotation_y(center.adjusted_travel, request.twirl),
                         rotation_z_deg: 0.0,
                         diffuse: request.diffuse,
                         alpha,
@@ -1157,9 +1208,11 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
     let (top_alpha, top_glow) = top_appearance;
     let (bottom_alpha, bottom_glow) = bottom_appearance;
     let top_row_positions = prev_row.unwrap_or_else(|| {
-        let row = hold_strip_row_3d(
-            [top.center_x, top_y, top.world_z],
+        let row = hold_path_row(
+            top,
+            top_y,
             top.arrow_px * width_ratio * 0.5,
+            request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
             u0,
             u1,
             v0,
@@ -1188,9 +1241,11 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
     if rendered.head_row.is_none() {
         rendered.head_row = Some([top_row[0].pos, top_row[1].pos]);
     }
-    let bottom_row = hold_strip_row_3d(
-        [bottom.center_x, bottom_y, bottom.world_z],
+    let bottom_row = hold_path_row(
+        bottom,
+        bottom_y,
         bottom.arrow_px * width_ratio * 0.5,
+        request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
         u0,
         u1,
         v1,
@@ -1245,14 +1300,11 @@ fn compose_top_cap<S, F, P>(
     let Some(slot) = request.top_cap_slot else {
         return;
     };
-    if request.y_head <= -400.0 || request.y_head >= request.screen_height + 400.0 {
-        return;
-    }
 
     let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let mut cap_height = cap_size[1];
-    let cap_top = request.y_head - cap_height;
+    let mut cap_top = request.y_head - cap_height;
     let mut cap_bottom = request.y_head;
     let mut uv_trim = None;
     if cap_height > f32::EPSILON && request.y_tail < cap_bottom {
@@ -1269,10 +1321,22 @@ fn compose_top_cap<S, F, P>(
         return;
     }
 
+    let original_top = cap_top;
+    let original_bottom = cap_bottom;
+    cap_top = cap_top.max(request.draw_bounds[0]);
+    cap_bottom = cap_bottom.min(request.draw_bounds[1]);
+    cap_height = cap_bottom - cap_top;
+    if cap_height <= f32::EPSILON {
+        return;
+    }
     let center_y = f32::midpoint(cap_top, cap_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
-    if alpha <= f32::EPSILON && glow <= f32::EPSILON {
+    if request.use_legacy_sprites
+        && request.twirl == 0.0
+        && alpha <= f32::EPSILON
+        && glow <= f32::EPSILON
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.top_cap_phase);
@@ -1287,20 +1351,26 @@ fn compose_top_cap<S, F, P>(
         slot.uv_for_note_at(frame, uv_elapsed, request.top_cap_uv_translation),
         request.body_flipped,
     );
-    let [u0, v0, u1, mut v1] = uv;
+    let [u0, mut v0, u1, mut v1] = uv;
     if let Some(trim) = uv_trim {
         v1 = (v1 - v0).mul_add(trim, v1);
     }
-    let top = sample_path(cap_top);
+    let span = v1 - v0;
+    let start = v0;
+    v0 = start + span * ((cap_top - original_top) / (original_bottom - original_top));
+    v1 = start + span * ((cap_bottom - original_top) / (original_bottom - original_top));
+    let mut top = sample_path(cap_top);
+    top.cap_step = 0.0;
     let bottom = sample_path(cap_bottom);
-    let use_mesh =
-        !request.use_legacy_sprites && !is_model && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
-        let top_row = hold_strip_row_3d(
-            [top.center_x, cap_top, top.world_z],
+        let top_row = hold_path_row(
+            top,
+            cap_top,
             scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
+            request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
             u0,
             u1,
             v0,
@@ -1312,6 +1382,7 @@ fn compose_top_cap<S, F, P>(
             ],
         );
         let bottom_row = if let Some(body_head_row) = rendered.head_row
+            && bottom.spline_step == 0.0
             && request
                 .body_slot
                 .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
@@ -1333,9 +1404,12 @@ fn compose_top_cap<S, F, P>(
                 ],
             )
         } else {
-            hold_strip_row_3d(
-                [bottom.center_x, cap_bottom, bottom.world_z],
+            hold_path_row(
+                bottom,
+                cap_bottom,
                 scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
+                request.rotation_y_deg
+                    + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
                 u0,
                 u1,
                 v1,
@@ -1359,6 +1433,9 @@ fn compose_top_cap<S, F, P>(
             top_alpha,
             bottom_alpha,
             request,
+            cap_top,
+            cap_bottom,
+            sample_path,
         );
     } else {
         let (center_xy, draw_height) =
@@ -1373,7 +1450,8 @@ fn compose_top_cap<S, F, P>(
                 center: center_xy,
                 size: [cap_width, draw_height],
                 uv: [u0, v0, u1, v1],
-                rotation_y_deg: request.rotation_y_deg,
+                rotation_y_deg: request.rotation_y_deg
+                    + visual_note_rotation_y(center.adjusted_travel, request.twirl),
                 rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
@@ -1388,7 +1466,7 @@ fn compose_top_cap<S, F, P>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn compose_cap_mesh<S>(
+fn compose_cap_mesh<S, P>(
     draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     slot: &S,
@@ -1400,43 +1478,92 @@ fn compose_cap_mesh<S>(
     top_alpha: f32,
     bottom_alpha: f32,
     request: &HoldBodyCapRequest<'_, S>,
+    top_y: f32,
+    bottom_y: f32,
+    sample_path: &P,
 ) where
     S: NoteskinSlot,
+    P: Fn(f32) -> HoldPathSample,
 {
-    let diffuse_quad = (top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON)
-        .then(|| hold_strip_quad(top_row, bottom_row));
-    let glow_quad = (top_glow > f32::EPSILON || bottom_glow > f32::EPSILON).then(|| {
+    let fill = |diffuse: &mut Vec<TexturedMeshVertex>, glow: &mut Vec<TexturedMeshVertex>| {
         let [u0, v0, u1, v1] = uv;
-        let top_glow_row = hold_strip_row_from_positions(
-            top_row[0].pos,
-            top_row[1].pos,
-            u0,
-            u1,
-            v0,
-            hold_glow_color(top_glow),
-        );
-        let bottom_glow_row = hold_strip_row_from_positions(
-            bottom_row[0].pos,
-            bottom_row[1].pos,
-            u0,
-            u1,
-            v1,
-            hold_glow_color(bottom_glow),
-        );
-        hold_strip_quad(top_glow_row, bottom_glow_row)
-    });
-    if diffuse_quad.is_none() && glow_quad.is_none() {
-        return;
-    }
-
-    if let Some((start, ())) = mesh_scratch.caps.with_pair(|diffuse, glow| {
-        if let Some(vertices) = diffuse_quad {
-            diffuse.extend_from_slice(&vertices);
+        let span = bottom_y - top_y;
+        let curved = request.twirl != 0.0 || !request.use_legacy_sprites;
+        let row_step = if request.depth_test {
+            4.0_f32
+        } else {
+            16.0_f32
+        };
+        let slices = if curved {
+            (span / row_step)
+                .ceil()
+                .clamp(1.0, (HOLD_CAP_BUFFER_VERTICES / 6) as f32) as usize
+        } else {
+            1
+        };
+        let step = if curved {
+            row_step.max(span / slices as f32)
+        } else {
+            span
+        };
+        let mut y = top_y;
+        let mut row = top_row;
+        let mut alpha = top_alpha;
+        let mut glow_alpha = top_glow;
+        for slice in 0..slices {
+            let next_y = if slice + 1 == slices {
+                bottom_y
+            } else {
+                (y + step).min(bottom_y)
+            };
+            if next_y <= y {
+                break;
+            }
+            let (next_row, next_alpha, next_glow) = if next_y == bottom_y {
+                (bottom_row, bottom_alpha, bottom_glow)
+            } else {
+                let sample = sample_path(next_y);
+                let (alpha, glow) = hold_alpha_glow(request, sample);
+                let v = (v1 - v0).mul_add((next_y - top_y) / (bottom_y - top_y), v0);
+                let row = hold_path_row(
+                    sample,
+                    next_y,
+                    scale_hold_part(slot.source_size(), sample.arrow_px)[0] * 0.5,
+                    request.rotation_y_deg
+                        + visual_note_rotation_y(sample.adjusted_travel, request.twirl),
+                    u0,
+                    u1,
+                    v,
+                    [
+                        request.diffuse[0],
+                        request.diffuse[1],
+                        request.diffuse[2],
+                        request.diffuse[3] * alpha,
+                    ],
+                );
+                (row, alpha, glow)
+            };
+            if alpha > f32::EPSILON || next_alpha > f32::EPSILON {
+                diffuse.extend_from_slice(&hold_strip_quad(row, next_row));
+            }
+            if glow_alpha > f32::EPSILON || next_glow > f32::EPSILON {
+                let mut glow_row = row;
+                let mut next_glow_row = next_row;
+                for vertex in &mut glow_row {
+                    vertex.color = hold_glow_color(glow_alpha);
+                }
+                for vertex in &mut next_glow_row {
+                    vertex.color = hold_glow_color(next_glow);
+                }
+                glow.extend_from_slice(&hold_strip_quad(glow_row, next_glow_row));
+            }
+            y = next_y;
+            row = next_row;
+            alpha = next_alpha;
+            glow_alpha = next_glow;
         }
-        if let Some(vertices) = glow_quad {
-            glow.extend_from_slice(&vertices);
-        }
-    }) {
+    };
+    if let Some((start, ())) = mesh_scratch.caps.with_pair(fill) {
         let (diffuse, glow) = mesh_scratch.caps.shared_nonempty_pair(start);
         if let Some(diffuse) = diffuse {
             draws.push(hold_reusable_strip_draw(
@@ -1458,19 +1585,22 @@ fn compose_cap_mesh<S>(
         return;
     }
 
-    if let Some(vertices) = diffuse_quad {
+    let mut diffuse = Vec::new();
+    let mut glow = Vec::new();
+    fill(&mut diffuse, &mut glow);
+    if !diffuse.is_empty() {
         draws.push(hold_strip_draw(
             slot.texture_key_shared(),
-            Arc::new(vertices),
+            Arc::from(diffuse),
             BlendMode::Alpha,
             request.depth_test,
             request.cap_z,
         ));
     }
-    if let Some(vertices) = glow_quad {
+    if !glow.is_empty() {
         draws.push(hold_strip_glow_draw(
             slot.texture_key_shared(),
-            Arc::new(vertices),
+            Arc::from(glow),
             request.depth_test,
             request.glow_z,
         ));
@@ -1496,26 +1626,27 @@ fn compose_bottom_cap<S, F, P>(
         return;
     };
     let tail_position = request.y_tail + 1.0;
-    if tail_position <= -400.0 || tail_position >= request.screen_height + 400.0 {
-        return;
-    }
 
     let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let cap_span = cap_size[1];
-    let Some((raw_top, draw_bottom)) =
+    let Some((raw_top, mut draw_bottom)) =
         hold_tail_cap_bounds(tail_position, cap_span, rendered.top, rendered.bottom)
     else {
         return;
     };
-    if cap_span <= f32::EPSILON {
+    if !(cap_span > f32::EPSILON) {
         return;
     }
-    let draw_top = if request.y_head > raw_top {
+    let mut draw_top = if request.y_head > raw_top {
         request.y_head.min(draw_bottom)
     } else {
         raw_top
     };
+    let original_top = draw_top;
+    let original_bottom = draw_bottom;
+    draw_top = draw_top.max(request.draw_bounds[0]);
+    draw_bottom = draw_bottom.min(request.draw_bounds[1]);
     let draw_height = draw_bottom - draw_top;
     if !(draw_height > f32::EPSILON) {
         return;
@@ -1524,7 +1655,11 @@ fn compose_bottom_cap<S, F, P>(
     let center_y = f32::midpoint(draw_top, draw_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
-    if alpha <= f32::EPSILON && glow <= f32::EPSILON {
+    if request.use_legacy_sprites
+        && request.twirl == 0.0
+        && alpha <= f32::EPSILON
+        && glow <= f32::EPSILON
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.bottom_cap_phase);
@@ -1539,25 +1674,28 @@ fn compose_bottom_cap<S, F, P>(
         request.body_flipped,
     );
     let [u0, base_v0, u1, base_v1] = uv;
-    let Some((v0, v1)) = bottom_cap_uv_window(
+    let Some((mut v0, mut v1)) = bottom_cap_uv_window(
         base_v0,
         base_v1,
-        draw_height,
+        original_bottom - original_top,
         cap_span,
         request.lane_reverse && request.top_anchor_reverse,
     ) else {
         return;
     };
-    let top = sample_path(draw_top);
+    let span = v1 - v0;
+    let start = v0;
+    v0 = start + span * ((draw_top - original_top) / (original_bottom - original_top));
+    v1 = start + span * ((draw_bottom - original_top) / (original_bottom - original_top));
+    let mut top = sample_path(draw_top);
+    top.cap_step = 0.0;
     let bottom = sample_path(draw_bottom);
-    let use_mesh = !request.use_legacy_sprites
-        && !is_model
-        && !request.lane_reverse
-        && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
         let top_row = if let Some(body_tail_row) = rendered.tail_row
+            && top.spline_step == 0.0
             && request
                 .body_slot
                 .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
@@ -1576,9 +1714,11 @@ fn compose_bottom_cap<S, F, P>(
                 ],
             )
         } else {
-            hold_strip_row_3d(
-                [top.center_x, draw_top, top.world_z],
+            hold_path_row(
+                top,
+                draw_top,
                 scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
+                request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
                 u0,
                 u1,
                 v0,
@@ -1590,9 +1730,11 @@ fn compose_bottom_cap<S, F, P>(
                 ],
             )
         };
-        let bottom_row = hold_strip_row_3d(
-            [bottom.center_x, draw_bottom, bottom.world_z],
+        let bottom_row = hold_path_row(
+            bottom,
+            draw_bottom,
             scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
+            request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
             u0,
             u1,
             v1,
@@ -1615,6 +1757,9 @@ fn compose_bottom_cap<S, F, P>(
             top_alpha,
             bottom_alpha,
             request,
+            draw_top,
+            draw_bottom,
+            sample_path,
         );
     } else {
         let (center_xy, cap_draw_height) =
@@ -1629,7 +1774,8 @@ fn compose_bottom_cap<S, F, P>(
                 center: center_xy,
                 size: [cap_width, cap_draw_height],
                 uv: [u0, v0, u1, v1],
-                rotation_y_deg: request.rotation_y_deg,
+                rotation_y_deg: request.rotation_y_deg
+                    + visual_note_rotation_y(center.adjusted_travel, request.twirl),
                 rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
@@ -1676,7 +1822,7 @@ pub(crate) fn scale_effect_size(
 pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if height <= 0.0 || target_arrow_px <= 0.0 {
+    if height <= 0.0 {
         return [width, height];
     }
     let scale = target_arrow_px / height;
@@ -1686,7 +1832,7 @@ pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f3
 pub(crate) fn scale_hold_part(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if width <= 0.0 || target_arrow_px <= 0.0 {
+    if width <= 0.0 {
         return [width, height];
     }
     // NoteDisplay scales the sprite's logical dimensions by ArrowEffects zoom.
@@ -1747,20 +1893,15 @@ pub(crate) fn hold_body_bottom_for_tail_cap(body_bottom: f32, y_tail: f32, cap_h
     }
 }
 
-pub(crate) fn hold_draw_span(y_head: f32, y_tail: f32, screen_height: f32) -> Option<(f32, f32)> {
-    if ![y_head, y_tail, screen_height]
+pub(crate) fn hold_draw_span(y_head: f32, y_tail: f32, bounds: [f32; 2]) -> Option<(f32, f32)> {
+    if ![y_head, y_tail, bounds[0], bounds[1]]
         .iter()
         .all(|v| v.is_finite())
     {
         return None;
     }
-    let mut top = y_head.min(y_tail);
-    let mut bottom = y_head.max(y_tail);
-    if bottom < -200.0 || top > screen_height + 200.0 {
-        return None;
-    }
-    top = top.max(-400.0);
-    bottom = bottom.min(screen_height + 400.0);
+    let top = y_head.min(y_tail).max(bounds[0]);
+    let bottom = y_head.max(y_tail).min(bounds[1]);
     (bottom >= top).then_some((top, bottom))
 }
 
@@ -1776,9 +1917,100 @@ pub(crate) fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -
     (max_segments, estimated <= HOLD_BODY_LEGACY_SEGMENT_LIMIT)
 }
 
+// NoteDisplay's spline hold basis uses RageVec3Cross and RageAARotate.
+// Keep the native Y sign and the normalization of both quaternion products.
+fn hold_spline_axes(
+    derivative: [f32; 3],
+    absolute: bool,
+    rotation_y_deg: f32,
+) -> ([f32; 3], [f32; 3]) {
+    let normalize = |vector: [f32; 3]| {
+        let square = vector.iter().map(|value| value * value).sum::<f32>();
+        let scale = if square > 0.0 {
+            1.0 / square.sqrt()
+        } else {
+            1.0
+        };
+        vector.map(|value| value * scale)
+    };
+    let derivative = normalize(derivative);
+    // NoteDisplay removes ArrowEffects' +Y direction in Position mode.
+    // Adding it to a reversed absolute tangent would cancel the strip's width.
+    let base_y = if absolute { 0.0 } else { 1.0 };
+    let forward = normalize([derivative[0], derivative[1] + base_y, derivative[2]]);
+    let left = if forward[2].abs() > 0.9 {
+        [forward[2], 0.0, -forward[0]]
+    } else {
+        [-forward[1], -forward[0], 0.0]
+    };
+    let multiply = |a: [f32; 4], b: [f32; 4]| {
+        let out = [
+            a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+            a[3] * b[1] + a[1] * b[3] + a[2] * b[0] - a[0] * b[2],
+            a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0],
+            a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+        ];
+        let square = out.iter().map(|value| value * value).sum::<f32>();
+        let scale = if square > 0.0 {
+            1.0 / square.sqrt()
+        } else {
+            1.0
+        };
+        out.map(|value| value * scale)
+    };
+    let (sine, cosine) = (-rotation_y_deg * std::f32::consts::PI / 180.0 / 2.0).sin_cos();
+    let quat = [
+        forward[0] * sine,
+        forward[1] * sine,
+        forward[2] * sine,
+        cosine,
+    ];
+    let conjugate = [-quat[0], -quat[1], -quat[2], quat[3]];
+    let left = multiply(multiply(quat, [left[0], left[1], left[2], 0.0]), conjugate);
+    (forward, [left[0], left[1], left[2]])
+}
+
+fn hold_path_row(
+    sample: HoldPathSample,
+    y: f32,
+    half_width: f32,
+    rotation_y_deg: f32,
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    let mut center = [
+        sample.center_x + sample.position_offset[0],
+        y + sample.position_offset[1],
+        sample.world_z + sample.position_offset[2],
+    ];
+    if !sample.spline_absolute && sample.spline_derivative == [0.0; 3] && sample.cap_step == 0.0 {
+        return hold_strip_row_3d(center, half_width, rotation_y_deg, u0, u1, v, color);
+    }
+    let (forward, left) = hold_spline_axes(
+        sample.spline_derivative,
+        sample.spline_absolute,
+        rotation_y_deg,
+    );
+    // Native cap rows after the first advance one field-local unit.
+    for axis in 0..3 {
+        center[axis] += forward[axis] * sample.cap_step;
+    }
+    hold_strip_row_from_positions(
+        std::array::from_fn(|axis| center[axis] + left[axis] * half_width),
+        std::array::from_fn(|axis| center[axis] - left[axis] * half_width),
+        u0,
+        u1,
+        v,
+        color,
+    )
+}
+
 pub(crate) fn hold_strip_row_3d(
     center: [f32; 3],
     half_width: f32,
+    rotation_y_deg: f32,
     u0: f32,
     u1: f32,
     v: f32,
@@ -1786,9 +2018,17 @@ pub(crate) fn hold_strip_row_3d(
 ) -> [TexturedMeshVertex; 2] {
     // NoteDisplay keeps ArrowEffects strips horizontal. Only a position
     // spline's derivative can tilt the cross-section, not Drunk/Tornado.
+    // NoteDisplay twists the cross-section around +Y by -GetRotationY.
+    let (sine, cosine) = if rotation_y_deg == 0.0 {
+        (0.0, 1.0)
+    } else {
+        rotation_y_deg.to_radians().sin_cos()
+    };
+    let x = half_width * cosine;
+    let z = half_width * sine;
     hold_strip_row_from_positions(
-        [center[0] - half_width, center[1], center[2]],
-        [center[0] + half_width, center[1], center[2]],
+        [center[0] - x, center[1], center[2] - z],
+        [center[0] + x, center[1], center[2] + z],
         u0,
         u1,
         v,
@@ -1806,12 +2046,14 @@ pub(crate) const fn hold_strip_row_from_positions(
 ) -> [TexturedMeshVertex; 2] {
     [
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: left,
             uv: [u0, v],
             color,
             tex_matrix_scale: [1.0, 1.0],
         },
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: right,
             uv: [u1, v],
             color,
@@ -1835,10 +2077,11 @@ pub(crate) const fn hold_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: FlatMeshVertices::Shared(vertices),
@@ -1847,6 +2090,11 @@ pub(crate) const fn hold_strip_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        depth_write: depth_test,
+        depth_test_on_fail: false,
+        clear_depth: false,
+        clear_depth_after: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -1859,10 +2107,11 @@ pub(crate) const fn hold_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices: FlatMeshVertices::Shared(vertices),
@@ -1871,6 +2120,11 @@ pub(crate) const fn hold_strip_glow_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        depth_write: depth_test,
+        depth_test_on_fail: false,
+        clear_depth: false,
+        clear_depth_after: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -1884,10 +2138,11 @@ const fn hold_reusable_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: FlatMeshVertices::Reusable(vertices),
@@ -1896,6 +2151,11 @@ const fn hold_reusable_strip_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        depth_write: depth_test,
+        depth_test_on_fail: false,
+        clear_depth: false,
+        clear_depth_after: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -1908,10 +2168,11 @@ const fn hold_reusable_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices: FlatMeshVertices::Reusable(vertices),
@@ -1920,6 +2181,11 @@ const fn hold_reusable_strip_glow_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        depth_write: depth_test,
+        depth_test_on_fail: false,
+        clear_depth: false,
+        clear_depth_after: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -2064,7 +2330,9 @@ mod tests {
         fn model(texture: &str) -> Self {
             Self {
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],
@@ -2160,24 +2428,369 @@ mod tests {
             diffuse: [0.5, 0.5, 0.5, 1.0],
             elapsed_s: 9.0,
             lane_offset: 0.0,
+            fade_travel_scale: 1.0,
             appearance,
             appearance_cache: crate::transforms::note_appearance_cache(9.0, 0.0, appearance),
             use_legacy_sprites: true,
             rotation_y_deg: 0.0,
+            twirl: 0.0,
             depth_test: false,
-            screen_height: 480.0,
+            draw_bounds: [-400.0, 880.0],
             body_z: 110,
             cap_z: 110,
             glow_z: 111,
         }
     }
 
+    #[test]
+    fn offset_spline_hold_rows_match_native_orientation() {
+        // NoteDisplay.cpp cross products and RageMath.cpp rotation/normalize,
+        // evaluated by MSVC /O2. Includes Bunny's almost negative-Y tangent.
+        let cases = [
+            (
+                [0f32, -216f32, 0.200000003f32],
+                0f32,
+                [1f32, 0f32, 0f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [0f32, -216f32, 0.200000003f32],
+                45f32,
+                [0.707106829f32, -0.707106709f32, 0.000318630278f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [0f32, -216f32, 0.200000003f32],
+                -90f32,
+                [4.74863739e-08f32, 1f32, -0.000450611318f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                0f32,
+                [-0.109118469f32, -0.994028747f32, 0f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                45f32,
+                [-0.143227533f32, -0.709497929f32, 0.689998925f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                -90f32,
+                [-0.211517721f32, -0.0241230205f32, -0.977076471f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                0f32,
+                [-0.994028926f32, 0.109116748f32, 0f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                45f32,
+                [-0.709852695f32, 0.139995679f32, -0.690297306f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                -90f32,
+                [-0.0236211419f32, 0.216087013f32, 0.976088405f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                0f32,
+                [-0.957508862f32, -0.288403869f32, 0f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                45f32,
+                [-0.738138914f32, -0.309331894f32, -0.599553823f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                -90f32,
+                [-0.137721106f32, -0.594954371f32, 0.791872621f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                0f32,
+                [-1f32, 0f32, 0f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                45f32,
+                [-0.707106829f32, 0.5f32, -0.5f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                -90f32,
+                [-2.98023259e-08f32, -0.707106769f32, 0.707106769f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+        ];
+        for (derivative, angle, left, forward) in cases {
+            let sample = HoldPathSample {
+                center_x: 100.0,
+                world_z: 3.0,
+                arrow_px: 64.0,
+                position_offset: [12.0, 54.0, 0.05],
+                spline_derivative: derivative,
+                ..Default::default()
+            };
+            let row = hold_path_row(sample, 200.0, 32.0, angle, 0.0, 1.0, 0.5, [1.0; 4]);
+            let center = [112.0, 254.0, 3.05];
+            let cap = hold_path_row(
+                HoldPathSample {
+                    cap_step: 1.5,
+                    ..sample
+                },
+                200.0,
+                32.0,
+                angle,
+                0.0,
+                1.0,
+                0.5,
+                [1.0; 4],
+            );
+            for axis in 0..3 {
+                assert!(
+                    (row[0].pos[axis] - (center[axis] + left[axis] * 32.0)).abs() < 0.002,
+                    "derivative={derivative:?}, angle={angle}, axis={axis}: {:?}",
+                    row[0].pos
+                );
+                assert!((row[1].pos[axis] - (center[axis] - left[axis] * 32.0)).abs() < 0.002);
+                assert!((cap[0].pos[axis] - row[0].pos[axis] - forward[axis] * 1.5).abs() < 0.002);
+            }
+        }
+    }
+
     fn straight_path(y: f32) -> HoldPathSample {
         HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_absolute: false,
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: y,
             center_x: 32.0,
             world_z: y * 0.1,
             arrow_px: 64.0,
+        }
+    }
+
+    #[test]
+    fn absolute_spline_caps_stay_at_the_native_endpoint() {
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for direction in [-1.0, 1.0] {
+            for zoom in [0.7, 1.0] {
+                let mut request = body_cap_request(None, Some(&top), Some(&bottom));
+                request.y_head = 100.0;
+                request.y_tail = 300.0;
+                request.draw_span = Some((100.0, 300.0));
+                request.use_legacy_sprites = false;
+                let mut draws = Vec::new();
+                compose_hold_body_caps(
+                    &mut draws, &mut HoldMeshScratch::with_columns(1), request,
+                    &|y, spline_y| {
+                        let base = straight_path(y);
+                        HoldPathSample {
+                            position_offset: [
+                                300.0 - base.center_x,
+                                400.0 + direction * (spline_y - 100.0) * zoom - y,
+                                12.0 - base.world_z,
+                            ],
+                            spline_derivative: [0.0, direction * 200.0, 0.0],
+                            spline_absolute: true,
+                            spline_step: zoom,
+                            arrow_px: 32.0 + spline_y * 0.2,
+                            ..base
+                        }
+                    },
+                    &test_source,
+                );
+                for (key, endpoint, width) in [("top", 400.0, 52.0), ("bottom", 400.0 + direction * 200.0 * zoom, 92.0)] {
+                    let vertices = draws.iter().find_map(|draw| match draw {
+                        FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key() == Some(key) => {
+                            Some(match &mesh.vertices {
+                                FlatMeshVertices::Shared(v) => v.as_ref(),
+                                FlatMeshVertices::Reusable(v) => v.as_slice(),
+                            })
+                        }
+                        _ => None,
+                    }).expect("absolute spline cap");
+                    // Native DrawHoldPart fixes cur_beat for a cap, clears
+                    // ae_pos.y in Position mode, then advances later rows by
+                    // one local unit along the spline tangent.
+                    for vertex in vertices {
+                        assert!((vertex.pos[2] - 12.0).abs() < 0.001);
+                        assert!(((vertex.pos[0] - 300.0).abs() - width * 0.5).abs() < 0.001,
+                            "{key}: cap width must use its endpoint beat: {:?}", vertex.pos);
+                        assert!((vertex.pos[1] - endpoint).abs() < 0.001
+                            || (vertex.pos[1] - endpoint - direction * zoom).abs() < 0.001,
+                            "{key} dir={direction}, zoom={zoom}: {:?}", vertex.pos);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn seventh_caps_match_native_drawn_rows_in_both_directions() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json"
+        ))
+        .unwrap();
+        for caps in native["caps"].as_array().unwrap() {
+            for part in ["top", "bottom"] {
+                let vertices: Vec<Vec<f32>> = serde_json::from_value(caps[part].clone()).unwrap();
+                let center: [f32; 3] = std::array::from_fn(|axis| vertices[1][axis]);
+                let forward: [f32; 3] = std::array::from_fn(|axis| vertices[4][axis] - center[axis]);
+                let half_width = (0..3)
+                    .map(|axis| (vertices[0][axis] - center[axis]).powi(2))
+                    .sum::<f32>()
+                    .sqrt();
+                // This is the native cap's entire extent, not a missing
+                // bottom-cap asset: later rows advance one tangent unit.
+                assert!((forward.iter().map(|x| x * x).sum::<f32>().sqrt() - 1.0).abs() < 0.0001);
+                for (index, vertices) in vertices.chunks_exact(3).enumerate() {
+                    let row = hold_path_row(
+                        HoldPathSample {
+                            center_x: center[0],
+                            world_z: center[2],
+                            position_offset: [0.0, center[1], 0.0],
+                            spline_derivative: forward,
+                            spline_absolute: true,
+                            cap_step: if index == 0 { 0.0 } else { 1.0 },
+                            ..straight_path(0.0)
+                        },
+                        0.0,
+                        half_width,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        [1.0; 4],
+                    );
+                    for (actual, expected) in row.iter().zip([&vertices[0], &vertices[2]]) {
+                        for axis in 0..3 {
+                            assert!(
+                                (actual.pos[axis] - expected[axis]).abs() < 0.001,
+                                "native cap beat {}, {part}, row {index}: {:?} vs {expected:?}",
+                                caps["beat"],
+                                actual.pos
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn absolute_spline_holds_keep_width_and_cap_direction_through_reversals() {
+        // NoteDisplay NCSM_Position uses the normalized spline derivative
+        // alone. Both +/-Y paths must have full-width strips, with opposite
+        // winding and cap advance. A zero tangent has no defined width.
+        for (derivative, left, forward) in [
+            ([0.0, 216.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
+            ([0.0, -216.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]),
+            ([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            ([0.0; 3], [0.0; 3], [0.0; 3]),
+        ] {
+            for zoom in [0.4, 0.7, 1.0] {
+                let sample = HoldPathSample {
+                    spline_derivative: derivative,
+                    spline_absolute: true,
+                    ..straight_path(100.0)
+                };
+                for cap_step in [0.0, zoom] {
+                    let row = hold_path_row(
+                        HoldPathSample { cap_step, ..sample },
+                        100.0, 32.0 * zoom, 0.0, 0.0, 1.0, 0.5, [1.0; 4],
+                    );
+                    for axis in 0..3 {
+                        let center = [32.0, 100.0, 10.0][axis] + forward[axis] * cap_step;
+                        assert!((row[0].pos[axis] - center - left[axis] * 32.0 * zoom).abs() < 0.001);
+                        assert!((row[1].pos[axis] - center + left[axis] * 32.0 * zoom).abs() < 0.001);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draw_limits_clip_caps_without_sliding_their_textures() {
+        for (top, bounds, native_uv) in [
+            (true, [60.0, 90.0], [0.425, 0.70625]),
+            (false, [180.0, 210.0], [0.340625, 0.621875]),
+        ] {
+            for flipped in [false, true] {
+                for mesh in [false, true] {
+                    let slot = TestSlot::sprite("cap");
+                    let mut request =
+                        body_cap_request(None, top.then_some(&slot), (!top).then_some(&slot));
+                    request.draw_bounds = bounds;
+                    request.body_flipped = flipped;
+                    request.use_legacy_sprites = !mesh;
+                    request.appearance = NoteAlphaParams::default();
+                    request.appearance_cache =
+                        crate::transforms::note_appearance_cache(9.0, 0.0, request.appearance);
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &|y, _| straight_path(y),
+                        &test_source,
+                    );
+                    assert_eq!(draws.len(), 1);
+                    let expected_uv: [f32; 2] = if flipped {
+                        [1.0 - native_uv[0], 1.0 - native_uv[1]]
+                    } else {
+                        native_uv
+                    };
+                    match &draws[0] {
+                        FlatDraw::Sprite(s) => {
+                            assert_eq!(s.center[1], (bounds[0] + bounds[1]) * 0.5);
+                            assert_eq!(s.size[1], bounds[1] - bounds[0]);
+                            assert_eq!(s.flip_y, flipped);
+                            for (actual, expected) in
+                                [s.uv_rect[1], s.uv_rect[3]].into_iter().zip([
+                                    expected_uv[0].min(expected_uv[1]),
+                                    expected_uv[0].max(expected_uv[1]),
+                                ])
+                            {
+                                assert!((actual - expected).abs() < 0.000001);
+                            }
+                        }
+                        FlatDraw::TexturedMesh(m) => {
+                            let vertices = match &m.vertices {
+                                FlatMeshVertices::Shared(v) => v.as_ref(),
+                                FlatMeshVertices::Reusable(v) => v.as_slice(),
+                            };
+                            for v in vertices {
+                                assert!(v.pos[1] >= bounds[0] && v.pos[1] <= bounds[1]);
+                                let t = (v.pos[1] - bounds[0]) / (bounds[1] - bounds[0]);
+                                let expected =
+                                    expected_uv[0] + t * (expected_uv[1] - expected_uv[0]);
+                                assert!((v.uv[1] - expected).abs() < 0.000001);
+                            }
+                        }
+                        _ => panic!("hold caps emit sprites or textured meshes"),
+                    }
+                }
+            }
         }
     }
 
@@ -2209,7 +2822,11 @@ mod tests {
                             &mut draws,
                             &mut scratch,
                             request,
-                            &|y| HoldPathSample {
+                            &|y, _| HoldPathSample {
+                                position_offset: [0.0; 3],
+                                spline_derivative: [0.0; 3],
+                                spline_step: 0.0,
+                                cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,
                                 ..straight_path(y)
                             },
@@ -2234,7 +2851,10 @@ mod tests {
                                         .iter()
                                         .map(|v| v.pos[0])
                                         .fold(f32::NEG_INFINITY, f32::max);
-                                    (mesh.texture.as_ref(), right - left)
+                                    (
+                                        mesh.texture.texture_key().expect("asset mesh"),
+                                        right - left,
+                                    )
                                 }
                                 _ => panic!("unexpected hold draw"),
                             };
@@ -2286,8 +2906,262 @@ mod tests {
     }
 
     #[test]
+    fn stealth_type_uses_raw_travel_for_body_and_caps() {
+        let body = TestSlot::sprite("body");
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for sudden in [false, true] {
+            for stealth_type in [false, true] {
+                for zoom in [0.5_f32, 1.0, 1.5] {
+                    let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
+                    request.y_head = 292.0;
+                    request.y_tail = 356.0;
+                    request.draw_span = Some((292.0, 356.0));
+                    request.target_arrow_px = 16.0;
+                    request.lane_offset = 256.0;
+                    request.fade_travel_scale = zoom.recip();
+                    request.appearance = NoteAlphaParams {
+                        hidden: f32::from(!sudden),
+                        sudden: f32::from(sudden),
+                        stealth_type,
+                        ..Default::default()
+                    };
+                    request.appearance_cache =
+                        crate::note_appearance_cache(0.0, 0.0, request.appearance);
+                    let sample = |y: f32| HoldPathSample {
+                        position_offset: [0.0; 3],
+                        spline_derivative: [0.0; 3],
+                        spline_step: 0.0,
+                        cap_step: 0.0,
+                        adjusted_travel: (y - 256.0) * zoom,
+                        ..straight_path(y)
+                    };
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &|y, _| sample(y),
+                        &test_source,
+                    );
+                    assert_eq!(
+                        !draws.is_empty(),
+                        sudden == stealth_type,
+                        "sudden={sudden}, type={stealth_type}"
+                    );
+                    if !draws.is_empty() {
+                        for key in ["body", "top", "bottom"] {
+                            assert!(
+                                draws.iter().any(|draw| match draw {
+                                    FlatDraw::Sprite(_) => sprite_key(draw) == key,
+                                    FlatDraw::TexturedMesh(m) =>
+                                        m.texture.texture_key().expect("asset mesh") == key,
+                                    _ => false,
+                                }),
+                                "{key}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lane_stealth_hold_crosses_receptor_without_hiding_visible_section() {
+        use deadlib_present::actors::FlatMeshVertices;
+        let body = TestSlot::sprite("body");
+        for stealth_type in [false, true] {
+            for lane_offset in [0.0, 64.0] {
+                for past in [false, true] {
+                    let mut request = body_cap_request(Some(&body), None, None);
+                    request.lane_offset = lane_offset;
+                    request.y_head = -64.0;
+                    request.y_tail = 64.0;
+                    request.draw_span = Some((-64.0, 64.0));
+                    request.appearance = NoteAlphaParams {
+                        stealth_type,
+                        stealth_col: 1.0,
+                        stealth_past_receptors: past,
+                        ..NoteAlphaParams::default()
+                    };
+                    request.appearance_cache =
+                        crate::note_appearance_cache(0.0, 0.0, request.appearance);
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &|y, _| straight_path(y),
+                        &test_source,
+                    );
+                    assert_eq!(
+                        draws.is_empty(),
+                        past || (!stealth_type && lane_offset == 64.0),
+                        "type={stealth_type}, offset={lane_offset}, past={past}"
+                    );
+                    for draw in &draws {
+                        match draw {
+                            FlatDraw::Sprite(sprite) => assert!(sprite.center[1] < 0.0),
+                            FlatDraw::TexturedMesh(mesh) => {
+                                let vertices = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(v) => v.as_ref(),
+                                    FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                };
+                                assert!(vertices.iter().all(|v| v.pos[1] <= 0.0));
+                            }
+                            _ => panic!("hold body draw"),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn twirl_rotates_each_hold_body_and_cap_row_in_native_direction() {
+        let body = TestSlot::sprite("body");
+        let top_cap = TestSlot::sprite("top");
+        let bottom_cap = TestSlot::sprite("bottom");
+        for twirl in [-2.5, 2.5] {
+            for reverse in [false, true] {
+                let mut request = body_cap_request(Some(&body), Some(&top_cap), Some(&bottom_cap));
+                request.twirl = twirl;
+                request.depth_test = true;
+                request.lane_reverse = reverse;
+                let sample = |y: f32| HoldPathSample {
+                    position_offset: [0.0; 3],
+                    spline_derivative: [0.0; 3],
+                    spline_step: 0.0,
+                    cap_step: 0.0,
+                    spline_absolute: false,
+                    adjusted_travel: if reverse { -y } else { y },
+                    center_x: 32.0,
+                    world_z: 0.0,
+                    arrow_px: 64.0,
+                };
+                let mut draws = Vec::new();
+                let mut scratch = HoldMeshScratch::with_columns(1);
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
+                let mut parts = Vec::new();
+                for draw in &draws {
+                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                        panic!("Twirl requires hold mesh rows")
+                    };
+                    assert!(mesh.depth_test);
+                    parts.push(mesh.texture.texture_key().expect("asset mesh"));
+                    let vertices = match &mesh.vertices {
+                        FlatMeshVertices::Shared(v) => v.as_ref(),
+                        FlatMeshVertices::Reusable(v) => v.as_slice(),
+                    };
+                    // Strip winding repeats left/right vertices in each six-vertex quad.
+                    for quad in vertices.chunks_exact(6) {
+                        for (left, right) in
+                            [(quad[0].pos, quad[1].pos), (quad[5].pos, quad[2].pos)]
+                        {
+                            let y_offset = if reverse { -left[1] } else { left[1] };
+                            let angle = (twirl * y_offset / 2.0).to_radians();
+                            let half_width = 0.5 * (left[0] - right[0]).hypot(left[2] - right[2]);
+                            assert!((left[0] - (32.0 - half_width * angle.cos())).abs() < 0.0001);
+                            assert!((left[2] + half_width * angle.sin()).abs() < 0.0001);
+                        }
+                    }
+                }
+                assert!(parts.contains(&"body"));
+                assert!(parts.contains(&"top"));
+                assert!(parts.contains(&"bottom"));
+                drop(parts);
+                let pointers: Vec<_> = draws
+                    .iter()
+                    .map(|draw| reusable_vertices(draw).as_ptr())
+                    .collect();
+                draws.clear();
+                scratch.begin_frame();
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
+                assert_eq!(
+                    draws
+                        .iter()
+                        .map(|draw| reusable_vertices(draw).as_ptr())
+                        .collect::<Vec<_>>(),
+                    pointers
+                );
+                assert_eq!(scratch.stats().saturated_pairs, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn twirl_caps_stay_within_preallocated_vertex_budget() {
+        let mut cap = TestSlot::sprite("oversized-cap");
+        cap.def.size[1] = 10_000;
+        let mut request = body_cap_request(None, Some(&cap), Some(&cap));
+        request.twirl = 2.5;
+        request.depth_test = true;
+        let mut scratch = HoldMeshScratch::with_columns(1);
+        let mut draws = Vec::new();
+        compose_hold_body_caps(
+            &mut draws,
+            &mut scratch,
+            request,
+            &|y, _| straight_path(y),
+            &test_source,
+        );
+        assert!(!draws.is_empty());
+        for draw in &draws {
+            let vertices = reusable_vertices(draw);
+            assert!(vertices.len() <= HOLD_CAP_BUFFER_VERTICES);
+            assert_eq!(vertices.capacity(), HOLD_CAP_BUFFER_VERTICES);
+        }
+        for pair in &scratch.caps.pairs {
+            assert!(
+                pair.iter()
+                    .all(|buffer| buffer.capacity() == HOLD_CAP_BUFFER_VERTICES)
+            );
+        }
+        assert_eq!(scratch.stats().saturated_pairs, 0);
+    }
+
+    #[test]
+    fn twirl_cap_keeps_visible_rows_when_stealth_hides_its_midpoint() {
+        let cap = TestSlot::sprite("partially-visible-cap");
+        let mut request = body_cap_request(None, Some(&cap), None);
+        request.twirl = 2.5;
+        request.depth_test = true;
+        request.y_head = 32.0;
+        request.y_tail = 64.0;
+        request.draw_span = Some((32.0, 64.0));
+        request.appearance.stealth = 1.0;
+        request.appearance_cache = crate::note_appearance_cache(0.0, 0.0, request.appearance);
+        let mut scratch = HoldMeshScratch::with_columns(1);
+        let mut draws = Vec::new();
+        compose_hold_body_caps(
+            &mut draws,
+            &mut scratch,
+            request,
+            &|y, _| straight_path(y),
+            &test_source,
+        );
+        assert!(!draws.is_empty());
+        for draw in &draws {
+            let vertices = reusable_vertices(draw);
+            assert!(vertices.iter().any(|vertex| vertex.color[3] > 0.0));
+            assert!(
+                vertices
+                    .iter()
+                    .filter(|vertex| vertex.color[3] > 0.0)
+                    .all(|vertex| vertex.pos[1] < 0.0)
+            );
+        }
+    }
+
+    #[test]
     fn cached_hold_endpoint_sample_matches_direct_sampling() {
         let sample = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y.mul_add(1.25, -3.0),
             center_x: y.mul_add(-0.5, 17.0),
             world_z: y * 0.125,
@@ -2319,6 +3193,11 @@ mod tests {
     fn cached_hold_endpoint_appearance_matches_direct_evaluation() {
         let request: HoldBodyCapRequest<'_, TestSlot> = body_cap_request(None, None, None);
         let sample = HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: 37.5,
             center_x: -12.0,
             world_z: 4.0,
@@ -2326,7 +3205,13 @@ mod tests {
         };
         let direct = hold_alpha_glow(&request, sample);
         assert_eq!(
-            hold_endpoint_alpha_glow(sample, None, request.lane_offset, &request.appearance_cache),
+            hold_endpoint_alpha_glow(
+                sample,
+                None,
+                request.lane_offset,
+                request.fade_travel_scale,
+                &request.appearance_cache
+            ),
             direct
         );
 
@@ -2341,6 +3226,7 @@ mod tests {
                 sample,
                 endpoint.appearance,
                 request.lane_offset,
+                request.fade_travel_scale,
                 &request.appearance_cache,
             ),
             cached
@@ -2385,6 +3271,11 @@ mod tests {
         let mut mesh_scratch = HoldMeshScratch::with_columns(1);
         mesh_scratch.begin_frame();
         let curved_path = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y,
             center_x: y.mul_add(0.125, 12.0),
             world_z: y * 0.25,
@@ -2395,7 +3286,7 @@ mod tests {
             &mut draws,
             &mut mesh_scratch,
             request,
-            &curved_path,
+            &|y, _| curved_path(y),
             &|slot| {
                 source_calls.set(source_calls.get() + 1);
                 test_source(slot)
@@ -2409,11 +3300,102 @@ mod tests {
                 draw,
                 FlatDraw::TexturedMesh(FlatTexturedMesh {
                     depth_test: true,
+                    depth_write: true,
+                    depth_test_on_fail: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     vertices: FlatMeshVertices::Reusable(vertices),
                     ..
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))
             )
         }));
+    }
+
+    #[test]
+    fn parabola_curves_hold_body_and_caps_with_native_row_steps() {
+        let body = TestSlot::sprite("body");
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for (x_amount, z_amount) in [(-2.5, 0.0), (0.0, 2.5), (2.5, -2.5)] {
+            for reverse in [false, true] {
+                let visual = deadsync_gameplay::VisualEffects {
+                    parabola_x: x_amount,
+                    parabola_z: z_amount,
+                    ..deadsync_gameplay::VisualEffects::default()
+                };
+                let z_params = crate::gameplay_visual_effect_params(&visual, 0);
+                let z_cache = crate::lane_note_transform_cache(0.0, z_params);
+                let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
+                request.use_legacy_sprites = false;
+                request.depth_test = crate::visual_hold_body_needs_z_buffer(z_params);
+                request.lane_reverse = reverse;
+                let sample = |y: f32| {
+                    let travel = if reverse { -y } else { y };
+                    HoldPathSample {
+                        position_offset: [0.0; 3],
+                        spline_derivative: [0.0; 3],
+                        spline_step: 0.0,
+                        cap_step: 0.0,
+                        spline_absolute: false,
+                        adjusted_travel: travel,
+                        center_x: crate::note_x_offset(
+                            0,
+                            travel,
+                            0.0,
+                            0.0,
+                            &[32.0],
+                            &[0.0],
+                            &[crate::TornadoBounds::default()],
+                            &[],
+                            crate::NoteXParams {
+                                parabola_x: x_amount,
+                                ..crate::NoteXParams::default()
+                            },
+                            0.0,
+                        ),
+                        world_z: crate::note_world_z_cached(
+                            travel,
+                            crate::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                            z_cache,
+                        ),
+                        arrow_px: 64.0,
+                    }
+                };
+                let mut scratch = HoldMeshScratch::with_columns(1);
+                let mut draws = Vec::new();
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
+                let mut parts = Vec::new();
+                for draw in &draws {
+                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                        panic!("curved hold must use mesh")
+                    };
+                    assert_eq!(mesh.depth_test, z_amount != 0.0);
+                    parts.push(mesh.texture.texture_key().expect("asset mesh"));
+                    let vertices = reusable_vertices(draw);
+                    for quad in vertices.chunks_exact(6) {
+                        assert!(
+                            quad[5].pos[1] - quad[0].pos[1]
+                                <= if request.depth_test { 4.001 } else { 16.001 }
+                        );
+                        for (left, right) in [(&quad[0], &quad[1]), (&quad[5], &quad[4])] {
+                            let y = left.pos[1];
+                            assert_eq!(right.pos[1], y);
+                            let square = (y / 64.0) * (y / 64.0);
+                            assert!((left.pos[0] - x_amount * square).abs() < 0.0001);
+                            assert!((right.pos[0] - (64.0 + x_amount * square)).abs() < 0.0001);
+                            assert!((left.pos[2] - z_amount * square).abs() < 0.0001);
+                            assert_eq!(left.pos[2], right.pos[2]);
+                        }
+                    }
+                }
+                for name in ["body", "top", "bottom"] {
+                    assert!(parts.contains(&name));
+                }
+                assert_eq!(scratch.stats().capacity_grows, 0);
+                assert_eq!(scratch.stats().saturated_pairs, 0);
+            }
+        }
     }
 
     #[test]
@@ -2424,17 +3406,32 @@ mod tests {
         request.use_legacy_sprites = false;
         request.y_tail = 620.0;
         request.draw_span = Some((100.0, 620.0));
-        request.screen_height = 720.0;
+        request.draw_bounds = [-400.0, 1120.0];
         let mut scratch = HoldMeshScratch::with_columns(1);
         scratch.begin_frame();
         let sample = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y - 100.0,
-            center_x: 200.0 + crate::drunk_x_extra(2, y - 100.0, 65.5, 480.0, -2.0),
+            center_x: 200.0
+                + crate::drunk_x_extra(
+                    2,
+                    y - 100.0,
+                    65.5,
+                    crate::NoteXParams {
+                        screen_height: 480.0,
+                        drunk: -2.0,
+                        ..crate::NoteXParams::default()
+                    },
+                ),
             world_z: 0.0,
             arrow_px: 64.0,
         };
         let mut draws = Vec::new();
-        compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+        compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
         let mut triangles = 0;
         for draw in draws {
             let FlatDraw::TexturedMesh(mesh) = draw else {
@@ -2566,7 +3563,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             body_cap_request(Some(&body), Some(&top), Some(&bottom)),
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -2609,7 +3606,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -2650,7 +3647,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         let first_ptrs = actors
@@ -2668,7 +3665,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         for ((draw, first_ptr), first_vertices) in actors.iter().zip(first_ptrs).zip(first_vertices)
@@ -2804,7 +3801,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &|slot| {
                 source_calls.set(source_calls.get() + 1);
                 test_source(slot)
@@ -2881,7 +3878,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 let frame = render_hold_draws(&draws);
@@ -2946,7 +3943,7 @@ mod tests {
                         &mut draws,
                         &mut HoldMeshScratch::default(),
                         request,
-                        &straight_path,
+                        &|y, _| straight_path(y),
                         &test_source,
                     );
                     let frame = render_hold_draws(&draws);
@@ -3025,7 +4022,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 let frame = render_hold_draws(&draws);
@@ -3068,7 +4065,7 @@ mod tests {
                 &mut draws,
                 &mut HoldMeshScratch::default(),
                 request,
-                &straight_path,
+                &|y, _| straight_path(y),
                 &test_source,
             );
             let frame = render_hold_draws(&draws);
@@ -3101,7 +4098,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -3182,7 +4179,11 @@ mod tests {
                 &mut draws,
                 &mut HoldMeshScratch::default(),
                 request,
-                &|y| HoldPathSample {
+                &|y, _| HoldPathSample {
+                    position_offset: [0.0; 3],
+                    spline_derivative: [0.0; 3],
+                    spline_step: 0.0,
+                    cap_step: 0.0,
                     adjusted_travel: if reason == "hidden" { 0.0 } else { y },
                     ..straight_path(y)
                 },
@@ -3220,7 +4221,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 assert_eq!(draws.len(), 4);
@@ -3295,7 +4296,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -3342,7 +4343,7 @@ mod tests {
             head_y: 100.0,
             tail_y: 220.0,
             receptor_y: 80.0,
-            screen_height: 480.0,
+            draw_bounds: [-400.0, 880.0],
             field_zoom: 1.0,
             lane_reverse: false,
             engaged: false,
@@ -3441,7 +4442,11 @@ mod tests {
                             &mut draws,
                             &mut HoldMeshScratch::default(),
                             draw,
-                            &|y| HoldPathSample {
+                            &|y, _| HoldPathSample {
+                                position_offset: [0.0; 3],
+                                spline_derivative: [0.0; 3],
+                                spline_step: 0.0,
+                                cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,
                                 ..straight_path(y)
                             },
@@ -3690,5 +4695,40 @@ mod tests {
         assert_eq!(offscreen.head_slot.copied(), Some(10));
         assert_eq!(offscreen.top_cap_slot.copied(), Some(30));
         assert_eq!(offscreen.bottom_cap_slot.copied(), Some(40));
+    }
+}
+
+#[cfg(test)]
+mod confusion_strip_tests {
+    use super::*;
+    #[test]
+    fn confusion_strip_matches_native_widths() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/confusion-spin-strip.json"
+        ))
+        .expect("unchanged native NoteDisplay and quaternion blocks");
+        let vectors = native["vectors"].as_array().expect("native strip rows");
+        assert_eq!(vectors.len(), 672);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let cache = crate::lane_note_transform_cache(
+                value("beat"),
+                crate::VisualEffectParams {
+                    confusion_y: value("strength_y"),
+                    confusion_y_offset: value("offset_y"),
+                    ..Default::default()
+                },
+            );
+            let rotation = cache.confusion_rotation_y_deg
+                + visual_note_rotation_y(value("travel"), value("twirl"));
+            let row = hold_strip_row_3d([0.0; 3], 32.0, rotation, 0.0, 1.0, 0.0, [1.0; 4]);
+            for (axis, key) in ["dx", "dy", "dz"].into_iter().enumerate() {
+                let actual = row[0].pos[axis];
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+        }
     }
 }

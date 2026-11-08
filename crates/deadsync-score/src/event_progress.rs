@@ -167,7 +167,7 @@ fn push_capitalized_first(out: &mut String, text: &str) {
         return;
     };
     out.extend(first.to_uppercase());
-    out.extend(chars);
+    out.push_str(chars.as_str());
 }
 
 fn push_stat_improvement_lines(out: &mut String, progress: Option<&SubmitProgress>) -> bool {
@@ -509,6 +509,7 @@ fn itl_progress_from_submit(
 fn srpg_progress_from_submit(
     input: &SubmitEventProgressInput,
     leaderboard: Vec<LeaderboardEntry>,
+    skill_improvements: Vec<String>,
 ) -> Option<ItlEventProgress> {
     let srpg = input.srpg.as_ref()?;
     let score_delta = if input.result.eq_ignore_ascii_case("score-added") {
@@ -549,11 +550,7 @@ fn srpg_progress_from_submit(
         clear_type_before: None,
         clear_type_after: None,
         stat_improvements: event_stat_improvements(srpg.progress.as_ref()),
-        skill_improvements: srpg
-            .progress
-            .as_ref()
-            .map(|progress| progress.skill_improvements.clone())
-            .unwrap_or_default(),
+        skill_improvements,
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages =
@@ -574,10 +571,16 @@ pub fn event_progress_from_submit(input: &SubmitEventProgressInput) -> Vec<ItlEv
         .filter(|_| input.itl_score_hundredths.is_some())
         .map(|event| event.leaderboard.clone())
         .unwrap_or_default();
-    event_progress_with_leaderboards(input, srpg, itl)
+    let skills = input
+        .srpg
+        .as_ref()
+        .and_then(|event| event.progress.as_ref())
+        .map(|progress| progress.skill_improvements.clone())
+        .unwrap_or_default();
+    event_progress_with_leaderboards(input, srpg, itl, skills)
 }
 
-/// Consume prepared event data without copying its leaderboard rows again.
+/// Consume prepared event data without copying leaderboard rows or skill text.
 #[must_use]
 pub fn event_progress_from_submit_owned(
     mut input: SubmitEventProgressInput,
@@ -592,22 +595,135 @@ pub fn event_progress_from_submit_owned(
         .as_mut()
         .map(|event| std::mem::take(&mut event.leaderboard))
         .unwrap_or_default();
-    event_progress_with_leaderboards(&input, srpg, itl)
+    let skills = input
+        .srpg
+        .as_mut()
+        .and_then(|event| event.progress.as_mut())
+        .map(|progress| {
+            let skills = &mut progress.skill_improvements;
+            if skills.iter().all(|skill| skill.capacity() == skill.len()) {
+                let mut skills = std::mem::take(skills);
+                skills.shrink_to_fit();
+                skills
+            } else {
+                skills.clone()
+            }
+        })
+        .unwrap_or_default();
+    event_progress_with_leaderboards(&input, srpg, itl, skills)
 }
 
 fn event_progress_with_leaderboards(
     input: &SubmitEventProgressInput,
     srpg: Vec<LeaderboardEntry>,
     itl: Vec<LeaderboardEntry>,
+    skills: Vec<String>,
 ) -> Vec<ItlEventProgress> {
     let count = usize::from(input.srpg.is_some())
         + usize::from(input.itl.is_some() && input.itl_score_hundredths.is_some());
     let mut progress = Vec::with_capacity(count);
-    if let Some(srpg) = srpg_progress_from_submit(input, srpg) {
+    if let Some(srpg) = srpg_progress_from_submit(input, srpg, skills) {
         progress.push(srpg);
     }
     if let Some(itl) = itl_progress_from_submit(input, itl) {
         progress.push(itl);
     }
     progress
+}
+
+#[cfg(test)]
+mod performance_event_regressions {
+    use super::*;
+
+    #[test]
+    fn capitalized_text_preserves_unicode_and_existing_output() {
+        for (input, expected) in [
+            ("", ""),
+            ("staminaLevel", "StaminaLevel"),
+            (
+                "\u{e9}nergie \u{6771}\u{4eac}",
+                "\u{c9}nergie \u{6771}\u{4eac}",
+            ),
+            ("\u{df}peed", "SSpeed"),
+            ("\u{1f0}ump", "J\u{30c}ump"),
+            ("\u{301}accent", "\u{301}accent"),
+            ("\u{1f980}rust\n", "\u{1f980}rust\n"),
+        ] {
+            let mut output = "prefix:".to_string();
+            push_capitalized_first(&mut output, input);
+            assert_eq!(output, format!("prefix:{expected}"));
+        }
+    }
+
+    #[test]
+    fn owned_progress_preserves_compact_skills_and_all_pages() {
+        for count in [0, 1, 4, 17] {
+            for spare_vector in [false, true] {
+                for spare_strings in [false, true] {
+                    let mut skills = Vec::with_capacity(count + usize::from(spare_vector) * 32);
+                    for i in 0..count {
+                        let text = format!("Skill {i}: \u{e9}lan \u{6771}\u{4eac}");
+                        let mut skill =
+                            String::with_capacity(text.len() + usize::from(spare_strings) * 512);
+                        skill.push_str(&text);
+                        skills.push(skill);
+                    }
+                    let event = SubmitEventProgressData {
+                        name: " Event ".into(),
+                        progress: Some(SubmitProgress {
+                            skill_improvements: skills,
+                            stat_improvements: vec![SubmitStatImprovement {
+                                name: "staminaLevel".into(),
+                                gained: 2,
+                                current: 3,
+                            }],
+                            quests_completed: vec![SubmitQuest {
+                                title: " Quest ".into(),
+                                ..Default::default()
+                            }],
+                            achievements_completed: vec![SubmitAchievement {
+                                title: "Achievement".into(),
+                                ..Default::default()
+                            }],
+                        }),
+                        ..Default::default()
+                    };
+                    for include_itl_score in [false, true] {
+                        let mut input = SubmitEventProgressInput {
+                            result: "success".into(),
+                            score_10000: 9876,
+                            rate_hundredths: 105,
+                            itl_score_hundredths: include_itl_score.then_some(9950),
+                            itl: Some(event.clone()),
+                            srpg: Some(event.clone()),
+                        };
+                        // Clone compacts buffers; recreate their spare capacity in the owned input.
+                        let owned_skills = &mut input
+                            .srpg
+                            .as_mut()
+                            .unwrap()
+                            .progress
+                            .as_mut()
+                            .unwrap()
+                            .skill_improvements;
+                        if spare_vector {
+                            owned_skills.reserve(32);
+                        }
+                        if spare_strings {
+                            for skill in owned_skills {
+                                skill.reserve(512);
+                            }
+                        }
+                        let expected = event_progress_from_submit(&input);
+                        let actual = event_progress_from_submit_owned(input);
+                        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+                        let skills = &actual[0].skill_improvements;
+                        assert_eq!(skills.capacity(), skills.len());
+                        assert!(skills.iter().all(|s| s.capacity() == s.len()));
+                    }
+                }
+            }
+        }
+        assert!(event_progress_from_submit_owned(SubmitEventProgressInput::default()).is_empty());
+    }
 }

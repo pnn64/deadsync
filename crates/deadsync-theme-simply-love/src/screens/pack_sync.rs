@@ -28,6 +28,45 @@ pub struct TargetSpec {
     pub chart_ix: usize,
 }
 
+/// Choose one chart with note data per song. Prefer the session's style and
+/// difficulty, but allow packs authored for another style to be measured.
+pub(crate) fn target_for_song(
+    song: &Arc<SongData>,
+    preferred_chart_type: &str,
+    preferred_difficulty_index: usize,
+) -> Option<TargetSpec> {
+    let chart_type = song
+        .charts
+        .iter()
+        .find(|chart| {
+            chart.has_note_data && chart.chart_type.eq_ignore_ascii_case(preferred_chart_type)
+        })
+        .or_else(|| song.charts.iter().find(|chart| chart.has_note_data))?
+        .chart_type
+        .as_str();
+    let chart_ix = song
+        .best_steps_index(chart_type, preferred_difficulty_index)
+        .and_then(|steps_index| {
+            let standard = song.standard_chart_indices(chart_type);
+            let edits = song.edit_chart_indices_sorted(chart_type);
+            deadsync_chart::song::chart_ix_for_steps_index(&standard, steps_index, &edits)
+        })
+        .filter(|&index| song.charts[index].has_note_data)
+        .or_else(|| {
+            song.charts.iter().position(|chart| {
+                chart.has_note_data && chart.chart_type.eq_ignore_ascii_case(chart_type)
+            })
+        })?;
+    let chart = &song.charts[chart_ix];
+    Some(TargetSpec {
+        song: Arc::clone(song),
+        simfile_path: song.simfile_path.clone(),
+        song_title: song.display_full_title(false),
+        chart_label: chart_label(chart),
+        chart_ix,
+    })
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NavigationPolicy {
     pub only_dedicated_menu_buttons: bool,
@@ -1145,6 +1184,29 @@ fn row_delta_seconds(row: &RowState) -> Option<f32> {
         .map(|bias_ms| -(bias_ms as f32) * 0.001)
         .filter(|v| v.is_finite())
         .map(quantize_sync_offset_seconds)
+}
+
+/// The simfiles of rows the review has left null: no change to make, a fix an
+/// earlier review saved, or one this review has saved already. A host that
+/// records the pack's sync after a save needs these alongside the ones the
+/// save in hand wrote.
+pub(crate) fn settled_simfiles(state: &OverlayState) -> Vec<PathBuf> {
+    let OverlayState::Visible(data) = state else {
+        return Vec::new();
+    };
+    data.rows
+        .iter()
+        .filter(|row| {
+            matches!(
+                row_disposition(row, data.min_confidence),
+                RowDisposition::NoChange
+                    | RowDisposition::AlreadyApplied
+                    | RowDisposition::Saved
+                    | RowDisposition::CacheRefreshFailed
+            )
+        })
+        .map(|row| row.simfile_path.clone())
+        .collect()
 }
 
 fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {

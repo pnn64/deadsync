@@ -1,0 +1,327 @@
+{
+  "production_checkpoint": "cafedc93d",
+  "production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33D55EE2ECA45B88852D6E2C1FEB0390E3894CD5E576DF7272A8E304E7DBDEA9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548EC2169B7C2C6D8ABE4715F284F65FE9BD70189C670F320D6E2F244FCB2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "7965DC182785951CA947A3EE1253B201816D2144128E452424316D766F84264B"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269EE9CC1083986A2B507F2E3EAD67C8780411C2AAE286257B9B8F8C1DBB035"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1A4431FFDC2D477EA928B8F97F439B0293B31CCA599A47DEC885D454E4690601"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70A7980389A5F9FD7FDD6AEDB9C574E7DA32B67E1CA5602BB901C0F3FB855ED3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "CDA4227E750C1CCF5A77FD300D541E9D6FF45CBE48F0AF2AA60633FBE264495D"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9DE8D5AE51577E8438F8FCA56FC7698B16F9E4E68AEE0548EA61AA569E304CF7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "B9D9A6D9B2CA92D56DB5B81F17BF6F71A590695D7DBAD27276CBAD509122CA9A"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "46AD510363BBE080B2401A327A6B9E017B259EC80D2BDB67FDFECB2A0A8B6117"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "F9DB3D3CBF32FB492ED524205E2C0699CC8A116B89B3C03E98B2C9C6253F576E"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+    }
+  ],
+  "harness_source_sha256": [
+    {
+      "path": "fuzz/fuzz_targets/zlib.rs",
+      "sha256": "fd9554f9bdae4786df4dc5cb054de4df8bcd73aabf295f51035210cd39953e62"
+    },
+    {
+      "path": "fuzz/fuzz_targets/huffman.rs",
+      "sha256": "d625611b80e644192c27dd9f7b8065cfb78515cc55236203985ae4fd9d5c29ca"
+    },
+    {
+      "path": "fuzz/support/reference.rs",
+      "sha256": "68a2bbed1d30d3e431e41ee56162112272f1a6adec395fbf6a80c3f7c50802f9"
+    },
+    {
+      "path": "fuzz/examples/reference_check.rs",
+      "sha256": "0cb251c38bf58a121c1ba8c0dcc40161d146e3f0975e0dc599f12af330e16bce"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "870c158287e62a44170276bee45f67c402b49b5e17cf1bbbbf94b0d6b9efbc36"
+    },
+    {
+      "path": "fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "adb505d7c458944059d702a159105ce4f4698a6a701daac5d37312b70c406f3c"
+    },
+    {
+      "path": "tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    }
+  ],
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "c_compiler": "Debian clang version 19.1.7 (3+b1)",
+  "environment": {
+    "CC": "/usr/bin/clang",
+    "CFLAGS": "-fsanitize=address"
+  },
+  "reference_packages": [
+    {
+      "name": "libdeflate-sys",
+      "version": "1.26.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "d7870e5fbd2766179a937c725fb11f4ca0ef025d982beb61bd3ce755425bd19c",
+      "dependencies": [
+        "cc"
+      ]
+    },
+    {
+      "name": "libdeflater",
+      "version": "1.26.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "0cbb8285d2e2bd4b8d4155840ae81929354b4ba0d7b3c272c84761ffa2141e1f",
+      "dependencies": [
+        "libdeflate-sys"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "cargo",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/Cargo.toml",
+        "--release",
+        "--example",
+        "reference_check",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-check"
+      ],
+      "log": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-deterministic-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 3.713
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "zlib",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-hdist31.zlib",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=1",
+        "-seed=782347",
+        "-timeout=10"
+      ],
+      "log": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-new-zlib-replay.log",
+      "exit_code": 0,
+      "wall_seconds": 22.875
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "zlib",
+        "/tmp/deadlib-image-reference-corpus-20261027-a/zlib",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=262144",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-zlib-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 19.05
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "huffman",
+        "/tmp/deadlib-image-reference-corpus-20261027-a/huffman",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=10000",
+        "-seed=782347",
+        "-max_len=64",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-huffman-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 162.366
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "zlib",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 810,
+        "bytes": 4803389,
+        "sha256": "3e9821a27aee4076cf6d9e55130c06cf10d356ca3a0f3c33224c97c68c87c8c1",
+        "maximum_file_bytes": 136426
+      },
+      "fuzz_seconds": 18,
+      "peak_rss_mib": 378,
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/zlib",
+      "binary_sha256": "e222c48be5b04f38684e3bea626a2d39d89e05f8bb488af5891b1b9b6f7d6d23",
+      "asan_init_defined": true,
+      "instrumented_c_reference_archives": [
+        "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/build/libdeflate-sys/5cd002566850224c/out/lib/libdeflate.a"
+      ],
+      "c_archive_sha256": [
+        {
+          "path": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/build/libdeflate-sys/5cd002566850224c/out/lib/libdeflate.a",
+          "sha256": "684647cff88c67fa8fd8040e10aa683c9ee28c5aa11959ed1421f85cd9aa3c09"
+        }
+      ]
+    },
+    {
+      "target": "huffman",
+      "runs": 10000,
+      "initial_corpus": {
+        "files": 649,
+        "bytes": 7788,
+        "sha256": "8ced47a4e4a4156b0ca5c367135da86a82004425176c5cccecbfff69b1c25b90",
+        "maximum_file_bytes": 12
+      },
+      "fuzz_seconds": 157,
+      "peak_rss_mib": 404,
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/huffman",
+      "binary_sha256": "caa958ce2894321da2d27a1ba2022a9211555e7f0614153f6ce2d10769b2279f",
+      "asan_init_defined": true,
+      "instrumented_c_reference_archives": [
+        "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/build/libdeflate-sys/5cd002566850224c/out/lib/libdeflate.a"
+      ],
+      "c_archive_sha256": [
+        {
+          "path": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/build/libdeflate-sys/5cd002566850224c/out/lib/libdeflate.a",
+          "sha256": "684647cff88c67fa8fd8040e10aa683c9ee28c5aa11959ed1421f85cd9aa3c09"
+        }
+      ]
+    }
+  ],
+  "scope": "Positive oracle only; reference permits some malformed trees. Strict negative checks remain native plus C zlib. C and Rust instrumentation verified. Fixed-input replays are excluded from campaign totals.",
+  "regression": {
+    "fixture": "fuzz/reports/reference-hdist31.zlib",
+    "sha256": "e7f04eaaf44d817c702edbd6d9625692ec9207ffa5a028d762e8b0734392566c",
+    "case": "counts-with-body/257/31",
+    "expected_output": [
+      0,
+      0
+    ],
+    "old_harness_binary": "/tmp/deadlib-image-zlib-flate2-cafedc93d",
+    "old_binary_sha256": "d9e1525374a4939f7bd5396f998ecf15ecf9c1edd437d9b672ab9fd040848800",
+    "old_exit_code": 77,
+    "old_log": "fuzz/reports/reference-old-zlib-replay.log",
+    "new_exit_code": 0,
+    "new_log": "fuzz/reports/reference-new-zlib-replay.log",
+    "scope": "Expected failure of old reference assumption, not a native codec defect. Fixed-input runs are excluded from successful campaign totals."
+  },
+  "deterministic_checks": {
+    "valid_huffman_streams": 3091,
+    "extended_distance_definitions": 68,
+    "zlib_window_level_headers": 32,
+    "native_malformed_rejections": 16554,
+    "reference_malformed_acceptances_in_64_byte_probe": {
+      "counts-with-body": 64,
+      "unused-code": 1
+    },
+    "platforms": [
+      "Windows x86-64 MSVC",
+      "Linux x86-64 GNU"
+    ]
+  },
+  "shared_source_sha256": {
+    "path": "crates/deadlib-image/src/lib.rs",
+    "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+  },
+  "bundled_reference": {
+    "libdeflate_version": "1.26",
+    "wrapper_version": "1.26.1",
+    "sys_crate_version": "1.26.1",
+    "c_header_files": 60,
+    "c_header_source_sha256": "fb8c99fd133d3cba023dbb8389698219784530c581939c58656e2a661dd5b37c",
+    "hash_method": "Sorted relative filenames, each followed by NUL and file contents",
+    "source": "https://github.com/ebiggers/libdeflate/tree/v1.26"
+  }
+}

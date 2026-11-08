@@ -147,6 +147,7 @@ pub enum SongLuaEase {
     Linear,
     InQuad,
     OutQuad,
+    Smooth,
     InOutQuad,
     OutInQuad,
     InCubic,
@@ -195,6 +196,7 @@ impl SongLuaEase {
             "linear" => Self::Linear,
             "inQuad" => Self::InQuad,
             "outQuad" => Self::OutQuad,
+            "smooth" => Self::Smooth,
             "inOutQuad" => Self::InOutQuad,
             "outInQuad" => Self::OutInQuad,
             "inCubic" => Self::InCubic,
@@ -244,6 +246,7 @@ impl SongLuaEase {
             Self::Linear => "linear",
             Self::InQuad => "inQuad",
             Self::OutQuad => "outQuad",
+            Self::Smooth => "smooth",
             Self::InOutQuad => "inOutQuad",
             Self::OutInQuad => "outInQuad",
             Self::InCubic => "inCubic",
@@ -295,6 +298,7 @@ impl SongLuaEase {
             Self::Linear => t,
             Self::InQuad => song_lua_pow::<2>(t),
             Self::OutQuad => song_lua_pow_out::<2>(t),
+            Self::Smooth => t * t * (3.0 - 2.0 * t),
             Self::InOutQuad => song_lua_pow_in_out::<2>(t),
             Self::OutInQuad => song_lua_pow_out_in::<2>(t),
             Self::InCubic => song_lua_pow::<3>(t),
@@ -454,7 +458,53 @@ pub fn song_lua_ease_factor(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> f32 {
+    if let Some(name) = easing {
+        if name == "spring" {
+            let t = t.clamp(0.0, 1.0);
+            return 1.0 - (t * std::f32::consts::PI * 2.5).cos() / (1.0 + t * 3.0);
+        }
+        if let Some(factor) = native_bezier_factor(name, t.clamp(0.0, 1.0)) {
+            return factor;
+        }
+    }
     SongLuaEase::from_name(easing).factor(t, opt1, opt2)
+}
+
+fn native_bezier_factor(name: &str, t: f32) -> Option<f32> {
+    // Actor tween blocks already retain named curves as strings. Preserve the
+    // native float controls in that representation, across load and playback.
+    let controls = name.strip_prefix("bezier(")?.strip_suffix(')')?;
+    let mut points = [0.0_f32; 8];
+    let mut count = 0;
+    for value in controls.split(',') {
+        *points.get_mut(count)? = value.parse().ok()?;
+        count += 1;
+    }
+    let coefficients = |[a, b, c, d]: [f32; 4]| {
+        let first = 3.0 * (b - a);
+        let second = 3.0 * (c - b) - first;
+        [d - a - first - second, second, first, a]
+    };
+    let evaluate = |[a, b, c, d]: [f32; 4], p: f32| ((a * p + b) * p + c) * p + d;
+    match count {
+        4 => Some(evaluate(coefficients([points[0], points[1], points[2], points[3]]), t)),
+        8 => {
+            let x = coefficients([points[0], points[2], points[4], points[6]]);
+            let y = coefficients([points[1], points[3], points[5], points[7]]);
+            // RageBezier2D starts with the curve's actual X endpoints, then
+            // applies at most 100 float Newton steps with its native tolerance.
+            let end = x[0] + x[1] + x[2] + x[3];
+            let mut p = (t - x[3]) / (end - x[3]);
+            for _ in 0..100 {
+                let error = t - evaluate(x, p);
+                if error.abs() < 0.0001 { break; }
+                let slope = 3.0 * x[0] * p * p + 2.0 * x[1] * p + x[2];
+                p += error / slope;
+            }
+            Some(evaluate(y, p))
+        }
+        _ => None,
+    }
 }
 
 #[inline(always)]
@@ -487,10 +537,50 @@ pub fn song_lua_column_y_offset(
 ) -> f32 {
     windows
         .iter()
-        .filter(|window| window.column == local_col)
+        .filter(|window| {
+            window.column == local_col && window.target == SongLuaColumnTransformTarget::OffsetY
+        })
         .filter_map(|window| song_lua_column_offset_window_value(window, now))
         .next_back()
         .unwrap_or(0.0)
+}
+
+/// Resolve the bounded, frame-local column state in one window scan.
+/// Consumers sample the solved splines in constant time, without allocations.
+pub fn song_lua_column_transforms(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    num_cols: usize,
+    current_time_s: f32,
+) -> (
+    [[f32; MAX_COLS]; 4],
+    [SongLuaPositionSpline<'static>; MAX_COLS],
+) {
+    let active_cols = num_cols.min(MAX_COLS);
+    let mut x_offsets = [0.0; MAX_COLS];
+    let mut y_offsets = [0.0; MAX_COLS];
+    let mut zooms = [1.0; MAX_COLS];
+    let mut rotations_deg = [0.0; MAX_COLS];
+    // Frame-local, fixed capacity state: one window scan, then constant-time
+    // sampling per note/hold vertex. No allocation or gameplay miss work.
+    let mut splines = [SongLuaPositionSpline::default(); MAX_COLS];
+    for window in windows {
+        if window.column >= active_cols {
+            continue;
+        }
+        let Some(value) = song_lua_column_offset_window_value(window, current_time_s) else {
+            continue;
+        };
+        match window.target {
+            SongLuaColumnTransformTarget::OffsetX => x_offsets[window.column] = value,
+            SongLuaColumnTransformTarget::OffsetY => y_offsets[window.column] = value,
+            SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
+            SongLuaColumnTransformTarget::RotationZ => {
+                rotations_deg[window.column] = value.to_degrees();
+            }
+            target => splines[window.column].set(target, value),
+        }
+    }
+    ([x_offsets, y_offsets, zooms, rotations_deg], splines)
 }
 
 #[derive(Debug, Clone, Copy)]

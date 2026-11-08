@@ -1,0 +1,11 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\references\ogg\Release\ogg.lib
+  FLAC.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\references\flac\src\libFLAC\Release\FLAC.lib
+  benchmark.cpp
+  Generating code
+  18 of 624 functions ( 2.9%) were compiled, the rest were copied from previous compilation.
+    2 functions were new in current compilation
+    14 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  flac_latency_benchmark.vcxproj -> C:\GitHub\deadsync\target\deadlib-flac-reference\latency-windows-build\Release\flac_latency_benchmark.exe

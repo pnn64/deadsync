@@ -22,6 +22,15 @@ fn extension_matches(ext: &str, extensions: &[&str]) -> bool {
         .any(|candidate| ext.eq_ignore_ascii_case(candidate))
 }
 
+// Enumeration supplies ordinary file types. Follow link targets (and retain
+// Path::is_file's error handling) only when that cached type is insufficient.
+pub(crate) fn song_asset_entry_is_file(entry: &fs::DirEntry, path: &Path) -> bool {
+    match entry.file_type() {
+        Ok(kind) if !kind.is_symlink() => kind.is_file(),
+        _ => path.is_file(),
+    }
+}
+
 #[must_use]
 pub fn collapse_song_asset_path(path: &str) -> String {
     collapse_song_asset_path_with(path, false)
@@ -225,14 +234,14 @@ pub fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
         return None;
     };
     let mut best: Option<(u8, PathBuf)> = None;
-    for path in read_dir
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-    {
+    for entry in read_dir.flatten() {
+        let path = entry.path();
         let Some(rank) = foreground_media_ext_rank(&path) else {
             continue;
         };
+        if !song_asset_entry_is_file(&entry, &path) {
+            continue;
+        }
         if best.as_ref().is_none_or(|(best_rank, best_path)| {
             foreground_media_candidate_cmp(rank, &path, *best_rank, best_path).is_lt()
         }) {
@@ -357,9 +366,12 @@ fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
     };
     let mut paths = entries
         .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
+        .filter_map(|entry| {
+            let path = entry.path();
+            (!is_mac_resource_fork(&path)
+                && is_bgchange_movie_path(&path)
+                && song_asset_entry_is_file(&entry, &path))
+            .then_some(path)
         })
         .collect::<Vec<_>>();
     paths.sort_by(|left, right| random_movie_path_cmp(left, right));
@@ -454,7 +466,7 @@ pub fn is_song_art_image(path: &Path) -> bool {
 #[must_use]
 pub fn is_mac_resource_fork(path: &Path) -> bool {
     path.file_name()
-        .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+        .is_some_and(|name| name.as_encoded_bytes().starts_with(b"._"))
 }
 
 #[must_use]
@@ -790,10 +802,12 @@ second.ogv=1
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         }
@@ -801,5 +815,5 @@ second.ogv=1
 }
 
 #[cfg(test)]
-#[path = "../tests/perf/asset_discovery.rs"]
-mod asset_discovery_perf;
+#[path = "media_perf.rs"]
+mod perf;

@@ -107,28 +107,13 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
             continue;
         }
         for song in &pack.songs {
-            let Some(steps_index) =
-                song.best_steps_index(target_chart_type, preferred_difficulty_index)
-            else {
-                continue;
-            };
-            let Some(chart_ix) = select_music::selected_chart_ix_for_sync(
-                song.as_ref(),
+            if let Some(target) = shared_pack_sync::target_for_song(
+                song,
                 target_chart_type,
-                steps_index,
-            ) else {
-                continue;
-            };
-            let Some(chart) = song.charts.get(chart_ix) else {
-                continue;
-            };
-            targets.push(shared_pack_sync::TargetSpec {
-                song: song.clone(),
-                simfile_path: song.simfile_path.clone(),
-                song_title: song.display_full_title(false),
-                chart_label: shared_pack_sync::chart_label(chart),
-                chart_ix,
-            });
+                preferred_difficulty_index,
+            ) {
+                targets.push(target);
+            }
         }
     }
     let confidence_percent = confidence_percent(state);

@@ -1,0 +1,20 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.07s
+     Running tests\residue_geometry.rs (target\debug\deps\residue_geometry-f398049bf38c2fc9.exe)
+
+running 1 test
+unaligned-residue-two/step-1: 160 samples, peak error 1.728101432e0, RMS 5.307471737e-1, signal peak 3.202916
+
+thread 'unaligned_residue_two_matches_libvorbis' (26368) panicked at crates\deadlib-audio\decode\vorbis\tests\support\mod.rs:128:9:
+unaligned-residue-two/step-1: PCM peak tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test unaligned_residue_two_matches_libvorbis ... FAILED
+
+failures:
+
+failures:
+    unaligned_residue_two_matches_libvorbis
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test residue_geometry`

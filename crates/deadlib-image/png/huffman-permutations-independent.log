@@ -1,0 +1,31 @@
+﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-f6a0913ad41f45b5a721b2102fc6f928
+Command: cargo test -p deadlib-image-png --offline --test huffman_permutations
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+     Locking 11 packages to highest Rust 1.97 compatible versions
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-f6a0913ad41f45b5a721b2102fc6f928)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-f6a0913ad41f45b5a721b2102fc6f928\png)
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.60s
+     Running tests\huffman_permutations.rs (target\debug\deps\huffman_permutations-efd87f5a8ffe512f.exe)
+
+running 5 tests
+test c_zlib_symbol_permutations ... ignored, explicit C zlib permutation audit; build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test every_code_length_assignment_and_all_repeat_symbols ... ok
+test every_literal_and_eob_assignment_with_empty_distances ... ok
+test every_literal_length_and_eob_assignment_with_matches ... ok
+test every_distance_assignment_and_full_history ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 39.01s
+
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-f6a0913ad41f45b5a721b2102fc6f928\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-f6a0913ad41f45b5a721b2102fc6f928)

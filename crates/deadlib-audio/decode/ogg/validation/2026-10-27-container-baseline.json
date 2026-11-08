@@ -1,0 +1,204 @@
+{
+  "started_utc": "2026-10-27T05:01:41.209527+00:00",
+  "git_head": "013711c184c664210bf2490f90f1a4aa03774e50",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_cpus": 44,
+  "reference_pin": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+  "repeats": 7,
+  "seed": 1337,
+  "min_seconds": 0.15,
+  "iteration_cap": 1000000,
+  "workers": {
+    "native": {
+      "path": "target/release/deps/container-29892761aaacb5a1.exe",
+      "sha256": "437e8c26283c5af109904d4ca570e8cef903177834b07148ba5d9cb6dd4422ef"
+    },
+    "libogg": {
+      "path": "target/deadlib-audio-reference/ogg-benchmark-build/Release/deadlib_ogg_benchmark.exe",
+      "sha256": "657fbcf931b928be92bc5ff048f500b6c168c2dd78f33193c453f53ffa8cc598"
+    }
+  },
+  "baseline": null,
+  "cargo_artifact_profile": {
+    "opt_level": "3",
+    "debuginfo": 1,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "registry_packages": [
+    "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+    "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2"
+  ],
+  "cargo_profiles": {
+    "release": {
+      "opt-level": 3,
+      "overflow-checks": false,
+      "debug-assertions": false,
+      "lto": true,
+      "debug": false,
+      "panic": "abort"
+    },
+    "dev": {
+      "package": {
+        "png": {
+          "opt-level": 3
+        },
+        "fdeflate": {
+          "opt-level": 3
+        },
+        "deadlib-audio": {
+          "opt-level": 3
+        },
+        "deadlib-audio-decode": {
+          "opt-level": 3
+        },
+        "rubato": {
+          "opt-level": 3
+        },
+        "symphonia-core": {
+          "opt-level": 3
+        },
+        "symphonia-codec-vorbis": {
+          "opt-level": 3
+        },
+        "sha2": {
+          "opt-level": 3
+        },
+        "deadsync-song-lua": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy-sys": {
+          "opt-level": 3
+        }
+      }
+    },
+    "local": {
+      "inherits": "release",
+      "lto": "thin"
+    },
+    "profiling": {
+      "inherits": "release",
+      "debug": 1
+    },
+    "bench": {
+      "debug": 1
+    }
+  },
+  "cargo_config": {
+    "target": {
+      "cfg(target_os = \"macos\")": {
+        "rustflags": [
+          "-L",
+          "native=/opt/homebrew/lib",
+          "-L",
+          "native=/opt/homebrew/opt/vulkan-loader/lib",
+          "-L",
+          "native=/usr/local/lib",
+          "-L",
+          "native=/usr/local/opt/vulkan-loader/lib"
+        ]
+      },
+      "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+        "rustflags": [
+          "-C",
+          "target-feature=+crt-static"
+        ]
+      }
+    },
+    "env": {
+      "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+    }
+  },
+  "rustflags_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null
+  },
+  "cmake_release_flags": [
+    "CMAKE_CXX_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_C_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=/INCREMENTAL:NO"
+  ],
+  "source_sha256": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "3c0749be15998357c6528b36f25f3c350b7f018bd9341840f1d33df12246b857",
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "crates/deadlib-audio/decode/ogg/benches/container.rs": "95de98f357e80218fff47d296f0d62a0769240db503dabd09cbde017d40bbae8",
+    "crates/deadlib-audio/decode/ogg/benches/oracle/benchmark.cpp": "26dfb633b4d6aff03055ec32093685c2523c08e169dab3fb449c64d115ad5522",
+    "crates/deadlib-audio/decode/ogg/benches/oracle/CMakeLists.txt": "a1241b55ae821f25b088aa466953ebe3caac0e2b9c0fb41b66b7e0669a7d5a88",
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "3e6a9a1c2046d71f7f7d9d195febdb7a59b8d49dc06a6001092194420fb7a1db",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "aea47b432fbffc4f7e3716c9591c23f48b4753d393079a9c06c67ab876aef869",
+    "crates/deadlib-audio/decode/scripts/benchmark_ogg.py": "352af1bc295f8b5646f2e3a9135817883fc7b1a41748f0fae8e60d21daa0053f"
+  },
+  "input_sha256": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483",
+    "target/deadlib-audio-reference/ogg-baseline-20261027/generated/bulk.ogg": "04863351671ba63cb16939aa32e0ecfbafbbfae286a708314ef9b2e4e6bc85d0",
+    "target/deadlib-audio-reference/ogg-baseline-20261027/generated/span-mux-chain.ogg": "2118454313c518306b97009046c79a1f0c8d0bb8018fe6d8a5d7631091bb3383",
+    "target/deadlib-audio-reference/ogg-baseline-20261027/generated/tiny.ogg": "a6a50a9c63f9e987c8a971a497abd2faaf3cd2a86668894696b743d53dab8146"
+  },
+  "verification": [
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg",
+      "wire_bytes": 2859,
+      "wire_sha256": "0300b9abf467dadb04359206a9798c52e1bd69b9f69821ab7d0599c91e42c115",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg",
+      "wire_bytes": 5117,
+      "wire_sha256": "b4acaf052cf7e9b50879d097217cc3d0e23ee5cfb2c735b04796876f3db77d9a",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "assets/music/in_two (loop).ogg",
+      "wire_bytes": 5148841,
+      "wire_sha256": "ed2a71b673994249cf2f5472e942a03bc9fc9e5df881986e96818298d9f0206d",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg",
+      "wire_bytes": 2578390,
+      "wire_sha256": "aecd2dce3ecc0db3b4a98812466cd96765782cf269615c0028f42e80dcd8914d",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "target/deadlib-audio-reference/ogg-baseline-20261027/generated/bulk.ogg",
+      "wire_bytes": 8400205,
+      "wire_sha256": "63c540b3a49d305d6eb55564efde6c6d1b1b12aebcfcbd1a33137b09031c32ae",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "target/deadlib-audio-reference/ogg-baseline-20261027/generated/span-mux-chain.ogg",
+      "wire_bytes": 401782,
+      "wire_sha256": "feaf93a90a21ef093b70cc9a27865115f09a2312ac3081e32cf3e1844483c3f0",
+      "all_workers_byte_exact": true
+    },
+    {
+      "path": "target/deadlib-audio-reference/ogg-baseline-20261027/generated/tiny.ogg",
+      "wire_bytes": 6945435,
+      "wire_sha256": "a3dd8272709ce0d042e9cbb650a3c506baccfe54537e3621a1aa9d77062f6681",
+      "all_workers_byte_exact": true
+    }
+  ],
+  "scope": "Warm resident-input container APIs; fresh context plus cleanup each iteration; no file load or retained output. Native strict physical grammar is broader than libogg page/packet checks. CRC compares contiguous native input with libogg header/body checksum_set including zero/store fields. No codec synthesis.",
+  "completed_utc": "2026-10-27T05:02:55.568124+00:00",
+  "timing_rows": 462,
+  "source_input_binary_hashes_rechecked": true
+}

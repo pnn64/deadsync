@@ -1,0 +1,85 @@
+{
+  "scope": "Many-component writer refactor; exact default-output identity reuses earlier C evidence where C_decoding_rerun is false. Fresh C checks are explicit. No performance claim.",
+  "cases": 10612,
+  "C_decoding_rerun_cases": 964,
+  "results": [
+    {
+      "matrix": "hierarchy-native",
+      "cases": 3100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-native-jpegxt.json",
+      "baseline_report_sha256": "fbcff13336967f9bed3b120197b7144b14f12fa02bd818148037989ad9767555",
+      "candidate_report_sha256": "cf87ebf94b48d4fbf01d861319f8de0269f160ed37e22c37bdffe0ea1a18dd6c",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "7d2a4302eead1f8a80f3d49671fdd96bfed0946575a6662d4064502c06577a42",
+        "inspect": "e80c472ffe0e303fb5df6f37b872877c2c1b26bcf256c078256fec6db3ee6c15",
+        "reference": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+      }
+    },
+    {
+      "matrix": "hierarchy-rewrite",
+      "cases": 2100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-rewrite-jpegxt.json",
+      "baseline_report_sha256": "5b8f29d8c8beed5c4da74dda7276ae7f9a6e678dd0d5dff973a86e3d543aa823",
+      "candidate_report_sha256": "fd1c1f8363e48990065d2b065b3935d961df4945639b46f82ba914668f537b48",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "7d2a4302eead1f8a80f3d49671fdd96bfed0946575a6662d4064502c06577a42",
+        "inspect": "e80c472ffe0e303fb5df6f37b872877c2c1b26bcf256c078256fec6db3ee6c15",
+        "reference": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+      }
+    },
+    {
+      "matrix": "lossless",
+      "cases": 4448,
+      "unchanged_output_sha256": true,
+      "baseline_report": "lossless-encode-turbo.json",
+      "baseline_report_sha256": "08168f0ea89fd1dbc8aa2c072766efd4eb2f2295193bff6a3b958bb110709320",
+      "candidate_report_sha256": "6bff92cdae0c8cb7b1a0f9dbdbd200a8f6983b2dd123b90f7f1e21e4badfdf14",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "33981a053a90bb65dfe463ca05a2cddf3012814ec8fe75a0e80ca2c6783e0940",
+        "inspect": "f5dab0358b3d66283cfc89fcd8b294e12fe632417d8c6d807c02fa49dad95a68",
+        "oracle": "042fa0a522e9b28c03f2886b21c47ec91ed7885de656ab7fac938ad0b0d07399"
+      }
+    },
+    {
+      "matrix": "pixels",
+      "cases": 172,
+      "unchanged_output_sha256": true,
+      "baseline_report": "pixel-turbo.json",
+      "baseline_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "candidate_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "C_decoding_rerun": true,
+      "tools": {
+        "encode_fixtures": "4da03e7c8c480896be9d472fd55ff4e796046a100703ea124556ebd095a2d307"
+      }
+    },
+    {
+      "matrix": "cmyk",
+      "cases": 192,
+      "unchanged_output_sha256": true,
+      "baseline_report": "cmyk-encode-turbo.json",
+      "baseline_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "candidate_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "C_decoding_rerun": true,
+      "tools": {
+        "cmyk_fixtures": "83cae9470b821afb67611261c94da5056efd4937804014207a4e4d7d4e73cc9b"
+      }
+    },
+    {
+      "matrix": "rewrite",
+      "cases": 600,
+      "unchanged_output_sha256": true,
+      "baseline_report": "rewrite-hierarchical-refactor-turbo.json",
+      "baseline_report_sha256": "5702e97496be2f2883a0a391668c4b64881d7af7056a46ea5415661091db07a3",
+      "candidate_report_sha256": "f3b8b69776de82be5049a4c9fa34cd11cb1dd946b897e3646e93a145bbf86f6f",
+      "C_decoding_rerun": true,
+      "tools": {
+        "rewrite": "cd867112aac9ee58d30087a550238855afaacf5385c22c804f0a871e5789b60c"
+      }
+    }
+  ]
+}

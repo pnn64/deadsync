@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "deflate-tables",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "borrowed",
+      "path": "optional-paired-1-borrowed.tsv",
+      "sha256": "78feef1e9f9047adfbf94f7c5cebcbcc988958ace42ed60270f00c61322c2503",
+      "source_manifest_sha256": "6fc608c0dfd037c675269d64ddb2fa0e62bc3d5bb98529b4cab21b36baa5cf38",
+      "executable_sha256": "657c529077a66bddb51044b0fd312a23fe1b11ed3860d3d7c555deb75d746d86"
+    },
+    {
+      "round": 1,
+      "label": "optional",
+      "path": "optional-paired-1-optional.tsv",
+      "sha256": "7f271fa079fbd123d6cc082dc1f7dcda40319017e43a8dbc5e41a9cf1f722e61",
+      "source_manifest_sha256": "558b30f303b5ff403349d882e0c026d149c9f28a2603fd6204ecef64d6d033db",
+      "executable_sha256": "5414877cb3bab3eb7c04d609ba8b10552182d1a7e487b921b0e8550ace2a9745"
+    },
+    {
+      "round": 2,
+      "label": "optional",
+      "path": "optional-paired-2-optional.tsv",
+      "sha256": "4dcddf42b41d947cb916d7ccb1c1d342693c11d2f7c2650567f6a505af8cd47b",
+      "source_manifest_sha256": "558b30f303b5ff403349d882e0c026d149c9f28a2603fd6204ecef64d6d033db",
+      "executable_sha256": "5414877cb3bab3eb7c04d609ba8b10552182d1a7e487b921b0e8550ace2a9745"
+    },
+    {
+      "round": 2,
+      "label": "borrowed",
+      "path": "optional-paired-2-borrowed.tsv",
+      "sha256": "3c7e6a98a80da5bfd68baa86798214d9cc31ac48380ad4334073af1cd24419c0",
+      "source_manifest_sha256": "6fc608c0dfd037c675269d64ddb2fa0e62bc3d5bb98529b4cab21b36baa5cf38",
+      "executable_sha256": "657c529077a66bddb51044b0fd312a23fe1b11ed3860d3d7c555deb75d746d86"
+    },
+    {
+      "round": 3,
+      "label": "borrowed",
+      "path": "optional-paired-3-borrowed.tsv",
+      "sha256": "4a1b5f52d092f9a4c5e11e6a820fc283bf7a57ae058cf852b55930fa659fc0bb",
+      "source_manifest_sha256": "6fc608c0dfd037c675269d64ddb2fa0e62bc3d5bb98529b4cab21b36baa5cf38",
+      "executable_sha256": "657c529077a66bddb51044b0fd312a23fe1b11ed3860d3d7c555deb75d746d86"
+    },
+    {
+      "round": 3,
+      "label": "optional",
+      "path": "optional-paired-3-optional.tsv",
+      "sha256": "612e523482c9150562d4d0db06ca336358bf83f71f5ff78842f6836c16cc89c3",
+      "source_manifest_sha256": "558b30f303b5ff403349d882e0c026d149c9f28a2603fd6204ecef64d6d033db",
+      "executable_sha256": "5414877cb3bab3eb7c04d609ba8b10552182d1a7e487b921b0e8550ace2a9745"
+    },
+    {
+      "round": 4,
+      "label": "optional",
+      "path": "optional-paired-4-optional.tsv",
+      "sha256": "6caa9153d52544cebbd0b657420339606951e707de13349056636382c7a89b93",
+      "source_manifest_sha256": "558b30f303b5ff403349d882e0c026d149c9f28a2603fd6204ecef64d6d033db",
+      "executable_sha256": "5414877cb3bab3eb7c04d609ba8b10552182d1a7e487b921b0e8550ace2a9745"
+    },
+    {
+      "round": 4,
+      "label": "borrowed",
+      "path": "optional-paired-4-borrowed.tsv",
+      "sha256": "0792a96fb270b4d9b9f6b161daf621dfe2c1053b834182669cf0fdee7d20a097",
+      "source_manifest_sha256": "6fc608c0dfd037c675269d64ddb2fa0e62bc3d5bb98529b4cab21b36baa5cf38",
+      "executable_sha256": "657c529077a66bddb51044b0fd312a23fe1b11ed3860d3d7c555deb75d746d86"
+    }
+  ]
+}

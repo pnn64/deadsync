@@ -1,0 +1,24 @@
+{
+  "direct_dependencies": {
+    "image": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libimage-69352b289dd119e1.rlib",
+      "sha256": "7307444d694afd07aae96c81b159a55587bcb4602092db76de8aa5cc0122d2d9",
+      "mtime_ns": 1793013437923281400
+    },
+    "png": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libpng-2175b561e605b111.rlib",
+      "sha256": "a16e68d3cd6f4049d9eff36092e03aaa4a3667c4a5279f712c171d0702c94ade",
+      "mtime_ns": 1792950252589961100
+    },
+    "gif": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libgif-46df19da9e94392f.rlib",
+      "sha256": "3d055b9f4d6a4e747a2d5e2747c0b4c0f4902c3492d0ff435b56e10065ec2ea5",
+      "mtime_ns": 1792663491130343100
+    },
+    "log": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\liblog-2bbda4e5da366b03.rlib",
+      "sha256": "8afd9f66064447a1a8f3987945cbfb0d8ec4848c52e4deff81ea60334f16d3c0",
+      "mtime_ns": 1792663481859936500
+    }
+  }
+}

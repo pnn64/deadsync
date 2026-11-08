@@ -1,0 +1,173 @@
+{
+  "reference_archive_sha256": "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333",
+  "work": "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117",
+  "command": [
+    "cc",
+    "-g",
+    "-O1",
+    "-fsanitize=address",
+    "-fno-omit-frame-pointer",
+    "-D_DEFAULT_SOURCE",
+    "-D_LARGEFILE64_SOURCE",
+    "-D_POSIX_C_SOURCE=200809L",
+    "-DLUA_USE_POSIX",
+    "-DLUA_USE_DLOPEN",
+    "-DLUA_USE_ISATTY",
+    "-I/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lbaselib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lcode.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldblib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldebug.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldump.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lfunc.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lgc.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/linit.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/liolib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/llex.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lmathlib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lmem.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lobject.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lopcodes.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loslib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lparser.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lstate.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lstring.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lstrlib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ltable.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ltablib.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ltm.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lundump.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lzio.c",
+    "-lm",
+    "-ldl",
+    "-o",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-asan"
+  ],
+  "reference_source_hashes": {
+    "lua.h": "470551c185f058360f8d0f9e5c54a29a3950f78af6a93f3fe9e4039a380c7b87",
+    "lstrlib.c": "e8048c79ae34be0fd29aa8db1a341cd600f5e09b9133b5810910e07b855a32d5",
+    "llex.h": "0f3715d22b025727ef11debd641600a123b81718d195cd8445ac6378814458e6",
+    "lparser.h": "84512d6540b83ab599cd8de5a1c8c4deaf71ff353f8e4fbc2e4ca135ba4e9ef0",
+    "lvm.h": "db4b79dc7f4e7656078aa527350fbf14b2fde5d136ccf1cb4f3dc397def5fb67",
+    "luac.c": "b22ad97edb37c2a4b117ef81489bfc6eee15d58d4476ea149abbef7aabf8773d",
+    "lopcodes.h": "a15fe349da7c1e73b563e8c3249fe7d535eccc844cb30ec80b4e335b0699279b",
+    "lparser.c": "3590f24bab5763af673182e40d33194a7de6f5eabe5432c02a548d44225d2b63",
+    "lstate.c": "c36d6b9354aaa30b5323b4984f3172783f69e0deb3186c2ef6f16a8281c59c29",
+    "lundump.h": "9f3a2924d1585620993a70eea6cf3def34acb8322b2d9c3629bcdacc037edc64",
+    "ltable.c": "3a853ce89bf5e834ec53f2a0dd2386eb8b84accbe5fdc18dabd7515b819f0f7c",
+    "lfunc.h": "3cea0071ffda94eac378adb5f1ecb467ef2ffafff4315459e4ccdf05b5119da4",
+    "ldblib.c": "eb8b056711f037e764f746d989f4e40621d8f9ff45add3336790c389849ed0ab",
+    "ldump.c": "30d83d766351bb053b3d20793a6bcd2ef0210e8fad76a7032abbe574bafa0ca3",
+    "lapi.c": "6aa0d9fdd88b13fe46568ad6722ecf44164fb84476cfdf6480cf05b5704935f8",
+    "lstring.c": "aa7e934c435d870b9d937ac2fb03dbfa15d367012d46e7e995a2ad8d440f2f6d",
+    "lmem.c": "e63c50cb1c75356bd4123c9ca05f77bd0cd99e05c099cf6d1bf472086761e9c5",
+    "lstate.h": "dc64ea7ec74d7c1efaeaf6a9e2257f0b7856a5c988747948af2e76cf079d20fe",
+    "loadlib.c": "b01bc465bb2e280fb45d24aea98d5ddd9dfd0999f44422e1151aafa1d7f5385c",
+    "lundump.c": "55ccb55abde44e94e6c4d0bafc94f5870d2674d1944e9a81f6537d9ac92e8ebc",
+    "luaconf.h": "0410ff22f66c275ba8fcee1fa87a0749d26d7952ed30d3bc9161688b39775464",
+    "llimits.h": "1910669296681d9d2814ca46c325063724bb634c0428dae4e5ff59be54e0b758",
+    "lualib.h": "13f880e9dd997a0f7fd0b17ccd949c98f33e95bd120f084de66084e888217413",
+    "ldo.h": "591ad9a90098d3fbf06839da3de752d2c2585cbf5801dde4cdaffe12b23a182e",
+    "lauxlib.c": "b564650bf4aca2757b9966311d32c8d5fea8803f6f33d72a856448d3b5d6d992",
+    "lua.c": "eb9ad1894926f0f807934ae52147cf9767ede0fbd01e9a1044dc4847caa9b73d",
+    "liolib.c": "a40f1d2c4aed9835885264cc6caf81c3bd2d5db93af3d313cc0478db37d93169",
+    "lcode.c": "027030bbef34115588bd4a64cf4c8c18236a56936835475a154277478767bac5",
+    "lobject.c": "d704915c79c721556cc5850d741ed3bef1611221356f0e3a2f0ee5cfd5fd3632",
+    "ldebug.c": "afa5840195befaec55177273c8168748026b38df3243767fc740cc7ced0c4c8f",
+    "lzio.c": "892bc24d898c19cbedceba419c68f910b99321c0b462be2c2c00b9d763563173",
+    "lbaselib.c": "b14c49fae6fa4690662185bf842cb05d87756585d2f5bdd8495251fde83ef331",
+    "lmem.h": "abd1258418486c69bf5a93ceea3a1b9f8af2c7497a4fa6c27b442ffec2c5bbb1",
+    "lobject.h": "274c18373fbbad71bfebd534cae4b2d2e49934abf6672f44735edc6646fb6a8b",
+    "lgc.h": "fbab2b989515377729d4c029dd58b3b6242877a88a7c4cfa703ea0deeb069a1e",
+    "lvm.c": "b560aad0a1b8bfc4e4b732b2393e8f8ecc68b6c772e6d25763d6ef71c38ab709",
+    "ltm.c": "9759ae5d1aa3b11e1c7faa6c0f65e05c7126417f7f8f3f989d82fc170b07f891",
+    "ldebug.h": "d036f0dbb996bdecd48d505746f72c31b82fb2fc38f111b780568338d4ed9e9c",
+    "lcode.h": "97d5a37f3b1b19eda1ef39607b3358aa0f7e917568ccd27ed0f14bc6a70d4b17",
+    "loslib.c": "f0d5892f152cf7e1001b086e48774ccb6e567d11f1bf521f27050c15d9a0f040",
+    "lgc.c": "35be212ad0e4d89336f50f11cd0e991c04fe59b023ec03a626bf3f98e69fd1dc",
+    "ltable.h": "219e6ac2bf43aaa93093c6bcd571c012660325e6b87ea3d6c1b40679a0acfd64",
+    "ldo.c": "d5942081ba661286327e30e22af5d11a1f4308d1f029a203c342b5f541cfa9b6",
+    "lstring.h": "c0e8af4eb33e3357be79f906e7e1191ba53a3a790d36ca15b50471d3a339e1f0",
+    "linit.c": "c0c97c45862f6c978620a9682cd2201f0fc29c2afbcab824ba20d26cc1745e56",
+    "print.c": "3c3b1c1dd17896e428b9742614c90ec10776ced65813eb648f02dee649892f2f",
+    "lopcodes.c": "63cd74edc75970092a8ce078c4ab970efa1ee18de960d00eb826d49fe98d8a76",
+    "lapi.h": "4aea4c1b975d43184f4f1fd1a42c79cf11d74d2801315740cec07fe9abebb56d",
+    "lzio.h": "0ec77d0179bf29c1ccab97028fed761944d5c21c02808e10cd7b5883b58b2ca6",
+    "ltablib.c": "e934dc4b2fc117a501c717302a00147f7b44eea978ef87a58a3e40e9bfe45d20",
+    "lmathlib.c": "e2933a56332d567cdd69f0fe514d638a8f82da6878754ff259e77cf2157263c3",
+    "lfunc.c": "525681d79098958530e5c937f7cbe94a4dafa679746ffdb16258f82b7ece29ce",
+    "ltm.h": "54f4c2fa76b8ed8d48163e31807a19999f5d65b009ae862cb757e0773f2aa485",
+    "llex.c": "f1ade23f957e69f164ff28e133b201dff5d81726c390b060110b60907831e79b",
+    "lauxlib.h": "c741f9c1587f29fd08a79acbe0c46884768a47f89bee4147669f774c5cf50fc0"
+  },
+  "source_hashes": {
+    "crates/deadlib-lua/tests/reference/package-rooting.lua": "6711d3b68305f53da10e8f6101d2f653e710533fe16583ad2e2a903dd124e2c3",
+    "scripts/check_rust_lua_reference_rooting.py": "b9ac0e9602469ae852670bb67164bcbd4822deedd819c78a3b7622d7de9522fd"
+  },
+  "fixture_source": "-- Overwriting a C library's only string root invalidates its saved pointer.\n-- The rooted mode retains that string until the loader has returned.\nlocal retained={}\npackage.path=nil\nsetmetatable(package,{__index=function(t,k)\n  assert(k=='path')\n  if ROOT_REFERENCE_STRINGS then\n    local _,value=debug.getlocal(2,3)\n    retained[#retained+1]=value\n  end\n  assert(debug.setlocal(2,1,'changed-argument'))\n  assert(debug.setlocal(2,3,'changed-name'))\n  collectgarbage('collect')\n  return 'absent-?.missing'\nend})\nlocal result=package.loaders[2]('original.name',{})\nlocal expected='absent-original'..package.config:sub(1,1)..'name.missing'\nassert(result:find(expected,1,true))\nprint('package-rooting-complete')\n",
+  "artifacts": {
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-asan": "cc3743f6b1d3b0437e1eabc45b1bdc4f913e7f32e230001e7799439b28823107",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/build.log": "7dac7d2682768ef33383d93182f5e3b2db5b8fd3d4b5f1d3253616da8fc7ae36",
+    "/home/perfecttaste/.cache/deadlua-table-writes-proof/final/rust/lua": "6258d891d8ad4587f5f3060abf8743b660b6f50242bbf086d871748128fadca2",
+    "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/observed-audit.json": "8cd25660d8209742d61535d23e7ca4c735f54780e75ab4b99b89f553f6e9fc89"
+  },
+  "runs": {
+    "unrooted": {
+      "command": [
+        "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-asan",
+        "-e",
+        "ROOT_REFERENCE_STRINGS=false",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-lua/tests/reference/package-rooting.lua"
+      ],
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "=================================================================\n==1534550==ERROR: AddressSanitizer: heap-use-after-free on address 0x504000003528 at pc 0x7c7620c79026 bp 0x7ffd0f7b6890 sp 0x7ffd0f7b6050\nREAD of size 14 at 0x504000003528 thread T0\n    #0 0x7c7620c79025 in strlen ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:391\n    #1 0x56d08d856ccb in luaL_addstring /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:443\n    #2 0x56d08d856f2b in luaL_gsub /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:348\n    #3 0x56d08d871dfe in findfile /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:362\n    #4 0x56d08d8721a5 in loader_Lua /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:383\n    #5 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #6 0x56d08d88f514 in luaV_execute /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:591\n    #7 0x56d08d86511a in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:378\n    #8 0x56d08d850e44 in f_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:800\n    #9 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #10 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n    #11 0x56d08d854894 in lua_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:821\n    #12 0x56d08d8878a2 in docall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:102\n    #13 0x56d08d888aeb in handle_script /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:250\n    #14 0x56d08d888aeb in pmain /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:362\n    #15 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #16 0x56d08d86505c in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:377\n    #17 0x56d08d850f85 in f_Ccall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:846\n    #18 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #19 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n    #20 0x56d08d854a9c in lua_cpcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:856\n    #21 0x56d08d888dfa in main /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:387\n    #22 0x7c7620945ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)\n    #23 0x7c7620945d64 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)\n    #24 0x56d08d8507e0 in _start (/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-asan+0x117e0) (BuildId: 93c2dfebd42e1498403ed98b187becef67dedee8)\n\n0x504000003528 is located 24 bytes inside of 38-byte region [0x504000003510,0x504000003536)\nfreed by thread T0 here:\n    #0 0x7c7620cf38f8 in free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:52\n    #1 0x56d08d855cf4 in l_alloc /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:631\n    #2 0x56d08d8712d4 in luaM_realloc_ /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lmem.c:79\n    #3 0x56d08d8687f9 in freeobj /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lgc.c:391\n    #4 0x56d08d8687f9 in sweeplist /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lgc.c:424\n    #5 0x56d08d86a54f in singlestep /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lgc.c:574\n    #6 0x56d08d86af13 in luaC_fullgc /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lgc.c:655\n    #7 0x56d08d854e0d in lua_gc /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:914\n    #8 0x56d08d8593b3 in luaB_collectgarbage /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lbaselib.c:200\n    #9 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #10 0x56d08d88f514 in luaV_execute /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:591\n    #11 0x56d08d86511a in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:378\n    #12 0x56d08d88aa4d in callTMres /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:88\n    #13 0x56d08d88ba51 in luaV_gettable /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:125\n    #14 0x56d08d853225 in lua_getfield /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:551\n    #15 0x56d08d871c8d in findfile /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:355\n    #16 0x56d08d8721a5 in loader_Lua /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:383\n    #17 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #18 0x56d08d88f514 in luaV_execute /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:591\n    #19 0x56d08d86511a in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:378\n    #20 0x56d08d850e44 in f_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:800\n    #21 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #22 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n    #23 0x56d08d854894 in lua_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:821\n    #24 0x56d08d8878a2 in docall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:102\n    #25 0x56d08d888aeb in handle_script /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:250\n    #26 0x56d08d888aeb in pmain /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:362\n    #27 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #28 0x56d08d86505c in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:377\n    #29 0x56d08d850f85 in f_Ccall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:846\n    #30 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #31 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n\npreviously allocated by thread T0 here:\n    #0 0x7c7620cf3b58 in realloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:85\n    #1 0x56d08d855ced in l_alloc /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:635\n    #2 0x56d08d8712d4 in luaM_realloc_ /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lmem.c:79\n    #3 0x56d08d87ea0a in newlstr /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lstring.c:56\n    #4 0x56d08d87ea0a in luaS_newlstr /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lstring.c:92\n    #5 0x56d08d8529f9 in lua_pushlstring /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:448\n    #6 0x56d08d8559a1 in emptybuffer /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:402\n    #7 0x56d08d856ced in luaL_pushresult /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:448\n    #8 0x56d08d856f67 in luaL_gsub /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lauxlib.c:352\n    #9 0x56d08d871c79 in findfile /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:354\n    #10 0x56d08d8721a5 in loader_Lua /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/loadlib.c:383\n    #11 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #12 0x56d08d88f514 in luaV_execute /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lvm.c:591\n    #13 0x56d08d86511a in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:378\n    #14 0x56d08d850e44 in f_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:800\n    #15 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #16 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n    #17 0x56d08d854894 in lua_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:821\n    #18 0x56d08d8878a2 in docall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:102\n    #19 0x56d08d888aeb in handle_script /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:250\n    #20 0x56d08d888aeb in pmain /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:362\n    #21 0x56d08d864117 in luaD_precall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:320\n    #22 0x56d08d86505c in luaD_call /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:377\n    #23 0x56d08d850f85 in f_Ccall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:846\n    #24 0x56d08d8626af in luaD_rawrunprotected /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:116\n    #25 0x56d08d865581 in luaD_pcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/ldo.c:464\n    #26 0x56d08d854a9c in lua_cpcall /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lapi.c:856\n    #27 0x56d08d888dfa in main /home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-5.1.5/src/lua.c:387\n    #28 0x7c7620945ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)\n\nSUMMARY: AddressSanitizer: heap-use-after-free ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:391 in strlen\nShadow bytes around the buggy address:\n  0x504000003280: fa fa 00 00 00 00 06 fa fa fa 00 00 00 00 01 fa\n  0x504000003300: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 05 fa\n  0x504000003380: fa fa 00 00 00 00 00 00 fa fa 00 00 00 00 00 fa\n  0x504000003400: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 fa\n  0x504000003480: fa fa 00 00 00 00 00 00 fa fa 00 00 00 00 00 fa\n=>0x504000003500: fa fa fd fd fd[fd]fd fa fa fa fd fd fd fd fd fa\n  0x504000003580: fa fa 00 00 00 00 07 fa fa fa fa fa fa fa fa fa\n  0x504000003600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa\n  0x504000003680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa\n  0x504000003700: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa\n  0x504000003780: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa\nShadow byte legend (one shadow byte represents 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==1534550==ABORTING\n"
+    },
+    "rooted": {
+      "command": [
+        "/home/perfecttaste/.cache/deadlua-package-rooting/1793253745657187117/lua-asan",
+        "-e",
+        "ROOT_REFERENCE_STRINGS=true",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-lua/tests/reference/package-rooting.lua"
+      ],
+      "returncode": 0,
+      "stdout": "package-rooting-complete\n",
+      "stderr": ""
+    },
+    "rust_rooted": {
+      "command": [
+        "/home/perfecttaste/.cache/deadlua-table-writes-proof/final/rust/lua",
+        "-e",
+        "ROOT_REFERENCE_STRINGS=true",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-lua/tests/reference/package-rooting.lua"
+      ],
+      "returncode": 0,
+      "stdout": "package-rooting-complete\n",
+      "stderr": ""
+    }
+  },
+  "unrooted_windows_observation": {
+    "fixture_sha256": "cfe749c9cf7de5ac254f02f9a4d05f88287e447a47634b158614f6df92cbe171",
+    "samples": {
+      "reference": {
+        "returncode": 0,
+        "line": "LIVE\tlua-path\t0a096e6f2066696c652027616273656e742d2e6d697373696e6727"
+      },
+      "rust": {
+        "returncode": 0,
+        "line": "LIVE\tlua-path\t0a096e6f2066696c652027616273656e742d6f726967696e616c5c6e616d652e6d697373696e6727"
+      }
+    }
+  },
+  "reference_use_after_free_confirmed": true,
+  "rooted_control_passed": true,
+  "asan_options": "detect_leaks=0:halt_on_error=1",
+  "compiler": "cc (Debian 14.2.0-19) 14.2.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "pointer_lifetime_contract": "https://www.lua.org/manual/5.1/manual.html#lua_tolstring"
+}

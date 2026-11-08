@@ -1,0 +1,86 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 249.3307476300624,
+      "deadlib-image-png/decode-reader": 255.4832488995311,
+      "deadlib-image-png/inflate": 769.5229294400812,
+      "deadlib-image-png/inflate-stream": 514.5346834092148,
+      "flate2-1.1.10/inflate": 615.9109470392949,
+      "png-0.18.1/decode": 323.68284878216207
+    },
+    "process_runs": 2,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-literals-before-formats-a-manifest.json",
+        "sha256": "b62b5a75857d8257a6c52084709b6d0d7c3328ac480a3c7fa6fa53e6564f1202"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literals-before-formats-a-run1.tsv",
+        "sha256": "a7d4bf2d7f1ebc88b95db8bed4b439f83d85d24316130508bbc2065b6a129aa6"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literals-before-formats-a-run2.tsv",
+        "sha256": "cee5fdcc97201f362fbe0245e7468ca3bad4825e81f2c13d8bc0ee74b38ae858"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 226.35872231942562,
+      "deadlib-image-png/decode-reader": 242.26693179386692,
+      "deadlib-image-png/inflate": 650.0452199215342,
+      "deadlib-image-png/inflate-stream": 483.35639477172555,
+      "flate2-1.1.10/inflate": 606.105576470053,
+      "png-0.18.1/decode": 308.4676966577546
+    },
+    "process_runs": 2,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-token-trial-formats-a-manifest.json",
+        "sha256": "24b093e49a3a136f595e4ce904602be4ce16787dec0265c95fa59fd06ac7db4b"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-token-trial-formats-a-run1.tsv",
+        "sha256": "24c62d721fd6585474fa1e4854af971507f66c2fbf190e7371b1598526ca1b5b"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-token-trial-formats-a-run2.tsv",
+        "sha256": "094f1f49f7bd10a6cf2488caefcb017047f1f02054736da5cd1c82df63d6f6dc"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 249.3307476300624,
+      "after_mib_s": 226.35872231942562,
+      "absolute_change_percent": -9.213474683323408,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -4.7354343293209755
+    },
+    "decode-reader": {
+      "before_mib_s": 255.4832488995311,
+      "after_mib_s": 242.26693179386692,
+      "absolute_change_percent": -5.173066008277328,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -0.49573271922305207
+    },
+    "inflate": {
+      "before_mib_s": 769.5229294400812,
+      "after_mib_s": 650.0452199215342,
+      "absolute_change_percent": -15.526205256220383,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -14.159616838280353
+    },
+    "inflate-stream": {
+      "before_mib_s": 514.5346834092148,
+      "after_mib_s": 483.35639477172555,
+      "absolute_change_percent": -6.0595115631287495,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -4.539774183473389
+    }
+  },
+  "case_count": 60,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

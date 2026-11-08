@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/scripts/fuzz_native.py",
+    "--cargo-fuzz",
+    "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+    "--seed-archive",
+    "/tmp/deadlib-image-huffman-permutations-seeds-20261028-a.zip",
+    "--target-dir",
+    "/tmp/deadlib-image-huffman-permutations-asan-target-20261028-b",
+    "--output-dir",
+    "/tmp/deadlib-image-huffman-permutations-asan-20261028-b",
+    "--runs",
+    "100000"
+  ],
+  "login_shell_rustup": "/home/perfecttaste/.cargo/bin/rustup",
+  "path": "/home/perfecttaste/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Users/PerfectTaste/.codex/tmp/arg0-windows/codex-arg0UKolnt:/mnt/c/Users/PerfectTaste/.codex/packages/app-server-daemon/releases/0.165.0-x86_64-pc-windows-msvc/codex-path:/mnt/c/Users/PerfectTaste/.codex/tmp/arg0-windows/codex-arg0dcbAy1:/mnt/c/Users/PerfectTaste/.codex/packages/app-server-daemon/releases/0.164.0-x86_64-pc-windows-msvc/codex-path:/mnt/c/Users/PerfectTaste/.codex/tmp/arg0-windows/codex-arg0gCY75u:/mnt/c/Users/PerfectTaste/.codex/packages/app-server-daemon/releases/0.163.0-x86_64-pc-windows-msvc/codex-path:/mnt/c/Users/PerfectTaste/.codex/tmp/arg0/codex-arg088kf4h:/mnt/c/Users/PerfectTaste/.codex/packages/standalone/releases/0.162.1-x86_64-pc-windows-msvc/codex-path:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/VulkanSDK/1.4.309.0/Bin:/mnt/c/Program Files/ffmpeg/bin:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/dotnet/:/mnt/c/Users/PerfectTaste/scoop/shims:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Python313/Scripts/:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Python313/:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/PerfectTaste/.cargo/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-7.1-full_build/bin:/mnt/c/Users/PerfectTaste/AppData/Local/GitHubDesktop/bin:/mnt/c/Program Files/JetBr:/mnt/c/Program Files/Calibre2/:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/PowerToys/:/mnt/c/Program Files/CMake/bin:/mnt/c/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/OpenAI/Codex/bin:/mnt/c/Users/PerfectTaste/scoop/shims:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Python313/Scripts/:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Python313/:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/PerfectTaste/.cargo/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-7.1-full_build/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm Community Edition/bin:/mnt/c/Users/PerfectTaste/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe:/mnt/c/Users/PerfectTaste/flutter/bin:/mnt/c/Program Files/Rizin/bin:/mnt/c/Users/PerfectTaste/.lmstudio/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Microsoft/WinGet/Packages/oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe/poppler-25.07.0/Library/bin:/mnt/c/Users/PerfectTaste/AppData/Local/Programs/Zed/bin:/mnt/c/Users/PerfectTaste/.photon/bin",
+  "exit_code": 0,
+  "wall_seconds": 465.381,
+  "log": "experiments/huffman-permutations-fuzz-launch.log",
+  "log_sha256": "24d23b6e9076ae03bdc79a2bdeab64c81a8730e44166f2c12470b338be44699d",
+  "runner_sha256": "3abb51804b0087631c3caaf6536fdbddbb3b8e83fed35115a4fe64597df0ef9c"
+}

@@ -1,0 +1,32 @@
+{
+  "baseline_png_commit": "79ccce5be382c5506c7994010cf71f5c19ce2a92",
+  "production_changes": [
+    "src/zlib/inflate.rs"
+  ],
+  "all_test_helper_tool_inputs_unchanged": true,
+  "existing_fixture_scope": "Every legal match length/distance at eight bit offsets, fixed/dynamic trees, both padding values and multiple input/output fragment shapes; PNG/APNG, limits, malformed fields and literal/history suites are included in the full run.",
+  "c_zlib_batch_cases": 19645,
+  "c_zlib_successful_outputs": 3091,
+  "c_zlib_error_records": 16554,
+  "documented_reference_policy_rejections": 68,
+  "performance_scope": "Photo reader +6.88% relative to Rust png; photo streaming inflate +8.31% relative to flate2. Formats inconclusive because unchanged controls improve more. Shared-host measurements do not prove broad parity.",
+  "new_successful_sanitizer_executions": 70000,
+  "evidence": [
+    {
+      "path": "stream-matches-validation.json",
+      "sha256": "2ee50e09554bbaefc16873c2b00f9da4415cdbd53747c1eed88b9baa741290f7"
+    },
+    {
+      "path": "fuzz/reports/stream-matches-source.json",
+      "sha256": "2f0271cdf5dda4984847f8986fcfa04998ee38325d0b392158a7644a4d3a2e02"
+    },
+    {
+      "path": "fuzz/reports/stream-matches-seeds.json",
+      "sha256": "846c4ba68d93fd464ff34049833c4049334d167f12e0e3f6a2581e8f95f447d2"
+    },
+    {
+      "path": "experiments/stream-matches-selection.json",
+      "sha256": "1cc6d1ba8a3b031e5aad0db7f672ab114ff619368752856c08a047691f46fc8c"
+    }
+  ]
+}

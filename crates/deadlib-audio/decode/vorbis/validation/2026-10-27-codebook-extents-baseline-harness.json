@@ -1,0 +1,8 @@
+{
+  "scope": "First 467-case matrix and its C golden preserved before mapped-book extension. Baseline cases reconstructed by removing only the subsequent resource-limit unit test (which names a new field). Comparison, request, matrix and golden reader are unchanged.",
+  "files": {
+    "baseline-golden.libvorbis-headers": "aa293b19824fb126570f27ef72a30206555011689abf4bb77cebb529de723994",
+    "baseline-vectors.rs": "25d53960cc8682e760e221446fee1a38ff81b3df1afbbb6a29715b8677575c1e",
+    "baseline-cases.rs": "1e8156557d088fc80b6ecbaf68dfd9212822dcf70285c0c38c0172946e5e6543"
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "date": "2026-10-26",
+  "baseline_commit": "434ea4029",
+  "commits_before_final_stage": [
+    "2de55968b",
+    "4b6e5dde0"
+  ],
+  "scope": "WASAPI enumeration, setup, and recovery; no change to render scheduling or playback timing.",
+  "environment": {
+    "cpu": "Intel Xeon E5-2696 v4, 22 cores/44 logical processors",
+    "os": "Windows 11 Pro, build 26100",
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1"
+  },
+  "method": {
+    "profile": "cargo test --release --lib: opt-level=3, LTO, static MSVC runtime",
+    "primary_metric": "QueryThreadCycleTime: scheduled current-thread CPU cycles, including kernel execution; not a user-only PMU counter",
+    "affinity": "logical processor 2",
+    "processes_per_stage": 5,
+    "iterations_per_batch": 100000,
+    "batches_per_process": 12,
+    "warmup_batches_discarded": 1,
+    "aggregation": "Median of 11 measured batches per process, then median of five process medians.",
+    "order": "First change measured five baseline processes before five changed processes; second and third comparisons alternate process order.",
+    "allocation_scope": "Current-thread Rust GlobalAlloc/System with TLS counting. Native COM allocations are excluded.",
+    "workloads": "Production functions; format probe uses COM mocks with real CoTaskMemAlloc/Free, QueryInterface and reference counting.",
+    "reproduction": "Build each stage with cargo test -p deadlib-audio-backend-wasapi --release --lib --locked --no-run --message-format=json; archive the compiler-artifact executable and lib.rs. For the baseline, add only the performance_tests module from 2de55968b to 434ea4029. Run scripts/benchmark_wasapi_setup.py --archive stage=executable [--archive next=executable] --runs 5 --output results.tsv."
+  },
+  "comparisons": [
+    {
+      "change": "Direct ole32 import",
+      "before_data": "2026-10-26-wasapi-baseline.tsv",
+      "after_data": "2026-10-26-wasapi-direct-free.tsv",
+      "results": [
+        {
+          "workload": "wasapi/com_alloc_free_40",
+          "before": {
+            "median_cycles_per_op": 20332.45,
+            "min_process_median_cycles_per_op": 20120.92,
+            "max_process_median_cycles_per_op": 20805.13,
+            "median_ns_per_op": 9417.47,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 128.44,
+            "min_process_median_cycles_per_op": 127.59,
+            "max_process_median_cycles_per_op": 219.99,
+            "median_ns_per_op": 58.64,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 158.30309872313921
+        }
+      ]
+    },
+    {
+      "change": "Read mix scalars without copying",
+      "before_data": "2026-10-26-wasapi-direct-probe.tsv",
+      "after_data": "2026-10-26-wasapi-direct-probe.tsv",
+      "results": [
+        {
+          "workload": "wasapi/mix_probe_0",
+          "before": {
+            "median_cycles_per_op": 354.24,
+            "min_process_median_cycles_per_op": 306.0,
+            "max_process_median_cycles_per_op": 369.84,
+            "median_ns_per_op": 161.66,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 0,
+              "frees": 1,
+              "allocated_bytes": 18,
+              "freed_bytes": 18,
+              "peak_bytes": 18
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 195.61,
+            "min_process_median_cycles_per_op": 182.83,
+            "max_process_median_cycles_per_op": 216.83,
+            "median_ns_per_op": 89.25,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.8109503604110218
+        },
+        {
+          "workload": "wasapi/mix_probe_22",
+          "before": {
+            "median_cycles_per_op": 367.25,
+            "min_process_median_cycles_per_op": 319.88,
+            "max_process_median_cycles_per_op": 382.67,
+            "median_ns_per_op": 167.66,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 0,
+              "frees": 1,
+              "allocated_bytes": 40,
+              "freed_bytes": 40,
+              "peak_bytes": 40
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 195.91,
+            "min_process_median_cycles_per_op": 183.27,
+            "max_process_median_cycles_per_op": 211.29,
+            "median_ns_per_op": 89.37,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.8745852687458526
+        },
+        {
+          "workload": "wasapi/mix_probe_256",
+          "before": {
+            "median_cycles_per_op": 399.83,
+            "min_process_median_cycles_per_op": 348.65,
+            "max_process_median_cycles_per_op": 416.45,
+            "median_ns_per_op": 182.39,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 0,
+              "frees": 1,
+              "allocated_bytes": 274,
+              "freed_bytes": 274,
+              "peak_bytes": 274
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 213.37,
+            "min_process_median_cycles_per_op": 203.42,
+            "max_process_median_cycles_per_op": 231.1,
+            "median_ns_per_op": 97.49,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.87388105169424
+        }
+      ]
+    },
+    {
+      "change": "Reserve UTF-16 output once",
+      "before_data": "2026-10-26-wasapi-reserved-id.tsv",
+      "after_data": "2026-10-26-wasapi-reserved-id.tsv",
+      "results": [
+        {
+          "workload": "wasapi/device_id_ascii",
+          "before": {
+            "median_cycles_per_op": 838.44,
+            "min_process_median_cycles_per_op": 792.99,
+            "max_process_median_cycles_per_op": 868.22,
+            "median_ns_per_op": 382.45,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 2,
+              "frees": 1,
+              "allocated_bytes": 280,
+              "freed_bytes": 280,
+              "peak_bytes": 160
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 312.52,
+            "min_process_median_cycles_per_op": 291.79,
+            "max_process_median_cycles_per_op": 324.02,
+            "median_ns_per_op": 142.56,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 0,
+              "frees": 1,
+              "allocated_bytes": 112,
+              "freed_bytes": 112,
+              "peak_bytes": 112
+            }
+          },
+          "cpu_throughput_ratio": 2.682836298476898
+        },
+        {
+          "workload": "wasapi/device_id_unicode",
+          "before": {
+            "median_cycles_per_op": 846.12,
+            "min_process_median_cycles_per_op": 779.83,
+            "max_process_median_cycles_per_op": 881.49,
+            "median_ns_per_op": 385.97,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 1,
+              "frees": 1,
+              "allocated_bytes": 312,
+              "freed_bytes": 312,
+              "peak_bytes": 208
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 579.55,
+            "min_process_median_cycles_per_op": 544.14,
+            "max_process_median_cycles_per_op": 600.51,
+            "median_ns_per_op": 264.35,
+            "rust_heap_churn_per_op": {
+              "allocs": 1,
+              "reallocs": 0,
+              "frees": 1,
+              "allocated_bytes": 302,
+              "freed_bytes": 302,
+              "peak_bytes": 302
+            }
+          },
+          "cpu_throughput_ratio": 1.4599603140367527
+        }
+      ]
+    }
+  ],
+  "source_and_binary_snapshots": {
+    "baseline": {
+      "binary_sha256": "55fed69fef0e165d9d995341847d45e8347a0e92526a48f05b52405a0c720fa2",
+      "lib_rs_lf_sha256": "d6d12e71cd624546f58da232cb35b8b6f1bb0766ae0d5cf2a02a9b666fa01dd2",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\baseline"
+    },
+    "direct-free": {
+      "binary_sha256": "f2dfe68a1af7fcfa2fd5c557ea2878f7c2b4561116e51517840de10a5ff4e5b4",
+      "lib_rs_lf_sha256": "5910f7740957f973b081996b2af15ef7ef06d133a9084e12a7f59ad23a916101",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\direct-free"
+    },
+    "direct-probe": {
+      "binary_sha256": "d47eb00a1885ce3bd77bd6eee24115ed71ddef56e84ee0d07a1b69963c69a229",
+      "lib_rs_lf_sha256": "eb948711b94875934cd85429b7e4495edade9821a6ae72fc16f22588ff867e2b",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\direct-probe"
+    },
+    "reserved-id": {
+      "binary_sha256": "43d441415f46af6e28d345d65be52acdf697abb6ae853325740b720fc59c14eb",
+      "lib_rs_lf_sha256": "56ab9057460a5dcd3d4c8a8ff07cde0e94010dc7d1984f63aac28bb1f5909db0",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\reserved-id"
+    }
+  },
+  "code_simplified": [
+    "Remove GetModuleHandleW, GetProcAddress, function-pointer transmute, and lookup failure branches from every COM free.",
+    "Remove get_mix_format_bytes -> Vec copy -> waveformat indirection from the two-scalar device probe; retain one native allocation/free.",
+    "Remove iterator-chain collection growth for device IDs; safe Rust reserves once, encodes, and appends the terminator."
+  ],
+  "limitations": [
+    "Microbenchmarks do not measure complete endpoint activation latency or steady-state rendering throughput.",
+    "Unicode fixture reserves a UTF-8 byte bound: peak Rust bytes rise from 208 to 302; total requested bytes fall from 312 to 302 and reallocations fall from one to zero. ASCII peak bytes fall from 160 to 112.",
+    "Native COM allocations remain one per format query and are not counted as Rust allocations.",
+    "Windows 7 was compile-checked and its legacy interface path was mocked; no Windows 7 hardware runtime was used.",
+    "Nightly emits an unused windows-core workspace dependency warning from its standard-library build."
+  ],
+  "validation": [
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --locked",
+      "result": "passed: 19 tests, 3 lib tests ignored (two hardware checks plus manual benchmark); separate hardware test ignored by default"
+    },
+    {
+      "command": "release lib test executable --test-threads=1",
+      "result": "passed: 19 tests; manual benchmark measured separately"
+    },
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --lib native_tests -- --ignored --nocapture --test-threads=1",
+      "result": "passed: 2 tests; legacy renders and modern selects 128-frame minimum"
+    },
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --test hardware -- --ignored --nocapture --test-threads=1",
+      "result": "passed: sustained shared/exclusive/shared at 48000 Hz; shared buffer 280 frames, exclusive buffer 128 frames; advancing clocks and prompt shutdown"
+    },
+    {
+      "command": "cargo clippy -p deadlib-audio-backend-wasapi --all-targets --no-deps -- -D warnings",
+      "result": "passed"
+    },
+    {
+      "command": "cargo +nightly check -p deadlib-audio-backend-wasapi -Z build-std=std,panic_abort --target x86_64-win7-windows-msvc --locked",
+      "result": "passed"
+    },
+    {
+      "command": "cargo fmt -p deadlib-audio-backend-wasapi --check; git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "dumpbin /imports final archived executable",
+      "result": "CoTaskMemFree imported from ole32.dll"
+    }
+  ]
+}

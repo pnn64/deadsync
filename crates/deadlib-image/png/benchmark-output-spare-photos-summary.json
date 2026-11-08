@@ -1,0 +1,126 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 101.23672394256808,
+      "deadlib-image-png/decode-reader": 81.38879414755971,
+      "deadlib-image-png/inflate": 128.67086591898604,
+      "deadlib-image-png/inflate-stream": 87.95283986566571,
+      "flate2-1.1.10/inflate": 141.3407726662376,
+      "png-0.18.1/decode": 201.99358843921567
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-output-spare-before-photos-a-manifest.json",
+        "sha256": "61cc247f51bebf754518a97d865408f3a962fcce9bbdffe686f290aa7a7b5ab5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-before-photos-a-run1.tsv",
+        "sha256": "1f64a251af9fa4ea962bcb9adf3d41d2b7920606051c1435fde3a4252b0cd6f5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-before-photos-a-run2.tsv",
+        "sha256": "56d8fc2ca4e7a2091131216876d54ae9fc93cbc1851e12d2dc150da03b6faa1e"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-before-photos-a-run3.tsv",
+        "sha256": "739063c387183b4598736489e4edaf3a95c009bbfc8bf8a730dcdd781199a23f"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-output-spare-control-photos-a-manifest.json",
+        "sha256": "64a4300741dda36a84b7050260b8bdb35db5b8dee03c2de0a57e0d5c6f69b1b4"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-control-photos-a-run1.tsv",
+        "sha256": "92766631ac65709bdd6f6a3d5ffc4502fe33b680aaca7d296a82e4c525a1e029"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-control-photos-a-run2.tsv",
+        "sha256": "18eb3817cf3efe3d47780add567c7e4bf463a14080601f5e7b1ab42fd906c6b9"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-control-photos-a-run3.tsv",
+        "sha256": "a688f64f0d571334ad4f2d8f33b27d58dff27c202a01b5fe42c844e975bb1ed5"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 99.03472758359761,
+      "deadlib-image-png/decode-reader": 80.45005848458534,
+      "deadlib-image-png/inflate": 126.07971724501732,
+      "deadlib-image-png/inflate-stream": 87.11479216854596,
+      "flate2-1.1.10/inflate": 141.77736271382102,
+      "png-0.18.1/decode": 202.84540109207157
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-output-spare-trial-photos-a-manifest.json",
+        "sha256": "f0fde1edee2df6b260e37adbe627335a0c56fda07bc46fc6a47af32f6c71032d"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-trial-photos-a-run1.tsv",
+        "sha256": "6934b62b426d7eb2e5197063cc88c2d6bcf3e5d4a7b346bf7e408d8e1b32529b"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-trial-photos-a-run2.tsv",
+        "sha256": "231883ff1bc8c658293eab793fa25d33a28da7226b5c3b84eadc01305b0f7881"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-trial-photos-a-run3.tsv",
+        "sha256": "cbb3fa74fdcb0389797588042c2b923ab1d7e2db15a5619efb953d13e474bb68"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-output-spare-repeat-photos-a-manifest.json",
+        "sha256": "e75dd0aecab4f1791c5801feb230d0c7ccb0a65ebd11a8674a5cc762c43f6349"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-repeat-photos-a-run1.tsv",
+        "sha256": "eb26e347c38908bbf11e1a45d117f1688d00de1f18643c5a7f742e82c8d1af16"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-repeat-photos-a-run2.tsv",
+        "sha256": "c69718bc83c02a82068eab7876da168021f268a88c40daabbb8edc969aaa27a5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-output-spare-repeat-photos-a-run3.tsv",
+        "sha256": "4a0fb4a083a96429232df7457e02b9a3b3fe79b1dd6b7491b3f9c4d363b493d2"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 101.23672394256808,
+      "after_mib_s": 99.03472758359761,
+      "absolute_change_percent": -2.175096420760969,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -2.5858944481482404
+    },
+    "decode-reader": {
+      "before_mib_s": 81.38879414755971,
+      "after_mib_s": 80.45005848458534,
+      "absolute_change_percent": -1.153396696444986,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -1.568485167430711
+    },
+    "inflate": {
+      "before_mib_s": 128.67086591898604,
+      "after_mib_s": 126.07971724501732,
+      "absolute_change_percent": -2.013780396566356,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -2.3155197395779314
+    },
+    "inflate-stream": {
+      "before_mib_s": 87.95283986566571,
+      "after_mib_s": 87.11479216854596,
+      "absolute_change_percent": -0.9528375643125697,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -1.257843980944029
+    }
+  },
+  "case_count": 24,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

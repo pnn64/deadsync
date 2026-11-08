@@ -1,5 +1,14 @@
 use super::*;
 
+pub(super) fn golf_features_enabled(state: &State) -> bool {
+    get_choice_by_id(
+        &state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::EnableGolf,
+    )
+    .is_some_and(yes_no_from_choice)
+}
+
 /// Returns `true` when the given submenu row should be treated as disabled
 /// (non-interactive and visually dimmed). Add new cases here for any row
 /// that should be conditionally locked based on runtime state.
@@ -77,6 +86,7 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
         SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ROWS,
         SubmenuKind::Lights => LIGHTS_OPTIONS_ROWS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ROWS,
+        SubmenuKind::Streaming => STREAMING_ROWS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ROWS,
         SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ROWS,
         SubmenuKind::SyncPacks => SYNC_PACK_OPTIONS_ROWS,
@@ -106,6 +116,7 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
         SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ITEMS,
         SubmenuKind::Lights => LIGHTS_OPTIONS_ITEMS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ITEMS,
+        SubmenuKind::Streaming => STREAMING_ITEMS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ITEMS,
         SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ITEMS,
         SubmenuKind::SyncPacks => SYNC_PACK_OPTIONS_ITEMS,
@@ -135,6 +146,7 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::SmxConfig => "STEPMANIAX",
         SubmenuKind::Lights => "LIGHTS OPTIONS",
         SubmenuKind::OnlineScoring => "ONLINE SCORE SERVICES",
+        SubmenuKind::Streaming => "STREAMING SERVICES",
         SubmenuKind::NullOrDie => "NULL-OR-DIE OPTIONS",
         SubmenuKind::NullOrDieOptions => "NULL-OR-DIE OPTIONS",
         SubmenuKind::SyncPacks => "SYNC PACKS",
@@ -278,7 +290,9 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::ShowVideoBanners && !show_banners {
+                    if row.id == SubRowId::ShowGolfPars && !golf_features_enabled(state) {
+                        None
+                    } else if row.id == SubRowId::ShowVideoBanners && !show_banners {
                         None
                     } else if row.id == SubRowId::BreakdownStyle && !show_breakdown {
                         None
@@ -287,6 +301,8 @@ pub(super) fn submenu_visible_row_indices(
                     } else if row.id == SubRowId::GsBoxPlacement && !show_scorebox {
                         None
                     } else if row.id == SubRowId::GsBoxLeaderboards && !show_scorebox {
+                        None
+                    } else if row.id == SubRowId::GsBoxEventsFirst && !show_scorebox {
                         None
                     } else {
                         Some(idx)

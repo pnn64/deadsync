@@ -22,14 +22,14 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, sc
 use deadsync_chart::SongData;
 use deadsync_config::theme::MachineFont;
 use deadsync_simfile::song_search::{
-    SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
-    song_search_difficulties_text,
+    SongSearchCandidate, parse_song_search_live, song_passes_search_filters, song_search_bpm_tiers,
+    song_search_difficulties_text_into,
 };
 use deadsync_theme::FontRole;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 mod text;
 pub use text::song_search_query_completed_with;
@@ -274,19 +274,14 @@ pub fn song_search_backspace(open: &mut SongSearchOpen) -> bool {
 
 /// Delete trailing whitespace then the word before it. Returns whether it changed.
 pub fn song_search_delete_word(open: &mut SongSearchOpen) -> bool {
-    let mut chars: Vec<char> = open.query.chars().collect();
-    let before = chars.len();
-    while chars.last().is_some_and(|c| c.is_whitespace()) {
-        chars.pop();
-    }
-    while chars.last().is_some_and(|c| !c.is_whitespace()) {
-        chars.pop();
-    }
-    if chars.len() == before {
-        return false;
-    }
-    open.query = chars.into_iter().collect();
-    true
+    let before = open.query.len();
+    let end = open
+        .query
+        .trim_end()
+        .trim_end_matches(|c: char| !c.is_whitespace())
+        .len();
+    open.query.truncate(end);
+    end != before
 }
 
 #[inline(always)]
@@ -349,12 +344,13 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
     // typed, and no ghost can truthfully be drawn over that.
     let accepted = song_search_query_completed_with(&open.query, &label);
     let consumed = fuzzy::folded_prefix_len(&open.query, &accepted)?;
-    let remainder: String = accepted.chars().skip(consumed).collect();
-    if remainder.is_empty() {
-        return None;
-    }
+    let (split, _) = accepted.char_indices().nth(consumed)?;
+    let remainder = &accepted[split..];
+    let mut display = String::with_capacity(open.query.len() + remainder.len());
+    display.push_str(&open.query);
+    display.push_str(remainder);
     Some(SongSearchCompletion {
-        display: format!("{}{remainder}", open.query),
+        display,
         typed: open.query.clone(),
         accepted,
     })
@@ -368,7 +364,12 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
 pub struct SongSearchIndex {
     packs: Vec<PackIndexEntry>,
     songs: Vec<SongIndexEntry>,
+    // The catalog is immutable after construction. Allocate only for BPM
+    // searches, initialize only visited songs, and share populated slots on clone.
+    bpm_tiers: OnceLock<Arc<[BpmTierSlot]>>,
 }
+
+type BpmTierSlot = OnceLock<Option<(i32, i32)>>;
 
 #[derive(Clone, Debug)]
 struct PackIndexEntry {
@@ -430,6 +431,7 @@ pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
     let mut index = SongSearchIndex {
         packs: Vec::with_capacity(pack_count),
         songs: Vec::with_capacity(song_count),
+        bpm_tiers: OnceLock::new(),
     };
     let mut current_pack = usize::MAX;
 
@@ -503,11 +505,31 @@ pub fn build_song_matches(
     // Only nine rows can be shown. Keep those nine ordered on the stack rather
     // than allocating and sorting every fuzzy match in a large library.
     let mut ranked = TopResults::<SONG_SEARCH_MAX_RESULTS>::new();
+    // An empty query stops after nine hits. Keep that first short request
+    // allocation-free with respect to the cache; reuse slots if already built.
+    let mut bpm_tiers = index.bpm_tiers.get();
+    let cache_bpm = parsed.bpm_tier.is_some() && !empty_query;
 
     for (i, entry) in index.songs.iter().enumerate() {
-        if !song_passes_search_filters(&entry.song, chart_type, parsed.difficulty, parsed.bpm_tier)
-        {
+        if !song_passes_search_filters(&entry.song, chart_type, parsed.difficulty, None) {
             continue;
+        }
+        if let Some(want) = parsed.bpm_tier {
+            let tiers = if cache_bpm || bpm_tiers.is_some() {
+                let slots = bpm_tiers.get_or_insert_with(|| {
+                    index.bpm_tiers.get_or_init(|| {
+                        (0..index.songs.len())
+                            .map(|_| BpmTierSlot::new())
+                            .collect::<Arc<[_]>>()
+                    })
+                });
+                *slots[i].get_or_init(|| song_search_bpm_tiers(&entry.song))
+            } else {
+                song_search_bpm_tiers(&entry.song)
+            };
+            if !tiers.is_some_and(|(lo, hi)| (lo..=hi).contains(&want)) {
+                continue;
+            }
         }
 
         if empty_query {
@@ -531,19 +553,32 @@ pub fn build_song_matches(
         ranked.insert_by((score, i), |a, b| song_rank_cmp(index, a, b));
     }
 
+    let mut detail_scratch = String::new();
     ranked
         .take()
         .map(|(score, i)| {
             let entry = &index.songs[i];
             let song = &entry.song;
-            // Only shown rows reach here, so building detail strings is cheap.
+            // Copy each formatted label into its required owning Arc before
+            // reusing the buffer for the next label/row. No buffer for misses.
+            if detail_scratch.capacity() == 0 {
+                detail_scratch.reserve(32);
+            }
+            deadsync_chart::song::format_display_bpm_range_into(
+                song.chart_display_bpm_range(None),
+                1.0,
+                &mut detail_scratch,
+            );
+            let bpm = Arc::from(detail_scratch.as_str());
+            song_search_difficulties_text_into(song, chart_type, &mut detail_scratch);
+            let difficulties = Arc::from(detail_scratch.as_str());
             SongSearchMatch::Song {
                 candidate: SongSearchCandidate {
                     pack_name: index.pack_name(entry.pack),
                     title: Arc::clone(&entry.title),
                     subtitle: Arc::from(song.display_subtitle(false)),
-                    bpm: Arc::from(song.formatted_chart_display_bpm(None)),
-                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
+                    bpm,
+                    difficulties,
                     song: Arc::clone(song),
                 },
                 score,
@@ -643,9 +678,7 @@ fn pack_rank_cmp(index: &SongSearchIndex, a: &(i32, usize), b: &(i32, usize)) ->
 
 /// Allocation-free case-insensitive ordering, for tie-breaks.
 fn cmp_ascii_ci(a: &str, b: &str) -> std::cmp::Ordering {
-    a.bytes()
-        .map(|c| c.to_ascii_lowercase())
-        .cmp(b.bytes().map(|c| c.to_ascii_lowercase()))
+    deadsync_simfile::song_sort::cmp_ignore_ascii_case(a, b)
 }
 
 /// Append the overlay actors, returning whether the search is visible.
@@ -941,6 +974,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -1000,10 +1034,12 @@ mod tests {
             min_bpm: bpm,
             max_bpm: bpm,
             normalized_bpms: format!("{bpm}"),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: vec![test_chart(10)],
         })
@@ -1302,3 +1338,11 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "song_search/data_paths_perf.rs"]
+mod data_paths_perf;
+
+#[cfg(test)]
+#[path = "song_search/menu_buffers_perf.rs"]
+mod menu_buffers_perf;

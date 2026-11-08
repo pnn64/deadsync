@@ -10,16 +10,7 @@ use crate::{prelude::*, Error};
 /// - `ParsedAttribute::Property(Ident, lit)`, e.g. `#[bincode(crate = "foo")]` will be `Property("crate", "foo")`
 ///
 /// # Examples
-/// ```
-/// # use virtue::prelude::*;
-/// # use std::str::FromStr;
-/// # fn parse_token_stream_group(input: &'static str) -> Group {
-/// #     let token_stream: TokenStream = proc_macro2::TokenStream::from_str(input).unwrap().into();
-/// #     let mut iter = token_stream.into_iter();
-/// #     let Some(TokenTree::Punct(_)) = iter.next() else { panic!() };
-/// #     let Some(TokenTree::Group(group)) = iter.next() else { panic!() };
-/// #     group
-/// # }
+/// ```text
 /// use virtue::utils::{parse_tagged_attribute, ParsedAttribute};
 ///
 /// // The attribute being parsed

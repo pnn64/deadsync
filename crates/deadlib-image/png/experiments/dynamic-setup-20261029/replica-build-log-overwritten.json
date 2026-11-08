@@ -1,0 +1,7 @@
+{
+  "reason": "Standalone replication driver reused the frozen replica build-log name. The original frozen build log is unavailable. Exclude replica-paired and narrow-paired and rebuild identical prefix sources as a new checkpoint with unique logs.",
+  "original_manifest_sha256": "6f7446f669fcbdc45c2a497352980219bfbf5bc5c7be7746f74dcd972f447d00",
+  "missing_original_build_log_sha256": "65c80e8ec52066d8cef984587beee655f0370cabf046dad81480d055bae476cd",
+  "replacement_build_log_sha256": "af6b0bcef7229f62136bb0cac841de9498cf8ccfce532b5a9c777cfc3b42e12d",
+  "excluded_processes": 16
+}

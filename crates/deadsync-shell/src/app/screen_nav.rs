@@ -1,18 +1,18 @@
 use super::{
-    App, Command, CurrentScreen, credits, evaluation, evaluation_summary, gameover, gameplay, init,
-    initials, input_screen, manage_local_profiles, mappings, menu, options, overscan_adjustment,
-    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
-    select_profile, select_style, test_lights,
+    App, Command, CurrentScreen, content_browser, credits, evaluation, evaluation_summary,
+    gameover, gameplay, init, initials, input_screen, manage_local_profiles, mappings, menu,
+    options, overscan_adjustment, player_options, profile_load, sandbox, select_color,
+    select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
 use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
     actor_transition_music_commands, apply_actor_entry_transition, apply_actor_fade_out_transition,
     apply_global_entry_transition, apply_global_fade_out_transition, course_plan_required,
-    fade_completion_plan, navigation_transition_effect_plan, process_exit_navigation_plan,
-    screen_change_plan, write_current_screen_file,
+    fade_completion_plan, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
+    process_exit_navigation_plan, screen_change_plan, write_current_screen_file,
 };
-use crate::screen_flow::navigation_route_plan;
+use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
 use deadsync_profile as profile_data;
@@ -34,8 +34,13 @@ pub(super) fn menu_music_path(
     )
 }
 
-pub(super) fn gameover_music_path() -> std::path::PathBuf {
-    deadsync_assets::resolve_asset_path(visual_styles::SRPG10_GAMEOVER_MUSIC)
+pub(super) fn gameover_music_path(
+    style: config::theme::VisualStyle,
+    variant: config::theme::SrpgVariant,
+) -> std::path::PathBuf {
+    visual_styles::gameover_music_asset_path(style, variant)
+        .map(deadsync_assets::resolve_asset_path)
+        .unwrap_or_default()
 }
 
 pub(super) fn overscan_view() -> OverscanAdjustmentView {
@@ -49,6 +54,59 @@ pub(super) fn overscan_view() -> OverscanAdjustmentView {
 }
 
 impl App {
+    /// Resolve a failed Endless renewal before committing a screen change.
+    /// Replaying by modulo here would reuse an old cycle without its totals.
+    fn resolve_course_stage_transition(
+        &mut self,
+        previous: CurrentScreen,
+        target: CurrentScreen,
+    ) -> CurrentScreen {
+        if previous != CurrentScreen::Gameplay
+            || target != CurrentScreen::Gameplay
+            || self.pending_song_lua_reload.is_some()
+        {
+            return target;
+        }
+        let Some(course) = self.state.session.course_run.as_mut() else {
+            return target;
+        };
+        let renewed = match (
+            course.course_type,
+            course.next_stage_index.cmp(&course.stages.len()),
+        ) {
+            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Equal) => {
+                select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
+                    .or_else(|| {
+                        select_course::selected_course_plan(&self.state.screens.select_course_state)
+                    })
+                    .is_some_and(|selection| {
+                        super::append_endless_cycle(
+                            course,
+                            selection,
+                            profile::get_session_play_style().chart_type(),
+                        )
+                    })
+            }
+            // Skipping unprepared history cannot repair an invalid cursor.
+            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Greater) => false,
+            _ => return target,
+        };
+        if renewed {
+            return target;
+        }
+        course.interrupted = true;
+        warn!("Unable to renew Endless course; finishing with the recorded course result.");
+        self.state.shell.interaction.show_message(
+            "Unable to prepare next course stage".to_string(),
+            std::time::Instant::now(),
+        );
+        self.state.screens.player_options_state = None;
+        self.pending_gameplay_init = None;
+        // The normal evaluation lifecycle records the finished song, saves the
+        // accumulated course score and retains its per-song evaluation pages.
+        CurrentScreen::Evaluation
+    }
+
     fn reject_missing_course_plan(
         &mut self,
         previous: CurrentScreen,
@@ -113,6 +171,14 @@ impl App {
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
         let plan = screen_change_plan(prev, target);
+        if let Some(rate) = practice_music_rate_on_screen_change(
+            &mut self.state.session.pre_practice_music_rate,
+            target,
+            profile::get_session_snapshot().music_rate,
+        ) {
+            profile::set_session_music_rate(rate);
+            self.audio.set_music_rate(rate);
+        }
         if prev != target
             && matches!(
                 prev,
@@ -130,10 +196,11 @@ impl App {
         // routes through, so handle it here rather than per exit path. on_exit is
         // idempotent; skip gameplay->gameplay (restart / next course stage) since
         // on_enter re-establishes the mode anyway.
-        if plan.exit_gameplay
-            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
-        {
-            crate::gameplay_runtime::exit(gs);
+        if plan.exit_gameplay {
+            self.audio.stop_mine_sfx();
+            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                crate::gameplay_runtime::exit(gs);
+            }
         }
         if prev != target {
             self.mark_screen_entry_runtime_dirty(target);
@@ -177,9 +244,10 @@ impl App {
             prev,
             target_screen,
             config.menu_music,
-            visual_styles::srpg10_active(config.visual_style, config.srpg_variant),
+            visual_styles::gameover_music_asset_path(config.visual_style, config.srpg_variant)
+                .is_some(),
             menu_music_path(config.visual_style, config.srpg_variant),
-            gameover_music_path(),
+            gameover_music_path(config.visual_style, config.srpg_variant),
         );
         self.run_commands(commands, event_loop);
 
@@ -223,10 +291,24 @@ impl App {
         if let Some(pending) = plan.pending_post_select_summary_exit {
             self.state.session.pending_post_select_summary_exit = pending;
         }
+        if plan.initialize_session_side {
+            let p2_started = self.state.screens.menu_state.started_by_p2;
+            profile::set_session_player_side(if p2_started {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            });
+            profile::set_session_joined(!p2_started, p2_started);
+        }
         if plan.apply_preferred_style {
-            let play_style = profile_data::play_style_from_machine_preference(
-                cfg.machine_preferred_style,
-                cfg.game_flag,
+            let session = profile::get_session_snapshot();
+            // Confirmed players take precedence over the machine's solo default.
+            let play_style = preferred_play_style_for_joined(
+                &cfg,
+                [
+                    session.side_joined(profile_data::PlayerSide::P1),
+                    session.side_joined(profile_data::PlayerSide::P2),
+                ],
             );
             profile::set_session_play_style(play_style);
             self.state.session.preferred_difficulty_index =
@@ -237,16 +319,6 @@ impl App {
                 cfg.machine_preferred_play_mode,
             ));
         }
-        if plan.initialize_session_side {
-            let p2_started = self.state.screens.menu_state.started_by_p2;
-            profile::set_session_player_side(if p2_started {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            });
-            profile::set_session_joined(!p2_started, p2_started);
-        }
-
         if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {
             return;
         }
@@ -354,6 +426,27 @@ impl App {
         if self.reject_missing_course_plan(prev, target) {
             return;
         }
+        let (target, commands) = self.prepare_global_fade_entry(target);
+
+        if target == CurrentScreen::Options {
+            self.update_options_monitor_specs(event_loop);
+        }
+
+        let (_, in_duration) = self.get_in_transition_for_screen(target);
+        apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
+        self.sync_gameplay_input_capture();
+        deadlib_present::runtime::clear_all();
+        self.run_commands(commands, event_loop);
+    }
+
+    /// Application state changes for a completed global fade. The event-loop
+    /// wrapper only applies window effects, fade timing and returned commands.
+    pub(super) fn prepare_global_fade_entry(
+        &mut self,
+        requested: CurrentScreen,
+    ) -> (CurrentScreen, Vec<Command>) {
+        let prev = self.state.screens.current_screen;
+        let target = self.resolve_course_stage_transition(prev, requested);
         if prev == CurrentScreen::SelectMusic && target != CurrentScreen::Gameplay {
             self.gameplay_preload = None;
         }
@@ -380,15 +473,9 @@ impl App {
         self.prepare_screen_state(prev, target);
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
 
-        if target == CurrentScreen::Options {
-            self.update_options_monitor_specs(event_loop);
-        }
-
-        let (_, in_duration) = self.get_in_transition_for_screen(target);
-        apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
-        self.sync_gameplay_input_capture();
-        deadlib_present::runtime::clear_all();
-        self.run_commands(commands, event_loop);
+        // Loading the requested screen can recover to course evaluation (or
+        // Player Options). Apply the fade and input policy to that screen.
+        (self.state.screens.current_screen, commands)
     }
 
     pub(super) fn get_out_transition_for_route(
@@ -402,6 +489,7 @@ impl App {
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
+            CurrentScreen::ContentBrowser => content_browser::out_transition(),
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
@@ -449,6 +537,7 @@ impl App {
                 super::simply_love_visual_policy(&config::runtime::get()),
             ),
             CurrentScreen::Options => options::in_transition(),
+            CurrentScreen::ContentBrowser => content_browser::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),

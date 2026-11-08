@@ -1,0 +1,21 @@
+{
+  "binary_sha256": "6bc726b82889b83f9049756f9c1f781b69b9dd4fc2c3aeaf60fe37ea0637bd4e",
+  "pdb_sha256": "b527190618816c3e337cf05d23722cf9a630f85029004554e59513bec743426d",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018980",
+      "code_bytes": 4365,
+      "assembly": "experiments/literal-batch-decompress_prefix.txt",
+      "assembly_sha256": "d93cf3f67ba8812021dde2162e2a47af01993a85eb8d7d4991aa5eaa2c0e1c2a"
+    }
+  ],
+  "literal_flush": {
+    "address": "0x140018d1b",
+    "callee": "memcpy",
+    "callee_address": "0x140069c60",
+    "length_argument": "R12 batch width copied into R8 before the call",
+    "width_range": "1..8",
+    "source": "Saved PDB memcpy symbol at text offset 429152 and extracted decompressor assembly"
+  }
+}

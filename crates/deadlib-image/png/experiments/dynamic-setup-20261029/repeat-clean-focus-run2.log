@@ -1,0 +1,9 @@
+repeat-1024-output-31: cycles/op 6162.29 -> 4119.05; ns/op 2809.96 -> 1875.59; CPU throughput 1.496x
+repeat-1024-output-258: cycles/op 1708.84 -> 1411.32; ns/op 777.54 -> 645.70; CPU throughput 1.211x
+repeat-1024-output-8192: cycles/op 1487.63 -> 1156.23; ns/op 676.56 -> 525.59; CPU throughput 1.287x
+repeat-65536-output-31: cycles/op 325573.33 -> 232743.17; ns/op 148425.00 -> 106116.67; CPU throughput 1.399x
+repeat-65536-output-258: cycles/op 132632.92 -> 118091.00; ns/op 60366.67 -> 53741.67; CPU throughput 1.123x
+repeat-65536-output-8192: cycles/op 107353.83 -> 91055.83; ns/op 48858.33 -> 41633.33; CPU throughput 1.179x
+repeat-1048576-output-31: cycles/op 4987296.08 -> 3522371.67; ns/op 2274700.00 -> 1607575.00; CPU throughput 1.416x
+repeat-1048576-output-258: cycles/op 1565931.33 -> 1105731.25; ns/op 714591.67 -> 504308.33; CPU throughput 1.416x
+repeat-1048576-output-8192: cycles/op 987695.17 -> 700625.75; ns/op 450850.00 -> 320066.67; CPU throughput 1.410x

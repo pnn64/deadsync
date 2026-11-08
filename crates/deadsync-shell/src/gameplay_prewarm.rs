@@ -48,40 +48,41 @@ fn prewarm_noteskin_textures(
     noteskin: &Noteskin,
 ) {
     noteskin.for_each_slot(|slot| {
-        let key = slot.texture_key();
-        if insert_texture_key(seen, key) {
-            deadsync_assets::textures::ensure_texture_for_key(
-                assets,
-                backend,
-                key,
-                deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
-            );
-        }
-    });
-    noteskin.for_each_slot(|slot| {
-        if slot.model.is_some() {
-            prewarm_model_texture_key(
-                assets,
-                backend,
-                seen,
-                seen_model_textures,
-                slot.texture_key(),
-            );
+        for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
+            let key = texture_slot.texture_key();
+            if slot.model.is_some() {
+                for key in std::iter::once(key)
+                    .chain(texture_slot.model_texture_keys.iter().map(AsRef::as_ref))
+                {
+                    prewarm_model_texture_key(assets, backend, seen, seen_model_textures, key);
+                }
+            } else if insert_texture_key(seen, key) {
+                deadsync_assets::textures::ensure_texture_for_key(
+                    assets,
+                    backend,
+                    key,
+                    deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
+                );
+            }
         }
     });
 }
 
-pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
+pub fn prewarm_gameplay_assets<StateDelta>(
     assets: &mut AssetManager,
     backend: &mut Backend,
     noteskin_sets: [&[Option<Arc<Noteskin>>; MAX_PLAYERS]; 4],
     song: &SongData,
     background_changes: &[SongBackgroundChange],
-    song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
+    song_lua_visuals: &SongLuaRuntimeVisuals<
+        SongLuaOverlayActor,
+        deadsync_song_lua::SongLuaCapturedActor,
+        StateDelta,
+    >,
 ) {
     let mut seen = FastHashSet::<String>::with_capacity(256);
     let mut seen_model_textures = FastHashSet::<String>::with_capacity(64);
-    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::with_capacity(8);
+    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::default();
     for noteskin in noteskin_sets
         .into_iter()
         .flat_map(|set| set.iter().flatten())
@@ -133,51 +134,78 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                     texture_key: Some(texture_key),
                     ..
                 } => {
-                    let key = texture_key.as_ref();
-                    let first_seen = insert_texture_key(&mut seen, key);
-                    let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
-                    if sampler != SamplerDesc::default() {
-                        match media_cache::load_banner_source_rgba(texture_path) {
-                            Ok(rgba) => {
-                                if let Err(error) = assets.update_texture_for_key_with_sampler(
-                                    backend, key, &rgba, sampler,
-                                ) {
+                    let changes = match &overlay.kind {
+                        SongLuaOverlayKind::Sprite { textures, .. } => textures.as_ref(),
+                        _ => &[],
+                    };
+                    for (texture_path, texture_key) in std::iter::once((texture_path, texture_key))
+                        .chain(changes.iter().map(|texture| (&texture.path, &texture.key)))
+                    {
+                        let key = texture_key.as_ref();
+                        let first_seen = insert_texture_key(&mut seen, key);
+                        let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(error) = assets.update_texture_for_key_with_sampler(
+                                        backend, key, &rgba, sampler,
+                                    ) {
+                                        warn!(
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {error}. Skipping."
+                                        );
+                                    }
+                                }
+                                Err(error) => {
                                     warn!(
-                                        "Failed to create custom-sampled GPU texture for image {texture_path:?}: {error}. Skipping."
+                                        "Failed to load song lua texture source {texture_path:?}: {error}. Skipping."
                                     );
                                 }
                             }
-                            Err(error) => {
-                                warn!(
-                                    "Failed to load song lua texture source {texture_path:?}: {error}. Skipping."
-                                );
-                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
-                    } else if first_seen {
-                        media_cache::ensure_banner_texture(assets, backend, texture_path);
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
-                        prewarm_model_texture_key(
-                            assets,
-                            backend,
-                            &mut seen,
-                            &mut seen_model_textures,
-                            layer.texture_key.as_ref(),
-                        );
-                    }
-                }
-                SongLuaOverlayKind::NoteskinActor { slots } => {
-                    for slot in slots.iter() {
-                        if slot.model.is_some() {
+                        for key in std::iter::once(&layer.texture_key)
+                            .chain(layer.additive.as_ref())
+                            .chain(
+                                layer
+                                    .texture_frames
+                                    .iter()
+                                    .chain(layer.additive_frames.iter())
+                                    .filter_map(|frame| frame.texture_key.as_ref()),
+                            )
+                        {
                             prewarm_model_texture_key(
                                 assets,
                                 backend,
                                 &mut seen,
                                 &mut seen_model_textures,
-                                slot.texture_key(),
+                                key.as_ref(),
                             );
+                        }
+                    }
+                }
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
+                    for slot in slots.iter() {
+                        if slot.model.is_some() {
+                            for texture in
+                                std::iter::once(slot).chain(slot.model_additive.as_deref())
+                            {
+                                for key in std::iter::once(texture.texture_key())
+                                    .chain(texture.model_texture_keys.iter().map(AsRef::as_ref))
+                                {
+                                    prewarm_model_texture_key(
+                                        assets,
+                                        backend,
+                                        &mut seen,
+                                        &mut seen_model_textures,
+                                        key,
+                                    );
+                                }
+                            }
                         } else if insert_texture_key(&mut seen, slot.texture_key()) {
                             deadsync_assets::textures::ensure_texture_for_key(
                                 assets,
@@ -199,6 +227,13 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     }
     for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
+    }
+    for player in &song_lua_visuals.player_actors {
+        for texture in &player.judgment.textures {
+            if insert_texture_key(&mut seen, &texture.key) {
+                media_cache::ensure_banner_texture(assets, backend, &texture.path);
+            }
+        }
     }
 }
 
@@ -278,6 +313,14 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     for sound_path in sound_paths {
         let key = sound_path.to_string_lossy();
         if let Some(sound) = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(key.as_ref())) {
+            // Native compiled resources use OS path components while authored
+            // Lua resources use forward slashes. Prepare both lookup spellings
+            // here so gameplay needs no normalization or allocation.
+            let native_key = sound_path.components().collect::<PathBuf>()
+                .to_string_lossy().into_owned();
+            if native_key != key {
+                song_lua.insert(native_key, sound.clone());
+            }
             song_lua.insert(key.into_owned(), sound);
         }
     }

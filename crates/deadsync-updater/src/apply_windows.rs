@@ -178,7 +178,12 @@ pub fn extract_archive<R: Read + Seek>(reader: R, dest: &Path) -> Result<usize, 
         let entry = archive
             .by_index_raw(idx)
             .map_err(|e| super::io_err_op("read zip entry header", e))?;
-        names.push(entry.name().to_string());
+        names.push(
+            entry
+                .name()
+                .map_err(|e| super::io_err_op("decode zip entry name", e))?
+                .into_owned(),
+        );
     }
     let prefix = detect_common_prefix(&names);
     let mut written = 0usize;
@@ -186,7 +191,10 @@ pub fn extract_archive<R: Read + Seek>(reader: R, dest: &Path) -> Result<usize, 
         let mut entry = archive
             .by_index(idx)
             .map_err(|e| super::io_err_op("read zip entry", e))?;
-        let raw_name = entry.name().to_string();
+        let raw_name = entry
+            .name()
+            .map_err(|e| super::io_err_op("decode zip entry name", e))?
+            .into_owned();
         let Some(rel) = sanitize_entry(&raw_name, prefix.as_deref()) else {
             if entry.is_dir() {
                 continue;

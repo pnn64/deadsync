@@ -1,0 +1,21 @@
+{
+  "archive_sha256": "9beb87a9dba5c7920e65601c98673b2aac06f914793d3c96ab003a75b3615dc6",
+  "initial_corpora": [
+    {
+      "target": "decoder_limits",
+      "files": 6360,
+      "bytes": 2620320,
+      "maximum_file_bytes": 1176,
+      "sha256": "f6a0ab410ceacd233c143fe9bea857179990e904a30c597dcdb86ccdb978e87b"
+    },
+    {
+      "target": "inflate_stream",
+      "files": 5379,
+      "bytes": 1067326,
+      "maximum_file_bytes": 32985,
+      "sha256": "e12961b975e74473f19d86862dbd06ae25ebf2aa4eeeafa83e04c21c5d8cd1b5"
+    }
+  ],
+  "runner_sha256": "2bc898efb8a5a3b59bcacec3addfdc2a0a5a9487b27a78e4904322430fd38909",
+  "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+}

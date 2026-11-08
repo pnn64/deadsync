@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "artifacts_sha256": {
+    "2026-10-27-historical-checks.json": "dc874af10ae78d121dc3d94a0e42c9dd3bca91581df65abe712637030cf5882c",
+    "2026-10-27-historical-clippy.log": "2bac21ac17d814c9fcfee2af22c041d0bfc81b2545ef96c70c9f6fd6e813d85d",
+    "2026-10-27-historical-fetch.log": "2610fca3f2a0621d3963f90ff808bc15bdd0db7f157bea3ef5adcbae482c9594",
+    "2026-10-27-historical-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-historical-ogg-release.log": "549afa96d9b581a2f9857b3593b5f9e3df3bd73a894a422d0bfaf36549a69b9d",
+    "2026-10-27-historical-validation-probe.py": "841ba19d1f3c790294fb49fd7d0a1cb61cebd676cf8e4cb13a000468b50d9c7c",
+    "2026-10-27-historical-vorbis-debug.log": "95369de9bf5320abfb817bb52dc3c678c4ae550838a97c3ea08257aefc90341c",
+    "2026-10-27-historical-vorbis-release.log": "00b6e0710a90fffaf260f8fc60bbac2efaede0f6b6196ba47f990d425a01247f",
+    "2026-10-27-historical.tsv": "c54166e8b339a8a5c4c10254d1ae043cca67285c2474f2483eb56d219eca7776"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "scope": "Sequential DCT 1..255 components, progressive 1..4; configured exact coefficient/frame-data gates. No complete conformance or performance claim.",
+  "rust_checks": {
+    "isolated_debug": {
+      "passed": 145,
+      "failed": 0,
+      "log_sha256": "cc3d645dbee299f1ed6a287181ad611e3ecb9dfc1f19b70e54e4e8c13f2bb84d"
+    },
+    "release": {
+      "passed": 145,
+      "failed": 0,
+      "log_sha256": "66584910a55d6a72e9215a747ef461465bddbc1efec89f22e2a1b9701b90bc8b"
+    }
+  },
+  "other_checks": {
+    "rustfmt": "pass",
+    "clippy_all_targets_warnings_denied": "pass",
+    "rustdoc_warnings_denied": "pass",
+    "new_python_drivers_py_compile": "pass"
+  },
+  "pinned_corpus": {
+    "sessions": 75,
+    "hashed_artifacts": 250,
+    "files": 251,
+    "bytes": 6089446,
+    "manifest_sha256": "0e27634da000036e4a346336628a033446a9bb064ed6a80d888dd21612be40c3",
+    "prefixes_and_boundaries": 36586,
+    "bounded_mutations": 2600
+  },
+  "legacy_regressions": {
+    "unchanged_default_output_hashes": 10612,
+    "fresh_Turbo_C_decodes": 964
+  },
+  "reports": {
+    "components-native.json": "0e275cb64a2a37ee1fa17f0b7fe6330a31d8ea7907b5867f3d1025e3a194c767",
+    "components-c.json": "d2178a432b1553f6cc5666793b92190bcc797d1198ec605f441f577f7078651a",
+    "components-fixed.json": "ca381814dc164a646cb361ea2765adb1e08c01f1435fd429ab6d01536a8a7b80",
+    "components-ijg-b5.json": "7bea7ff8db23d912b2de6c318aaef8e0a370605543c03152f4287b07a7d88bab",
+    "components-observer.json": "e7fa29f4f6eefed8fdc2adb905359641c0382b0accad7ca4edc04cfff76069f4",
+    "components-regressions.json": "bf5a7bc435e1ad12ed380003b6942f849701c74b9b298e8e9683b2cda2c5f158",
+    "components-jpegxt-build.json": "61ac6afac8cdd756baaf549708fcbcd18d95a2aaa0029087eec2cead04744ba8",
+    "ijg10-build.json": "b678ae9a008032f0a8c2c07f7f92dac456109d5b2c1d4aa9238903ced02bb905"
+  },
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "application_integration": false,
+  "remaining": [
+    "Incremental byte I/O",
+    "Broader IJG/mozjpeg and rare-mode combinations",
+    "Independent conformance corpus",
+    "Coverage-guided fuzzing",
+    "Measured performance and optimization"
+  ]
+}

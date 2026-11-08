@@ -1,0 +1,815 @@
+{
+  "suite_url": "https://www.lua.org/tests/lua5.1-tests.tar.gz",
+  "suite_sha256": "49e4ca6561f82ea605908c5041ab5fad66ed9930fa0686675bd51b02767f18ad",
+  "bootstrap": "_U=true; function Message(s) print(s) end",
+  "command": [
+    "cargo",
+    "build",
+    "--release",
+    "-p",
+    "deadlib-lua",
+    "--example",
+    "official_suite"
+  ],
+  "results": [
+    {
+      "file": "constructs.lua",
+      "source_sha256": "da83de439859ca44d6450d9bd76e4abfa9891624207491238b2227683fdfde5f",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing syntax\r\n+\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.9039774000411853
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing syntax\n+\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 2.673318100045435
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing syntax\n+\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 2.570905299973674
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing syntax\n+\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 2.6391225999686867
+      }
+    },
+    {
+      "file": "locals.lua",
+      "source_sha256": "7ee8a582fef614fa367852d4426b28485fd4dbeded3fa29bf03890a179792ff0",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t2 return values\n",
+        "seconds": 0.026057699928060174
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\n+\nOK\n",
+        "stderr": "PASS\t2 return values\n",
+        "seconds": 0.038460300071164966
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t2 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.037716299993917346
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t2 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.03236710000783205
+      }
+    },
+    {
+      "file": "calls.lua",
+      "source_sha256": "343fc099d121f0bdc068bd7293a52fd5f32c2f3eff6f1e823c41471bdf7c4639",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing functions and calls\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.028220499982126057
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing functions and calls\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.04036910005379468
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing functions and calls\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t1 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.041869399952702224
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing functions and calls\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t1 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.033778299926780164
+      }
+    },
+    {
+      "file": "events.lua",
+      "source_sha256": "6dd484a0c6f17be699e0fdc577ad0341b60784f3f69666956b8af7d6b778d73c",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing metatables\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.021589300013147295
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing metatables\n+\n+\nOK\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.02291300008073449
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing metatables\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t1 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.026672499952837825
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing metatables\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t1 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.019653999945148826
+      }
+    },
+    {
+      "file": "nextvar.lua",
+      "source_sha256": "3e81e2ecf908f5576081a691a954b11acaa15dc9eaa6e4c9cd4f53e40baf07b6",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing tables, next, and for\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.04527010000310838
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing tables, next, and for\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.09703279996756464
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing tables, next, and for\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.08795039996039122
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing tables, next, and for\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.08157859998755157
+      }
+    },
+    {
+      "file": "literals.lua",
+      "source_sha256": "633b3cb94fe7652c1a1ea99425f161a6df0b64e572d8354739cc9e4e9a0b0f8b",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing scanner\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.07331120001617819
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing scanner\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.058192500029690564
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing scanner\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.06539170001633465
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing scanner\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.057322400039993227
+      }
+    },
+    {
+      "file": "closure.lua",
+      "source_sha256": "9496056e3b89461e06391a565e2c7e8935abbf8f92fbb658c7714985fbbfb830",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing closures and coroutines\r\n+\r\n\u0007\r\n >>> testC not active: skipping yield/hook tests <<<\r\n\u0007\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.027887300006113946
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing closures and coroutines\n+\n\u0007\n >>> testC not active: skipping yield/hook tests <<<\n\u0007\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.03848019998986274
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing closures and coroutines\n+\n\u0007\n >>> testC not active: skipping yield/hook tests <<<\n\u0007\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.03836339991539717
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing closures and coroutines\n+\n\u0007\n >>> testC not active: skipping yield/hook tests <<<\n\u0007\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.03045890002977103
+      }
+    },
+    {
+      "file": "vararg.lua",
+      "source_sha256": "afa3796df77bf56574c2e71f8e4f219a6c4b4ba08d914b8110ea60e363a7d9ff",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.01872190006542951
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.025899300002492964
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.09117930009961128
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.015828899922780693
+      }
+    },
+    {
+      "file": "strings.lua",
+      "source_sha256": "c97c706a6120847472aff5020bedaf29411b5177f4cf98d059bfd41eada730f8",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing strings and string library\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.045034199953079224
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing strings and string library\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.04720420006196946
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing strings and string library\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.04880639992188662
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing strings and string library\n+\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.04094920004718006
+      }
+    },
+    {
+      "file": "pm.lua",
+      "source_sha256": "f7888930a69457635a606fe0597be1dc69114602eaf61293ca510eed9d1971d6",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.035403399961069226
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.03782059997320175
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.05013600003439933
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\n+\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.03517469996586442
+      }
+    },
+    {
+      "file": "sort.lua",
+      "source_sha256": "b8f6fefe976dd484a86b0c0d4989af70421005abbb6005567886fb9a40181cb2",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing sort\r\nSorting 30000 elements in 0.01 sec.\r\nRe-sorting 30000 elements in 0.01 sec.\r\nInvert-sorting other 30000 elements in 0.05 sec., with 476357 comparisons\r\nSorting 30000 equal elements in 0.03 sec.\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.14549420005641878
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing sort\nSorting 30000 elements in 0.03 sec.\nRe-sorting 30000 elements in 0.02 sec.\nInvert-sorting other 30000 elements in 0.18 sec., with 476357 comparisons\nSorting 30000 equal elements in 0.07 sec.\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.4454228999093175
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing sort\nSorting 30000 elements in 0.03 sec.\nRe-sorting 30000 elements in 0.02 sec.\nInvert-sorting other 30000 elements in 0.18 sec., with 476357 comparisons\nSorting 30000 equal elements in 0.07 sec.\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.39680180000141263
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing sort\nSorting 30000 elements in 0.03 sec.\nRe-sorting 30000 elements in 0.03 sec.\nInvert-sorting other 30000 elements in 0.18 sec., with 476357 comparisons\nSorting 30000 equal elements in 0.07 sec.\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.40172500000335276
+      }
+    },
+    {
+      "file": "math.lua",
+      "source_sha256": "24a862ff81b7099eaa08170d317a5d75a6f7a9debe4328108cc248517f6696ca",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing numbers and math lib\r\n+\r\n`querytab' nao ativo\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.042004400049336255
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing numbers and math lib\n+\n`querytab' nao ativo\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.034086299943737686
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing numbers and math lib\n+\n`querytab' nao ativo\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.037872200016863644
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing numbers and math lib\n+\n`querytab' nao ativo\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.031265400000847876
+      }
+    },
+    {
+      "file": "gc.lua",
+      "source_sha256": "f3cc02f690371fa0cc2ddced1c2378d36a0e1025a7359044a80d42b1e06efe23",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing garbage collection\r\ntables\r\nstrings\r\nfunctions\r\nfunctions with errors\r\nlong strings\r\nweak tables\r\ndeep structures\r\nOK\r\n>>> closing state <<<\r\n\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.30408729996997863
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing garbage collection\ntables\nstrings\nfunctions\nfunctions with errors\nlong strings\nweak tables\ndeep structures\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.6152977000456303
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing garbage collection\ntables\nstrings\nfunctions\nfunctions with errors\nlong strings\nweak tables\ndeep structures\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.6468286999734119
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing garbage collection\ntables\nstrings\nfunctions\nfunctions with errors\nlong strings\nweak tables\ndeep structures\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.6483075999421999
+      }
+    },
+    {
+      "file": "db.lua",
+      "source_sha256": "45bee0f25a06a9b058f3d746c794488ffbf95ab591c5360a477eca5b226b1bc4",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing debug library and debug information\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.13087889994494617
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing debug library and debug information\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.0843911999836564
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing debug library and debug information\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.08756860007997602
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing debug library and debug information\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.08460139995440841
+      }
+    },
+    {
+      "file": "errors.lua",
+      "source_sha256": "9d23589cae9ed6bdfa3386fc4c3b474274ae469120a56664e935886c031bbbe5",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing errors\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.4278688000049442
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing errors\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.0642748000100255
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing errors\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t0 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.0696666999720037
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing errors\n+\n+\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t0 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.05906969995703548
+      }
+    },
+    {
+      "file": "files.lua",
+      "source_sha256": "d9f714f374fba9b9ed8db8aea88d538f04fb3e9aff689bd6cc3d4036926e8dc7",
+      "reference": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing i/o\r\n+\r\n",
+        "stderr": "FAIL\truntime error: files.lua:59: C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\suhw.0: Permission denied\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'assert'\n\tfiles.lua:59: in main chunk\n",
+        "seconds": 0.13210919999983162
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing i/o\n+\n",
+        "stderr": "FAIL\tRuntime\t59\tC:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-48244-1793023965861688400-0.tmp: Permission denied\nerror object: files.lua:59: C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-48244-1793023965861688400-0.tmp: Permission denied\n",
+        "seconds": 0.13803480006754398
+      },
+      "rust_cache_cold": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing i/o\n+\n",
+        "stderr": "CACHE\tStored\nFAIL\tRuntime\t59\tC:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-29852-1793023966003090400-0.tmp: Permission denied\nerror object: files.lua:59: C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-29852-1793023966003090400-0.tmp: Permission denied\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.1425660999957472
+      },
+      "rust_cache_hit": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing i/o\n+\n",
+        "stderr": "CACHE\tHit\nFAIL\tRuntime\t59\tC:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-10232-1793023966197662200-0.tmp: Permission denied\nerror object: files.lua:59: C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadsync-lua-10232-1793023966197662200-0.tmp: Permission denied\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.19582139991689473
+      }
+    },
+    {
+      "file": "attrib.lua",
+      "source_sha256": "c8c7db0c5b7439139a767075102100717890c6004c7c6a3931bba16d99af6eba",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing require\r\n\u0007\r\n >>> cannot load dynamic library <<<\r\n\u0007\r\nThe specified module could not be found.\r\r\n\topen\r\n+\r\ntesting assignments, logical operators, and constructors\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.05487130000256002
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing require\n\u0007\n >>> cannot load dynamic library <<<\n\u0007\ndynamic libraries are not enabled in this Rust engine\tabsent\n+\ntesting assignments, logical operators, and constructors\n+\nOK\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.03650710009969771
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing require\n\u0007\n >>> cannot load dynamic library <<<\n\u0007\ndynamic libraries are not enabled in this Rust engine\tabsent\n+\ntesting assignments, logical operators, and constructors\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t1 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.03994129993952811
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing require\n\u0007\n >>> cannot load dynamic library <<<\n\u0007\ndynamic libraries are not enabled in this Rust engine\tabsent\n+\ntesting assignments, logical operators, and constructors\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t1 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 0.03147399995941669
+      }
+    },
+    {
+      "file": "verybig.lua",
+      "source_sha256": "2e647a4285ac2c09be7e9cb10ce83e19a359a2b3c630cb6e62962319c8caec1e",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing large programs (>64k)\r\n`querytab' nao ativo\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.3845405000029132
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing large programs (>64k)\n`querytab' nao ativo\n+\nOK\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.9308905999641865
+      },
+      "rust_cache_cold": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing large programs (>64k)\n`querytab' nao ativo\n+\nOK\n",
+        "stderr": "CACHE\tStored\nPASS\t1 return values\n",
+        "cache_status": [
+          "Stored"
+        ],
+        "seconds": 0.8909355000359938
+      },
+      "rust_cache_hit": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing large programs (>64k)\n`querytab' nao ativo\n+\nOK\n",
+        "stderr": "CACHE\tHit\nPASS\t1 return values\n",
+        "cache_status": [
+          "Hit"
+        ],
+        "seconds": 1.0196490999078378
+      }
+    }
+  ],
+  "instruction_limit": 100000000,
+  "file_timeout_seconds": 60,
+  "cache_directory": "C:\\GitHub\\deadsync\\target\\lua-reference-suites\\compiled-1793023950322943300-44400",
+  "engines": [
+    "reference",
+    "rust",
+    "rust_cache_cold",
+    "rust_cache_hit"
+  ],
+  "source_hashes": {
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/build.rs": "70cb94f79cfa22187fedec21f4f01e809a2bcb13a775f3058f32f91be0977921",
+    "crates/deadlib-lua/Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "3c9e80fb1ff2eeb6ece410b62d9b0322fa9f67620b602217b6ae2bf55001b870",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/bytecode.rs": "2ffc6aaa133e563774f949efbe5cf08d12658e396ac04c13c46f201ae8cf97be",
+    "crates/deadlib-lua/src/cache/codec.rs": "4ccd7068908fc66f199d862a6e62e915d569f3a3fecd69a5cdbf8d1eb50f0281",
+    "crates/deadlib-lua/src/cache/tests.rs": "c14087e4ab9d57181d83909d889bcf0d49cc8f0445314b76966c14518d3380ad",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "d67affeaac94f15d932bc6b42bc516e14bf48ce8fc439d80f9799dcf930d5478",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "84771beef7712dd26e912d7f66d4389f051352ea2c9ea5c0a89b6e4ad30ba526",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "1c751f59a9844bf77ee0e8b621c51a61194a2a89b0d19e3be878f7c1d0b37b53",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "27989460da0906d334032e22ce5bf3b294d78da7926142ec187c89c0a37b104a",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "7710330cbed9f0ee06d027bb99d20d9f87660025299e97787e7db519559a58f1",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "bd86d3007c3f72902eb42c1757de848dc2c22e78c2f402c3ac3f520d94e09b28",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "91502457a4575a700ad84c6ba8f938becd946868aaa064808b005db6afe984d9",
+    "crates/deadlib-lua/src/compiler/statements.rs": "128008a8ac164bee0342426bae947666c65a85d2b2134deb04bbfab1ebf400a9",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "3ca195a4bc1a8e1a117899315f222c1dc370b3f612269101fa8a948d81f30451",
+    "crates/deadlib-lua/src/compiler.rs": "2deca84503bef4b4d3754f0b89ac65f52f5b7f31c766702d69a28fc74bc9fa98",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "0a23763500c566db4ba18448fd15564cb57428df2d410f80b37c5283b34f7d0d",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "744179cae501d75efeef010f65c8238cad29c8e5b38cf8d0a0435134ebcc5e27",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "456cf8e12a559ea02443203813fa819e099735ef3f618b818c8fe4014d32f4bb",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "cd610b4fbca645350fb4bcfbbe23ab694b442c55ee2ede8fccb04f458ec95c10",
+    "crates/deadlib-lua/src/parser/resume.rs": "08a5d6da3044cac11fb0121bdd77d50e7d29197b5734326b0c3efecfe60a93c3",
+    "crates/deadlib-lua/src/parser.rs": "490fdfc7ff391b4421d4f0d1265e5dae84939f4bad0d72dce2031eb2554e8b71",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "5301a282862d6f7879e4a64c59d5a0d8df1d56f463b5da16a451d075648f26c0",
+    "crates/deadlib-lua/src/value.rs": "4b830e1788ef76ce51c97807cdc3c8d9e40c4b3a22cecc3f076c0098b896d6ba",
+    "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+    "crates/deadlib-lua/src/vm/debug.rs": "2e07e275ecf6852e2f87d4e018fe9e721283dff2ed27eedfe5f1f5117575d30d",
+    "crates/deadlib-lua/src/vm/errors.rs": "892dd847b6c35c300fd902cd6cb5ddcb01f80477c96f3e61b514ab04cdedd2e9",
+    "crates/deadlib-lua/src/vm/gc.rs": "23df261826725c07d252b1770e70d81b3564416ba234c5c498635b91c1082c48",
+    "crates/deadlib-lua/src/vm/hooks.rs": "b5825777e414a0f39e08f761323e6bb2859d0299f053f0a2f09082a9417b79e8",
+    "crates/deadlib-lua/src/vm/host.rs": "d16facc500921a3960cc331efc52abe4c9e6c0bbe3a48293ddf45b20f873ba8e",
+    "crates/deadlib-lua/src/vm/io/number.rs": "56928749ea72f1eca5be18ffd33995fec9521641b6d8322df59003bc7469cb26",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "d5a01ef2e193655e25849e60aafcac66a1d575751d0e6c3e5232f57e6ca49cb4",
+    "crates/deadlib-lua/src/vm/io.rs": "dc85c743aa267cd83ef7c2009602c032efd268ccd67750cd73c0e5ffb68f5a20",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "83eae76435efeb81c431af26454c52e302d162acf32ae4760651e796aa2e007f",
+    "crates/deadlib-lua/src/vm/math.rs": "ba770fa64f891571d757ed55f019f0c1bfb77d3573e4601644d0facfbebcd0df",
+    "crates/deadlib-lua/src/vm/meta.rs": "dd24624cf2e64bb66ed86b25490124617acff0b007067400a5390c4c69ad3837",
+    "crates/deadlib-lua/src/vm/native.rs": "2f7d2757f6701bc4fe53ba30f16dfc2b95ad4776b86139195c254ab2b66fb572",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "cfd512034a919ab2ac92525f18db5e309f92be20dbea2ac473021784af61d6d8",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "711ad043839bcd321732c36fc462cc28c40dc462e4da5d8b032ab8231b4cc99d",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "7b3163dcef1829b0e47374549e7551247165cc6a50a1058ab89978c4be84cc61",
+    "crates/deadlib-lua/src/vm/strings.rs": "09833250360f8562c675f9e7bc00fb8723c9267edb26a2430b585717fba6ceb7",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "c3cbf79a1b56d0a5ca86462af5cd15bcc4abfbb0a411e8b18754c64a9368db1f",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "fb527e20d34b5302415aa0c466ca80cd2d0de85209d5a7e64df8a24943fca021",
+    "crates/deadlib-lua/src/vm.rs": "c780be224a301527466d5ebddb2f1051f50f08a59bd9ef2fa5148dc3d7d1cfd6",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "0c8d2c9d462ba0313841ea1664428c80ef52701c00ee1dd75bc0ab78a22d1158",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "ae478e99557a817c43dbfdb1e204783a134b185d23b62906b4b37cc9ae7636af",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "6c13af6eb1b688c5e727cf3c90a092e5a8d9222ae6414b86234d4498b7177fa3",
+    "crates/deadlib-lua/tests/hooks.rs": "6f95e8f0af6341958ece55ef93f265dbe956cc0a21da3238055018bd1609771b",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_functions.rs": "598d5bd372424e94dff8ade034853a6e0af809d64e2b21e9cb7fc3b06fa0bfb0",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "f46e52f3f3fc914740b8a9179fe4bc8ebe06ec5563edc93b88c1957f94da2113",
+    "crates/deadlib-lua/tests/loading.rs": "2e3d1898bed58d1f22623079f55132a349ac9b4d9cf6e8309a2a839aa61bcebc",
+    "crates/deadlib-lua/tests/lua51.rs": "d57b376a6ee2da4e2ea45586f805a8aa7027abc314e2683c4dc5d3b851748607",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/os.rs": "146b6517714ede2ea716898f11b08a1c1dd68419badd6e5efa202a30ad375bd8",
+    "crates/deadlib-lua/tests/package.rs": "abc56676397035a2f56900aa9c17f5e22b523a8f8723d33975af3ff6393c1f72",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "2024ded5dbd922e36b5e1207134c975ed7bb86916e1fe09fa032fad473fc925b",
+    "crates/deadlib-lua/tests/stdlib.rs": "90be6163d9f28599ca629551da971d4b93662f6f36f4a2e54cf4e19d08cf2595",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/tracebacks.rs": "215ac3d208984413ffec93691ac7a72f923cf17a9c31d54e7b4cc9afec0b35fa",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/check_rust_lua_suite.py": "b8422a799a4d905e8473fe849c12e668de16edd4f16654d300be4cf81a900e80"
+  },
+  "limitations": "Files are independent probes, not all.lua, the complete suite, or internal C API tests. No tests are removed or rewritten."
+}

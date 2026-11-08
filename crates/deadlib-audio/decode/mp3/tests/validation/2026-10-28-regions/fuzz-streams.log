@@ -1,0 +1,18 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 438179
+INFO: Loaded 1 modules   (6819 inline 8-bit counters): 6819 [0x58556d86ee50, 0x58556d8708f3), 
+INFO: Loaded 1 PC tables (6819 PCs): 6819 [0x58556d8708f8,0x58556d88b328), 
+INFO:      621 files found in /home/perfecttaste/.cache/deadlib-mp3/fuzz-regions-campaign/corpus/streams
+INFO: seed corpus: files: 621 min: 1b max: 32769b total: 7088964b rss: 35Mb
+#64	pulse  cov: 1239 ft: 3444 corp: 44/30Kb exec/s: 21 rss: 66Mb
+#128	pulse  cov: 1288 ft: 3904 corp: 75/80Kb exec/s: 16 rss: 89Mb
+#256	pulse  cov: 1317 ft: 4237 corp: 125/198Kb exec/s: 11 rss: 138Mb
+#512	pulse  cov: 1431 ft: 5582 corp: 236/1671Kb exec/s: 4 rss: 387Mb
+#622	INITED cov: 1437 ft: 5689 corp: 258/2375Kb exec/s: 3 rss: 401Mb
+#622	DONE   cov: 1437 ft: 5689 corp: 258/2375Kb lim: 32769 exec/s: 3 rss: 401Mb
+Done 622 runs in 195 second(s)
+stat::number_of_executed_units: 622
+stat::average_exec_per_sec:     3
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              401

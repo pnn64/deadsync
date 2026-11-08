@@ -25,7 +25,8 @@ windows = { version = "0.62.2", features = [
 ] }
 
 [target.'cfg(windows)'.dev-dependencies]
-windows-core.workspace = true
+# The COM implementation macro must use the same ABI/types as windows above.
+windows-core = "0.62.2"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

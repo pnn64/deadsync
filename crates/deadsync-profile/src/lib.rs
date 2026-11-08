@@ -46,6 +46,9 @@ pub mod update;
 mod profile_ini;
 use profile_ini::ProfileIni;
 
+#[cfg(test)]
+mod perf_tests;
+
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
@@ -692,9 +695,12 @@ pub fn runtime_load_profile_data_for_side(
     let groovestats_ini_path = groovestats_ini_path(profile_dir);
     let arrowcloud_ini_path = arrowcloud_ini_path(profile_dir);
     let stats_path = profile_stats_path(profile_dir);
-    let profile_ini = ProfileIni::load(&profile_ini_path).ok();
-    let groovestats_ini = ProfileIni::load(&groovestats_ini_path).ok();
-    let arrowcloud_ini = ProfileIni::load(&arrowcloud_ini_path).ok();
+    let profile_text = fs::read_to_string(&profile_ini_path).ok();
+    let profile_ini = profile_text.as_deref().map(ProfileIni::parse);
+    let groovestats_text = fs::read_to_string(&groovestats_ini_path).ok();
+    let groovestats_ini = groovestats_text.as_deref().map(ProfileIni::parse);
+    let arrowcloud_text = fs::read_to_string(&arrowcloud_ini_path).ok();
+    let arrowcloud_ini = arrowcloud_text.as_deref().map(ProfileIni::parse);
 
     let ProfileSidecarLoadData {
         stats,
@@ -936,6 +942,9 @@ pub fn runtime_session_play_style() -> PlayStyle {
 pub fn runtime_set_session_play_style(style: PlayStyle) {
     let prev_style = {
         let mut session = runtime_lock_session();
+        if style.is_couple() || style.is_routine() {
+            session.set_joined_sides(true, true);
+        }
         let Some(prev_style) = session.set_play_style(style) else {
             return;
         };
@@ -1155,12 +1164,13 @@ fn runtime_profile_stats_payload_for_side(side: PlayerSide) -> Option<(String, P
     let ActiveProfile::Local { id } = &session.active_profiles[player_side_index(side)] else {
         return None;
     };
-    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
+    let profiles = runtime_lock_profiles();
+    let profile = &profiles[player_side_index(side)];
     Some((
         id.clone(),
         ProfileStats {
             current_combo: profile.current_combo,
-            known_pack_names: profile.known_pack_names,
+            known_pack_names: profile.known_pack_names.clone(),
         },
     ))
 }
@@ -1221,21 +1231,39 @@ pub fn runtime_sync_known_packs(
 
     let mut result = RuntimeKnownPackSyncResult::default();
     for profile_id in profile_ids {
-        let known = runtime_known_pack_names_for_local_profile(profile_id).unwrap_or_default();
-        if known.is_empty() && !scanned_pack_names.is_empty() {
-            if let Some(error) = runtime_mark_known_pack_names_for_local_profile(
+        let initialize = {
+            let session = runtime_lock_session();
+            let profiles = runtime_lock_profiles();
+            let known = session
+                .active_profiles
+                .iter()
+                .zip(profiles.iter())
+                .find_map(|(active, profile)| {
+                    (active_profile_local_id(active) == Some(profile_id.as_str()))
+                        .then_some(&profile.known_pack_names)
+                });
+            if known.is_none_or(HashSet::is_empty) && !scanned_pack_names.is_empty() {
+                true
+            } else {
+                result.unknown_pack_names.extend(
+                    scanned_pack_names
+                        .iter()
+                        .filter(|name| known.is_none_or(|known| !known.contains(name.as_str())))
+                        .cloned(),
+                );
+                false
+            }
+        };
+        if initialize
+            && let Some(error) = runtime_mark_known_pack_names_for_local_profile(
                 root,
                 profile_id,
                 scanned_pack_names.iter().map(String::as_str),
                 &mut duplicate,
-            ) {
-                result.write_errors.push(error);
-            }
-            continue;
+            )
+        {
+            result.write_errors.push(error);
         }
-        result
-            .unknown_pack_names
-            .extend(unknown_pack_names(&known, scanned_pack_names));
     }
     result
 }
@@ -1276,14 +1304,14 @@ pub fn runtime_save_profile_ini_for_side(
 ) -> Option<RuntimeProfileSidecarWriteError> {
     let profile_id = runtime_active_local_profile_id_for_side(side)?;
     let play_style = runtime_session_play_style();
-    let profile = {
+    let content = {
         let mut profiles = runtime_lock_profiles();
         let profile = &mut profiles[player_side_index(side)];
         profile.store_current_player_options(play_style);
-        profile.clone()
+        render_profile_ini_content(&profile_id, profile)
     };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_profile_ini_dir(&dir, &profile_id, &profile)
+    write_atomic(&profile_ini_path(&dir), content.as_bytes())
         .err()
         .map(|error| RuntimeProfileSidecarWriteError {
             path: profile_ini_path(&dir),
@@ -1299,31 +1327,29 @@ fn runtime_profile_dir_for_profile_id(
     runtime_profile_dir_for_id(root, profile_id, duplicate)
 }
 
-fn runtime_active_profile_id_and_data_for_side(side: PlayerSide) -> Option<(String, Profile)> {
-    let profile_id = runtime_active_local_profile_id_for_side(side)?;
-    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
-    Some((profile_id, profile))
-}
-
 pub fn runtime_save_groovestats_credentials_for_side(
     root: &Path,
     side: PlayerSide,
     duplicate: impl FnMut(&str, &Path, &Path, &Path),
 ) -> Option<RuntimeProfileSidecarWriteError> {
-    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let content = {
+        let profiles = runtime_lock_profiles();
+        let profile = &profiles[player_side_index(side)];
+        render_groovestats_ini_content(
+            &profile.groovestats_api_key,
+            profile.groovestats_is_pad_player,
+            &profile.groovestats_username,
+            profile.groovestats_password.expose(),
+        )
+    };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_groovestats_credentials_dir(
-        &dir,
-        &profile.groovestats_api_key,
-        profile.groovestats_is_pad_player,
-        &profile.groovestats_username,
-        profile.groovestats_password.expose(),
-    )
-    .err()
-    .map(|error| RuntimeProfileSidecarWriteError {
-        path: groovestats_ini_path(&dir),
-        error,
-    })
+    write_atomic(&groovestats_ini_path(&dir), content.as_bytes())
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: groovestats_ini_path(&dir),
+            error,
+        })
 }
 
 pub fn runtime_save_arrowcloud_api_key_for_side(
@@ -1331,9 +1357,13 @@ pub fn runtime_save_arrowcloud_api_key_for_side(
     side: PlayerSide,
     duplicate: impl FnMut(&str, &Path, &Path, &Path),
 ) -> Option<RuntimeProfileSidecarWriteError> {
-    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let content = {
+        let profiles = runtime_lock_profiles();
+        render_arrowcloud_ini_content(&profiles[player_side_index(side)].arrowcloud_api_key)
+    };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_arrowcloud_api_key_dir(&dir, &profile.arrowcloud_api_key)
+    write_atomic(&arrowcloud_ini_path(&dir), content.as_bytes())
         .err()
         .map(|error| RuntimeProfileSidecarWriteError {
             path: arrowcloud_ini_path(&dir),
@@ -1765,12 +1795,12 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
 #[must_use]
 pub fn sanitize_player_initials(raw: &str) -> String {
     let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
-    for ch in raw.chars() {
-        if out.len() >= PLAYER_INITIALS_MAX_LEN {
-            break;
-        }
-        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
-            out.push(ch.to_ascii_uppercase());
+    for byte in raw.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'?' || byte == b'!' {
+            out.push(char::from(byte.to_ascii_uppercase()));
+            if out.len() == PLAYER_INITIALS_MAX_LEN {
+                break;
+            }
         }
     }
     out
@@ -1864,17 +1894,27 @@ pub fn push_profile_guid_line(out: &mut String, guid: &str) {
 /// this canonical dashed-lowercase form.
 #[must_use]
 pub fn is_valid_profile_guid(s: &str) -> bool {
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut parts = s.split('-');
-    for &len in &groups {
-        let Some(part) = parts.next() else {
-            return false;
-        };
-        if part.len() != len || !part.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return false;
-        }
+    let bytes = s.as_bytes();
+    if bytes.len() != 36
+        || bytes[8] != b'-'
+        || bytes[13] != b'-'
+        || bytes[18] != b'-'
+        || bytes[23] != b'-'
+    {
+        return false;
     }
-    parts.next().is_none()
+    [
+        &bytes[..8],
+        &bytes[9..13],
+        &bytes[14..18],
+        &bytes[19..23],
+        &bytes[24..],
+    ]
+    .iter()
+    .all(|part| {
+        part.iter()
+            .fold(true, |valid, byte| valid & byte.is_ascii_hexdigit())
+    })
 }
 
 /// Fixed namespace UUID for deriving `DeadSync` profile GUIDs from `ITGmania`
@@ -1898,21 +1938,38 @@ pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let derived = uuid::Uuid::new_v5(
-        &ITGMANIA_GUID_NAMESPACE,
-        trimmed.to_ascii_lowercase().as_bytes(),
-    );
+    let mut folded = [0u8; 64];
+    let derived = if trimmed.len() <= folded.len() {
+        let name = &mut folded[..trimmed.len()];
+        name.copy_from_slice(trimmed.as_bytes());
+        name.make_ascii_lowercase();
+        uuid::Uuid::new_v5(&ITGMANIA_GUID_NAMESPACE, name)
+    } else {
+        uuid::Uuid::new_v5(
+            &ITGMANIA_GUID_NAMESPACE,
+            trimmed.to_ascii_lowercase().as_bytes(),
+        )
+    };
     Some(derived.to_string())
 }
 
 const FOLDER_NAME_MAX_LEN: usize = 48;
 
 fn is_windows_reserved_name(name: &str) -> bool {
-    const RESERVED: [&str; 22] = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    RESERVED.iter().any(|r| name.eq_ignore_ascii_case(r))
+    let prefix = match name.as_bytes() {
+        [a, b, c] => [a | 0x20, b | 0x20, c | 0x20],
+        [a, b, c, b'1'..=b'9'] => {
+            return matches!(
+                [a | 0x20, b | 0x20, c | 0x20],
+                [b'c', b'o', b'm'] | [b'l', b'p', b't']
+            );
+        }
+        _ => return false,
+    };
+    matches!(
+        prefix,
+        [b'c', b'o', b'n'] | [b'p', b'r', b'n'] | [b'a', b'u', b'x'] | [b'n', b'u', b'l']
+    )
 }
 
 /// Derive a safe single-segment folder name from a display name. `None` (caller
@@ -1950,7 +2007,11 @@ pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
     if trimmed.is_empty() || is_windows_reserved_name(trimmed) {
         return None;
     }
-    Some(trimmed.to_string())
+    if out.capacity() == trimmed.len() {
+        Some(out)
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 /// Largest numeric suffix tried before giving up and using the fallback.
@@ -1973,6 +2034,22 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
         return base;
     }
     let mut candidate = String::with_capacity(base.len() + 5);
+    if existing.len() >= 32 {
+        // Preserve the common small-gap search before building the full index.
+        for n in 2..=8 {
+            candidate.clear();
+            let _ = write!(candidate, "{base}-{n}");
+            if !taken(&candidate) {
+                return candidate;
+            }
+        }
+        let Some(n) = available_folder_suffix(&base, existing) else {
+            return fallback.to_string();
+        };
+        candidate.clear();
+        let _ = write!(candidate, "{base}-{n}");
+        return candidate;
+    }
     for n in 2..=FOLDER_NAME_MAX_SUFFIX {
         candidate.clear();
         let _ = write!(candidate, "{base}-{n}");
@@ -1983,12 +2060,46 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
     fallback.to_string()
 }
 
+// The bound is fixed: one bit per canonical suffix, with no heap index.
+#[inline(never)]
+fn available_folder_suffix(base: &str, existing: &[String]) -> Option<u32> {
+    let mut occupied = [0u64; 157];
+    occupied[0] = 3;
+    occupied[156] = u64::MAX << 16;
+    for name in existing {
+        let Some((prefix, suffix)) = name.as_bytes().split_at_checked(base.len()) else {
+            continue;
+        };
+        if !prefix.eq_ignore_ascii_case(base.as_bytes()) {
+            continue;
+        }
+        let [b'-', first @ b'1'..=b'9', tail @ ..] = suffix else {
+            continue;
+        };
+        if tail.len() > 3 {
+            continue;
+        }
+        let mut n = u32::from(first - b'0');
+        for &digit in tail {
+            if !digit.is_ascii_digit() {
+                n = 0;
+                break;
+            }
+            n = n * 10 + u32::from(digit - b'0');
+        }
+        if n >= 2 {
+            occupied[n as usize / 64] |= 1u64 << (n % 64);
+        }
+    }
+    occupied.iter().enumerate().find_map(|(word, &bits)| {
+        let free = !bits;
+        (free != 0).then(|| (word * 64 + free.trailing_zeros() as usize) as u32)
+    })
+}
+
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
-    a.chars()
-        .flat_map(char::to_lowercase)
-        .cmp(b.chars().flat_map(char::to_lowercase))
-        .then_with(|| a.cmp(b))
+    favorites_view::unicode_case_insensitive_cmp(a, b).then_with(|| a.cmp(b))
 }
 
 #[must_use]
@@ -2347,9 +2458,8 @@ pub struct MusicProfileSnapshot {
 /// caller's thread, has one entry, and is warmed by the first music, course, or
 /// Evaluation frame. A miss rebuilds the small snapshot without I/O;
 /// replacement drops the previous shared strings on the game thread. There is
-/// no eviction scan or capacity growth. Benchmarks cover hits/misses and
-/// allocation counters; a hit is bounded by two source-field comparisons plus
-/// `Arc` refcount increments.
+/// no eviction scan or capacity growth. A hit is bounded by two source-field
+/// comparisons plus `Arc` refcount increments.
 #[derive(Default)]
 pub struct MusicProfileSnapshotCache {
     snapshot: Option<Arc<MusicProfileSnapshot>>,
@@ -2591,6 +2701,8 @@ fn music_profile_fields_match(
             && view.player_initials.as_ref() == profile.player_initials
             && leaderboard.display_scorebox == profile.display_scorebox
             && leaderboard.gs_active == (enable_groovestats && view.joined && !api_key.is_empty())
+            && leaderboard.ac_active
+                == (enable_arrowcloud && view.joined && !arrowcloud_api_key.is_empty())
             && leaderboard.show_ex_score == profile.show_ex_score
             && leaderboard.api_key() == api_key
             && leaderboard.arrowcloud_api_key() == arrowcloud_api_key
@@ -3969,6 +4081,10 @@ pub enum PlayStyle {
     PumpSingle,
     PumpVersus,
     PumpDouble,
+    Couple,
+    Routine,
+    PumpCouple,
+    PumpRoutine,
 }
 
 impl PlayStyle {
@@ -3978,8 +4094,12 @@ impl PlayStyle {
         match self {
             Self::Single | Self::Versus => "dance-single",
             Self::Double => "dance-double",
+            Self::Couple => "dance-couple",
+            Self::Routine => "dance-routine",
             Self::PumpSingle | Self::PumpVersus => "pump-single",
             Self::PumpDouble => "pump-double",
+            Self::PumpCouple => "pump-couple",
+            Self::PumpRoutine => "pump-routine",
         }
     }
 
@@ -3987,10 +4107,10 @@ impl PlayStyle {
     #[must_use]
     pub const fn cols_per_player(self) -> usize {
         match self {
-            Self::Single | Self::Versus => 4,
-            Self::Double => 8,
-            Self::PumpSingle | Self::PumpVersus => 5,
-            Self::PumpDouble => 10,
+            Self::Single | Self::Versus | Self::Couple => 4,
+            Self::Double | Self::Routine => 8,
+            Self::PumpSingle | Self::PumpVersus | Self::PumpCouple => 5,
+            Self::PumpDouble | Self::PumpRoutine => 10,
         }
     }
 
@@ -3999,10 +4119,16 @@ impl PlayStyle {
     pub const fn player_count(self) -> usize {
         match self {
             Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
-            Self::Versus | Self::PumpVersus => 2,
+            Self::Versus
+            | Self::PumpVersus
+            | Self::Couple
+            | Self::PumpCouple
+            | Self::Routine
+            | Self::PumpRoutine => 2,
         }
     }
 
+    /// Routine gives each participant its own field over the shared pads.
     #[inline(always)]
     #[must_use]
     pub const fn total_cols(self) -> usize {
@@ -4012,13 +4138,40 @@ impl PlayStyle {
     #[inline(always)]
     #[must_use]
     pub const fn is_pump(self) -> bool {
-        matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
+        matches!(
+            self,
+            Self::PumpSingle
+                | Self::PumpVersus
+                | Self::PumpDouble
+                | Self::PumpCouple
+                | Self::PumpRoutine
+        )
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_versus(self) -> bool {
-        matches!(self, Self::Versus | Self::PumpVersus)
+        matches!(
+            self,
+            Self::Versus
+                | Self::PumpVersus
+                | Self::Couple
+                | Self::PumpCouple
+                | Self::Routine
+                | Self::PumpRoutine
+        )
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_couple(self) -> bool {
+        matches!(self, Self::Couple | Self::PumpCouple)
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_routine(self) -> bool {
+        matches!(self, Self::Routine | Self::PumpRoutine)
     }
 
     #[inline(always)]
@@ -4038,10 +4191,12 @@ impl PlayStyle {
 #[must_use]
 pub const fn player_options_section(style: PlayStyle) -> &'static str {
     match style {
-        PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
-        PlayStyle::Double => "PlayerOptionsDoubles",
-        PlayStyle::PumpSingle | PlayStyle::PumpVersus => "PlayerOptionsPumpSingles",
-        PlayStyle::PumpDouble => "PlayerOptionsPumpDoubles",
+        PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => "PlayerOptionsSingles",
+        PlayStyle::Double | PlayStyle::Routine => "PlayerOptionsDoubles",
+        PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+            "PlayerOptionsPumpSingles"
+        }
+        PlayStyle::PumpDouble | PlayStyle::PumpRoutine => "PlayerOptionsPumpDoubles",
     }
 }
 
@@ -4137,6 +4292,9 @@ pub const fn play_style_for_joined(
     p1_joined: bool,
     p2_joined: bool,
 ) -> PlayStyle {
+    if style.is_couple() || style.is_routine() {
+        return style;
+    }
     if p1_joined && p2_joined {
         if style.is_pump() {
             PlayStyle::PumpVersus
@@ -4150,7 +4308,11 @@ pub const fn play_style_for_joined(
             PlayStyle::Single
             | PlayStyle::Double
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpDouble => style,
+            | PlayStyle::PumpDouble
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => style,
         }
     }
 }
@@ -4167,7 +4329,10 @@ pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bo
     matches!(
         (play_style, side),
         (
-            PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble,
+            PlayStyle::Single
+                | PlayStyle::Double
+                | PlayStyle::PumpSingle
+                | PlayStyle::PumpDouble,
             PlayerSide::P2
         )
     )
@@ -4435,20 +4600,38 @@ fn with_lower_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
 #[inline]
 fn with_compact_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
     let value = value.trim();
+    const MAP: [u8; 256] = {
+        let mut map = [0u8; 256];
+        let mut byte = 0usize;
+        while byte < 256 {
+            let value = byte as u8;
+            if value.is_ascii_alphanumeric() {
+                map[byte] = value.to_ascii_lowercase();
+            }
+            byte += 1;
+        }
+        map
+    };
     let mut bytes = [0u8; OPTION_KEY_STACK_BYTES];
     let mut len = 0;
-    for byte in value.bytes().filter(u8::is_ascii_alphanumeric) {
+    for byte in value.bytes().filter_map(|byte| {
+        let mapped = MAP[usize::from(byte)];
+        (mapped != 0).then_some(mapped)
+    }) {
         if len == OPTION_KEY_STACK_BYTES {
             let mut key = String::with_capacity(value.len());
             key.extend(
                 value
                     .bytes()
-                    .filter(u8::is_ascii_alphanumeric)
-                    .map(|byte| byte.to_ascii_lowercase() as char),
+                    .filter_map(|byte| {
+                        let mapped = MAP[usize::from(byte)];
+                        (mapped != 0).then_some(mapped)
+                    })
+                    .map(char::from),
             );
             return use_key(&key);
         }
-        bytes[len] = byte.to_ascii_lowercase();
+        bytes[len] = byte;
         len += 1;
     }
     let key = std::str::from_utf8(&bytes[..len])
@@ -4768,6 +4951,39 @@ impl core::fmt::Display for ComboColors {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JudgmentAnimation {
+    #[default]
+    Default,
+    Still,
+    Itg,
+}
+
+impl FromStr for JudgmentAnimation {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        with_lower_option_key(s, |key| match key {
+            "default" => Ok(Self::Default),
+            "still" => Ok(Self::Still),
+            "itg" => Ok(Self::Itg),
+            other => Err(format!(
+                "'{other}' is not a valid JudgmentAnimation setting"
+            )),
+        })
+    }
+}
+
+impl core::fmt::Display for JudgmentAnimation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Default => "Default",
+            Self::Still => "Still",
+            Self::Itg => "ITG",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ComboFont {
     #[default]
     Wendy,
@@ -4778,6 +4994,7 @@ pub enum ComboFont {
     Work,
     WendyCursed,
     Mega,
+    Unprofessional,
     None,
 }
 
@@ -4794,6 +5011,7 @@ impl FromStr for ComboFont {
             "work" => Ok(Self::Work),
             "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
             "mega" => Ok(Self::Mega),
+            "unprofessional" => Ok(Self::Unprofessional),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboFont setting")),
         })
@@ -4811,6 +5029,7 @@ impl core::fmt::Display for ComboFont {
             Self::Work => write!(f, "Work"),
             Self::WendyCursed => write!(f, "Wendy (Cursed)"),
             Self::Mega => write!(f, "Mega"),
+            Self::Unprofessional => write!(f, "Unprofessional"),
             Self::None => write!(f, "None"),
         }
     }
@@ -4838,6 +5057,7 @@ pub enum TargetScoreSetting {
     SpecifiedValue,
     MachineBest,
     PersonalBest,
+    GhostData,
 }
 
 impl FromStr for TargetScoreSetting {
@@ -4876,6 +5096,7 @@ impl FromStr for TargetScoreSetting {
             "specifiedvalue" | "specified" => Ok(Self::SpecifiedValue),
             "machinebest" | "machine" => Ok(Self::MachineBest),
             "personalbest" | "personal" => Ok(Self::PersonalBest),
+            "ghostdata" | "ghost" => Ok(Self::GhostData),
             other => Err(format!("'{other}' is not a valid TargetScore setting")),
         })
     }
@@ -4903,6 +5124,7 @@ impl core::fmt::Display for TargetScoreSetting {
             Self::SpecifiedValue => write!(f, "Specified Value"),
             Self::MachineBest => write!(f, "Machine Best"),
             Self::PersonalBest => write!(f, "Personal Best"),
+            Self::GhostData => write!(f, "Ghost Data"),
         }
     }
 }
@@ -6173,52 +6395,44 @@ pub fn migrate_noteskin_parts(options: &mut PlayerOptionsData) {
     let Some((base, query)) = raw.split_once('?') else {
         return;
     };
-    let base = base.to_string();
-    let choices: Vec<_> = query
-        .split('&')
-        .filter_map(|pair| pair.split_once('='))
-        .collect();
-    let part = |slot: &str| {
-        choices
-            .iter()
-            .find(|(key, _)| *key == slot)
-            .map(|(_, value)| NoteSkin::new(&format!("{base}?{slot}={value}")))
-    };
-    let arrows = part("arrows");
-    let receptors = part("receptors");
-    let hold_active = part("hold_active");
-    let hold_inactive = part("hold_inactive");
-    let roll_active = part("roll_active");
-    let roll_inactive = part("roll_inactive");
-    let tap_explosions = part("tap_explosions");
-    let hold_explosions = part("hold_explosions");
-    let lifts = part("lifts");
-    // The old size option changed the mine model, not just its scale. Retain that
-    // model in the migrated mine selection; new size controls scale any provider.
-    let mine_query: Vec<_> = choices
-        .iter()
-        .filter(|(key, _)| matches!(*key, "mines" | "mine_size"))
-        .map(|(key, value)| format!("{key}={value}"))
-        .collect();
-    let mines = (!mine_query.is_empty())
-        .then(|| NoteSkin::new(&format!("{base}?{}", mine_query.join("&"))));
-    for (target, legacy) in [
-        (&mut options.arrow_noteskin, arrows),
-        (&mut options.receptor_noteskin, receptors),
-        (&mut options.hold_active_noteskin, hold_active),
-        (&mut options.hold_inactive_noteskin, hold_inactive),
-        (&mut options.roll_active_noteskin, roll_active),
-        (&mut options.roll_inactive_noteskin, roll_inactive),
-        (&mut options.tap_explosion_noteskin, tap_explosions),
-        (&mut options.hold_explosion_noteskin, hold_explosions),
-        (&mut options.mine_noteskin, mines),
-        (&mut options.lift_noteskin, lifts),
-    ] {
+    let mut mine_query = String::new();
+    for (key, value) in query.split('&').filter_map(|pair| pair.split_once('=')) {
+        let target = match key {
+            "arrows" => &mut options.arrow_noteskin,
+            "receptors" => &mut options.receptor_noteskin,
+            "hold_active" => &mut options.hold_active_noteskin,
+            "hold_inactive" => &mut options.hold_inactive_noteskin,
+            "roll_active" => &mut options.roll_active_noteskin,
+            "roll_inactive" => &mut options.roll_inactive_noteskin,
+            "tap_explosions" => &mut options.tap_explosion_noteskin,
+            "hold_explosions" => &mut options.hold_explosion_noteskin,
+            "lifts" => &mut options.lift_noteskin,
+            // Legacy size changed the mine model. Preserve it with the provider,
+            // including the original query order and any repeated mine options.
+            "mines" | "mine_size" => {
+                if options.mine_noteskin.is_none() {
+                    if mine_query.is_empty() {
+                        mine_query.push_str(base);
+                        mine_query.push('?');
+                    } else {
+                        mine_query.push('&');
+                    }
+                    mine_query.push_str(key);
+                    mine_query.push('=');
+                    mine_query.push_str(value);
+                }
+                continue;
+            }
+            _ => continue,
+        };
         if target.is_none() {
-            *target = legacy;
+            *target = Some(NoteSkin::new(&format!("{base}?{key}={value}")));
         }
     }
-    options.noteskin = NoteSkin::new(&base);
+    if !mine_query.is_empty() {
+        options.mine_noteskin = Some(NoteSkin::new(&mine_query));
+    }
+    options.noteskin = NoteSkin::new(base);
 }
 
 #[inline(always)]
@@ -6913,14 +7127,15 @@ pub fn decode_profile_stats(bytes: &[u8]) -> Result<ProfileStats, ProfileStatsDe
 
 #[must_use]
 pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
-    let mut known_pack_names: Vec<String> = stats.known_pack_names.iter().cloned().collect();
+    let mut known_pack_names: Vec<&str> =
+        stats.known_pack_names.iter().map(String::as_str).collect();
     known_pack_names.sort_unstable();
     bincode::encode_to_vec(
-        ProfileStatsV1 {
-            version: PROFILE_STATS_VERSION_V1,
-            current_combo: stats.current_combo,
+        (
+            PROFILE_STATS_VERSION_V1,
+            stats.current_combo,
             known_pack_names,
-        },
+        ),
         bincode::config::standard(),
     )
     .ok()
@@ -7315,10 +7530,15 @@ pub struct PlayerOptionsData {
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
     pub score_display_mode: ScoreDisplayMode,
+    pub show_golf_score: bool,
+    pub golf_all_charts: bool,
+    pub golf_stroke_feedback: bool,
+    pub show_golf_results: bool,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     /// Pad-light brightness 0..=100 (gamma-mapped on send; 0 = off, 100 = full).
     pub pad_light_brightness: u8,
+    pub judgment_animation: JudgmentAnimation,
     pub judgment_tilt: bool,
     pub column_cues: bool,
     pub measure_cues: bool,
@@ -7349,6 +7569,8 @@ pub struct PlayerOptionsData {
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
     pub text_error_bar_scalable: bool,
+    /// Keep early/late (and FAST/SLOW) text at the error bar center.
+    pub text_error_bar_centered: bool,
     pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
@@ -7469,9 +7691,17 @@ fn default_player_options() -> PlayerOptionsData {
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
         score_display_mode: ScoreDisplayMode::Normal,
+        // Golf scoring defaults on so golf packs light up as soon as the machine's
+        // golf master switch is enabled. `golf_all_charts` stays off, so charts
+        // without an authored par keep the normal score and results.
+        show_golf_score: true,
+        golf_all_charts: false,
+        golf_stroke_feedback: false,
+        show_golf_results: true,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         pad_light_brightness: PAD_LIGHT_BRIGHTNESS_DEFAULT,
+        judgment_animation: JudgmentAnimation::Default,
         judgment_tilt: false,
         column_cues: false,
         measure_cues: false,
@@ -7495,6 +7725,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
         text_error_bar_scalable: false,
+        text_error_bar_centered: false,
         text_error_bar_threshold_ms: TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         error_bar_up: false,
         error_bar_multi_tick: false,
@@ -7724,16 +7955,20 @@ where
     options.background_filter = get("BackgroundFilter")
         .and_then(|s| BackgroundFilter::from_str(&s).ok())
         .unwrap_or(options.background_filter);
-    options.hold_judgment_graphic = get("HoldJudgmentGraphic")
-        .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.hold_judgment_graphic.clone());
-    options.held_miss_graphic = get("HeldGraphic")
+    if let Some(value) =
+        get("HoldJudgmentGraphic").and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
+    {
+        options.hold_judgment_graphic = value;
+    }
+    if let Some(value) = get("HeldGraphic")
         .or_else(|| get("HeldMissGraphic"))
         .and_then(|s| HeldMissGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.held_miss_graphic.clone());
-    options.judgment_graphic = get("JudgmentGraphic")
-        .and_then(|s| JudgmentGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.judgment_graphic.clone());
+    {
+        options.held_miss_graphic = value;
+    }
+    if let Some(value) = get("JudgmentGraphic").and_then(|s| JudgmentGraphic::from_str(&s).ok()) {
+        options.judgment_graphic = value;
+    }
     options.combo_font = get("ComboFont")
         .and_then(|s| ComboFont::from_str(&s).ok())
         .unwrap_or(options.combo_font);
@@ -7747,9 +7982,9 @@ where
         .or_else(|| get("ComboContinuesBetweenSongs"))
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.carry_combo_between_songs, |v| v != 0);
-    options.noteskin = get("NoteSkin")
-        .and_then(|s| NoteSkin::from_str(&s).ok())
-        .unwrap_or_else(|| options.noteskin.clone());
+    if let Some(value) = get("NoteSkin").and_then(|s| NoteSkin::from_str(&s).ok()) {
+        options.noteskin = value;
+    }
     options.mine_noteskin = get("MineSkin").and_then(|s| NoteSkin::from_str(&s).ok());
     options.receptor_noteskin = get("ReceptorSkin").and_then(|s| NoteSkin::from_str(&s).ok());
     options.tap_explosion_noteskin =
@@ -7854,6 +8089,11 @@ where
     options.score_position = get("ScorePosition")
         .and_then(|s| ScorePosition::from_str(&s).ok())
         .unwrap_or(options.score_position);
+    options.show_golf_score = load_u8_bool(&mut get, "GolfScore", options.show_golf_score);
+    options.golf_all_charts = load_u8_bool(&mut get, "GolfAllCharts", options.golf_all_charts);
+    options.golf_stroke_feedback =
+        load_u8_bool(&mut get, "GolfStrokeFeedback", options.golf_stroke_feedback);
+    options.show_golf_results = load_u8_bool(&mut get, "GolfResults", options.show_golf_results);
     options.score_display_mode = get("ScoreDisplay")
         .or_else(|| get("ScoreDisplayMode"))
         .and_then(|s| ScoreDisplayMode::from_str(&s).ok())
@@ -7871,6 +8111,9 @@ where
         .and_then(|s| s.parse::<u8>().ok())
         .map(clamp_pad_light_brightness)
         .unwrap_or(options.pad_light_brightness);
+    options.judgment_animation = get("JudgmentAnimation")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(options.judgment_animation);
     options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
     options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
     options.measure_cues = load_u8_bool(&mut get, "MeasureCues", options.measure_cues);
@@ -7943,6 +8186,9 @@ where
         .and_then(|s| parse_profile_bool(&s))
         .or_else(|| get("TextErrorBar10ms").and_then(|s| parse_profile_bool(&s)))
         .unwrap_or(options.text_error_bar_scalable);
+    options.text_error_bar_centered = get("TextErrorBarCentered")
+        .and_then(|s| parse_profile_bool(&s))
+        .unwrap_or(options.text_error_bar_centered);
     options.text_error_bar_threshold_ms = get("TextErrorBarThresholdMs")
         .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
         .map(clamp_text_error_bar_threshold_ms)
@@ -8476,6 +8722,27 @@ pub fn append_player_options_section(
     let _ = write!(content, "ScoreDisplay={}\n", options.score_display_mode);
     let _ = write!(
         content,
+        "GolfScore={}\n",
+        i32::from(options.show_golf_score)
+    );
+    let _ = write!(
+        content,
+        "GolfAllCharts={}\n",
+        i32::from(options.golf_all_charts)
+    );
+    let _ = write!(
+        content,
+        "GolfStrokeFeedback={}\n",
+        i32::from(options.golf_stroke_feedback)
+    );
+    let _ = write!(
+        content,
+        "GolfResults={}\n",
+        i32::from(options.show_golf_results)
+    );
+
+    let _ = write!(
+        content,
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
     );
@@ -8488,6 +8755,11 @@ pub fn append_player_options_section(
         content,
         "PadLightBrightness={}\n",
         options.pad_light_brightness
+    );
+    let _ = write!(
+        content,
+        "JudgmentAnimation={}\n",
+        options.judgment_animation
     );
     let _ = write!(
         content,
@@ -8583,6 +8855,11 @@ pub fn append_player_options_section(
         content,
         "TextErrorBar10ms={}\n",
         i32::from(options.text_error_bar_scalable)
+    );
+    let _ = writeln!(
+        content,
+        "TextErrorBarCentered={}",
+        i32::from(options.text_error_bar_centered)
     );
     let _ = write!(
         content,
@@ -9177,12 +9454,17 @@ pub struct Profile {
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
     pub score_display_mode: ScoreDisplayMode,
+    pub show_golf_score: bool,
+    pub golf_all_charts: bool,
+    pub golf_stroke_feedback: bool,
+    pub show_golf_results: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     /// Pad-light brightness 0..=100. Seeded from the `StepManiaX` machine default
     /// when the profile is created; the player adjusts it in Player Options.
     pub pad_light_brightness: u8,
+    pub judgment_animation: JudgmentAnimation,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
@@ -9215,6 +9497,8 @@ pub struct Profile {
     // Optional Text error bar mode that surfaces hits beyond a configured
     // threshold independently of the active judgment windows.
     pub text_error_bar_scalable: bool,
+    /// Keep early/late (and FAST/SLOW) text at the error bar center.
+    pub text_error_bar_centered: bool,
     pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
@@ -9387,9 +9671,14 @@ impl Default for Profile {
             scatterplot_max_window: player_options.scatterplot_max_window,
             score_position: player_options.score_position,
             score_display_mode: player_options.score_display_mode,
+            show_golf_score: player_options.show_golf_score,
+            golf_all_charts: player_options.golf_all_charts,
+            golf_stroke_feedback: player_options.golf_stroke_feedback,
+            show_golf_results: player_options.show_golf_results,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             pad_light_brightness: player_options.pad_light_brightness,
+            judgment_animation: player_options.judgment_animation,
             judgment_tilt: player_options.judgment_tilt,
             column_cues: player_options.column_cues,
             measure_cues: player_options.measure_cues,
@@ -9413,6 +9702,7 @@ impl Default for Profile {
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
             text_error_bar_scalable: player_options.text_error_bar_scalable,
+            text_error_bar_centered: player_options.text_error_bar_centered,
             text_error_bar_threshold_ms: player_options.text_error_bar_threshold_ms,
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
@@ -10011,6 +10301,10 @@ impl Profile {
         set_value_if_changed(&mut self.text_error_bar_scalable, enabled)
     }
 
+    pub fn set_text_error_bar_centered(&mut self, enabled: bool) -> bool {
+        set_value_if_changed(&mut self.text_error_bar_centered, enabled)
+    }
+
     pub fn set_note_field_offset_x(&mut self, offset: i32) -> bool {
         set_i32_if_changed(
             &mut self.note_field_offset_x,
@@ -10354,9 +10648,14 @@ impl Profile {
             scatterplot_max_window: self.scatterplot_max_window,
             score_position: self.score_position,
             score_display_mode: self.score_display_mode,
+            show_golf_score: self.show_golf_score,
+            golf_all_charts: self.golf_all_charts,
+            golf_stroke_feedback: self.golf_stroke_feedback,
+            show_golf_results: self.show_golf_results,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             pad_light_brightness: self.pad_light_brightness,
+            judgment_animation: self.judgment_animation,
             judgment_tilt: self.judgment_tilt,
             column_cues: self.column_cues,
             measure_cues: self.measure_cues,
@@ -10380,6 +10679,7 @@ impl Profile {
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
             text_error_bar_scalable: self.text_error_bar_scalable,
+            text_error_bar_centered: self.text_error_bar_centered,
             text_error_bar_threshold_ms: self.text_error_bar_threshold_ms,
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
@@ -10448,34 +10748,27 @@ impl Profile {
         }
     }
 
-    fn apply_player_options(&mut self, options: &PlayerOptionsData) {
+    fn apply_player_options(&mut self, options: PlayerOptionsData) {
         self.background_filter = options.background_filter;
-        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
-        self.held_miss_graphic = options.held_miss_graphic.clone();
-        self.judgment_graphic = options.judgment_graphic.clone();
+        self.hold_judgment_graphic = options.hold_judgment_graphic;
+        self.held_miss_graphic = options.held_miss_graphic;
+        self.judgment_graphic = options.judgment_graphic;
         self.combo_font = options.combo_font;
         self.combo_colors = options.combo_colors;
         self.combo_mode = options.combo_mode;
         self.carry_combo_between_songs = options.carry_combo_between_songs;
-        self.noteskin = options.noteskin.clone();
-        self.arrow_noteskin.clone_from(&options.arrow_noteskin);
-        self.hold_active_noteskin
-            .clone_from(&options.hold_active_noteskin);
-        self.hold_inactive_noteskin
-            .clone_from(&options.hold_inactive_noteskin);
-        self.roll_active_noteskin
-            .clone_from(&options.roll_active_noteskin);
-        self.roll_inactive_noteskin
-            .clone_from(&options.roll_inactive_noteskin);
-        self.hold_explosion_noteskin
-            .clone_from(&options.hold_explosion_noteskin);
-        self.lift_noteskin.clone_from(&options.lift_noteskin);
+        self.noteskin = options.noteskin;
+        self.arrow_noteskin = options.arrow_noteskin;
+        self.hold_active_noteskin = options.hold_active_noteskin;
+        self.hold_inactive_noteskin = options.hold_inactive_noteskin;
+        self.roll_active_noteskin = options.roll_active_noteskin;
+        self.roll_inactive_noteskin = options.roll_inactive_noteskin;
+        self.hold_explosion_noteskin = options.hold_explosion_noteskin;
+        self.lift_noteskin = options.lift_noteskin;
         self.mine_size_percent = options.mine_size_percent;
-        self.mine_noteskin.clone_from(&options.mine_noteskin);
-        self.receptor_noteskin
-            .clone_from(&options.receptor_noteskin);
-        self.tap_explosion_noteskin
-            .clone_from(&options.tap_explosion_noteskin);
+        self.mine_noteskin = options.mine_noteskin;
+        self.receptor_noteskin = options.receptor_noteskin;
+        self.tap_explosion_noteskin = options.tap_explosion_noteskin;
         self.tap_explosion_active_mask = options.tap_explosion_active_mask;
         self.scroll_speed = options.scroll_speed;
         self.no_cmod_alternative = options.no_cmod_alternative;
@@ -10507,9 +10800,14 @@ impl Profile {
         self.scatterplot_max_window = options.scatterplot_max_window;
         self.score_position = options.score_position;
         self.score_display_mode = options.score_display_mode;
+        self.show_golf_score = options.show_golf_score;
+        self.golf_all_charts = options.golf_all_charts;
+        self.golf_stroke_feedback = options.golf_stroke_feedback;
+        self.show_golf_results = options.show_golf_results;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.pad_light_brightness = options.pad_light_brightness;
+        self.judgment_animation = options.judgment_animation;
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
         self.measure_cues = options.measure_cues;
@@ -10533,6 +10831,7 @@ impl Profile {
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
         self.text_error_bar_scalable = options.text_error_bar_scalable;
+        self.text_error_bar_centered = options.text_error_bar_centered;
         self.text_error_bar_threshold_ms = options.text_error_bar_threshold_ms;
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
@@ -10546,7 +10845,7 @@ impl Profile {
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
         self.step_statistics = options.step_statistics;
-        self.step_stats_extra = options.step_stats_extra.clone();
+        self.step_stats_extra = options.step_stats_extra;
         self.target_score = options.target_score;
         self.target_score_percent = options.target_score_percent;
         self.target_score_miss_policy = options.target_score_miss_policy;
@@ -10577,8 +10876,8 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.smx_fsr_display = options.smx_fsr_display;
         self.smx_pad_input_display = options.smx_pad_input_display;
-        self.smx_bg_pack.clone_from(&options.smx_bg_pack);
-        self.smx_judge_pack.clone_from(&options.smx_judge_pack);
+        self.smx_bg_pack = options.smx_bg_pack;
+        self.smx_judge_pack = options.smx_judge_pack;
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;
@@ -10606,7 +10905,7 @@ impl Profile {
         if self.current_player_options() == options {
             return false;
         }
-        self.apply_player_options(&options);
+        self.apply_player_options(options);
         true
     }
 
@@ -10614,20 +10913,28 @@ impl Profile {
     #[must_use]
     pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
         match style {
-            PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
-            PlayStyle::Double => &self.player_options_doubles,
-            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &self.player_options_pump_singles,
-            PlayStyle::PumpDouble => &self.player_options_pump_doubles,
+            PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => {
+                &self.player_options_singles
+            }
+            PlayStyle::Double | PlayStyle::Routine => &self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+                &self.player_options_pump_singles
+            }
+            PlayStyle::PumpDouble | PlayStyle::PumpRoutine => &self.player_options_pump_doubles,
         }
     }
 
     #[inline(always)]
     pub const fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
         match style {
-            PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
-            PlayStyle::Double => &mut self.player_options_doubles,
-            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &mut self.player_options_pump_singles,
-            PlayStyle::PumpDouble => &mut self.player_options_pump_doubles,
+            PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => {
+                &mut self.player_options_singles
+            }
+            PlayStyle::Double | PlayStyle::Routine => &mut self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+                &mut self.player_options_pump_singles
+            }
+            PlayStyle::PumpDouble | PlayStyle::PumpRoutine => &mut self.player_options_pump_doubles,
         }
     }
 
@@ -10646,7 +10953,7 @@ impl Profile {
 
     pub fn apply_player_options_for_style(&mut self, style: PlayStyle) {
         let options = self.player_options(style).clone();
-        self.apply_player_options(&options);
+        self.apply_player_options(options);
     }
 
     #[inline(always)]
@@ -10656,8 +10963,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &self.last_played_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &self.last_played_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &self.last_played_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &self.last_played_doubles,
         }
     }
 
@@ -10667,8 +10979,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &mut self.last_played_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &mut self.last_played_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &mut self.last_played_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &mut self.last_played_doubles,
         }
     }
 
@@ -10679,8 +10996,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &self.last_played_course_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &self.last_played_course_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &self.last_played_course_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &self.last_played_course_doubles,
         }
     }
 
@@ -10690,8 +11012,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &mut self.last_played_course_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &mut self.last_played_course_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &mut self.last_played_course_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &mut self.last_played_course_doubles,
         }
     }
 }
@@ -10803,6 +11130,7 @@ mod tests {
         assert!(options.short_average_error_bar_enabled);
         assert!(options.long_error_bar_enabled);
         assert!(!options.text_error_bar_scalable);
+        assert!(!options.text_error_bar_centered);
         assert_eq!(
             options.text_error_bar_threshold_ms,
             TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT
@@ -10870,6 +11198,7 @@ mod tests {
             scorebox_profile_snapshot(&profile, true, true, true, true, Some("profile-1".into()));
         assert!(snapshot.display_scorebox);
         assert!(snapshot.gs_active);
+        assert!(snapshot.ac_active);
         assert!(snapshot.show_ex_score);
         assert_eq!(snapshot.api_key(), "gs-key");
         assert_eq!(snapshot.arrowcloud_api_key(), "ac-key");
@@ -10882,6 +11211,8 @@ mod tests {
         let disabled =
             scorebox_profile_snapshot(&profile, true, false, false, true, Some("profile-1".into()));
         assert!(!disabled.gs_active);
+        assert!(!disabled.ac_active);
+        assert!(!disabled.online_active());
         assert!(!disabled.include_arrowcloud());
     }
 
@@ -11538,7 +11869,7 @@ mod tests {
             ("HoldJudgmentGraphic", "itg2"),
             ("HeldGraphic", "none"),
             ("JudgmentGraphic", "custom.png"),
-            ("ComboFont", "BebasNeue"),
+            ("ComboFont", "Unprofessional"),
             ("ComboColors", "RainbowScroll"),
             ("ComboMode", "CurrentCombo"),
             ("ComboContinuesBetweenSongs", "1"),
@@ -11579,7 +11910,7 @@ mod tests {
         );
         assert_eq!(options.held_miss_graphic.as_str(), "None");
         assert_eq!(options.judgment_graphic.as_str(), "judgements/custom.png");
-        assert_eq!(options.combo_font, ComboFont::BebasNeue);
+        assert_eq!(options.combo_font, ComboFont::Unprofessional);
         assert_eq!(options.combo_colors, ComboColors::RainbowScroll);
         assert_eq!(options.combo_mode, ComboMode::CurrentCombo);
         assert!(options.carry_combo_between_songs);
@@ -13121,6 +13452,7 @@ mod tests {
             average_error_bar_intensity: 1.13,
             long_error_bar_intensity: 1.95,
             text_error_bar_scalable: true,
+            text_error_bar_centered: true,
             text_error_bar_threshold_ms: 17,
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
@@ -13143,6 +13475,7 @@ mod tests {
         assert!(content.contains("Colorful=1\n"));
         assert!(content.contains("Text=1\n"));
         assert!(content.contains("TextErrorBarScalable=1\n"));
+        assert!(content.contains("TextErrorBarCentered=1\n"));
         assert!(content.contains("TextErrorBar10ms=1\n"));
         assert!(content.contains("TextErrorBarThresholdMs=17\n"));
         assert!(content.contains("AverageErrorBarIntensity=1.25\n"));
@@ -13164,6 +13497,62 @@ mod tests {
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
         assert!(content.contains("DimPostFailScatter=1\n"));
+    }
+
+    #[test]
+    fn text_error_bar_position_round_trips_and_preserves_missing_key_defaults() {
+        let split = PlayerOptionsData::default();
+        let old_profile = load_player_options_section(true, |_| None, &split).unwrap();
+        assert!(!old_profile.text_error_bar_centered);
+
+        for centered in [false, true] {
+            let options = PlayerOptionsData {
+                text_error_bar_centered: centered,
+                ..split.clone()
+            };
+            let fallback = PlayerOptionsData {
+                text_error_bar_centered: !centered,
+                ..split.clone()
+            };
+            let mut content = String::new();
+            append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+            let ini = ProfileIni::parse(&content);
+            let loaded = load_player_options_section(
+                true,
+                |key| ini.get("PlayerOptionsSingles", key),
+                &fallback,
+            )
+            .unwrap();
+            assert_eq!(loaded.text_error_bar_centered, centered);
+
+            let mut profile = Profile::default();
+            profile.set_current_player_options(loaded);
+            assert_eq!(profile.text_error_bar_centered, centered);
+            assert_eq!(
+                profile.current_player_options().text_error_bar_centered,
+                centered
+            );
+        }
+
+        let centered = PlayerOptionsData {
+            text_error_bar_centered: true,
+            ..split
+        };
+        for value in [None, Some("invalid")] {
+            let inherited = load_player_options_section(
+                true,
+                |key| {
+                    if key == "TextErrorBarCentered" {
+                        value.map(str::to_owned)
+                    } else {
+                        None
+                    }
+                },
+                &centered,
+            )
+            .unwrap();
+            assert!(inherited.text_error_bar_centered);
+        }
     }
 
     #[test]
@@ -14481,6 +14870,7 @@ ApiKey = gs-key
             ComboFont::Work,
             ComboFont::WendyCursed,
             ComboFont::Mega,
+            ComboFont::Unprofessional,
             ComboFont::None,
         ] {
             assert_eq!(setting.to_string().parse::<ComboFont>(), Ok(setting));
@@ -14514,6 +14904,8 @@ ApiKey = gs-key
             ("machinebest", TargetScoreSetting::MachineBest),
             ("personal", TargetScoreSetting::PersonalBest),
             ("personalbest", TargetScoreSetting::PersonalBest),
+            ("Ghost Data", TargetScoreSetting::GhostData),
+            ("ghost", TargetScoreSetting::GhostData),
         ] {
             assert_eq!(TargetScoreSetting::from_str(raw), Ok(setting));
             assert_eq!(
@@ -14748,6 +15140,64 @@ ApiKey = gs-key
     }
 
     #[test]
+    fn judgment_animation_round_trips_profiles_and_defaults() {
+        let defaults = PlayerOptionsData::default();
+        assert_eq!(defaults.judgment_animation, JudgmentAnimation::Default);
+        for animation in [
+            JudgmentAnimation::Default,
+            JudgmentAnimation::Still,
+            JudgmentAnimation::Itg,
+        ] {
+            assert_eq!(
+                animation.to_string().parse::<JudgmentAnimation>(),
+                Ok(animation)
+            );
+            let options = PlayerOptionsData {
+                judgment_animation: animation,
+                ..defaults.clone()
+            };
+            let mut content = String::new();
+            append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+            let ini = ProfileIni::parse(&content);
+            let loaded = load_player_options_section(
+                true,
+                |key| ini.get("PlayerOptionsSingles", key),
+                &defaults,
+            )
+            .unwrap();
+            assert_eq!(loaded.judgment_animation, animation);
+            let seeded = profile_with_player_options(&loaded);
+            assert_eq!(seeded.judgment_animation, animation);
+            let mut profile = Profile::default();
+            profile.set_current_player_options(loaded);
+            assert_eq!(profile.judgment_animation, animation);
+            assert_eq!(
+                profile.current_player_options().judgment_animation,
+                animation
+            );
+        }
+        for value in [None, Some("unknown")] {
+            let loaded = load_player_options_section(
+                true,
+                |key| {
+                    if key == "JudgmentAnimation" {
+                        value.map(str::to_owned)
+                    } else {
+                        None
+                    }
+                },
+                &defaults,
+            )
+            .unwrap();
+            assert_eq!(loaded.judgment_animation, JudgmentAnimation::Default);
+        }
+        assert_eq!(
+            "sTiLl".parse::<JudgmentAnimation>(),
+            Ok(JudgmentAnimation::Still)
+        );
+    }
+
+    #[test]
     fn column_flash_visual_options_round_trip() {
         for setting in [ColumnFlashBrightness::Normal, ColumnFlashBrightness::Dimmed] {
             assert_eq!(
@@ -14799,6 +15249,43 @@ ApiKey = gs-key
         );
         assert_eq!(ScorePosition::from_str("top"), Ok(ScorePosition::Normal));
         assert!(ScorePosition::from_str("middle").is_err());
+    }
+
+    #[test]
+    fn golf_scoring_defaults_to_golf_charts_only_and_round_trips_independently() {
+        let defaults = PlayerOptionsData::default();
+        assert!(
+            defaults.show_golf_score
+                && !defaults.golf_all_charts
+                && !defaults.golf_stroke_feedback
+                && defaults.show_golf_results
+        );
+        let options = PlayerOptionsData {
+            show_golf_score: false,
+            golf_all_charts: true,
+            golf_stroke_feedback: true,
+            show_golf_results: false,
+            ..defaults.clone()
+        };
+        let mut text = String::new();
+        append_player_options_section(&mut text, "PlayerOptionsSingles", &options);
+        let values: std::collections::HashMap<_, _> = text
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect();
+        let loaded = load_player_options_section(
+            true,
+            |key| values.get(key).map(|s| s.to_string()),
+            &defaults,
+        )
+        .unwrap();
+        assert_eq!(loaded, options);
+        let mut profile = Profile::default();
+        profile.set_current_player_options(options.clone());
+        assert_eq!(profile.current_player_options(), options);
+        let legacy = load_player_options_section(true, |_| None, &defaults).unwrap();
+        assert!(legacy.show_golf_score && legacy.show_golf_results);
+        assert!(!legacy.golf_all_charts && !legacy.golf_stroke_feedback);
     }
 
     #[test]
@@ -15306,3 +15793,234 @@ ApiKey = gs-key
         assert!(!profile.set_current_player_options(options));
     }
 }
+
+#[cfg(test)]
+mod performance_profile_regressions {
+    use super::*;
+
+    #[test]
+    fn stats_snapshots_and_known_pack_sync_preserve_profile_and_file_behavior() {
+        struct Restore {
+            session: SessionState,
+            profiles: [Profile; PLAYER_SLOTS],
+            cache: Option<RuntimeProfileDirCache>,
+            root: PathBuf,
+        }
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                *runtime_lock_session() = std::mem::take(&mut self.session);
+                *runtime_lock_profiles() = std::mem::replace(
+                    &mut self.profiles,
+                    std::array::from_fn(|_| Profile::default()),
+                );
+                *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = self.cache.take();
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+        let root =
+            std::env::temp_dir().join(format!("deadsync-profile-perf-{}", uuid::Uuid::new_v4()));
+        let restore = Restore {
+            session: std::mem::take(&mut *runtime_lock_session()),
+            profiles: std::mem::replace(
+                &mut *runtime_lock_profiles(),
+                std::array::from_fn(|_| Profile::default()),
+            ),
+            cache: RUNTIME_PROFILE_DIR_CACHE.lock().unwrap().take(),
+            root: root.clone(),
+        };
+        let ids = [
+            "00000000-0000-4000-8000-000000000001".to_string(),
+            "00000000-0000-4000-8000-000000000002".to_string(),
+        ];
+        runtime_lock_session().active_profiles =
+            std::array::from_fn(|i| ActiveProfile::Local { id: ids[i].clone() });
+        *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(RuntimeProfileDirCache {
+            root: root.clone(),
+            map: HashMap::from([
+                (ids[0].clone(), root.join("one")),
+                (ids[1].clone(), root.join("two")),
+            ]),
+        });
+        {
+            let mut profiles = runtime_lock_profiles();
+            profiles[0].current_combo = u32::MAX;
+            profiles[0].known_pack_names = HashSet::from(["Alpha".into(), "beta".into()]);
+            profiles[0].favorites = HashSet::from(["unrelated-chart".into()]);
+            profiles[0].display_name = "Unchanged identity".into();
+            profiles[1].current_combo = 42;
+            profiles[1].known_pack_names = HashSet::from(["Beta".into()]);
+        }
+        let generation = runtime_profile_generation();
+        let (id, snapshot) = runtime_profile_stats_payload_for_side(PlayerSide::P1).unwrap();
+        assert_eq!(id, ids[0]);
+        assert_eq!(snapshot.current_combo, u32::MAX);
+        assert_eq!(
+            snapshot.known_pack_names,
+            HashSet::from(["Alpha".into(), "beta".into()])
+        );
+        let scanned = ["Alpha", "Beta", "Gamma", "Gamma", "beta"].map(str::to_owned);
+        let result = runtime_sync_known_packs(&root, &ids, &scanned, |_, _, _, _| {
+            panic!("no duplication required")
+        });
+        assert_eq!(result.unknown_pack_names, scanned.iter().cloned().collect());
+        assert!(result.write_errors.is_empty());
+        assert_eq!(runtime_profile_generation(), generation);
+        assert!(!root.exists());
+        assert_eq!(
+            runtime_lock_profiles()[0].favorites,
+            HashSet::from(["unrelated-chart".into()])
+        );
+        assert_eq!(
+            runtime_lock_profiles()[0].display_name,
+            "Unchanged identity"
+        );
+        assert!(
+            runtime_sync_known_packs(&root, &[], &scanned, |_, _, _, _| unreachable!())
+                .unknown_pack_names
+                .is_empty()
+        );
+        assert!(
+            runtime_sync_known_packs(&root, &ids, &[], |_, _, _, _| unreachable!())
+                .unknown_pack_names
+                .is_empty()
+        );
+        assert!(
+            runtime_sync_known_packs(
+                &root,
+                &["absent".into()],
+                &scanned,
+                |_, _, _, _| unreachable!()
+            )
+            .unknown_pack_names
+            .is_empty()
+        );
+        assert!(!root.exists());
+
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Local { id: ids[0].clone() };
+        let first_side_only =
+            runtime_sync_known_packs(&root, &ids[..1], &scanned, |_, _, _, _| unreachable!());
+        assert_eq!(
+            first_side_only.unknown_pack_names,
+            HashSet::from(["Beta".into(), "Gamma".into()])
+        );
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Guest;
+        assert!(runtime_profile_stats_payload_for_side(PlayerSide::P2).is_none());
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Local { id: ids[1].clone() };
+        runtime_lock_profiles()[1].known_pack_names.clear();
+        let initialized =
+            runtime_sync_known_packs(&root, &ids[1..], &scanned, |_, _, _, _| unreachable!());
+        assert!(initialized.unknown_pack_names.is_empty());
+        assert!(initialized.write_errors.is_empty());
+        let saved = load_profile_stats_file(&profile_stats_path(&root.join("two")))
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.current_combo, 42);
+        assert_eq!(saved.known_pack_names, scanned.iter().cloned().collect());
+        assert_eq!(
+            runtime_lock_profiles()[1].known_pack_names,
+            saved.known_pack_names
+        );
+        runtime_lock_profiles()[0].known_pack_names.clear();
+        assert_eq!(
+            snapshot.known_pack_names,
+            HashSet::from(["Alpha".into(), "beta".into()])
+        );
+        fs::create_dir_all(&root).unwrap();
+        let blocked = root.join("blocked");
+        fs::write(&blocked, b"file instead of directory").unwrap();
+        RUNTIME_PROFILE_DIR_CACHE
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .map
+            .insert(ids[0].clone(), blocked);
+        let failed =
+            runtime_sync_known_packs(&root, &ids[..1], &scanned, |_, _, _, _| unreachable!());
+        assert!(failed.unknown_pack_names.is_empty());
+        assert_eq!(failed.write_errors.len(), 1);
+        assert_eq!(failed.write_errors[0].profile_id, ids[0]);
+        assert_eq!(
+            runtime_lock_profiles()[0].known_pack_names,
+            scanned.iter().cloned().collect()
+        );
+        drop(restore);
+    }
+
+    #[test]
+    fn legacy_noteskin_migration_preserves_first_choices_mine_order_and_overrides() {
+        let mut options = PlayerOptionsData {
+            noteskin: NoteSkin::new(
+                "CEL-WORKSHOP?arrows=first&bad&arrows=second&receptors=metal&hold_active=&hold_inactive=x&roll_active=y&roll_inactive=z&tap_explosions=t&hold_explosions=h&lifts=l&mine_size=large&mines=blue&mines=red&unknown=value=a",
+            ),
+            receptor_noteskin: Some(NoteSkin::none_choice()),
+            roll_active_noteskin: Some(NoteSkin::new("explicit")),
+            ..PlayerOptionsData::default()
+        };
+        let mut expected = options.clone();
+        expected.noteskin = NoteSkin::new("cel-workshop");
+        expected.arrow_noteskin = Some(NoteSkin::new("cel-workshop?arrows=first"));
+        expected.hold_active_noteskin = Some(NoteSkin::new("cel-workshop?hold_active="));
+        expected.hold_inactive_noteskin = Some(NoteSkin::new("cel-workshop?hold_inactive=x"));
+        expected.roll_inactive_noteskin = Some(NoteSkin::new("cel-workshop?roll_inactive=z"));
+        expected.tap_explosion_noteskin = Some(NoteSkin::new("cel-workshop?tap_explosions=t"));
+        expected.hold_explosion_noteskin = Some(NoteSkin::new("cel-workshop?hold_explosions=h"));
+        expected.lift_noteskin = Some(NoteSkin::new("cel-workshop?lifts=l"));
+        expected.mine_noteskin = Some(NoteSkin::new(
+            "cel-workshop?mine_size=large&mines=blue&mines=red",
+        ));
+        migrate_noteskin_parts(&mut options);
+        assert_eq!(options, expected);
+        migrate_noteskin_parts(&mut options);
+        assert_eq!(options, expected);
+        for raw in [
+            "cel",
+            "cel?",
+            "cel?invalid&unknown=x",
+            "?arrows=none&mine_size=small",
+        ] {
+            let mut options = PlayerOptionsData {
+                noteskin: NoteSkin::new(raw),
+                mine_noteskin: Some(NoteSkin::none_choice()),
+                ..PlayerOptionsData::default()
+            };
+            migrate_noteskin_parts(&mut options);
+            assert_eq!(
+                options.noteskin,
+                NoteSkin::new(raw.split_once('?').map_or(raw, |(base, _)| base))
+            );
+            assert_eq!(options.mine_noteskin, Some(NoteSkin::none_choice()));
+            if raw.starts_with('?') {
+                assert_eq!(options.arrow_noteskin, Some(NoteSkin::new("?arrows=none")));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+use perf_tests::allocations as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/visual_options.rs"]
+mod visual_options_perf;
+
+#[cfg(test)]
+#[path="folder_paths_performance.rs"]
+mod folder_paths_performance;
+
+#[cfg(test)]
+#[path = "identity_performance.rs"]
+mod identity_performance;
+
+#[cfg(test)]
+#[path = "normalization_performance.rs"]
+mod normalization_performance;

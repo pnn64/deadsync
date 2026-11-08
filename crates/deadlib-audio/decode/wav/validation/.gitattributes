@@ -1,0 +1,12 @@
+# Preserve the exact bytes hashed by these campaign reports and source archives.
+adpcm-wavl-reader-* -text
+adpcm-wavl-forward-* -text
+native-widths-* -text
+wavl-writer-pinned-* -text
+adpcm-flat-pinned-* -text
+adpcm-segmented-pinned-* -text
+adpcm-cache-* -text
+symphonia-widths-* -text
+adpcm-cursor-* -text
+ms-narrow-* -text
+decoding-final-* -text

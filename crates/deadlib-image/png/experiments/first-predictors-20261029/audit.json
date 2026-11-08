@@ -1,0 +1,335 @@
+{
+  "source_base": "8314615bc",
+  "selected_checkpoint": "adaptive",
+  "pipeline_processes": 32,
+  "pipeline_cases": 228,
+  "in_process_processes": 3,
+  "in_process_cases": 100,
+  "writer_memory_probes": {
+    "first-c0-d8-4097x1-i0-f2": {
+      "before": 147732,
+      "after": 143635
+    },
+    "first-c0-d8-4097x1-i0-f4": {
+      "before": 147732,
+      "after": 143635
+    },
+    "first-c0-d8-4097x1-i0-f5": {
+      "before": 151830,
+      "after": 147733
+    },
+    "first-c0-d8-33x9-i0-f5": {
+      "before": 135574,
+      "after": 135574
+    },
+    "first-c0-d8-4097x1-i1-f2": {
+      "before": 141600,
+      "after": 139548
+    },
+    "first-c0-d8-4097x1-i1-f4": {
+      "before": 141600,
+      "after": 139548
+    },
+    "first-c0-d8-4097x1-i1-f5": {
+      "before": 143656,
+      "after": 141604
+    },
+    "first-c0-d8-33x9-i1-f5": {
+      "before": 135696,
+      "after": 135666
+    },
+    "first-c6-d8-4097x1-i0-f2": {
+      "before": 184605,
+      "after": 168217
+    },
+    "first-c6-d8-4097x1-i0-f4": {
+      "before": 184605,
+      "after": 168217
+    },
+    "first-c6-d8-4097x1-i0-f5": {
+      "before": 200994,
+      "after": 184606
+    },
+    "first-c6-d8-33x9-i0-f5": {
+      "before": 135970,
+      "after": 135970
+    },
+    "first-c6-d8-4097x1-i1-f2": {
+      "before": 160068,
+      "after": 151860
+    },
+    "first-c6-d8-4097x1-i1-f4": {
+      "before": 160068,
+      "after": 151860
+    },
+    "first-c6-d8-4097x1-i1-f5": {
+      "before": 168280,
+      "after": 160072
+    },
+    "first-c6-d8-33x9-i1-f5": {
+      "before": 136096,
+      "after": 136096
+    },
+    "first-c6-d16-4097x1-i0-f2": {
+      "before": 233769,
+      "after": 200993
+    },
+    "first-c6-d16-4097x1-i0-f4": {
+      "before": 233769,
+      "after": 200993
+    },
+    "first-c6-d16-4097x1-i0-f5": {
+      "before": 266546,
+      "after": 233770
+    },
+    "first-c6-d16-33x9-i0-f5": {
+      "before": 136498,
+      "after": 136498
+    },
+    "first-c6-d16-4097x1-i1-f2": {
+      "before": 184692,
+      "after": 168276
+    },
+    "first-c6-d16-4097x1-i1-f4": {
+      "before": 184692,
+      "after": 168276
+    },
+    "first-c6-d16-4097x1-i1-f5": {
+      "before": 201112,
+      "after": 184696
+    },
+    "first-c6-d16-33x9-i1-f5": {
+      "before": 136736,
+      "after": 136736
+    },
+    "first-c0-d2-4097x1-i0-f2": {
+      "before": 138516,
+      "after": 137491
+    },
+    "first-c0-d2-4097x1-i0-f4": {
+      "before": 138516,
+      "after": 137491
+    },
+    "first-c0-d2-4097x1-i0-f5": {
+      "before": 139542,
+      "after": 138517
+    },
+    "first-c0-d2-33x9-i0-f5": {
+      "before": 135478,
+      "after": 135478
+    },
+    "first-c0-d2-4097x1-i1-f2": {
+      "before": 136992,
+      "after": 136476
+    },
+    "first-c0-d2-4097x1-i1-f4": {
+      "before": 136992,
+      "after": 136476
+    },
+    "first-c0-d2-4097x1-i1-f5": {
+      "before": 137512,
+      "after": 136996
+    },
+    "first-c0-d2-33x9-i1-f5": {
+      "before": 135504,
+      "after": 135504
+    },
+    "first-c0-d8-513x257-i0-f0": {
+      "before": 135954,
+      "after": 135954
+    },
+    "first-c0-d8-513x257-i0-f5": {
+      "before": 137494,
+      "after": 137494
+    },
+    "first-c6-d8-513x257-i0-f0": {
+      "before": 137493,
+      "after": 137493
+    },
+    "first-c6-d8-513x257-i0-f5": {
+      "before": 143650,
+      "after": 143650
+    },
+    "first-c6-d16-513x257-i0-f0": {
+      "before": 139545,
+      "after": 139545
+    },
+    "first-c6-d16-513x257-i0-f5": {
+      "before": 151858,
+      "after": 151858
+    },
+    "first-c6-d8-1x1-i0-f0": {
+      "before": 135448,
+      "after": 135448
+    },
+    "first-c6-d8-1x1-i0-f1": {
+      "before": 135456,
+      "after": 135456
+    },
+    "first-c6-d8-1x1-i0-f2": {
+      "before": 135464,
+      "after": 135456
+    },
+    "first-c6-d8-1x1-i0-f3": {
+      "before": 135464,
+      "after": 135456
+    },
+    "first-c6-d8-1x1-i0-f4": {
+      "before": 135464,
+      "after": 135456
+    },
+    "first-c6-d8-1x1-i0-f5": {
+      "before": 135472,
+      "after": 135464
+    },
+    "first-c6-d16-4097x1-i0-f3": {
+      "before": 233769,
+      "after": 200993
+    },
+    "first-c0-d8-4097x1-i0-f0": {
+      "before": 139538,
+      "after": 139538
+    },
+    "first-c0-d8-4097x1-i0-f1": {
+      "before": 143635,
+      "after": 143635
+    },
+    "first-c6-d16-4097x1-i1-f3": {
+      "before": 184692,
+      "after": 168276
+    },
+    "first-c0-d8-4097x1-i1-f0": {
+      "before": 137496,
+      "after": 137496
+    },
+    "first-c0-d8-4097x1-i1-f1": {
+      "before": 139548,
+      "after": 139548
+    }
+  },
+  "validation_commands": 6,
+  "source_sha256": {
+    "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+    "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+    "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+    "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+    "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "crates/deadlib-image/png/src/scanline.rs": "36db4173844aad1289436885cbedd14c66fab7a575bfed64b2284617d0b840f4",
+    "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+    "crates/deadlib-image/png/src/stream/encode_rows.rs": "090c560575067fc6d9dddc131d8201b5676991997a411c6554105ff094695b95",
+    "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+    "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+    "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "crates/deadlib-image/png/src/zlib/inflate.rs": "a60d409c9f8d37f4f5e37e136aac321be9df66a69d3b2f5a0edb406f014f2b95",
+    "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+    "crates/deadlib-image/png/src/zlib.rs": "c5522af45ec731b023b5fd5dc3c293f3905fb6f2258f721dce22dcafa6be7f19",
+    "crates/deadlib-image/src/lib.rs": "fa534cee7f3e761cd30469741872a94a8dbe15637aeb4ee7460cf42cc4ee96ed"
+  },
+  "evidence_sha256": {
+    ".gitattributes": "fe49f901f36a339fdfb12768ac98bfb161d75ab703df5e211d03f529b3d16c63",
+    "adaptive-build.log": "cb316f108f24057874991d16eb19a0d6b68937c10ae43d279d33db13f88ef8b4",
+    "adaptive-paired-1-adaptive.tsv": "bad44a85f07bc7d1e3b49b4e3003944301a92580aff0d5a39747930578a980f5",
+    "adaptive-paired-1-writer.tsv": "bcf80762647970e768a5f57fd1a0cd213e2de40c13a7fa6e0e680d2a723c41e0",
+    "adaptive-paired-2-adaptive.tsv": "ab29203de59365cd2c5d66b828cbfae21f8452d908e718a1e95957531db597ef",
+    "adaptive-paired-2-writer.tsv": "2e2b08b675953373ca1ce5ac28de06d44288404da61d76f33c79c2e4cd7e2bcf",
+    "adaptive-paired-3-adaptive.tsv": "7fd983d3d42656d27cdd3610a718871eaa100dfe32891023d601d5ac1f3adaf2",
+    "adaptive-paired-3-writer.tsv": "63e1948c20d91505f29ef5117ad1bdd983cad3eb1dd61c22fec4512ab7f23348",
+    "adaptive-paired-4-adaptive.tsv": "19be3c32b332e33bd3300fda18c965b2801087f01f13080804973f7ade1abac4",
+    "adaptive-paired-4-writer.tsv": "9e25ba1aebd5238d1cf72e2ba7ae032e397b6054cdf054973fb36b907d5d45a5",
+    "adaptive-paired-summary.tsv": "e97310f3dd116c3a591486fc9c81b6503d7aabd5553a6c0a454df9964c1cd2c4",
+    "adaptive-paired.json": "abe1217ce1c938028855a02509c803d7af30662d445c3a6118a2868242b25c10",
+    "adaptive.json": "cd3d53b21d0c196726dae42fb4281098a55a0430ea5482ab149f50931da2ca32",
+    "adaptive.patch": "a531b9eb07552976129f1241bd88c40eeb8f63dba266f4c3546a3fdaa79f4a21",
+    "audit.py": "8f2a85655cf0d8e831d4fc9c1a855eea78e7eb7ed7a5ed5528bb88c4473d4072",
+    "baseline-build.log": "8f9308b84560f4cf36addd64f6a25cdde96ae5a73a4a740fce12b8b64c385550",
+    "baseline.json": "93f2b9162e0aa5b249f73a4582b03631b67307b609fafb01d8e89763469c9b18",
+    "baseline.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "buffered-build.log": "1a440d232e1eb7bda2d19d5e3aeb1b5abc1d6966c5c426b341477a294ea09bfb",
+    "buffered-paired-1-baseline.tsv": "dc47fc98824780916d77c17e4961aeeb94c121e5967d13a22b64a9a3f52a16c4",
+    "buffered-paired-1-buffered.tsv": "d1d55ce4085fa1a94f0e3e35b98cf78ef93ff2236b57fb75d9d106996cd19872",
+    "buffered-paired-2-baseline.tsv": "6cc4b44f57a8bcd4625f75c9d4ec1c567d26dacba16fe7f4ce8894e2efda316a",
+    "buffered-paired-2-buffered.tsv": "5c84e340fe64ab07e79219734b8461930820ef7f8008a1f319f8a179760dab06",
+    "buffered-paired-3-baseline.tsv": "4cbb3276fe4db2596d5594fb7355ab34d2a7e3623d24cebca21d37fee2c88a39",
+    "buffered-paired-3-buffered.tsv": "a1d735195b0de6bab3cb9913e3e7186ed2b6ee960dab550e7a090abf52fce16a",
+    "buffered-paired-4-baseline.tsv": "fd5054593c4d3a1a82e601ad550d75fc3d54b39f96415ff127657a8fe139d42e",
+    "buffered-paired-4-buffered.tsv": "430fa2223ac7fa7012ae6da5ce784f7cdaae0caad8427f33856651b082f3ef49",
+    "buffered-paired-summary.tsv": "bf14ef81b3f05e78f9a22213b88297ba93d9178faab5c38c11a4c690482bb9f9",
+    "buffered-paired.json": "fe7f0cb7618fa1406e240e5bbd8dc54186c1b0d2d00e4bc9fd61f9de69373c93",
+    "buffered.json": "47187b4a201660e07267c7e99060a3a262325ff8299b76b4e36b39f78df64c69",
+    "buffered.patch": "66ab7d0f87a1163f1daaf609c568e4033457f70790ce2a196d3a2e8afd977473",
+    "clippy.log": "6336960f20e3433f750fbe03e8929c38ffb0c527d00d31c268532a5fa035f744",
+    "compare.py": "079f2476d5d61cb5355ee2c8ebf409f05b008e0134eb32dbf5a6b8aecd59f8ab",
+    "compare.rs": "584075ac0c9debbfd45c2099e316ce89e9fe3d483b61acdd8463e02886561337",
+    "debug.log": "2851e5907d5beacf0c0b85806c0b29a8b65ebffadaa1db2462d6f0c5ac36b633",
+    "final-tests.log": "07170a1697db01bc0b2d630c6dfb0825f785596a1104cf895f61c353488f12f5",
+    "final-validation.json": "3ed4e15c978d0a76a355338d94727cca89c3b620e59dd73085e5e76f21221d6c",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "in-process-caller-build.log": "78d83ded0733b68ce944d515a2f955ad919b18cc67f242eae4c4d89880772cd7",
+    "in-process-run1.log": "b6c7aded2b232f135817d8387104e4c9b9be332b80eacaa41d5b5f1508de0a4a",
+    "in-process-run2.log": "b6c954fe26dbf2ee58547e68b457ad6d8db92eeec627eac51eb883ffa31fdb5e",
+    "in-process-run3.log": "d1fe9bee5b8728628edf085228459daffeb5347ab9b6e2d0a6c79211fdc464c5",
+    "in-process-summary.tsv": "7531b919dcaca9c73a64d244dae3ccfcb2100e158e47387fffb2ce05a73c5ed2",
+    "in-process.json": "19d52e501e66105c1c8dba7290dc1252a6dac77677e7751bdfde1433e9966686",
+    "library-debug.log": "dd823809ff93346e45da6087af4d8a42617b06eebb25677bcb39d1e570e3b00a",
+    "library-release.log": "a5b3f4a02000a0495ec2f27db2a5a78d662a3ce7b373c0aa48701512dc416edb",
+    "library-validation.json": "b77ebc22bdcdbe769c3af4c33473c7eed5179626561dcda4054c2b107565b227",
+    "measure.py": "74762ff6a38c8c9addd650c23174a931ebbe7ff73538ebfec2ea0125d9f27755",
+    "pair.py": "feefa36bcba94e0a190375d871aa4d006c8cc279715f66440228c354bec3a526",
+    "protocol.json": "e69ef1cc52f06a32c7e19342420a0436112ba1f865e5fadd29a861d8a888d14e",
+    "selected-paired-1-adaptive.tsv": "f39480d56dfd38f4aa5c55ca4965b3d30144cdc46f91c8a05458ada97d549ed4",
+    "selected-paired-1-baseline.tsv": "2a4e305fafaf8716de465a7a821d842831aa6b5ad335c8088fd350421de6502c",
+    "selected-paired-2-adaptive.tsv": "02354f1f2a27009fc35ef6400b50191921a64b7800dc05ee8325d8616b45484c",
+    "selected-paired-2-baseline.tsv": "522bcb6394c942617227931dfbaabea6950d9ddcdf54bca6784f8a208e7b488d",
+    "selected-paired-3-adaptive.tsv": "b54c2175ddaae8e6387827892d50bd55c109c07570d5d8d3e622df638c61e382",
+    "selected-paired-3-baseline.tsv": "bc1fe0c5b59de93d859d8e048d18a93380360e9331572f9f4df068df219e6a76",
+    "selected-paired-4-adaptive.tsv": "90ce09ee49519344d446f8009439cc4f7c2774068df3910062d5b9ecb29ea7ab",
+    "selected-paired-4-baseline.tsv": "791918f7ba701206fdc21df7138dc2dcee66a74290eadb254c286338a2811a5c",
+    "selected-paired-summary.tsv": "440a57690b128bfc3f546b399849a743492ee6afb4ed7bf42137118e8ba6a700",
+    "selected-paired.json": "02a74c7dd3a60c6a9cdaac3304e3c50368fc80635f5fa81e0015e426414e2655",
+    "summary.py": "2757733f7e58a1178f1775574f9da65aab83d55cac70af8d57e8a2cf295de0fb",
+    "validate.py": "a8befb4e2e87d62e3b667557b58dd9e728d436dad41757dc2c058f6961657db0",
+    "validate_lib.py": "8c4ba794284732e499a1f97da4d55cc6bb17f195509efb9b539a5e65766861e5",
+    "write_report.py": "e62bbe7227bb007691e2a431340e24fb6e63b5df02d5c8f7be76df91f435efe5",
+    "writer-build.log": "2690ff786f4f4832a472132acdd8a9160c9703385537be5ae7f3a1880234fc78",
+    "writer-paired-1-buffered.tsv": "9eb2afae08b43c8f1c1eba69e769a232f3f858104b6e3dcd25a815969739fd71",
+    "writer-paired-1-writer.tsv": "66609208cc7a879633600ffe3666650db06e8eed6ae55bc350e223be0a8a388d",
+    "writer-paired-2-buffered.tsv": "451749db54696ce4f28d867210107a5cc92acf8bf1690b8201cc8b7d94c97f39",
+    "writer-paired-2-writer.tsv": "c2691fb279e0eed9c088e4e2c6bff92842a9ef4a67794aa3c6922a97290f048f",
+    "writer-paired-3-buffered.tsv": "52efb5484c4a9b585caaa67d57de1c8bb451c3fdab6cdf4deaf44c9c96d34afe",
+    "writer-paired-3-writer.tsv": "24e7e6db82a757c9a64fe7280bbd20916137dcd05b4a5f089c2551e1d84d521f",
+    "writer-paired-4-buffered.tsv": "9a370865c181597656fe481a57c6176af17b49f620979a17dea1d8f4f3a70f98",
+    "writer-paired-4-writer.tsv": "679b06547ca1a6a413931aa7073b9107c71af92c72ac069b271fc0d72aa55b53",
+    "writer-paired-summary.tsv": "6122f84cdcd0d8192f7be98ce18c36695a57ceed39742d5cd9070b2baef895ea",
+    "writer-paired.json": "55f539740967111b7808c684a750bbbaa7833ce61e3dcce9139a9cd583664ff7",
+    "writer.json": "aab6398858d24cd60464ad85ed35d1fc93902cfd3eb09690c119da0a65c4bfdf",
+    "writer.patch": "810de6a380355b9833d1778f5b1b160d15d91b6fe40aa05f0c80e47d9d30642b"
+  },
+  "report_sha256": "eb3f0e5244dcf9e52ec5699a59b1d1eeeea54709ad34682eaa35b51ea3bbc532",
+  "test_support_sha256": {
+    "crates/deadlib-image/png/tests/support/ancillary_order.rs": "fc4147849cef800586ab11aed5f856340fad0096d668208c46e5d74430551ba4",
+    "crates/deadlib-image/png/tests/support/animation_fields.rs": "5de0c79402e5fc0131d962ff4a39d44be3da8c7515d18b5b4d82bda6fb5f687b",
+    "crates/deadlib-image/png/tests/support/apng_recovery.rs": "364eecf47e563847ede2822fd1bb7fe62860d2cdc0cabbade213aa9d9b88efbc",
+    "crates/deadlib-image/png/tests/support/budgets.rs": "0d54c20ecead7dbc072de1c39b9fb8699554a493a5d580b41a5a668b0c5c3776",
+    "crates/deadlib-image/png/tests/support/chunks.rs": "e6800bf3d51a7d3e83bf421a65c391b818b99fb0f7c3bb9119b0e435ec8206e0",
+    "crates/deadlib-image/png/tests/support/compositor.rs": "5bb6367253208e9ff62c6885dd9a38c33531ff6eb7590b3d0fbd544e1f858d0d",
+    "crates/deadlib-image/png/tests/support/hdr.rs": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720",
+    "crates/deadlib-image/png/tests/support/huffman.rs": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2",
+    "crates/deadlib-image/png/tests/support/huffman_permutations.rs": "a9e19a5b5313fccd278f9ab4f778ba7d8d04f12abc81574819c6e0b2f307c314",
+    "crates/deadlib-image/png/tests/support/language_extensions.rs": "39b37ccad5a351a8ab208b0849c24c64012c603fca2a494f04b8effbda81ffd6",
+    "crates/deadlib-image/png/tests/support/mod.rs": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442",
+    "crates/deadlib-image/png/tests/support/named.rs": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3",
+    "crates/deadlib-image/png/tests/support/prefix.rs": "f82165432598200efc28beb20fc398b94f6ad360c3ef48d5b95291166373ca78",
+    "crates/deadlib-image/png/tests/support/primary_pairs.rs": "8daaa28f2e4405c936aff6442613d7c665dfe9710cea3783d60fb4c19a34bd6f",
+    "crates/deadlib-image/png/tests/support/resource.rs": "37d108a466a801e4f9733d663168e8028c4504cdec2870706e04c703be152cde",
+    "crates/deadlib-image/png/tests/support/scalar_fields.rs": "c5194f70ab4117fa35aa8635b6040a2dea2b7c9aac254a592a2d05dae07c47fa",
+    "crates/deadlib-image/png/tests/support/stream_literals.rs": "d89c0f91afe690d9342282defe0de37b94c7adf6f76c206b8725d3603a836e70",
+    "crates/deadlib-image/png/tests/support/text_body.rs": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+  }
+}

@@ -6,7 +6,7 @@ use crate::fonts::machine_font_key;
 use crate::screens::components::shared::qr_code;
 use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadsync_config::theme::MachineFont;
+use deadsync_config::theme::{MACHINE_FONT_VARIANTS, MachineFont};
 use deadsync_profile as profile_data;
 use deadsync_theme::FontRole;
 
@@ -57,7 +57,7 @@ pub(crate) struct QrPanePresentation {
     help: TextContent,
     qr: Option<qr_code::PreparedQrCode>,
     valid: bool,
-    children: RefCell<[Option<Arc<[Actor]>>; 2]>,
+    children: RefCell<[Option<Arc<[Actor]>>; MACHINE_FONT_VARIANTS.len()]>,
 }
 
 impl QrPanePresentation {
@@ -95,15 +95,12 @@ impl QrPanePresentation {
             help,
             qr: qr_content.and_then(|content| qr_code::prepare(content, GS_QR_SIZE)),
             valid,
-            children: RefCell::new([None, None]),
+            children: RefCell::new(std::array::from_fn(|_| None)),
         }
     }
 
     fn cached_children(&self, machine_font: MachineFont) -> Arc<[Actor]> {
-        let index = match machine_font {
-            MachineFont::Wendy => 0,
-            MachineFont::Mega => 1,
-        };
+        let index = deadsync_config::options::machine_font_choice_index(machine_font);
         if let Some(children) = self.children.borrow()[index].as_ref() {
             return Arc::clone(children);
         }
@@ -272,6 +269,11 @@ mod tests {
         assert_eq!(presentation.help.as_str(), GS_QR_HELP_TEXT_VALID);
         assert!(presentation.qr.is_some());
         assert!(presentation.valid);
+        for font in MACHINE_FONT_VARIANTS {
+            let first = presentation.cached_children(font);
+            let repeated = presentation.cached_children(font);
+            assert!(Arc::ptr_eq(&first, &repeated));
+        }
     }
 
     #[test]

@@ -1,0 +1,7 @@
+[package]
+name="deadlib-raw-refactor-before"
+version="0.0.0"
+edition="2024"
+[workspace]
+[dependencies]
+codec={package="deadlib-audio-decode-vorbis",path="C:/GitHub/deadsync/target/deadlib-audio-reference/seek-reference-20261027/raw-refactor/before/vorbis"}

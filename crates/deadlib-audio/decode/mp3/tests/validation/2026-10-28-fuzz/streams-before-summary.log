@@ -1,0 +1,148 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 438179
+INFO: Loaded 1 modules   (5876 inline 8-bit counters): 5876 [0x6175b0c6bd90, 0x6175b0c6d484), 
+INFO: Loaded 1 PC tables (5876 PCs): 5876 [0x6175b0c6d488,0x6175b0c843c8), 
+INFO:      347 files found in /home/perfecttaste/.cache/deadlib-mp3/fuzz-campaign-2/corpus/streams
+INFO: seed corpus: files: 347 min: 1b max: 32769b total: 3301322b rss: 34Mb
+#64	pulse  cov: 808 ft: 1415 corp: 24/26Kb exec/s: 32 rss: 52Mb
+#128	pulse  cov: 853 ft: 1747 corp: 44/69Kb exec/s: 21 rss: 63Mb
+#256	pulse  cov: 899 ft: 1949 corp: 69/190Kb exec/s: 16 rss: 93Mb
+#348	INITED cov: 953 ft: 2788 corp: 103/1084Kb exec/s: 6 rss: 184Mb
+	NEW_FUNC[1/1]: 0x6175b0a9d980  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x18a980) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+#349	NEW    cov: 970 ft: 3052 corp: 104/1086Kb lim: 32769 exec/s: 6 rss: 185Mb L: 2143/32769 MS: 1 InsertRepeatedBytes-
+#351	NEW    cov: 981 ft: 3065 corp: 105/1110Kb lim: 32769 exec/s: 6 rss: 186Mb L: 25101/32769 MS: 2 ChangeByte-CopyPart-
+	NEW_FUNC[1/2]: 0x6175b0a9cc40  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x189c40) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+	NEW_FUNC[2/2]: 0x6175b0bf8740  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2e5740) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+#352	NEW    cov: 1016 ft: 3155 corp: 106/1114Kb lim: 32769 exec/s: 6 rss: 186Mb L: 3465/32769 MS: 1 CMP- DE: "\377\377\377\377\377\377\377\027"-
+#357	NEW    cov: 1016 ft: 3292 corp: 107/1116Kb lim: 32769 exec/s: 6 rss: 187Mb L: 2075/32769 MS: 5 ShuffleBytes-ChangeBinInt-ChangeASCIIInt-ChangeASCIIInt-InsertRepeatedBytes-
+#358	NEW    cov: 1017 ft: 3308 corp: 108/1117Kb lim: 32769 exec/s: 6 rss: 187Mb L: 1133/32769 MS: 1 InsertRepeatedBytes-
+#360	NEW    cov: 1019 ft: 3323 corp: 109/1128Kb lim: 32769 exec/s: 6 rss: 188Mb L: 11101/32769 MS: 2 ChangeASCIIInt-CopyPart-
+#361	NEW    cov: 1019 ft: 3337 corp: 110/1130Kb lim: 32769 exec/s: 6 rss: 188Mb L: 2192/32769 MS: 1 InsertByte-
+#362	NEW    cov: 1027 ft: 3370 corp: 111/1132Kb lim: 32769 exec/s: 6 rss: 188Mb L: 2308/32769 MS: 1 CMP- DE: "TAG"-
+#412	NEW    cov: 1029 ft: 3391 corp: 112/1142Kb lim: 32769 exec/s: 6 rss: 210Mb L: 9587/32769 MS: 1 CopyPart-
+#416	NEW    cov: 1029 ft: 3400 corp: 113/1161Kb lim: 32769 exec/s: 6 rss: 213Mb L: 19991/32769 MS: 4 ChangeBinInt-ChangeASCIIInt-ChangeBit-EraseBytes-
+#417	NEW    cov: 1031 ft: 3422 corp: 114/1163Kb lim: 32769 exec/s: 6 rss: 214Mb L: 1505/32769 MS: 1 CrossOver-
+#418	NEW    cov: 1035 ft: 3443 corp: 115/1185Kb lim: 32769 exec/s: 6 rss: 215Mb L: 23241/32769 MS: 1 EraseBytes-
+#419	NEW    cov: 1036 ft: 3452 corp: 116/1188Kb lim: 32769 exec/s: 6 rss: 215Mb L: 3169/32769 MS: 1 CrossOver-
+#420	NEW    cov: 1039 ft: 3476 corp: 117/1192Kb lim: 32769 exec/s: 6 rss: 215Mb L: 3457/32769 MS: 1 PersAutoDict- DE: "\377\377\377\377\377\377\377\027"-
+#423	NEW    cov: 1041 ft: 3505 corp: 118/1214Kb lim: 32769 exec/s: 6 rss: 217Mb L: 22374/32769 MS: 3 ChangeByte-ShuffleBytes-CrossOver-
+#424	NEW    cov: 1041 ft: 3514 corp: 119/1226Kb lim: 32769 exec/s: 6 rss: 219Mb L: 12811/32769 MS: 1 InsertRepeatedBytes-
+#425	NEW    cov: 1041 ft: 3534 corp: 120/1228Kb lim: 32769 exec/s: 6 rss: 219Mb L: 1924/32769 MS: 1 PersAutoDict- DE: "TAG"-
+#426	NEW    cov: 1041 ft: 3536 corp: 121/1260Kb lim: 32769 exec/s: 6 rss: 221Mb L: 32769/32769 MS: 1 CrossOver-
+#427	NEW    cov: 1042 ft: 3677 corp: 122/1262Kb lim: 32769 exec/s: 6 rss: 221Mb L: 2067/32769 MS: 1 InsertRepeatedBytes-
+#428	NEW    cov: 1042 ft: 3679 corp: 123/1262Kb lim: 32769 exec/s: 6 rss: 221Mb L: 28/32769 MS: 1 InsertRepeatedBytes-
+#429	NEW    cov: 1042 ft: 3761 corp: 124/1264Kb lim: 32769 exec/s: 6 rss: 221Mb L: 2020/32769 MS: 1 CMP- DE: "\377\373\230"-
+#430	NEW    cov: 1042 ft: 3819 corp: 125/1266Kb lim: 32769 exec/s: 6 rss: 221Mb L: 1800/32769 MS: 1 EraseBytes-
+#432	NEW    cov: 1042 ft: 3821 corp: 126/1269Kb lim: 32769 exec/s: 6 rss: 221Mb L: 3475/32769 MS: 2 ChangeByte-InsertRepeatedBytes-
+#434	NEW    cov: 1042 ft: 3823 corp: 127/1277Kb lim: 32769 exec/s: 6 rss: 222Mb L: 7838/32769 MS: 2 ChangeBinInt-ChangeBinInt-
+#435	NEW    cov: 1042 ft: 3825 corp: 128/1284Kb lim: 32769 exec/s: 6 rss: 223Mb L: 7849/32769 MS: 1 InsertRepeatedBytes-
+#437	NEW    cov: 1042 ft: 3826 corp: 129/1287Kb lim: 32769 exec/s: 6 rss: 223Mb L: 2298/32769 MS: 2 ChangeBinInt-ChangeByte-
+#438	REDUCE cov: 1042 ft: 3826 corp: 129/1287Kb lim: 32769 exec/s: 6 rss: 223Mb L: 974/32769 MS: 1 EraseBytes-
+#439	NEW    cov: 1042 ft: 3827 corp: 130/1290Kb lim: 32769 exec/s: 6 rss: 223Mb L: 3169/32769 MS: 1 ShuffleBytes-
+#441	NEW    cov: 1042 ft: 3846 corp: 131/1293Kb lim: 32769 exec/s: 6 rss: 224Mb L: 3554/32769 MS: 2 ChangeByte-InsertRepeatedBytes-
+#442	NEW    cov: 1042 ft: 3917 corp: 132/1302Kb lim: 32769 exec/s: 6 rss: 224Mb L: 9084/32769 MS: 1 CrossOver-
+#443	NEW    cov: 1042 ft: 3927 corp: 133/1304Kb lim: 32769 exec/s: 6 rss: 224Mb L: 2111/32769 MS: 1 InsertRepeatedBytes-
+#445	NEW    cov: 1069 ft: 4007 corp: 134/1316Kb lim: 32769 exec/s: 6 rss: 226Mb L: 11815/32769 MS: 2 ChangeBit-CrossOver-
+#446	NEW    cov: 1069 ft: 4024 corp: 135/1324Kb lim: 32769 exec/s: 6 rss: 226Mb L: 8162/32769 MS: 1 CrossOver-
+#448	NEW    cov: 1069 ft: 4029 corp: 136/1324Kb lim: 32769 exec/s: 6 rss: 226Mb L: 731/32769 MS: 2 ChangeBit-EraseBytes-
+#452	NEW    cov: 1069 ft: 4031 corp: 137/1332Kb lim: 32769 exec/s: 6 rss: 228Mb L: 7849/32769 MS: 4 PersAutoDict-ChangeBinInt-ChangeASCIIInt-ShuffleBytes- DE: "TAG"-
+#454	NEW    cov: 1071 ft: 4033 corp: 138/1336Kb lim: 32769 exec/s: 6 rss: 229Mb L: 4178/32769 MS: 2 ChangeByte-InsertByte-
+#455	NEW    cov: 1071 ft: 4050 corp: 139/1337Kb lim: 32769 exec/s: 6 rss: 229Mb L: 1323/32769 MS: 1 EraseBytes-
+#457	REDUCE cov: 1071 ft: 4050 corp: 139/1337Kb lim: 32769 exec/s: 6 rss: 229Mb L: 3344/32769 MS: 2 InsertRepeatedBytes-EraseBytes-
+#459	NEW    cov: 1071 ft: 4073 corp: 140/1357Kb lim: 32769 exec/s: 6 rss: 230Mb L: 20370/32769 MS: 2 ChangeBit-CrossOver-
+#463	NEW    cov: 1071 ft: 4076 corp: 141/1359Kb lim: 32769 exec/s: 6 rss: 231Mb L: 2076/32769 MS: 4 PersAutoDict-ChangeByte-ChangeByte-InsertByte- DE: "\377\377\377\377\377\377\377\027"-
+#464	NEW    cov: 1071 ft: 4078 corp: 142/1361Kb lim: 32769 exec/s: 6 rss: 231Mb L: 1563/32769 MS: 1 CopyPart-
+#466	NEW    cov: 1078 ft: 4095 corp: 143/1363Kb lim: 32769 exec/s: 6 rss: 232Mb L: 2305/32769 MS: 2 PersAutoDict-CopyPart- DE: "TAG"-
+#469	NEW    cov: 1078 ft: 4102 corp: 144/1365Kb lim: 32769 exec/s: 6 rss: 232Mb L: 2485/32769 MS: 3 ChangeBinInt-ChangeBinInt-ChangeBit-
+#470	REDUCE cov: 1078 ft: 4104 corp: 145/1366Kb lim: 32769 exec/s: 6 rss: 233Mb L: 974/32769 MS: 1 ChangeBinInt-
+#483	NEW    cov: 1078 ft: 4107 corp: 146/1366Kb lim: 32769 exec/s: 6 rss: 236Mb L: 5/32769 MS: 3 ChangeBit-CopyPart-InsertByte-
+#494	NEW    cov: 1078 ft: 4109 corp: 147/1374Kb lim: 32769 exec/s: 6 rss: 242Mb L: 7839/32769 MS: 1 InsertByte-
+#497	NEW    cov: 1078 ft: 4110 corp: 148/1375Kb lim: 32769 exec/s: 6 rss: 242Mb L: 1066/32769 MS: 3 InsertRepeatedBytes-CMP-ChangeBinInt- DE: "\377\377\377\377\377\377\002\274"-
+#504	NEW    cov: 1078 ft: 4112 corp: 149/1385Kb lim: 32769 exec/s: 6 rss: 244Mb L: 10642/32769 MS: 2 ShuffleBytes-EraseBytes-
+#505	NEW    cov: 1079 ft: 4124 corp: 150/1388Kb lim: 32769 exec/s: 6 rss: 244Mb L: 3172/32769 MS: 1 PersAutoDict- DE: "TAG"-
+#511	NEW    cov: 1079 ft: 4127 corp: 151/1401Kb lim: 32769 exec/s: 7 rss: 244Mb L: 12718/32769 MS: 1 InsertByte-
+#512	pulse  cov: 1079 ft: 4127 corp: 151/1401Kb lim: 32769 exec/s: 6 rss: 245Mb
+#516	NEW    cov: 1079 ft: 4134 corp: 152/1429Kb lim: 32769 exec/s: 6 rss: 248Mb L: 28952/32769 MS: 5 ChangeByte-ChangeByte-ChangeByte-ChangeASCIIInt-EraseBytes-
+#517	NEW    cov: 1079 ft: 4135 corp: 153/1454Kb lim: 32769 exec/s: 6 rss: 250Mb L: 25101/32769 MS: 1 ChangeByte-
+#518	NEW    cov: 1079 ft: 4141 corp: 154/1454Kb lim: 32769 exec/s: 6 rss: 250Mb L: 11/32769 MS: 1 ChangeByte-
+#522	NEW    cov: 1079 ft: 4143 corp: 155/1478Kb lim: 32769 exec/s: 6 rss: 251Mb L: 25194/32769 MS: 4 CMP-InsertRepeatedBytes-ChangeBinInt-CopyPart- DE: "o+\024"-
+#523	NEW    cov: 1079 ft: 4145 corp: 156/1510Kb lim: 32769 exec/s: 6 rss: 253Mb L: 32550/32769 MS: 1 EraseBytes-
+#526	NEW    cov: 1081 ft: 4147 corp: 157/1530Kb lim: 32769 exec/s: 6 rss: 254Mb L: 20373/32769 MS: 3 ChangeByte-ChangeBinInt-PersAutoDict- DE: "o+\024"-
+#531	NEW    cov: 1082 ft: 4149 corp: 158/1550Kb lim: 32769 exec/s: 6 rss: 258Mb L: 20239/32769 MS: 5 ChangeBit-CMP-ChangeASCIIInt-CMP-EraseBytes- DE: "\005\000\000\000"-"\003\000"-
+#534	NEW    cov: 1082 ft: 4154 corp: 159/1582Kb lim: 32769 exec/s: 6 rss: 264Mb L: 32769/32769 MS: 3 ChangeByte-ShuffleBytes-CrossOver-
+#535	NEW    cov: 1082 ft: 4157 corp: 160/1614Kb lim: 32769 exec/s: 6 rss: 265Mb L: 32769/32769 MS: 1 ChangeASCIIInt-
+#536	NEW    cov: 1082 ft: 4163 corp: 161/1617Kb lim: 32769 exec/s: 6 rss: 265Mb L: 2941/32769 MS: 1 CopyPart-
+#537	NEW    cov: 1082 ft: 4164 corp: 162/1619Kb lim: 32769 exec/s: 6 rss: 265Mb L: 2191/32769 MS: 1 InsertRepeatedBytes-
+#538	NEW    cov: 1082 ft: 4165 corp: 163/1628Kb lim: 32769 exec/s: 6 rss: 266Mb L: 9122/32769 MS: 1 InsertRepeatedBytes-
+#540	NEW    cov: 1082 ft: 4168 corp: 164/1630Kb lim: 32769 exec/s: 6 rss: 266Mb L: 1985/32769 MS: 2 ChangeByte-InsertRepeatedBytes-
+#551	NEW    cov: 1082 ft: 4172 corp: 165/1640Kb lim: 32769 exec/s: 6 rss: 271Mb L: 11101/32769 MS: 1 CrossOver-
+#552	NEW    cov: 1082 ft: 4182 corp: 166/1641Kb lim: 32769 exec/s: 6 rss: 271Mb L: 1041/32769 MS: 1 EraseBytes-
+#555	NEW    cov: 1082 ft: 4186 corp: 167/1644Kb lim: 32769 exec/s: 6 rss: 272Mb L: 2313/32769 MS: 3 ChangeBinInt-ChangeASCIIInt-PersAutoDict- DE: "\377\377\377\377\377\377\377\027"-
+#561	NEW    cov: 1082 ft: 4195 corp: 168/1660Kb lim: 32769 exec/s: 6 rss: 281Mb L: 16254/32769 MS: 1 CrossOver-
+#569	NEW    cov: 1082 ft: 4209 corp: 169/1660Kb lim: 32769 exec/s: 6 rss: 282Mb L: 786/32769 MS: 3 InsertByte-EraseBytes-CMP- DE: "\270\003\000\000\000\000\000\000"-
+#572	NEW    cov: 1082 ft: 4213 corp: 170/1677Kb lim: 32769 exec/s: 6 rss: 283Mb L: 17245/32769 MS: 3 ChangeBit-ChangeBinInt-CrossOver-
+#574	NEW    cov: 1083 ft: 4218 corp: 171/1679Kb lim: 32769 exec/s: 6 rss: 284Mb L: 2207/32769 MS: 2 InsertByte-EraseBytes-
+#575	NEW    cov: 1083 ft: 4220 corp: 172/1711Kb lim: 32769 exec/s: 6 rss: 286Mb L: 32769/32769 MS: 1 CopyPart-
+#577	NEW    cov: 1086 ft: 4244 corp: 173/1719Kb lim: 32769 exec/s: 6 rss: 287Mb L: 7839/32769 MS: 2 ChangeBit-InsertByte-
+#578	NEW    cov: 1086 ft: 4283 corp: 174/1721Kb lim: 32769 exec/s: 6 rss: 287Mb L: 2065/32769 MS: 1 PersAutoDict- DE: "\377\377\377\377\377\377\377\027"-
+#582	NEW    cov: 1086 ft: 4288 corp: 175/1723Kb lim: 32769 exec/s: 6 rss: 287Mb L: 1624/32769 MS: 4 ChangeBit-EraseBytes-InsertRepeatedBytes-CrossOver-
+#585	REDUCE cov: 1086 ft: 4288 corp: 175/1719Kb lim: 32769 exec/s: 6 rss: 288Mb L: 16250/32769 MS: 3 InsertByte-ChangeBinInt-EraseBytes-
+#587	NEW    cov: 1086 ft: 4290 corp: 176/1726Kb lim: 32769 exec/s: 6 rss: 290Mb L: 7964/32769 MS: 2 ShuffleBytes-CopyPart-
+#588	NEW    cov: 1086 ft: 4291 corp: 177/1751Kb lim: 32769 exec/s: 6 rss: 290Mb L: 24893/32769 MS: 1 InsertRepeatedBytes-
+#589	NEW    cov: 1086 ft: 4321 corp: 178/1759Kb lim: 32769 exec/s: 6 rss: 290Mb L: 8144/32769 MS: 1 CopyPart-
+#590	NEW    cov: 1086 ft: 4322 corp: 179/1760Kb lim: 32769 exec/s: 6 rss: 290Mb L: 1441/32769 MS: 1 ChangeASCIIInt-
+#593	NEW    cov: 1086 ft: 4326 corp: 180/1762Kb lim: 32769 exec/s: 6 rss: 291Mb L: 1675/32769 MS: 3 ShuffleBytes-ShuffleBytes-EraseBytes-
+#594	NEW    cov: 1086 ft: 4327 corp: 181/1774Kb lim: 32769 exec/s: 6 rss: 292Mb L: 13005/32769 MS: 1 CopyPart-
+#596	NEW    cov: 1086 ft: 4329 corp: 182/1776Kb lim: 32769 exec/s: 6 rss: 292Mb L: 2096/32769 MS: 2 ShuffleBytes-EraseBytes-
+#602	NEW    cov: 1086 ft: 4333 corp: 183/1783Kb lim: 32769 exec/s: 6 rss: 293Mb L: 7151/32769 MS: 1 EraseBytes-
+#614	NEW    cov: 1086 ft: 4343 corp: 184/1786Kb lim: 32769 exec/s: 6 rss: 302Mb L: 2402/32769 MS: 2 ChangeBit-InsertRepeatedBytes-
+#617	NEW    cov: 1086 ft: 4344 corp: 185/1808Kb lim: 32769 exec/s: 6 rss: 304Mb L: 23186/32769 MS: 3 InsertByte-ChangeBit-EraseBytes-
+#621	NEW    cov: 1086 ft: 4372 corp: 186/1821Kb lim: 32769 exec/s: 6 rss: 305Mb L: 13205/32769 MS: 4 EraseBytes-ChangeByte-PersAutoDict-CrossOver- DE: "TAG"-
+#624	NEW    cov: 1086 ft: 4374 corp: 187/1839Kb lim: 32769 exec/s: 6 rss: 308Mb L: 18247/32769 MS: 3 ChangeBinInt-CopyPart-EraseBytes-
+
+thread '<unnamed>' (954335) panicked at fuzz_targets/streams.rs:93:5:
+assertion `left == right` failed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+==954335== ERROR: libFuzzer: deadly signal
+    #0 0x6175b0a76201  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x163201) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #1 0x6175b0b53d6a  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x240d6a) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #2 0x6175b0bcb361  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2b8361) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #3 0x71a82104bd6f  (/lib/x86_64-linux-gnu/libc.so.6+0x3fd6f) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #4 0x71a8210a069b  (/lib/x86_64-linux-gnu/libc.so.6+0x9469b) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #5 0x71a82104bc41  (/lib/x86_64-linux-gnu/libc.so.6+0x3fc41) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #6 0x71a8210344ab  (/lib/x86_64-linux-gnu/libc.so.6+0x284ab) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #7 0x6175b0c36439  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x323439) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #8 0x6175b0c350b8  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x3220b8) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #9 0x6175b0ac54b4  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b24b4) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #10 0x6175b0c35341  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x322341) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #11 0x6175b0c239b1  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x3109b1) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #12 0x6175b0c1c9d8  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x3099d8) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #13 0x6175b0c2409c  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x31109c) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #14 0x6175b0c483bb  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x3353bb) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #15 0x6175b0c482b2  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x3352b2) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #16 0x6175b0aa23b6  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x18f3b6) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #17 0x6175b0abba34  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1a8a34) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #18 0x6175b0ac415c  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b115c) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #19 0x6175b0ac5044  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b2044) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #20 0x6175b0ac5e28  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b2e28) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #21 0x6175b0ac473d  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b173d) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #22 0x6175b0bcc223  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2b9223) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #23 0x6175b0be3602  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2d0602) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #24 0x6175b0be78cc  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2d48cc) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #25 0x6175b0bec067  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x2d9067) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #26 0x6175b0afc492  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1e9492) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #27 0x6175b0ac5ebd  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0x1b2ebd) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+    #28 0x71a821035ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #29 0x71a821035d64  (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #30 0x6175b09d6ee0  (/home/perfecttaste/.cache/deadlib-mp3/fuzz-build/x86_64-unknown-linux-gnu/release/streams+0xc3ee0) (BuildId: cac2733e526fc92c9e7e1b50a6bf0b306fee1aec)
+
+NOTE: libFuzzer has rudimentary signal handlers.
+      Combine libFuzzer with AddressSanitizer or similar for better crash reports.
+SUMMARY: libFuzzer: deadly signal
+MS: 2 ShuffleBytes-EraseBytes-; base unit: 61c6791d26b0c402adb53373a00253f25d979ffb
+artifact_prefix='/home/perfecttaste/.cache/deadlib-mp3/fuzz-campaign-2/artifacts/streams/'; Test unit written to /home/perfecttaste/.cache/deadlib-mp3/fuzz-campaign-2/artifacts/streams/crash-c6185995de306fd07102566c2e01d4eb319cbc86
+stat::number_of_executed_units: 631
+stat::average_exec_per_sec:     6
+stat::new_units_added:          87
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              310

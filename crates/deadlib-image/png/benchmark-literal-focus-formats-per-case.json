@@ -1,0 +1,162 @@
+[
+  {
+    "case": "color-0-depth-08-adam7-1-noise-1",
+    "operation": "inflate",
+    "before_ns": 9354.5,
+    "after_ns": 10544.0,
+    "reference_relative_percent": -8.689587768844941,
+    "control_relative_percent": -10.230568750353097
+  },
+  {
+    "case": "color-0-depth-08-adam7-0-noise-0",
+    "operation": "inflate",
+    "before_ns": 33475.5,
+    "after_ns": 36196.5,
+    "reference_relative_percent": -5.555871197044915,
+    "control_relative_percent": -3.4188551066817507
+  },
+  {
+    "case": "color-6-depth-16-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 914464.5,
+    "after_ns": 928440.0,
+    "reference_relative_percent": -1.0525528740183976,
+    "control_relative_percent": -2.9242480847367025
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 8456.5,
+    "after_ns": 8800.0,
+    "reference_relative_percent": -5.0708746967568885,
+    "control_relative_percent": -2.6953482826524655
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 41171.0,
+    "after_ns": 42519.5,
+    "reference_relative_percent": -5.319132818076156,
+    "control_relative_percent": -2.348433985949694
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-0",
+    "operation": "inflate",
+    "before_ns": 30730.5,
+    "after_ns": 32377.0,
+    "reference_relative_percent": -2.553130572191642,
+    "control_relative_percent": -2.0624680704965925
+  },
+  {
+    "case": "color-0-depth-08-adam7-1-noise-1",
+    "operation": "decode",
+    "before_ns": 173040.5,
+    "after_ns": 178798.5,
+    "reference_relative_percent": -3.0522566027790687,
+    "control_relative_percent": -1.423613720817063
+  },
+  {
+    "case": "color-4-depth-16-adam7-1-noise-1",
+    "operation": "inflate",
+    "before_ns": 46699.5,
+    "after_ns": 46699.5,
+    "reference_relative_percent": -0.6646804582266852,
+    "control_relative_percent": -0.636306011994725
+  },
+  {
+    "case": "color-4-depth-16-adam7-1-noise-1",
+    "operation": "decode",
+    "before_ns": 415757.5,
+    "after_ns": 421642.0,
+    "reference_relative_percent": -1.6284709060390368,
+    "control_relative_percent": -0.0605319391280279
+  },
+  {
+    "case": "color-4-depth-16-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 46314.5,
+    "after_ns": 46685.0,
+    "reference_relative_percent": -4.2860372340350334,
+    "control_relative_percent": 0.0674426457641264
+  },
+  {
+    "case": "color-6-depth-08-adam7-1-noise-1",
+    "operation": "inflate",
+    "before_ns": 48418.5,
+    "after_ns": 48364.5,
+    "reference_relative_percent": -2.164739039121333,
+    "control_relative_percent": 0.2055791367983506
+  },
+  {
+    "case": "color-3-depth-02-adam7-0-noise-0",
+    "operation": "decode",
+    "before_ns": 105466.5,
+    "after_ns": 106745.5,
+    "reference_relative_percent": 3.0825269546410627,
+    "control_relative_percent": 0.22360272796850822
+  },
+  {
+    "case": "color-6-depth-08-adam7-1-noise-1",
+    "operation": "decode",
+    "before_ns": 393394.5,
+    "after_ns": 398306.0,
+    "reference_relative_percent": -3.361316070920062,
+    "control_relative_percent": 0.3931072327449048
+  },
+  {
+    "case": "color-0-depth-08-adam7-0-noise-0",
+    "operation": "decode",
+    "before_ns": 143473.0,
+    "after_ns": 147603.0,
+    "reference_relative_percent": -2.571365059620667,
+    "control_relative_percent": 1.5804237856728687
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-0",
+    "operation": "decode",
+    "before_ns": 38255.0,
+    "after_ns": 39233.0,
+    "reference_relative_percent": 0.0454765494312781,
+    "control_relative_percent": 1.8586889362167902
+  },
+  {
+    "case": "color-4-depth-16-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 199632.5,
+    "after_ns": 199388.5,
+    "reference_relative_percent": 1.3689245231950142,
+    "control_relative_percent": 2.05658198523464
+  },
+  {
+    "case": "color-2-depth-16-adam7-0-noise-0",
+    "operation": "decode",
+    "before_ns": 326953.0,
+    "after_ns": 326258.5,
+    "reference_relative_percent": 6.131406226956693,
+    "control_relative_percent": 2.140764719624433
+  },
+  {
+    "case": "color-6-depth-16-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 125472.0,
+    "after_ns": 123972.5,
+    "reference_relative_percent": 7.521633334620348,
+    "control_relative_percent": 2.1793948212752046
+  },
+  {
+    "case": "color-2-depth-16-adam7-0-noise-0",
+    "operation": "inflate",
+    "before_ns": 111380.5,
+    "after_ns": 114186.0,
+    "reference_relative_percent": -1.5572357486650756,
+    "control_relative_percent": 3.1045924332996133
+  },
+  {
+    "case": "color-3-depth-02-adam7-0-noise-0",
+    "operation": "inflate",
+    "before_ns": 8454.5,
+    "after_ns": 8693.5,
+    "reference_relative_percent": 0.8904980858107647,
+    "control_relative_percent": 5.681536072750548
+  }
+]

@@ -1,0 +1,11 @@
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.01s
+     Running unittests src\lib.rs (crates\deadlib-audio\decode\fuzz\target\debug\deps\deadlib_audio_decode_fuzz-926058075a566a5c.exe)
+
+running 4 tests
+test tests::bitpacking_oracle_covers_mixed_widths_and_packet_tails ... ok
+test tests::buffered_sync_covers_raw_flags_nested_capture_limits_and_cached_seeks ... ok
+test tests::synthesis_schedules_cover_finite_ieee_pending_and_restart_states ... ok
+test tests::valid_and_truncated_seeds_reach_every_oracle ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s

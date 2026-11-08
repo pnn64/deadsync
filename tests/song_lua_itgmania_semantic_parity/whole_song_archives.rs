@@ -9,20 +9,27 @@ use std::io::Read;
 const ARCHIVE_SCHEMA_VERSION: u32 = 1;
 const ARCHIVE_FILTER_ENV: &str = "DEADSYNC_SONG_ARCHIVE";
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ArchiveIndex {
     archive_schema_version: u32,
     hash: String,
     archives: Vec<ArchiveEntry>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ArchiveEntry {
     title: String,
     source_simfile: String,
+    harness_version: String,
     archive: String,
     sha256: String,
     compressed_bytes: u64,
+    #[serde(default)]
+    local_only: bool,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(skip)]
+    retained_version: bool,
 }
 
 #[derive(Deserialize)]
@@ -30,6 +37,7 @@ struct ArchiveManifest {
     archive_schema_version: u32,
     fixture_schema_version: u32,
     oracle_schema_version: u32,
+    harness_version: String,
     itgmania: ArchiveItgmania,
     chart: ArchiveChart,
     runtime: ArchiveRuntime,
@@ -57,8 +65,25 @@ struct ArchiveChart {
 #[derive(Deserialize)]
 struct ArchiveRuntime {
     display: ArchiveDisplay,
-    update_hz: f32,
+    update_hz: Option<f32>,
+    #[serde(default)]
+    frame_clock: Option<String>,
+    #[serde(default)]
+    machine_preferences: Option<ArchiveMachinePreferences>,
+    #[serde(default)]
+    command_observer: Option<ArchiveCommandObserver>,
     random_state: RandomState,
+}
+
+#[derive(Deserialize)]
+struct ArchiveCommandObserver {
+    dynamic_commands: bool,
+    capture_binary_sha256: String,
+}
+
+#[derive(Deserialize)]
+struct ArchiveMachinePreferences {
+    last_seen_video_driver: String,
 }
 
 #[derive(Deserialize)]
@@ -114,17 +139,145 @@ struct ExtractedArchive {
 }
 
 fn archive_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-archives")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/full_song_lua")
+}
+
+/// Resolve historical regression references into the single flat fixture store.
+/// Aliases retain the original native captures, including older oracle versions.
+pub(super) fn reference_path(path: &Path) -> PathBuf {
+    if path.is_file() {
+        return path.to_owned();
+    }
+    static REFERENCES: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+    let references = REFERENCES.get_or_init(|| {
+        serde_json::from_slice(
+            &fs::read(archive_root().join("references.json"))
+                .expect("missing consolidated song Lua reference index"),
+        )
+        .expect("invalid consolidated song Lua reference index")
+    });
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // Normalize '..' lexically: historical manifests can reference a micro trace
+    // outside their former directory, and those directories no longer exist.
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            std::path::Component::CurDir => {}
+            _ => return path.to_owned(),
+        }
+    }
+    references
+        .get(&parts.join("/"))
+        .map_or_else(|| path.to_owned(), |name| archive_root().join(name))
+}
+
+pub(super) fn reference_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
+    let path = reference_path(path);
+    let input = File::open(&path)
+        .unwrap_or_else(|error| panic!("missing reference {}: {error}", path.display()));
+    if path.extension().is_some_and(|extension| extension == "zst") {
+        let decoder = zstd::stream::read::Decoder::new(input).expect("decode reference");
+        serde_json::from_reader(std::io::BufReader::new(decoder)).expect("parse reference JSON")
+    } else {
+        serde_json::from_reader(std::io::BufReader::new(input)).expect("parse reference JSON")
+    }
 }
 
 fn archive_index() -> ArchiveIndex {
+    static INDEX: std::sync::OnceLock<ArchiveIndex> = std::sync::OnceLock::new();
+    INDEX.get_or_init(load_archive_index).clone()
+}
+
+fn load_archive_index() -> ArchiveIndex {
     let path = archive_root().join("index.json");
-    serde_json::from_slice(
-        &fs::read(&path).unwrap_or_else(|error| {
+    let mut index: ArchiveIndex =
+        serde_json::from_slice(&fs::read(&path).unwrap_or_else(|error| {
             panic!("missing song archive index {}: {error}", path.display())
-        }),
-    )
-    .unwrap_or_else(|error| panic!("invalid song archive index {}: {error}", path.display()))
+        }))
+        .unwrap_or_else(|error| panic!("invalid song archive index {}: {error}", path.display()));
+    let committed = include_str!("../fixtures/full_song_lua/committed-archives.txt")
+        .lines().collect::<HashSet<_>>();
+    // Optional captures used by the CLI are not checkout test inputs. Their
+    // presence on one developer's disk must not change the tested corpus.
+    index.archives.retain(|entry| committed.contains(entry.archive.as_str()));
+    for entry in &index.archives {
+        assert!(archive_root().join(&entry.archive).is_file(),
+            "missing committed song archive: {}", entry.archive);
+    }
+    // Retained native versions are runnable by filename as well as the current
+    // captures in the index. Discover them in the same flat fixture store.
+    let indexed = index
+        .archives
+        .iter()
+        .map(|entry| entry.archive.clone())
+        .collect::<HashSet<_>>();
+    let aliases: HashMap<String, String> = fs::read(archive_root().join("references.json"))
+        .map(|bytes| serde_json::from_slice(&bytes).expect("reference aliases"))
+        .unwrap_or_default();
+    let mut extra = Vec::new();
+    for name in include_str!("../fixtures/full_song_lua/committed-archives.txt").lines() {
+        let name = name.to_owned();
+        if indexed.contains(&name) {
+            continue;
+        }
+        let path = archive_root().join(&name);
+        let decoder = zstd::stream::read::Decoder::new(
+            File::open(&path).expect("open committed retained archive"),
+        )
+        .expect("decode retained archive");
+        let mut archive = tar::Archive::new(decoder);
+        let mut members = archive.entries().expect("retained archive members");
+        let member = members
+            .next()
+            .expect("retained archive manifest")
+            .expect("read manifest member");
+        assert_eq!(member.path().unwrap(), Path::new("manifest.json"));
+        let manifest: ArchiveManifest =
+            serde_json::from_reader(member).expect("retained archive manifest JSON");
+        let mut historical = aliases
+            .iter()
+            .filter(|(_, target)| **target == name)
+            .filter_map(|(alias, _)| {
+                Path::new(alias)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            })
+            .collect::<Vec<_>>();
+        historical.sort();
+        extra.push(ArchiveEntry {
+            title: manifest.chart.title,
+            source_simfile: manifest.chart.source_path,
+            harness_version: manifest.harness_version,
+            sha256: name.trim_end_matches(".tar.zst").into(),
+            compressed_bytes: fs::metadata(&path).unwrap().len(),
+            archive: name,
+            aliases: historical,
+            local_only: false,
+            retained_version: true,
+        });
+    }
+    extra.sort_by(|a, b| a.archive.cmp(&b.archive));
+    index.archives.extend(extra);
+    let unavailable = index
+        .archives
+        .iter()
+        .filter(|entry| !archive_available(entry))
+        .count();
+    if unavailable > 0 {
+        eprintln!(
+            "{unavailable} local-only archives are unavailable; generate them with the harness to run their comparisons"
+        );
+    }
+    index
+}
+
+fn archive_available(entry: &ArchiveEntry) -> bool {
+    !entry.local_only || archive_root().join(&entry.archive).is_file()
 }
 
 fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
@@ -132,6 +285,7 @@ fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
     let selected = index
         .archives
         .iter()
+        .filter(|entry| archive_available(entry))
         .filter(|entry| {
             filter.as_ref().is_none_or(|filter| {
                 entry.title.contains(filter)
@@ -147,18 +301,16 @@ fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
     selected
 }
 
-fn extract_archive(entry: &ArchiveEntry) -> ExtractedArchive {
-    let path = archive_root().join(&entry.archive);
+fn extract_archive(entry: &ArchiveEntry, path: &Path) -> ExtractedArchive {
     let metadata = fs::metadata(&path)
         .unwrap_or_else(|error| panic!("missing archive {}: {error}", path.display()));
     assert_eq!(metadata.len(), entry.compressed_bytes, "archive byte count");
     assert_eq!(hash_file(&path), entry.sha256, "archive content address");
-    assert_eq!(entry.archive, format!("{}.tar.zst", entry.sha256));
+    let suffix = if path.extension().is_some_and(|ext| ext == "tar") { "tar" } else { "tar.zst" };
+    assert_eq!(entry.archive, format!("{}.{suffix}", entry.sha256));
 
     let temp = tempfile::tempdir().expect("create archive extraction directory");
-    let input = File::open(&path).expect("open whole-song archive");
-    let decoder = zstd::stream::read::Decoder::new(input).expect("start streaming zstd decoder");
-    let mut archive = tar::Archive::new(decoder);
+    let mut archive = tar::Archive::new(archive_reader(path));
     for member in archive.entries().expect("read tar entries") {
         let mut member = member.expect("read tar member");
         assert!(
@@ -179,7 +331,20 @@ fn extract_archive(entry: &ArchiveEntry) -> ExtractedArchive {
     }
 }
 
+fn archive_reader(path: &Path) -> Box<dyn Read> {
+    let input = File::open(path).expect("open whole-song fixture");
+    if path.extension().is_some_and(|ext| ext == "tar") {
+        Box::new(input)
+    } else {
+        Box::new(zstd::stream::read::Decoder::new(input).expect("start streaming zstd decoder"))
+    }
+}
+
 fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
+    assert_eq!(
+        entry.harness_version, archive.manifest.harness_version,
+        "fixture index must preserve the capture's harness version"
+    );
     let manifest = &archive.manifest;
     assert_eq!(manifest.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert!(manifest.fixture_schema_version > 0);
@@ -187,28 +352,50 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     assert_eq!(manifest.chart.title, entry.title);
     assert_eq!(manifest.chart.source_path, entry.source_simfile);
     assert!(!manifest.itgmania.source_revision.is_empty());
-    assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
-    assert!(!manifest.itgmania.launches_executable);
-    assert!(manifest.runtime.update_hz.is_finite() && manifest.runtime.update_hz > 0.0);
-    assert!(manifest.runtime.display.width > 0.0);
-    assert!(manifest.runtime.display.height > 0.0);
+    let native = manifest.itgmania.execution == "native_gameplay";
+    if native {
+        assert!(manifest.itgmania.launches_executable);
+        assert!(manifest.runtime.update_hz.is_none(), "native frames cannot use a fabricated update rate");
+        assert_eq!(manifest.runtime.frame_clock.as_deref(), Some("native-update-frames"));
+        assert!(manifest.runtime.display.width.is_finite() && manifest.runtime.display.width >= 0.0);
+        assert!(manifest.runtime.display.height.is_finite() && manifest.runtime.display.height >= 0.0);
+    } else {
+        assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
+        assert!(!manifest.itgmania.launches_executable);
+        assert!(manifest.runtime.update_hz.is_some_and(|rate| rate.is_finite() && rate > 0.0));
+        assert!(manifest.runtime.frame_clock.as_deref().is_none_or(|clock| clock == "fixed-update-rate"));
+        assert!(manifest.runtime.display.width > 0.0);
+        assert!(manifest.runtime.display.height > 0.0);
+    }
     assert!(manifest.runtime.display.logical_width > 0.0);
     assert!(manifest.runtime.display.logical_height > 0.0);
     assert!(!manifest.runtime.random_state.source.is_empty());
-    assert_eq!(
-        manifest.runtime.random_state.reproducible,
-        manifest.runtime.random_state.seed.is_some()
+    // A recorded seed alone does not guarantee deterministic native state.
+    // Preserve captures explicitly marked as non-reproducible.
+    assert!(
+        !manifest.runtime.random_state.reproducible || manifest.runtime.random_state.seed.is_some(),
+        "a reproducible capture must record its seed"
     );
     assert_eq!(
         manifest.lua_closure.strategy,
         "executed-sources-plus-static-loads"
     );
-    assert!(!manifest.lua_closure.files.is_empty());
+    if manifest.lua_closure.files.is_empty() {
+        let song = parse_song(&archive.root.join(&manifest.chart.simfile));
+        assert!(
+            song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty(),
+            "empty Lua closure omitted authored song layers"
+        );
+    }
     for lua in &manifest.lua_closure.files {
         assert!(lua.ends_with(".lua"), "non-Lua closure member: {lua}");
         assert!(
             archive.root.join(lua).is_file(),
             "missing Lua member: {lua}"
+        );
+        assert!(
+            manifest.files.iter().any(|file| file.path == *lua),
+            "Lua closure member is not hash-validated: {lua}"
         );
     }
     for reference in &manifest.lua_closure.external_references {
@@ -235,16 +422,20 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
         ));
     }
     for file in &manifest.files {
+        assert!(
+            Path::new(&file.path)
+                .components()
+                .all(|part| matches!(part, std::path::Component::Normal(_))),
+            "invalid archive member path"
+        );
         let path = archive.root.join(&file.path);
-        let bytes = fs::read(&path)
-            .unwrap_or_else(|error| panic!("missing archive member {}: {error}", path.display()));
-        assert_eq!(bytes.len(), file.bytes, "member size: {}", file.path);
         assert_eq!(
-            hash_bytes(&bytes),
-            file.sha256,
-            "member hash: {}",
+            fs::metadata(&path).expect("archive member exists").len(),
+            file.bytes as u64,
+            "member size: {}",
             file.path
         );
+        assert_eq!(hash_file(&path), file.sha256, "member hash: {}", file.path);
         assert!(matches!(
             file.role.as_str(),
             "simfile" | "semantic-render-trace" | "lua-dependency" | "required-asset"
@@ -254,42 +445,302 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     assert!(archive.root.join(&manifest.chart.trace).is_file());
 }
 
-fn compile_archive(
-    archive: &ExtractedArchive,
-) -> (
-    NativeTrace,
-    Vec<CompiledSongLua>,
-    usize,
-    SongLuaCompileContext,
-) {
-    let trace_path = archive.root.join(&archive.manifest.chart.trace);
-    let trace = read_trace_file(&trace_path);
-    let simfile = archive.root.join(&archive.manifest.chart.simfile);
-    let (compiled, primary_index, context) = compile_trace_song_at(&trace, &simfile);
-    (trace, compiled, primary_index, context)
+// Full-song archives must describe native engine timing and complete replay.
+// Focused Lua-only micro fixtures can legitimately use a synthetic clock.
+fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
+    assert_eq!(
+        trace.harness_version, manifest.harness_version,
+        "trace and manifest capture versions differ"
+    );
+    assert!(
+        matches!(
+            trace.song_clock.as_deref(),
+            Some("native-song-timing" | "native-pauses")
+        ),
+        "obsolete song clock {:?}; recapture this archive with native timing",
+        trace.song_clock,
+    );
+    assert_eq!(
+        trace.song_position.as_deref(), Some("native-music-seconds"),
+        "obsolete public music clock; recapture with native SongPosition getters",
+    );
+    assert_eq!(
+        trace.music_effect_clock.as_deref(), Some("native-music-seconds"),
+        "obsolete music effect clock; recapture with native Actor music timestamps",
+    );
+    assert!(
+        trace.runtime_errors.is_empty(),
+        "native runtime errors invalidate the reference"
+    );
+    assert_eq!(
+        trace.dropped_events, 0,
+        "dropped native events invalidate the reference"
+    );
+    validate_native_endpoint(trace);
+    assert!(
+        trace
+            .actor_definitions
+            .iter()
+            .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
+        "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
+    );
+    // Require complete native observations before compiling. The production
+    // Model comparator checks every update's geometry, transforms, bindings
+    // and render state; unsupported states remain failed comparisons.
+    if let Err(error) = models::validate_models(trace) {
+        panic!("native Model mesh geometry is not captured and compared: {error}; this archive cannot establish full-song parity");
+    }
+    assert!(
+        trace
+            .update_frames
+            .first()
+            .is_some_and(|frame| frame.1 == 0.0)
+            && trace.update_frames.last().is_some_and(|frame| {
+                frame.1 as f32 >= trace.end_position.seconds
+                    && trace
+                        .trace_until_seconds
+                        .is_none_or(|end| frame.1 + 0.0000001 >= end)
+            }),
+        "native replay must cover the complete song from frame zero",
+    );
+    let has_operation = |name: &str, predicate: fn(f32) -> bool| {
+        let matches = |operation: &str, args: &[Value]| {
+            operation
+                .rsplit('.')
+                .next()
+                .is_some_and(|operation| operation.eq_ignore_ascii_case(name))
+                && args
+                    .first()
+                    .and_then(projected_alpha)
+                    .is_some_and(predicate)
+        };
+        trace.operation_tracks.iter().any(|track| {
+            track
+                .samples
+                .iter()
+                .any(|sample| matches(&track.operation, &sample.3))
+        }) || trace
+            .tween_tracks
+            .iter()
+            .flat_map(|track| &track.segments)
+            .flat_map(|segment| &segment.operations)
+            .any(|operation| matches(&operation.operation, &operation.args))
+    };
+    let version = manifest
+        .harness_version
+        .split('.')
+        .map(str::parse::<u32>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("numeric harness version");
+    let wrappers = trace.external_actors.iter().filter(|actor| {
+        actor.path.rsplit('/').next().and_then(|part| part.strip_prefix("WrapperState"))
+            .is_some_and(|index| index.parse::<usize>().is_ok())
+    }).map(|actor| actor.id.as_str()).collect::<HashSet<_>>();
+    let vibrates = |operation: &str| operation.rsplit('.').next()
+        .is_some_and(|name| name.eq_ignore_ascii_case("vibrate"));
+    let wrapper_vibration = trace.operation_tracks.iter().any(|track| {
+        wrappers.contains(track.actor.as_str()) && !track.samples.is_empty()
+            && vibrates(&track.operation)
+    }) || trace.tween_tracks.iter().any(|track| {
+        wrappers.contains(track.actor.as_str()) && track.segments.iter()
+            .flat_map(|segment| &segment.operations)
+            .any(|operation| vibrates(&operation.operation))
+    });
+    assert!(
+        !wrapper_vibration || (version.as_slice() >= [0, 1, 15].as_slice()
+            && trace.wrapper_effects.as_deref() == Some("native-draw-stack")),
+        "obsolete wrapper effect chain; recapture with harness 0.1.15 or later",
+    );
+    let broadcasts =
+        trace.timeline_tracks.iter().any(|track| {
+            track.operation == "MessageManager.Broadcast" && !track.samples.is_empty()
+        }) || trace
+            .command_tracks
+            .iter()
+            .any(|track| track.command.ends_with("MessageCommand") && !track.runs.is_empty());
+    if broadcasts || trace.message_dispatch.is_some() {
+        assert!(
+            version.as_slice() >= [0, 1, 11].as_slice()
+                && trace.message_dispatch.as_deref() == Some("native-subscriber-pointer-order"),
+            "obsolete tree-order broadcast replay; recapture with native dispatch",
+        );
+        assert!(
+            !broadcasts || !trace.message_dispatches.is_empty(),
+            "native broadcast delivery order is missing",
+        );
+        assert!(
+            trace
+                .runtime_actors
+                .iter()
+                .all(|actor| actor.message_order.is_some()),
+            "native actor subscriber ranks are missing"
+        );
+        let ranks: std::collections::HashMap<_, _> = trace
+            .runtime_actors
+            .iter()
+            .map(|actor| (actor.id.as_str(), actor.message_order))
+            .chain(
+                trace
+                    .external_actors
+                    .iter()
+                    .map(|actor| (actor.id.as_str(), actor.message_order)),
+            )
+            .filter_map(|(id, rank)| rank.map(|rank| (id, rank)))
+            .collect();
+        let mut unique = HashSet::new();
+        assert!(
+            ranks.values().all(|rank| *rank > 0 && unique.insert(*rank)),
+            "native subscriber ranks must be distinct and positive"
+        );
+        for dispatch in &trace.message_dispatches {
+            assert!(
+                dispatch.beat.is_finite()
+                    && dispatch.seconds.is_finite()
+                    && dispatch.seconds >= 0.0
+                    && dispatch.seconds as f32 <= trace.end_position.seconds,
+                "invalid native broadcast clock: {}",
+                dispatch.name
+            );
+            let mut previous = 0;
+            for id in &dispatch.actor_ids {
+                let rank = *ranks
+                    .get(id.as_str())
+                    .expect("unknown native message subscriber");
+                assert!(
+                    rank > previous,
+                    "broadcast {} is not in native subscriber order",
+                    dispatch.name
+                );
+                previous = rank;
+            }
+        }
+    }
+    assert!(
+        !has_operation("hibernate", |value| value > 0.0)
+            || version.as_slice() >= [0, 1, 6].as_slice(),
+        "obsolete hibernation replay; recapture with harness 0.1.6 or later",
+    );
+    assert!(
+        !has_operation("SetUpdateRate", |value| value != 1.0)
+            || version.as_slice() >= [0, 1, 7].as_slice(),
+        "obsolete ActorFrame update-rate replay; recapture with harness 0.1.7 or later",
+    );
+    assert!(
+        !has_operation("SetUpdateRate", f32::is_nan) || version.as_slice() >= [0, 1, 9].as_slice(),
+        "obsolete NaN update-rate replay; recapture with harness 0.1.9 or later",
+    );
+    assert!(
+        trace.runtime_actors.iter().all(|actor| {
+            actor
+                .render_state_samples
+                .iter()
+                .all(|sample| sample.1.is_some())
+        }),
+        "lossy native render alpha; recapture with harness 0.1.8 or later",
+    );
 }
 
-fn compose_entire_song(
+pub(super) fn validate_native_endpoint(trace: &NativeTrace) {
+    let endpoint = trace
+        .native_song_end
+        .as_ref()
+        .expect("missing native Song::GetLastSecond endpoint; recapture this archive");
+    let music_seconds = trace
+        .end_position
+        .music_seconds
+        .expect("missing final native music timestamp; recapture this archive");
+    assert!(
+        endpoint.seconds.is_finite() && endpoint.music_seconds.is_finite()
+            && music_seconds.is_finite(),
+        "native endpoint must be finite"
+    );
+    assert!(
+        trace.end_position.seconds >= endpoint.seconds && music_seconds >= endpoint.music_seconds
+            && trace.update_frames.last().is_some_and(|frame| {
+                // Native SongPosition consumes float seconds. JSON's f64 frame
+                // timestamp can round below the same native float endpoint.
+                let seconds = frame.1 as f32;
+                seconds.is_finite() && seconds >= endpoint.seconds
+            }),
+        "native replay must reach the raw Song::GetLastSecond endpoint"
+    );
+}
+
+#[test]
+fn native_song_endpoint_rejects_incomplete_replays() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst");
+    let control = read_trace_file(&path);
+    validate_native_endpoint(&control);
+    for mutation in ["missing endpoint", "missing music", "short clock", "short frame", "short music", "nonfinite endpoint", "one native tick short", "nonfinite frame"] {
+        let mut trace = read_trace_file(&path);
+        let endpoint = trace.native_song_end.as_ref().expect("native endpoint");
+        match mutation {
+            "missing endpoint" => trace.native_song_end = None,
+            "missing music" => trace.end_position.music_seconds = None,
+            "short clock" => trace.end_position.seconds = endpoint.seconds - 0.125,
+            "short frame" => trace.update_frames.last_mut().expect("last frame").1 = f64::from(endpoint.seconds) - 0.125,
+            "one native tick short" => trace.update_frames.last_mut().expect("last frame").1 = f64::from(endpoint.seconds.next_down()),
+            "nonfinite frame" => trace.update_frames.last_mut().expect("last frame").1 = f64::INFINITY,
+            "short music" => trace.end_position.music_seconds = Some(endpoint.music_seconds - 0.125),
+            "nonfinite endpoint" => trace.native_song_end.as_mut().expect("native endpoint").music_seconds = f32::NAN,
+            _ => unreachable!("listed replay mutation"),
+        }
+        assert!(std::panic::catch_unwind(|| validate_native_endpoint(&trace)).is_err(), "{mutation}");
+    }
+}
+
+#[test]
+fn native_song_endpoint_uses_native_float_clock() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst");
+    let mut trace = read_trace_file(&path);
+    let seconds = trace.native_song_end.as_ref().expect("native endpoint").seconds;
+    let frame = trace.update_frames.last_mut().expect("last frame");
+    frame.1 = f64::from(seconds).next_down();
+    assert!(frame.1 < f64::from(seconds));
+    assert_eq!(frame.1 as f32, seconds);
+    validate_native_endpoint(&trace);
+}
+
+fn compose_entire_song_with_progress(
     trace: &NativeTrace,
     compiled_layers: &[CompiledSongLua],
     context: &SongLuaCompileContext,
     update_hz: f32,
+    progress: Option<&progress::Progress>,
 ) {
+    use std::sync::atomic::Ordering;
     let frame_count = (trace.end_position.seconds.max(0.0) * update_hz).ceil() as usize + 1;
+    if let Some(progress) = progress {
+        progress.frames.store(frame_count, Ordering::Relaxed);
+        progress.frame.store(0, Ordering::Relaxed);
+    }
     let composers = compiled_layers
         .iter()
         .map(|compiled| WholeSongComposer::new(&compiled.overlays))
         .collect::<Vec<_>>();
     let mut actor_samples = 0usize;
+    let render_actors = projected_drawable_map(trace, compiled_layers)
+        .into_iter()
+        .filter_map(|(id, position)| {
+            trace
+                .runtime_actors
+                .iter()
+                .find(|actor| actor.id == id)
+                .map(|actor| (position, actor))
+        })
+        .collect::<HashMap<_, _>>();
     for frame in 0..frame_count {
         let seconds = frame as f32 / update_hz;
         let beat = song_beat_at_elapsed_seconds(seconds, context);
-        for (compiled, composer) in compiled_layers.iter().zip(&composers) {
+        for (layer, (compiled, composer)) in compiled_layers.iter().zip(&composers).enumerate() {
             let local = compiled_local_states_at(compiled, context, beat, seconds);
             let composed = compose_overlay_states(
                 &compiled.overlays,
                 &local,
                 [compiled.screen_width, compiled.screen_height],
+                [seconds, beat],
             );
             assert_eq!(composed.len(), compiled.overlays.len());
             actor_samples += composer.actor_count(
@@ -316,13 +767,33 @@ fn compose_entire_song(
                     state.diffuse[0],
                     state.diffuse[1],
                     state.diffuse[2],
-                    state.diffuse[3],
                 ];
                 assert!(
                     values.iter().all(|value| value.is_finite()),
-                    "non-finite composed state at frame {frame}, actor {index}"
+                    "non-finite composed state at frame {frame}, actor {index}: {values:?}"
                 );
+                let expected = render_actors.get(&(layer, index)).and_then(|actor| {
+                    let next = actor
+                        .render_state_samples
+                        .partition_point(|sample| sample.0 <= frame);
+                    actor.render_state_samples.get(next.checked_sub(1)?)?.1
+                });
+                if !state.diffuse[3].is_finite() || expected.is_some_and(|alpha| !alpha.is_finite())
+                {
+                    // Actor::SetDiffuseAlpha retains native infinities and NaN.
+                    // Require the exact kind on this frame; an earlier projected
+                    // sample must not authorize an extra nonfinite frame.
+                    assert!(
+                        expected.is_some_and(|alpha| alpha == state.diffuse[3]
+                            || (alpha.is_nan() && state.diffuse[3].is_nan())),
+                        "nonfinite alpha differs at frame {frame}, actor {index}: native {expected:?}, DeadSync {}",
+                        state.diffuse[3],
+                    );
+                }
             }
+        }
+        if let Some(progress) = progress {
+            progress.frame.store(frame + 1, Ordering::Relaxed);
         }
     }
     // Modifier-only songs can have no drawable overlays. Require draw output
@@ -336,33 +807,6 @@ fn compose_entire_song(
     assert!(
         !native_draws || actor_samples > 0,
         "whole-song composition emitted no actors despite visible reference geometry"
-    );
-}
-
-fn assert_complete_parity(
-    trace: &NativeTrace,
-    compiled: &[CompiledSongLua],
-    primary_index: usize,
-    context: &SongLuaCompileContext,
-) {
-    let mut gaps = Vec::new();
-    compare_compile_info(compiled, &mut gaps);
-    compare_layers(trace, compiled, &mut gaps);
-    compare_final_render_states(trace, compiled, &mut gaps);
-    compare_update_render_persistence(trace, compiled, &mut gaps);
-    compare_update_render_values(trace, compiled, context, &mut gaps);
-    compare_player_operation_ranges(trace, compiled, &mut gaps);
-    compare_column_splines(trace, compiled, context, &mut gaps);
-    multitap::compare_multitap(trace, compiled, context, &mut gaps);
-    compare_projected_geometry(trace, compiled, context, &mut gaps);
-    compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
-    compare_timeline(trace, &compiled[primary_index], &mut gaps);
-    compare_commands(trace, compiled, primary_index, &mut gaps);
-    assert!(
-        gaps.is_empty(),
-        "whole-song archive parity gaps ({}):\n- {}",
-        gaps.len(),
-        gaps.join("\n- ")
     );
 }
 
@@ -380,10 +824,6 @@ pub(super) fn hash_file(path: &Path) -> String {
     encode_hash(hasher.finalize())
 }
 
-fn hash_bytes(bytes: &[u8]) -> String {
-    encode_hash(Sha256::digest(bytes))
-}
-
 fn encode_hash(hash: impl AsRef<[u8]>) -> String {
     let bytes = hash.as_ref();
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -394,16 +834,98 @@ fn encode_hash(hash: impl AsRef<[u8]>) -> String {
 }
 
 #[test]
+fn composition_checks_nonfinite_alpha_per_frame() {
+    for (kind, alpha) in [
+        ("infinity", f32::INFINITY),
+        ("-infinity", f32::NEG_INFINITY),
+        ("nan", f32::NAN),
+    ] {
+        let value = serde_json::json!({"type": "number", "value": kind});
+        let mut trace: NativeTrace = serde_json::from_value(serde_json::json!({
+            "oracle": "itgmania_native_actor_conformance", "title": "nonfinite alpha", "style": "single",
+            "simfile": "", "roots": ["quad"],
+            "actor_definitions": [{"id": "quad", "class": "Quad", "name": "quad"}],
+            "runtime_actors": [{"id": "quad", "path": "quad", "render_state_samples": [[0, value, true]]}],
+            "timeline_tracks": [], "tween_tracks": [], "end_position": {"seconds": 0.0},
+            "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
+            "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 0.0
+        })).expect("native nonfinite alpha reference");
+        let context = SongLuaCompileContext::new("", "nonfinite alpha");
+        let mut compiled = CompiledSongLua {
+            overlays: vec![deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: Some("quad".into()),
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    diffuse: [1.0, 1.0, 1.0, alpha],
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            }],
+            ..CompiledSongLua::default()
+        };
+        let check = |trace: &NativeTrace, compiled: &CompiledSongLua| {
+            compose_entire_song_with_progress(
+                trace,
+                std::slice::from_ref(compiled),
+                &context,
+                60.0,
+                None,
+            );
+        };
+        check(&trace, &compiled);
+        compiled.overlays[0].initial_state.diffuse[3] = 1.0;
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
+            "clamping must fail"
+        );
+        compiled.overlays[0].initial_state.diffuse[3] = if alpha.is_nan() {
+            f32::INFINITY
+        } else {
+            -alpha
+        };
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
+            "the wrong kind must fail"
+        );
+        compiled.overlays[0].initial_state.diffuse[3] = alpha;
+        trace.runtime_actors[0].render_state_samples[0].1 = Some(1.0);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
+            "an extra nonfinite frame must fail"
+        );
+    }
+}
+
+#[test]
+#[ignore = "long song-fixture audit: streams and validates all 932 committed full-song archives"]
 fn whole_song_archive_index_and_streamed_members_are_valid() {
     crate::paths::init();
     let index = archive_index();
     assert_eq!(index.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert_eq!(index.hash, "sha256-compressed-archive");
-    assert_eq!(index.archives.len(), 46);
+    assert!(!index.archives.is_empty());
+    let mut names = HashSet::new();
     for entry in selected_archives(&index) {
-        let archive = extract_archive(entry);
+        assert!(names.insert(&entry.archive), "duplicate indexed archive");
+        let archive = extract_archive(entry, &archive_root().join(&entry.archive));
         validate_archive(entry, &archive);
-        if entry.source_simfile.contains("Who the Hell Is Edgar") {
+        let trace_path = archive.root.join(&archive.manifest.chart.trace);
+        if archive.manifest.itgmania.execution == "native_gameplay" {
+            let trace: serde_json::Value = serde_json::from_slice(
+                &fs::read(&trace_path).expect("native executable trace"),
+            ).expect("native executable trace JSON");
+            assert_eq!(trace["harness_version"], archive.manifest.harness_version);
+            native_gameplay::validate_capture(&trace).expect("complete native executable capture");
+        } else {
+            let trace = read_trace_file(&trace_path);
+            validate_native_trace(&trace, &archive.manifest);
+        }
+        if !entry.retained_version
+            && entry
+                .source_simfile
+                .starts_with("[09] Who the Hell Is Edgar")
+        {
             for font in [
                 "song/multitap/_komika axis 42px.ini",
                 "song/multitap/_komika axis 42px [numbers] 4x4 (doubleres).png",
@@ -418,21 +940,736 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
 }
 
 #[test]
-#[ignore = "explicit full-corpus compile, composition, and exact semantic/render audit"]
-fn whole_song_archives_compile_compose_and_match_native_trace() {
+fn empty_song_layers_match_current_native_control() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut trace = read_trace_file(&root.join(
+        "tests/fixtures/itgmania-song-lua-micro/empty-song/native.json",
+    ));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/empty-song/chart.sm"));
+    assert!(compiled.is_empty());
+    assert!(trace.roots.is_empty());
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
+    assert!(parity.checks() > 0, "the empty scene must still compare native player observations");
+    parity.assert_complete("song without Lua layers");
+    // Missing compiled roots must still fail instead of skipping native actors.
+    trace.roots.push("missing-layer".into());
+    let rejected = compare_semantics(&trace, &compiled, primary, &context);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "uncompiled native layers must fail"
+    );
+}
+
+#[test]
+fn archive_reference_rejects_missing_model_meshes() {
     crate::paths::init();
     let index = archive_index();
-    for entry in selected_archives(&index) {
-        eprintln!("whole-song parity: {}", entry.source_simfile);
-        let archive = extract_archive(entry);
-        validate_archive(entry, &archive);
-        let (trace, compiled, primary_index, context) = compile_archive(&archive);
-        compose_entire_song(
-            &trace,
-            &compiled,
-            &context,
-            archive.manifest.runtime.update_hz,
+    let control = index.archives.iter().find(|entry| {
+        entry.source_simfile == "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc"
+    }).expect("complete native non-Model reference");
+    let archive = extract_archive(control, &archive_root().join(&control.archive));
+    let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+
+    let model = index.archives.iter().find(|entry| {
+        entry.archive == "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst"
+    }).expect("complete native KABOOOOOM Model reference");
+    let archive = extract_archive(model, &archive_root().join(&model.archive));
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    assert!(trace.actor_definitions.iter().any(|definition| {
+        definition.class == "Model" && !definition.runtime_actors.is_empty()
+    }));
+    validate_native_trace(&trace, &archive.manifest);
+    trace.model_geometry_tracks.clear();
+    let error = std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest))
+        .expect_err("an omitted native Model mesh must invalidate the reference");
+    let message = error.downcast_ref::<String>().map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied()).unwrap_or_default();
+    assert!(message.contains("native Model mesh geometry is not captured and compared"), "{message}");
+}
+
+#[test]
+fn archive_reference_rejects_obsolete_replays() {
+    crate::paths::init();
+    let index = archive_index();
+    let entry = index
+        .archives
+        .iter()
+        .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
+        .expect("complete native reference");
+    let mut archive = extract_archive(entry, &archive_root().join(&entry.archive));
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+    let native_position = trace.song_position.take();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_position = Some("elapsed-seconds".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_position = native_position;
+    let native_effect_clock = trace.music_effect_clock.take();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.music_effect_clock = Some("elapsed-seconds".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.music_effect_clock = native_effect_clock;
+    validate_native_trace(&trace, &archive.manifest);
+    trace.song_clock = Some("continuous-bpm".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_clock = Some("native-song-timing".into());
+    // This no-Lua chart has no dispatch observations. Omit its unused modern
+    // tag while independently probing capabilities of historical versions.
+    assert!(trace.message_dispatches.is_empty());
+    assert!(trace.runtime_actors.is_empty());
+    trace.message_dispatch = None;
+    trace.wrapper_effects = None;
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "probe".into(),
+        operation: "Actor.hibernate".into(),
+        samples: vec![(0, 0.0, 0.0, vec![serde_json::json!(0.125)])],
+    });
+    archive.manifest.harness_version = "0.1.5".into();
+    trace.harness_version = "0.1.5".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("hibernation probe")
+        .samples[0]
+        .3 = vec![serde_json::json!({"type": "number", "value": "infinity"})];
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.6".into();
+    trace.harness_version = "0.1.6".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "probe".into(),
+        operation: "ActorFrame.SetUpdateRate".into(),
+        samples: vec![(0, 0.0, 0.0, vec![serde_json::json!(2)])],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("update-rate probe")
+        .samples[0]
+        .3 = vec![serde_json::json!(1)];
+    validate_native_trace(&trace, &archive.manifest);
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("update-rate probe")
+        .samples[0]
+        .3 = vec![serde_json::json!(2)];
+    archive.manifest.harness_version = "0.1.7".into();
+    trace.harness_version = "0.1.7".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.last_mut().expect("update-rate probe").samples[0].3 =
+        vec![serde_json::json!({"type": "number", "value": "nan"})];
+    archive.manifest.harness_version = "0.1.8".into();
+    trace.harness_version = "0.1.8".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.9".into();
+    trace.harness_version = "0.1.9".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.runtime_actors.push(NativeActor {
+        id: "alpha-probe".into(),
+        path: "alpha-probe".into(),
+        parent_id: None,
+        message_order: None,
+        final_render_state: None,
+        render_state_samples: vec![(0, None, true)],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .runtime_actors
+        .last_mut()
+        .expect("alpha probe")
+        .render_state_samples[0]
+        .1 = Some(f32::INFINITY);
+    validate_native_trace(&trace, &archive.manifest);
+    trace.runtime_actors.pop();
+    trace.actor_definitions.push(serde_json::from_value(serde_json::json!({
+        "id": "noteskin-probe", "class": "Sprite", "properties": {"NoteSkinElement": "Explosion"}
+    })).expect("placeholder noteskin probe"));
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.actor_definitions.pop();
+    trace.timeline_tracks.push(NativeTimelineTrack {
+        kind: "message".into(), actor: None, operation: "MessageManager.Broadcast".into(),
+        samples: vec![(0, Some(0.0), Some(0.0), vec![serde_json::json!("Go")], None)],
+    });
+    archive.manifest.harness_version = "0.1.10".into();
+    trace.harness_version = "0.1.10".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.11".into();
+    trace.harness_version = "0.1.11".into();
+    trace.message_dispatch = Some("native-subscriber-pointer-order".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    for (id, rank) in [("parent-probe", 2), ("child-probe", 1)] {
+        trace.runtime_actors.push(NativeActor {
+            id: id.into(), path: id.into(), parent_id: None, message_order: Some(rank),
+            final_render_state: None, render_state_samples: Vec::new(),
+        });
+    }
+    trace.message_dispatches.push(NativeMessageDispatch {
+        name: "Go".into(), beat: 0.0, seconds: 0.0,
+        actor_ids: vec!["child-probe".into(), "parent-probe".into()],
+    });
+    validate_native_trace(&trace, &archive.manifest);
+    trace.message_dispatches[0].actor_ids.reverse();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.message_dispatches[0].actor_ids.reverse();
+    trace.message_dispatches[0].actor_ids.push("unknown-probe".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.message_dispatches[0].actor_ids.pop();
+    trace.runtime_actors.last_mut().expect("subscriber probe").message_order = Some(2);
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.runtime_actors.last_mut().expect("subscriber probe").message_order = Some(1);
+    validate_native_trace(&trace, &archive.manifest);
+    trace.external_actors.push(NativeExternalActor {
+        id: "wrapper-probe".into(), path: "probe/WrapperState1".into(),
+        class: "ActorFrame".into(), message_order: None,
+    });
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "wrapper-probe".into(), operation: "ActorFrame.vibrate".into(),
+        samples: vec![(0, 0.0, 0.0, Vec::new())],
+    });
+    archive.manifest.harness_version = "0.1.14".into();
+    trace.harness_version = "0.1.14".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.15".into();
+    trace.harness_version = "0.1.15".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.wrapper_effects = Some("native-draw-stack".into());
+    validate_native_trace(&trace, &archive.manifest);
+    trace.wrapper_effects = None;
+    trace.operation_tracks.last_mut().expect("wrapper probe").operation = "ActorFrame.bob".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.pop();
+    trace.tween_tracks.push(NativeTweenTrack {
+        actor: "wrapper-probe".into(), command: None, kind: "linear".into(), easing: None,
+        segments: vec![NativeTweenSegment {
+            enqueue_seq: 0, beat: 0.0, seconds: Some(0.0), duration: 1.0,
+            queue_start_seconds: None, implicit: false,
+            operations: vec![NativeTweenOperation {
+                seq: 0, operation: "ActorFrame.Vibrate".into(), args: Vec::new(),
+            }],
+        }],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.wrapper_effects = Some("native-draw-stack".into());
+    validate_native_trace(&trace, &archive.manifest);
+    trace.tween_tracks.pop();
+    trace.external_actors.pop();
+    trace.dropped_events = 1;
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.dropped_events = 0;
+    trace.runtime_errors.push(serde_json::json!("native error"));
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.runtime_errors.clear();
+    trace.update_frames.clear();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+}
+
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry|--first-query|--through-second SECONDS]\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nUse --jobs N with --all or multiple positional selectors to replay independent fixtures on multiple cores. Each fixture preserves chronological Lua execution.\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+
+fn select_archive<'a>(
+    index: &'a ArchiveIndex,
+    selector: &str,
+) -> Result<&'a ArchiveEntry, Vec<&'a ArchiveEntry>> {
+    let filename = Path::new(selector)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(selector);
+    let exact = index
+        .archives
+        .iter()
+        .filter(|entry| {
+            entry.archive == filename
+                || entry.aliases.iter().any(|alias| alias == filename)
+                || entry.title.eq_ignore_ascii_case(selector)
+                || entry.source_simfile.eq_ignore_ascii_case(selector)
+        })
+        .collect::<Vec<_>>();
+    let matches = if exact.is_empty() {
+        index
+            .archives
+            .iter()
+            .filter(|entry| {
+                entry.sha256.starts_with(selector)
+                    || entry
+                        .aliases
+                        .iter()
+                        .any(|alias| alias.starts_with(selector))
+                    || entry
+                        .title
+                        .to_lowercase()
+                        .contains(&selector.to_lowercase())
+                    || entry
+                        .source_simfile
+                        .to_lowercase()
+                        .contains(&selector.to_lowercase())
+            })
+            .collect::<Vec<_>>()
+    } else {
+        exact
+    };
+    if matches.len() == 1 {
+        Ok(matches[0])
+    } else {
+        Err(matches)
+    }
+}
+
+pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
+    use std::process::ExitCode;
+    // Cargo forwards these global libtest options to custom harnesses too.
+    // This harness always shows output and explicitly selects expensive runs.
+    // The custom harness is serial; libtest's thread count has no effect.
+    if let Some(index) = args.iter().position(|arg| arg == "--test-threads") {
+        args.drain(index..(index + 2).min(args.len()));
+    }
+    args.retain(|arg| {
+        !arg.starts_with("--test-threads=") && !matches!(
+            arg.as_str(),
+            "--nocapture"
+                | "--show-output"
+                | "--ignored"
+                | "--include-ignored"
+                | "--exact"
+                | "--quiet"
+        )
+    });
+    let jobs = if let Some(index) = args.iter().position(|arg| arg == "--jobs") {
+        let Some(jobs) = args.get(index + 1).and_then(|s| s.parse::<usize>().ok()).filter(|&n| n > 0) else {
+            eprintln!("--jobs requires a positive worker count");
+            return ExitCode::FAILURE;
+        };
+        args.drain(index..=index + 1);
+        jobs
+    } else { 1 };
+    if args.is_empty() || args == ["--help"] || args == ["-h"] {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
+    // Capture candidates can be checked without publishing them in the fixture store.
+    if args.first().is_some_and(|arg| arg == "--archive") {
+        if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")
+            || args.len() == 6 && args[4] == "--through-second") || args[2] != "--report" {
+            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--entry|--first-query|--through-second SECONDS]");
+            return ExitCode::FAILURE;
+        }
+        let path = Path::new(&args[1]);
+        let scope = match args.get(4).map(String::as_str) {
+            Some("--entry") => native_gameplay::Scope::Entry,
+            Some("--first-query") => native_gameplay::Scope::FirstQuery,
+            Some("--through-second") => {
+                let Ok(at) = args[5].parse::<f64>() else {
+                    eprintln!("diagnostic replay cutoff must be a number");
+                    return std::process::ExitCode::from(1);
+                };
+                if !at.is_finite() || at < 0.0 {
+                    eprintln!("diagnostic replay cutoff must be finite and nonnegative");
+                    return std::process::ExitCode::from(1);
+                }
+                native_gameplay::Scope::ThroughSecond(at)
+            },
+            _ => native_gameplay::Scope::Full,
+        };
+        let outcome = std::panic::catch_unwind(|| {
+            let fixture_hash = hash_file(path);
+            let mut tar = tar::Archive::new(archive_reader(path));
+            let mut members = tar.entries().expect("candidate members");
+            let member = members.next().expect("candidate manifest").expect("read candidate manifest");
+            assert_eq!(member.path().expect("manifest path"), Path::new("manifest.json"));
+            let manifest: ArchiveManifest = serde_json::from_reader(member).expect("candidate manifest JSON");
+            let name = path.file_name().and_then(|name| name.to_str()).expect("portable archive filename");
+            let entry = ArchiveEntry {
+                title: manifest.chart.title, source_simfile: manifest.chart.source_path,
+                harness_version: manifest.harness_version, archive: name.into(),
+                sha256: name.strip_suffix(".tar.zst").or_else(|| name.strip_suffix(".tar"))
+                    .expect("fixture extension").into(),
+                compressed_bytes: fs::metadata(path).expect("candidate metadata").len(),
+                local_only: false, aliases: Vec::new(), retained_version: false,
+            };
+            let archive = extract_archive(&entry, path);
+            validate_archive(&entry, &archive);
+            assert_eq!(archive.manifest.itgmania.execution, "native_gameplay",
+                "candidate replay requires a native gameplay archive");
+            crate::paths::init();
+            let reporter = progress::Reporter::start();
+            let passed = replay_native_archive(&archive, scope, Path::new(&args[3]),
+                &reporter.progress, (path, &fixture_hash));
+            assert_eq!(hash_file(path), fixture_hash, "candidate changed during replay");
+            passed
+        });
+        return match outcome {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::from(2), // A partial replay or failed comparison.
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
+    let index = archive_index();
+    if args == ["--list"] {
+        for entry in &index.archives {
+            println!(
+                "{}  {}  ({})",
+                entry.archive, entry.title, entry.source_simfile
+            );
+        }
+        println!("{} full-song archives", index.archives.len());
+        return ExitCode::SUCCESS;
+    }
+    let selected = if args == ["--all"] {
+        index
+            .archives
+            .iter()
+            .filter(|entry| archive_available(entry))
+            .collect::<Vec<_>>()
+    } else if !args.is_empty() && args.iter().all(|arg| !arg.starts_with('-')) {
+        let mut selected = Vec::with_capacity(args.len());
+        for selector in &args {
+            match select_archive(&index, selector) {
+                Ok(entry) if archive_available(entry) => {
+                    if !selected.iter().any(|prior: &&ArchiveEntry| prior.archive == entry.archive) {
+                        selected.push(entry);
+                    }
+                }
+                Ok(entry) => {
+                    eprintln!(
+                        "{} is a local-only archive; generate it with the harness before selecting it",
+                        entry.archive
+                    );
+                    return ExitCode::FAILURE;
+                }
+                Err(matches) => {
+                    eprintln!(
+                        "selector {:?} matched {} archives; choose one filename from --list",
+                        selector,
+                        matches.len()
+                    );
+                    for entry in matches.iter().take(20) {
+                        eprintln!("  {}  {}", entry.archive, entry.source_simfile);
+                    }
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        selected
+    } else {
+        eprintln!("invalid arguments: {}\n\n{USAGE}", args.join(" "));
+        return ExitCode::FAILURE;
+    };
+    if jobs > 1 && selected.len() > 1 {
+        return run_parallel_archives(&selected, jobs);
+    }
+    crate::paths::init();
+    let started = std::time::Instant::now();
+    let mut failed = 0;
+    let mut checks = 0;
+    let mut failed_checks = 0;
+    for (position, entry) in selected.iter().enumerate() {
+        eprintln!(
+            "\n[{}/{}] {} ({})\n{}\n  harness version: {}",
+            position + 1,
+            selected.len(),
+            entry.title,
+            entry.source_simfile,
+            entry.archive,
+            entry.harness_version
         );
-        assert_complete_parity(&trace, &compiled, primary_index, &context);
+        let reporter = progress::Reporter::start();
+        let progress = &reporter.progress;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            progress.stage("extracting archive and verifying SHA-256");
+            let fixture_path = archive_root().join(&entry.archive);
+            let archive = extract_archive(entry, &fixture_path);
+            progress.stage("validating archive members");
+            validate_archive(entry, &archive);
+            if archive.manifest.itgmania.execution == "native_gameplay" {
+                return replay_native_archive(&archive, native_gameplay::Scope::Full,
+                    &archive.root.join("native-report.json"), progress, (&fixture_path, &entry.sha256));
+            }
+            progress.stage("reading native trace");
+            let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+            validate_native_trace(&trace, &archive.manifest);
+            eprintln!(
+                "  native duration: {:.2}s, {} recorded update frames",
+                trace.end_position.seconds,
+                trace.update_frames.len()
+            );
+            progress.stage("compiling complete Lua runtime");
+            let (compiled, primary, context) =
+                compile_trace_song_at(&trace, &archive.root.join(&archive.manifest.chart.simfile));
+            progress.stage("composing every song frame");
+            compose_entire_song_with_progress(
+                &trace,
+                &compiled,
+                &context,
+                archive.manifest.runtime.update_hz.expect("validated embedded frame rate"),
+                Some(progress),
+            );
+            let mut parity = compare_semantics_with_progress(
+                &trace,
+                &compiled,
+                primary,
+                &context,
+                Some(std::sync::Arc::clone(progress)),
+            );
+            runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+            // Newer references contain sparse player transforms; older captures
+            // retain only visibility and cannot support these additional checks.
+            if trace
+                .player_render_tracks
+                .iter()
+                .any(|track| !track.transform_samples.is_empty())
+            {
+                runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
+            }
+            assert_eq!(
+                progress.checks.load(Ordering::Relaxed),
+                parity.checks(),
+                "live comparison count must include every comparator"
+            );
+            assert_eq!(
+                progress.failed.load(Ordering::Relaxed),
+                parity.checks() - parity.passed(),
+                "live failure count must include every comparator"
+            );
+            eprintln!("\n{}", parity.summary(&entry.title));
+            if !parity.is_complete() {
+                eprintln!(
+                    "parity gaps ({} reported):\n- {}",
+                    parity.gaps.len(),
+                    parity.gaps.join("\n- ")
+                );
+            }
+            parity.is_complete()
+        }));
+        use std::sync::atomic::Ordering;
+        checks += progress.checks.load(Ordering::Relaxed);
+        failed_checks += progress.failed.load(Ordering::Relaxed);
+        let succeeded = matches!(outcome, Ok(true));
+        if !succeeded {
+            failed += 1;
+        }
+        drop(reporter);
+        eprintln!(
+            "fixture result: {}",
+            if succeeded { "ok" } else { "FAILED" }
+        );
+    }
+    eprintln!(
+        "\nresult: {}; {}/{} fixtures passed; {} comparisons passed, {} failed ({} total); elapsed {:.2}s",
+        if failed == 0 { "ok" } else { "FAILED" },
+        selected.len() - failed,
+        selected.len(),
+        checks - failed_checks,
+        failed_checks,
+        checks,
+        started.elapsed().as_secs_f64()
+    );
+    if failed == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+fn run_parallel_archives(entries: &[&ArchiveEntry], jobs: usize) -> std::process::ExitCode {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let executable = std::env::current_exe().expect("fixture runner executable");
+    let next = AtomicUsize::new(0);
+    let passed = AtomicUsize::new(0);
+    let started = std::time::Instant::now();
+    // Processes isolate Lua VMs, asset services and per-fixture trace logs.
+    // Frames within each fixture retain their original chronological order.
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.min(entries.len()) {
+            scope.spawn(|| loop {
+                let index = next.fetch_add(1, Relaxed);
+                let Some(entry) = entries.get(index) else { break; };
+                eprintln!("[worker {}/{}] {}", index + 1, entries.len(), entry.source_simfile);
+                let mut command = std::process::Command::new(&executable);
+                command.arg(&entry.archive)
+                    .env_remove("DEADSYNC_PERF_CONTROL")
+                    .env_remove("DEADSYNC_PERF_ACK");
+                if let Some(mut metrics) = std::env::var_os("DEADSYNC_SONG_LUA_METRICS") {
+                    metrics.push(format!(".worker-{index}.json"));
+                    command.env("DEADSYNC_SONG_LUA_METRICS", metrics);
+                }
+                match command.status() {
+                    Ok(status) if status.success() => { passed.fetch_add(1, Relaxed); },
+                    Ok(status) => eprintln!("{} failed: {status}", entry.source_simfile),
+                    Err(error) => eprintln!("{} failed to start: {error}", entry.source_simfile),
+                }
+            });
+        }
+    });
+    let passed = passed.load(Relaxed);
+    eprintln!("{passed}/{} fixtures passed with {} workers in {:.2}s",
+        entries.len(), jobs.min(entries.len()), started.elapsed().as_secs_f64());
+    if passed == entries.len() { std::process::ExitCode::SUCCESS }
+    else { std::process::ExitCode::FAILURE }
+}
+
+fn replay_native_archive(
+    archive: &ExtractedArchive,
+    scope: native_gameplay::Scope,
+    report_path: &Path,
+    progress: &progress::Progress,
+    fixture: (&Path, &str),
+) -> bool {
+    use std::io::Write as _;
+    use std::sync::atomic::Ordering;
+    let trace_path = archive.root.join(&archive.manifest.chart.trace);
+    let trace: Value = serde_json::from_slice(&fs::read(&trace_path).expect("read native gameplay trace"))
+        .expect("parse native gameplay trace");
+    assert_eq!(trace["harness_version"], archive.manifest.harness_version);
+    assert_eq!(trace["schema_version"], archive.manifest.oracle_schema_version);
+    for (key, expected) in [
+        ("width", archive.manifest.runtime.display.width),
+        ("height", archive.manifest.runtime.display.height),
+        ("logical_width", archive.manifest.runtime.display.logical_width),
+        ("logical_height", archive.manifest.runtime.display.logical_height),
+    ] {
+        assert_eq!(trace["display"][key].as_f64().expect("native display dimension") as f32, expected);
+    }
+    if archive.manifest.runtime.display.width == 0.0 || archive.manifest.runtime.display.height == 0.0 {
+        assert_eq!(trace["display"]["video_renderers"], "null", "zero pixel dimensions require the native null renderer");
+    }
+    progress.stage(match scope {
+        native_gameplay::Scope::Entry => "replaying native entry and reload",
+        native_gameplay::Scope::FirstQuery => "replaying through the first native point query",
+        native_gameplay::Scope::Full => "replaying every native gameplay frame",
+        native_gameplay::Scope::ThroughSecond(_) => "replaying native frames through the diagnostic cutoff",
+    });
+    let mut report = native_gameplay::replay_with_command_observer(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+        archive.manifest.runtime.machine_preferences.as_ref().map(|prefs| prefs.last_seen_video_driver.as_str()),
+        archive.manifest.runtime.command_observer.as_ref().is_some_and(|observer| observer.dynamic_commands),
+        scope, |frame, frames| {
+            progress.frame.store(frame, Ordering::Relaxed);
+            progress.frames.store(frames, Ordering::Relaxed);
+        }).unwrap_or_else(|error| panic!("native gameplay replay failed: {error}"));
+    if let Some(observer) = &archive.manifest.runtime.command_observer {
+        report["command_observer"] = serde_json::json!({
+            "dynamic_commands": observer.dynamic_commands,
+            "capture_binary_sha256": observer.capture_binary_sha256,
+        });
+    }
+    report["fixture_sha256"] = Value::String(fixture.1.into());
+    report["fixture_path"] = Value::String(fixture.0.to_string_lossy().into_owned());
+    let mismatches = report["mismatches"].as_array().expect("native comparison failures");
+    let errors = report["errors"].as_array().expect("Lua callback failures");
+    let coverage = report["pending_coverage"].as_array().expect("explicit pending coverage");
+    progress.checks.fetch_add(report["compared_stage_fields"].as_u64().expect("stage field count") as usize, Ordering::Relaxed);
+    progress.failed.fetch_add(mismatches.iter().filter(|item|
+        matches!(item["field"].as_str(), Some("possible" | "current_possible" | "actual" | "misses" |
+            "w1" | "w2" | "failed" | "life_latest" | "difficulty" | "description" | "meter"))).count(), Ordering::Relaxed);
+    // Keep the full observations, but bind metadata before streaming once.
+    // Reopening a large report to add two fields doubled serialization and I/O.
+    let mut output = std::io::BufWriter::with_capacity(64 * 1024,
+        File::create(report_path).expect("create native report"));
+    serde_json::to_writer_pretty(&mut output, &report).expect("serialize native report");
+    output.flush().expect("write native report");
+    eprintln!("{} native frames replayed; {} stage fields compared; {} mismatches; {} callback errors",
+        report["replayed_frames"], report["compared_stage_fields"], mismatches.len(), errors.len());
+    for mismatch in mismatches.iter().take(20) { eprintln!("  {mismatch}"); }
+    for pending in coverage { eprintln!("  pending: {pending}"); }
+    eprintln!("report: {}", report_path.display());
+    native_gameplay::archive_passes(scope, &report)
+}
+
+#[test]
+fn uncompressed_candidates_retain_member_validation() {
+    let compressed = archive_root().join("cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst");
+    let temp = tempfile::tempdir().expect("candidate directory");
+    let path = temp.path().join("candidate.tar");
+    std::io::copy(&mut archive_reader(&compressed), &mut File::create(&path).unwrap()).unwrap();
+    let digest = hash_file(&path);
+    let name = format!("{digest}.tar");
+    let candidate = temp.path().join(&name);
+    fs::rename(path, &candidate).unwrap();
+    let mut tar = tar::Archive::new(archive_reader(&candidate));
+    let manifest: ArchiveManifest = serde_json::from_reader(tar.entries().unwrap().next().unwrap().unwrap()).unwrap();
+    let entry = ArchiveEntry {
+        title: manifest.chart.title, source_simfile: manifest.chart.source_path,
+        harness_version: manifest.harness_version, archive: name, sha256: digest,
+        compressed_bytes: fs::metadata(&candidate).unwrap().len(), local_only: false,
+        aliases: Vec::new(), retained_version: false,
+    };
+    let archive = extract_archive(&entry, &candidate);
+    validate_archive(&entry, &archive);
+    fs::write(archive.root.join(&archive.manifest.chart.trace), b"corrupt trace").unwrap();
+    assert!(std::panic::catch_unwind(|| validate_archive(&entry, &archive)).is_err());
+}
+
+#[test]
+fn full_song_selector_rejects_missing_and_ambiguous_matches_and_preserves_aliases() {
+    let entry = |hash: &str, title: &str| ArchiveEntry {
+        title: title.into(),
+        source_simfile: format!("{title}/chart.ssc"),
+        harness_version: "0.1.0".into(),
+        archive: format!("{hash}.tar.zst"),
+        sha256: hash.into(),
+        compressed_bytes: 1,
+        local_only: false,
+        aliases: vec![format!("old-{hash}.tar.zst")],
+        retained_version: false,
+    };
+    let index = ArchiveIndex {
+        archive_schema_version: 1,
+        hash: "sha256-compressed-archive".into(),
+        archives: vec![
+            entry("abc123", "Example"),
+            entry("abc456", "Example Double"),
+        ],
+    };
+    for selector in [
+        "abc123.tar.zst",
+        "old-abc123.tar.zst",
+        "abc123",
+        "example/chart.ssc",
+    ] {
+        assert!(select_archive(&index, selector).is_ok_and(|entry| entry.sha256 == "abc123"));
+    }
+    assert!(select_archive(&index, "abc").is_err_and(|matches| matches.len() == 2));
+    assert!(select_archive(&index, "nonexistent").is_err_and(|matches| matches.is_empty()));
+}
+
+#[test]
+fn consolidated_song_lua_references_resolve_and_are_compressed() {
+    let references: HashMap<String, String> = serde_json::from_slice(
+        &fs::read(archive_root().join("references.json")).expect("reference index"),
+    )
+    .unwrap();
+    assert!(!references.is_empty());
+    let committed = include_str!("../fixtures/full_song_lua/committed-reference-files.txt")
+        .lines().collect::<HashSet<_>>();
+    let mut referenced = HashSet::new();
+    for (alias, filename) in references {
+        assert!(committed.contains(filename.as_str()),
+            "reference target must be a committed fixture: {alias} -> {filename}");
+        referenced.insert(filename.clone());
+        let original = Path::new(env!("CARGO_MANIFEST_DIR")).join(&alias);
+        let resolved = reference_path(&original);
+        assert_eq!(resolved, archive_root().join(&filename), "{alias}");
+        assert!(resolved.is_file(), "missing committed reference fixture: {filename}");
+        if !filename.ends_with(".manifest.json") {
+            assert!(filename.ends_with(".zst"));
+        }
+    }
+    assert_eq!(referenced.len(), committed.len(), "reference catalog must have no orphaned targets");
+}
+
+#[test]
+#[ignore = "explicit full-corpus compile, composition, and exact semantic/render audit"]
+fn whole_song_archives_compile_compose_and_match_native_trace() {
+    let index = archive_index();
+    for entry in selected_archives(&index) {
+        assert_eq!(
+            run_cli(vec![entry.archive.clone()]),
+            std::process::ExitCode::SUCCESS
+        );
     }
 }

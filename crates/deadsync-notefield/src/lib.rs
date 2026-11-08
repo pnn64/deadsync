@@ -24,11 +24,12 @@ mod placement;
 mod receptors;
 mod song_lua;
 mod style;
+mod timing_labels;
 mod transforms;
 
 pub use actor_builder::{
     BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
-    NotefieldFramePlan,
+    NotefieldFramePlan, NotefieldHudParts,
 };
 pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{
@@ -53,8 +54,9 @@ pub use frame_hud::{
 };
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
-pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
+pub use judgment_feedback::{IndicatorSprite, TapJudgmentAnimation, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
+pub use mini_indicator::ghost_mini_indicator_output;
 pub use mini_indicator::{
     BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
     MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,
@@ -68,7 +70,7 @@ pub use notes::ScrollTravel;
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
-    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
+    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry, noteskin_model_depth,
 };
 pub use placement::{
     FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, NotefieldCameraCache,
@@ -78,6 +80,7 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
+pub use timing_labels::{TimingLabelStyle, TimingSegmentLabel};
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
@@ -156,29 +159,29 @@ pub(crate) use placement::{
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets, player_metric_y,
 };
 #[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, notefield_view_proj, zmod_layout_ys};
+use placement::{default_column_x, hud_layout_ys, hud_y, notefield_camera, zmod_layout_ys};
 pub(crate) use receptors::{
     ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,
 };
 pub(crate) use transforms::{
-    AccelYParams, BumpyFrameCache, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache,
-    NoteXParams, TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached,
-    beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
-    fill_gameplay_lane_effects, fill_move_col_extras, fill_static_note_x_offsets,
-    gameplay_visual_effect_params, lane_note_transform_cache, note_appearance_cache,
-    note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached, smoothstep01,
-    tiny_spacing_scale, visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached,
+    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache,
+    NoteDepthFrameCache, NoteXParams, TornadoLaneCache, VisualEffectParams,
+    appearance_note_alpha_glow_cached, beat_factor, compute_active_note_geometry,
+    compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
+    fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
+    note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
+    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom_cached,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
     visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
     visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
-    appearance_needs_rows, beat_x_extra, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
+    appearance_needs_rows, beat_wave_offset, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
     move_col_extra, note_x_extra, quantize_step, signed_effect_active, sm_scale, tipsy_y_extra,
-    tornado_x_extra, visual_effect_params_for_col, visual_pulse_inner_zoom,
-    visual_pulse_zoom_for_y, visual_tiny_zoom,
+    tornado_x_extra, visual_arrow_effect_zoom, visual_effect_params_for_col,
+    visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
@@ -193,7 +196,7 @@ mod tests {
     use super::transforms::{
         accel_y_cache, appearance_note_actor_alpha_from_alpha, appearance_note_alpha_cached,
         appearance_note_glow_from_alpha, apply_accel_y_cached, apply_accel_y_with_peak_cached,
-        note_world_z_for_bumpy_cached, visual_note_rotation_z_cached,
+        note_world_z_cached, visual_note_rotation_z_cached,
     };
     use super::{
         AccelYParams, BrokenRunLookup, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
@@ -208,7 +211,7 @@ mod tests {
         ZmodMiniIndicatorText, appearance_needs_rows, append_average_error_bar_part,
         append_beat_bar, append_cue_bar, append_disabled_timing_windows,
         append_edit_measure_number, append_mini_part, append_perspective_parts, append_turn_parts,
-        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
+        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_wave_offset,
         bottom_cap_uv_window, clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha,
         column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
         column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
@@ -227,7 +230,7 @@ mod tests {
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, lane_note_transform_cache, mine_hides_after_resolution,
         mine_part, mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra,
-        note_x_offset, notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
+        note_x_offset, notefield_camera, offset_center, player_metric_y, push_transform_parts,
         quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
         scale_effect_size, scale_hold_part, scale_sprite_to_arrow, share_actor_range,
         signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
@@ -250,7 +253,7 @@ mod tests {
     use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 
     fn appearance_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
-        appearance_note_alpha_cached(y, &super::note_appearance_cache(elapsed, mini, params))
+        appearance_note_alpha_cached(y, y, &super::note_appearance_cache(elapsed, mini, params))
     }
 
     fn appearance_glow(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
@@ -294,9 +297,9 @@ mod tests {
     }
 
     fn cached_bumpy_z(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
-        note_world_z_for_bumpy_cached(
+        note_world_z_cached(
             y,
-            super::bumpy_frame_cache(offset, period),
+            super::note_depth_frame_cache(offset, period, 0.0, 480.0),
             lane_note_transform_cache(
                 0.0,
                 VisualEffectParams {
@@ -315,7 +318,7 @@ mod tests {
     ) -> f32 {
         let cache = lane_note_transform_cache(song_beat, params);
         if is_hold_head {
-            visual_hold_head_rotation_z_cached(cache)
+            visual_hold_head_rotation_z_cached(note_beat, cache)
         } else {
             visual_note_rotation_z_cached(note_beat, cache)
         }
@@ -376,6 +379,7 @@ mod tests {
 
     fn test_note_at_beat(beat: f32) -> Note {
         Note {
+            participant: None,
             beat,
             quantization_idx: 0,
             column: 0,
@@ -414,6 +418,108 @@ mod tests {
 
     fn edit_bar_info(row: i32, segments: &[TimeSignatureSegment]) -> Option<EditBeatBarInfo> {
         EditBeatBarCursor::new(row, segments).info_for_row(row)
+    }
+
+    #[test]
+    fn stealth_type_fades_match_native_cpp_vectors() {
+        // ArrowGetPercentVisible and its fade-line functions from local
+        // ITGmania ArrowEffects.cpp, compiled unchanged with MSVC /O2.
+        // y includes lane shifts; y_offset is post-acceleration travel.
+        #[rustfmt::skip]
+        const CASES: &[(bool, bool, f32, [f32; 7], f32, f32, u32)] = &[
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f800000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f800000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x00000000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x00000000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x3f000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x3f000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x3f800000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x3f000000u32),
+            (true, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x3f000000u32),
+            (false, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f800000u32),
+            (false, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f800000u32),
+            (true, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f000000u32),
+            (true, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x3f800000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x3f800000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3f400000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3f400000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3e800000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3e800000u32),
+            (false, false, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (false, true, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (true, false, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (true, true, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (false, false, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3f800000u32),
+            (false, true, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3f800000u32),
+            (true, false, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3ed5555au32),
+            (true, true, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3ed5555au32),
+            (false, false, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x3e800000u32),
+            (false, true, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x3e800000u32),
+            (true, false, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x00000000u32),
+            (true, true, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x00000000u32),
+        ];
+        for &(
+            stealth_type,
+            past,
+            mini,
+            [
+                hidden,
+                hidden_offset,
+                sudden,
+                sudden_offset,
+                stealth,
+                stealth_col,
+                random_vanish,
+            ],
+            y,
+            y_offset,
+            bits,
+        ) in CASES
+        {
+            let cache = super::note_appearance_cache(
+                0.1,
+                mini,
+                super::NoteAlphaParams {
+                    stealth_type,
+                    stealth_past_receptors: past,
+                    hidden,
+                    hidden_offset,
+                    sudden,
+                    sudden_offset,
+                    stealth,
+                    stealth_col,
+                    random_vanish,
+                    ..Default::default()
+                },
+            );
+            let visibility = appearance_note_alpha_cached(y, y_offset, &cache);
+            let expected = f32::from_bits(bits);
+            assert!(
+                (visibility - expected).abs() <= 0.000001,
+                "type={stealth_type}, past={past}, y={y}, offset={y_offset}: {visibility} != {expected}"
+            );
+            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, y_offset, &cache);
+            assert_eq!(alpha, if expected > 0.5 { 1.0 } else { 0.0 });
+            assert!((glow - (1.3 - (expected - 0.5).abs() * 2.6).max(0.0)).abs() < 0.00001);
+        }
     }
 
     #[test]
@@ -538,6 +644,7 @@ mod tests {
                 flip_y,
                 fade,
                 blend,
+                rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
                 z,
@@ -553,6 +660,7 @@ mod tests {
                 assert!(!*flip_y);
                 assert_eq!(*fade, [0.0; 4]);
                 assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_x_deg, 0.0);
                 assert_eq!(*rot_y_deg, 0.0);
                 assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*z, 80);
@@ -775,7 +883,7 @@ mod tests {
         assert_eq!(scale_sprite_to_arrow([32, 64], 128.0), [64.0, 128.0]);
         assert_eq!(scale_sprite_to_arrow([32, 0], 128.0), [32.0, 0.0]);
         assert_eq!(scale_sprite_to_arrow([-32, 64], 128.0), [0.0, 128.0]);
-        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [32.0, 64.0]);
+        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [0.0, 0.0]);
     }
 
     #[test]
@@ -783,7 +891,7 @@ mod tests {
         assert_eq!(scale_hold_part([32, 16], 64.0), [32.0, 16.0]);
         assert_eq!(scale_hold_part([0, 16], 64.0), [0.0, 16.0]);
         assert_eq!(scale_hold_part([32, -16], 64.0), [32.0, 0.0]);
-        assert_eq!(scale_hold_part([32, 16], 0.0), [32.0, 16.0]);
+        assert_eq!(scale_hold_part([32, 16], 0.0), [0.0, 0.0]);
     }
 
     #[test]
@@ -1200,10 +1308,10 @@ mod tests {
 
     #[test]
     fn beat_factor_pulses_early_in_each_beat() {
-        assert_eq!(beat_factor(-0.25), 0.0);
-        assert_eq!(beat_factor(0.3), 0.0);
-        assert!((beat_factor(0.0) - 20.0).abs() <= 1e-6);
-        assert!((beat_factor(1.0) + 20.0).abs() <= 1e-6);
+        assert_eq!(beat_factor(-0.25, 0.0, 0.0), 0.0);
+        assert_eq!(beat_factor(0.3, 0.0, 0.0), 0.0);
+        assert!((beat_factor(0.0, 0.0, 0.0) - 20.0).abs() <= 1e-6);
+        assert!((beat_factor(1.0, 0.0, 0.0) + 20.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -1441,6 +1549,882 @@ mod tests {
     }
 
     #[test]
+    fn xmode_matches_native_sides_travel_and_tiny_order() {
+        let columns = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        // Native style cases, including floor(odd columns / 2).
+        for (p2, double, directions) in [
+            (false, false, &[1.0; 4][..]),
+            (true, false, &[-1.0; 4][..]),
+            (
+                false,
+                true,
+                &[1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0][..],
+            ),
+            (
+                true,
+                true,
+                &[1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0][..],
+            ),
+            (false, true, &[1.0, 1.0, -1.0, -1.0, -1.0][..]),
+        ] {
+            let n = directions.len();
+            for (amount, travel, native_shift) in [
+                (-2.5, 128.0, -320.0),
+                (-2.5, -128.0, 320.0),
+                (0.5, 64.0, 32.0),
+                (0.5, 0.0, 0.0),
+                (0.000000025, 512.0, 0.0000128),
+            ] {
+                let params = NoteXParams {
+                    xmode: amount,
+                    player_p2: p2,
+                    double_style: double,
+                    ..NoteXParams::default()
+                };
+                assert!(!super::fill_static_note_x_offsets(
+                    n,
+                    &columns[..n],
+                    &[0.0; 8],
+                    &[TornadoBounds::default(); 8],
+                    &[32.0; 8],
+                    params,
+                    0.5,
+                    &mut [0.0; 8],
+                ));
+                for (col, &direction) in directions.iter().enumerate() {
+                    let expected = (columns[col] + native_shift * direction) * 0.5 + 32.0;
+                    assert_eq!(
+                        note_x_offset(
+                            col,
+                            travel,
+                            0.0,
+                            0.0,
+                            &columns[..n],
+                            &[0.0; 8],
+                            &[TornadoBounds::default(); 8],
+                            &[0.5; 8],
+                            params,
+                            1.0,
+                        ),
+                        expected
+                    );
+                    assert_eq!(
+                        super::note_x_offset_cached(
+                            col,
+                            travel,
+                            0.0,
+                            0.0,
+                            &columns[..n],
+                            &[0.0; 8],
+                            &[TornadoBounds::default(); 8],
+                            &[],
+                            &[32.0; 8],
+                            params,
+                            0.5,
+                        ),
+                        expected
+                    );
+                }
+            }
+        }
+        for amount in [0.0, f32::NAN, f32::INFINITY] {
+            let params = NoteXParams {
+                xmode: amount,
+                ..NoteXParams::default()
+            };
+            assert_eq!(
+                note_x_extra(0, 128.0, 0.0, 0.0, &columns, &[], &[], params),
+                0.0
+            );
+            assert!(super::fill_static_note_x_offsets(
+                8,
+                &columns,
+                &[],
+                &[],
+                &[],
+                params,
+                1.0,
+                &mut [0.0; 8],
+            ));
+        }
+    }
+
+    #[test]
+    fn bumpy_variants_match_compiled_native_vectors() {
+        // CalculateBumpyAngle and SelectTanType were copied verbatim from
+        // the unchanged local ArrowEffects.cpp and compiled with MSVC.
+        for (travel, amount, offset, period, sin, tan, csc) in [
+            (0f32, 1f32, 0f32, 0f32, 0f32, 0f32, f32::INFINITY),
+            (
+                64f32,
+                1f32,
+                0f32,
+                0f32,
+                -30.2721004f32,
+                46.312851f32,
+                -52.8539467f32,
+            ),
+            (
+                -128f32,
+                -0.75f32,
+                0.5f32,
+                -0.25f32,
+                6.45359945f32,
+                6.60831594f32,
+                139.457062f32,
+            ),
+            (
+                192f32,
+                2f32,
+                -1f32,
+                -2f32,
+                40.6623268f32,
+                47.2163048f32,
+                157.393845f32,
+            ),
+            (
+                384f32,
+                0.5f32,
+                2f32,
+                1.5f32,
+                17.8958206f32,
+                -40.0815506f32,
+                22.3515892f32,
+            ),
+            (
+                -96f32,
+                -2f32,
+                -0.75f32,
+                -2f32,
+                76.2335358f32,
+                -251.409851f32,
+                83.9525528f32,
+            ),
+            (
+                32f32,
+                1f32,
+                0f32,
+                0f32,
+                36.3718948f32,
+                -87.4015884f32,
+                43.9900055f32,
+            ),
+            (
+                256f32,
+                0.25f32,
+                50f32,
+                -0.25f32,
+                -9.68371964f32,
+                38.8108025f32,
+                -10.3266096f32,
+            ),
+            (
+                64f32,
+                2.50000003e-08f32,
+                0f32,
+                0f32,
+                -7.56802478e-07f32,
+                1.15782132e-06f32,
+                -1.32134869e-06f32,
+            ),
+            (0f32, 1f32, 0f32, -1f32, f32::NAN, f32::NAN, f32::NAN),
+            (
+                128f32,
+                1f32,
+                0.300000012f32,
+                -1f32,
+                f32::NAN,
+                f32::NAN,
+                f32::NAN,
+            ),
+            (0f32, 0f32, 0f32, -1f32, 0f32, 0f32, 0f32),
+        ] {
+            for (tangent, cosecant, expected) in
+                [(false, false, sin), (true, false, tan), (true, true, csc)]
+            {
+                let params = NoteXParams {
+                    bumpy_x: if tangent { 0.0 } else { amount },
+                    bumpy_x_offset: offset,
+                    bumpy_x_period: period,
+                    tan_bumpy_x: if tangent { amount } else { 0.0 },
+                    tan_bumpy_x_offset: offset,
+                    tan_bumpy_x_period: period,
+                    cosecant,
+                    ..NoteXParams::default()
+                };
+                let x = note_x_offset(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &[-96.0],
+                    &[0.0],
+                    &[TornadoBounds::default()],
+                    &[0.5],
+                    params,
+                    1.0,
+                );
+                let cached = super::note_x_offset_cached(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &[-96.0],
+                    &[0.0],
+                    &[TornadoBounds::default()],
+                    &[],
+                    &[32.0],
+                    params,
+                    0.5,
+                );
+                let expected_x = (-96.0 + expected) * 0.5 + 32.0;
+                if expected.is_nan() {
+                    assert!(x.is_nan() && cached.is_nan());
+                } else if expected.is_infinite() {
+                    assert_eq!(x, expected);
+                    assert_eq!(cached, expected);
+                } else {
+                    assert!((x - expected_x).abs() <= 0.00002);
+                    assert_eq!(x, cached);
+                }
+                if tangent {
+                    let z_params = VisualEffectParams {
+                        tan_bumpy: amount,
+                        tan_bumpy_offset: offset,
+                        tan_bumpy_period: period,
+                        cosecant,
+                        tiny: 1.0,
+                        ..VisualEffectParams::default()
+                    };
+                    let z = note_world_z_cached(
+                        travel,
+                        super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                        lane_note_transform_cache(0.0, z_params),
+                    );
+                    if expected.is_nan() {
+                        assert!(z.is_nan());
+                    } else if expected.is_infinite() {
+                        assert_eq!(z, expected);
+                    } else {
+                        assert!((z - expected).abs() <= 0.00002);
+                    }
+                    // Native NeedZBuffer omits TanBumpy, despite its depth.
+                    assert!(!visual_hold_body_needs_z_buffer(z_params));
+                }
+            }
+        }
+        for params in [
+            NoteXParams {
+                bumpy_x: 0.000000025,
+                ..NoteXParams::default()
+            },
+            NoteXParams {
+                tan_bumpy_x: 0.000000025,
+                ..NoteXParams::default()
+            },
+        ] {
+            assert!(!super::fill_static_note_x_offsets(
+                1,
+                &[0.0],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[0.0],
+                params,
+                1.0,
+                &mut [0.0]
+            ));
+        }
+    }
+
+    #[test]
+    fn drunk_variants_match_compiled_native_vectors() {
+        // CalculateDrunkAngle and SelectTanType were copied verbatim from
+        // the unchanged local ArrowEffects.cpp and compiled with MSVC.
+        let cols = [
+            -96.0, -32.0, 32.0, 96.0, -96.0, -32.0, 32.0, 96.0, -96.0, -32.0, 32.0, 96.0, -96.0,
+            -32.0, 32.0, 96.0,
+        ];
+        for (col, travel, time, height, amount, offset, speed, period, cos, tan, csc) in [
+            (
+                0,
+                0f32,
+                0f32,
+                480f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                32f32,
+                0f32,
+                f32::INFINITY,
+            ),
+            (
+                1,
+                64f32,
+                0.25f32,
+                480f32,
+                1f32,
+                0f32,
+                0.5f32,
+                0f32,
+                -10.59725f32,
+                -91.176384f32,
+                33.9136391f32,
+            ),
+            (
+                3,
+                192f32,
+                1.25f32,
+                480f32,
+                -0.75f32,
+                0.5f32,
+                -1f32,
+                -0.25f32,
+                17.4223747f32,
+                -22.7381954f32,
+                34.8955765f32,
+            ),
+            (
+                2,
+                -128f32,
+                -0.5f32,
+                480f32,
+                2f32,
+                -1f32,
+                -2f32,
+                -1f32,
+                56.1652832f32,
+                34.9633598f32,
+                133.493088f32,
+            ),
+            (
+                7,
+                384f32,
+                2.5f32,
+                720f32,
+                0.5f32,
+                2f32,
+                2f32,
+                1.5f32,
+                15.9210091f32,
+                -1.59579444f32,
+                -161.217575f32,
+            ),
+            (
+                15,
+                -96f32,
+                7.5f32,
+                1080f32,
+                -2f32,
+                -0.75f32,
+                -0.25f32,
+                -2f32,
+                -35.6120415f32,
+                -95.566597f32,
+                -77.0259247f32,
+            ),
+            (
+                0,
+                32f32,
+                4f32,
+                480f32,
+                1f32,
+                0f32,
+                -1f32,
+                0f32,
+                25.1483917f32,
+                25.1789742f32,
+                51.74897f32,
+            ),
+            (
+                3,
+                256f32,
+                9f32,
+                480f32,
+                0.25f32,
+                50f32,
+                0.25f32,
+                -0.25f32,
+                -2.3404963f32,
+                -26.1482067f32,
+                8.36604309f32,
+            ),
+            (
+                1,
+                0f32,
+                0f32,
+                480f32,
+                2.50000003e-08f32,
+                0f32,
+                0f32,
+                0f32,
+                7.8405327e-07f32,
+                1.62168021e-07f32,
+                4.02679188e-06f32,
+            ),
+            (
+                2,
+                128f32,
+                1f32,
+                480f32,
+                1f32,
+                0.300000012f32,
+                1f32,
+                0.75f32,
+                19.8041382f32,
+                40.6146317f32,
+                40.7391052f32,
+            ),
+        ] {
+            for (tangent, cosecant, expected) in
+                [(false, false, cos), (true, false, tan), (true, true, csc)]
+            {
+                let params = NoteXParams {
+                    screen_height: height,
+                    drunk: if tangent { 0.0 } else { amount },
+                    drunk_offset: offset,
+                    drunk_speed: speed,
+                    drunk_period: period,
+                    tan_drunk: if tangent { amount } else { 0.0 },
+                    tan_drunk_offset: offset,
+                    tan_drunk_speed: speed,
+                    tan_drunk_period: period,
+                    cosecant,
+                    ..NoteXParams::default()
+                };
+                let z_params = VisualEffectParams {
+                    local_col: col,
+                    cosecant,
+                    drunk_z: if tangent { 0.0 } else { amount },
+                    drunk_z_offset: offset,
+                    drunk_z_speed: speed,
+                    drunk_z_period: period,
+                    tan_drunk_z: if tangent { amount } else { 0.0 },
+                    tan_drunk_z_offset: offset,
+                    tan_drunk_z_speed: speed,
+                    tan_drunk_z_period: period,
+                    tiny: 1.0,
+                    ..VisualEffectParams::default()
+                };
+                let z = note_world_z_cached(
+                    travel,
+                    super::note_depth_frame_cache(0.0, 0.0, time, height),
+                    lane_note_transform_cache(0.0, z_params),
+                );
+                let x = note_x_offset(
+                    col,
+                    travel,
+                    0.0,
+                    time,
+                    &cols,
+                    &[0.0; 16],
+                    &[TornadoBounds::default(); 16],
+                    &[0.5; 16],
+                    params,
+                    1.0,
+                );
+                let cached = super::note_x_offset_cached(
+                    col,
+                    travel,
+                    0.0,
+                    time,
+                    &cols,
+                    &[0.0; 16],
+                    &[TornadoBounds::default(); 16],
+                    &[],
+                    &[32.0; 16],
+                    params,
+                    0.5,
+                );
+                if expected.is_infinite() {
+                    assert!(z.is_infinite() && x.is_infinite() && cached.is_infinite());
+                } else {
+                    assert!(
+                        (z - expected).abs() <= 0.00002,
+                        "col {col}, tangent {tangent}, cosecant {cosecant}: {z} != {expected}"
+                    );
+                    let expected_x = (cols[col] + expected) * 0.5 + 32.0;
+                    assert!((x - expected_x).abs() <= 0.00002);
+                    assert_eq!(x, cached);
+                }
+                // Native NeedZBuffer deliberately omits DrunkZ/TanDrunkZ.
+                assert!(!visual_hold_body_needs_z_buffer(z_params));
+            }
+        }
+        let params = VisualEffectParams {
+            cosecant: true,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                0.0,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, params)
+            ),
+            0.0
+        );
+        let params = NoteXParams {
+            tan_drunk: 0.000000025,
+            screen_height: 480.0,
+            ..NoteXParams::default()
+        };
+        assert!(!super::fill_static_note_x_offsets(
+            1,
+            &cols[..1],
+            &[0.0],
+            &[TornadoBounds::default()],
+            &[0.0],
+            params,
+            1.0,
+            &mut [0.0]
+        ));
+    }
+
+    #[test]
+    fn digital_and_zigzag_match_native_travel_vectors() {
+        // Digital values come from ArrowEffects.cpp compiled with MSVC;
+        // Zigzag values call the linked reference RageMath::RageTriangle.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, y, offset, period, steps, expected) in [
+            (0.5, 0.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, 10.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, 11.0, 0.0, 0.0, 0.0, 16.0),
+            (0.5, 32.0, 0.0, 0.0, 0.0, 16.0),
+            (0.5, 64.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, -11.0, 0.0, 0.0, 0.0, -16.0),
+            (0.5, -32.0, 0.0, 0.0, 0.0, -16.0),
+            (-2.5, 17.3, 0.0, 0.0, 3.0, -60.0),
+            (0.5, 73.25, 11.0, 1.5, 2.0, 16.0),
+            (0.5, -200.0, -0.75, -2.0, 1.0, -8.0),
+        ] {
+            let params = NoteXParams {
+                digital: amount,
+                digital_offset: offset,
+                digital_period: period,
+                digital_steps: steps,
+                ..NoteXParams::default()
+            };
+            let expected = (-96.0 + expected) * 0.5 + 32.0;
+            assert_eq!(
+                note_x_offset(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], params, 1.0
+                ),
+                expected
+            );
+            assert_eq!(
+                super::note_x_offset_cached(
+                    0,
+                    y,
+                    0.0,
+                    0.0,
+                    &columns,
+                    &inverse,
+                    &tornado,
+                    &[],
+                    &[32.0; 4],
+                    params,
+                    0.5
+                ),
+                expected
+            );
+            assert!(!super::fill_static_note_x_offsets(
+                4,
+                &columns,
+                &inverse,
+                &tornado,
+                &[0.0; 4],
+                params,
+                1.0,
+                &mut [0.0; 4]
+            ));
+        }
+        for (amount, y, offset, period, expected) in [
+            (3.0, 0.0, 0.0, 0.0, 0.0),
+            (3.0, 16.0, 0.0, 0.0, 48.0),
+            (3.0, 32.0, 0.0, 0.0, 96.0),
+            (3.0, 64.0, 0.0, 0.0, 0.0),
+            (3.0, 96.0, 0.0, 0.0, -96.0),
+            (3.0, 128.0, 0.0, 0.0, 0.0),
+            (3.0, -16.0, 0.0, 0.0, -48.0),
+            (3.0, -96.0, 0.0, 0.0, 95.999985),
+            (-2.5, 73.25, 0.25, 1.5, -61.75),
+            (0.5, -200.0, -0.75, -2.0, 9.499997),
+        ] {
+            // Native GetXPos uses the same RageTriangle phase as GetZPos,
+            // then applies Tiny to travel and lane spacing before MoveX.
+            let x_params = NoteXParams {
+                zigzag: amount,
+                zigzag_offset: offset,
+                zigzag_period: period,
+                ..NoteXParams::default()
+            };
+            let expected_x = (-96.0 + expected) * 0.5 + 32.0;
+            for actual_x in [
+                note_x_offset(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[0.5; 4], x_params, 1.0,
+                ),
+                super::note_x_offset_cached(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[], &[32.0; 4], x_params, 0.5,
+                ),
+            ] {
+                assert!(
+                    (actual_x - expected_x).abs() < 0.00002,
+                    "X travel y={y}: {actual_x} vs {expected_x}"
+                );
+            }
+            assert!(!super::fill_static_note_x_offsets(
+                4, &columns, &inverse, &tornado, &[0.0; 4],
+                x_params, 1.0, &mut [0.0; 4],
+            ));
+            let params = VisualEffectParams {
+                zigzag_z: amount,
+                zigzag_z_offset: offset,
+                zigzag_z_period: period,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            let actual = note_world_z_cached(
+                y,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, params),
+            );
+            assert!(
+                (actual - expected).abs() < 0.00002,
+                "y={y}: {actual} vs {expected}"
+            );
+            assert!(visual_hold_body_needs_z_buffer(params));
+        }
+    }
+
+    #[test]
+    fn square_matches_native_ragesquare_vectors_and_tiny_order() {
+        // Expected values were obtained by linking the checked-out ITGmania
+        // RageMath.cpp and calling RageSquare, including its receptor hack.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, travel, offset, period, expected) in [
+            (1.0, 0.0, 0.0, 0.0, -32.0),
+            (1.0, 0.1, 0.0, 0.0, -32.0),
+            (1.0, 0.3, 0.0, 0.0, 32.0),
+            (1.0, 32.0, 0.0, 0.0, 32.0),
+            (1.0, 64.0, 0.0, 0.0, -32.0),
+            (1.0, 128.0, 0.0, 0.0, -32.0),
+            (1.0, 128.1, 0.0, 0.0, -32.0),
+            (1.0, 128.3, 0.0, 0.0, 32.0),
+            (1.0, -0.1, 0.0, 0.0, -32.0),
+            (1.0, -32.0, 0.0, 0.0, -32.0),
+            (1.0, -64.0, 0.0, 0.0, -32.0),
+            (1.0, -128.3, 0.0, 0.0, -32.0),
+            (-2.5, 32.0, 0.0, 0.0, -80.0),
+            (-2.5, 64.0, 0.0, 0.0, 80.0),
+            (0.5, 32.0, 32.0, 0.0, -16.0),
+            (0.5, 64.0, 0.0, 1.0, 16.0),
+            (0.5, 128.0, 0.0, 1.0, -16.0),
+            (0.5, -64.0, 0.0, -2.0, -16.0),
+            (0.5, 0.0, 0.0, -1.0, 16.0),
+            (0.5, 64.0, 0.0, -1.0, 16.0),
+        ] {
+            let params = NoteXParams {
+                square: amount,
+                square_offset: offset,
+                square_period: period,
+                ..NoteXParams::default()
+            };
+            let x = note_x_offset(
+                0, travel, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], params, 1.0,
+            );
+            assert_eq!(x, (-96.0 + expected) * 0.5 + 32.0);
+            assert_eq!(
+                super::note_x_offset_cached(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &columns,
+                    &inverse,
+                    &tornado,
+                    &[],
+                    &[32.0; 4],
+                    params,
+                    0.5,
+                ),
+                x
+            );
+            let z_params = VisualEffectParams {
+                square_z: amount,
+                square_z_offset: offset,
+                square_z_period: period,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            assert_eq!(
+                note_world_z_cached(
+                    travel,
+                    super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                    lane_note_transform_cache(0.0, z_params),
+                ),
+                expected
+            );
+            assert!(visual_hold_body_needs_z_buffer(z_params));
+        }
+        let params = NoteXParams {
+            square: 0.000000025,
+            ..NoteXParams::default()
+        };
+        assert!(!super::fill_static_note_x_offsets(
+            4,
+            &columns,
+            &inverse,
+            &tornado,
+            &[0.0; 4],
+            params,
+            1.0,
+            &mut [0.0; 4],
+        ));
+        assert!(visual_hold_body_needs_z_buffer(VisualEffectParams {
+            square_z: params.square,
+            ..VisualEffectParams::default()
+        }));
+        for amount in [0.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(
+                super::transforms::square_wave_offset(32.0, amount, 0.0, 0.0),
+                0.0
+            );
+        }
+        let params = VisualEffectParams {
+            bumpy: 0.75,
+            parabola_z: -2.5,
+            square_z: 0.5,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                128.0,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, params),
+            ),
+            cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0 - 16.0
+        );
+    }
+
+    #[test]
+    fn parabola_matches_native_travel_coordinates_and_tiny_order() {
+        // ArrowEffects GetXPos/GetZPos: amount * (fYOffset / 64)^2.
+        // X scales with Tiny after summation; Z does not. Negative travel
+        // uses the same curve, and values smaller than epsilon stay active.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, travel, expected) in [
+            (-2.5, -128.0, -10.0),
+            (-0.75, 128.0, -3.0),
+            (-0.5, 256.0, -8.0),
+            (0.5, -512.0, 32.0),
+            (1.0, 32.0, 0.25),
+            (2.5, 64.0, 2.5),
+            (1.0, 0.0, 0.0),
+            (0.000000025, 512.0, 0.0000016),
+        ] {
+            let x_params = NoteXParams {
+                parabola_x: amount,
+                ..NoteXParams::default()
+            };
+            let x = note_x_offset(
+                0, travel, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], x_params, 1.0,
+            );
+            let cached = super::note_x_offset_cached(
+                0,
+                travel,
+                0.0,
+                0.0,
+                &columns,
+                &inverse,
+                &tornado,
+                &[],
+                &[32.0; 4],
+                x_params,
+                0.5,
+            );
+            assert_eq!(x, (-96.0 + expected) * 0.5 + 32.0);
+            assert_eq!(cached, x);
+            let z_params = VisualEffectParams {
+                parabola_z: amount,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            assert_eq!(
+                note_world_z_cached(
+                    travel,
+                    super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                    lane_note_transform_cache(0.0, z_params)
+                ),
+                expected
+            );
+            assert!(visual_hold_body_needs_z_buffer(z_params));
+            assert!(!super::fill_static_note_x_offsets(
+                4,
+                &columns,
+                &inverse,
+                &tornado,
+                &[32.0; 4],
+                x_params,
+                0.5,
+                &mut [0.0; 4]
+            ));
+        }
+        let params = VisualEffectParams {
+            bumpy: 0.75,
+            parabola_z: -2.5,
+            ..VisualEffectParams::default()
+        };
+        let z = note_world_z_cached(
+            128.0,
+            super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+            lane_note_transform_cache(0.0, params),
+        );
+        assert_eq!(z, cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0);
+        let invalid = VisualEffectParams {
+            parabola_z: f32::NAN,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                128.0,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, invalid)
+            ),
+            0.0
+        );
+        assert!(!visual_hold_body_needs_z_buffer(invalid));
+    }
+
+    #[test]
+    fn roll_uses_native_angles_and_preserves_authored_model_rotation() {
+        use super::transforms::visual_note_rotation_x;
+        for (travel, amount, expected) in [
+            (-128.0, -2.5, 160.0),
+            (128.0, -2.5, -160.0),
+            (64.0, 15.0, 480.0),
+            (0.0, 15.0, 0.0),
+            (512.0, 0.000000025, 0.0000064),
+        ] {
+            assert_eq!(visual_note_rotation_x(travel, amount), expected);
+        }
+        assert_eq!(visual_note_rotation_x(128.0, f32::NAN), 0.0);
+        let draw = deadsync_noteskin::ModelDrawState {
+            rot: [7.0, -5.0, 13.0],
+            ..deadsync_noteskin::ModelDrawState::default()
+        };
+        let combined = super::song_lua_note_model_draw(draw, [-160.0, 32.0]);
+        assert_eq!(combined.rot, [-153.0, 27.0, 13.0]);
+    }
+
+    #[test]
     fn note_x_offset_applies_tiny_and_column_move_after_effects() {
         let col_offsets = [-96.0, -32.0, 32.0, 96.0];
         let invert = [0.0; 4];
@@ -1574,7 +2558,7 @@ mod tests {
             -16.0,
             params,
             1.0,
-            tipsy_y_extra(2, 0.37, 1.0),
+            tipsy_y_extra(2, 0.37, 1.0, 0.0, 0.0),
         );
         let expected_x = 320.0
             + note_x_offset(
@@ -1589,8 +2573,8 @@ mod tests {
                 params,
                 0.0,
             );
-        let expected_y = 240.0 + tipsy_y_extra(2, 0.37, 1.0) - 16.0;
-        let beat_coupled_y = 240.0 + tipsy_y_extra(2, 12.0, 1.0) - 16.0;
+        let expected_y = 240.0 + tipsy_y_extra(2, 0.37, 1.0, 0.0, 0.0) - 16.0;
+        let beat_coupled_y = 240.0 + tipsy_y_extra(2, 12.0, 1.0, 0.0, 0.0) - 16.0;
         assert!((center[0] - expected_x).abs() <= 1e-6);
         assert!((center[1] - expected_y).abs() <= 1e-6);
         assert!((center[1] - beat_coupled_y).abs() > 1e-3);
@@ -1640,6 +2624,7 @@ mod tests {
                         flip: amount,
                         invert: -amount,
                         beat: amount,
+                        ..NoteXParams::default()
                     };
                     let mut tornado_cache = [super::TornadoLaneCache::default(); 8];
                     super::compute_tornado_lane_caches(
@@ -1681,7 +2666,7 @@ mod tests {
                                 ),
                             115.125
                                 + move_col_extra(&move_y, local_col)
-                                + tipsy_y_extra(local_col, 0.37, tipsy),
+                                + tipsy_y_extra(local_col, 0.37, tipsy, 0.0, 0.0),
                         ];
                         assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
                     }
@@ -1830,12 +2815,24 @@ mod tests {
                 params[local_col].tiny.to_bits(),
                 expected_params.tiny.to_bits()
             );
-            let expected_offset = tipsy_y_extra(local_col, 1.25, visual.tipsy)
-                + move_col_extra(&visual.move_y_cols, local_col);
+            let expected_offset = tipsy_y_extra(
+                local_col,
+                1.25,
+                visual.tipsy,
+                visual.tipsy_offset,
+                visual.tipsy_speed,
+            ) + move_col_extra(&visual.move_y_cols, local_col);
             assert_eq!(lane_offsets[local_col].to_bits(), expected_offset.to_bits());
             assert_eq!(
                 tipsy_offsets[local_col].to_bits(),
-                tipsy_y_extra(local_col, 1.25, visual.tipsy).to_bits(),
+                tipsy_y_extra(
+                    local_col,
+                    1.25,
+                    visual.tipsy,
+                    visual.tipsy_offset,
+                    visual.tipsy_speed
+                )
+                .to_bits(),
             );
             assert_eq!(
                 move_y_offsets[local_col].to_bits(),
@@ -1875,11 +2872,122 @@ mod tests {
         let hold_rotation = cached_note_rotation(6.75, 3.5, true, params);
         let tap_rotation = cached_note_rotation(6.75, 3.5, false, params);
         let expected = visual_confusion_rotation_deg(3.5, params);
-        let cached = visual_hold_head_rotation_z_cached(lane_note_transform_cache(3.5, params));
+        let cached =
+            visual_hold_head_rotation_z_cached(6.75, lane_note_transform_cache(3.5, params));
 
         assert!((hold_rotation - expected).abs() <= 1e-6);
         assert_eq!(cached.to_bits(), hold_rotation.to_bits());
         assert!((tap_rotation - hold_rotation).abs() > 1.0);
+    }
+
+    #[test]
+    fn dizzy_holds_matches_native_rotation_goldens() {
+        // Verbatim GetRotationZ and ReceptorGetRotationZ compiled with MSVC.
+        // Native actor angles are negated for FlatDraw's Y-up coordinates.
+        for (note, song, dizzy, confusion, offset, column_offset, expected) in [
+            (
+                2f32,
+                1f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, 57.2957764f32, 57.2957764f32],
+            ),
+            (
+                2f32,
+                3f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, -57.2957764f32, -57.2957764f32],
+            ),
+            (
+                2f32,
+                1f32,
+                -0.5f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, -28.6478882f32, -28.6478882f32],
+            ),
+            (
+                6.75f32,
+                3.5f32,
+                2f32,
+                0.25f32,
+                0.5f32,
+                -0.75f32,
+                [-64.4577484f32, -52.0351944f32, -52.0351944f32],
+            ),
+            (
+                1f32,
+                70f32,
+                -0.5f32,
+                -1.5f32,
+                -0.25f32,
+                1.25f32,
+                [313.352448f32, 490.056763f32, 490.056763f32],
+            ),
+            (
+                -9f32,
+                3f32,
+                1.25f32,
+                2f32,
+                1f32,
+                -2f32,
+                [-401.070435f32, -540.50708f32, -540.50708f32],
+            ),
+            (
+                100f32,
+                0f32,
+                -3.5f32,
+                -2f32,
+                0.75f32,
+                0.25f32,
+                [57.2957764f32, -196.226486f32, -196.226486f32],
+            ),
+            (
+                3f32,
+                3f32,
+                2f32,
+                0f32,
+                0.25f32,
+                0.5f32,
+                [42.9718323f32, 42.9718323f32, 42.9718323f32],
+            ),
+            (
+                2f32,
+                1f32,
+                0f32,
+                1.5f32,
+                0f32,
+                0f32,
+                [-85.9436646f32, -85.9436646f32, -85.9436646f32],
+            ),
+            (0f32, 0f32, 0f32, 0f32, 0f32, 0f32, [0f32, 0f32, 0f32]),
+        ] {
+            let mut visual = VisualEffects {
+                dizzy,
+                confusion,
+                confusion_offset: offset,
+                ..Default::default()
+            };
+            visual.confusion_offset_cols[9] = column_offset;
+            for enabled in [false, true] {
+                visual.dizzy_holds = enabled;
+                let params = super::gameplay_visual_effect_params(&visual, 9);
+                assert!((visual_confusion_rotation_deg(song, params) + expected[0]).abs() < 0.0001);
+                let tap = cached_note_rotation(note, song, false, params);
+                let head = cached_note_rotation(note, song, true, params);
+                assert!((tap + expected[1]).abs() < 0.0001, "tap {note}, {song}");
+                assert!(
+                    (head + expected[usize::from(enabled) * 2]).abs() < 0.0001,
+                    "head {note}, {song}, {enabled}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2018,24 +3126,206 @@ mod tests {
 
     #[test]
     fn tipsy_y_extra_matches_itg_column_wave() {
-        assert_eq!(tipsy_y_extra(0, 0.0, 0.0), 0.0);
-        assert_eq!(tipsy_y_extra(0, 0.0, f32::NAN), 0.0);
-        assert!((tipsy_y_extra(0, 0.0, -1.0) + 25.6).abs() <= 1e-6);
+        assert_eq!(tipsy_y_extra(0, 0.0, 0.0, 0.0, 0.0), 0.0);
+        assert_eq!(tipsy_y_extra(0, 0.0, f32::NAN, 0.0, 0.0), 0.0);
+        assert!((tipsy_y_extra(0, 0.0, -1.0, 0.0, 0.0) + 25.6).abs() <= 1e-6);
     }
 
     #[test]
-    fn beat_x_extra_uses_beat_factor_wave() {
-        assert_eq!(beat_x_extra(0.0, 20.0, 0.0), 0.0);
-        assert!((beat_x_extra(0.0, 20.0, 1.0) - 20.0).abs() <= 1e-6);
+    fn motion_suboptions_match_native_coordinates() {
+        // Golden coordinates from ITGmania ArrowEffects.cpp CalculateDrunkAngle
+        // and UpdateTipsy, compiled with _fallback/metrics.ini constants.
+        let cols = [-96.0, -32.0, 32.0, 96.0];
+        for (elapsed, y, amount, offset, speed, period, expected) in [
+            (
+                2.25,
+                192.0,
+                0.75,
+                2.5,
+                -0.5,
+                -0.99,
+                [9.47400856, -6.95947361, -20.1198063, -23.8174801],
+            ),
+            (
+                0.37,
+                -96.0,
+                -1.25,
+                200.0,
+                1.5,
+                0.75,
+                [33.7493935, -39.8901978, 30.2086658, -8.5450201],
+            ),
+        ] {
+            let params = NoteXParams {
+                screen_height: 480.0,
+                drunk: amount,
+                drunk_offset: offset,
+                drunk_speed: speed,
+                drunk_period: period,
+                ..NoteXParams::default()
+            };
+            for (col, expected) in expected.into_iter().enumerate() {
+                let actual = note_x_extra(
+                    col,
+                    y,
+                    0.0,
+                    elapsed,
+                    &cols,
+                    &[0.0; 4],
+                    &[TornadoBounds::default(); 4],
+                    params,
+                );
+                assert!((actual - expected).abs() < 0.0001, "column {col}: {actual}");
+            }
+        }
+        let visual = deadsync_gameplay::VisualEffects {
+            tipsy: 0.75,
+            tipsy_offset: 2.5,
+            tipsy_speed: -0.5,
+            ..deadsync_gameplay::VisualEffects::default()
+        };
+        let mut lane_offsets = [0.0; 4];
+        let mut tipsy_offsets = [0.0; 4];
+        super::fill_gameplay_lane_effects(
+            &visual,
+            2.25,
+            4,
+            &mut [super::VisualEffectParams::default(); 4],
+            &mut lane_offsets,
+            &mut tipsy_offsets,
+            &mut [0.0; 4],
+        );
+        for (col, expected) in [4.20492792, 3.88934255, 3.57264614, 3.25493073]
+            .into_iter()
+            .enumerate()
+        {
+            assert!(
+                (lane_offsets[col] - expected).abs() < 0.0001,
+                "column {col}"
+            );
+            assert_eq!(lane_offsets[col], tipsy_offsets[col]);
+        }
+        // At -100% speed and column offset, Tipsy has no temporal or column phase.
+        assert_eq!(tipsy_y_extra(3, 100.0, -1.0, -1.0, -1.0), -25.6);
+    }
+
+    #[test]
+    fn beat_wave_offset_uses_beat_factor_wave() {
+        assert_eq!(beat_wave_offset(0.0, 20.0, 0.0, 0.0), 0.0);
+        assert!((beat_wave_offset(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
         let expected = 20.0 * (1.0_f32 + std::f32::consts::FRAC_PI_2).sin();
-        assert!((beat_x_extra(15.0, 20.0, 1.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
+        // Native ArrowEffects scales the Y wavelength by 1 + BeatPeriod.
+        assert!((beat_wave_offset(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
     }
 
     #[test]
     fn drunk_x_extra_uses_column_and_y_phase() {
-        assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, 0.0), 0.0);
-        assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, f32::NAN), 0.0);
-        assert!((drunk_x_extra(0, 0.0, 0.0, 480.0, -1.0) + 32.0).abs() <= 1e-6);
+        assert_eq!(
+            drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: 0.0,
+                    ..NoteXParams::default()
+                }
+            ),
+            0.0
+        );
+        assert_eq!(
+            drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: f32::NAN,
+                    ..NoteXParams::default()
+                }
+            ),
+            0.0
+        );
+        assert!(
+            (drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: -1.0,
+                    ..NoteXParams::default()
+                }
+            ) + 32.0)
+                .abs()
+                <= 1e-6
+        );
+    }
+
+    #[test]
+    fn bounce_tornado_match_native_positions() {
+        // Original ArrowEffects C++ bodies, compiled independently of the
+        // Lua semantic host. Samples include receptors and hold-body travel.
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/bounce-tornado-motion.json"
+        ))
+        .expect("native ArrowEffects motion vectors");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 108);
+        for v in vectors {
+            let value = |name: &str| v[name].as_f64().expect("native float") as f32;
+            let num_cols = v["columns"].as_u64().expect("columns") as usize;
+            let col = v["column"].as_u64().expect("column") as usize;
+            let columns = if num_cols == 2 {
+                &[-32.0, 32.0][..]
+            } else {
+                &[-96.0, -32.0, 32.0, 96.0][..]
+            };
+            let params = NoteXParams {
+                bounce: value("bounce"),
+                bounce_period: value("bounce_period"),
+                bounce_offset: value("bounce_offset"),
+                tornado: value("tornado"),
+                tornado_period: value("tornado_period"),
+                tornado_offset: value("tornado_offset"),
+                screen_height: 480.0,
+                ..NoteXParams::default()
+            };
+            let mut bounds = [TornadoBounds::default(); 4];
+            super::compute_tornado_bounds(columns, &mut bounds);
+            let mut caches = [super::TornadoLaneCache::default(); 4];
+            super::compute_tornado_lane_caches(columns, &bounds, params.tornado, &mut caches);
+            let travel = value("travel");
+            // Tiny pulls tracks together, then MoveX translates each lane.
+            let expected = value("x") * 0.5 + 32.0;
+            let direct = note_x_offset(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &[0.5; 4], params, 1.0,
+            );
+            let cached = super::note_x_offset_cached(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &caches, &[32.0; 4], params,
+                0.5,
+            );
+            assert!((direct - expected).abs() < 0.00005, "{v}: direct={direct}");
+            assert!((cached - expected).abs() < 0.00005, "{v}: cached={cached}");
+            assert!(
+                !super::fill_static_note_x_offsets(
+                    num_cols,
+                    columns,
+                    &[0.0; 4],
+                    &bounds,
+                    &[32.0; 4],
+                    NoteXParams {
+                        tornado: 0.0,
+                        ..params
+                    },
+                    0.5,
+                    &mut [0.0; 4],
+                ),
+                "Bounce requires travel-dependent offsets even without Tornado"
+            );
+        }
     }
 
     #[test]
@@ -2044,13 +3334,18 @@ mod tests {
             min_x: -96.0,
             max_x: 96.0,
         };
-        assert_eq!(tornado_x_extra(0.0, 0.0, bounds, 480.0, 0.0), 0.0);
-        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, 1.0) - 0.0).abs() <= 1e-4);
+        assert_eq!(
+            tornado_x_extra(0.0, 0.0, bounds, 480.0, [0.0, 0.0, 0.0]),
+            0.0
+        );
+        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, [1.0, 0.0, 0.0]) - 0.0).abs() <= 1e-4);
         let expected = {
             let radians = std::f32::consts::PI + 80.0 * 6.0 / 480.0;
             sm_scale(radians.cos(), -1.0, 1.0, -96.0, 96.0) + 96.0
         };
-        assert!((tornado_x_extra(80.0, -96.0, bounds, 480.0, 1.0) - expected).abs() <= 1e-4);
+        assert!(
+            (tornado_x_extra(80.0, -96.0, bounds, 480.0, [1.0, 0.0, 0.0]) - expected).abs() <= 1e-4
+        );
     }
 
     #[test]
@@ -2073,6 +3368,7 @@ mod tests {
                 drunk: 0.0,
                 invert: 0.0,
                 beat: 0.0,
+                ..NoteXParams::default()
             },
         );
         assert!((delta - 192.0).abs() <= 1e-6);
@@ -2098,11 +3394,12 @@ mod tests {
                 flip: -0.5,
                 invert: 0.0,
                 beat: 0.0,
+                ..NoteXParams::default()
             },
         );
 
         assert!((delta + 128.0).abs() <= 1e-6);
-        assert!((tipsy_y_extra(0, 0.0, -1.0) + 25.6).abs() <= 1e-6);
+        assert!((tipsy_y_extra(0, 0.0, -1.0, 0.0, 0.0) + 25.6).abs() <= 1e-6);
     }
 
     #[test]
@@ -2158,6 +3455,21 @@ mod tests {
         assert_eq!(appearance_alpha(160.0, 0.0, 0.0, sudden), 1.0);
         assert!((appearance_alpha(180.0, 0.0, 0.0, sudden) - 0.5).abs() <= 1e-6);
         assert_eq!(appearance_alpha(200.0, 0.0, 0.0, sudden), 0.0);
+    }
+
+    #[test]
+    fn hidden_offset_moves_native_fade_band() {
+        // ArrowEffects::GetHidden{End,Start}Line: [120,160] + 160*offset.
+        for (offset, end, middle, start) in [(1.5, 360.0, 380.0, 400.0), (-0.5, 40.0, 60.0, 80.0)] {
+            let hidden = NoteAlphaParams {
+                hidden: 1.0,
+                hidden_offset: offset,
+                ..NoteAlphaParams::default()
+            };
+            assert_eq!(appearance_alpha(end, 0.0, 0.0, hidden), 0.0);
+            assert!((appearance_alpha(middle, 0.0, 0.0, hidden) - 0.5).abs() < 0.000001);
+            assert_eq!(appearance_alpha(start, 0.0, 0.0, hidden), 1.0);
+        }
     }
 
     #[test]
@@ -2238,8 +3550,68 @@ mod tests {
         assert!(!appearance_needs_rows(NoteAlphaParams {
             blink: 1.0,
             stealth: 1.0,
+            stealth_past_receptors: true,
             ..NoteAlphaParams::default()
         }));
+        assert!(!appearance_needs_rows(NoteAlphaParams {
+            stealth_col: 1.0,
+            ..NoteAlphaParams::default()
+        }));
+    }
+
+    #[test]
+    fn lane_stealth_combines_before_clamp_and_honors_receptor_boundary() {
+        assert_eq!(
+            appearance_alpha(
+                200.0,
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth: f32::EPSILON,
+                    ..NoteAlphaParams::default()
+                }
+            ),
+            1.0 - f32::EPSILON
+        );
+        for (global, column, hidden, y, expected) in [
+            (0.25, 0.25, 0.0, 200.0, 0.5),
+            (0.75, 0.5, 0.0, 200.0, 0.0),
+            (0.0, -0.25, 1.0, 140.0, 0.75),
+            (-0.25, 0.0, 1.0, 140.0, 0.75),
+            (1.0, -1.0, 0.0, 200.0, 1.0),
+        ] {
+            let cache = super::note_appearance_cache(
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth: global,
+                    stealth_col: column,
+                    hidden,
+                    ..NoteAlphaParams::default()
+                },
+            );
+            let visibility = appearance_note_alpha_cached(y, y, &cache);
+            assert!((visibility - expected).abs() < 0.000001);
+            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, y, &cache);
+            assert_eq!(alpha, if expected > 0.5 { 1.0 } else { 0.0 });
+            assert!((glow - (1.3 - 2.6 * (expected - 0.5).abs())).abs() < 0.000001);
+        }
+        for past in [false, true] {
+            let cache = super::note_appearance_cache(
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth_col: 1.0,
+                    stealth_past_receptors: past,
+                    ..NoteAlphaParams::default()
+                },
+            );
+            assert_eq!(
+                appearance_note_alpha_cached(-0.001, -0.001, &cache),
+                f32::from(!past)
+            );
+            assert_eq!(appearance_note_alpha_cached(0.0, 0.0, &cache), 0.0);
+        }
     }
 
     #[test]
@@ -3341,13 +4713,22 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_rejects_invalid_screen_sizes() {
-        assert!(notefield_view_proj(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false).is_none());
-        assert!(notefield_view_proj(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false).is_none());
+        assert!(
+            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
+                .map(|(projection, _)| projection)
+                .is_none()
+        );
+        assert!(
+            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
+                .map(|(projection, _)| projection)
+                .is_none()
+        );
     }
 
     #[test]
     fn notefield_view_proj_returns_finite_matrix_for_flat_field() {
-        let matrix = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection)
             .expect("valid notefield projection");
 
         assert!(matrix.to_cols_array().into_iter().all(f32::is_finite));
@@ -3355,7 +4736,8 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_maps_centered_world_coords_to_clip_space() {
-        let matrix = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection)
             .expect("valid notefield projection");
         let center = matrix.project_point3(glam::Vec3::ZERO);
         let top_right = matrix.project_point3(glam::Vec3::new(320.0, 240.0, 0.0));
@@ -3368,11 +4750,14 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_changes_with_tilt_skew_and_reverse() {
-        let flat = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection)
             .expect("flat projection");
-        let tilted = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false)
+        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection)
             .expect("tilted projection");
-        let reverse = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true)
+        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true, glam::Mat4::IDENTITY)
+            .map(|(projection, _)| projection)
             .expect("reverse projection");
 
         assert_ne!(flat.to_cols_array(), tilted.to_cols_array());
@@ -3915,16 +5300,31 @@ mod tests {
 
     #[test]
     fn collapsed_hold_draw_span_still_draws_caps() {
-        assert_eq!(hold_draw_span(120.0, 120.0, 480.0), Some((120.0, 120.0)));
+        assert_eq!(
+            hold_draw_span(120.0, 120.0, [-400.0, 880.0]),
+            Some((120.0, 120.0))
+        );
     }
 
     #[test]
-    fn hold_draw_span_uses_legacy_overscan_window() {
-        assert_eq!(hold_draw_span(-300.0, -250.0, 480.0), None);
-        assert_eq!(hold_draw_span(700.0, 720.0, 480.0), None);
-        assert_eq!(hold_draw_span(-450.0, 100.0, 480.0), Some((-400.0, 100.0)));
-        assert_eq!(hold_draw_span(100.0, 920.0, 480.0), Some((100.0, 880.0)));
-        assert_eq!(hold_draw_span(f32::NAN, 120.0, 480.0), None);
+    fn hold_draw_span_uses_supplied_draw_limits() {
+        assert_eq!(
+            hold_draw_span(-300.0, -250.0, [-400.0, 880.0]),
+            Some((-300.0, -250.0))
+        );
+        assert_eq!(
+            hold_draw_span(700.0, 720.0, [-400.0, 880.0]),
+            Some((700.0, 720.0))
+        );
+        assert_eq!(
+            hold_draw_span(-450.0, 100.0, [-400.0, 880.0]),
+            Some((-400.0, 100.0))
+        );
+        assert_eq!(
+            hold_draw_span(100.0, 920.0, [-400.0, 880.0]),
+            Some((100.0, 880.0))
+        );
+        assert_eq!(hold_draw_span(f32::NAN, 120.0, [-400.0, 880.0]), None);
     }
 
     #[test]
@@ -3950,15 +5350,15 @@ mod tests {
 
     #[test]
     fn hold_strip_row_3d_preserves_row_z() {
-        let row = hold_strip_row_3d([64.0, 128.0, 12.5], 8.0, 0.0, 1.0, 0.5, [1.0; 4]);
+        let row = hold_strip_row_3d([64.0, 128.0, 12.5], 8.0, 0.0, 0.0, 1.0, 0.5, [1.0; 4]);
         assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
         assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
     }
 
     #[test]
     fn hold_strip_quad_matches_legacy_triangle_order() {
-        let top = hold_strip_row_3d([0.0, 0.0, 0.0], 1.0, 0.0, 1.0, 0.0, [1.0; 4]);
-        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], 1.0, 0.0, 1.0, 1.0, [1.0; 4]);
+        let top = hold_strip_row_3d([0.0, 0.0, 0.0], 1.0, 0.0, 0.0, 1.0, 0.0, [1.0; 4]);
+        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], 1.0, 0.0, 0.0, 1.0, 1.0, [1.0; 4]);
         let quad = hold_strip_quad(top, bottom);
         assert_eq!(quad[0].pos, top[0].pos);
         assert_eq!(quad[1].pos, top[1].pos);
@@ -3983,6 +5383,11 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 0.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
+                clear_depth: false,
+                clear_depth_after: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));
@@ -3998,6 +5403,11 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 1.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
+                clear_depth: false,
+                clear_depth_after: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));

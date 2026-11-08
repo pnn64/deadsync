@@ -1,0 +1,258 @@
+{
+    "target":  "decode",
+    "stage":  "pipeline",
+    "iterations":  12,
+    "runs":  3,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "b2b3a74583250f6a60ee220e689570f9521fafaf",
+    "source_sha256":  [
+                          {
+                              "path":  "src/apng.rs",
+                              "sha256":  "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+                          },
+                          {
+                              "path":  "src/checksum.rs",
+                              "sha256":  "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+                          },
+                          {
+                              "path":  "src/codec.rs",
+                              "sha256":  "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+                          },
+                          {
+                              "path":  "src/composite.rs",
+                              "sha256":  "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+                          },
+                          {
+                              "path":  "src/lib.rs",
+                              "sha256":  "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+                          },
+                          {
+                              "path":  "src/metadata/language/registry.rs",
+                              "sha256":  "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+                          },
+                          {
+                              "path":  "src/metadata/language.rs",
+                              "sha256":  "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+                          },
+                          {
+                              "path":  "src/metadata/profile.rs",
+                              "sha256":  "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+                          },
+                          {
+                              "path":  "src/metadata.rs",
+                              "sha256":  "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+                          },
+                          {
+                              "path":  "src/reference.rs",
+                              "sha256":  "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+                          },
+                          {
+                              "path":  "src/scanline.rs",
+                              "sha256":  "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+                          },
+                          {
+                              "path":  "src/stream/decode.rs",
+                              "sha256":  "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+                          },
+                          {
+                              "path":  "src/stream/encode_rows.rs",
+                              "sha256":  "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+                          },
+                          {
+                              "path":  "src/stream/mod.rs",
+                              "sha256":  "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+                          },
+                          {
+                              "path":  "src/stream/read.rs",
+                              "sha256":  "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+                          },
+                          {
+                              "path":  "src/stream/rows.rs",
+                              "sha256":  "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+                          },
+                          {
+                              "path":  "src/stream/write.rs",
+                              "sha256":  "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+                          },
+                          {
+                              "path":  "src/zlib/deflate.rs",
+                              "sha256":  "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+                          },
+                          {
+                              "path":  "src/zlib/inflate.rs",
+                              "sha256":  "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+                          },
+                          {
+                              "path":  "src/zlib/matcher.rs",
+                              "sha256":  "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+                          },
+                          {
+                              "path":  "src/zlib.rs",
+                              "sha256":  "6f3f7d4a2f6406c7852f1b57a1f3d7c2983b2aa20da1a7c2fba5e37a18e2e315"
+                          }
+                      ],
+    "benchmark_source":  "examples/decode_bench.rs",
+    "benchmark_source_sha256":  "c30baae289a56086d5bb51b6da5ca04d303977a229c75b6118b712b1ba8ebc06",
+    "corpus_sha256":  [
+                          {
+                              "file":  "kodim01.png",
+                              "bytes":  736501,
+                              "sha256":  "A56E27CBF5F843C048B6AF1D6E090760E9C92FADBA88B7DEE0205918A37523BD"
+                          },
+                          {
+                              "file":  "kodim02.png",
+                              "bytes":  617995,
+                              "sha256":  "4F4B74A79237E311D72CAD958237B5F7088D8BCE1C82305EBEFE1A70E3022DFD"
+                          },
+                          {
+                              "file":  "kodim03.png",
+                              "bytes":  502888,
+                              "sha256":  "E25CA1FF2F0C0CB5FDFD5F9B0A0BB21AC4C3DE3C84A67F35B09A85D3306249DB"
+                          },
+                          {
+                              "file":  "kodim04.png",
+                              "bytes":  637432,
+                              "sha256":  "E3B946107C5D3441C022F678D0C3CAF1E224D81B1604BA840A4F88E562DE61AA"
+                          },
+                          {
+                              "file":  "kodim05.png",
+                              "bytes":  785610,
+                              "sha256":  "10349E963C5C813D327852F82C1795FA4148D69FEDFFC4C589BEE458E3AC3D53"
+                          },
+                          {
+                              "file":  "kodim06.png",
+                              "bytes":  618959,
+                              "sha256":  "363510303B715D4CBC384E1CE227E466B613A09E1B71AE985882BF8E7FBD9B18"
+                          },
+                          {
+                              "file":  "kodim07.png",
+                              "bytes":  566322,
+                              "sha256":  "B77D3F006F42414BB242222E0482E750C0FB9E5EE8D4BED2F6F11C5605FE54A4"
+                          },
+                          {
+                              "file":  "kodim08.png",
+                              "bytes":  788470,
+                              "sha256":  "BA23983C76B4832EE0E8AF0592664756841A16779ACD69F792E268FB6D13D6E7"
+                          },
+                          {
+                              "file":  "kodim09.png",
+                              "bytes":  582899,
+                              "sha256":  "6A4361C2FC194FEB4EDAA9F9A4A0620FB9943E460AC7FDF037FB0F6DD6607A7D"
+                          },
+                          {
+                              "file":  "kodim10.png",
+                              "bytes":  593463,
+                              "sha256":  "9DFB70F5867C29FF9ED6313683F19B3D867849E40FBC0C4C54A4A89DF341CF23"
+                          },
+                          {
+                              "file":  "kodim11.png",
+                              "bytes":  621023,
+                              "sha256":  "7936814B58B5387FCE2E4E2488B4EC830DADD95FA9520F358DDB30990B50F2B6"
+                          },
+                          {
+                              "file":  "kodim12.png",
+                              "bytes":  531024,
+                              "sha256":  "D78C37C2F04F23761ED2367DD77E2DB584DDD4C3950833FECF89F199A8126980"
+                          },
+                          {
+                              "file":  "kodim13.png",
+                              "bytes":  822712,
+                              "sha256":  "BC34A3CE58DEA09DCE1704C997171602DE90CB34D0C8503A988B77F473D39B08"
+                          },
+                          {
+                              "file":  "kodim14.png",
+                              "bytes":  692201,
+                              "sha256":  "55A94550FF18F3246C4074FD32B77B0C74447C26B6AD274D564D999C0450BA6E"
+                          },
+                          {
+                              "file":  "kodim15.png",
+                              "bytes":  612582,
+                              "sha256":  "7538CBB80CB9103606C48B806EAE57D56C885C7F90B9B3BE70A41160F9CBB683"
+                          },
+                          {
+                              "file":  "kodim16.png",
+                              "bytes":  534247,
+                              "sha256":  "A89C7268CCD4718BA424A99FC4643C572CF692CA6EAE887185CEB4E9F11D2E54"
+                          },
+                          {
+                              "file":  "kodim17.png",
+                              "bytes":  602078,
+                              "sha256":  "37AFCC89FBDCB76D9518E04B2FC011027E2F4CD14B3B2F83CEFD721641A47C5B"
+                          },
+                          {
+                              "file":  "kodim18.png",
+                              "bytes":  780947,
+                              "sha256":  "1A9258C365988961D87A0598725B609139C303AD48A5AAD6C503C3B1A87849AA"
+                          },
+                          {
+                              "file":  "kodim19.png",
+                              "bytes":  671476,
+                              "sha256":  "B7450B264B1B0A411390D8931B112C27905A992520FC90569DC4B920AA32BBDC"
+                          },
+                          {
+                              "file":  "kodim20.png",
+                              "bytes":  492462,
+                              "sha256":  "3B46C71E3B92A563820BA32936BE8330C586C41F938EFD94BE938386AAE4328A"
+                          },
+                          {
+                              "file":  "kodim21.png",
+                              "bytes":  637051,
+                              "sha256":  "AC958597C82073F6BB65129C68F72B651DB5B9EFD82E11547D07350214BC268B"
+                          },
+                          {
+                              "file":  "kodim22.png",
+                              "bytes":  701970,
+                              "sha256":  "1CEE58EB1F2D9C7EBB254D208A03C783CE6CF2C4D8C2CF45E235DD23B4CE1B29"
+                          },
+                          {
+                              "file":  "kodim23.png",
+                              "bytes":  557596,
+                              "sha256":  "E3111A2FD4DA24AF15D6459EF9EACFE54106B38E27B4A21821B75C3F5D2D5BAF"
+                          },
+                          {
+                              "file":  "kodim24.png",
+                              "bytes":  706397,
+                              "sha256":  "1071C68372CC5A01435C2C225A5CF7D4BB803846EC08BB6B3D6721B156D7CB96"
+                          }
+                      ],
+    "executable":  "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe",
+    "executable_sha256":  "b38a7c5c4e8a980c843b31e9205972048dff63bfd76ca9ad8f8e88602a95d4d2",
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T23:25:13.2006786Z",
+                             "end_utc":  "2026-10-27T23:25:35.6209566Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T23:25:35.6334784Z",
+                             "end_utc":  "2026-10-27T23:25:57.9487797Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a-run2.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  3,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T23:25:57.9497798Z",
+                             "end_utc":  "2026-10-27T23:26:20.2381686Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a-run3.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "source_build_record":  "experiments/literal-refill-trial.json",
+    "template_scope":  "Binary/source/input provenance only; no timed process in this template.",
+    "control_of":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-photos-source.json",
+    "control_manifest_sha256":  "E8D02FDE740D2DA5AD0129880390E5ED919B37F1603958367D29A3872E8D9A43",
+    "control_runner_sha256":  "28EE0D0B7F969CBFA4F3CE51037E1BE43CDFEBBC768C1FCAB3AD01AED0BB7BC2"
+}

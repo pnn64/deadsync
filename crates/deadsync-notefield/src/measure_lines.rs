@@ -124,10 +124,12 @@ fn bars_in_segment(start_row: i32, end_row: i32, sig: TimeSignatureSegment) -> i
     if end_row <= start_row {
         return 0;
     }
-    let step = i64::from(bar_step_rows(sig));
-    let freq = i64::from(measure_frequency(sig));
-    let bars = (i64::from(end_row) - i64::from(start_row) - 1) / step + 1;
-    (bars - 1) / freq + 1
+    EditBeatBarSegmentCache {
+        start_row,
+        step_rows: bar_step_rows(sig),
+        measure_frequency: measure_frequency(sig),
+    }
+    .bars_before_end_row(end_row)
 }
 
 fn measure_index_before(segments: &[TimeSignatureSegment], index: usize) -> i64 {
@@ -154,6 +156,18 @@ struct EditBeatBarSegmentCache {
     start_row: i32,
     step_rows: i32,
     measure_frequency: i32,
+}
+
+impl EditBeatBarSegmentCache {
+    fn bars_before_end_row(self, end_row: i32) -> i64 {
+        if end_row <= self.start_row {
+            return 0;
+        }
+        let rows = i64::from(end_row) - i64::from(self.start_row) - 1;
+        // Validated factors are positive, with a product below 2^60.
+        let period = i64::from(self.step_rows) * i64::from(self.measure_frequency);
+        if rows < period { 1 } else { rows / period + 1 }
+    }
 }
 
 fn edit_beat_bar_segment_cache(
@@ -198,21 +212,16 @@ impl<'a> EditBeatBarCursor<'a> {
 
     fn advance_to(&mut self, row: i32) {
         while self.index + 1 < self.segments.len() && row >= self.next_start_row {
-            self.measure_index_before += bars_in_segment(
-                self.segment.start_row,
-                self.next_start_row,
-                sig_at(self.segments, self.index),
-            );
+            self.measure_index_before += self.segment.bars_before_end_row(self.next_start_row);
             self.index += 1;
             self.segment = edit_beat_bar_segment_cache(self.segments, self.index);
             self.next_start_row = next_edit_beat_bar_start_row(self.segments, self.index);
         }
         while self.index > 0 && row < self.segment.start_row {
             let previous = self.index - 1;
-            let sig = sig_at(self.segments, previous);
             let previous_segment = edit_beat_bar_segment_cache(self.segments, previous);
             self.measure_index_before -=
-                bars_in_segment(previous_segment.start_row, self.segment.start_row, sig);
+                previous_segment.bars_before_end_row(self.segment.start_row);
             self.index = previous;
             self.segment = previous_segment;
             self.next_start_row = next_edit_beat_bar_start_row(self.segments, self.index);
@@ -286,6 +295,10 @@ fn gcd(a: i32, b: i32) -> i32 {
 pub(crate) fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
     let mut out = bar_step_rows(sig_at(segments, 0));
     for i in 0..sig_count(segments) {
+        // One is final: every remaining GCD will also be one.
+        if out == 1 {
+            return 1;
+        }
         let sig = sig_at(segments, i);
         out = gcd(out, bar_step_rows(sig));
         out = gcd(out, beat_to_note_row(sig.beat));
@@ -993,12 +1006,14 @@ mod tests {
             draw_distance_after_targets: 400.0,
             draw_distance_before_targets: 400.0,
             field_zoom: 1.0,
-            elapsed_screen_s: 0.0,
+            expand_seconds: 0.0,
             effect_height: 640.0,
             screen_height: 480.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         }
     }
@@ -1091,6 +1106,8 @@ mod tests {
                     let travel = scroll_travel(ScrollTravelRequest {
                         arrow_effect_time_s: arrow_time,
                         lane_tipsy: tipsy,
+                        lane_tipsy_offset: 0.0,
+                        lane_tipsy_speed: 0.0,
                         lane_move_y: &visual.move_y_cols,
                         ..travel_request(&timing, speed)
                     });
@@ -1267,12 +1284,14 @@ mod tests {
             draw_distance_after_targets: 400.0,
             draw_distance_before_targets: 400.0,
             field_zoom: 1.0,
-            elapsed_screen_s: 0.0,
+            expand_seconds: 0.0,
             effect_height: 640.0,
             screen_height: 480.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         });
         let boomerang_request = request(
@@ -1442,3 +1461,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "edit_bars_performance.rs"]
+mod edit_bars_performance;

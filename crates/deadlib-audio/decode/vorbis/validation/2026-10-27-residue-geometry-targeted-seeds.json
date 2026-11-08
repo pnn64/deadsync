@@ -1,0 +1,150 @@
+{
+  "scope": "Four unaligned residue regressions, each with normative and explicit libvorbis layout controls. Strict Ogg framing; packet granules from independent libvorbis PCM counts. Inherits prior corpus without modifying it.",
+  "reference_binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "seeds": [
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-0-control-2.bin",
+      "bytes": 199,
+      "sha256": "46a7206416a3215edb6e497a9f31aa715cf5fa3b1b44ef81c6683d7bdbf5526f",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-0.bin",
+      "source_sha256": "47c90f5a6f850384613dc2fe32076f024cd68b921ab8252c53d79ad2f3cf8dd2",
+      "reference_pcm_sha256": "da37db1aa4be3d25f0a5f60c1300b4becadd401f4acbfb1c463a0aa658ac3bd8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-0-control-194.bin",
+      "bytes": 199,
+      "sha256": "f3ee37dbf0cb3cfdf6c42ebd1d0931c7a7c5413e462246b03cb09a48121b72c5",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-0.bin",
+      "source_sha256": "47c90f5a6f850384613dc2fe32076f024cd68b921ab8252c53d79ad2f3cf8dd2",
+      "reference_pcm_sha256": "da37db1aa4be3d25f0a5f60c1300b4becadd401f4acbfb1c463a0aa658ac3bd8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-0-control-0.bin",
+      "bytes": 576,
+      "sha256": "39564ae994214bb142bb31375c955ceb531d2d65b6b541b5c0e49449f257e282",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-0.bin",
+      "source_sha256": "47c90f5a6f850384613dc2fe32076f024cd68b921ab8252c53d79ad2f3cf8dd2",
+      "reference_pcm_sha256": "da37db1aa4be3d25f0a5f60c1300b4becadd401f4acbfb1c463a0aa658ac3bd8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-0-control-8.bin",
+      "bytes": 576,
+      "sha256": "96eb2e445a1e4fae4a9521e2496826c075b809abeae59b84750b0cad39d25d92",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-0.bin",
+      "source_sha256": "47c90f5a6f850384613dc2fe32076f024cd68b921ab8252c53d79ad2f3cf8dd2",
+      "reference_pcm_sha256": "da37db1aa4be3d25f0a5f60c1300b4becadd401f4acbfb1c463a0aa658ac3bd8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-1-control-2.bin",
+      "bytes": 229,
+      "sha256": "ccf91ebd854cac6c2a9fda297132514ed5a84461e15f4b06626e1ab7f986d668",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-1.bin",
+      "source_sha256": "9a7c9a448af2f61709249e3079817973419f958114c391a01845c2134c36a1a7",
+      "reference_pcm_sha256": "1d91cae37d688f683a175af01778611f97365889e6954d365b8b171e40165fbd",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-1-control-194.bin",
+      "bytes": 229,
+      "sha256": "2032ac7d69cfa7fc2c17cc52087346d3b86c63dc359a9059d89938d50f286a3e",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-1.bin",
+      "source_sha256": "9a7c9a448af2f61709249e3079817973419f958114c391a01845c2134c36a1a7",
+      "reference_pcm_sha256": "1d91cae37d688f683a175af01778611f97365889e6954d365b8b171e40165fbd",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-1-control-0.bin",
+      "bytes": 1242,
+      "sha256": "c0711839484d61fc2b38c9c5b883f665b9de24b7b5e16f0dc1ec8593c5e9d638",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-1.bin",
+      "source_sha256": "9a7c9a448af2f61709249e3079817973419f958114c391a01845c2134c36a1a7",
+      "reference_pcm_sha256": "1d91cae37d688f683a175af01778611f97365889e6954d365b8b171e40165fbd",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-1-control-8.bin",
+      "bytes": 1242,
+      "sha256": "5af02d07eaab661649180a09bfb0a946df3d03c2534c671ba13a01034f350b0a",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-1.bin",
+      "source_sha256": "9a7c9a448af2f61709249e3079817973419f958114c391a01845c2134c36a1a7",
+      "reference_pcm_sha256": "1d91cae37d688f683a175af01778611f97365889e6954d365b8b171e40165fbd",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-2-control-2.bin",
+      "bytes": 246,
+      "sha256": "252b8a16d9836da165ce86efe33be3e32308631fed8703c6dcb4cde47623ef61",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-2.bin",
+      "source_sha256": "ac4213b91904283c87e1e2924d0dc987208573c1f500d2b208f2fc5943efbb51",
+      "reference_pcm_sha256": "d9e2f23c0e74fd45186cfeb0be943186661ff8a1f6c6651821ef25202b24718f",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-2-control-194.bin",
+      "bytes": 246,
+      "sha256": "102eebbdaea0cd41631ca3f97c6a1e4c5ec9226f93f16a76a5c0d4e2f48e9dbb",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-2.bin",
+      "source_sha256": "ac4213b91904283c87e1e2924d0dc987208573c1f500d2b208f2fc5943efbb51",
+      "reference_pcm_sha256": "d9e2f23c0e74fd45186cfeb0be943186661ff8a1f6c6651821ef25202b24718f",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-2-control-0.bin",
+      "bytes": 1513,
+      "sha256": "40c1f450b0fa83a91711f0432f2017b3ac8bd6d6f8bcbc45b8a66a553d511cdd",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-2.bin",
+      "source_sha256": "ac4213b91904283c87e1e2924d0dc987208573c1f500d2b208f2fc5943efbb51",
+      "reference_pcm_sha256": "d9e2f23c0e74fd45186cfeb0be943186661ff8a1f6c6651821ef25202b24718f",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-2-control-8.bin",
+      "bytes": 1513,
+      "sha256": "032674c9d6257a13540f423e4aca2a6ae52014118d04f200f6bb4be5e41372dd",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-2.bin",
+      "source_sha256": "ac4213b91904283c87e1e2924d0dc987208573c1f500d2b208f2fc5943efbb51",
+      "reference_pcm_sha256": "d9e2f23c0e74fd45186cfeb0be943186661ff8a1f6c6651821ef25202b24718f",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-3-control-2.bin",
+      "bytes": 250,
+      "sha256": "0aefae1a09e40fc6cc47fb1452c19de1e45294c7f5c566c530d2d6caa8db36a8",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-3.bin",
+      "source_sha256": "3df96095bc1463bd76f65ee6eb449a7a6a6f4c30b52a91e839ad9c200d089af5",
+      "reference_pcm_sha256": "d088aac1a44a833a2e77922477ffd365f89399ebed42077b12cbd507e2c2a590",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-geometry-golden-3-control-194.bin",
+      "bytes": 250,
+      "sha256": "5ac9e3df6719ccae45d0ed17693eb11c8e9b6fee25d9145b9df2a274865bc7b8",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-3.bin",
+      "source_sha256": "3df96095bc1463bd76f65ee6eb449a7a6a6f4c30b52a91e839ad9c200d089af5",
+      "reference_pcm_sha256": "d088aac1a44a833a2e77922477ffd365f89399ebed42077b12cbd507e2c2a590",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-3-control-0.bin",
+      "bytes": 2991,
+      "sha256": "fc596068198521a7eddd632a7b858c310b3d9c826dd9a03118907bb4517db0ce",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-3.bin",
+      "source_sha256": "3df96095bc1463bd76f65ee6eb449a7a6a6f4c30b52a91e839ad9c200d089af5",
+      "reference_pcm_sha256": "d088aac1a44a833a2e77922477ffd365f89399ebed42077b12cbd507e2c2a590",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-geometry-golden-3-control-8.bin",
+      "bytes": 2991,
+      "sha256": "8583792d2cbf18da888015ac13921634142a60c60b264fc8f611beb3ba4851a3",
+      "source_request": "target/deadlib-audio-reference/residue-geometry-20261027/golden-inputs/geometry-golden-3.bin",
+      "source_sha256": "3df96095bc1463bd76f65ee6eb449a7a6a6f4c30b52a91e839ad9c200d089af5",
+      "reference_pcm_sha256": "d088aac1a44a833a2e77922477ffd365f89399ebed42077b12cbd507e2c2a590",
+      "final_granule": 368
+    }
+  ]
+}

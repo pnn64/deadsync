@@ -24,6 +24,7 @@ impl TweenType {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelVertex {
+    pub normal: [f32; 3],
     pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub tex_matrix_scale: [f32; 2],
@@ -33,6 +34,51 @@ pub struct ModelVertex {
 pub struct ModelMesh {
     pub vertices: Arc<[ModelVertex]>,
     pub bounds: [f32; 6], // min_x, min_y, min_z, max_x, max_y, max_z
+    pub material: Option<ModelMaterial>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelMaterial {
+    pub ambient: [f32; 4],
+    pub diffuse: [f32; 4],
+    pub specular: [f32; 4],
+    pub emissive: [f32; 4],
+    pub shininess: f32,
+    /// MilkShape stores this separately; ITG's draw uses diffuse alpha.
+    pub transparency: f32,
+    /// Model::DrawPrimitives does not tint meshes with material index -1.
+    pub modulate: bool,
+}
+
+impl ModelMaterial {
+    pub const fn unassigned() -> Self {
+        Self {
+            ambient: [0.2, 0.2, 0.2, 1.0],
+            diffuse: [0.7, 0.7, 0.7, 1.0],
+            specular: [0.2, 0.2, 0.2, 1.0],
+            emissive: [0.0; 4],
+            shininess: 1.0,
+            transparency: 1.0,
+            modulate: false,
+        }
+    }
+}
+
+/// Model::DrawPrimitives and RageDisplay_Legacy::SetMaterial with lighting off.
+/// Clamp the final color before texture modulation, as fixed-function GL does.
+pub fn model_unlit_color(material: Option<ModelMaterial>, tint: [f32; 4]) -> [f32; 4] {
+    let Some(material) = material else {
+        return tint;
+    };
+    let tint = if material.modulate { tint } else { [1.0; 4] };
+    let mut color = [0.0; 4];
+    for axis in 0..3 {
+        color[axis] = (material.diffuse[axis] * tint[axis]
+            + (material.emissive[axis] * tint[axis] + material.ambient[axis] * tint[axis]))
+            .clamp(0.0, 1.0);
+    }
+    color[3] = (material.diffuse[3] * tint[3]).clamp(0.0, 1.0);
+    color
 }
 
 impl ModelMesh {
@@ -84,6 +130,8 @@ pub fn model_texture_uv_params_cached(
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelDrawState {
+    /// Material animation clock, separate from transform/effect clocks.
+    pub texture_seconds: f32,
     pub pos: [f32; 3],
     pub rot: [f32; 3],
     pub zoom: [f32; 3],
@@ -99,6 +147,7 @@ pub struct ModelDrawState {
 impl Default for ModelDrawState {
     fn default() -> Self {
         Self {
+            texture_seconds: 0.0,
             pos: [0.0, 0.0, 0.0],
             rot: [0.0, 0.0, 0.0],
             zoom: [1.0, 1.0, 1.0],
@@ -150,6 +199,7 @@ pub enum ModelEffectMode {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Bob,
     Bounce,
@@ -213,6 +263,7 @@ fn model_effect_mix_impl(
         ModelEffectMode::DiffuseRamp
             | ModelEffectMode::DiffuseShift
             | ModelEffectMode::GlowShift
+            | ModelEffectMode::Rainbow
             | ModelEffectMode::Pulse
             | ModelEffectMode::Bob
             | ModelEffectMode::Bounce
@@ -362,7 +413,10 @@ fn model_draw_at_impl(
                 | ModelEffectMode::Wag
         )
     {
-        return sanitize_model_draw(base_draw);
+        return sanitize_model_draw(ModelDrawState {
+            texture_seconds: time,
+            ..base_draw
+        });
     }
 
     let mut out = base_draw;
@@ -429,7 +483,10 @@ fn model_draw_at_impl(
     if (!optimized
         || matches!(
             effect.mode,
-            ModelEffectMode::DiffuseRamp | ModelEffectMode::DiffuseShift | ModelEffectMode::Pulse
+            ModelEffectMode::DiffuseRamp
+                | ModelEffectMode::DiffuseShift
+                | ModelEffectMode::Rainbow
+                | ModelEffectMode::Pulse
         ))
         && let Some(percent) = model_effect_mix(effect, time, beat)
     {
@@ -455,6 +512,14 @@ fn model_draw_at_impl(
                 out.tint[2] *= c[2];
                 out.tint[3] *= c[3];
             }
+            ModelEffectMode::Rainbow => {
+                // Actor::PreDraw uses the sine-eased color phase, replaces RGB,
+                // and retains diffuse alpha (including any in-progress tween).
+                let angle = glowshift_mix(percent) * 2.0 * std::f32::consts::PI;
+                out.tint[0] = angle.cos() * 0.5 + 0.5;
+                out.tint[1] = (angle + std::f32::consts::PI * 2.0 / 3.0).cos() * 0.5 + 0.5;
+                out.tint[2] = (angle + std::f32::consts::PI * 4.0 / 3.0).cos() * 0.5 + 0.5;
+            }
             ModelEffectMode::Pulse => {
                 let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
                 let zoom = lerp(effect.magnitude[0], effect.magnitude[1], offset).max(0.0);
@@ -475,6 +540,7 @@ fn model_draw_at_impl(
         }
     }
 
+    out.texture_seconds = time;
     sanitize_model_draw(out)
 }
 

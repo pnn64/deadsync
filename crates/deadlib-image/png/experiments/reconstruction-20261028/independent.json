@@ -1,0 +1,11 @@
+{
+    "isolated_root":  "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-8f8e3a5b23ef48af873ed8709eaffdd7",
+    "files_verified":  894,
+    "tree_sha256":  "70114c531490e94c30bc8571766b48a4b17793e95491bb631f782abbe5ece1b5",
+    "passed":  145,
+    "failed":  0,
+    "optional_reference_tests_skipped":  21,
+    "optional_reference_tests_executed_in_release":  true,
+    "log_sha256":  "ef8e8dfc749a2dde54e93d585ca78b71d647ed38265fc3019e4b0cced5e127aa",
+    "normal_dependencies":  "deadlib-image only, verified by cargo tree in independent.log"
+}

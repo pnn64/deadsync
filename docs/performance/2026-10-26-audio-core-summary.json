@@ -1,0 +1,184 @@
+[
+  {
+    "name": "music-final",
+    "file": "2026-10-26-audio-core-final-music.tsv",
+    "workload": "callback/steady-gain/samples=4096",
+    "before": "baseline",
+    "after": "final-callback",
+    "cycles_per_op": {
+      "baseline": 2234.225,
+      "final-callback": 1673.895
+    },
+    "cpu_throughput": 1.3347462057058537,
+    "allocation": {
+      "baseline": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      },
+      "final-callback": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "music-stage",
+    "file": "2026-10-26-audio-core-folded-scale.tsv",
+    "workload": "callback/steady-gain/samples=4096",
+    "before": "baseline",
+    "after": "folded-scale-exact",
+    "cycles_per_op": {
+      "baseline": 2307.225,
+      "folded-scale-exact": 1641.305
+    },
+    "cpu_throughput": 1.4057259314996298,
+    "allocation": {
+      "baseline": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      },
+      "folded-scale-exact": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "sfx-center-final",
+    "file": "2026-10-26-audio-core-masked-sfx.tsv",
+    "workload": "pan/Center/gain=0.375/frames=4096",
+    "before": "pan-before",
+    "after": "final-panned",
+    "cycles_per_op": {
+      "pan-before": 29663.09,
+      "final-panned": 5309.83
+    },
+    "cpu_throughput": 5.586448153707369,
+    "allocation": {
+      "pan-before": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      },
+      "final-panned": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "sfx-left-final",
+    "file": "2026-10-26-audio-core-masked-sfx.tsv",
+    "workload": "pan/Left/gain=0.375/frames=4096",
+    "before": "pan-before",
+    "after": "final-panned",
+    "cycles_per_op": {
+      "pan-before": 16593.84,
+      "final-panned": 6430.72
+    },
+    "cpu_throughput": 2.5804015724522293,
+    "allocation": {
+      "pan-before": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      },
+      "final-panned": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "sfx-right-final",
+    "file": "2026-10-26-audio-core-masked-sfx.tsv",
+    "workload": "pan/Right/gain=0.375/frames=4096",
+    "before": "pan-before",
+    "after": "final-panned",
+    "cycles_per_op": {
+      "pan-before": 16736.2,
+      "final-panned": 6475.924999999999
+    },
+    "cpu_throughput": 2.584372116724638,
+    "allocation": {
+      "pan-before": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      },
+      "final-panned": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "mode-final",
+    "file": "2026-10-26-audio-core-final-mode.tsv",
+    "workload": "callback/mode-auto",
+    "before": "parser-before",
+    "after": "final-callback",
+    "cycles_per_op": {
+      "parser-before": 143.51,
+      "final-callback": 17.965
+    },
+    "cpu_throughput": 7.9883106039521286,
+    "allocation": {
+      "parser-before": {
+        "allocs": "1",
+        "reallocs": "0",
+        "frees": "1",
+        "allocated_bytes": "4"
+      },
+      "final-callback": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  },
+  {
+    "name": "mode-stage",
+    "file": "2026-10-26-audio-core-borrowed-mode.tsv",
+    "workload": "callback/mode-auto",
+    "before": "parser-before",
+    "after": "borrowed-mode",
+    "cycles_per_op": {
+      "parser-before": 163.835,
+      "borrowed-mode": 19.41
+    },
+    "cpu_throughput": 8.440752189592994,
+    "allocation": {
+      "parser-before": {
+        "allocs": "1",
+        "reallocs": "0",
+        "frees": "1",
+        "allocated_bytes": "4"
+      },
+      "borrowed-mode": {
+        "allocs": "0",
+        "reallocs": "0",
+        "frees": "0",
+        "allocated_bytes": "0"
+      }
+    }
+  }
+]

@@ -1,0 +1,32 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index eb2fe440d..977ec851e 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -135,7 +135,9 @@ impl Huffman {
+         let mut code = 0;
+         let mut offset = 0;
+         let mut n = 1;
+-        while n < 16 {
++        // Beyond the longest code, unused slots only double `left`. Its sign
++        // and whether the tree is complete are already determined here.
++        while n <= h.max as usize {
+             left = left * 2 - h.counts[n] as i32;
+             if left < 0 {
+                 return Err("oversubscribed Huffman tree");
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 4b79e76e9..4441a7bbb 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -183,6 +183,12 @@ impl Inflater {
+     }
+     #[inline]
+     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
++        if distance == 1 {
++            let previous = (self.history_pos + self.history.len() - 1) & (self.history.len() - 1);
++            output.fill(self.history[previous]);
++            self.remember(output);
++            return;
++        }
+         let n = output.len();
+         let seed = distance.min(n);
+         let size = self.history.len();

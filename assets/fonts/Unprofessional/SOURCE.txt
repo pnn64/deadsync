@@ -1,0 +1,6 @@
+Original bitmap fonts and metrics imported unchanged from Arrow Cloud's theme:
+https://github.com/Arrow-Cloud/theme/tree/6a711abb21db8b7d75affc1f7afa033592bff3d9/Fonts
+
+Includes Fonts/Unprofessional, Miso/_miso unprof, and
+_Combo Fonts/Unprofessional. Git blob hashes were verified on import.
+Upstream license: https://github.com/Arrow-Cloud/theme/blob/6a711abb21db8b7d75affc1f7afa033592bff3d9/LICENSE

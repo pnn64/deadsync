@@ -1,0 +1,117 @@
+
+running 113 tests
+test builtin::tests::built_in_solid_textures_have_expected_keys_and_size ... ok
+test builtin::tests::fallback_texture_is_two_by_two ... ok
+test choice::tests::texture_choice_actor_source_uses_arena_ownership ... ok
+test context::tests::asset_texture_context_falls_back_to_registry_defaults ... ok
+test decode::direct_media_perf::benchmark_direct_media ... ignored, release CPU and allocation benchmark
+test decode::indexed_pixels_perf::benchmark_indexed_pixels ... ignored, paired release benchmark; --ignored --nocapture --test-threads=1
+test decode::indexed_pixels_perf::color_key_matches_original_edge_selection_and_alpha ... ok
+test decode::indexed_pixels_perf::expansion_perf::benchmark_bmp_expansion ... ignored, release CPU-cycle and allocation benchmark
+test decode::indexed_pixels_perf::expansion_perf::benchmark_png_expansion ... ignored, release CPU-cycle and allocation benchmark
+test decode::indexed_pixels_perf::expansion_perf::bmp_partial_palettes_preserve_errors_and_ignore_padding ... ok
+test decode::indexed_pixels_perf::expansion_perf::png_expansion_preserves_pixels ... ok
+test decode::indexed_pixels_perf::indexed_decoders_match_original_pixels_and_errors ... ok
+test decode::key_kernel::benchmark_key_kernel ... ignored, release CPU and allocation benchmark
+test decode::key_kernel::key_preserves_edges_alpha_and_trailing_storage ... ok
+test decode::perf_tests::batching_matches_original_pixels_errors_and_cancellation ... ok
+test decode::perf_tests::benchmark_texture_worker_batches ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test decode::preparation_perf::benchmark_luma ... ignored, release CPU and allocation benchmark
+test decode::preparation_perf::benchmark_png_metadata ... ignored, release CPU and allocation benchmark
+test decode::preparation_perf::benchmark_zoom ... ignored, release CPU and allocation benchmark
+test decode::preparation_perf::luminance_matches_for_every_rgb_and_hint_combination ... ok
+test decode::preparation_perf::native_png_fixtures_match_starting_decoder ... ok
+test decode::preparation_perf::png_metadata_matches_original_pixels_and_errors ... ok
+test decode::preparation_perf::streamed_zoom_matches_original_rounding_and_multistep_resizes ... ok
+test decode::resize_kernel::benchmark_resize_kernel ... ignored, release CPU and allocation benchmark
+test decode::tests::consumer_error_cancels_and_joins_workers ... ok
+test decode::tests::decode_failure_preserves_key_and_sampler ... ok
+test decode::tests::empty_jobs_do_not_call_consumer ... ok
+test decode::tests::indexed_bmp_rejects_truncation_and_excessive_allocation ... ok
+test decode::tests::primary_bitmap_observations_match_native ... ok
+test decode::tests::primary_bitmap_undefined_native_pixels_have_defined_rust_behavior ... ok
+test decode::tests::workers_apply_resolved_options_without_interpreting_names ... ok
+test decode::texture_pixels_perf::benchmark_texture_pixels ... ignored, paired release benchmark; --ignored --nocapture --test-threads=1
+test decode::texture_pixels_perf::packed_half_resize_preserves_byte_lanes_and_rounding ... ok
+test decode::texture_pixels_perf::png_and_gif_match_original_pixels_and_errors ... ok
+test decode::texture_pixels_perf::resize_matches_original_fixed_point_rounding ... ok
+test decode::texture_pixels_perf::wide_half_resize_preserves_float_coordinate_failure ... ok
+test dynamic::perf_tests::benchmark_cache_file_handle ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test dynamic::perf_tests::benchmark_cache_path_allocations ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test dynamic::perf_tests::cache_handle_reuse_matches_original_results_and_cleanup ... ok
+test dynamic::perf_tests::cache_path_streaming_preserves_hashes_and_reduces_allocations ... ok
+test dynamic::tests::batched_dynamic_image_prewarm_reports_every_job ... ok
+test dynamic::tests::cache_hit_skips_stale_variant_prune ... ok
+test dynamic::tests::cache_write_prunes_stale_variants ... ok
+test dynamic::tests::dedupe_dynamic_keys_handles_empty_unique_and_repeated_inputs ... ok
+test dynamic::tests::dedupe_dynamic_keys_preserves_first_owner_order ... ok
+test dynamic::tests::dynamic_image_prewarm_jobs_share_one_cache_directory_allocation ... ok
+test dynamic::tests::dynamic_image_prewarm_workers_are_bounded_by_jobs ... ok
+test dynamic::tests::dynamic_video_play_time_uses_local_anchor ... ok
+test dynamic::tests::dynamic_video_timing_rate_change_preserves_media_time ... ok
+test dynamic::tests::prepared_dynamic_image_cache_location_builds_the_expected_entry ... ok
+test dynamic::tests::push_dynamic_image_prewarm_jobs_dedupes_by_cache_path ... ok
+test dynamic::tests::raw_banner_cache_load_rejects_wrong_payload_lengths ... ok
+test dynamic::tests::raw_banner_cache_load_round_trips_exact_pixels ... ok
+test dynamic::tests::streamed_raw_cache_bytes_match_cache_layout ... ok
+test dynamic::tests::video_timing_keeps_neg_start ... ok
+test font::tests::font_texture_key_strips_known_asset_roots ... ok
+test font::tests::parse_font_asset_specs_accepts_empty_catalog ... ok
+test font::tests::prepare_required_font_textures_skips_existing_keys ... ok
+test font::tests::required_font_texture_preparation_carries_selected_keys_in_order ... ok
+test font::tests::set_font_fallback_applies_present_fallback_name ... ok
+test font_store::tests::batch_registration_matches_immediate_fallback_resolution ... ok
+test font_store::tests::register_font_refreshes_cache_state ... ok
+test manager::tests::remove_texture_cancels_pending_upload_for_reserved_handle ... ok
+test manager::tests::renderer_uploads_preserve_budgets_recycling_and_formats ... ok
+test path_scan_perf::benchmark_metadata_scans ... ignored, release CPU-cycle, throughput, and allocation benchmark
+test path_scan_perf::candidate_offsets_and_non_ascii_bytes_match_frozen_metadata ... ok
+test path_scan_perf::metadata_scans_preserve_nested_malformed_overflow_and_unicode_inputs ... ok
+test path_scan_perf::shipped_names_match_frozen_metadata ... ok
+test registry::tests::combined_metadata_registry_preserves_cached_sheet_and_texture_dimensions ... ok
+test registry::tests::generated_registry_coalesces_replacements_and_pending_keys ... ok
+test registry::tests::generated_registry_delivers_latest_values_and_reuses_owned_keys ... ok
+test registry::tests::generated_registry_drains_only_changed_keys_in_publish_order ... ok
+test registry::tests::generated_texture_pending_gate_coalesces_idle_polls ... ok
+test tests::apply_texture_hints_converts_alphamap ... ok
+test tests::apply_texture_hints_converts_grayscale ... ok
+test tests::ascii_hash_is_case_insensitive ... ok
+test tests::detects_space_delimited_multiframe_hints ... ok
+test tests::direct_texture_key_path_accepts_absolute_keys ... ok
+test tests::fix_hidden_alpha_preserves_opaque_image ... ok
+test tests::fix_hidden_alpha_uses_black_for_mixed_edges ... ok
+test tests::fix_hidden_alpha_uses_matching_edge_rgb ... ok
+test tests::hidden_alpha_clears_rgb ... ok
+test tests::ignores_invalid_res_tags_until_a_valid_one ... ok
+test tests::ignores_non_parenthetical_sheet_dims ... ok
+test tests::ignores_resolution_labels_in_banner_names ... ok
+test tests::ignores_zero_sized_res_tags ... ok
+test tests::media_path_key_uses_lossless_path_text ... ok
+test tests::native_alpha_decode ... ok
+test tests::native_png16_decode ... ok
+test tests::parses_itg_style_sprite_sheet_dims ... ok
+test tests::parses_texture_hints_case_insensitively ... ok
+test tests::parses_texture_resolution_hint_case_insensitively ... ok
+test tests::parses_texture_resolution_hint_from_parenthetical_res_tag ... ok
+test tests::preserves_local_underscore_sprite_sheet_dims ... ok
+test tests::sprite_hint_strip_preserves_utf8_labels ... ok
+test tests::strips_sprite_hints_for_display_labels ... ok
+test tests::texture_hint_predicates_match_full_parse ... ok
+test tests::texture_key_sampler_preserves_hints_with_repeat_override ... ok
+test tests::texture_source_dims_honors_res_and_doubleres ... ok
+test tests::texture_source_frame_dims_honors_sheet_and_source_dims ... ok
+test texture_store::tests::binding_dimensions_honor_resolution_hints ... ok
+test texture_store::tests::prepared_sources_survive_uploads_and_reset_on_replacement ... ok
+test texture_store::tests::remove_texture_cancels_pending_upload_for_reserved_handle ... ok
+test texture_store::tests::shared_upload_key_keeps_handle_and_metadata_in_sync ... ok
+test texture_store::tests::texture_replacement_updates_revision_only_when_uploaded_size_changes ... ok
+test texture_store::tests::uploaded_dimensions_distinguish_steady_video_frames_from_resizes ... ok
+test upload::tests::allows_one_oversize_upload_then_stops_at_budget ... ok
+test upload::tests::budget_rejection_preserves_front_for_the_next_drain ... ok
+test upload::tests::prepared_upload_replacement_keeps_source_dimensions_with_latest_pixels ... ok
+test upload::tests::queued_dimensions_follow_the_latest_replacement ... ok
+test upload::tests::replaced_recyclable_upload_returns_its_pixel_buffer ... ok
+test upload::tests::replaces_existing_key_without_dup_order ... ok
+test upload::tests::video_upload_retains_numeric_handle ... ok
+
+test result: ok. 99 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 7.96s

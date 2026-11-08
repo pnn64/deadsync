@@ -20,6 +20,12 @@ pub enum ItemId {
     CourseOptions,
     ManageLocalProfiles,
     OnlineScoreServices,
+    StreamingServices,
+    TwitchEnabled,
+    TwitchChannel,
+    TwitchBadges,
+    TwitchEmotes,
+    TwitchGameplay,
     NullOrDieOptions,
     FoldersOptions,
     DownloadPacks,
@@ -208,6 +214,7 @@ pub enum ItemId {
     SmWheelShowFails,
     SmWheelItlPoints,
     SmNewPackBadge,
+    SmGolfPars,
     SmFolderStats,
     SmPatternInfo,
     SmStepArtistBox,
@@ -221,6 +228,7 @@ pub enum ItemId {
     SmShowRivals,
     SmScoreboxPlacement,
     SmScoreboxCycle,
+    SmScoreboxEventsFirst,
 
     // Course Options submenu
     CrsShowRandom,
@@ -250,6 +258,7 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcGolf,
     AcSubmitFails,
     AcResultDialogs,
     AcQrLogin,
@@ -258,6 +267,7 @@ pub enum ItemId {
     OsGsBsOptions,
     OsArrowCloudOptions,
     OsScoreImport,
+    OsShareRips,
 
     // Null-or-Die menu (launcher)
     NodOptions,
@@ -574,7 +584,16 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "GsBsOptions")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ArrowCloudOptions")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ScoreImport")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ShareRips")),
         ],
+    },
+    Item {
+        id: ItemId::StreamingServices,
+        name: lookup_key("Options", "StreamingServices"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "StreamingServicesHelp",
+        ))],
     },
     Item {
         id: ItemId::NullOrDieOptions,

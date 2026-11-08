@@ -1,0 +1,77 @@
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import time
+import zipfile
+
+root = Path('crates/deadlib-audio/decode/wav')
+base = Path('target/wav')
+validation = root / 'validation'
+sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+sources = {p.relative_to(root).as_posix(): sha(p) for p in sorted((root / 'src').rglob('*.rs'))}
+assert len(sources) == 23
+records = []
+
+def record(path, expected=None, bind_source=False):
+    r = json.loads(path.read_text())
+    assert r.get('inputs_unchanged', True)
+    if expected is not None:
+        assert r['passed'] == r['total'] == expected
+        assert all(c['passed'] for c in r['cases'])
+    if bind_source:
+        found = {}
+        for name, digest in r['sources'].items():
+            name = name.removeprefix(root.as_posix() + '/')
+            if name in sources:
+                assert digest == sources[name], (path, name)
+                found[name] = digest
+        assert found == sources, path
+    records.append(dict(file=path.name, sha256=sha(path), total=r.get('total'), passed=r.get('passed'), current_production_sources_checked=bind_source))
+    return r
+
+checks = record(validation / 'ms-narrow-checks.json', bind_source=True)
+assert checks['inputs_unchanged'] and [r['passed_tests'] for r in checks['runs']] == [95, 95, 95, 0, 0, 0]
+assert all(r['exit_code'] == 0 for r in checks['runs'])
+direct = record(base / 'decoding-final-checks.json', bind_source=True)
+assert direct['inputs_unchanged'] and len(direct['runs']) == 3 and all(r['exit_code'] == 0 for r in direct['runs'])
+pcm = record(base / 'decoding-final-pcm.json', 460, True)
+assert pcm['own_passed'] == 460 and pcm['core_reference_passed'] == pcm['core_reference_total'] == 24
+for case in pcm['cases']:
+    if case['core_reference_gate']:
+        assert set(case['references']) == {'dr_wav', 'libsndfile', 'symphonia', 'ffmpeg'}
+        assert all(r['exact'] for r in case['references'].values())
+with zipfile.ZipFile(base / 'decoding-final-pcm.json.corpus.zip') as archive:
+    assert {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()} == pcm['fixtures']
+assert sha(base / 'decoding-final-pcm.json.corpus.zip') == pcm['corpus_sha256']
+for name, count in [('decoding-final-adpcm.json', 40), ('decoding-final-encoded.json', 144)]:
+    r = record(base / name, count, True)
+    for case in r['cases']:
+        assert all(case['references'][library]['fact_trimmed_exact'] for library in case['spec_arithmetic_gate'])
+        if name == 'decoding-final-encoded.json' and case['name'].startswith('ms-'):
+            assert case['references']['symphonia']['fact_trimmed_exact']
+native = record(validation / 'ms-narrow-native.json', 708, True)
+assert native['decode_descriptor_checks'] == 4484 and native['writer_checks'] == 1912
+for prior in native['references']:
+    assert sha(validation / prior['report']) == prior['report_sha256']
+    assert sha(validation / prior['archive']) == prior['archive_sha256']
+wavl = record(validation / 'ms-narrow-wavl.json', 216, True)
+assert wavl['own_checks'] == 3024 and wavl['paired_cases'] == 10
+for name, count in [('ima3-references.json', 122), ('ima-extensible-references-repro.json', 416)]:
+    record(validation / name, count)
+for name in ['ms-narrow-mutation-x64.json', 'ms-narrow-mutation-i686.json', 'ms-narrow-prior-replay.json', 'ms-narrow-asan.json']:
+    r = record(validation / name, bind_source=True)
+    assert r['exit_code'] == 0
+    if 'mutation' in name:
+        assert r['result']['iterations'] == 1000000
+    if name == 'ms-narrow-prior-replay.json':
+        assert r['result']['seeds'] == 1846
+    if name == 'ms-narrow-asan.json':
+        assert r['stats']['number_of_executed_units'] == 100000 and not r['artifacts']
+boundary = record(validation / 'ms-narrow-boundary.json')
+assert not boundary['production_dependencies'] and not boundary['workspace_consumers'] and not boundary['external_rust_imports']
+assert boundary['registered_workspace_member']
+assert subprocess.run(['git', 'diff', '--quiet', '--', str(root / 'src')]).returncode == 0
+report = dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), scope='current goal: completed WAV decoding, passing tests and accurate interoperability; performance excluded by user', driver_sha256=sha(Path(__file__)), implementation_commit=subprocess.check_output(['git', 'log', '-1', '--format=%H', '--', str(root / 'src')], text=True).strip(), production_sources=sources, reports=records, conclusion='all applicable correctness gates pass; no unresolved decoding defect identified; known external rounding/support differences remain documented', tests={'x64_debug':95,'x64_release':95,'i686_debug':95,'clippy_both_architectures':'pass'}, direct_native_gates=460, all_four_reference_core_gates=24, direct_adpcm_gates=40, direct_encoded_file_decoding_gates=144, native_replay_gates=708, compressed_sequence_gates=216, production_dependencies=[], external_workspace_consumers=[])
+(base / 'decoding-final-audit.json').write_text(json.dumps(report, indent=2) + '\n')
+print('Final decoding audit passes:', len(records), 'verified reports; all 23 production files match final tests and current direct comparisons.')

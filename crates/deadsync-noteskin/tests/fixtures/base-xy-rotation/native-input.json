@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "name": "native Sprite base XYZ half turns",
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Left",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            0,
+            0,
+            90
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Down",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Up",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            0,
+            180,
+            180
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Right",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            180,
+            0,
+            -90
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "X45",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            180,
+            0,
+            45
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Y45",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            0,
+            180,
+            45
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Both45",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            180,
+            180,
+            45
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "None45",
+        "size": [
+          16,
+          16
+        ],
+        "base": {
+          "rotation": [
+            0,
+            0,
+            45
+          ]
+        }
+      }
+    ]
+  }
+}

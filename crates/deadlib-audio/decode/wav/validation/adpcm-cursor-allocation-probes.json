@@ -1,0 +1,27 @@
+{
+  "runs": [
+    {
+      "architecture": "x64",
+      "binary_sha256": "76b5de1d653a374d104763910a278c3dc16abd359e7f83e0e17f37804c9ee622",
+      "command": [
+        "target\\wav\\debug\\deps\\adpcm_wavl_allocations-b3c0ecfd4e11bb1d.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 1 test\nowning wavl wrapper: reused index, 2 requested allocations/52 bytes for block buffers; reads 0; object bytes reader=344\nforward wavl wrapper: 2 requested allocations/52 bytes for block buffers; reads/finish 0; object bytes forward=384\nwavl index: 1 requested allocation/128 bytes for 8 children; reads and flat views: 0; object bytes wavl=128 flat=88\ntest borrowed_sequence_index_is_compact_reads_allocate_nothing_and_flat_state_is_unchanged ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": ""
+    },
+    {
+      "architecture": "i686",
+      "binary_sha256": "ddf5ad2ce11c8724e3adb2ff2e6ad5c927bbf9ce1c806c3b6dfb15018bf32658",
+      "command": [
+        "target\\wav\\i686-pc-windows-msvc\\debug\\deps\\adpcm_wavl_allocations-94a5442e388376ed.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 1 test\nowning wavl wrapper: reused index, 2 requested allocations/52 bytes for block buffers; reads 0; object bytes reader=248\nforward wavl wrapper: 2 requested allocations/52 bytes for block buffers; reads/finish 0; object bytes forward=280\nwavl index: 1 requested allocation/128 bytes for 8 children; reads and flat views: 0; object bytes wavl=80 flat=64\ntest borrowed_sequence_index_is_compact_reads_allocate_nothing_and_flat_state_is_unchanged ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": ""
+    }
+  ],
+  "scope": "Existing scoped allocator regression executable; caller/container allocations excluded as described by test"
+}

@@ -1,0 +1,33 @@
+{
+  "archive_sha256": "6082e2e9257d310f17b535192ebe8061427c1bf1cbaf753ed523c78488d3e879",
+  "initial_corpora": [
+    {
+      "target": "png_stream",
+      "files": 58911,
+      "bytes": 41951121,
+      "maximum_file_bytes": 63435,
+      "sha256": "8387df347cc6cffe3a555d5d81e5ff798252d6423be5735539f3ff4c7b72829f"
+    },
+    {
+      "target": "inflate_stream",
+      "files": 17671,
+      "bytes": 34117186,
+      "maximum_file_bytes": 34575,
+      "sha256": "ad4edad06f455c798feda17dcea267326d2fdbad539dac81b653afb35f37bdc7"
+    }
+  ],
+  "runner_sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610",
+  "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents",
+  "included_archives": [
+    {
+      "path": "/tmp/deadlib-image-stream-literals-seeds-20261027-a.zip",
+      "sha256": "aa9f00512df5de65ec0e3d62463e8072a83d69396ca21307010128153ae2cd6b"
+    }
+  ],
+  "archive_path": "/tmp/deadlib-image-huffman-permutations-seeds-20261028-a.zip",
+  "generator_validation": "huffman-permutations-validation.json",
+  "generator_validation_sha256": "bdc39755e73099c22c682a91048b7797571581ccebb430a1ed80d98dac69879f",
+  "baseline_seed_description": "fuzz/reports/stream-literals-seeds.json",
+  "baseline_seed_description_sha256": "bbbc569a0fc803928afebeef555dd52c1e97767bf2f63c5c8a4a7b0aa144eb87",
+  "added_independent_streams_per_target": 10744
+}

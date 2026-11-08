@@ -9,6 +9,10 @@
 //! - No `regex/glob/configparser/once_cell`; pure std + image + log
 //! - VERBOSE TRACE logging for troubleshooting: enable with `RUST_LOG=new_engine::core::font=trace`
 
+#[cfg(test)]
+#[path = "font_cache_checks.rs"]
+mod font_cache_checks;
+
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -430,40 +434,31 @@ fn marker_value(spec: &str) -> Option<char> {
 #[must_use]
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
     let bytes = text.as_bytes();
-    let Some(mut marker_start) = bytes.iter().position(|&byte| byte == b'&') else {
+    let Some(mut marker_start) = text.find('&') else {
         return Cow::Borrowed(text);
     };
 
     let mut copied_through = 0usize;
     let mut out = None::<String>;
 
-    while marker_start < bytes.len() {
-        let mut marker_end = marker_start + 1;
-        while marker_end < bytes.len() {
-            match bytes[marker_end] {
-                b'&' => break,
-                b';' => {
-                    if let Some(value) = marker_value(&text[marker_start + 1..marker_end]) {
-                        let output = out.get_or_insert_with(|| String::with_capacity(text.len()));
-                        output.push_str(&text[copied_through..marker_start]);
-                        output.push(value);
-                        copied_through = marker_end + 1;
-                    }
-                    break;
-                }
-                _ => marker_end += 1,
-            }
-        }
-
-        if marker_end == bytes.len() {
+    loop {
+        let search_from = marker_start + 1;
+        let Some(end) = memchr::memchr2(b'&', b';', &bytes[search_from..]) else {
             break;
-        }
-        let search_from = if bytes[marker_end] == b'&' {
-            marker_end
-        } else {
-            marker_end + 1
         };
-        let Some(next) = bytes[search_from..].iter().position(|&byte| byte == b'&') else {
+        let marker_end = search_from + end;
+        if bytes[marker_end] == b'&' {
+            marker_start = marker_end;
+            continue;
+        }
+        if let Some(value) = marker_value(&text[search_from..marker_end]) {
+            let output = out.get_or_insert_with(|| String::with_capacity(text.len()));
+            output.push_str(&text[copied_through..marker_start]);
+            output.push(value);
+            copied_through = marker_end + 1;
+        }
+        let search_from = marker_end + 1;
+        let Some(next) = memchr::memchr(b'&', &bytes[search_from..]) else {
             break;
         };
         marker_start = search_from + next;
@@ -609,14 +604,75 @@ pub fn refresh_chain_keys(fonts: &mut FontMap) {
     }
 }
 
+#[inline(always)]
 fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> [Option<Glyph>; 128] {
     let Some(start_font) = fonts.get(start_name) else {
         return std::array::from_fn(|_| None);
     };
     let default_glyph = start_font.default_glyph.clone();
+    let fallback = start_font
+        .fallback_font_name
+        .and_then(|name| fonts.get(name));
+    // Short chains keep the original single-pass construction.
+    if fallback
+        .and_then(|font| font.fallback_font_name)
+        .and_then(|name| fonts.get(name))
+        .is_some()
+    {
+        let mut unresolved = 128;
+        let mut glyphs = std::array::from_fn(|code| {
+            start_font
+                .glyph_map
+                .get(&(code as u8 as char))
+                .map(|glyph| {
+                    unresolved -= 1;
+                    glyph.clone()
+                })
+        });
+        let mut current = fallback;
+        while unresolved != 0 {
+            let Some(font) = current else {
+                break;
+            };
+            // Iterate small authored maps; large Unicode maps probe ASCII only.
+            if font.glyph_map.len() <= 128 {
+                for (&code, glyph) in &font.glyph_map {
+                    if code.is_ascii() {
+                        let slot = &mut glyphs[code as usize];
+                        if slot.is_none() {
+                            *slot = Some(glyph.clone());
+                            unresolved -= 1;
+                        }
+                    }
+                }
+            } else {
+                for (code, slot) in glyphs.iter_mut().enumerate() {
+                    if slot.is_none()
+                        && let Some(glyph) = font.glyph_map.get(&(code as u8 as char))
+                    {
+                        *slot = Some(glyph.clone());
+                        unresolved -= 1;
+                    }
+                }
+            }
+            current = font.fallback_font_name.and_then(|name| fonts.get(name));
+        }
+        if unresolved == 0 {
+            return glyphs;
+        }
+        for glyph in &mut glyphs {
+            if glyph.is_none() {
+                *glyph = default_glyph.clone();
+            }
+        }
+        return glyphs;
+    }
     std::array::from_fn(|code| {
         let c = code as u8 as char;
-        let mut current = Some(start_font);
+        if let Some(glyph) = start_font.glyph_map.get(&c) {
+            return Some(glyph.clone());
+        }
+        let mut current = fallback;
         while let Some(font) = current {
             if let Some(glyph) = font.glyph_map.get(&c) {
                 return Some(glyph.clone());
@@ -1027,9 +1083,6 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
     for entry in fs::read_dir(font_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
         if !has_png_suffix(name) {
             continue;
@@ -1040,7 +1093,15 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
         if name.contains("-stroke") {
             continue;
         }
-        v.push(path);
+        // Directory entries already carry file type on supported filesystems.
+        // Follow symlinks (and retry type errors) just as Path::is_file does.
+        let is_file = match entry.file_type() {
+            Ok(kind) if !kind.is_symlink() => kind.is_file(),
+            _ => path.is_file(),
+        };
+        if is_file {
+            v.push(path);
+        }
     }
     v.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
     Ok(v)
@@ -1209,12 +1270,11 @@ fn fmt_char(ch: char) -> String {
 /// Parse "(res `WxH`)" from a filename or path (case-insensitive). Returns sheet base res.
 #[inline(always)]
 fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
-    let s = path_or_name.to_ascii_lowercase();
-    let bytes = s.as_bytes();
+    let bytes = path_or_name.as_bytes();
     let needle = b"(res";
     let mut i = 0usize;
     while i + needle.len() <= bytes.len() {
-        if &bytes[i..i + needle.len()] == needle {
+        if bytes[i..i + needle.len()].eq_ignore_ascii_case(needle) {
             // skip whitespace
             let mut k = i + needle.len();
             while k < bytes.len() && bytes[k].is_ascii_whitespace() {
@@ -1233,7 +1293,7 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
                 k += 1;
             }
             // expect 'x'
-            if k >= bytes.len() || bytes[k] != b'x' {
+            if k >= bytes.len() || !bytes[k].eq_ignore_ascii_case(&b'x') {
                 i += 1;
                 continue;
             }
@@ -1264,19 +1324,16 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
 #[inline(always)]
 #[must_use]
 fn round_half_to_even_i32(v: f32) -> i32 {
-    if !v.is_finite() {
+    let magnitude = v.to_bits() & 0x7fff_ffff;
+    if magnitude >= 0x7f80_0000 {
         return 0;
     }
-    let floor = v.floor();
-    let frac = v - floor;
-    if frac < 0.5 {
-        floor as i32
-    } else if frac > 0.5 {
-        (floor + 1.0) as i32
-    } else {
-        let f = floor as i32;
-        if (f & 1) == 0 { f } else { f + 1 }
+    if magnitude >= 0x4f00_0000 {
+        return v as i32;
     }
+    // At this f64 exponent, adding the bias rounds to an integer, ties to even.
+    // Its low 32 bits start at zero and encode the bounded signed result.
+    (f64::from(v) + 6_755_399_441_055_744.0).to_bits() as i32
 }
 
 /* ======================= RANGE APPLY ======================= */
@@ -2162,63 +2219,41 @@ fn apply_range_mapping<S: BuildHasher>(
     hex_range: Option<(u32, u32)>,
     first_frame: usize,
 ) {
-    match codeset.to_ascii_lowercase().as_str() {
-        "unicode" => {
-            if let Some((start, end)) = hex_range {
-                let count = end.saturating_sub(start).saturating_add(1);
-                for i in 0..count {
-                    if let Some(ch) = char::from_u32(start + i) {
-                        map.insert(ch, first_frame + i as usize);
-                    }
+    if codeset.eq_ignore_ascii_case("unicode") {
+        if let Some((start, end)) = hex_range {
+            let count = end.saturating_sub(start).saturating_add(1);
+            for i in 0..count {
+                if let Some(ch) = char::from_u32(start + i) {
+                    map.insert(ch, first_frame + i as usize);
                 }
-            } else {
-                warn!("range Unicode without #start-end ignored");
             }
+        } else {
+            warn!("range Unicode without #start-end ignored");
         }
-        "ascii" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ASCII, map_offset, first_frame, count);
-        }
-        "cp1252" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_CP1252, map_offset, first_frame, count);
-        }
-        "iso-8859-1" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ISO_8859_1, map_offset, first_frame, count);
-        }
-        "iso-8859-2" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ISO_8859_2, map_offset, first_frame, count);
-        }
-        "korean-jamo" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_KOREAN_JAMO, map_offset, first_frame, count);
-        }
-        "basic-japanese" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_BASIC_JAPANESE, map_offset, first_frame, count);
-        }
-        "numbers" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_NUMBERS, map_offset, first_frame, count);
-        }
-        other => warn!("Unsupported codeset '{other}' in RANGE; skipping."),
+        return;
     }
+    let charmap = [
+        ("ascii", MAP_ASCII),
+        ("cp1252", MAP_CP1252),
+        ("iso-8859-1", MAP_ISO_8859_1),
+        ("iso-8859-2", MAP_ISO_8859_2),
+        ("korean-jamo", MAP_KOREAN_JAMO),
+        ("basic-japanese", MAP_BASIC_JAPANESE),
+        ("numbers", MAP_NUMBERS),
+    ]
+    .into_iter()
+    .find_map(|(name, map)| codeset.eq_ignore_ascii_case(name).then_some(map));
+    let Some(charmap) = charmap else {
+        warn!(
+            "Unsupported codeset '{}' in RANGE; skipping.",
+            codeset.to_ascii_lowercase()
+        );
+        return;
+    };
+    let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
+        (start, Some(end.saturating_sub(start).saturating_add(1)))
+    });
+    apply_charmap_range(map, charmap, map_offset, first_frame, count);
 }
 
 /* ======================= PARSE ======================= */
@@ -2261,7 +2296,10 @@ fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
 }
 
 fn import_specs<'a>(ini: &'a ParsedFontIni<'a>) -> impl Iterator<Item = &'a str> {
-    split_import_specs(ini.get("main").and_then(|section| section.value("import")))
+    // ITGmania renames the legacy section before reading imports, provided
+    // there is no explicit main section.
+    let main = ini.get("main").or_else(|| ini.get("char widths"));
+    split_import_specs(main.and_then(|section| section.value("import")))
 }
 
 fn import_path_candidates(base_ini: &Path, spec: &str) -> Option<[Option<PathBuf>; 2]> {
@@ -2972,9 +3010,10 @@ pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) 
 
 #[inline(always)]
 fn apply_space_nbsp_symmetry<S: BuildHasher>(char_to_frame: &mut HashMap<char, usize, S>) {
-    // If SPACE exists but NBSP doesn't, map NBSP -> SPACE frame.
+    // ITGmania always maps NBSP to an authored SPACE, even when the page
+    // also explicitly maps NBSP to another frame.
     if let Some(&space_idx) = char_to_frame.get(&' ') {
-        char_to_frame.entry('\u{00A0}').or_insert(space_idx);
+        char_to_frame.insert('\u{00A0}', space_idx);
     } else if let Some(&nbsp_idx) = char_to_frame.get(&'\u{00A0}') {
         // SPACE is absent: map it to NBSP's frame. (Wendy relies on this)
         char_to_frame.entry(' ').or_insert(nbsp_idx);
@@ -2996,7 +3035,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn space_nbsp_symmetry_fills_only_missing_mappings() {
+    fn resolution_tags_preserve_whitespace_case_and_numeric_limits() {
+        for (input, expected) in [
+            ("sheet (ReS 640 X 480).png", Some((640, 480))),
+            ("sheet (res640x480).png", Some((640, 480))),
+            ("sheet (res\t640\nX\r480 ).png", Some((640, 480))),
+            ("sheet (res 0x480) (RES 32x16).png", Some((32, 16))),
+            ("(res invalid) (res 32x16)", Some((32, 16))),
+            ("(res 4294967295x4294967295)", Some((u32::MAX, u32::MAX))),
+            ("é/日本語 (rEs 32x16).png", Some((32, 16))),
+            ("(other (res 32x16))", Some((32, 16))),
+            ("(res 32x16extra) (res 8x4)", Some((8, 4))),
+            ("(res 32x16", None),
+            ("(res 32×16)", None),
+            ("(res 32\u{a0}x16)", None),
+            ("sheet 32x16.png", None),
+            ("", None),
+        ] {
+            assert_eq!(parse_base_res_from_filename(input), expected, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn range_codesets_preserve_case_ranges_and_existing_mappings() {
+        for (codeset, charmap) in [
+            ("ASCII", MAP_ASCII),
+            ("Cp1252", MAP_CP1252),
+            ("ISO-8859-1", MAP_ISO_8859_1),
+            ("Iso-8859-2", MAP_ISO_8859_2),
+            ("Korean-Jamo", MAP_KOREAN_JAMO),
+            ("Basic-Japanese", MAP_BASIC_JAPANESE),
+            ("NUMBERS", MAP_NUMBERS),
+        ] {
+            for range in [
+                None,
+                Some((0, 3)),
+                Some((32, 40)),
+                Some((9, 2)),
+                Some((u32::MAX, u32::MAX)),
+            ] {
+                let mut expected = HashMap::from([('A', 999), ('雪', 7)]);
+                let mut actual = expected.clone();
+                let (offset, count) = range.map_or((0, None), |(start, end)| {
+                    (start, Some(end.saturating_sub(start).saturating_add(1)))
+                });
+                apply_charmap_range(&mut expected, charmap, offset, 17, count);
+                apply_range_mapping(&mut actual, codeset, range, 17);
+                assert_eq!(actual, expected, "{codeset:?} {range:?}");
+            }
+        }
+        let mut map = HashMap::from([('A', 999)]);
+        apply_range_mapping(&mut map, "UnIcOdE", Some((65, 66)), 3);
+        assert_eq!(map, HashMap::from([('A', 3), ('B', 4)]));
+        apply_range_mapping(&mut map, "Unicode", None, 7);
+        apply_range_mapping(&mut map, "Unsupported", None, 7);
+        assert_eq!(map, HashMap::from([('A', 3), ('B', 4)]));
+    }
+
+    #[test]
+    fn space_nbsp_symmetry_prefers_authored_space() {
         for (space, nbsp) in [
             (None, None),
             (Some(3), None),
@@ -3012,7 +3109,7 @@ mod tests {
             }
             apply_space_nbsp_symmetry(&mut frames);
             assert_eq!(frames.get(&' ').copied(), space.or(nbsp));
-            assert_eq!(frames.get(&'\u{00A0}').copied(), nbsp.or(space));
+            assert_eq!(frames.get(&'\u{00A0}').copied(), space.or(nbsp));
             assert_eq!(frames[&'A'], 11);
             let once = frames.clone();
             apply_space_nbsp_symmetry(&mut frames);
@@ -3101,6 +3198,21 @@ mod tests {
         }
         assert_eq!(split_import_specs(None).count(), 0);
         assert_eq!(split_import_specs(Some(" , , ")).count(), 0);
+    }
+
+    #[test]
+    fn import_specs_accept_legacy_section_without_overriding_main() {
+        for (source, expected) in [
+            ("[Char Widths]\nimport=Buttons\n", vec!["Buttons"]),
+            (
+                "[Char Widths]\nimport=Buttons\n[main]\nimport=Explicit\n",
+                vec!["Explicit"],
+            ),
+            ("[Char Widths]\nimport=Buttons\n[main]\n0=12\n", vec![]),
+        ] {
+            let ini = parse_font_ini(source);
+            assert_eq!(import_specs(&ini).collect::<Vec<_>>(), expected);
+        }
     }
 
     #[test]
@@ -3375,3 +3487,11 @@ mod tests {
         assert_eq!(parse_range_spec("unicode #zz-ff"), None);
     }
 }
+
+#[cfg(test)]
+#[path = "font_discovery_perf.rs"]
+mod discovery_perf;
+
+#[cfg(test)]
+#[path = "marker_checks.rs"]
+mod marker_checks;

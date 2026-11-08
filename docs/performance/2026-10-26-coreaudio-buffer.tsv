@@ -1,0 +1,169 @@
+run	version	workload	cycles_per_op	ns_per_op	allocations	sha256
+0	before	mach_identity	7767.17	3542.09		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	mach_fractional	6263.47	2861.13		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	mach_overflow	24869.31	11341.89		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	latency_normal	1206.82	550.59		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	latency_overflow	661.93	300.78		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	callback_fixed	13856.15	6322.75	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	before	callback_variable	13728.83	6264.06	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+0	after	mach_identity	6868.81	3134.67		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	mach_fractional	6336.13	2889.65		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	mach_overflow	23852.62	10900.2		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	latency_normal	1189.46	541.11		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	latency_overflow	713.16	324.12		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	callback_fixed	8614.52	3933.69	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+0	after	callback_variable	8617.95	3928.71	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	mach_identity	7274.37	3324.51		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	mach_fractional	5937.0	34019.24		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	mach_overflow	24207.38	42354.39		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	latency_normal	1151.09	526.37		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	latency_overflow	648.42	294.73		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	callback_fixed	7750.24	3535.35	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	after	callback_variable	7520.66	3433.79	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+1	before	mach_identity	6192.3	2824.61		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	mach_fractional	5268.86	2401.17		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	mach_overflow	21332.44	40523.44		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	latency_normal	996.97	456.35		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	latency_overflow	627.85	285.35		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	callback_fixed	12137.67	36354.2	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+1	before	callback_variable	13659.37	8194.04	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	mach_identity	7405.55	3383.59		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	mach_fractional	6336.13	2890.33		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	mach_overflow	24759.13	42355.96		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	latency_normal	1153.66	524.51		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	latency_overflow	702.66	319.34		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	callback_fixed	12243.99	36637.89	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	before	callback_variable	11566.41	5274.12	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+2	after	mach_identity	6151.36	2804.79		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	mach_fractional	5297.37	2414.75		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	mach_overflow	21138.67	9645.02		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	latency_normal	1233.19	561.04		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	latency_overflow	625.49	284.38		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	callback_fixed	7561.17	3449.51	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+2	after	callback_variable	7197.2	3281.54	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	mach_identity	6019.75	2745.51		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	mach_fractional	5216.55	2379.69		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	mach_overflow	22864.23	10437.79		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	latency_normal	998.9	455.76		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	latency_overflow	608.34	276.56		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	callback_fixed	7312.31	3335.35	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	after	callback_variable	7679.93	3503.52	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+3	before	mach_identity	6958.62	3172.66		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	mach_fractional	5210.12	2380.08		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	mach_overflow	21131.16	9642.38		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	latency_normal	958.6	436.13		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	latency_overflow	608.56	276.56		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	callback_fixed	12349.45	5629.49	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+3	before	callback_variable	13698.6	6253.42	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	mach_identity	7486.15	3422.56		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	mach_fractional	6375.36	2905.86		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	mach_overflow	24055.4	10974.22		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	latency_normal	1073.71	489.94		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	latency_overflow	669.86	305.86		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	callback_fixed	12894.34	5879.2	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	before	callback_variable	13169.36	36796.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+4	after	mach_identity	6545.56	2985.94		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	mach_fractional	5213.55	2382.62		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	mach_overflow	21123.45	9632.62		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	latency_normal	964.6	441.02		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	latency_overflow	610.27	278.81		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	callback_fixed	7802.54	3558.3	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+4	after	callback_variable	7175.55	3271.97	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	mach_identity	7004.28	3202.54		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	mach_fractional	5433.05	2477.34		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	mach_overflow	21928.14	10001.37		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	latency_normal	1006.18	457.71		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	latency_overflow	659.36	299.71		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	callback_fixed	7506.51	3427.93	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	after	callback_variable	7717.87	3519.82	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+5	before	mach_identity	6502.26	2963.77		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	mach_fractional	5943.65	2712.7		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	mach_overflow	21945.93	41073.73		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	latency_normal	1140.16	518.46		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	latency_overflow	654.64	299.61		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	callback_fixed	12009.05	37971.88	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+5	before	callback_variable	12109.37	5526.86	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	mach_identity	6531.41	2978.42		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	mach_fractional	5486.43	2500.0		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	mach_overflow	21944.85	10015.04		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	latency_normal	1043.27	474.61		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	latency_overflow	853.13	387.89		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	callback_fixed	12590.81	5745.41	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	before	callback_variable	12759.08	5817.29	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+6	after	mach_identity	6996.13	3188.38		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	mach_fractional	5338.74	2438.87		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	mach_overflow	23776.09	10844.82		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	latency_normal	1046.7	476.07		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	latency_overflow	737.6	335.25		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	callback_fixed	8581.08	3912.79	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+6	after	callback_variable	8882.25	4049.71	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	mach_identity	7116.6	3245.51		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	mach_fractional	6133.35	2795.02		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	mach_overflow	24099.99	10993.75		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	latency_normal	1025.26	469.04		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	latency_overflow	775.97	352.64		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	callback_fixed	7426.77	3385.55	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	after	callback_variable	7847.34	3577.34	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+7	before	mach_identity	7426.13	3385.45		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	mach_fractional	6081.69	2773.93		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	mach_overflow	25005.21	11409.77		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	latency_normal	1211.11	550.98		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	latency_overflow	741.03	336.72		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	callback_fixed	14114.24	6457.13	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+7	before	callback_variable	13574.06	6196.78	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	mach_identity	6979.2	3181.93		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	mach_fractional	5908.92	2693.95		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	mach_overflow	24080.48	11007.62		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	latency_normal	1081.21	491.8		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	latency_overflow	671.15	306.54		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	callback_fixed	11942.6	5445.31	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	before	callback_variable	12177.54	5552.05	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+8	after	mach_identity	6885.1	3139.65		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	mach_fractional	5803.25	2645.12		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	mach_overflow	22810.85	10405.37		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	latency_normal	1042.41	474.12		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	latency_overflow	653.14	296.78		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	callback_fixed	7640.7	3483.4	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+8	after	callback_variable	7811.97	3561.91	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	mach_identity	6236.89	2844.14		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	mach_fractional	5745.58	2621.97		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	mach_overflow	22214.3	10129.59		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	latency_normal	1079.07	491.02		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	latency_overflow	669.22	304.1		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	callback_fixed	7787.96	3556.74	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	after	callback_variable	7730.73	3523.44	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+9	before	mach_identity	6384.15	2916.89		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	mach_fractional	5464.35	2495.51		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	mach_overflow	21928.35	10005.37		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	latency_normal	1007.9	460.94		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	latency_overflow	689.58	313.48		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	callback_fixed	13310.83	6077.44	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+9	before	callback_variable	12057.71	5498.05	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	mach_identity	7076.73	3234.77		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	mach_fractional	5515.15	2514.55		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	mach_overflow	24640.8	11241.89		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	latency_normal	1173.81	535.35		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	latency_overflow	756.89	343.95		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	callback_fixed	13398.07	6116.21	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	before	callback_variable	12492.21	5694.82	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+10	after	mach_identity	6324.56	2882.62		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	mach_fractional	5478.28	2496.78		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	mach_overflow	22227.59	10142.77		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	latency_normal	990.11	450.29		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	latency_overflow	638.14	289.65		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	callback_fixed	7407.05	3377.34	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+10	after	callback_variable	7596.97	3463.87	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	mach_identity	6326.92	2885.94		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	mach_fractional	6436.45	2934.18		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	mach_overflow	25287.94	11548.73		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	latency_normal	1166.09	530.47		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	latency_overflow	778.33	353.81		272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	callback_fixed	8142.51	3717.87	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	after	callback_variable	8491.05	3878.71	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	272d92430cfaf553fe5ce821d4241c12c5fc9f3b5efdcd9c20a9232c0d614190
+11	before	mach_identity	6892.39	3142.97		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	mach_fractional	6376.43	2906.05		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	mach_overflow	24357.21	11112.89		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	latency_normal	1066.2	484.96		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	latency_overflow	677.79	313.18		6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	callback_fixed	13516.61	6162.6	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74
+11	before	callback_variable	12638.83	5762.21	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	6ddb7e97356dcceb0c581e35ed28c4d3ce42bc9752596ab676e1584d97d2ab74

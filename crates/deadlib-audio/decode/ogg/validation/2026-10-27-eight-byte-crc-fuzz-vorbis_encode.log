@@ -1,0 +1,61 @@
+Dictionary: 8 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1339
+INFO: Loaded 1 modules   (12622 inline 8-bit counters): 12622 [00007FF7C2375148, 00007FF7C2378296),
+INFO: Loaded 1 PC tables (12622 PCs): 12622 [00007FF7C22DBE00,00007FF7C230D2E0),
+INFO:      385 files found in C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-eight-byte-crc-20261027\corpus\vorbis_encode
+INFO: seed corpus: files: 385 min: 8b max: 8198b total: 1857794b rss: 43Mb
+#32	pulse  cov: 1977 ft: 4341 corp: 29/5320b exec/s: 6 rss: 90Mb
+#64	pulse  cov: 1982 ft: 5040 corp: 52/21Kb exec/s: 3 rss: 188Mb
+#128	pulse  cov: 1998 ft: 5918 corp: 103/115Kb exec/s: 5 rss: 211Mb
+#256	pulse  cov: 1999 ft: 6412 corp: 187/509Kb exec/s: 8 rss: 272Mb
+#387	INITED cov: 1999 ft: 6610 corp: 210/691Kb exec/s: 8 rss: 354Mb
+#512	pulse  cov: 1999 ft: 6610 corp: 210/691Kb lim: 8198 exec/s: 8 rss: 361Mb
+#530	NEW    cov: 2008 ft: 6686 corp: 211/691Kb lim: 8198 exec/s: 8 rss: 363Mb L: 7/8198 MS: 3 EraseBytes-EraseBytes-EraseBytes-
+#544	NEW    cov: 2008 ft: 6687 corp: 212/693Kb lim: 8198 exec/s: 8 rss: 363Mb L: 2448/8198 MS: 4 InsertRepeatedBytes-ChangeBit-EraseBytes-InsertRepeatedBytes-
+#565	NEW    cov: 2008 ft: 6688 corp: 213/697Kb lim: 8198 exec/s: 8 rss: 364Mb L: 3929/8198 MS: 1 EraseBytes-
+#602	REDUCE cov: 2008 ft: 6688 corp: 213/695Kb lim: 8198 exec/s: 8 rss: 366Mb L: 2660/8198 MS: 2 CrossOver-EraseBytes-
+#649	NEW    cov: 2008 ft: 6691 corp: 214/695Kb lim: 8198 exec/s: 9 rss: 366Mb L: 8/8198 MS: 2 InsertByte-ShuffleBytes-
+#661	NEW    cov: 2008 ft: 6693 corp: 215/697Kb lim: 8198 exec/s: 9 rss: 366Mb L: 1932/8198 MS: 2 ShuffleBytes-InsertByte-
+#663	NEW    cov: 2008 ft: 6695 corp: 216/698Kb lim: 8198 exec/s: 9 rss: 366Mb L: 1381/8198 MS: 2 ManualDict-CrossOver- DE: "\005vorbis"-
+#695	NEW    cov: 2008 ft: 6720 corp: 217/700Kb lim: 8198 exec/s: 8 rss: 414Mb L: 1203/8198 MS: 2 CMP-CrossOver- DE: "\377\037"-
+#712	NEW    cov: 2008 ft: 6721 corp: 218/701Kb lim: 8198 exec/s: 8 rss: 414Mb L: 895/8198 MS: 2 ChangeByte-InsertRepeatedBytes-
+#763	NEW    cov: 2008 ft: 6740 corp: 219/706Kb lim: 8198 exec/s: 8 rss: 422Mb L: 5550/8198 MS: 1 CrossOver-
+#772	NEW    cov: 2008 ft: 6741 corp: 220/708Kb lim: 8198 exec/s: 8 rss: 422Mb L: 1931/8198 MS: 4 ChangeByte-ChangeByte-CMP-PersAutoDict- DE: "\000\000\000\000"-"\005vorbis"-
+#775	NEW    cov: 2008 ft: 6750 corp: 221/708Kb lim: 8198 exec/s: 8 rss: 422Mb L: 10/8198 MS: 3 CrossOver-CopyPart-ChangeByte-
+#971	NEW    cov: 2008 ft: 6752 corp: 222/711Kb lim: 8198 exec/s: 8 rss: 483Mb L: 2852/8198 MS: 1 CrossOver-
+#977	NEW    cov: 2008 ft: 6753 corp: 223/711Kb lim: 8198 exec/s: 8 rss: 483Mb L: 11/8198 MS: 1 PersAutoDict- DE: "\000\000\000\000"-
+#990	NEW    cov: 2008 ft: 6754 corp: 224/711Kb lim: 8198 exec/s: 8 rss: 483Mb L: 146/8198 MS: 3 CrossOver-ShuffleBytes-ManualDict- DE: "\005vorbis"-
+#1024	pulse  cov: 2008 ft: 6754 corp: 224/711Kb lim: 8198 exec/s: 8 rss: 483Mb
+#1182	NEW    cov: 2008 ft: 6761 corp: 225/711Kb lim: 8198 exec/s: 8 rss: 483Mb L: 20/8198 MS: 2 CrossOver-CopyPart-
+#1250	NEW    cov: 2008 ft: 6762 corp: 226/712Kb lim: 8198 exec/s: 8 rss: 483Mb L: 857/8198 MS: 3 InsertByte-ManualDict-InsertByte- DE: "BCV"-
+#1292	REDUCE cov: 2008 ft: 6762 corp: 226/712Kb lim: 8198 exec/s: 8 rss: 483Mb L: 1590/8198 MS: 2 ChangeByte-EraseBytes-
+#1308	REDUCE cov: 2008 ft: 6762 corp: 226/711Kb lim: 8198 exec/s: 8 rss: 483Mb L: 2072/8198 MS: 1 EraseBytes-
+#1317	NEW    cov: 2008 ft: 6764 corp: 227/718Kb lim: 8198 exec/s: 8 rss: 483Mb L: 7106/8198 MS: 4 ChangeByte-EraseBytes-CrossOver-InsertByte-
+#1350	NEW    cov: 2008 ft: 6766 corp: 228/718Kb lim: 8198 exec/s: 8 rss: 486Mb L: 774/8198 MS: 3 ShuffleBytes-ChangeByte-InsertByte-
+#1425	NEW    cov: 2008 ft: 6781 corp: 229/722Kb lim: 8198 exec/s: 7 rss: 504Mb L: 3812/8198 MS: 5 InsertRepeatedBytes-ManualDict-EraseBytes-CopyPart-CrossOver- DE: "\003vorbis"-
+#1443	NEW    cov: 2008 ft: 6782 corp: 230/729Kb lim: 8198 exec/s: 7 rss: 504Mb L: 7203/8198 MS: 3 CrossOver-ChangeBit-CrossOver-
+#1488	NEW    cov: 2008 ft: 6783 corp: 231/729Kb lim: 8198 exec/s: 7 rss: 504Mb L: 9/8198 MS: 5 ChangeBinInt-CopyPart-EraseBytes-ChangeByte-ShuffleBytes-
+#1497	REDUCE cov: 2008 ft: 6783 corp: 231/729Kb lim: 8198 exec/s: 7 rss: 529Mb L: 653/8198 MS: 4 ChangeByte-ChangeBinInt-ManualDict-EraseBytes- DE: "\003vorbis"-
+#1590	NEW    cov: 2008 ft: 6784 corp: 232/732Kb lim: 8198 exec/s: 7 rss: 529Mb L: 3029/8198 MS: 3 ShuffleBytes-ManualDict-CrossOver- DE: "OggS"-
+#1623	NEW    cov: 2008 ft: 6789 corp: 233/732Kb lim: 8198 exec/s: 6 rss: 551Mb L: 134/8198 MS: 3 ChangeASCIIInt-EraseBytes-EraseBytes-
+#1847	NEW    cov: 2008 ft: 6796 corp: 234/732Kb lim: 8198 exec/s: 7 rss: 551Mb L: 21/8198 MS: 4 CopyPart-InsertByte-CrossOver-ChangeBinInt-
+#1854	NEW    cov: 2008 ft: 6810 corp: 235/732Kb lim: 8198 exec/s: 7 rss: 551Mb L: 29/8198 MS: 2 InsertByte-InsertByte-
+#1874	NEW    cov: 2008 ft: 6834 corp: 236/736Kb lim: 8198 exec/s: 7 rss: 551Mb L: 3533/8198 MS: 5 ShuffleBytes-CopyPart-InsertRepeatedBytes-InsertRepeatedBytes-CrossOver-
+#1902	REDUCE cov: 2008 ft: 6834 corp: 236/732Kb lim: 8198 exec/s: 7 rss: 551Mb L: 4738/8198 MS: 3 CopyPart-ChangeBinInt-EraseBytes-
+#1917	REDUCE cov: 2008 ft: 6834 corp: 236/732Kb lim: 8198 exec/s: 7 rss: 551Mb L: 110/8198 MS: 5 InsertByte-ChangeASCIIInt-CMP-InsertByte-EraseBytes- DE: "\000."-
+#1993	REDUCE cov: 2008 ft: 6834 corp: 236/731Kb lim: 8198 exec/s: 7 rss: 551Mb L: 2114/8198 MS: 1 EraseBytes-
+#2034	REDUCE cov: 2008 ft: 6834 corp: 236/731Kb lim: 8198 exec/s: 7 rss: 551Mb L: 18/8198 MS: 1 EraseBytes-
+#2048	pulse  cov: 2008 ft: 6834 corp: 236/731Kb lim: 8198 exec/s: 7 rss: 551Mb
+#2186	REDUCE cov: 2008 ft: 6834 corp: 236/731Kb lim: 8198 exec/s: 7 rss: 551Mb L: 849/8198 MS: 2 EraseBytes-ChangeByte-
+#2202	DONE   cov: 2008 ft: 6834 corp: 236/731Kb lim: 8198 exec/s: 7 rss: 551Mb
+###### Recommended dictionary. ######
+"\377\037" # Uses: 23
+"\000." # Uses: 3
+###### End of recommended dictionary. ######
+Done 2202 runs in 301 second(s)
+stat::number_of_executed_units: 2202
+stat::average_exec_per_sec:     7
+stat::new_units_added:          35
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              551

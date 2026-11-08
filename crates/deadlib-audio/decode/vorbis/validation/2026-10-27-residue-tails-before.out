@@ -1,0 +1,9 @@
+init-0-0.bin	rejected	Invalid("residue partition is not a codebook dimension multiple")
+init-0-1.bin	rejected	Invalid("residue range")
+init-0-2.bin	accepted	1	60	12
+init-1-0.bin	rejected	Invalid("residue partition is not a codebook dimension multiple")
+init-1-1.bin	rejected	Invalid("residue range")
+init-1-2.bin	accepted	1	60	12
+init-2-0.bin	rejected	Invalid("residue partition is not a codebook dimension multiple")
+init-2-1.bin	rejected	Invalid("residue range")
+init-2-2.bin	accepted	1	60	12

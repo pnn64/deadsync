@@ -1,0 +1,44 @@
+{
+  "starting_commit": "0e6c38a56",
+  "measurements": 240,
+  "complete_codec_bodies_equal_after_reader_initialization_substitution": true,
+  "all_reported_allocation_deltas_verified_in_every_repeat": true,
+  "fixed_dependencies_across_archives": true,
+  "validation": {
+    "cargo-tests": {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-assets",
+        "--locked"
+      ],
+      "exit_code": 0
+    },
+    "clippy": {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-assets",
+        "--locked",
+        "--lib",
+        "--tests",
+        "--no-deps"
+      ],
+      "exit_code": 0
+    }
+  },
+  "final_source_sha256": {
+    "crates\\deadlib-assets\\src\\decode.rs": "d07952f099ce88baff937a202032fd881de6949e26ae966cd46ac4d6d62eab1e",
+    "crates\\deadlib-assets\\src\\decode\\open_perf.rs": "d418d2408d83388b1aaae56fab403c1b752495e275f36b1b3aca79b0a245d00e",
+    "crates\\deadlib-assets\\src\\decode\\open_seek.rs": "217ac1cb9a5a946f261575b21d401aaa23a80783263eb78fc79609c29a1ba738"
+  },
+  "all_seven_frozen_bodies_match_starting_commit_after_rustfmt": true,
+  "final_patch_replays_to_working_source": true,
+  "post_measurement_crlf_only_changes_verified_against_exact_staged_lf_hashes": [
+    "crates/deadlib-assets/src/decode/open_perf.rs",
+    "crates/deadlib-assets/src/decode/open_original.rs",
+    "tests/support/perf.rs"
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "name": "rainbow diffuse colors and native clocks",
+  "bpm": 120,
+  "samples": [
+    0,
+    0.0625,
+    0.125,
+    0.25,
+    0.375,
+    0.5,
+    0.625,
+    0.75,
+    1,
+    1.125,
+    1.5,
+    1.75,
+    2,
+    2.25,
+    4
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "BeatReceptor",
+        "size": [
+          16,
+          16
+        ],
+        "state": {
+          "diffuse": [
+            0.2,
+            0.4,
+            0.6,
+            0.65
+          ]
+        },
+        "effect": {
+          "type": "rainbow",
+          "clock": "bgm_beat",
+          "period": 4
+        },
+        "noteskin_command": "diffuse,0.2,0.4,0.6,0.65;effectclock,beat;rainbow;effectperiod,4"
+      },
+      {
+        "kind": "sprite",
+        "name": "TimerDefault",
+        "size": [
+          16,
+          16
+        ],
+        "state": {
+          "diffuse": [
+            0.2,
+            0.4,
+            0.6,
+            0.65
+          ]
+        },
+        "effect": {
+          "type": "rainbow",
+          "period": 2
+        },
+        "noteskin_command": "diffuse,0.2,0.4,0.6,0.65;rainbow;linear,2;diffusealpha,0.35",
+        "tweens": [
+          {
+            "duration": 2,
+            "curve": "linear",
+            "state": {
+              "diffuse": [
+                0.2,
+                0.4,
+                0.6,
+                0.35
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Canonical",
+        "size": [
+          16,
+          16
+        ],
+        "state": {
+          "diffuse": [
+            0.2,
+            0.4,
+            0.6,
+            0.65
+          ]
+        },
+        "effect": {
+          "type": "rainbow",
+          "period": 1
+        },
+        "noteskin_command": "diffuse,0.2,0.4,0.6,0.65;rainbow;effectperiod,1"
+      },
+      {
+        "kind": "sprite",
+        "name": "OffsetTiming",
+        "size": [
+          16,
+          16
+        ],
+        "state": {
+          "diffuse": [
+            0.2,
+            0.4,
+            0.6,
+            0.65
+          ]
+        },
+        "effect": {
+          "type": "rainbow",
+          "period": 2,
+          "offset": 0.125,
+          "timing": [
+            0.25,
+            0.125,
+            0.5,
+            0.25,
+            0.125
+          ]
+        },
+        "noteskin_command": "diffuse,0.2,0.4,0.6,0.65;effectperiod,8;rainbow;effectoffset,0.125;effecttiming,0.25,0.125,0.5,0.125,0.25"
+      }
+    ]
+  }
+}

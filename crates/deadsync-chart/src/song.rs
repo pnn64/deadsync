@@ -34,8 +34,16 @@ pub const fn sync_pref_offset(pref: SyncPref, default: SyncPref) -> f32 {
 
 #[must_use]
 pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> String {
+    let mut out = String::new();
+    format_display_bpm_range_into(range, music_rate, &mut out);
+    out
+}
+
+/// Format into reusable storage, replacing its previous contents.
+pub fn format_display_bpm_range_into(range: Option<(f64, f64)>, music_rate: f32, out: &mut String) {
+    out.clear();
     let Some((lo, hi)) = range else {
-        return String::new();
+        return;
     };
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
@@ -46,7 +54,7 @@ pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> S
     let hi = hi * f64::from(rate);
     let use_decimals = (rate - 1.0).abs() > 0.001;
     let equal = (lo - hi).abs() < 1.0e-6;
-    let mut out = String::with_capacity(if equal { 8 } else { 19 });
+    out.reserve(if equal { 8 } else { 19 });
     let write_one = |out: &mut String, value: f64| {
         if use_decimals {
             write!(out, "{value:.1}").expect("writing to a String cannot fail");
@@ -61,13 +69,12 @@ pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> S
         }
     };
     if equal {
-        write_one(&mut out, lo);
+        write_one(out, lo);
     } else {
-        write_one(&mut out, lo.min(hi));
+        write_one(out, lo.min(hi));
         out.push_str(" - ");
-        write_one(&mut out, lo.max(hi));
+        write_one(out, lo.max(hi));
     }
-    out
 }
 
 pub const STANDARD_DIFFICULTY_NAMES: [&str; 5] =
@@ -77,9 +84,43 @@ pub const STANDARD_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_NAMES.len();
 #[inline(always)]
 #[must_use]
 pub fn standard_difficulty_index(difficulty_name: &str) -> Option<usize> {
-    STANDARD_DIFFICULTY_NAMES
-        .iter()
-        .position(|name| difficulty_name.eq_ignore_ascii_case(name))
+    // These fixed names contain only ASCII letters. Folding their case bit
+    // cannot turn punctuation or non-ASCII bytes into a matching letter.
+    match difficulty_name.as_bytes() {
+        [a, b, c, d] => match [a | 0x20, b | 0x20, c | 0x20, d | 0x20] {
+            [b'e', b'a', b's', b'y'] => Some(1),
+            [b'h', b'a', b'r', b'd'] => Some(3),
+            _ => None,
+        },
+        [a, b, c, d, e, f] if matches!(*a, b'm' | b'M') => {
+            ([a | 0x20, b | 0x20, c | 0x20, d | 0x20, e | 0x20, f | 0x20] == *b"medium")
+                .then_some(2)
+        }
+        [a, b, c, d, e, f, g, h] if matches!(*a, b'b' | b'B') => ([
+            a | 0x20,
+            b | 0x20,
+            c | 0x20,
+            d | 0x20,
+            e | 0x20,
+            f | 0x20,
+            g | 0x20,
+            h | 0x20,
+        ] == *b"beginner")
+            .then_some(0),
+        [a, b, c, d, e, f, g, h, i] if matches!(*a, b'c' | b'C') => ([
+            a | 0x20,
+            b | 0x20,
+            c | 0x20,
+            d | 0x20,
+            e | 0x20,
+            f | 0x20,
+            g | 0x20,
+            h | 0x20,
+            i | 0x20,
+        ] == *b"challenge")
+            .then_some(4),
+        _ => None,
+    }
 }
 
 #[inline]
@@ -99,15 +140,24 @@ pub fn chart_ix_for_steps_index(
 
 #[inline]
 fn lowercase_cmp(left: &str, right: &str) -> Ordering {
-    if left.is_ascii() && right.is_ascii() {
-        return left
-            .bytes()
-            .map(|byte| byte.to_ascii_lowercase())
-            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()));
+    let mut offset = 0;
+    for (&a, &b) in left.as_bytes().iter().zip(right.as_bytes()) {
+        if !a.is_ascii() || !b.is_ascii() {
+            break;
+        }
+        match a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()) {
+            Ordering::Equal => offset += 1,
+            different => return different,
+        }
     }
-    left.chars()
+    if offset == left.len().min(right.len()) {
+        return left.len().cmp(&right.len());
+    }
+    // The skipped prefix is ASCII on both sides, so these are UTF-8 boundaries.
+    left[offset..]
+        .chars()
         .flat_map(char::to_lowercase)
-        .cmp(right.chars().flat_map(char::to_lowercase))
+        .cmp(right[offset..].chars().flat_map(char::to_lowercase))
 }
 
 #[inline]
@@ -120,8 +170,11 @@ fn edit_chart_cmp(left: &ChartData, right: &ChartData) -> Ordering {
 
 #[inline(always)]
 fn is_edit_chart(chart: &ChartData, chart_type: &str) -> bool {
-    chart.chart_type.eq_ignore_ascii_case(chart_type)
-        && chart.difficulty.eq_ignore_ascii_case("edit")
+    // Reject unequal types cheaply, then test the fixed four-letter marker.
+    chart.chart_type.len() == chart_type.len()
+        && matches!(chart.difficulty.as_bytes(), [a, b, c, d]
+            if [a | 0x20, b | 0x20, c | 0x20, d | 0x20] == *b"edit")
+        && chart.chart_type.eq_ignore_ascii_case(chart_type)
 }
 
 #[derive(Clone, Debug)]
@@ -174,6 +227,9 @@ impl SongBackgroundChange {
 pub struct SongForegroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
+
+    /// Authored FGCHANGES filename, used as the native root actor name.
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -186,6 +242,27 @@ pub struct SongForegroundChange {
 pub struct SongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
+    pub effect: String,
+    pub color1: Option<[f32; 4]>,
+    /// BackgroundDef caches are separate for each native background layer.
+    pub layer: u8,
+    /// Every activation of this cached owner, including repeated definitions.
+    pub activations: Vec<SongBackgroundLuaActivation>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongBackgroundLuaActivation {
+    pub start_beat: f32,
+    pub rate: f32,
+    pub transition: String,
+}
+
+impl SongBackgroundLuaChange {
+    pub fn new(start_beat: f32, path: PathBuf) -> Self {
+        Self { start_beat, path, effect: String::new(), color1: None, layer: 0, activations: vec![SongBackgroundLuaActivation {
+            start_beat, rate: 1.0, transition: String::new(),
+        }] }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -215,6 +292,8 @@ pub struct SongData {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
+    /// Full global timing for Lua songs with pauses or warps, shared at song load.
+    pub song_timing: Option<deadsync_rules::timing::TimingData>,
     /// Length of the music file in seconds (audio duration, including trailing silence).
     /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
@@ -225,6 +304,9 @@ pub struct SongData {
     pub total_length_seconds: i32,
     /// Float-precision song end time used by graph scaling and preview helpers.
     pub precise_last_second_seconds: f32,
+    /// Last eligible note second before the absolute hint and pack sync offset.
+    /// None means no chart contributes to the native whole-song note bound.
+    pub precise_note_last_second_seconds: Option<f32>,
     /// Minimum song end in music seconds from SSC `#LASTSECONDHINT`; zero if absent.
     pub last_second_hint: f32,
     pub charts: Vec<ChartData>,
@@ -251,8 +333,7 @@ impl SongData {
     #[inline(always)]
     fn is_video_path(path: &Path) -> bool {
         path.extension()
-            .and_then(|ext| ext.to_str())
-            .is_some_and(is_video_extension)
+            .is_some_and(|ext| is_video_extension(ext.as_encoded_bytes()))
     }
 
     #[inline(always)]
@@ -337,7 +418,7 @@ impl SongData {
         if subtitle.trim().is_empty() {
             title.to_string()
         } else {
-            format!("{title} {subtitle}")
+            [title, " ", subtitle].concat()
         }
     }
 
@@ -349,7 +430,32 @@ impl SongData {
     /// it. Used by the player-options "No `CMod` alternative" auto-switch.
     #[must_use]
     pub fn is_no_cmod(&self) -> bool {
-        title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
+        let contains = |text: &str| {
+            text.as_bytes().windows(b"no cmod".len()).any(|window| {
+                let prefix = u32::from_le_bytes(window[..4].try_into().unwrap());
+                // Clear the ASCII case bit in letters, keeping the space exact.
+                prefix & u32::from_le_bytes([0xdf, 0xdf, 0xff, 0xdf])
+                    == u32::from_le_bytes(*b"NO C")
+                    && window[4..].eq_ignore_ascii_case(b"mod")
+            })
+        };
+        if contains(&self.title) {
+            return true;
+        }
+        if self.subtitle.trim().is_empty() {
+            return false;
+        }
+        contains(&self.subtitle)
+            || (self
+                .title
+                .as_bytes()
+                .get(self.title.len().wrapping_sub(2)..)
+                .is_some_and(|tail| tail.eq_ignore_ascii_case(b"no"))
+                && self
+                    .subtitle
+                    .as_bytes()
+                    .get(..4)
+                    .is_some_and(|head| head.eq_ignore_ascii_case(b"cmod")))
     }
 
     #[must_use]
@@ -358,31 +464,43 @@ impl SongData {
             return false;
         };
         self.charts.iter().any(|chart| {
-            chart.chart_type.eq_ignore_ascii_case(chart_type)
+            chart.chart_type.len() == chart_type.len()
                 && chart.difficulty.eq_ignore_ascii_case(target)
+                && chart.chart_type.eq_ignore_ascii_case(chart_type)
         })
     }
 
     #[must_use]
     pub fn edit_charts_sorted(&self, chart_type: &str) -> Vec<&ChartData> {
-        let mut edits: Vec<&ChartData> = self
+        let mut edits = self
             .charts
             .iter()
-            .filter(|chart| is_edit_chart(chart, chart_type))
-            .collect();
-        edits.sort_by(|left, right| edit_chart_cmp(left, right));
-        edits
+            .filter(|chart| is_edit_chart(chart, chart_type));
+        let Some(first) = edits.next() else {
+            return Vec::new();
+        };
+        let Some(second) = edits.next() else {
+            return vec![first];
+        };
+        let mut sorted = smallvec::SmallVec::<[&ChartData; 8]>::from_slice(&[first, second]);
+        sorted.extend(edits);
+        sorted.sort_by(|left, right| edit_chart_cmp(left, right));
+        sorted.into_vec()
     }
 
     #[must_use]
     pub fn edit_chart_indices_sorted(&self, chart_type: &str) -> Vec<usize> {
+        let mut edits = self
+            .charts
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index));
+        let Some(first) = edits.next() else {
+            return Vec::new();
+        };
         let mut indices = Vec::with_capacity(self.charts.len());
-        indices.extend(
-            self.charts
-                .iter()
-                .enumerate()
-                .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index)),
-        );
+        indices.push(first);
+        indices.extend(edits);
         indices.sort_by(|&left, &right| edit_chart_cmp(&self.charts[left], &self.charts[right]));
         indices
     }
@@ -721,62 +839,27 @@ impl SongData {
 }
 
 #[inline(always)]
-fn is_video_extension(extension: &str) -> bool {
-    let bytes = extension.as_bytes();
-    if !(3..=4).contains(&bytes.len()) {
-        return false;
+fn is_video_extension(bytes: &[u8]) -> bool {
+    match bytes {
+        [a, b, c] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase()
+            ],
+            b"mp4" | b"avi" | b"f4v" | b"flv" | b"m4v" | b"mov" | b"ogv" | b"mkv" | b"mpg" | b"wmv"
+        ),
+        [a, b, c, d] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase(),
+                d.to_ascii_lowercase()
+            ],
+            b"webm" | b"mpeg"
+        ),
+        _ => false,
     }
-
-    let mut lowercase = [0_u8; 4];
-    for (target, source) in lowercase.iter_mut().zip(bytes) {
-        *target = source.to_ascii_lowercase();
-    }
-    matches!(
-        &lowercase[..bytes.len()],
-        b"mp4"
-            | b"avi"
-            | b"f4v"
-            | b"flv"
-            | b"m4v"
-            | b"mov"
-            | b"ogv"
-            | b"webm"
-            | b"mkv"
-            | b"mpg"
-            | b"mpeg"
-            | b"wmv"
-    )
-}
-
-#[inline]
-fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle: &str) -> bool {
-    let subtitle = (!subtitle.trim().is_empty()).then_some(subtitle);
-    let joined_len = title
-        .len()
-        .saturating_add(subtitle.map_or(0, |value| value.len().saturating_add(1)));
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
-    }
-    if needle.len() > joined_len {
-        return false;
-    }
-
-    let title = title.as_bytes();
-    let subtitle = subtitle.map(str::as_bytes).unwrap_or_default();
-    (0..=joined_len - needle.len()).any(|start| {
-        needle.iter().enumerate().all(|(offset, expected)| {
-            let index = start + offset;
-            let actual = if index < title.len() {
-                title[index]
-            } else if index == title.len() {
-                b' '
-            } else {
-                subtitle[index - title.len() - 1]
-            };
-            actual.eq_ignore_ascii_case(expected)
-        })
-    })
 }
 
 #[cfg(test)]
@@ -811,10 +894,12 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 180.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         }
@@ -828,6 +913,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "hash".to_string(),
             stats: ArrowStats::default(),
@@ -1211,3 +1297,15 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "metadata_perf.rs"]
+mod metadata_perf;
+
+#[cfg(test)]
+#[path = "song_sort_shortcuts.rs"]
+mod song_sort_shortcuts;
+
+#[cfg(test)]
+#[path = "metadata_dispatch.rs"]
+mod metadata_dispatch;

@@ -1,0 +1,273 @@
+{
+  "reports": {
+    "boundary-current": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-boundary-current.json",
+      "sha256": "56966935d3d73bd77f17a0d5952a28109094d896eb1745754ee3286231e9da49",
+      "source_hashes_match_current": true
+    },
+    "validation": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-validation.json",
+      "sha256": "175accaeaecd41f60b09e7698fbf1551cb24a9fdedbd325a16588b3aca0c27ae",
+      "source_hashes_match_current": true
+    },
+    "windows-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-windows-suite.json",
+      "sha256": "a3f842a3b29c7de91419490d7482bc00905c711dbda800c8033b84935268dbbd",
+      "source_hashes_match_current": true
+    },
+    "i686-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-i686-suite.json",
+      "sha256": "06bc09fef5f369fc017a8e7d4beee0ae39a0c1f9e9bbb3ab41b146534e9cb5d0",
+      "source_hashes_match_current": true
+    }
+  },
+  "baselines": {
+    "before": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-before.json",
+      "sha256": "8d5c00d74054ed081fd4c8c6c88163834e8cd81fabb580590052a91831775061",
+      "runner": {
+        "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\library-loader-before\\native_boundary.exe",
+        "sha256": "b48de27a6e9afca1ec8b01e806b4a29a718c3e1998c1cc879fefd0dec2e8791c",
+        "prebuilt": true
+      },
+      "runner_digest_matches_prior_source_built_report": true,
+      "retained_runner": "target/lua-native-hooks/library-loader-before/native_boundary.exe"
+    },
+    "first": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-first.json",
+      "sha256": "b88214cbf28dfd3d41b414350b648d8e7c62d2767bc69c307088784d76848d16",
+      "runner": {
+        "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\examples\\native_boundary.exe",
+        "sha256": "cbc4407a0c9fe1d1aecb9a58b1699d6572e6a35f450931510e8872261e2d7b54",
+        "prebuilt": false
+      }
+    },
+    "validation-first": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-validation-first.json",
+      "sha256": "aa912e6773057a323b426b90c21d2ce9bf11173b27830bff8ba654d7bd4e7140"
+    },
+    "capture-audit": {
+      "path": "docs/testing/2026-10-27-rust-lua-library-loading-capture-audit.json",
+      "sha256": "4f138d09a368ccd2f36d44fc679b388d7362e4010b8db0641ce5ebdba2a93c05",
+      "runner": {
+        "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\examples\\native_boundary.exe",
+        "sha256": "cbc4407a0c9fe1d1aecb9a58b1699d6572e6a35f450931510e8872261e2d7b54",
+        "prebuilt": false
+      }
+    }
+  },
+  "native_library_modes": {
+    "ordinary": {
+      "matched_stdout_bytes": 1767,
+      "opened": 5,
+      "closed": 5,
+      "dispatches": 425,
+      "drops": 425,
+      "states_created": 8,
+      "states_destroyed": 8
+    },
+    "copied": {
+      "matched_stdout_bytes": 1767,
+      "opened": 5,
+      "closed": 5,
+      "dispatches": 490,
+      "drops": 490,
+      "states_created": 8,
+      "states_destroyed": 8
+    }
+  },
+  "retained_unrooted_capture_mismatch": true,
+  "capture_audit_strict_results": [
+    true,
+    true,
+    true
+  ],
+  "default_production_c_abi_adapter": false,
+  "all_current_source_hashes_match": true,
+  "body_stack_comparisons": {
+    "return-stacks.lua": {
+      "observations": 252,
+      "matched_stdout_bytes": 40382
+    },
+    "library-stacks.lua": {
+      "observations": 291,
+      "matched_stdout_bytes": 42531
+    },
+    "package-stacks.lua": {
+      "observations": 135,
+      "matched_stdout_bytes": 28869
+    }
+  },
+  "copied_body_observations": 678,
+  "matched_copied_body_stdout_bytes": 111782,
+  "rust_dispatch_and_state_guards": {
+    "/runs/rust": {
+      "operations": 141654,
+      "drops": 141654,
+      "created": 183,
+      "collected": 182,
+      "destroyed": 183
+    },
+    "/parser_scratch_probe/runs/rust": {
+      "operations": 14,
+      "drops": 14,
+      "created": 2,
+      "collected": 1,
+      "destroyed": 2
+    },
+    "/native_reader_roots_probe/runs/rust": {
+      "operations": 268564,
+      "drops": 268564,
+      "created": 2,
+      "collected": 1,
+      "destroyed": 2
+    },
+    "/native_thread_stacks_probe/runs/rust": {
+      "operations": 70609,
+      "drops": 70609,
+      "created": 2023,
+      "collected": 2022,
+      "destroyed": 2023
+    },
+    "/native_resume_probe/runs/rust": {
+      "operations": 42829,
+      "drops": 42829,
+      "created": 1023,
+      "collected": 1022,
+      "destroyed": 1023
+    },
+    "/native_call_levels_probe/runs/rust": {
+      "operations": 94234,
+      "drops": 94234,
+      "created": 1076,
+      "collected": 1075,
+      "destroyed": 1076
+    },
+    "/reader_call_levels_probe/runs/rust": {
+      "operations": 2876,
+      "drops": 2876,
+      "created": 77,
+      "collected": 76,
+      "destroyed": 77
+    },
+    "/native_debug_probe/runs/rust": {
+      "operations": 12209,
+      "drops": 12209,
+      "created": 6,
+      "collected": 5,
+      "destroyed": 6
+    },
+    "/native_hooks_probe/runs/rust": {
+      "operations": 7998,
+      "drops": 7998,
+      "created": 7,
+      "collected": 6,
+      "destroyed": 7
+    },
+    "/native_context_probe/runs/rust": {
+      "operations": 555,
+      "drops": 555,
+      "created": 6,
+      "collected": 5,
+      "destroyed": 6
+    },
+    "/native_return_stacks_probe/runs/rust": {
+      "operations": 13454,
+      "drops": 13454,
+      "created": 254,
+      "collected": 253,
+      "destroyed": 254
+    },
+    "/native_protection_hooks_probe/runs/rust": {
+      "operations": 1879,
+      "drops": 1879,
+      "created": 41,
+      "collected": 40,
+      "destroyed": 41
+    },
+    "/native_library_stacks_probe/runs/rust": {
+      "operations": 14146,
+      "drops": 14146,
+      "created": 293,
+      "collected": 292,
+      "destroyed": 293
+    },
+    "/native_package_stacks_probe/runs/rust": {
+      "operations": 8355,
+      "drops": 8355,
+      "created": 137,
+      "collected": 136,
+      "destroyed": 137
+    },
+    "/native_body_stacks_probe/runs/rust/return-stacks.lua/rust": {
+      "operations": 15095,
+      "drops": 15095,
+      "created": 254,
+      "collected": 253,
+      "destroyed": 254
+    },
+    "/native_body_stacks_probe/runs/rust/library-stacks.lua/rust": {
+      "operations": 16207,
+      "drops": 16207,
+      "created": 293,
+      "collected": 292,
+      "destroyed": 293
+    },
+    "/native_body_stacks_probe/runs/rust/package-stacks.lua/rust": {
+      "operations": 9363,
+      "drops": 9363,
+      "created": 137,
+      "collected": 136,
+      "destroyed": 137
+    },
+    "/native_bodies_probe/runs/rust": {
+      "operations": 453,
+      "drops": 453,
+      "created": 8,
+      "collected": 7,
+      "destroyed": 8
+    },
+    "/native_library_loading_probe/runs/rust/ordinary/rust": {
+      "operations": 425,
+      "drops": 425,
+      "created": 8,
+      "collected": 7,
+      "destroyed": 8
+    },
+    "/native_library_loading_probe/runs/rust/copied/rust": {
+      "operations": 490,
+      "drops": 490,
+      "created": 8,
+      "collected": 7,
+      "destroyed": 8
+    }
+  },
+  "portable_test_counts": {
+    "windows-tests": 755,
+    "linux-x64-tests": 756,
+    "linux-i686-tests": 756
+  },
+  "windows_independent_pass_counts": {
+    "reference": 17,
+    "rust": 17,
+    "rust_cache_cold": 17,
+    "rust_cache_hit": 17
+  },
+  "windows_files_rename_failure_retained": true,
+  "stock_suite_internal_T_module": false,
+  "core_c_api": {
+    "implemented": 75,
+    "total": 80,
+    "missing": [
+      "lua_atpanic",
+      "lua_close",
+      "lua_getallocf",
+      "lua_newstate",
+      "lua_setallocf"
+    ],
+    "complete_semantics_proven": false
+  },
+  "full_lua_51_parity_proven": false,
+  "production_native_loading_complete": false,
+  "complete_inactive_body_execution_proven": false
+}

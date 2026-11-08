@@ -1,0 +1,84 @@
+metric	engine	workload	sample	repeats	ns_per_iteration	rust_allocations_total	rust_reallocations_total	rust_bytes_total
+startup_drop	rust	state	0	1000	11405	71000	15000	7351000
+startup_drop	lua51	state	0	1000	149092	526000	1000	41178000
+compile_drop	rust	numeric_for	0	1000	5021	25000	11000	2584000
+compile_drop	lua51	numeric_for	0	1000	8585	16001	12000	2677068
+execute	rust	numeric_for	0	100	5605496	0	0	0
+execute	lua51	numeric_for	0	100	812970	0	0	0
+execute	lua51	numeric_for	1	100	818686	0	0	0
+execute	rust	numeric_for	1	100	5300628	0	0	0
+execute	rust	numeric_for	2	100	5360853	0	0	0
+execute	lua51	numeric_for	2	100	828109	0	0	0
+execute	lua51	numeric_for	3	100	805494	0	0	0
+execute	rust	numeric_for	3	100	5385745	0	0	0
+execute	rust	numeric_for	4	100	5325449	0	0	0
+execute	lua51	numeric_for	4	100	803711	0	0	0
+reference_live_heap_bytes	numeric_for	63393
+compile_drop	rust	numeric_while	0	1000	6566	31000	19000	4763000
+compile_drop	lua51	numeric_while	0	1000	5985	16001	11000	2501068
+execute	rust	numeric_while	0	100	9589914	0	0	0
+execute	lua51	numeric_while	0	100	1637125	0	0	0
+execute	lua51	numeric_while	1	100	1631855	0	0	0
+execute	rust	numeric_while	1	100	9717117	0	0	0
+execute	rust	numeric_while	2	100	9688681	0	0	0
+execute	lua51	numeric_while	2	100	1652806	0	0	0
+execute	lua51	numeric_while	3	100	1575811	0	0	0
+execute	rust	numeric_while	3	100	9620824	0	0	0
+execute	rust	numeric_while	4	100	9893883	0	0	0
+execute	lua51	numeric_while	4	100	1744540	0	0	0
+reference_live_heap_bytes	numeric_while	64846
+compile_drop	rust	array_table	0	1000	8862	37000	18000	6730000
+compile_drop	lua51	array_table	0	1000	7858	16001	15000	3333068
+execute	rust	array_table	0	50	1621464	50	604	26220800
+execute	lua51	array_table	0	50	514300	100	700	26216800
+execute	lua51	array_table	1	50	489592	100	700	26216800
+execute	rust	array_table	1	50	1656510	50	601	26221440
+execute	rust	array_table	2	50	1646692	50	601	26231680
+execute	lua51	array_table	2	50	403794	100	700	26216800
+execute	lua51	array_table	3	50	417510	100	700	26216800
+execute	rust	array_table	3	50	1620294	50	600	26211200
+execute	rust	array_table	4	50	1618234	50	600	26211200
+execute	lua51	array_table	4	50	403250	100	700	26216800
+reference_live_heap_bytes	array_table	1341095
+compile_drop	rust	recursive_fib	0	1000	9093	38000	24000	7819000
+compile_drop	lua51	recursive_fib	0	1000	8437	25001	19001	2693708
+execute	rust	recursive_fib	0	30	3610286	30	6	3256
+execute	lua51	recursive_fib	0	30	982673	60	1	3920
+execute	lua51	recursive_fib	1	30	967620	60	0	2640
+execute	rust	recursive_fib	1	30	3553736	30	2	3704
+execute	rust	recursive_fib	2	30	3600006	30	2	7288
+execute	lua51	recursive_fib	2	30	961023	60	0	2640
+execute	lua51	recursive_fib	3	30	944180	60	0	2640
+execute	rust	recursive_fib	3	30	3495770	30	0	120
+execute	rust	recursive_fib	4	30	3555376	30	2	14456
+execute	lua51	recursive_fib	4	30	962293	60	0	2640
+reference_live_heap_bytes	recursive_fib	52726
+compile_drop	rust	closure_calls	0	1000	8361	38000	18000	5308000
+compile_drop	lua51	closure_calls	0	1000	8854	24001	17000	3077068
+execute	rust	closure_calls	0	50	1508272	50	8	6920
+execute	lua51	closure_calls	0	50	453412	100	0	4400
+execute	lua51	closure_calls	1	50	405442	100	0	4400
+execute	rust	closure_calls	1	50	1462374	50	2	7368
+execute	rust	closure_calls	2	50	1496718	50	2	14536
+execute	lua51	closure_calls	2	50	420376	100	0	4400
+execute	lua51	closure_calls	3	50	419638	100	0	4400
+execute	rust	closure_calls	3	50	1470666	50	0	200
+execute	rust	closure_calls	4	50	1492868	50	0	200
+execute	lua51	closure_calls	4	50	411966	100	0	4400
+reference_live_heap_bytes	closure_calls	61133
+compile_drop	rust	byte_concat	0	1000	5291	26000	10000	3253000
+compile_drop	lua51	byte_concat	0	1000	7371	16001	12004	2718005
+execute	rust	byte_concat	0	30	1280763	60000	29970	44985600
+execute	lua51	byte_concat	0	30	497880	29970	20742	29312328
+execute	lua51	byte_concat	1	30	536003	29970	20520	29274384
+execute	rust	byte_concat	1	30	1276600	60000	29970	44985600
+execute	rust	byte_concat	2	30	1270083	60000	29970	44985600
+execute	lua51	byte_concat	2	30	436356	29970	20520	29274384
+execute	lua51	byte_concat	3	30	538396	29970	20520	29274384
+execute	rust	byte_concat	3	30	1343403	60000	29970	44985600
+execute	rust	byte_concat	4	30	1330136	60000	29970	44985600
+execute	lua51	byte_concat	4	30	476850	29970	20520	29274384
+reference_live_heap_bytes	byte_concat	66069
+value_size_bytes	16
+allocation_scope	Rust GlobalAlloc only; native C malloc excluded; totals cover all iterations in each row
+limitations	No Rust GC yet; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary

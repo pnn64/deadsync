@@ -1,0 +1,14 @@
+{
+  "native": {
+    "path": "target/deadlib-audio-reference/ogg-eight-byte-20261027/binaries/native.exe",
+    "sha256": "266421aed15d66f11dd80e562b9478ba35df3d40241a8cf149924ff75b524792"
+  },
+  "native-baseline": {
+    "path": "target/deadlib-audio-reference/ogg-eight-byte-20261027/binaries/native-baseline.exe",
+    "sha256": "5821a05a9f8ab7fd6187096de7bc9a20e4eef2b35b4e099dd7ddd1d465927ed0"
+  },
+  "libogg": {
+    "path": "target/deadlib-audio-reference/ogg-eight-byte-20261027/binaries/libogg.exe",
+    "sha256": "657fbcf931b928be92bc5ff048f500b6c168c2dd78f33193c453f53ffa8cc598"
+  }
+}

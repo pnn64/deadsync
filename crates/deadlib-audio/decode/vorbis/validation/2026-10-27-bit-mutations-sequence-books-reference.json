@@ -1,0 +1,30 @@
+{
+  "binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "minimum": 1,
+  "delta": "2^-24",
+  "dimensions": 3,
+  "sequence": true,
+  "all_multiplicands": 1,
+  "books": [
+    {
+      "lookup_type": 1,
+      "input_sha256": "293f20cbb58e98e038f4c010d8206ccea055c7276400f528652e9c3f48e31011",
+      "output_sha256": "0b8c6fbc573d648ed746d4bc65a8e807d6b4c130aacba2d49fba612b1a9916d1",
+      "reference_vector": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "lookup_type": 2,
+      "input_sha256": "683d454cc1b2ea53fe5c80582616e0a238504fa18c8da44154d9171c22554722",
+      "output_sha256": "e7fede0951d28f701212c4c5554b3d7a56debd6eab796effb75e1a7d99cec633",
+      "reference_vector": [
+        1,
+        2,
+        3
+      ]
+    }
+  ]
+}

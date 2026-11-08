@@ -1,0 +1,9 @@
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Finished `release` profile [optimized] target(s) in 12.89s
+     Running tests\libogg.rs (target\release\deps\libogg-5a25c936ded5e17b.exe)
+
+running 1 test
+historical libogg parity: 3 files, 381 pages, 4402 packets
+test libogg_historical_vorbis_pages_and_packets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.06s

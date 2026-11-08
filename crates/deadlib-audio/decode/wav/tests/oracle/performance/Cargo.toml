@@ -1,0 +1,17 @@
+[package]
+name = "wav-performance-reference"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+deadlib-audio-decode-wav = { path = "../../.." }
+symphonia = { version = "=0.6.1", default-features = false, features = ["wav", "pcm", "adpcm", "opt-simd"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = 1
+panic = "abort"

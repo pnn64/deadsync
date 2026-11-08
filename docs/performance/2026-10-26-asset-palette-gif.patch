@@ -1,0 +1,22 @@
+--- a/crates/deadlib-assets/src/decode.rs
++++ b/crates/deadlib-assets/src/decode.rs
+@@ -275 +274,0 @@
+-    let global = reader.global_palette().map(<[u8]>::to_vec);
+@@ -290,8 +289,6 @@
+-    for (color, rgb) in colors.iter_mut().zip(
+-        frame
+-            .palette
+-            .as_deref()
+-            .or(global.as_deref())
+-            .unwrap_or_default()
+-            .chunks_exact(3),
+-    ) {
++    let transparent = frame.transparent;
++    let palette = match frame.palette.as_deref() {
++        Some(palette) => palette,
++        None => reader.global_palette().unwrap_or_default(),
++    };
++    for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+@@ -300 +297 @@
+-    if let Some(index) = frame.transparent {
++    if let Some(index) = transparent {

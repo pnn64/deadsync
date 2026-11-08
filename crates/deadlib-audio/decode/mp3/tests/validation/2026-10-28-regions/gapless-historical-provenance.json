@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "files": 2,
+  "read_schedules": 2,
+  "binary_sha256": "44e620c9c57b91df1f6905e43d7c7fa8e230c59a2ef2d1b484bbf446402cbdcc",
+  "script_sha256": "7b17106a3ff9d514e7759d91dd605245bcb2b787ecc124d6079be92b1db7db5b",
+  "reference_results_sha256": "b554c52a15b2465e30a4b0a50dd216acfbdc6d3a0b55f78ea9513124abb61e45"
+}

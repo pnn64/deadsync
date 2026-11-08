@@ -52,6 +52,9 @@ fn normalized_query_contains(target: &str, query: &str) -> bool {
 pub fn theme_path(kind: &str, group: &str, name: &str) -> String {
     let group = group.trim_matches('/');
     let name = name.trim_start_matches('/');
+    let name = if kind == "G" && group.is_empty() {
+        crate::lua_util::native_gameplay_in_bitmap_filename(name).unwrap_or(name)
+    } else { name };
     if group.is_empty() {
         format!("{}{kind}/{name}", crate::SONG_LUA_THEME_PATH_PREFIX)
     } else {
@@ -87,27 +90,61 @@ pub fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
 }
 
 pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    let raw = Path::new(path);
+    resolve_script_path_with(lua, song_dir, path, false)
+}
+
+// ActorUtil::ResolvePath calls CollapsePath before filesystem lookup. Keep
+// that lexical spelling for Lua chunk names; canonicalize would also resolve
+// filesystem links, which native actor loading does not do.
+pub(crate) fn collapse_actor_path(path: &Path) -> PathBuf {
+    let text = file_path_string(path);
+    let mut output = PathBuf::new();
+    for component in Path::new(&text).components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if output.file_name().is_some_and(|name| name != "..") {
+                    output.pop();
+                } else if !output.has_root() {
+                    output.push("..");
+                }
+            }
+            component => output.push(component.as_os_str()),
+        }
+    }
+    output
+}
+
+fn resolve_script_path_with(
+    lua: &Lua,
+    song_dir: &Path,
+    path: &str,
+    actor_path: bool,
+) -> mlua::Result<PathBuf> {
+    let prepare = |candidate: &Path| {
+        if actor_path { collapse_actor_path(candidate) } else { candidate.to_path_buf() }
+    };
+    let raw = prepare(Path::new(path));
     if raw.is_absolute() && raw.exists() {
-        return Ok(raw.to_path_buf());
+        return Ok(raw);
     }
     let globals = lua.globals();
     if let Some(current_dir) = globals
         .get::<Option<String>>("__songlua_script_dir")?
         .filter(|dir| !dir.trim().is_empty())
     {
-        let candidate = Path::new(&current_dir).join(path);
+        let candidate = prepare(&Path::new(&current_dir).join(path));
         if candidate.exists() {
             return Ok(candidate);
         }
     }
-    let candidate = song_dir.join(path);
+    let candidate = prepare(&song_dir.join(path));
     if candidate.exists() {
         return Ok(candidate);
     }
     // GetSongDir can be process-relative for AdditionalSongFolders entries.
     if raw.exists() {
-        return Ok(raw.to_path_buf());
+        return Ok(raw);
     }
     Err(mlua::Error::external(format!(
         "script '{}' not found relative to '{}'",
@@ -117,7 +154,7 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
 }
 
 pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    let mut resolved = if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
+    let mut resolved = if let Ok(resolved) = resolve_script_path_with(lua, song_dir, path, true) {
         if resolved.is_dir() {
             return resolve_load_actor_directory(&resolved, song_dir, path);
         }
@@ -173,7 +210,7 @@ fn resolve_load_actor_autowildcard(
     // ITGmania's ActorUtil::ResolvePath appends "*" after an exact miss, so
     // LoadActor("overlay") can resolve a hinted name such as "overlay 3x4.png".
     for base_dir in load_actor_search_dirs(lua, song_dir)? {
-        let base = base_dir.join(path);
+        let base = collapse_actor_path(&base_dir.join(path));
         let Some(parent) = base.parent().filter(|parent| parent.is_dir()) else {
             continue;
         };
@@ -256,7 +293,7 @@ pub fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
             envs
         }
     };
-    envs.set(loader_env_key(function), env.clone())
+    envs.set(loader_env_key(lua, function)?, env.clone())
 }
 
 pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
@@ -266,14 +303,21 @@ pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
     else {
         return Ok(());
     };
-    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(function))? else {
+    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(lua, function)?)? else {
         return Ok(());
     };
     loader_env.set("__songlua_env_target", env.clone())
 }
 
-fn loader_env_key(function: &Function) -> String {
-    format!("{:p}", function.to_pointer())
+fn loader_env_key(lua: &Lua, function: &Function) -> mlua::Result<mlua::LuaString> {
+    use std::io::Write;
+    // Pointer text keeps the existing registry keys, including the 0x prefix.
+    const CAPACITY: usize = 2 + 2 * std::mem::size_of::<usize>();
+    let mut buffer = [0_u8; CAPACITY];
+    let mut remaining = &mut buffer[..];
+    write!(remaining, "{:p}", function.to_pointer()).expect("pointer fits its hexadecimal width");
+    let len = CAPACITY - remaining.len();
+    lua.create_string(&buffer[..len])
 }
 
 pub fn call_with_script_dir<T>(
@@ -468,9 +512,14 @@ pub fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table
     )?;
     table.set(
         "ReportScriptError",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
+        lua.create_function(|lua, args: MultiValue| {
+            let message = method_arg(&args, 0)
+                .cloned()
+                .and_then(read_string)
+                .ok_or_else(|| {
+                    mlua::Error::RuntimeError("ReportScriptError: string expected".into())
+                })?;
+            crate::lua_util::report_script_error(lua, &message)
         })?,
     )?;
     Ok(table)
@@ -803,7 +852,7 @@ fn path_stem_eq(path: &Path, stem: &str) -> bool {
 #[inline(always)]
 #[must_use]
 pub fn song_dir_string(path: &Path) -> String {
-    let mut text = path.to_string_lossy().replace('\\', "/");
+    let mut text = file_path_string(path);
     if !text.ends_with('/') {
         text.push('/');
     }
@@ -813,7 +862,18 @@ pub fn song_dir_string(path: &Path) -> String {
 #[inline(always)]
 #[must_use]
 pub fn file_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    let text = path.to_string_lossy().replace('\\', "/");
+    // canonicalize() returns verbatim paths on Windows. Lua paths use forward
+    // slashes; spelling that prefix as //?/ breaks subsequent filesystem lookup.
+    if let Some(verbatim) = text.strip_prefix("//?/") {
+        if let Some(network) = verbatim.strip_prefix("UNC/") {
+            return format!("//{network}");
+        }
+        if verbatim.as_bytes().get(1) == Some(&b':') {
+            return verbatim.to_owned();
+        }
+    }
+    text
 }
 
 #[inline(always)]
@@ -955,6 +1015,34 @@ mod tests {
         assert_eq!(
             theme_path("G", "/Banner/", "group fallback"),
             "__songlua_theme_path/G/Banner/group fallback"
+        );
+    }
+    #[test]
+    fn path_strings_preserve_windows_canonical_drive_and_network_roots() {
+        assert_eq!(
+            file_path_string(Path::new(r"\\?\C:\Songs\fof\fof.lua")),
+            "C:/Songs/fof/fof.lua"
+        );
+        assert_eq!(
+            song_dir_string(Path::new(r"\\?\C:\Songs\fof")),
+            "C:/Songs/fof/"
+        );
+        assert_eq!(
+            file_path_string(Path::new(r"\\?\UNC\server\share\fof.lua")),
+            "//server/share/fof.lua"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn actor_path_collapse_preserves_windows_roots() {
+        assert_eq!(
+            collapse_actor_path(Path::new(r"\\?\C:\Songs\fof\nested\..\FofGuys.lua")),
+            PathBuf::from("C:/Songs/fof/FofGuys.lua")
+        );
+        assert_eq!(
+            collapse_actor_path(Path::new(r"\\?\UNC\server\share\nested\..\FofGuys.lua")),
+            PathBuf::from(r"\\server\share\FofGuys.lua")
         );
     }
 }

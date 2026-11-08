@@ -1,0 +1,7 @@
+warning: Maximum frequency rate (250 Hz) exceeded, throttling from 499 Hz to 250 Hz.
+         The limit can be raised via /proc/sys/kernel/perf_event_max_sample_rate.
+         The kernel will lower it when perf's interrupts take too long.
+         Use --strict-freq to disable this throttling, refusing to record.
+Profiling inflate: 24 files, 80 corpus passes
+[ perf record: Woken up 67 times to write data ]
+[ perf record: Captured and wrote 16.663 MB /tmp/deadlib-image-inflate-b19a1d1b3-20261027-a.data (4016 samples) ]

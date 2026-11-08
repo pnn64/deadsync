@@ -20,16 +20,18 @@ use twox_hash::XxHash64;
 
 static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(test)]
+#[path = "cache_filename_perf.rs"]
+mod cache_filename_perf;
+
 #[derive(Clone, Copy, Debug)]
 pub struct BannerCacheOptions {
     pub enabled: bool,
 }
 
 fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write_u8(1);
-    hasher.write_u8(u8::from(opts.enabled));
-    hasher.finish()
+    // XXHash64(seed 0) after write_u8(1), write_u8(enabled), for both options.
+    [0xdd8f_621d_bf7f_57f1, 0x52fc_4823_a13c_997a][usize::from(opts.enabled)]
 }
 
 const BANNER_CACHE_MAGIC: [u8; 8] = *b"DSBNR02\0";
@@ -42,15 +44,35 @@ pub fn dynamic_image_cache_path_for(
     cache_dir: &Path,
 ) -> Option<(PathBuf, String)> {
     let canonical = path.canonicalize().ok()?;
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(canonical.to_string_lossy().replace('\\', "/").as_bytes());
-    let path_hash = hasher.finish();
+    let path_hash = banner_path_hash(&canonical.to_string_lossy());
     let path_hex = format!("{path_hash:016x}");
     let opt_hash = banner_cache_opthash(opts);
-    let shard2 = &path_hex[..2];
-    let stem = format!("{path_hex}-{opt_hash:016x}");
-    let dir = cache_dir.join(shard2);
-    Some((dir.join(format!("{stem}.rgba")), path_hex))
+    let mut filename = *b"0000000000000000-0000000000000000.rgba";
+    filename[..16].copy_from_slice(path_hex.as_bytes());
+    let hex = b"0123456789abcdef";
+    for (i, byte) in opt_hash.to_be_bytes().into_iter().enumerate() {
+        filename[17 + i * 2] = hex[usize::from(byte >> 4)];
+        filename[18 + i * 2] = hex[usize::from(byte & 15)];
+    }
+    // Reserve both separators, the two-character shard, and the fixed filename.
+    let mut cache_path = PathBuf::with_capacity(cache_dir.as_os_str().len() + filename.len() + 4);
+    cache_path.push(cache_dir);
+    cache_path.push(&path_hex[..2]);
+    cache_path.push(std::str::from_utf8(&filename).expect("cache filename is ASCII hex"));
+    Some((cache_path, path_hex))
+}
+
+fn banner_path_hash(path: &str) -> u64 {
+    let mut hasher = XxHash64::with_seed(0);
+    let bytes = path.as_bytes();
+    let mut start = 0;
+    for index in memchr::memchr_iter(b'\\', bytes) {
+        hasher.write(&bytes[start..index]);
+        hasher.write(b"/");
+        start = index + 1;
+    }
+    hasher.write(&bytes[start..]);
+    hasher.finish()
 }
 
 fn source_newer_than_cache(src: &Path, cache: &fs::Metadata) -> bool {
@@ -76,10 +98,8 @@ fn ensure_cache_parent(cache_path: &Path) -> bool {
     true
 }
 
-fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
-    let mut file = fs::File::open(cache_path).ok()?;
-    let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
-    let (width, height, payload_len) = read_raw_banner_header(&mut file, file_len)?;
+fn load_raw_cached_banner_image(file: &mut fs::File, file_len: usize) -> Option<RgbaImage> {
+    let (width, height, payload_len) = read_raw_banner_header(file, file_len)?;
     let mut payload = vec![0_u8; payload_len];
     file.read_exact(&mut payload).ok()?;
     RgbaImage::from_raw(width, height, payload)
@@ -105,12 +125,6 @@ fn read_raw_banner_header(reader: &mut impl Read, file_len: usize) -> Option<(u3
         .checked_mul(width as usize)?
         .checked_mul(height as usize)?;
     Some((width, height, payload_len))
-}
-
-fn validate_raw_cached_banner(cache_path: &Path) -> Option<()> {
-    let mut file = fs::File::open(cache_path).ok()?;
-    let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
-    validate_raw_banner(&mut file, file_len)
 }
 
 fn validate_raw_banner(reader: &mut impl Read, file_len: usize) -> Option<()> {
@@ -185,13 +199,27 @@ fn load_cached_banner_image(cache_path: &Path, source_path: &Path) -> Option<Rgb
 fn with_cached_banner<T>(
     cache_path: &Path,
     source_path: &Path,
-    read: impl FnOnce(&Path) -> Option<T>,
+    read: impl FnOnce(&mut fs::File, usize) -> Option<T>,
 ) -> Option<T> {
-    let metadata = fs::metadata(cache_path).ok()?;
+    let mut file = match fs::File::open(cache_path) {
+        Ok(file) => Some(file),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(_) => None,
+    };
+    // Read freshness, length and pixels from the same opened cache entry.
+    // If opening fails, preserve the existing stale/invalid cleanup policy.
+    let metadata = file
+        .as_ref()
+        .map_or_else(|| fs::metadata(cache_path), fs::File::metadata)
+        .ok()?;
     if metadata.is_file() && !source_newer_than_cache(source_path, &metadata) {
-        if let Some(value) = read(cache_path) {
+        if let Some(value) = file
+            .as_mut()
+            .and_then(|file| read(file, usize::try_from(metadata.len()).ok()?))
+        {
             return Some(value);
         }
+        drop(file);
         let _ = fs::remove_file(cache_path);
         debug!(
             "Invalid raw banner cache '{}'; rebuilding.",
@@ -321,17 +349,13 @@ fn ensure_cached_dynamic_image_at(
     cache_path: &Path,
     path_hex: &str,
 ) -> image::ImageResult<bool> {
-    if with_cached_banner(cache_path, path, validate_raw_cached_banner).is_some() {
+    if with_cached_banner(cache_path, path, validate_raw_banner).is_some() {
         return Ok(false);
     }
     let rgba = build_cached_banner_rgba(path, opts)?;
     save_cached_banner_image(cache_path, path_hex, &rgba);
     Ok(true)
 }
-
-#[cfg(test)]
-#[path = "../tests/banner_cache/mod.rs"]
-mod banner_cache;
 
 fn build_cached_banner_rgba(
     path: &Path,
@@ -343,10 +367,6 @@ fn build_cached_banner_rgba(
     }
     Ok(open_image_fallback_quiet(path)?.into_rgba8())
 }
-
-#[cfg(test)]
-#[path = "../tests/image_loading/mod.rs"]
-mod image_loading;
 
 pub enum DynamicImagePrewarmOutcome {
     Built { path: PathBuf, millis: f64 },
@@ -433,7 +453,7 @@ pub fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
     std::thread::available_parallelism()
         .map(std::num::NonZero::get)
         .unwrap_or(1)
-        .min(job_count)
+        .min(job_count.div_ceil(DYNAMIC_IMAGE_PREWARM_BATCH_SIZE))
 }
 
 #[inline(always)]
@@ -736,6 +756,10 @@ pub fn dynamic_video_play_time(
 }
 
 #[cfg(test)]
+#[path = "dynamic_perf.rs"]
+mod perf_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -775,6 +799,10 @@ mod tests {
 
     fn write_test_png(path: &Path, color: [u8; 4]) {
         test_rgba(color).save(path).unwrap();
+    }
+
+    fn load_raw_cached_banner_image(path: &Path) -> Option<RgbaImage> {
+        super::load_cached_banner_image(path, path)
     }
 
     #[test]
@@ -1081,3 +1109,7 @@ mod tests {
         assert!(!stale_path.exists());
     }
 }
+
+#[cfg(test)]
+#[path = "cache_options_performance.rs"]
+mod cache_options_performance;

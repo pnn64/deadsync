@@ -1,0 +1,6 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-benchmark-build\ogg\Release\ogg.lib
+  vorbis.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-benchmark-build\vorbis\lib\Release\vorbis.lib
+  vorbisfile.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-benchmark-build\vorbis\lib\Release\vorbisfile.lib
+  deadlib_vorbis_benchmark.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-benchmark-build\Release\deadlib_vorbis_benchmark.exe

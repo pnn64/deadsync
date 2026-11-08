@@ -1,0 +1,56 @@
+[
+  {
+    "stage": "stereo-loop-before",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-stereo-loop-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-stereo-loop-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "358bc4092ae8b7ad4ed164bcfd08d5912dba566224aa4eb16f33976b7229a428",
+      "binary_sha256": "2532e18ff7e6bc45b0d8a7b32437fedcd44f0b6f1e58ad50e09717a105edd189"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.05s\n\n"
+  },
+  {
+    "stage": "stereo-retained",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-stereo-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-stereo-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "d02525a8cbf1d10fd177056d56600ecf51da20419ee79e36d90164c6f3f5d9bd",
+      "binary_sha256": "5378db1b8ff690eaa7687a53c49dd8989aff2753681204edc199cc5a0a4bc349"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.04s\n\n"
+  }
+]

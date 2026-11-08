@@ -1,0 +1,68 @@
+{
+  "source_sha256": "de867699f51d20c8b6bd814ebb19fa14a2b8456adc85378bd471a60216a1bcff",
+  "configurations": 784,
+  "capture_runs_per_configuration": 4,
+  "workers": {
+    "before-short": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "ogg_preflight_probe",
+        "--edition",
+        "2024",
+        "-D",
+        "warnings",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\before-short\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\before-short\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-preflight-probe.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\before-short-policy.exe"
+      ],
+      "library_sha256": "c9122afbee8858eae1a4672918042cc0de3d544827f49f64b35b283f041077ce",
+      "executable_sha256": "d1e6b25ae24094f830c6b84d076f70a47ac8cf9d31525f7bea6d13d69a5238fc",
+      "trace_sha256": "0be5d959956902afa396f58f6f35befbb8a93d798088e8d25306767979e77a9a",
+      "trace_bytes": 3461242
+    },
+    "bounds": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "ogg_preflight_probe",
+        "--edition",
+        "2024",
+        "-D",
+        "warnings",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\bounds\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\bounds\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-preflight-probe.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-word-scans-20261028\\bounds-policy.exe"
+      ],
+      "library_sha256": "b51416744473b0a03ca27856273f1666e2660b8fd71d897d8d7837f7cb9080cb",
+      "executable_sha256": "240602a5d4f322b596579f2bf0372fda0ecd864627cfc48c05cac0b7490ea3da",
+      "trace_sha256": "0be5d959956902afa396f58f6f35befbb8a93d798088e8d25306767979e77a9a",
+      "trace_bytes": 3461242
+    }
+  },
+  "complete_traces_equal": true
+}

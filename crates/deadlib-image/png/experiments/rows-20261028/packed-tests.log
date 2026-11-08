@@ -1,0 +1,44 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 25.02s
+     Running tests\decoder_boundaries.rs (target\png-rows-20261028\build\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running tests\palette.rs (target\png-rows-20261028\build\release\deps\palette-14b9150ceacbb782.exe)
+
+running 2 tests
+test independent_palette_overflow_fixture ... ok
+test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\png_stream.rs (target\png-rows-20261028\build\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test apng_image_roles_and_completion ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+
+     Running tests\static_png.rs (target\png-rows-20261028\build\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+

@@ -80,6 +80,24 @@ fn collect_row_choices<T: ChoiceText>(
     rows: &[SubRow],
     row_idx: usize,
 ) -> Vec<T> {
+    if kind == SubmenuKind::Streaming
+        && rows
+            .get(row_idx)
+            .is_some_and(|row| row.id == SubRowId::TwitchChannel)
+    {
+        return vec![if state.twitch.channel.is_empty() {
+            T::shared(tr("OptionsStreaming", "SetChannel"))
+        } else {
+            T::borrowed(state.twitch.channel.as_str())
+        }];
+    }
+    if let Some(row) = rows.get(row_idx)
+        && kind == SubmenuKind::SelectMusic
+        && row.id == SubRowId::GsBoxLeaderboards
+        && !golf_features_enabled(state)
+    {
+        return choice_texts(&row.choices[..4]);
+    }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Gameplay)
         && row.id == SubRowId::DefaultJudgmentPalette
@@ -424,15 +442,6 @@ pub(super) fn borrow_submenu_row_layout<'a>(
     }))
 }
 
-pub(super) fn submenu_row_layout(
-    state: &State,
-    asset_manager: &AssetManager,
-    kind: SubmenuKind,
-    row_idx: usize,
-) -> Option<SubmenuRowLayout> {
-    borrow_submenu_row_layout(state, asset_manager, kind, row_idx).map(|layout| layout.clone())
-}
-
 pub fn clear_submenu_row_layout_cache(state: &State) {
     state.submenu_layout_cache_kind.set(None);
     let mut cache = state.submenu_row_layout_cache.borrow_mut();
@@ -448,18 +457,21 @@ pub(super) fn sync_submenu_inline_x_from_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_idx) else {
-        return;
+    let x = {
+        let Some(layout) = borrow_submenu_row_layout(state, asset_manager, kind, row_idx) else {
+            return;
+        };
+        if !layout.inline_row || layout.centers.is_empty() {
+            return;
+        }
+        let choice_idx = submenu_choice_indices(state, kind)
+            .get(row_idx)
+            .copied()
+            .unwrap_or(0)
+            .min(layout.centers.len().saturating_sub(1));
+        layout.centers[choice_idx]
     };
-    if !layout.inline_row || layout.centers.is_empty() {
-        return;
-    }
-    let choice_idx = submenu_choice_indices(state, kind)
-        .get(row_idx)
-        .copied()
-        .unwrap_or(0)
-        .min(layout.centers.len().saturating_sub(1));
-    state.sub_inline_x = layout.centers[choice_idx];
+    state.sub_inline_x = x;
 }
 
 pub(super) fn apply_submenu_inline_x_to_row(
@@ -471,21 +483,24 @@ pub(super) fn apply_submenu_inline_x_to_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_idx) else {
-        return;
+    let (choice_idx, x) = {
+        let Some(layout) = borrow_submenu_row_layout(state, asset_manager, kind, row_idx) else {
+            return;
+        };
+        if !layout.inline_row || layout.centers.is_empty() {
+            return;
+        }
+        let choice_idx = submenu_choice_indices(state, kind)
+            .get(row_idx)
+            .copied()
+            .unwrap_or(0)
+            .min(layout.centers.len().saturating_sub(1));
+        (choice_idx, layout.centers[choice_idx])
     };
-    if !layout.inline_row || layout.centers.is_empty() {
-        return;
-    }
-    let choice_idx = submenu_choice_indices(state, kind)
-        .get(row_idx)
-        .copied()
-        .unwrap_or(0)
-        .min(layout.centers.len().saturating_sub(1));
     if let Some(slot) = submenu_cursor_indices_mut(state, kind).get_mut(row_idx) {
         *slot = choice_idx;
     }
-    state.sub_inline_x = layout.centers[choice_idx];
+    state.sub_inline_x = x;
 }
 
 pub(super) fn move_submenu_selection_vertical(
@@ -889,6 +904,7 @@ fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> 
         SubRowId::LoopMusic => SubRowId::MusicPreviews,
         SubRowId::GsBoxPlacement => SubRowId::ShowGsBox,
         SubRowId::GsBoxLeaderboards => SubRowId::ShowGsBox,
+        SubRowId::GsBoxEventsFirst => SubRowId::ShowGsBox,
         _ => return None,
     };
     rows.iter().position(|r| r.id == parent_id)
@@ -984,5 +1000,5 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
 }
 
 #[cfg(test)]
-#[path = "../../../tests/option_frame/baseline_layout.rs"]
-pub(super) mod label_baseline;
+#[path = "layout_pipelines_original.rs"]
+pub(super) mod pipelines_original;

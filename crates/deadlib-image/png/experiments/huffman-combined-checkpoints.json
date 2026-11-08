@@ -1,0 +1,19 @@
+{
+  "baseline_png_commit": "f1b22d891",
+  "change": "Small symbol result with inlined primary lookup and separate canonical/error fallback",
+  "reverse_patch": "huffman-combined-before.patch",
+  "reverse_patch_sha256": "a1b13b7b091a7d27c0376004626c74657dfd555b1325d6907ccc2ec5a9b37612",
+  "exact_reconstruction_verified": true,
+  "sources": [
+    {
+      "path": "src/zlib.rs",
+      "before_sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117",
+      "candidate_sha256": "f4f4d34c1b3e86fa95c3d36373350b721d447ee8b7cacbf5538e085568336122"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "before_sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e",
+      "candidate_sha256": "e5b06545a44cc2867e637e4d50f082932fff803ece6480a2fa800fab6c1a6d8c"
+    }
+  ]
+}

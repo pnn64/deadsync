@@ -1,0 +1,74 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..6dd15a490 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -202,6 +202,47 @@ fn fixed() -> (Huffman, Huffman) {
+     )
+ }
+ 
++// Only buffered decoding uses paired literals. The nine-bit lookahead and the
++// incremental decoder's compact tables/working-memory contract are unchanged.
++struct BufferedLiterals {
++    tree: Huffman,
++    fast: [u32; 512],
++}
++impl BufferedLiterals {
++    fn new(tree: Huffman) -> Self {
++        let short = tree.counts[1..=4].iter().any(|&n| n != 0);
++        let fast = core::array::from_fn(|prefix| {
++            let entry = tree.fast[prefix];
++            let n = entry & 15;
++            if short && n != 0 && entry >> 4 < 256 {
++                let next = tree.fast[prefix >> n];
++                let m = next & 15;
++                if m != 0 && n + m <= 9 && next >> 4 < 256 {
++                    return (1 << 21)
++                        | (u32::from(next >> 4) << 13)
++                        | (u32::from(entry >> 4) << 4)
++                        | u32::from(n + m);
++                }
++            }
++            u32::from(entry)
++        });
++        Self { tree, fast }
++    }
++    #[inline]
++    fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
++        bits.fill_huffman(9);
++        let entry = self.fast[(bits.word & 511) as usize];
++        let n = (entry & 15) as u8;
++        if n != 0 && n <= bits.count {
++            bits.word >>= n;
++            bits.count -= n;
++            return Ok((entry >> 4) as usize);
++        }
++        // Near EOF the first literal can fit even when a pair does not.
++        self.tree.decode(bits)
++    }
++}
++
+ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+     let nl = bits.read(5)? as usize + 257;
+     let nd = bits.read(5)? as usize + 1;
+@@ -296,6 +337,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             } else {
+                 dynamic(&mut bits)?
+             };
++            let lit = BufferedLiterals::new(lit);
+             loop {
+                 match lit.decode(&mut bits)? {
+                     literal @ 0..=255 => {
+@@ -335,6 +377,13 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                             }
+                         }
+                     }
++                    pair if pair & (1 << 17) != 0 => {
++                        if limit.saturating_sub(output.len()) < 2 {
++                            return Err(Error::LimitExceeded);
++                        }
++                        reserve(&mut output, 2)?;
++                        output.extend_from_slice(&[pair as u8, (pair >> 9) as u8]);
++                    }
+                     _ => return Err(Error::Invalid("reserved literal symbol")),
+                 }
+             }

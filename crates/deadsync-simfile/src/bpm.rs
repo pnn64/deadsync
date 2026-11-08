@@ -169,14 +169,16 @@ impl BpmTimeline {
         if !target_beat.is_finite() || target_beat <= 0.0 {
             return 0.0;
         }
-        if !self.ordered {
-            return sec_at_beat_linear(self.segments.as_slice(), target_beat);
-        }
         let segments = self.segments.as_slice();
-        let index = segments
-            .partition_point(|segment| segment.beat <= target_beat)
-            .saturating_sub(1);
-        let segment = segments[index];
+        let segment = match segments {
+            [segment] => segment,
+            _ if !self.ordered => return sec_at_beat_linear(segments, target_beat),
+            _ => {
+                &segments[segments
+                    .partition_point(|segment| segment.beat <= target_beat)
+                    .saturating_sub(1)]
+            }
+        };
         let delta_beats = (target_beat - segment.beat).max(0.0);
         let mut time = segment.seconds_at_beat;
         if segment.bpm > 0.0 {
@@ -190,12 +192,15 @@ impl BpmTimeline {
         if !target_sec.is_finite() || target_sec <= 0.0 {
             return 0.0;
         }
-        if !self.ordered {
-            return beat_at_sec_linear(self.segments.as_slice(), target_sec);
-        }
         let segments = self.segments.as_slice();
-        let next = segments.partition_point(|segment| segment.seconds_at_beat < target_sec);
-        let segment = segments[next.saturating_sub(1).min(segments.len() - 1)];
+        let segment = match segments {
+            [segment] => segment,
+            _ if !self.ordered => return beat_at_sec_linear(segments, target_sec),
+            _ => {
+                let next = segments.partition_point(|segment| segment.seconds_at_beat < target_sec);
+                &segments[next.saturating_sub(1).min(segments.len() - 1)]
+            }
+        };
         let remain = (target_sec - segment.seconds_at_beat).max(0.0);
         let add_beats = if segment.bpm > 0.0 {
             remain * segment.bpm / 60.0
@@ -328,6 +333,27 @@ fn beat_at_sec_linear(segments: &[BpmSegment], target_sec: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constant_bpm_queries_preserve_invalid_rates_and_time_guards() {
+        for (map, seconds, beats) in [
+            ("", 4.0, 2.0),
+            ("invalid", 4.0, 2.0),
+            ("0=120", 2.0, 4.0),
+            ("0=0", 0.0, 0.0),
+            ("0=-120", 0.0, 0.0),
+            ("0=NaN", 0.0, 0.0),
+            ("0=inf", 0.0, f64::INFINITY),
+        ] {
+            let timeline = BpmTimeline::new(map);
+            assert_eq!(timeline.sec_at_beat(4.0), seconds, "{map}");
+            assert_eq!(timeline.beat_at_sec(2.0), beats, "{map}");
+            for target in [-1.0, -0.0, 0.0, f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
+                assert_eq!(timeline.sec_at_beat(target).to_bits(), 0.0f64.to_bits());
+                assert_eq!(timeline.beat_at_sec(target).to_bits(), 0.0f64.to_bits());
+            }
+        }
+    }
 
     #[test]
     fn sec_at_beat_uses_bpm_segments() {

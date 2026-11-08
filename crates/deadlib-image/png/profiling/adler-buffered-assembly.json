@@ -1,0 +1,24 @@
+{
+  "scope": "Static Linux machine code inspection, not a timing measurement. Packed widening and u32 addition in buffered adler32 demonstrate compiler SIMD; no explicit intrinsics or unsafe Rust were added.",
+  "binary_sha256": "2177cc2bda3dab4309c8014e7387d7886c5366ac458286280a13f9c0c28429d2",
+  "command": [
+    "objdump",
+    "-d",
+    "-l",
+    "-M",
+    "intel",
+    "--disassemble=_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32",
+    "/tmp/deadlib-image-adler-profile-target-20261027-a/release/examples/decode_profile"
+  ],
+  "objdump": "GNU objdump (GNU Binutils for Debian) 2.44",
+  "symbol": "_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32",
+  "assembly_sha256": "c6f684a777280029333169bdce52aa6d2f5ff2807535944072100b61f6a7768b",
+  "packed_instruction_counts": {
+    "punpckhwd": 2,
+    "paddd": 8,
+    "punpcklwd": 2,
+    "punpcklbw": 1,
+    "pslld": 4
+  },
+  "runner_sha256": "14fbc275e311bf629046a2a58bb4e520764447b2d39ed5e94d74d80a7042f8c3"
+}

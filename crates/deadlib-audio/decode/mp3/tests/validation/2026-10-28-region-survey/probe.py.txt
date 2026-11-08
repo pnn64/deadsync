@@ -1,0 +1,44 @@
+from pathlib import Path
+import csv,json,sys,subprocess,math
+root=Path(__file__).resolve().parents[2];tests=root/'crates/deadlib-audio/decode/mp3/tests';sys.path.insert(0,str(tests))
+from reference_huffman import Bits
+from reference_pcm import frames
+out=Path(__file__).parent/'regions-probe-1';out.mkdir(exist_ok=False)
+books={(int(r['book']),int(r['x']),int(r['y'])):(int(r['code']),int(r['bits'])) for r in csv.DictReader((tests/'data/huffman.csv').open())}
+bands=json.loads((tests/'data/bands.json').read_text())['rates']
+def frame(rate,kind,mixed,bound,line):
+ mpeg1=rate>=32000;version=3 if mpeg1 else 2 if rate>=16000 else 0
+ index=([44100,48000,32000] if mpeg1 else [22050,24000,16000] if version==2 else [11025,12000,8000]).index(rate)
+ main=Bits();big=0 if line is None else line//2+1
+ for n in range(big):
+  x=int(n*2==line);code,width=books[(1 if n*2<bound else 2,x,0)];main.put(code,width)
+  if x:main.put(0,1)
+ side=Bits();side.put(0,9 if mpeg1 else 8);side.put(0,5 if mpeg1 else 1)
+ if mpeg1:side.put(0,4)
+ for gr in range(2 if mpeg1 else 1):
+  for v,w in [(len(main.bits) if gr==0 else 0,12),(big if gr==0 else 0,9),(206,8),(0,4 if mpeg1 else 9),(1,1),(kind,2),(mixed,1),(1,5),(2,5),(0,3),(0,3),(0,3)]:side.put(v,w)
+  if mpeg1:side.put(0,1)
+  side.put(0,1);side.put(0,1)
+ assert len(side.bits)==(136 if mpeg1 else 72)
+ word=(2047<<21)|(version<<19)|(1<<17)|(1<<16)|(14<<12)|(index<<10)|(3<<6)
+ size=(144 if mpeg1 else 72)*(320000 if mpeg1 else 160000)//rate
+ data=word.to_bytes(4,'big')+side.data()+main.data();return data+bytes(size-len(data))
+records=[]
+linux=lambda p:'/mnt/c/'+str(p.resolve())[3:].replace('\\','/')
+for rate_text,(long,short) in bands.items():
+ rate=int(rate_text)
+ for kind,mixed in [(1,False),(2,False),(2,True),(3,False)]:
+  bound=3*short[3] if kind==2 else long[8]
+  source=out/f'{rate}-{kind}-{int(mixed)}.mp3'
+  source.write_bytes(b''.join(frame(rate,kind,mixed,bound,line)+frame(rate,kind,mixed,bound,None)*2 for line in [bound-2,bound,bound+2]))
+  results={};outputs={}
+  for mode in ['native','mad','mpg123','symphonia']:
+   binary='/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode' if mode in ['native','symphonia'] else '/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final';target=out/(source.stem+'-'+mode+'.bin')
+   r=subprocess.run(['wsl','-d','Debian','--',binary,mode,linux(source),linux(target)],capture_output=True,text=True)
+   results[mode]={'exit_code':r.returncode,'stderr':r.stderr}
+   if not r.returncode:outputs[mode]=[s for _,pcm in frames(target) for s in pcm]
+  for mode,pcm in outputs.items():
+   if mode!='native' and 'native' in outputs:
+    assert len(pcm)==len(outputs['native']);results[mode]['max']=max(abs(x-y) for x,y in zip(outputs['native'],pcm))
+  records.append({'file':source.name,'bound':bound,'results':results});(out/'results.json').write_text(json.dumps(records,indent=2)+'\n')
+  print(source.name,bound,results,flush=True)

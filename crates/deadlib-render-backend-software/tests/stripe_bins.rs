@@ -7,10 +7,24 @@ mod perf;
 mod backend {
     include!("../src/lib.rs");
 
+    #[test]
+    fn opacity_scan_has_no_allocation_churn() {
+        let mut image = RgbaImage::from_pixel(512, 512, image::Rgba([17, 31, 43, 255]));
+        for pixel in [0, 1, 131_072, 262_143] {
+            crate::perf::assert_no_churn(|| {
+                assert!(texture_is_opaque(std::hint::black_box(&image)));
+            });
+            image.as_mut()[pixel * 4 + 3] = 254;
+            crate::perf::assert_no_churn(|| {
+                assert!(!texture_is_opaque(std::hint::black_box(&image)));
+            });
+            image.as_mut()[pixel * 4 + 3] = 255;
+        }
+    }
+
     mod stripe_bins {
         use super::*;
         use crate::perf;
-        use std::hint::black_box;
 
         fn sprite(rows: ScreenRows) -> PreparedObject {
             PreparedObject::Sprite {
@@ -110,6 +124,8 @@ mod backend {
                                 tmeshes.push(PreparedTriangle {
                                     object: index,
                                     vertices: [ScreenVertexTexColor {
+                                        inv_w: 1.0,
+                                        z: 0.0,
                                         x: 0.0,
                                         y: 0.0,
                                         u: 0.0,
@@ -124,6 +140,10 @@ mod backend {
                                     rows,
                                     texture_mask: false,
                                     blend: BlendMode::Alpha,
+                                    depth_test: false,
+                                    depth_write: false,
+                                    depth_test_on_fail: false,
+                                    sampler: None,
                                     texture_handle: 7,
                                 });
                                 expected.push((rows, StripeItem::tmesh(triangle)));
@@ -149,6 +169,10 @@ mod backend {
                                     instance: 0,
                                     mvp: Matrix4::IDENTITY,
                                     blend: BlendMode::Alpha,
+                                    depth_test: false,
+                                    depth_write: false,
+                                    depth_test_on_fail: false,
+                                    sampler: None,
                                     texture_handle: 7,
                                 });
                                 expected.push((
@@ -180,41 +204,6 @@ mod backend {
                     assert_eq!(bins.offsets.last().copied(), Some(bins.items.len() as u32));
                     perf::assert_no_churn(|| bins.build(&objects, &meshes, &tmeshes, height));
                 }
-            }
-        }
-
-        #[test]
-        #[ignore = "manual release benchmark"]
-        fn benchmark_stripe_build() {
-            for (name, height, count, span) in [
-                ("empty", 1080, 0, 1),
-                ("small", 1080, 16, 32),
-                ("one-stripe", 1080, 1024, 1),
-                ("four-stripes", 1080, 1024, 128),
-                ("full-height", 1080, 1024, 1080),
-                ("mixed", 1080, 1024, 0),
-                ("4k-mixed", 2160, 1024, 0),
-            ] {
-                let objects: Vec<_> = (0..count)
-                    .map(|index| {
-                        let span = if span == 0 {
-                            [1, 32, 128, height][index % 4]
-                        } else {
-                            span
-                        };
-                        let start = (index * 37) % (height - span + 1);
-                        sprite(ScreenRows {
-                            start: start as u32,
-                            end: (start + span) as u32,
-                        })
-                    })
-                    .collect();
-                let mut bins = StripeBins::warmed();
-                bins.build(&objects, &[], &[], height);
-                perf::measure_sampled(name, 8192, count.max(1), || {
-                    bins.build(black_box(&objects), &[], &[], black_box(height));
-                    black_box(&bins);
-                });
             }
         }
     }

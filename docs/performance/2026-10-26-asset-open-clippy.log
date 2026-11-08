@@ -1,0 +1,138 @@
+    Checking deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+warning: file is loaded as a module multiple times: `crates\deadlib-assets\src\decode\..\..\..\..\tests\support\kernel_bench.rs`
+  |
+  = help: replace all but one `mod` item with `use` items
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#duplicate_mod
+  = note: `#[warn(clippy::duplicate_mod)]` on by default
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\decode.rs:326:55
+    |
+326 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> crates\deadlib-assets\src\decode.rs:326:55
+    |
+326 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+    = note: `#[warn(clippy::chunks_exact_to_as_chunks)]` on by default
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\decode.rs:557:53
+    |
+557 |         for (i, rgb) in palette.unwrap_or_default().chunks_exact(3).enumerate() {
+    |                                                     ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadlib-assets\src\present_dsl.rs:121:1
+    |
+121 | / fn build_sprite(
+122 | |     texture_key: impl Into<Arc<str>>,
+123 | |     x: f32,
+124 | |     y: f32,
+...   |
+129 | |     uv: Option<[f32; 4]>,
+130 | | ) -> Actor {
+    | |__________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: `deadlib-assets` (lib) generated 3 warnings (run `cargo clippy --fix --lib -p deadlib-assets -- --no-deps` to apply 1 suggestion)
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\texture_pixels_original.rs:34:14
+   |
+34 |             .chunks_exact(3)
+   |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\texture_pixels_original.rs:107:14
+    |
+107 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> crates\deadlib-assets\src\texture_pixels_original.rs:107:14
+    |
+107 |             .chunks_exact(3),
+    |              ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\indexed_pixels_original.rs:152:14
+    |
+152 |             .chunks_exact(3)
+    |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\decode\..\preparation_original.rs:44:14
+   |
+44 |             .chunks_exact(3)
+   |              ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\decode\palette_original.rs:32:14
+   |
+32 |             .chunks_exact(3),
+   |              ^^^^^^^^^^^^^^^
+   |
+help: consider using `as_chunks::<3>()` instead
+  --> crates\deadlib-assets\src\decode\palette_original.rs:32:14
+   |
+32 |             .chunks_exact(3),
+   |              ^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: this `if` statement can be collapsed
+  --> crates\deadlib-assets\src\decode\open_original.rs:32:5
+   |
+32 | /     if &signature[..2] == b"BM" {
+33 | |         if let Some(image) = decode_indexed_bmp_before(path, color_key)? {
+34 | |             return Ok(image);
+35 | |         }
+36 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+   = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+   |
+32 ~     if &signature[..2] == b"BM"
+33 ~         && let Some(image) = decode_indexed_bmp_before(path, color_key)? {
+34 |             return Ok(image);
+35 ~         }
+   |
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadlib-assets\src\decode\open_original.rs:83:53
+   |
+83 |         for (i, rgb) in palette.unwrap_or_default().chunks_exact(3).enumerate() {
+   |                                                     ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<3>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: using `chunks_exact` with a constant chunk size
+   --> crates\deadlib-assets\src\decode\open_original.rs:181:55
+    |
+181 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> crates\deadlib-assets\src\decode\open_original.rs:181:55
+    |
+181 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: `deadlib-assets` (lib test) generated 12 warnings (3 duplicates) (run `cargo clippy --fix --lib -p deadlib-assets --tests -- --no-deps` to apply 5 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.88s

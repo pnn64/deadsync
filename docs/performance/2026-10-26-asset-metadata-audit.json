@@ -1,0 +1,87 @@
+{
+  "baseline_commit": "79bc8398084976db234073a3f0069b561b7a9ddf",
+  "frozen_bodies_match_baseline": true,
+  "archives": {
+    "asset-metadata/baseline": {
+      "binary_sha256": "e2cdf1c9743ed5f26c8b5c027814b6fd807dcda889cfb0af90f3bcdcf0d22412",
+      "snapshot_sha256": "2feb0d22102a97a77ed6311b31593f6948b4c911875ecc9492ce144d9734c907",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata/gif": {
+      "binary_sha256": "edc51600281a6cbb1485c37468e1dcd6d731a339e845b4d7f61b0cc1b7b3a902",
+      "snapshot_sha256": "d80c7a1a9d27bae73a7c70030b46b99c81432d7c76903e3f74834f87af63af34",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata/spaces": {
+      "binary_sha256": "b4479273cfce35d046861657194b8caac60b052fe95b2d29d23ea739cf8719e8",
+      "snapshot_sha256": "7bf9ed970315d025333b4639f628ad44883b691b25d5326d298a944b1f0585ba",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata/final": {
+      "binary_sha256": "88b6689648c9da375ef3d895ad4ad5ad53894e56109572e9b784d3aaf10e39e3",
+      "snapshot_sha256": "e48f9b9a80d1d540abd3e4fd0a8cf595b794de5787060b5205518dcc85ac540c",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata-flags/baseline": {
+      "binary_sha256": "922486b1af5d3405a1fc135a0efb653cf34b07ddcbb579ec2be8388b5c180452",
+      "snapshot_sha256": "303ab540b3fa73bbf230bd94b1a200f74b60a7f31a93bfe73c58e46beced5156",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata-flags/direct": {
+      "binary_sha256": "d36a2da183d222a0b99a394f67ba281d1d1f3a32c4eb50303bac335ae821e044",
+      "snapshot_sha256": "a0318892018a23d67f89f1397397036c3a4a48612448e34760876ef2b673fd13",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata-flags/final": {
+      "binary_sha256": "8522f7852db1041e3a3d5f0f3cfff0e23422920b7d08d31b83d6331f9f151a88",
+      "snapshot_sha256": "89ba01f591df8ee391d16c407634626c757a6d53684fa0bb4bb5c91732698630",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata-spaces/baseline": {
+      "binary_sha256": "4d2b00340eb32007d7c3a101da1760b1531c9797a600caaf492d69e21ade2051",
+      "snapshot_sha256": "83031fa39ebb0187ba017b29d90a3881d50f888e11b30c6a475394711950f552",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    },
+    "asset-metadata-spaces/near": {
+      "binary_sha256": "0378c5a964fabdc7db4dfd0dc6150014938cb6b40e01958a0d2b06d36511d8dc",
+      "snapshot_sha256": "51e90d7a758f749d2ca064f448d76b836d465f1faaa1aceb2d125a19ec499b6e",
+      "body_hashes_verified": true,
+      "dependency_hashes_verified": true
+    }
+  },
+  "retained_bodies_match_current_source": true,
+  "cargo-tests-final": {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "deadlib-assets",
+      "--locked"
+    ],
+    "exit_code": 0,
+    "seconds": 75.99913787841797
+  },
+  "clippy-final": {
+    "argv": [
+      "cargo",
+      "clippy",
+      "-p",
+      "deadlib-assets",
+      "--locked",
+      "--lib",
+      "--tests",
+      "--no-deps"
+    ],
+    "exit_code": 0,
+    "seconds": 3.5487635135650635
+  },
+  "production_patch_replays_from_baseline_via_git_apply_unidiff_zero": true
+}

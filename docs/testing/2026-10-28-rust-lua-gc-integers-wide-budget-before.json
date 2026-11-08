@@ -1,0 +1,39 @@
+{
+  "runs": {
+    "reference": {
+      "command": [
+        "/mnt/c/GitHub/deadsync/target/lua-cli-reference-i686-unknown-linux-gnu-sse2/lua",
+        "-e",
+        "collectgarbage();collectgarbage('stop');local keep={};for i=1,150000 do keep[i]={i}end;collectgarbage();collectgarbage('stop');local visits=0;do local p=newproxy(true);getmetatable(p).__gc=function()visits=visits+1 end end;collectgarbage('setstepmul',-2000000000);local done=collectgarbage('step',0);print(done,visits,keep[150000][1]);collectgarbage('setstepmul',200);keep=nil;collectgarbage();collectgarbage()"
+      ],
+      "sha256": "677b8cf22b06d095cd7cdca2eb77ccfba393cf4913d12434d064ccce2ed33991",
+      "returncode": 0,
+      "stdout_hex": "747275650931093135303030300a",
+      "stderr_hex": ""
+    },
+    "checked": {
+      "command": [
+        "/home/perfecttaste/.cache/deadlua-gc-integers/checked/lua",
+        "-e",
+        "collectgarbage();collectgarbage('stop');local keep={};for i=1,150000 do keep[i]={i}end;collectgarbage();collectgarbage('stop');local visits=0;do local p=newproxy(true);getmetatable(p).__gc=function()visits=visits+1 end end;collectgarbage('setstepmul',-2000000000);local done=collectgarbage('step',0);print(done,visits,keep[150000][1]);collectgarbage('setstepmul',200);keep=nil;collectgarbage();collectgarbage()"
+      ],
+      "sha256": "e0b15abe00eaf1a55c3879d9d04e150c5e1ac732503f35c988c499df11636123",
+      "returncode": 0,
+      "stdout_hex": "747275650931093135303030300a",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "command": [
+        "/home/perfecttaste/.cache/deadlua-gc-integers/deadlua-before-wide",
+        "-e",
+        "collectgarbage();collectgarbage('stop');local keep={};for i=1,150000 do keep[i]={i}end;collectgarbage();collectgarbage('stop');local visits=0;do local p=newproxy(true);getmetatable(p).__gc=function()visits=visits+1 end end;collectgarbage('setstepmul',-2000000000);local done=collectgarbage('step',0);print(done,visits,keep[150000][1]);collectgarbage('setstepmul',200);keep=nil;collectgarbage();collectgarbage()"
+      ],
+      "sha256": "d6cf8dfd1c1cd01585d6e5171199db1bdb5544730918e6df69fee33e0900a6ed",
+      "returncode": 0,
+      "stdout_hex": "66616c73650930093135303030300a",
+      "stderr_hex": ""
+    }
+  },
+  "source": "collectgarbage();collectgarbage('stop');local keep={};for i=1,150000 do keep[i]={i}end;collectgarbage();collectgarbage('stop');local visits=0;do local p=newproxy(true);getmetatable(p).__gc=function()visits=visits+1 end end;collectgarbage('setstepmul',-2000000000);local done=collectgarbage('step',0);print(done,visits,keep[150000][1]);collectgarbage('setstepmul',200);keep=nil;collectgarbage();collectgarbage()",
+  "saved_rust_cli": "/home/perfecttaste/.cache/deadlua-gc-integers/deadlua-before-wide"
+}

@@ -1,0 +1,6 @@
+{
+  "vorbis/src/decoder.rs": "9b8fa6a26d4c05f462e0c20ccbadc2ce0a66be32ab18c57ddef9f5f8b33baa13",
+  "vorbis/src/residue.rs": "d4006ecba1438c2001f0c3503645c2f60e786f15601346df1be81e28f5ecf95a",
+  "vorbis/tests/concealment.rs": "1d81285ceb5786dabcea4c68f334c50a39ecd6e573d2b7c694eb9264cc1aece4",
+  "vorbis/tests/oracle/oracle.c": "d09fcd053c4093de5e3f04edda1bb4e651eb95d89905107c85d166ee0f65a407"
+}

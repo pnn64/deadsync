@@ -1,0 +1,10 @@
+{
+  "before": {
+    "sha256": "922486b1af5d3405a1fc135a0efb653cf34b07ddcbb579ec2be8388b5c180452",
+    "checks": "\nrunning 1 test\ntest texture_hint_perf::hint_flags_match_every_byte_boundary_overlap_and_shipped_name ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s\n\n"
+  },
+  "after": {
+    "sha256": "d36a2da183d222a0b99a394f67ba281d1d1f3a32c4eb50303bac335ae821e044",
+    "checks": "\nrunning 1 test\ntest texture_hint_perf::hint_flags_match_every_byte_boundary_overlap_and_shipped_name ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s\n\n"
+  }
+}

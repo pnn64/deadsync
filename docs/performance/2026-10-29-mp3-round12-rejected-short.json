@@ -1,0 +1,33 @@
+{
+  "command": [
+    "python",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_dsp.py",
+    "--dewindow",
+    "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\dewindow",
+    "--crate",
+    "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\round12-regenerated"
+  ],
+  "passed": true,
+  "coefficient_count": 72,
+  "coefficient_bytes": 576,
+  "old_shape": [
+    12,
+    6
+  ],
+  "new_shape": [
+    6,
+    12
+  ],
+  "old_sha256": "3d205526dae02f428ffa1f56261dbab4819128b455f035a3c9cfcd2c7fb51d4a",
+  "new_sha256": "60d77528be9b8e28d458f4636d6b1a9ab640e4dab132b1ad5836fdf61b790648",
+  "generator_sha256": "c1e4af1ab69ae2d362d4f63d68cb6c601573446fabd1d9b41be27ab190b6aee8",
+  "unchanged_other_tables": true,
+  "unchanged_provenance": true,
+  "retained": false,
+  "reason": "Expanded nonfinite-output trace differs after transposition",
+  "first_differing_trace_byte": 177840780,
+  "baseline_output_sha256": "e388e71bbcfa2f55a2adb67cc2cc973cb5e5eaf5829c7669d2f67414872b7663",
+  "transposed_output_sha256": "76a20168a975d0cbff3d58207e9b13c16f71eb98b689e6c06902efdf3c44b532",
+  "before_hex": "020000000000f8ff010000000000f8ff",
+  "after_hex": "010000000000f87f020000000000f87f"
+}

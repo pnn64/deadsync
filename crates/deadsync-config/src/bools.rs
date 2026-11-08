@@ -1,20 +1,41 @@
 #[must_use]
 pub fn parse_bool_str(raw: &str) -> Option<bool> {
-    let raw = raw.trim();
-    if matches!(raw, "1")
-        || raw.eq_ignore_ascii_case("true")
-        || raw.eq_ignore_ascii_case("yes")
-        || raw.eq_ignore_ascii_case("on")
-    {
-        Some(true)
-    } else if matches!(raw, "0")
-        || raw.eq_ignore_ascii_case("false")
-        || raw.eq_ignore_ascii_case("no")
-        || raw.eq_ignore_ascii_case("off")
-    {
-        Some(false)
-    } else {
-        None
+    match raw.trim().as_bytes() {
+        [b'1'] => Some(true),
+        [b'0'] => Some(false),
+        [a, b] => {
+            const ON: u16 = u16::from_le_bytes(*b"on");
+            const NO: u16 = u16::from_le_bytes(*b"no");
+            match u16::from_le_bytes([*a, *b]) | 0x2020 {
+                ON => Some(true),
+                NO => Some(false),
+                _ => None,
+            }
+        }
+        [a, b, c] => {
+            let key = [*a | 0x20, *b | 0x20, *c | 0x20];
+            if key == *b"yes" {
+                Some(true)
+            } else if key == *b"off" {
+                Some(false)
+            } else {
+                None
+            }
+        }
+        [a, b, c, d]
+            if u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020
+                == u32::from_le_bytes(*b"true") =>
+        {
+            Some(true)
+        }
+        [a, b, c, d, e]
+            if u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020
+                == u32::from_le_bytes(*b"fals")
+                && (*e | 0x20) == b'e' =>
+        {
+            Some(false)
+        }
+        _ => None,
     }
 }
 
@@ -29,7 +50,26 @@ pub fn parse_loose_bool_str(raw: &str) -> Option<bool> {
 
 #[must_use]
 pub fn parse_u8_bool_str(raw: &str) -> Option<bool> {
-    raw.trim().parse::<u8>().ok().map(|n| n != 0)
+    let raw = raw.trim();
+    let raw = raw.strip_prefix('+').unwrap_or(raw);
+    if raw.is_empty() {
+        return None;
+    }
+    let mut bytes = raw.as_bytes();
+    while let [b'0', rest @ ..] = bytes {
+        bytes = rest;
+    }
+    match bytes {
+        [] => Some(false),
+        [a] if a.is_ascii_digit() => Some(true),
+        [a, b] if a.is_ascii_digit() && b.is_ascii_digit() => Some(true),
+        [a, b, c] if a.is_ascii_digit() && b.is_ascii_digit() && c.is_ascii_digit() => {
+            let value =
+                u16::from(*a - b'0') * 100 + u16::from(*b - b'0') * 10 + u16::from(*c - b'0');
+            (value <= 255).then_some(true)
+        }
+        _ => None,
+    }
 }
 
 pub fn parse_u8_bool_or_default(raw: Option<&str>, default: bool) -> bool {

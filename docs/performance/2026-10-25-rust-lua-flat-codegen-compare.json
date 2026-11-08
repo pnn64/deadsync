@@ -1,0 +1,647 @@
+{
+  "metadata_equal_programs": 261,
+  "parent_revision": "7c82297c781e73ea2dc534e4799a985565fb61f7",
+  "protocol": "Same executable, two independent zero-dependency libraries; compile/drop timing, five warmups, nine alternating pairs. 261 complete Program Debug representations compared, including code, constants, register maps, upvalues, source lines and debug metadata. Return value 7 checked before timing. rustc opt-level=3, static CRT, final fat LTO; differs from Cargo reference protocol.",
+  "source_artifact": "2026-10-25-rust-lua-flat-codegen-compare.rs",
+  "driver_sha256": "dc5c10d757f7435a66009658fcc53c0a5c2f76659c8f1b984ba429f6bc156f1b",
+  "commands": [
+    [
+      "rustc",
+      "--edition=2024",
+      "--crate-type=rlib",
+      "--crate-name=lua_parent",
+      "C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\parent\\crates\\deadlib-lua\\src\\lib.rs",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\liblua_parent.rlib"
+    ],
+    [
+      "rustc",
+      "--edition=2024",
+      "--crate-type=rlib",
+      "--crate-name=lua_current",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\src\\lib.rs",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\liblua_current.rlib"
+    ],
+    [
+      "rustc",
+      "--edition=2024",
+      "--crate-name=capture_compare",
+      "C:\\GitHub\\deadsync\\docs\\performance\\2026-10-25-rust-lua-flat-codegen-compare.rs",
+      "--extern",
+      "lua_parent=C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\liblua_parent.rlib",
+      "--extern",
+      "lua_current=C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\liblua_current.rlib",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-C",
+      "lto=fat",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-flat-codegen-comparison\\compare.exe"
+    ]
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "current_source_hashes": {
+    "arena.rs": "a022f5e910680d3634eb415937b001441decc00e508c3293ff52ab04a09f8419",
+    "bin/deadlua.rs": "0990ea2628d37ade72447caaad2d9f27050a39aff95c35185e8a0897052f0824",
+    "bytecode.rs": "f8437ecd78f5360d1663ea6fd4db68d71245435538b3f9c2f1dccf66a1c356a0",
+    "compiler/expressions.rs": "1c87d42edbc21e27c590c5003987629f3cb3e72fa51fce521e7438e913e9253c",
+    "compiler/statements.rs": "25cc7d1d9feffb98a304843563e85a2697230efa7f75ac905ae6087f47899fee",
+    "compiler/tasks.rs": "a72ecf2fcd1bf0e8e5f08cbe5b47715ff8ded34b54345e650187b429dd1695b0",
+    "compiler.rs": "88d5b94393c6ae414bf50260f67419a4f5902a82283c50045ec248fedd0f7b94",
+    "error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "format.rs": "d30690c55ddcb9beba4e1fe0979aa168e14fc67f1eed05c8195efe57a8d2aa3c",
+    "lexer/scanner.rs": "2b0f17806492db5c53dc13e747136256207f56607c520698be80a36ddaa0c48f",
+    "lexer.rs": "bcbfc34ea608868f1013a227388f6454e3b7d6870c9a7f1f27ecbe19c6e105a2",
+    "lib.rs": "13006e1dec794c8a2ffaafab04455e941e5599c2ae1e5dbe3b461ffca50f6bb1",
+    "optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "parser/bindings.rs": "f0237695436f8af822913623a1845102ed29c2c246759d2a2ecbe5f35ea45cba",
+    "parser/resume.rs": "45d0363631ca1c11164dcb6ab1333ec14c700d1bb8f822f8f56c8485846b0246",
+    "parser.rs": "e0f257b946bdad82534307134a60592f7ed5c3de929ff4fd3b9f29f332aa4f8d",
+    "pattern.rs": "70ca21eae197709630ad94e279031ebb8a5647ee6042dc3b6f4874e9f02de01f",
+    "table.rs": "792846122e35696d45213f20d7b822ab4b647c49dc3755ff9285500754e6d5d3",
+    "value.rs": "f24a28b8ab79ceb6e6fb9dce25d719d6378f2f63788784729acf79130959f7fc",
+    "vm/debug.rs": "fac98d70c108e4fb999ebf05497b636c290b7d7e413e697fc47a15179fb4737d",
+    "vm/errors.rs": "9d027a742dc5073996f803eb4c7a15613c73066170310c91fab6d7b0d50ebcce",
+    "vm/gc.rs": "4322f1a6df3901753e774879301e021b994ef2429d33c88f0eaf75d988a5a7db",
+    "vm/hooks.rs": "32999dd0d952a10dc076245955225842cdeff2210f96f8daaee1ef887138171f",
+    "vm/io/number.rs": "7c4d6cb43e3792ee7b6237440361776aa6f1be623fab0f782d02a2c91baad9f1",
+    "vm/io/stream.rs": "1fd635c2e2e6bd399296247a737545e868eca1b5a9d8a312619656eff8f8cfab",
+    "vm/io.rs": "582e2f23169807de5cce90a34f7b2d9369aa096b643852edcad774e321e2f971",
+    "vm/limits.rs": "82c8ca8b0c23d90297b7b00afb4448dfd3e1383132740fac97d10e2a0027c47a",
+    "vm/loads.rs": "3822431796acf5abbbdcc248d1111d5eae87302ed3ff7a4039f82cb07c7f0264",
+    "vm/math.rs": "c8457f3fd7efc8ee1c00c9b0e81debe9cdc49833eb37a3ae9685803c9db5f5c8",
+    "vm/meta.rs": "23124912deaf29fe6be1e768a00703c650c67df56c2bebbedcb39206d9ed3a07",
+    "vm/native.rs": "9771d7a4286befd43b0db522f1ce1c9226770abb369e2e4073a864c90af0a807",
+    "vm/package.rs": "7850e2b22b1d46dad66676a650c653e8025c7037c4353fa603ad3b5fbdec4907",
+    "vm/strings.rs": "2789ff563365d54e51d0d3d1b61bf2ca1efe2dfe6855d929547cfda76b0868b5",
+    "vm/tables.rs": "1cf0f8c0474b2b5c2ac03f91226ed669a1ad8f7c8df114c33367dda78d762ee7",
+    "vm/threads.rs": "23ffe72f87cdb4263255c99c3c689293cf65a16c064d31c936dfe23831ebb860",
+    "vm/traces.rs": "55b16bd9001878ac03a42c9447ebbf8b9ee4dadd7d5c2dcb16c43c60c451e3df",
+    "vm/userdata.rs": "10b2328d57dc18abc1da09e3af6daa8ef4a650ceb1bf46c43ff597e80461f058",
+    "vm.rs": "f83c9a6386a0394d52decf394465d0df5fedc366ca8779fbd12f07e5bbd8b6ab"
+  },
+  "parent_source_hashes": {
+    "arena.rs": "49e430940197bd075f8f1c3cbf55941ab84b073c2d175a4021c2845e9c4b3d06",
+    "bin/deadlua.rs": "414f6c16aa256837f0ba452e172d1dfd02e985d9ef6b7e9f2d380700a7f31743",
+    "bytecode.rs": "7399b9551d7fb3efb5c50d6a44d337cf86619af5733b606957c1c5fa40742afa",
+    "compiler.rs": "a3ab63878346ab2987fef3ee428713fff7d74b88e0ba63bcb34b55bbbf6d750e",
+    "error.rs": "997b52aa34aef53cfb04e081ce397241095a3f8f175963ed9a6db9fa5539883c",
+    "format.rs": "e2c14f109f7909ae417f55ef152e7334522d1cce94786271d3b7a855c06d25fe",
+    "lexer/scanner.rs": "db71447eef8fa70108cf49bcaf26c89d2fedbacb8624c2a2d09a54fe06bbf1a8",
+    "lexer.rs": "16035cc5490301c60055fb502bd730f1f1694b04d98d306178907353f9825d1d",
+    "lib.rs": "4dc2a2f35ba57f0ef620aefe03e6d856b6994fe58a10894658e66e0f7b898fb8",
+    "optimizer.rs": "60bfa583b75bec6919019b17d7bd746549a303a151bc084d18a5b482134c038c",
+    "parser/bindings.rs": "bea4d6d144eccb829674d518460c660507fefbb35e7886d0cf88c3abf3ce9199",
+    "parser/resume.rs": "2df3cab81cacf36465c89a7ca352d2c7c4949dbc64c0e916d6ddefcbc7052f13",
+    "parser.rs": "5f61251b4d4323ff9fad639159a794f05f4677ec44707cdf13e1aacbd2af4005",
+    "pattern.rs": "67c8060f21fcbe7b9774d4f8b22e357650371d7db542621db04992a0c8ab30fc",
+    "table.rs": "fce2e9407bb849d209a384a8c22b907cf711d4a4303245812f19af46280f7548",
+    "value.rs": "dc0d9c5e50a137c1fb2ff6cc41426d8694ddee08f8b92dc19d0696da30af1a35",
+    "vm/debug.rs": "fac98d70c108e4fb999ebf05497b636c290b7d7e413e697fc47a15179fb4737d",
+    "vm/errors.rs": "52a90897713c751fcafe7dde54a085ffa5290fe4e2c0885069a3a5bd39c2808b",
+    "vm/gc.rs": "6e49c3b69bdba8432c84283e814f396b2d42d4d5d421cb42a033b21aaeed81e4",
+    "vm/hooks.rs": "7a60ba7400f614a6102234c9a1d063c03095943c08037bb581bdaa59f2a43bc2",
+    "vm/io/number.rs": "8da9d0cdd87f9dad661419ca0afc61b92486b309b7fae848d0818437075083f9",
+    "vm/io/stream.rs": "84253e53aca7904c49a028181e2610e88bf2b4eac4495d92844c4bfe27db5d3c",
+    "vm/io.rs": "582e2f23169807de5cce90a34f7b2d9369aa096b643852edcad774e321e2f971",
+    "vm/limits.rs": "7aa3398300aae60305fba4352779976a7637524395941696c58b28f15232dee9",
+    "vm/loads.rs": "3822431796acf5abbbdcc248d1111d5eae87302ed3ff7a4039f82cb07c7f0264",
+    "vm/math.rs": "c8457f3fd7efc8ee1c00c9b0e81debe9cdc49833eb37a3ae9685803c9db5f5c8",
+    "vm/meta.rs": "a5d484e6b5b8c00ad410bc2b8a215c537205ad182f4de421bf6e5668c44d71d7",
+    "vm/native.rs": "027b73c6b017b8050206f1e88c146886d068f7a964fb1110591cb4e2ba81ed08",
+    "vm/package.rs": "95a63ea086e4cf6b7b60eaaa97c2728d25a13730578d5e68b69453414d721be2",
+    "vm/strings.rs": "2789ff563365d54e51d0d3d1b61bf2ca1efe2dfe6855d929547cfda76b0868b5",
+    "vm/tables.rs": "1cf0f8c0474b2b5c2ac03f91226ed669a1ad8f7c8df114c33367dda78d762ee7",
+    "vm/threads.rs": "52c62eb5b891e40f43a40bbf7c60a6b3ede8715c9f88a1674a59cc917f1e9d8b",
+    "vm/traces.rs": "17935dbea2fe12ba6693dcdfb4bc5414202044710e949c7c076ec4e24ffaa2ed",
+    "vm/userdata.rs": "01f26efed6275ebbebbca23d554ae4de2c1ed0e207479900ca98aeab8a446d6e",
+    "vm.rs": "fbd413ee1e6d8666ce708a63688fa68be09024219807d4d378d880e45c775767"
+  },
+  "samples": [
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 1000,
+      "ns_per_iteration": 5628
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 1000,
+      "ns_per_iteration": 6093
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 1000,
+      "ns_per_iteration": 6056
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 1000,
+      "ns_per_iteration": 5636
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 1000,
+      "ns_per_iteration": 5649
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 1000,
+      "ns_per_iteration": 6076
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 1000,
+      "ns_per_iteration": 6124
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 1000,
+      "ns_per_iteration": 5627
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 1000,
+      "ns_per_iteration": 5616
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 1000,
+      "ns_per_iteration": 6076
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 1000,
+      "ns_per_iteration": 6075
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 1000,
+      "ns_per_iteration": 5630
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 1000,
+      "ns_per_iteration": 5679
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 1000,
+      "ns_per_iteration": 6072
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 1000,
+      "ns_per_iteration": 6067
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 1000,
+      "ns_per_iteration": 5678
+    },
+    {
+      "workload": "tiny",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 1000,
+      "ns_per_iteration": 5616
+    },
+    {
+      "workload": "tiny",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 1000,
+      "ns_per_iteration": 6145
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 5,
+      "ns_per_iteration": 6538760
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 5,
+      "ns_per_iteration": 7237780
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 5,
+      "ns_per_iteration": 7152580
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 5,
+      "ns_per_iteration": 6533200
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 5,
+      "ns_per_iteration": 6671340
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 5,
+      "ns_per_iteration": 7123300
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 5,
+      "ns_per_iteration": 7165460
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 5,
+      "ns_per_iteration": 6610680
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 5,
+      "ns_per_iteration": 6837400
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 5,
+      "ns_per_iteration": 7715780
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 5,
+      "ns_per_iteration": 7644320
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 5,
+      "ns_per_iteration": 6699040
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 5,
+      "ns_per_iteration": 6590220
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 5,
+      "ns_per_iteration": 7127840
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 5,
+      "ns_per_iteration": 7165180
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 5,
+      "ns_per_iteration": 6649120
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 5,
+      "ns_per_iteration": 6580380
+    },
+    {
+      "workload": "scopes_1000",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 5,
+      "ns_per_iteration": 7129500
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 5,
+      "ns_per_iteration": 10961380
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 5,
+      "ns_per_iteration": 11572880
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 5,
+      "ns_per_iteration": 11308460
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 5,
+      "ns_per_iteration": 10880680
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 5,
+      "ns_per_iteration": 10875780
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 5,
+      "ns_per_iteration": 11514580
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 5,
+      "ns_per_iteration": 11472660
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 5,
+      "ns_per_iteration": 10964180
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 5,
+      "ns_per_iteration": 10909980
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 5,
+      "ns_per_iteration": 11315760
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 5,
+      "ns_per_iteration": 11236980
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 5,
+      "ns_per_iteration": 10875520
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 5,
+      "ns_per_iteration": 10568220
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 5,
+      "ns_per_iteration": 11437240
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 5,
+      "ns_per_iteration": 11324760
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 5,
+      "ns_per_iteration": 10865940
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 5,
+      "ns_per_iteration": 11297320
+    },
+    {
+      "workload": "captures_1000",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 5,
+      "ns_per_iteration": 11451120
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 100,
+      "ns_per_iteration": 133778
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 100,
+      "ns_per_iteration": 133710
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 100,
+      "ns_per_iteration": 132493
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 100,
+      "ns_per_iteration": 133913
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 100,
+      "ns_per_iteration": 133355
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 100,
+      "ns_per_iteration": 133403
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 100,
+      "ns_per_iteration": 132577
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 100,
+      "ns_per_iteration": 133617
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 100,
+      "ns_per_iteration": 134037
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 100,
+      "ns_per_iteration": 133648
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 100,
+      "ns_per_iteration": 133456
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 100,
+      "ns_per_iteration": 135479
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 100,
+      "ns_per_iteration": 135818
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 100,
+      "ns_per_iteration": 132846
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 100,
+      "ns_per_iteration": 133347
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 100,
+      "ns_per_iteration": 134556
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 100,
+      "ns_per_iteration": 134151
+    },
+    {
+      "workload": "distinct_190",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 100,
+      "ns_per_iteration": 133152
+    }
+  ],
+  "median_paired_current_over_parent": {
+    "captures_1000": 1.0422255230564499,
+    "distinct_190": 0.9922165592701527,
+    "scopes_1000": 1.0839217750670127,
+    "tiny": 1.0790408525754884
+  },
+  "fixture_source": "crates/deadlib-lua/tests/codegen.rs",
+  "fixture_sha256": "f6972101c1951afc5f3e22e8712736222315ca2bfa3c5db2ef91773480f7887a"
+}

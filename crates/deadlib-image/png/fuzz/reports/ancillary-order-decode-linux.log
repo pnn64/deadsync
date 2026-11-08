@@ -1,0 +1,49 @@
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.50s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
+     Running `/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/decode -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/decode/ -runs=30000 -seed=928671 -max_len=65536 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1 /tmp/deadlib-image-ancillary-order-corpus-20261027-a/decode`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 928671
+INFO: Loaded 1 modules   (20566 inline 8-bit counters): 20566 [0x5ce13613e780, 0x5ce1361437d6), 
+INFO: Loaded 1 PC tables (20566 PCs): 20566 [0x5ce1361437d8,0x5ce136193d38), 
+INFO:    27627 files found in /tmp/deadlib-image-ancillary-order-corpus-20261027-a/decode
+INFO: seed corpus: files: 27627 min: 61b max: 63435b total: 5758804b rss: 60Mb
+#8192	pulse  cov: 2511 ft: 4455 corp: 246/26Kb exec/s: 4096 rss: 300Mb
+#16384	pulse  cov: 2591 ft: 4683 corp: 259/28Kb exec/s: 4096 rss: 446Mb
+#27628	INITED cov: 3752 ft: 11052 corp: 603/296Kb exec/s: 4604 rss: 466Mb
+#27639	NEW    cov: 3753 ft: 11053 corp: 604/296Kb lim: 63450 exec/s: 4606 rss: 466Mb L: 117/63435 MS: 1 ChangeByte-
+#27646	NEW    cov: 3753 ft: 11054 corp: 605/296Kb lim: 63450 exec/s: 4607 rss: 467Mb L: 143/63435 MS: 2 CopyPart-ShuffleBytes-
+#27677	NEW    cov: 3755 ft: 11056 corp: 606/296Kb lim: 63450 exec/s: 4612 rss: 467Mb L: 256/63435 MS: 1 ChangeBit-
+#27679	NEW    cov: 3756 ft: 11057 corp: 607/296Kb lim: 63450 exec/s: 4613 rss: 467Mb L: 114/63435 MS: 2 InsertByte-ChangeByte-
+#27709	NEW    cov: 3757 ft: 11058 corp: 608/297Kb lim: 63450 exec/s: 4618 rss: 467Mb L: 351/63435 MS: 5 CMP-EraseBytes-CrossOver-CMP-ChangeByte- DE: "\271d\222\212"-"\001\000\000\000\000\000\000\031"-
+#27725	NEW    cov: 3758 ft: 11059 corp: 609/297Kb lim: 63450 exec/s: 4620 rss: 467Mb L: 138/63435 MS: 1 ShuffleBytes-
+#27791	NEW    cov: 3759 ft: 11060 corp: 610/297Kb lim: 63450 exec/s: 4631 rss: 467Mb L: 145/63435 MS: 1 ChangeBinInt-
+#27809	REDUCE cov: 3759 ft: 11060 corp: 610/297Kb lim: 63450 exec/s: 4634 rss: 467Mb L: 230/63435 MS: 3 PersAutoDict-ChangeByte-EraseBytes- DE: "\271d\222\212"-
+#27820	NEW    cov: 3760 ft: 11061 corp: 611/297Kb lim: 63450 exec/s: 4636 rss: 467Mb L: 144/63435 MS: 1 ChangeByte-
+#27846	NEW    cov: 3761 ft: 11062 corp: 612/297Kb lim: 63450 exec/s: 4641 rss: 467Mb L: 105/63435 MS: 1 ChangeBinInt-
+#27949	NEW    cov: 3762 ft: 11063 corp: 613/298Kb lim: 63450 exec/s: 4658 rss: 467Mb L: 1346/63435 MS: 3 ChangeByte-CopyPart-ChangeBinInt-
+#28078	NEW    cov: 3762 ft: 11071 corp: 614/299Kb lim: 63450 exec/s: 4679 rss: 467Mb L: 557/63435 MS: 4 InsertRepeatedBytes-ChangeASCIIInt-CrossOver-ChangeBit-
+#28200	NEW    cov: 3763 ft: 11072 corp: 615/299Kb lim: 63450 exec/s: 4700 rss: 467Mb L: 55/63435 MS: 2 EraseBytes-CMP- DE: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"-
+#28203	NEW    cov: 3763 ft: 11074 corp: 616/300Kb lim: 63450 exec/s: 4700 rss: 467Mb L: 1416/63435 MS: 3 PersAutoDict-CrossOver-InsertRepeatedBytes- DE: "\271d\222\212"-
+#28229	NEW    cov: 3765 ft: 11076 corp: 617/301Kb lim: 63450 exec/s: 4704 rss: 468Mb L: 249/63435 MS: 1 InsertByte-
+#28280	NEW    cov: 3765 ft: 11078 corp: 618/301Kb lim: 63450 exec/s: 4713 rss: 468Mb L: 262/63435 MS: 1 ChangeByte-
+#28521	REDUCE cov: 3765 ft: 11078 corp: 618/301Kb lim: 63450 exec/s: 4753 rss: 468Mb L: 96/63435 MS: 1 EraseBytes-
+#28558	NEW    cov: 3766 ft: 11079 corp: 619/301Kb lim: 63450 exec/s: 4759 rss: 468Mb L: 207/63435 MS: 2 ChangeBit-CopyPart-
+#28839	NEW    cov: 3766 ft: 11083 corp: 620/302Kb lim: 63450 exec/s: 4806 rss: 469Mb L: 753/63435 MS: 1 ChangeBit-
+#28957	NEW    cov: 3766 ft: 11084 corp: 621/303Kb lim: 63450 exec/s: 4826 rss: 469Mb L: 1187/63435 MS: 3 CopyPart-EraseBytes-PersAutoDict- DE: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"-
+#29121	REDUCE cov: 3766 ft: 11084 corp: 621/303Kb lim: 63450 exec/s: 4853 rss: 469Mb L: 228/63435 MS: 4 ChangeBinInt-CrossOver-InsertByte-EraseBytes-
+#29362	REDUCE cov: 3766 ft: 11084 corp: 621/303Kb lim: 63450 exec/s: 4893 rss: 470Mb L: 73/63435 MS: 1 EraseBytes-
+#29583	REDUCE cov: 3766 ft: 11084 corp: 621/303Kb lim: 63450 exec/s: 4930 rss: 470Mb L: 87/63435 MS: 1 EraseBytes-
+#29604	NEW    cov: 3767 ft: 11085 corp: 622/303Kb lim: 63450 exec/s: 4934 rss: 470Mb L: 62/63435 MS: 1 EraseBytes-
+#30000	DONE   cov: 3767 ft: 11085 corp: 622/303Kb lim: 63450 exec/s: 5000 rss: 470Mb
+###### Recommended dictionary. ######
+"\271d\222\212" # Uses: 69
+"\001\000\000\000\000\000\000\031" # Uses: 62
+"\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000" # Uses: 64
+###### End of recommended dictionary. ######
+Done 30000 runs in 6 second(s)
+stat::number_of_executed_units: 30000
+stat::average_exec_per_sec:     5000
+stat::new_units_added:          24
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              470

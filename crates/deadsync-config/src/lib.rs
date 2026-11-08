@@ -23,6 +23,7 @@ pub mod runtime_load;
 pub mod runtime_state;
 pub mod runtime_update;
 mod save;
+pub mod streaming;
 pub mod theme;
 mod update;
 mod writer;

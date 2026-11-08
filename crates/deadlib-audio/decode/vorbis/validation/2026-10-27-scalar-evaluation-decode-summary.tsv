@@ -1,0 +1,145 @@
+path	producer	setting	decoder	median_ns	min_ns	max_ns	mad_ns	samples_per_run
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	3	native	159977.9661016949	153992.09039548022	176566.10169491524	5985.875706214691	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	2	libvorbis	138433.50449293965	133221.69448010268	171353.65853658537	4798.844672657258	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	3	libvorbis	189660.51779935276	176048.38187702265	225014.0776699029	9224.110032362456	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	1	symphonia	134880.72289156626	129064.5438898451	160193.63166953527	5390.017211703962	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	4	libvorbis	256751.59914712154	240784.86140724947	293304.6908315565	10784.43496801707	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	4	native	229446.49910233394	209244.52423698385	266911.49012567324	9099.281867145415	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	1	native	84973.79830348727	79414.42035815268	94600.09425070688	2716.965127238451	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	4	symphonia	257593.5412026726	160381.29175946547	296822.04899777286	13759.688195991097	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	4	native	206625.95041322315	195883.47107438016	236607.27272727274	8855.206611570262	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	3	libvorbis	206128.19672131148	185899.18032786885	228347.54098360657	6277.704918032803	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	2	libvorbis	120340.25834230355	112328.31001076427	134935.30678148547	5214.962325080734	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	2	symphonia	569704.8611111111	510835.7638888889	631738.5416666666	45347.22222222225	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	2	native	107482.18661639962	103332.23374175307	125851.55513666352	4116.776625824685	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	4	libvorbis	236434.11306042885	223079.14230019494	271807.99220272904	12242.105263157893	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	2	symphonia	136637.43922204213	128974.06807131281	158002.43111831442	6862.722852512146	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	1	libvorbis	87518.71961102106	75167.50405186386	96219.4489465154	4439.384116693691	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	4	symphonia	618125.5707762557	594690.8675799087	654072.1461187215	12881.735159817385	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	1	symphonia	543994.7955390335	514200.7434944238	596443.4944237918	22694.42379182158	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	1	native	56996.9465648855	54920.81887578071	64136.22484385843	890.9784871616939	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	3	native	179075.62189054728	173391.70812603648	202364.8424543947	5547.927031509142	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	3	symphonia	586100.0	559041.5094339623	673736.9811320754	16436.981132075423	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	2	native	132415.65600882028	122617.42006615215	150226.5711135612	6679.933847850058	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	3	symphonia	166524.79166666666	154125.41666666666	202921.66666666666	3657.708333333314	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	1	libvorbis	61397.355769230766	60373.958333333336	77101.28205128205	1023.3974358974301	640
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	3	symphonia	644593.7172774869	631691.0994764398	700194.7643979058	12902.617801047163	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	4	symphonia	345935.76923076925	317952.3076923077	358571.92307692306	9379.23076923081	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	2	symphonia	675270.3517587939	633667.3366834171	707022.6130653266	30868.84422110545	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	2	symphonia	218088.30409356725	206843.27485380118	232630.40935672514	3187.719298245618	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	3	native	346083.5260115607	323709.24855491327	356471.9653179191	10388.4393063584	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	3	libvorbis	310928.15013404825	288452.5469168901	348748.79356568365	22475.603217158176	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	1	symphonia	274491.0034602076	254889.96539792386	279899.3079584775	4460.207612456754	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	1	native	221164.0562248996	208799.79919678715	241153.8152610442	9746.78714859439	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	3	symphonia	235170.8439897698	229792.8388746803	255151.66240409206	3304.347826086945	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	2	native	247517.75898520084	239784.14376321353	269058.5623678647	3306.7653276955534	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	4	native	427078.3582089552	415044.77611940296	470849.62686567166	12033.582089552248	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	2	native	274069.30455635494	257947.242206235	290101.9184652278	12823.501199040737	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	2	libvorbis	233784.07079646018	216136.50442477877	262528.98230088496	10586.061946902657	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	1	symphonia	624171.144278607	610303.9800995025	665608.9552238806	13867.164179104497	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	3	native	313629.9145299145	308041.3105413105	344722.50712250714	5563.53276353277	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	4	native	414795.71428571426	399014.64285714284	471784.28571428574	9436.78571428574	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	4	libvorbis	447069.76744186046	443014.6179401993	456108.9700996678	4002.9900332225952	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	2	libvorbis	220394.06779661018	201289.83050847458	232948.09322033898	6236.228813559341	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	4	libvorbis	440687.1323529412	428229.04411764705	494062.1323529412	3058.823529411806	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	1	libvorbis	167745.3924914676	142802.21843003412	180507.67918088738	4810.9215017065	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	4	symphonia	685098.8700564972	671025.4237288135	716034.4632768362	10651.412429378484	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	1	native	193503.09477756286	182687.2340425532	207891.6827852998	3413.733075435215	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	3	libvorbis	302084.1432225064	288671.8670076726	318782.8644501279	11969.053708439867	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	1	libvorbis	146759.16666666666	139693.75	150515.41666666666	2464.722222222219	7680
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	2	libvorbis	218086.61710037175	197968.77323420075	241469.51672862453	9781.4126394052	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	3	symphonia	218322.42268041236	201723.71134020618	242900.77319587627	10557.216494845372	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	3	native	393396.98630136985	376597.80821917806	415942.19178082194	1770.9589041096042	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	1	native	313132.7160493827	300092.2839506173	326868.51851851854	3228.08641975309	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	3	symphonia	734937.7777777778	716568.8888888889	793914.4444444445	17381.111111111124	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	1	symphonia	636695.2095808383	611405.3892215568	669671.25748503	19408.982035928173	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	2	symphonia	202686.36363636365	194864.20454545456	322604.82954545453	2693.1818181817944	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	1	libvorbis	188781.46639511202	185001.22199592667	198337.06720977597	3780.2443991853506	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	4	libvorbis	275289.6907216495	260481.1855670103	294521.6494845361	9240.206185567018	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	4	symphonia	720686.274509804	680818.3006535948	747796.0784313725	12318.300653594779	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	2	native	356061.9834710744	340738.8429752066	379499.7245179063	12612.672176308522	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	4	native	424031.5112540193	414005.7877813505	440533.7620578778	5815.11254019296	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	3	libvorbis	241096.86800894854	228850.11185682326	258213.42281879194	5619.239373601798	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	2	native	312197.9498861048	307374.4874715262	339064.0091116173	4823.462414578593	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	3	native	351946.28571428574	339686.85714285716	364931.71428571426	6698.0	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	3	libvorbis	259073.97260273973	250884.47488584474	287022.14611872146	4766.666666666657	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	1	native	250368.57142857142	247514.48979591837	258275.10204081633	1476.938775510207	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	4	symphonia	340513.8790035587	332184.6975088968	355057.6512455516	5929.537366548029	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	4	libvorbis	306160.9550561798	283369.3820224719	331543.8202247191	11435.95505617978	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	2	symphonia	657600.0	645963.5802469136	684409.8765432099	8762.34567901236	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	1	libvorbis	223678.55670103093	214572.98969072165	229187.42268041236	5508.8659793814295	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	1	symphonia	264280.25641025644	260353.07692307694	271407.4358974359	2361.025641025626	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	4	native	392893.3908045977	369372.1264367816	418972.1264367816	13075.0	7056
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native-baseline	2	libvorbis	237726.4534883721	229844.76744186046	248271.8023255814	5189.825581395358	7056
+assets/sounds/boom.ogg	native	1	symphonia	367831.3559322034	356496.04519774014	419352.5423728814	6635.028248587565	17152
+assets/sounds/boom.ogg	native	3	native	1071580.46875	987682.8125	1168219.53125	56364.0625	17152
+assets/sounds/boom.ogg	native	2	native	847590.6976744186	761565.1162790698	895304.6511627907	42882.5581395349	17152
+assets/sounds/boom.ogg	native	2	symphonia	558993.8679245283	530491.9811320754	668958.962264151	28501.88679245289	17152
+assets/sounds/boom.ogg	native-baseline	3	native	914513.698630137	862481.506849315	1030543.1506849315	26804.109589041094	17152
+assets/sounds/boom.ogg	native	4	native	1181707.2727272727	1108288.1818181819	1387866.3636363635	47369.090909090824	17152
+assets/sounds/boom.ogg	native-baseline	2	libvorbis	642502.7472527473	624895.0549450549	765431.8681318681	17194.5054945054	17152
+assets/sounds/boom.ogg	native	4	symphonia	767938.9937106918	721103.1446540881	859756.6037735849	26891.823899371084	17152
+assets/sounds/boom.ogg	native	4	libvorbis	1279484.0425531915	1231247.8723404256	1376285.1063829786	12339.361702127615	17152
+assets/sounds/boom.ogg	native-baseline	1	symphonia	729731.6666666666	697435.0	794857.2222222222	31323.333333333372	17152
+assets/sounds/boom.ogg	native-baseline	4	symphonia	1035002.9126213592	1008748.5436893204	1122633.9805825243	12323.300970873795	17152
+assets/sounds/boom.ogg	native	2	libvorbis	702751.3368983957	682377.0053475936	757466.8449197861	20374.331550802104	17152
+assets/sounds/boom.ogg	native-baseline	4	native	1115354.716981132	1038252.8301886793	1217457.5471698113	46030.1886792453	17152
+assets/sounds/boom.ogg	native-baseline	2	native	755469.3641618497	683648.5549132949	848476.8786127168	28699.421965317917	17152
+assets/sounds/boom.ogg	native	3	libvorbis	1002288.4892086331	973856.1151079136	1208252.5179856115	13917.26618705038	17152
+assets/sounds/boom.ogg	native-baseline	3	libvorbis	950419.4244604317	894001.4388489209	1048717.9856115107	46579.13669064746	17152
+assets/sounds/boom.ogg	native	3	symphonia	658873.1182795699	627545.1612903225	720989.7849462365	24869.354838709696	17152
+assets/sounds/boom.ogg	native-baseline	1	libvorbis	279110.9913793103	265675.2155172414	308809.4827586207	4575.0	17152
+assets/sounds/boom.ogg	native-baseline	4	libvorbis	1265553.0612244897	1202187.7551020407	1335157.142857143	47308.16326530604	17152
+assets/sounds/boom.ogg	native-baseline	1	native	449489.89898989897	414226.93602693605	494005.0505050505	29301.34680134675	17152
+assets/sounds/boom.ogg	native-baseline	2	symphonia	885866.4670658683	857600.0	920029.3413173653	11750.898203592864	17152
+assets/sounds/boom.ogg	native-baseline	3	symphonia	970172.027972028	920136.3636363636	990009.0909090909	6437.762237762217	17152
+assets/sounds/boom.ogg	native	1	native	426496.9135802469	393222.83950617287	456037.037037037	12459.25925925927	17152
+assets/sounds/boom.ogg	native	1	libvorbis	262013.704496788	256878.58672376873	304097.64453961456	5135.117773019272	17152
+assets/music/in_two (loop).ogg	native-baseline	3	symphonia	8084905.263157895	7809194.736842105	8443857.894736841	228373.68421052676	441000
+assets/music/in_two (loop).ogg	native-baseline	4	symphonia	10206806.666666666	9921306.666666666	11854360.0	276433.3333333321	441000
+assets/music/in_two (loop).ogg	native	4	native	22517014.285714287	22452428.57142857	26191928.57142857	64585.714285716414	441000
+assets/music/in_two (loop).ogg	native	2	libvorbis	9705858.823529411	9077894.11764706	11019835.294117646	486170.5882352926	441000
+assets/music/in_two (loop).ogg	native	3	libvorbis	16066430.0	15348940.0	17024110.0	665840.0	441000
+assets/music/in_two (loop).ogg	native	4	symphonia	11515576.923076924	10900600.0	12606392.307692308	145369.23076923005	441000
+assets/music/in_two (loop).ogg	native-baseline	4	native	20302428.57142857	19794928.57142857	20643985.714285713	289500.0	441000
+assets/music/in_two (loop).ogg	native	2	symphonia	6877045.454545454	6384313.636363637	7435381.818181818	147500.0	441000
+assets/music/in_two (loop).ogg	native	2	native	12651269.23076923	12325507.692307692	13198415.384615384	114607.69230769388	441000
+assets/music/in_two (loop).ogg	native-baseline	3	libvorbis	14402018.181818182	13542390.909090908	15376145.454545455	260181.81818181835	441000
+assets/music/in_two (loop).ogg	native	1	symphonia	4959500.0	4780029.0322580645	5355119.354838709	96000.0	441000
+assets/music/in_two (loop).ogg	native-baseline	2	libvorbis	8439788.888888888	7835611.111111111	9225611.111111112	389472.2222222239	441000
+assets/music/in_two (loop).ogg	native	3	native	17364155.555555556	16905333.333333332	17755777.777777776	97666.66666666791	441000
+assets/music/in_two (loop).ogg	native-baseline	3	native	15436170.0	14777940.0	16138950.0	100950.0	441000
+assets/music/in_two (loop).ogg	native	4	libvorbis	23277057.14285714	22616657.14285714	24204071.42857143	520271.4285714291	441000
+assets/music/in_two (loop).ogg	native	3	symphonia	9059187.5	8756218.75	9731137.5	154581.25	441000
+assets/music/in_two (loop).ogg	native-baseline	1	libvorbis	4833400.0	4666887.878787879	5427893.939393939	157887.8787878789	441000
+assets/music/in_two (loop).ogg	native-baseline	2	native	11485764.285714285	11144185.714285715	12532028.57142857	330785.71428571455	441000
+assets/music/in_two (loop).ogg	native-baseline	2	symphonia	6474316.666666667	6103920.833333333	7420170.833333333	249170.83333333302	441000
+assets/music/in_two (loop).ogg	native-baseline	1	native	8836876.470588235	8411517.647058824	10178141.176470589	91388.23529411852	441000
+assets/music/in_two (loop).ogg	native-baseline	4	libvorbis	22489587.5	20546037.5	23691975.0	1102162.5	441000
+assets/music/in_two (loop).ogg	native	1	native	9226762.5	8669437.5	10450087.5	75206.25	441000
+assets/music/in_two (loop).ogg	native	1	libvorbis	5168626.666666667	4864853.333333333	5698990.0	74046.66666666605	441000
+assets/music/in_two (loop).ogg	native-baseline	1	symphonia	5215725.0	5047792.857142857	5753714.285714285	115771.42857142817	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	4	libvorbis	21709442.85714286	20914785.714285713	23629242.85714286	443000.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	4	native	20770600.0	19991757.14285714	21551414.285714287	419214.2857142873	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	2	native	12012450.0	11585378.57142857	12297107.142857144	284657.14285714366	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	1	symphonia	4689819.354838709	4440383.870967742	4836070.9677419355	138848.38709677383	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	1	libvorbis	4415585.294117647	4234750.0	4612514.705882353	76400.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	3	symphonia	8733443.75	8280993.75	9165431.25	181518.75	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	2	symphonia	7309677.2727272725	6805304.545454546	7607959.090909091	106718.18181818165	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	4	libvorbis	24387414.285714287	23456585.714285713	25659357.14285714	907671.4285714291	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	3	native	17033833.333333332	16484544.444444444	17994211.111111112	272011.1111111101	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	3	native	19576125.0	18511912.5	20362725.0	568612.5	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	3	symphonia	9659025.0	9522762.5	10194581.25	88650.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	3	libvorbis	18239100.0	17472637.5	18980400.0	411025.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	1	symphonia	4928329.0322580645	4801058.064516129	5114861.29032258	57261.290322580375	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	4	native	22692314.285714287	22047228.57142857	27126385.714285713	564071.4285714291	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	2	symphonia	6468616.666666667	6297270.833333333	7369895.833333333	77400.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	4	symphonia	10552614.285714285	9888464.285714285	10739035.714285715	186421.4285714291	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	3	libvorbis	16366420.0	15434290.0	17554890.0	603490.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	4	symphonia	11585161.538461538	11285753.846153846	12086353.846153846	168861.53846153803	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	2	libvorbis	9045255.555555556	8822394.444444444	10140405.555555556	32977.777777777985	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	2	native	13405809.090909092	12853072.727272727	13842236.363636363	156918.18181818165	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	2	libvorbis	10102813.333333334	9765233.333333334	10571700.0	230300.0	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	1	native	8429894.11764706	8331264.705882353	9039217.647058824	84829.41176470555	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	1	native	8246089.47368421	8103784.2105263155	9265415.789473685	121121.05263157934	441000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	1	libvorbis	4630941.176470588	4433076.470588235	4918497.05882353	151470.58823529352	441000

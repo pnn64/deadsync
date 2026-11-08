@@ -1,0 +1,34 @@
+{
+  "decode": {
+    "case_count": 1,
+    "median_reference_relative_percent": 2.015999952251102,
+    "median_control_relative_percent": -0.6504075475002868,
+    "both_comparisons_below_minus_5_percent": [],
+    "cases": [
+      {
+        "case": "kodim21",
+        "sample_bytes": 1179648,
+        "before_ns": 11543419.5,
+        "after_ns": 11236920.0,
+        "reference_relative_percent": 2.015999952251102,
+        "unchanged_control_relative_percent": -0.6504075475002868
+      }
+    ]
+  },
+  "inflate": {
+    "case_count": 1,
+    "median_reference_relative_percent": 0.8396513896424818,
+    "median_control_relative_percent": 2.7084374018260693,
+    "both_comparisons_below_minus_5_percent": [],
+    "cases": [
+      {
+        "case": "kodim21",
+        "sample_bytes": 1180160,
+        "before_ns": 9373135.0,
+        "after_ns": 8935332.0,
+        "reference_relative_percent": 0.8396513896424818,
+        "unchanged_control_relative_percent": 2.7084374018260693
+      }
+    ]
+  }
+}

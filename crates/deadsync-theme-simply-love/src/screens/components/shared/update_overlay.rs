@@ -99,23 +99,23 @@ struct PanelProgress {
 
 impl PanelContent {
     pub(crate) fn new(
-        title: String,
+        title: TextContent,
         version_tag: Option<String>,
-        body_lines: Vec<String>,
-        footer: String,
+        body_lines: Vec<TextContent>,
+        footer: TextContent,
         progress: Option<f32>,
         show_spinner: bool,
     ) -> Self {
         let (footer_frames, footer_animated) = footer_frames(footer);
         Self {
-            title: retained_string(title),
-            version_tag: version_tag.map(retained_string),
-            body_lines: body_lines.into_iter().map(retained_string).collect(),
+            title: retained_text(title),
+            version_tag: version_tag.map(|tag| retained_text(tag.into())),
+            body_lines: body_lines.into_iter().map(retained_text).collect(),
             footer_frames,
             footer_animated,
             progress: progress.map(|fraction| PanelProgress {
                 fraction,
-                label: retained_string(progress_label(fraction)),
+                label: retained_text(progress_label(fraction).into()),
             }),
             show_spinner,
         }
@@ -238,7 +238,7 @@ pub(crate) fn prepare(phase: &ActionPhase) -> Option<PanelContent> {
     if matches!(phase, ActionPhase::Idle) {
         return None;
     }
-    let (title, body_lines, footer, progress) = phase_strings(phase);
+    let (title, body_lines, footer, progress) = phase_text(phase, TextContent::Shared);
     Some(PanelContent::new(
         title,
         phase_version_tag(phase),
@@ -288,14 +288,14 @@ fn spinner_actor(cx: f32, cy: f32) -> Actor {
 /// slots so the (center-aligned) label doesn't shift left/right as
 /// dots come and go.  Cycles a hair under 1 s end-to-end (~200 ms per
 /// step) — fast enough to read as "alive" without strobing.
-fn footer_frames(footer: String) -> ([TextContent; 4], bool) {
-    let Some(stripped) = footer.strip_suffix('…') else {
-        let text = retained_string(footer);
+fn footer_frames(footer: TextContent) -> ([TextContent; 4], bool) {
+    let Some(stripped) = footer.as_str().strip_suffix('…') else {
+        let text = retained_text(footer);
         return (std::array::from_fn(|_| text.clone()), false);
     };
     const DOTS: [&str; 4] = ["   ", ".  ", ".. ", "..."];
     (
-        std::array::from_fn(|index| retained_string(format!("{stripped}{}", DOTS[index]))),
+        std::array::from_fn(|index| retained_text(format!("{stripped}{}", DOTS[index]).into())),
         true,
     )
 }
@@ -344,8 +344,11 @@ fn panel_text_tinted(
     actor
 }
 
-fn retained_string(value: String) -> TextContent {
-    TextContent::inline_str(&value).unwrap_or_else(|| TextContent::Shared(Arc::from(value)))
+fn retained_text(value: TextContent) -> TextContent {
+    TextContent::inline_str(value.as_str()).unwrap_or_else(|| match value {
+        TextContent::Owned(value) => TextContent::Shared(Arc::from(value)),
+        value => value,
+    })
 }
 
 /// `(title_rgba, body_rgba)` for the phase.  Lets us tint the title green
@@ -374,18 +377,25 @@ fn phase_version_tag(phase: &ActionPhase) -> Option<String> {
 /// without invoking the renderer.
 #[must_use]
 pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Option<f32>) {
+    phase_text(phase, |value| value.to_string())
+}
+
+fn phase_text<T: From<String>>(
+    phase: &ActionPhase,
+    text: impl Fn(Arc<str>) -> T,
+) -> (T, Vec<T>, T, Option<f32>) {
     match phase {
-        ActionPhase::Idle => (String::new(), Vec::new(), String::new(), None),
+        ActionPhase::Idle => (String::new().into(), Vec::new(), String::new().into(), None),
         ActionPhase::Checking => (
-            tr("Updater", "TitleChecking").to_string(),
-            vec![tr("Updater", "BodyChecking").to_string()],
-            tr("Updater", "FooterPleaseWait").to_string(),
+            text(tr("Updater", "TitleChecking")),
+            vec![text(tr("Updater", "BodyChecking"))],
+            text(tr("Updater", "FooterPleaseWait")),
             None,
         ),
         ActionPhase::RollbackChecking => (
-            tr("Updater", "TitleRollback").to_string(),
-            vec![tr("Updater", "BodyRollbackChecking").to_string()],
-            tr("Updater", "FooterPleaseWait").to_string(),
+            text(tr("Updater", "TitleRollback")),
+            vec![text(tr("Updater", "BodyRollbackChecking"))],
+            text(tr("Updater", "FooterPleaseWait")),
             None,
         ),
         ActionPhase::RollbackPick {
@@ -393,14 +403,11 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
             selected,
         } => {
             let mut body = Vec::with_capacity(candidates.len() + 1);
-            body.push(
-                tr_fmt(
-                    "Updater",
-                    "BodyRollbackCurrent",
-                    &[("version", &deadsync_version::current_tag())],
-                )
-                .to_string(),
-            );
+            body.push(text(tr_fmt(
+                "Updater",
+                "BodyRollbackCurrent",
+                &[("version", &deadsync_version::current_tag())],
+            )));
             for (i, info) in candidates.iter().enumerate() {
                 let key = if i == *selected {
                     "BodyRollbackRowSelected"
@@ -416,63 +423,66 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                         &[("date", &date)],
                     ));
                 }
-                body.push(row);
+                body.push(row.into());
             }
             (
-                tr("Updater", "TitleRollback").to_string(),
+                text(tr("Updater", "TitleRollback")),
                 body,
-                tr("Updater", "FooterRollbackPick").to_string(),
+                text(tr("Updater", "FooterRollbackPick")),
                 None,
             )
         }
         ActionPhase::RollbackEmpty => (
-            tr("Updater", "TitleRollback").to_string(),
-            vec![tr("Updater", "BodyRollbackEmpty").to_string()],
-            tr("Updater", "FooterDismiss").to_string(),
+            text(tr("Updater", "TitleRollback")),
+            vec![text(tr("Updater", "BodyRollbackEmpty"))],
+            text(tr("Updater", "FooterDismiss")),
             None,
         ),
         ActionPhase::ConfirmDownload { info, asset } => {
             let mut body = Vec::with_capacity(5);
-            body.push(
-                tr_fmt(
-                    "Updater",
-                    "BodyCurrent",
-                    &[("version", &deadsync_version::current_tag())],
-                )
-                .to_string(),
-            );
-            body.push(tr_fmt("Updater", "BodyLatest", &[("version", &info.tag)]).to_string());
-            body.push(
-                tr_fmt("Updater", "BodySize", &[("size", &format_size(asset.size))]).to_string(),
-            );
+            body.push(text(tr_fmt(
+                "Updater",
+                "BodyCurrent",
+                &[("version", &deadsync_version::current_tag())],
+            )));
+            body.push(text(tr_fmt(
+                "Updater",
+                "BodyLatest",
+                &[("version", &info.tag)],
+            )));
+            body.push(text(tr_fmt(
+                "Updater",
+                "BodySize",
+                &[("size", &format_size(asset.size))],
+            )));
             if let Some(date) = format_published_at(info.published_at.as_deref()) {
-                body.push(tr_fmt("Updater", "BodyPublished", &[("date", &date)]).to_string());
+                body.push(text(tr_fmt("Updater", "BodyPublished", &[("date", &date)])));
             }
             if let Some(sha) = format_sha256_short(asset.digest.as_deref()) {
-                body.push(tr_fmt("Updater", "BodySha256", &[("sha", &sha)]).to_string());
+                body.push(text(tr_fmt("Updater", "BodySha256", &[("sha", &sha)])));
             }
             (
-                tr("Updater", "TitleConfirm").to_string(),
+                text(tr("Updater", "TitleConfirm")),
                 body,
-                tr("Updater", "FooterConfirm").to_string(),
+                text(tr("Updater", "FooterConfirm")),
                 None,
             )
         }
         ActionPhase::UpToDate { tag: _tag } => (
-            tr("Updater", "TitleUpToDate").to_string(),
+            text(tr("Updater", "TitleUpToDate")),
             // Tag is rendered above as the focal point, so the body
             // can stay empty (the title alone reads cleanly).
             Vec::new(),
-            tr("Updater", "FooterDismiss").to_string(),
+            text(tr("Updater", "FooterDismiss")),
             None,
         ),
         ActionPhase::AvailableNoInstall { info } => (
-            tr("Updater", "TitleConfirm").to_string(),
+            text(tr("Updater", "TitleConfirm")),
             vec![
-                tr("Updater", "BodyManualDownload").to_string(),
-                truncate(&info.html_url, 80),
+                text(tr("Updater", "BodyManualDownload")),
+                truncate(&info.html_url, 80).into(),
             ],
-            tr("Updater", "FooterDismiss").to_string(),
+            text(tr("Updater", "FooterDismiss")),
             None,
         ),
         ActionPhase::Downloading {
@@ -484,52 +494,56 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
         } => {
             let mut body = match total {
                 Some(t) if *t > 0 => {
-                    vec![format!("{} / {}", format_size(*written), format_size(*t))]
+                    vec![format!("{} / {}", format_size(*written), format_size(*t)).into()]
                 }
-                _ => vec![format_size(*written)],
+                _ => vec![format_size(*written).into()],
             };
             if let Some(secs) = eta_secs {
-                body.push(tr("Updater", "BodyEtaShort").replace("{time}", &format_eta(*secs)));
+                body.push(
+                    tr("Updater", "BodyEtaShort")
+                        .replace("{time}", &format_eta(*secs))
+                        .into(),
+                );
             }
             let progress = total.and_then(|t| (t > 0).then_some(*written as f32 / t as f32));
             (
-                tr("Updater", "TitleDownloading").to_string(),
+                text(tr("Updater", "TitleDownloading")),
                 body,
-                tr("Updater", "FooterPleaseWait").to_string(),
+                text(tr("Updater", "FooterPleaseWait")),
                 progress.or(Some(0.0)),
             )
         }
         ActionPhase::Ready { info: _info } => (
-            tr("Updater", "TitleReady").to_string(),
-            vec![tr("Updater", "BodyReadyShort").to_string()],
-            tr("Updater", "FooterInstall").to_string(),
+            text(tr("Updater", "TitleReady")),
+            vec![text(tr("Updater", "BodyReadyShort"))],
+            text(tr("Updater", "FooterInstall")),
             None,
         ),
         ActionPhase::Applying { info: _info } => (
-            tr("Updater", "TitleApplying").to_string(),
-            vec![tr("Updater", "BodyApplyingWarning").to_string()],
-            tr("Updater", "FooterPleaseWait").to_string(),
+            text(tr("Updater", "TitleApplying")),
+            vec![text(tr("Updater", "BodyApplyingWarning"))],
+            text(tr("Updater", "FooterPleaseWait")),
             None,
         ),
         ActionPhase::AppliedRestartRequired {
             info: _info,
             detail,
         } => (
-            tr("Updater", "TitleAppliedRestartRequired").to_string(),
+            text(tr("Updater", "TitleAppliedRestartRequired")),
             vec![
-                tr("Updater", "BodyAppliedRestartRequired").to_string(),
-                truncate(detail, 80),
+                text(tr("Updater", "BodyAppliedRestartRequired")),
+                truncate(detail, 80).into(),
             ],
-            tr("Updater", "FooterDismiss").to_string(),
+            text(tr("Updater", "FooterDismiss")),
             None,
         ),
         ActionPhase::Error { kind, detail } => (
-            tr("Updater", "TitleError").to_string(),
+            text(tr("Updater", "TitleError")),
             vec![
-                tr("Updater", error_kind_key(*kind)).to_string(),
-                truncate(detail, 80),
+                text(tr("Updater", error_kind_key(*kind))),
+                truncate(detail, 80).into(),
             ],
-            tr("Updater", "FooterDismiss").to_string(),
+            text(tr("Updater", "FooterDismiss")),
             None,
         ),
     }
@@ -1212,3 +1226,11 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../../tests/perf/overlay_original.rs"]
+pub(crate) mod perf_original;
+
+#[cfg(test)]
+#[path = "../../../../../../tests/perf/overlay_ownership.rs"]
+pub(crate) mod perf_tests;

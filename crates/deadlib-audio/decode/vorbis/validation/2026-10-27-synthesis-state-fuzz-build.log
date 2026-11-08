@@ -1,0 +1,3 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 18.32s

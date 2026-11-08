@@ -1,0 +1,87 @@
+   Compiling deadlib-image-png v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png)
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 10.75s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
+     Running `/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/encode_stream/ -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1 /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/corpus/encode_stream`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 782347
+INFO: Loaded 1 modules   (21909 inline 8-bit counters): 21909 [0x5f3e29ab0350, 0x5f3e29ab58e5), 
+INFO: Loaded 1 PC tables (21909 PCs): 21909 [0x5f3e29ab58e8,0x5f3e29b0b238), 
+INFO:     1080 files found in /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/corpus/encode_stream
+INFO: seed corpus: files: 1080 min: 12b max: 12b total: 12960b rss: 36Mb
+#2	pulse  ft: 2032 exec/s: 1 rss: 40Mb
+#4	pulse  cov: 2132 ft: 2806 corp: 2/24b exec/s: 2 rss: 44Mb
+
+thread '<unnamed>' (237483) panicked at fuzz_targets/encode_stream.rs:207:5:
+assertion `left == right` failed
+  left: Png { image: Image { width: 18, height: 14, color_type: Grayscale, bit_depth: 2, samples: U8([3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3]) }, interlaced: false, palette: [], transparency: None, ancillary: [AncillaryChunk { kind: [116, 69, 88, 116], data: [67, 111, 109, 109, 101, 110, 116, 0, 98, 114, 110, 103, 100, 97, 104, 120, 118, 98, 113, 121], position: BeforePalette }], animation: None }
+ right: Png { image: Image { width: 18, height: 14, color_type: Grayscale, bit_depth: 2, samples: U8([3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3, 3, 3, 1, 2, 0, 1, 1, 1, 0, 3, 0, 3]) }, interlaced: false, palette: [], transparency: None, ancillary: [AncillaryChunk { kind: [116, 69, 88, 116], data: [67, 111, 109, 109, 101, 110, 116, 0, 98, 114, 110, 103, 100, 97, 104, 120, 118, 98, 113, 121], position: BeforeData }], animation: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+==237483== ERROR: libFuzzer: deadly signal
+    #0 0x5f3e297f2e41  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x1ede41) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #1 0x5f3e29926f2a  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x321f2a) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #2 0x5f3e2999e521  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x399521) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #3 0x79eac9b5bd6f  (/lib/x86_64-linux-gnu/libc.so.6+0x3fd6f) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #4 0x79eac9bb069b  (/lib/x86_64-linux-gnu/libc.so.6+0x9469b) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #5 0x79eac9b5bc41  (/lib/x86_64-linux-gnu/libc.so.6+0x3fc41) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #6 0x79eac9b444ab  (/lib/x86_64-linux-gnu/libc.so.6+0x284ab) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #7 0x5f3e29a608e9  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x45b8e9) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #8 0x5f3e29a5f568  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x45a568) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #9 0x5f3e29898654  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x293654) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #10 0x5f3e29a5f7f1  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x45a7f1) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #11 0x5f3e29a4de41  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x448e41) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #12 0x5f3e29a46d48  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x441d48) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #13 0x5f3e29a4e54c  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x44954c) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #14 0x5f3e29a73abb  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x46eabb) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #15 0x5f3e29a73972  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x46e972) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #16 0x5f3e29824b56  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x21fb56) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #17 0x5f3e29835ce6  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x230ce6) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #18 0x5f3e298431bc  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x23e1bc) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #19 0x5f3e298981e4  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x2931e4) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #20 0x5f3e29898fc8  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x293fc8) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #21 0x5f3e298978dd  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x2928dd) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #22 0x5f3e2999f3e3  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x39a3e3) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #23 0x5f3e299b67c2  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x3b17c2) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #24 0x5f3e299bcce3  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x3b7ce3) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #25 0x5f3e299be98b  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x3b998b) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #26 0x5f3e298cf652  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x2ca652) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #27 0x5f3e2989905d  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x29405d) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+    #28 0x79eac9b45ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #29 0x79eac9b45d64  (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #30 0x5f3e29753760  (/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream+0x14e760) (BuildId: 8d324506ca6c09a9fde274c890b4aa505721c558)
+
+NOTE: libFuzzer has rudimentary signal handlers.
+      Combine libFuzzer with AddressSanitizer or similar for better crash reports.
+SUMMARY: libFuzzer: deadly signal
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x1,0x11,0xd,0x20,0x3,0x0,0x7,0x7f,0xff,0x1,0x2a,0x80,
+\001\021\015 \003\000\007\177\377\001*\200
+artifact_prefix='/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/encode_stream/'; Test unit written to /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f
+Base64: ARENIAMAB3//ASqA
+stat::number_of_executed_units: 6
+stat::average_exec_per_sec:     3
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              46
+
+────────────────────────────────────────────────────────────────────────────────
+
+Failing input:
+
+	fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f
+
+Output of `std::fmt::Debug`:
+
+	[1, 17, 13, 32, 3, 0, 7, 127, 255, 1, 42, 128]
+
+Reproduce with:
+
+	cargo fuzz run --target-dir=/tmp/deadlib-image-fuzz-target encode_stream fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f
+
+Minimize test case with:
+
+	cargo fuzz tmin --target-dir=/tmp/deadlib-image-fuzz-target encode_stream fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f
+
+────────────────────────────────────────────────────────────────────────────────
+
+Error: Fuzz target exited with exit status: 77

@@ -1,0 +1,433 @@
+{
+  "base_revision": "c4ea3ece15003d04738cbab9e5fca4eb30815e9c",
+  "isolated_worktree": "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500",
+  "windows_cargo_target": "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500\\target\\cargo-final-1793080524229704000",
+  "native_linux_cargo_target": "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/native",
+  "i686_cargo_target": "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/i686",
+  "fresh_targets_initially_absent": true,
+  "source_hashes": {
+    "crates/deadlib-lua/Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/build.rs": "70cb94f79cfa22187fedec21f4f01e809a2bcb13a775f3058f32f91be0977921",
+    "crates/deadlib-lua/examples/native_boundary.rs": "2d72c543e61380f0ae1d969aa0e6d00c979d191422d6de1f476a97b572313341",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "3c9e80fb1ff2eeb6ece410b62d9b0322fa9f67620b602217b6ae2bf55001b870",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+    "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+    "crates/deadlib-lua/src/chunk51.rs": "bd86d3007c3f72902eb42c1757de848dc2c22e78c2f402c3ac3f520d94e09b28",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "1c751f59a9844bf77ee0e8b621c51a61194a2a89b0d19e3be878f7c1d0b37b53",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "198f7b5496b385bca42101ca63aed960230c288583fdb9675ab94510670c8058",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "47dbb7b3a71bf46d9adca789c2b6355f5ea8c6e443cfad90a97958c3cd188d43",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+    "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+    "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lib.rs": "e7b9bca002f8bac49bd21ba427221b53977fcc532880caffa2ebdbdef98211c6",
+    "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+    "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser.rs": "330dd6bf426456c360b54bcf6ae8cee7f68c8e7542a566c0a6416ae031f97b2a",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "8b55dfe6bd0ff5ec424d7883400d599b19bd5505397f2f93095ff6ea9419e5b9",
+    "crates/deadlib-lua/src/parser/resume.rs": "eaa2d68ae5f90202a6e0cb5bb11fa7043e7ca88e87e4c70f453ed8676d897951",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "dae14af310103a0a8622221b75156e0ebc1f19a8cb83f4cb04ebd1f30924868b",
+    "crates/deadlib-lua/src/value.rs": "4b830e1788ef76ce51c97807cdc3c8d9e40c4b3a22cecc3f076c0098b896d6ba",
+    "crates/deadlib-lua/src/vm.rs": "3ca07f3d434985c4b7df6765b6996542c18ce5e1a8c455f9dbbd4df4189c3cc1",
+    "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+    "crates/deadlib-lua/src/vm/debug.rs": "e6fcd6e21d906db0c4b7e5c68c265811d15fce793e7a8e716e0b8fe26fe8cc4f",
+    "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+    "crates/deadlib-lua/src/vm/gc.rs": "fa41ddcf110e8fea92b555af39d5ec481baad11ec6d56145654634de76ccd494",
+    "crates/deadlib-lua/src/vm/hooks.rs": "9ebb9b64b98a77b758bb36a7767112c4b8d43902172389579664ac04e694a92f",
+    "crates/deadlib-lua/src/vm/host.rs": "dd411a7fc4548c94cef9791c73fba1049689c11e101cf42d2117182b63989d37",
+    "crates/deadlib-lua/src/vm/host/stack.rs": "4e8ec323dea4582e7afcc80347eb4ef398a130f3ff5c3e6869abfa0467b126fd",
+    "crates/deadlib-lua/src/vm/host/stack/objects.rs": "33d050b17c933a1b2548833f3d39eb39562d55305ab893ff99c5591deffb10cf",
+    "crates/deadlib-lua/src/vm/host/stack/protected.rs": "4ecf6e26487225ae838f03c52436f67d1a76e6db0a78ceed4ae115ba2229cc01",
+    "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "d008e6be20cdac81befb215f866245e7ed61e903862fb1ab717ce034d9fca9d0",
+    "crates/deadlib-lua/src/vm/host/stack/tables.rs": "e806fbc72c8399ca21ab8b1a740ade9334d6241a26d74154f4dd73eb75320d1d",
+    "crates/deadlib-lua/src/vm/host/thread.rs": "d5b5c60e1ee2a5129e2c5049a6d4200a041aa7ad7ebe306c6b9c240be0eedc0d",
+    "crates/deadlib-lua/src/vm/io.rs": "1f483abdb0bc15b476afe3927fea213eed5c06c2292ed60a85750cb11c83d3a7",
+    "crates/deadlib-lua/src/vm/io/number.rs": "d2c3459749a329e9a277d584008e05c4b1e017c1f217c195d8dd23d174d61419",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "e39a786a6f6412ec609f64ba225d8b27588b0d54cf51283bd66e73b05cdad972",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "398618160c2eb779d0e40c3ca420f6ef483e6341eeed957d4ee228251b99b113",
+    "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+    "crates/deadlib-lua/src/vm/meta.rs": "dd24624cf2e64bb66ed86b25490124617acff0b007067400a5390c4c69ad3837",
+    "crates/deadlib-lua/src/vm/native.rs": "15956c46fe71bfb06eb47e371c4a6cbe92cb7826caf08b8995e12f89c57b44fe",
+    "crates/deadlib-lua/src/vm/os.rs": "09ad1346652180310dbef385095c2baf9e4c2bbc27b487aab9fb16e561e2015f",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "7b3163dcef1829b0e47374549e7551247165cc6a50a1058ab89978c4be84cc61",
+    "crates/deadlib-lua/src/vm/strings.rs": "1102a1253730c87fe39322e856a3d1a23d68f3759e4edca6b586509d84c8d7bb",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "aec3790dd7e947c77a3b7afde7ef66064f4ca6c1f94e3765e881c2444fddad5b",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "157ee14590ed4d301c40b69680b8c8a486977a8704ae4461f71ac4403f9199f0",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "37dc7a03a84702bacb90cd2b3b555735b27b966d82456e19dc083a389ec5b474",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "6c13af6eb1b688c5e727cf3c90a092e5a8d9222ae6414b86234d4498b7177fa3",
+    "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+    "crates/deadlib-lua/tests/hooks.rs": "a6acd5066289f71ed0a6428cc34ca7568185169db660b58fed0e1fd4f9ed30f7",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+    "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+    "crates/deadlib-lua/tests/loading.rs": "2e3d1898bed58d1f22623079f55132a349ac9b4d9cf6e8309a2a839aa61bcebc",
+    "crates/deadlib-lua/tests/lua51.rs": "d57b376a6ee2da4e2ea45586f805a8aa7027abc314e2683c4dc5d3b851748607",
+    "crates/deadlib-lua/tests/native-boundary/api.h": "b2fc3f508c5281b210d967bd98e4fa0817a2d815631f3394254c55a2a2d21cc1",
+    "crates/deadlib-lua/tests/native-boundary/boundary.c": "6aa02bac9d8691668e5651b3f361f526bdc6fe8f6ef5bc22a89611670b469427",
+    "crates/deadlib-lua/tests/native-boundary/cases.lua": "9daaa5f8db0daed57d8bbb56fa26a84b18b9a08a38a9e9f53c7a8006adaf772d",
+    "crates/deadlib-lua/tests/native-boundary/module.c": "e571c86eb91ce747c50de7821d6e2b83146be07725ca582eafa1e4d88d448aaf",
+    "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+    "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+    "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+    "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+    "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+    "crates/deadlib-lua/tests/os.rs": "eef37368f3867ef546053e2635187cd21f31e30a24c0e19fa2505df84099655a",
+    "crates/deadlib-lua/tests/package.rs": "a82a5c577f4f2af8ccde28f160a0948706e4997d3b92212bb77a86acbef8a219",
+    "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "2024ded5dbd922e36b5e1207134c975ed7bb86916e1fe09fa032fad473fc925b",
+    "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+    "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+    "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/build_lua_cli_reference.py": "500285532b2ded90fc7c27b0bd9b7e26387ae27de665f06b2af0e16a7d0263be",
+    "scripts/check_rust_lua_full_suite.py": "29e14049861198cc7c1d07a254e38808fa784df0c2d8bee18ebb645939a2627f",
+    "scripts/check_rust_lua_native_boundary.py": "bf825992969fdfe01b27acd9d30440811fceb791df05956d02fd23789c937f35",
+    "scripts/check_rust_lua_suite.py": "c9220d2262d80b3588be4cb74f2d49dad772c963259431dd01aef3e4e47d0ec1",
+    "scripts/check_rust_lua_traceback_limits.py": "c42266ae201b56f7a1bee3969dbe54313f4c03bb31deb0888e631cbbfd96900e"
+  },
+  "before_helper_snapshots": {
+    "scripts/build_lua_cli_reference.py": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-i686-before-helpers\\build_lua_cli_reference.py",
+      "sha256": "00d2a681e1ab2574258ad45d788eab60f2614c90612a57aa4fda9c7bff5936be"
+    },
+    "scripts/check_rust_lua_full_suite.py": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-i686-before-helpers\\check_rust_lua_full_suite.py",
+      "sha256": "808d77e3dabbdf4e35472a6b2d3cd8b790b85ae0965a26372782ce0da1d331d1"
+    }
+  },
+  "parent_validation": {
+    "path": "docs/testing/2026-10-27-rust-lua-portable-tests-validation.json",
+    "sha256": "6f95a9fcd3ab0b7780abcb1f8fe62fc1dafd128047102bfe5bf3af14764229cb"
+  },
+  "workspace_inputs": {
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "Cargo.lock": "3c0749be15998357c6528b36f25f3c350b7f018bd9341840f1d33df12246b857",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "tests": {
+    "windows": {
+      "total": 630,
+      "unit": 73,
+      "integration": 553,
+      "documentation": 4
+    },
+    "linux": {
+      "total": 630,
+      "unit": 73,
+      "integration": 553,
+      "documentation": 4
+    },
+    "i686": {
+      "total": 630,
+      "unit": 73,
+      "integration": 553,
+      "documentation": 4
+    }
+  },
+  "i686_reference_model": {
+    "flags": [
+      "-m32",
+      "-msse2",
+      "-mfpmath=sse"
+    ],
+    "development_oracle_environment": {
+      "CFLAGS_i686_unknown_linux_gnu": "-msse2 -mfpmath=sse"
+    },
+    "lua_integer_bits": 32,
+    "c_long_bits": 32,
+    "time_t_bits": 32,
+    "lua_number_bits": 64
+  },
+  "retained_windows_files": {
+    "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500\\target\\lua-full-suite\\1793080682437054500-47352\\reference\\main\\bin\\lua.exe": "fef6bc137240bae3070b2da41176e6451566840ce3a17753633e82077d45ac36",
+    "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500\\target\\lua-full-suite\\1793080682437054500-47352\\reference\\all\\bin\\lua.exe": "fef6bc137240bae3070b2da41176e6451566840ce3a17753633e82077d45ac36",
+    "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500\\target\\lua-full-suite\\1793080682437054500-47352\\rust\\main\\bin\\lua.exe": "c4e6ae8dd0d410572809dd6952fa88b270e8653e498bde7b89b5a1ad4e22d679",
+    "C:\\GitHub\\deadsync\\target\\lua-i686-suite-1793077807846656500\\target\\lua-full-suite\\1793080682437054500-47352\\rust\\all\\bin\\lua.exe": "c4e6ae8dd0d410572809dd6952fa88b270e8653e498bde7b89b5a1ad4e22d679"
+  },
+  "retained_linux_files": {
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/runs/1793077866730914349-301690/reference/main/bin/lua": "b8cf2fe918ffb9550681d4569bec8b546942c9a667b16b48cd85b8633d31e977",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/runs/1793077866730914349-301690/reference/all/bin/lua": "b8cf2fe918ffb9550681d4569bec8b546942c9a667b16b48cd85b8633d31e977",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/runs/1793077866730914349-301690/rust/main/bin/lua": "578941991d5f2e9fc88ef45ae8d53b36823377fefe774d34563af5c769b4d54a",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/runs/1793077866730914349-301690/rust/all/bin/lua": "578941991d5f2e9fc88ef45ae8d53b36823377fefe774d34563af5c769b4d54a",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/probe/i686-unknown-linux-gnu/release/deadlua": "578941991d5f2e9fc88ef45ae8d53b36823377fefe774d34563af5c769b4d54a",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793080843092658544-323115/reference/main/bin/lua": "e5a174d86ecf9cf0e673823c1c2475d518c0f8446eba16285451d6face21cbe8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793080843092658544-323115/reference/all/bin/lua": "e5a174d86ecf9cf0e673823c1c2475d518c0f8446eba16285451d6face21cbe8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793080843092658544-323115/rust/main/bin/lua": "5ffc52ccbcff3df473088ef52d8fc7459a098fb202e9e5eed876baf692bdd6f8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793080843092658544-323115/rust/all/bin/lua": "5ffc52ccbcff3df473088ef52d8fc7459a098fb202e9e5eed876baf692bdd6f8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/native/release/deadlua": "5ffc52ccbcff3df473088ef52d8fc7459a098fb202e9e5eed876baf692bdd6f8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081045889804072-330132/reference/main/bin/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081045889804072-330132/reference/all/bin/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081045889804072-330132/rust/main/bin/lua": "dfc86e32c6b3f999952b3bdb0a09b878e1bed61a13992a01693b8225fa08a69c",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081045889804072-330132/rust/all/bin/lua": "dfc86e32c6b3f999952b3bdb0a09b878e1bed61a13992a01693b8225fa08a69c",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/i686/i686-unknown-linux-gnu/release/deadlua": "dfc86e32c6b3f999952b3bdb0a09b878e1bed61a13992a01693b8225fa08a69c",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081077073496346/reference/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/1793081077073496346/rust/lua": "dfc86e32c6b3f999952b3bdb0a09b878e1bed61a13992a01693b8225fa08a69c",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/abi/abi.c": "9e0af3ea56f87d74f94f79bdc36f215d3355fa076832d9897232f71e0b3a0c56",
+    "/usr/include/stdc-predef.h": "82975831ea2d1f95b60225f37ddd6130225f0c3de2318674cb178fea661ad87b",
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h": "c93f57f1538121cdbc27b59a47f1ed82b078d40e404b46481c83bafadd5deada",
+    "/usr/include/stdio.h": "e5094b40bd7ab3bea3a4e80a4071069882c2e9a4488ff2b1b03174352a0db0b1",
+    "/usr/include/x86_64-linux-gnu/bits/libc-header-start.h": "06256b79e2535489e5dce8c21854d3b0bd72d5479a3d013170f09261defc0a4f",
+    "/usr/include/features.h": "20c5358da5ab2353b26bda1b36e66400290fbd2b16d30a6a21dc16f4f22ab280",
+    "/usr/include/features-time64.h": "89036fa88ac19881ddfb07d4e65beb620a083d770cbf1c925f148c9ea1ce5a63",
+    "/usr/include/x86_64-linux-gnu/bits/wordsize.h": "948177c0fc84c4746588f62252029880ec4c6f88b743ba55d952f980303ebfbb",
+    "/usr/include/x86_64-linux-gnu/bits/timesize.h": "d949eed9646ca5916b338e1f02ffaf31a4c62907738805aba4ffa329a365f8f2",
+    "/usr/include/x86_64-linux-gnu/sys/cdefs.h": "69a3c3625bac01b58ab781d02c7800592b5082c4ea962a456260dcf288216f68",
+    "/usr/include/x86_64-linux-gnu/bits/long-double.h": "30f74e9207fbbbe7fafb7b5e3e54124997abc44549506c514f2adae054ee3d56",
+    "/usr/include/x86_64-linux-gnu/gnu/stubs.h": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e",
+    "/usr/include/x86_64-linux-gnu/gnu/stubs-64.h": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289",
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include/stdarg.h": "7ead4a2428691baf94bec3fd2db8984dbb1c5f597edf0f9bc3068fb43dad22f7",
+    "/usr/include/x86_64-linux-gnu/bits/types.h": "74d92766725404961cc2908de587aeaf24a5a8ef49a0103c5d3fb9f9fe9dead0",
+    "/usr/include/x86_64-linux-gnu/bits/typesizes.h": "49656ffcee2a7091ae16f8ad737c63c1d3e06ecdb84c3fa1c6f65b0b6784262a",
+    "/usr/include/x86_64-linux-gnu/bits/time64.h": "b0c5f25ce84037dda2c42408543a4616e129d70d6ebf10bd3ecc8b756466582a",
+    "/usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h": "603e58ab31ed75b7e0ab09a2ca94e99955f7fbc63310466321ce27c906227eb4",
+    "/usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h": "c561df72d5b987ccbd022059fdb1bcb6899c3e94b403997a0576ef3e1afb0f94",
+    "/usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h": "8afae3abf006beb39fd9d4d4bae38745cdf08a91e6217ddf25833c8d4b04751b",
+    "/usr/include/x86_64-linux-gnu/bits/types/__FILE.h": "26c909942e8a6bc82725e9c402f393aed9e32d94190257ddf71e1b5f819b4e5e",
+    "/usr/include/x86_64-linux-gnu/bits/types/FILE.h": "37515f78be386f2edad4746f2947c928f480728c56d9a94e25302ebbdaef3c96",
+    "/usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h": "5b1e0312496e150398e71409ffd203e00cdff92365772ffa6aa4a198c3b8ea53",
+    "/usr/include/x86_64-linux-gnu/bits/types/cookie_io_functions_t.h": "f3a731752c167e53c1786b20e5460ec3696e1a35521f883d5ca84da85d983d9f",
+    "/usr/include/x86_64-linux-gnu/bits/stdio_lim.h": "436ad57abe906d460631967c822c0622dc100da1e1bd3e0fa8879b6f7f2c6654",
+    "/usr/include/x86_64-linux-gnu/bits/floatn.h": "959a6fafb663ca665daa89066124c126291603e14d727d8a1d59823e9fd92451",
+    "/usr/include/x86_64-linux-gnu/bits/floatn-common.h": "a8a1a20b3e3c9811b348f9f7c4a3825d0eae6b27615991d1ca50dd1338e32a00",
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include/float.h": "0924f0708449d918e3152d00087efdf18e3f26c92030c464a6b4a77da1439f57",
+    "/usr/include/time.h": "502077dfa1b92bb9d166d69ab07ba536afbc5188ff0ed4e55308845e7ef9752a",
+    "/usr/include/x86_64-linux-gnu/bits/time.h": "9b34f004f183bea846379580cb3d2f19588d96b4c7faafb3ebb7c9ffd9bafd59",
+    "/usr/include/x86_64-linux-gnu/bits/timex.h": "feb7e3f78aadcf5aa89233175df74e74366b0a7e79bf70f29edd24b45e817a4b",
+    "/usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h": "6585bf0dcd3d5a780d6246da841031f9b314ceb7400a3210f34815f5da93b1fa",
+    "/usr/include/x86_64-linux-gnu/bits/types/clock_t.h": "81e60e8a8d99b28bc723c14b156d7f7fc8ff663d98a857a3f5aea90431f577e3",
+    "/usr/include/x86_64-linux-gnu/bits/types/time_t.h": "d1cc45e24a80009117f61ee4ae9cae5d12f69f38d691e0a933f989f7a1d27bb0",
+    "/usr/include/x86_64-linux-gnu/bits/types/struct_tm.h": "e7bdda3f42eb0633850ed150fef0a0cf6193cbba8fa740e7505925424a595566",
+    "/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h": "798e773d0c7f3796033c043910db2b093d1e43116c4b3d2cf3be85f8c4304cf1",
+    "/usr/include/x86_64-linux-gnu/bits/endian.h": "f559fd70d8a24202805d1d8a3546e28c427f6ce7808296002687cb6c636fd21f",
+    "/usr/include/x86_64-linux-gnu/bits/endianness.h": "659a7060004eda113671a38852c4d1e9cb97a35932bcd1d8540f98c09c180747",
+    "/usr/include/x86_64-linux-gnu/bits/types/clockid_t.h": "dcd64d184855b245e5c7acf21910a0aaca590f1faf094e400da5d30551d11eb0",
+    "/usr/include/x86_64-linux-gnu/bits/types/timer_t.h": "d96a2452da0d933941273d11d1048ea525f033306892835b0a7a0999b13853aa",
+    "/usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h": "d6299fbc46fc57e7d14635cd5cf69125710ed021ab7305586c84644a03a39f8e",
+    "/usr/include/x86_64-linux-gnu/bits/types/locale_t.h": "aee0f473e9900ae9c3f9845cfabce44fb4d60ddf2706a30f802ea89bc6411d4c",
+    "/usr/include/x86_64-linux-gnu/bits/types/__locale_t.h": "d2513e510029ea0f2fc3868e9f1c990173b2df593d40bb8957b63c8035a1eb35",
+    "/mnt/c/GitHub/deadsync/target/lua-i686-suite-1793077807846656500/target/lua-cli-reference-i686-unknown-linux-gnu-sse2/lua-5.1.5/src/lua.h": "470551c185f058360f8d0f9e5c54a29a3950f78af6a93f3fe9e4039a380c7b87",
+    "/mnt/c/GitHub/deadsync/target/lua-i686-suite-1793077807846656500/target/lua-cli-reference-i686-unknown-linux-gnu-sse2/lua-5.1.5/src/luaconf.h": "0410ff22f66c275ba8fcee1fa87a0749d26d7952ed30d3bc9161688b39775464",
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include/limits.h": "bc572350077d8caa24f82d5439119aa2dc184e72cc4ea325b4cd0137db51580f",
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include/syslimits.h": "22dd0ab81baadd5a8d455b445855f341d419c7b0267beca235de00b7ec78e529",
+    "/usr/include/limits.h": "59dccd0e0f84037a0be75a01efe840b7b1ebe8502cdfb49742697c49290ce18f",
+    "/usr/include/x86_64-linux-gnu/bits/posix1_lim.h": "ea4252c4bb02abfad2e734c657d9f323e98f406b35be6377f43c7eb78699b8d6",
+    "/usr/include/x86_64-linux-gnu/bits/local_lim.h": "b38fad51045d65239da3868ea94c4f31850901ec1f7e56349452fca45f70717e",
+    "/usr/include/linux/limits.h": "567dbb4893d20bb986996f0a8b8f774b02ca6cb7df8e4b642895eade7e7ffcd9",
+    "/usr/include/x86_64-linux-gnu/bits/pthread_stack_min-dynamic.h": "aa07727cdcd5a7d9e2159e03b2db63f0e9ab75efd5332b565b5c8623ab9b714f",
+    "/usr/include/x86_64-linux-gnu/bits/posix2_lim.h": "53647564016cc8ecba361bd9cb7c706b9755ef604213ece31a1307ebc4cd08d1",
+    "/usr/include/x86_64-linux-gnu/bits/xopen_lim.h": "189ecbb0ca3df67cd58ee5160845c074af56c9ccc28467048576c492b2fac559",
+    "/usr/include/x86_64-linux-gnu/bits/uio_lim.h": "f3f33ea936a58c89d0a45601ec3ad6d75bf0442599500bd3506ece333fa6b0e1",
+    "/usr/include/bits/libc-header-start.h": "06256b79e2535489e5dce8c21854d3b0bd72d5479a3d013170f09261defc0a4f",
+    "/usr/include/bits/wordsize.h": "948177c0fc84c4746588f62252029880ec4c6f88b743ba55d952f980303ebfbb",
+    "/usr/include/bits/timesize.h": "d949eed9646ca5916b338e1f02ffaf31a4c62907738805aba4ffa329a365f8f2",
+    "/usr/include/sys/cdefs.h": "69a3c3625bac01b58ab781d02c7800592b5082c4ea962a456260dcf288216f68",
+    "/usr/include/bits/long-double.h": "30f74e9207fbbbe7fafb7b5e3e54124997abc44549506c514f2adae054ee3d56",
+    "/usr/include/gnu/stubs.h": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e",
+    "/usr/include/gnu/stubs-32.h": "fabece34f2565884d8a7a0b9a39069cc32d335e4b9be55353780172a971a9fb2",
+    "/usr/include/bits/types.h": "74d92766725404961cc2908de587aeaf24a5a8ef49a0103c5d3fb9f9fe9dead0",
+    "/usr/include/bits/typesizes.h": "49656ffcee2a7091ae16f8ad737c63c1d3e06ecdb84c3fa1c6f65b0b6784262a",
+    "/usr/include/bits/time64.h": "b0c5f25ce84037dda2c42408543a4616e129d70d6ebf10bd3ecc8b756466582a",
+    "/usr/include/bits/types/__fpos_t.h": "603e58ab31ed75b7e0ab09a2ca94e99955f7fbc63310466321ce27c906227eb4",
+    "/usr/include/bits/types/__mbstate_t.h": "c561df72d5b987ccbd022059fdb1bcb6899c3e94b403997a0576ef3e1afb0f94",
+    "/usr/include/bits/types/__fpos64_t.h": "8afae3abf006beb39fd9d4d4bae38745cdf08a91e6217ddf25833c8d4b04751b",
+    "/usr/include/bits/types/__FILE.h": "26c909942e8a6bc82725e9c402f393aed9e32d94190257ddf71e1b5f819b4e5e",
+    "/usr/include/bits/types/FILE.h": "37515f78be386f2edad4746f2947c928f480728c56d9a94e25302ebbdaef3c96",
+    "/usr/include/bits/types/struct_FILE.h": "5b1e0312496e150398e71409ffd203e00cdff92365772ffa6aa4a198c3b8ea53",
+    "/usr/include/bits/types/cookie_io_functions_t.h": "f3a731752c167e53c1786b20e5460ec3696e1a35521f883d5ca84da85d983d9f",
+    "/usr/include/bits/stdio_lim.h": "436ad57abe906d460631967c822c0622dc100da1e1bd3e0fa8879b6f7f2c6654",
+    "/usr/include/bits/floatn.h": "959a6fafb663ca665daa89066124c126291603e14d727d8a1d59823e9fd92451",
+    "/usr/include/bits/floatn-common.h": "a8a1a20b3e3c9811b348f9f7c4a3825d0eae6b27615991d1ca50dd1338e32a00",
+    "/usr/include/bits/time.h": "9b34f004f183bea846379580cb3d2f19588d96b4c7faafb3ebb7c9ffd9bafd59",
+    "/usr/include/bits/timex.h": "feb7e3f78aadcf5aa89233175df74e74366b0a7e79bf70f29edd24b45e817a4b",
+    "/usr/include/bits/types/struct_timeval.h": "6585bf0dcd3d5a780d6246da841031f9b314ceb7400a3210f34815f5da93b1fa",
+    "/usr/include/bits/types/clock_t.h": "81e60e8a8d99b28bc723c14b156d7f7fc8ff663d98a857a3f5aea90431f577e3",
+    "/usr/include/bits/types/time_t.h": "d1cc45e24a80009117f61ee4ae9cae5d12f69f38d691e0a933f989f7a1d27bb0",
+    "/usr/include/bits/types/struct_tm.h": "e7bdda3f42eb0633850ed150fef0a0cf6193cbba8fa740e7505925424a595566",
+    "/usr/include/bits/types/struct_timespec.h": "798e773d0c7f3796033c043910db2b093d1e43116c4b3d2cf3be85f8c4304cf1",
+    "/usr/include/bits/endian.h": "f559fd70d8a24202805d1d8a3546e28c427f6ce7808296002687cb6c636fd21f",
+    "/usr/include/bits/endianness.h": "659a7060004eda113671a38852c4d1e9cb97a35932bcd1d8540f98c09c180747",
+    "/usr/include/bits/types/clockid_t.h": "dcd64d184855b245e5c7acf21910a0aaca590f1faf094e400da5d30551d11eb0",
+    "/usr/include/bits/types/timer_t.h": "d96a2452da0d933941273d11d1048ea525f033306892835b0a7a0999b13853aa",
+    "/usr/include/bits/types/struct_itimerspec.h": "d6299fbc46fc57e7d14635cd5cf69125710ed021ab7305586c84644a03a39f8e",
+    "/usr/include/bits/types/locale_t.h": "aee0f473e9900ae9c3f9845cfabce44fb4d60ddf2706a30f802ea89bc6411d4c",
+    "/usr/include/bits/types/__locale_t.h": "d2513e510029ea0f2fc3868e9f1c990173b2df593d40bb8957b63c8035a1eb35",
+    "/usr/include/bits/posix1_lim.h": "ea4252c4bb02abfad2e734c657d9f323e98f406b35be6377f43c7eb78699b8d6",
+    "/usr/include/bits/local_lim.h": "b38fad51045d65239da3868ea94c4f31850901ec1f7e56349452fca45f70717e",
+    "/usr/include/bits/pthread_stack_min-dynamic.h": "aa07727cdcd5a7d9e2159e03b2db63f0e9ab75efd5332b565b5c8623ab9b714f",
+    "/usr/include/bits/posix2_lim.h": "53647564016cc8ecba361bd9cb7c706b9755ef604213ece31a1307ebc4cd08d1",
+    "/usr/include/bits/xopen_lim.h": "189ecbb0ca3df67cd58ee5160845c074af56c9ccc28467048576c492b2fac559",
+    "/usr/include/bits/uio_lim.h": "f3f33ea936a58c89d0a45601ec3ad6d75bf0442599500bd3506ece333fa6b0e1",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/abi/native": "e037132070516dd5ef48f1df15dc589f3e65ad812822eb8ccf33414964cd1c3f",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/abi/i686-default": "196c0997e7a7cbf36b0f2384bd9a2c929a0c5dd8ac494e42f29f72795112c4b8",
+    "/home/perfecttaste/.cache/deadlua-i686-suite/1793080524229704000/runs/abi/i686-sse2": "9709670d7e14b4b0c5cc2eb1d362c071715fe1a2b268bb2f177b36a609c82d6b"
+  },
+  "boundary_dispatch_trace": [
+    "BOUNDARY operations=36766 drops=36766 panic_abort=true",
+    "STATES created=73 collected=72 destroyed=73"
+  ],
+  "reports": {
+    "windows": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-windows.json",
+      "sha256": "3ae8ca6b54d7b7acff53e9e57fa729f300d7a5a5f2a045d2b28a843dd90a2488"
+    },
+    "linux": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-linux.json",
+      "sha256": "41c271d8c0b91371bbd73b08e140734401bb06cce2ef6ef51ff8dab77d3227c8"
+    },
+    "i686": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-i686.json",
+      "sha256": "97426aa2bd2448a3d7d2100337b873e99a64eb477918291e9f0213af6cb2a399"
+    },
+    "tracebacks": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-tracebacks.json",
+      "sha256": "852920d15b5d85469de6363138c6cbb2e0bdc41ec8ff7e25563345d0b3b7c41e"
+    },
+    "boundary": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-boundary.json",
+      "sha256": "59db4a26dd53031342dd47405ea85684212ab154e1df3b35fb4da0d8f28a34e0"
+    },
+    "before": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-before.json",
+      "sha256": "5b9055622adc55dfda69c27ba4e0c49528e4a8050db90db190c0becc13c66b1d"
+    },
+    "abi": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-abi.json",
+      "sha256": "708e9123800e9570e4f9a9ec740eecbd01e2f580f5b55cce4cafd8f3b16048e5"
+    },
+    "audit": {
+      "path": "docs/testing/2026-10-27-rust-lua-i686-suite-audit.json",
+      "sha256": "4b147f6c11f9ca0f5c1e604461a55376c7af573028a0c6d6c9adaa4c9a4901d0"
+    }
+  },
+  "checks": {
+    "fmt": {
+      "path": "target/lua-i686-suite-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "clippy": {
+      "path": "target/lua-i686-suite-clippy.log",
+      "sha256": "b05fca9598b27c7cfd8451fce78790f4d0995c0672f01a4e9276fb0260cd9cec",
+      "exit_code": 0
+    },
+    "tree": {
+      "path": "target/lua-i686-suite-tree.log",
+      "sha256": "afb1a9da9bb90028fbaace31c4d9571ac0049c7a0d334e8b81216a9b2c919f9c",
+      "exit_code": 0
+    },
+    "tests": {
+      "path": "target/lua-i686-suite-tests.log",
+      "sha256": "a601b11eb61dc361e8994a09703c2130727a4c269d6958502003ebf3b7f9a94f",
+      "exit_code": 0
+    },
+    "windows": {
+      "path": "target/lua-i686-suite-windows.log",
+      "sha256": "07fa9d3ded34362653ab72119cc9ff8646e5f38edc8838f8542b11ae0a04719f",
+      "exit_code": 1
+    },
+    "linux-clippy": {
+      "path": "target/lua-i686-suite-linux-clippy.log",
+      "sha256": "8e22654c7b873dd21ee345951d686f82ee32d83e53b6ee6683517d000c6df533",
+      "exit_code": 0
+    },
+    "linux-tests": {
+      "path": "target/lua-i686-suite-linux-tests.log",
+      "sha256": "732177710ccfa093fa78d4d6f4878a5d75ca8d8f161985aa094af6951fd5768d",
+      "exit_code": 0
+    },
+    "linux": {
+      "path": "target/lua-i686-suite-linux.log",
+      "sha256": "7f473cc5891a1d905cba15d4418b18974885447e76fa9e7dfb86286dc99a77aa",
+      "exit_code": 1
+    },
+    "i686-clippy": {
+      "path": "target/lua-i686-suite-i686-clippy.log",
+      "sha256": "853f2e602c09205b0babf2e2364f20740d55cc2c41eafe57c79cff064f178253",
+      "exit_code": 0
+    },
+    "i686-tests": {
+      "path": "target/lua-i686-suite-i686-tests.log",
+      "sha256": "db036af709177fde89405b2d2597500954cccdc2690c4d32b7ee23a35742af5d",
+      "exit_code": 0
+    },
+    "i686": {
+      "path": "target/lua-i686-suite-i686.log",
+      "sha256": "10156d8e968d95aea57f728099a9863f6c91c9c27f9e293982579e20a2fffe9d",
+      "exit_code": 0
+    },
+    "tracebacks": {
+      "path": "target/lua-i686-suite-tracebacks.log",
+      "sha256": "e7fbcfca0fa83c83fb69472f633518bed2f24ee2bae7162216e2efd1ff1fd757",
+      "exit_code": 1
+    },
+    "boundary": {
+      "path": "target/lua-i686-suite-boundary.log",
+      "sha256": "52eba2c65304d716f74bbb1a6ff07d5883ae1db5f676349eb57453430584dc79",
+      "exit_code": 0
+    }
+  },
+  "setup_logs": {
+    "target/lua-i686-apt-plan.log": "d365090610c0ef01f2e83aebac31d907fabd3ee14fe2270150722ec6ae30ff00",
+    "target/lua-i686-apt-install.log": "33778367ac0ffa2aedaa022c63df76568fe2d8e0a5a9d885bb3deb785347fcfe",
+    "target/lua-i686-rustup.log": "831ad8906cd548d1be0b512110752469e0a5b4f23e8ea459eb4bf438761bef31"
+  },
+  "validation_drivers": {
+    "target/check_lua_i686_suite.py": "87494124bc4abeaba2fba64bdf98f20aea37d451cf57f27dc2ed319ea65fc215",
+    "target/check_lua_i686_boundary.py": "1fdcae9f27e3ab38256451fef043d1ad1d679556ac9342132b3b6fe6ec424e72"
+  },
+  "performance_benchmarks_run": false,
+  "limitations": "Both unchanged stock suite entry points pass in C and Rust on i686 SSE2. T/testC and suite native libraries remain absent. The x87 model is an exploratory baseline, not the declared Rust arithmetic profile. Five huge traceback cases time out in both bounded processes and remain incomplete. Native Linux x64 all.lua still fails at big.lua:11, and Windows entry points retain main.lua:53. Full Lua 5.1 parity, complete C/auxiliary APIs, production native loading, broader numeric/debug/GC/resource behavior, later dialects and integrations remain open."
+}

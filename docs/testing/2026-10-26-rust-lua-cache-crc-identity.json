@@ -1,0 +1,194 @@
+{
+  "source_hashes": {
+    "crates/deadlib-lua/build.rs": "70cb94f79cfa22187fedec21f4f01e809a2bcb13a775f3058f32f91be0977921",
+    "crates/deadlib-lua/Cargo.toml": "3032b3488a7bd024938085f178c71138fd93429147848ff45c56b58e1bd7157e",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/bytecode.rs": "3a148053ee732600ccdc932a578b47e20f71d03c6e13c371b8973b580df6bb80",
+    "crates/deadlib-lua/src/cache/codec.rs": "4ccd7068908fc66f199d862a6e62e915d569f3a3fecd69a5cdbf8d1eb50f0281",
+    "crates/deadlib-lua/src/cache/tests.rs": "7347bb1c7f14d5c527fca80fdd130fa1cd4f519dba3889900a9440fc5cc4f0d3",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "d67affeaac94f15d932bc6b42bc516e14bf48ce8fc439d80f9799dcf930d5478",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "59b1206b3468601f8fba83b0b6ac132ecc9fc92e6060c21d57447406ef51007b",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "1c751f59a9844bf77ee0e8b621c51a61194a2a89b0d19e3be878f7c1d0b37b53",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "74e684fccb61434b6b8a96f97eb41c4ad52ef5441a24fa2952f5414b65dcea34",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "7710330cbed9f0ee06d027bb99d20d9f87660025299e97787e7db519559a58f1",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "bd86d3007c3f72902eb42c1757de848dc2c22e78c2f402c3ac3f520d94e09b28",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "3b8163e4f4d1553e1f1e8ff46dc79367513161ea3784a9f99d6262f908f656a1",
+    "crates/deadlib-lua/src/compiler/statements.rs": "13b611e452288148129a90638481fc74917a9357688b985ac14ce11e5a893e3f",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "76e0cfedd67d485306ae4f7fd1e0e784cea9f8ae2ea04d20a632bd99e84f4dce",
+    "crates/deadlib-lua/src/compiler.rs": "d1b405755dfaf2a334b2fe9e1e579dd6d009772114903a9ab7ffc2e2fbbd212c",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "0a23763500c566db4ba18448fd15564cb57428df2d410f80b37c5283b34f7d0d",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "addee593f3534df2acf5d130eb21492a35d2ab19a9bde3939cf601129d8b2c6f",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "456cf8e12a559ea02443203813fa819e099735ef3f618b818c8fe4014d32f4bb",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "cd610b4fbca645350fb4bcfbbe23ab694b442c55ee2ede8fccb04f458ec95c10",
+    "crates/deadlib-lua/src/parser/resume.rs": "08a5d6da3044cac11fb0121bdd77d50e7d29197b5734326b0c3efecfe60a93c3",
+    "crates/deadlib-lua/src/parser.rs": "490fdfc7ff391b4421d4f0d1265e5dae84939f4bad0d72dce2031eb2554e8b71",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "5301a282862d6f7879e4a64c59d5a0d8df1d56f463b5da16a451d075648f26c0",
+    "crates/deadlib-lua/src/value.rs": "f24a28b8ab79ceb6e6fb9dce25d719d6378f2f63788784729acf79130959f7fc",
+    "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+    "crates/deadlib-lua/src/vm/debug.rs": "9016516e80f5e4f247a317f9e3238bc1195be89b5773527a24992b6bcf31c94e",
+    "crates/deadlib-lua/src/vm/errors.rs": "892dd847b6c35c300fd902cd6cb5ddcb01f80477c96f3e61b514ab04cdedd2e9",
+    "crates/deadlib-lua/src/vm/gc.rs": "376477a835ddca8b75ba8aaba260396ff3d3301d5b4835e4bbb27e365a432de9",
+    "crates/deadlib-lua/src/vm/hooks.rs": "b5825777e414a0f39e08f761323e6bb2859d0299f053f0a2f09082a9417b79e8",
+    "crates/deadlib-lua/src/vm/io/number.rs": "56928749ea72f1eca5be18ffd33995fec9521641b6d8322df59003bc7469cb26",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "d5a01ef2e193655e25849e60aafcac66a1d575751d0e6c3e5232f57e6ca49cb4",
+    "crates/deadlib-lua/src/vm/io.rs": "dc85c743aa267cd83ef7c2009602c032efd268ccd67750cd73c0e5ffb68f5a20",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "83eae76435efeb81c431af26454c52e302d162acf32ae4760651e796aa2e007f",
+    "crates/deadlib-lua/src/vm/math.rs": "ba770fa64f891571d757ed55f019f0c1bfb77d3573e4601644d0facfbebcd0df",
+    "crates/deadlib-lua/src/vm/meta.rs": "dd24624cf2e64bb66ed86b25490124617acff0b007067400a5390c4c69ad3837",
+    "crates/deadlib-lua/src/vm/native.rs": "d22340b380ca7ff3516075c269334ca95105e4c677a195a6a43c312dbe6ff8e1",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "cfd512034a919ab2ac92525f18db5e309f92be20dbea2ac473021784af61d6d8",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "711ad043839bcd321732c36fc462cc28c40dc462e4da5d8b032ab8231b4cc99d",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "ed4be867e3e0f2623c925fb1817644c500a05a47a7fd913ae8c19667e93ad6ca",
+    "crates/deadlib-lua/src/vm/strings.rs": "c71fc2471afff837fad0819d8f88216382db8c7ddd2c03de904b3e4d539b62f4",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "aeace8531dac7043dc25cdad76dc5edade9910d672a812713f68a6e2abfba3d3",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "e53126e06d87d1a7dc7a0a5ce28a120f52ce23234fbbdcda490a9b47408e0e80",
+    "crates/deadlib-lua/src/vm.rs": "5036ca639a52e1e28e50de764b339b32a2a072129eb2c67987d37e80962f02c6",
+    "scripts/check_rust_lua_cache_identity.py": "8ece411014ef50e75429e2d676589ea48b62ef2da0addccd83cd0beed6e459e2"
+  },
+  "build_command": [
+    "C:\\Users\\PerfectTaste\\.cargo\\bin\\rustc.EXE",
+    "--edition=2024",
+    "-C",
+    "opt-level=2",
+    "C:\\GitHub\\deadsync\\target\\lua-cache-identity-owe0kyrp\\build.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\lua-cache-identity-owe0kyrp\\identity.exe",
+    "-C",
+    "target-feature=+crt-static"
+  ],
+  "build_binary_sha256": "f5ffc6f48f0316b26a0100938a2c0dcdd7ace5724f168757517758f134390701",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "baseline_identity": "ac09e7b94ec82c10a6c5348b9a7f3d13",
+  "fixture_environment": {
+    "CARGO_CFG_TARGET_ARCH": "x86_64",
+    "CARGO_CFG_TARGET_OS": "windows",
+    "CARGO_CFG_TARGET_ENV": "msvc",
+    "CARGO_CFG_TARGET_ENDIAN": "little",
+    "CARGO_CFG_TARGET_POINTER_WIDTH": "64",
+    "CARGO_CFG_TARGET_FEATURE": "crt-static,sse,sse2",
+    "CARGO_ENCODED_RUSTFLAGS": "-C\u001ftarget-feature=+crt-static",
+    "DEBUG": "false",
+    "OPT_LEVEL": "3",
+    "RUSTC": "C:\\Users\\PerfectTaste\\.cargo\\bin\\rustc.EXE"
+  },
+  "cases": [
+    {
+      "name": "identical_inputs",
+      "changed_expected": false,
+      "identity": "ac09e7b94ec82c10a6c5348b9a7f3d13",
+      "pass_": true
+    },
+    {
+      "name": "checkout_crlf",
+      "changed_expected": false,
+      "identity": "ac09e7b94ec82c10a6c5348b9a7f3d13",
+      "pass_": true
+    },
+    {
+      "name": "source_content",
+      "changed_expected": true,
+      "identity": "a3663fa6b137fdf2c321e038a1d0a7d2",
+      "pass_": true
+    },
+    {
+      "name": "new_source_path",
+      "changed_expected": true,
+      "identity": "1dbd36974bf056df770d54494e8fc968",
+      "pass_": true
+    },
+    {
+      "name": "Cargo.toml_content",
+      "changed_expected": true,
+      "identity": "4e4891dbc39b09343814555ad7ae4f1a",
+      "pass_": true
+    },
+    {
+      "name": "build.rs_content",
+      "changed_expected": true,
+      "identity": "81cc7bb4a3771680fed001ff8cf919b7",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_ARCH",
+      "changed_expected": true,
+      "identity": "f34db0885071f77360d8211b91eeab4e",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_OS",
+      "changed_expected": true,
+      "identity": "6088d010e476ada91b20b2761541e5b7",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_ENV",
+      "changed_expected": true,
+      "identity": "1f532751da906b442a8c1d0ccd9508b7",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_ENDIAN",
+      "changed_expected": true,
+      "identity": "bc58cf43ace3955f3cd1073eadad5054",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_POINTER_WIDTH",
+      "changed_expected": true,
+      "identity": "63bd7ae44701e15dabb80ba2796bc3f2",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_CFG_TARGET_FEATURE",
+      "changed_expected": true,
+      "identity": "27c8248cc648d8d634e2b4e9ecb9916c",
+      "pass_": true
+    },
+    {
+      "name": "CARGO_ENCODED_RUSTFLAGS",
+      "changed_expected": true,
+      "identity": "af252e9784fe1291d97eb2c2f30dca49",
+      "pass_": true
+    },
+    {
+      "name": "DEBUG",
+      "changed_expected": true,
+      "identity": "6394eb8d677e546e694d4fc052929b28",
+      "pass_": true
+    },
+    {
+      "name": "OPT_LEVEL",
+      "changed_expected": true,
+      "identity": "8ced91cdf9a29bfd900e2479c7800a52",
+      "pass_": true
+    },
+    {
+      "name": "restored_inputs",
+      "changed_expected": false,
+      "identity": "ac09e7b94ec82c10a6c5348b9a7f3d13",
+      "pass_": true
+    }
+  ],
+  "limitations": "Runs the real build script in an isolated source copy. New-file hashing and emitted source-directory watches are checked; this is not a cross-target execution test or a cryptographic-authentication claim."
+}

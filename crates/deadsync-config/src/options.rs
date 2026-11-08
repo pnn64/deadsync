@@ -16,7 +16,7 @@ use crate::defaults::{
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
-    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
+    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHARE_RIPS,
     DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS, DEFAULT_SHOW_CONSOLE,
     DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_LOCAL_IP, DEFAULT_SHOW_MOST_PLAYED_COURSES,
     DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
@@ -60,7 +60,7 @@ use deadsync_theme::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 
-pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
+pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 5;
 pub const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 pub const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 pub const SHOW_STATS_MODE_MAX: u8 = 3;
@@ -245,12 +245,16 @@ pub struct SystemOptions {
     pub show_srpg_shop: bool,
     pub srpg_shop_folder: SrpgShopFolder,
     pub enable_arrowcloud: bool,
+    pub enable_golf: bool,
     pub enable_boogiestats: bool,
     pub submit_arrowcloud_fails: bool,
     pub show_arrowcloud_result_dialogs: bool,
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
+    /// List rips made in Find Content's Rip Packs on itgcontent.net's recent
+    /// rips, and mark the kept ones kept.
+    pub share_rips: bool,
     pub mine_hit_sound: bool,
     pub show_stats_mode: u8,
     pub frame_stats_overlay_anchor: &'static str,
@@ -311,12 +315,14 @@ impl Default for SystemOptions {
             show_srpg_shop: DEFAULT_SHOW_SRPG_SHOP,
             srpg_shop_folder: SrpgShopFolder::default(),
             enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
+            enable_golf: false,
             enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
             submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
             show_arrowcloud_result_dialogs: DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
+            share_rips: DEFAULT_SHARE_RIPS,
             mine_hit_sound: DEFAULT_MINE_HIT_SOUND,
             show_stats_mode: DEFAULT_SHOW_STATS_MODE,
             frame_stats_overlay_anchor: DEFAULT_FRAME_STATS_OVERLAY_ANCHOR,
@@ -492,9 +498,14 @@ fn parse_legacy_present_mode<P>(raw: &str, balanced_policy: P, unhinged_policy: 
 where
     P: Copy,
 {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "balanced" => Some(balanced_policy),
-        "unhinged" | "maxfps" | "max_fps" | "max-fps" => Some(unhinged_policy),
+    let raw = raw.trim();
+    match raw.len() {
+        8 if raw.eq_ignore_ascii_case("balanced") => Some(balanced_policy),
+        8 if raw.eq_ignore_ascii_case("unhinged") => Some(unhinged_policy),
+        6 if raw.eq_ignore_ascii_case("maxfps") => Some(unhinged_policy),
+        7 if raw.eq_ignore_ascii_case("max_fps") || raw.eq_ignore_ascii_case("max-fps") => {
+            Some(unhinged_policy)
+        }
         _ => None,
     }
 }
@@ -618,6 +629,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "EnableArrowCloud"),
             default.enable_arrowcloud,
         ),
+        enable_golf: parse_u8_bool_or_default(
+            conf.get("Options", "EnableGolf"),
+            default.enable_golf,
+        ),
         enable_boogiestats: parse_u8_bool_or_default(
             conf.get("Options", "EnableBoogieStats"),
             default.enable_boogiestats,
@@ -642,6 +657,7 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "SeparateUnlocksByPlayer"),
             default.separate_unlocks_by_player,
         ),
+        share_rips: parse_u8_bool_or_default(conf.get("Options", "ShareRips"), default.share_rips),
         mine_hit_sound: parse_u8_bool_or_default(
             conf.get("Options", "MineHitSound"),
             default.mine_hit_sound,
@@ -880,6 +896,7 @@ pub fn push_system_course_option_lines(content: &mut String, options: SystemOpti
 
 pub fn push_system_online_option_lines(content: &mut String, options: SystemOptions) {
     push_bool(content, "EnableArrowCloud", options.enable_arrowcloud);
+    push_bool(content, "EnableGolf", options.enable_golf);
     push_bool(content, "EnableBoogieStats", options.enable_boogiestats);
     push_bool(content, "EnableGrooveStats", options.enable_groovestats);
     push_bool(content, "ShowSrpgShop", options.show_srpg_shop);
@@ -904,6 +921,7 @@ pub fn push_system_online_option_lines(content: &mut String, options: SystemOpti
         "GrooveStatsQrLoginWhen",
         options.groovestats_qr_login_when.as_str(),
     );
+    push_bool(content, "ShareRips", options.share_rips);
 }
 
 pub fn push_system_input_hardware_option_lines(
@@ -1127,6 +1145,9 @@ pub struct SelectMusicOptions {
     pub scorebox_cycle_ex: bool,
     pub scorebox_cycle_hard_ex: bool,
     pub scorebox_cycle_tournaments: bool,
+    pub scorebox_cycle_golf: bool,
+    pub scorebox_events_first: bool,
+    pub show_golf_pars: bool,
     pub chart_info_peak_nps: bool,
     pub chart_info_effective_bpm: bool,
     pub chart_info_matrix_rating: bool,
@@ -1172,6 +1193,9 @@ impl Default for SelectMusicOptions {
             scorebox_cycle_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
             scorebox_cycle_hard_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
             scorebox_cycle_tournaments: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+            scorebox_cycle_golf: false,
+            scorebox_events_first: true,
+            show_golf_pars: false,
             chart_info_peak_nps: DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
             chart_info_effective_bpm: DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
             chart_info_matrix_rating: DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
@@ -1344,6 +1368,18 @@ pub fn load_select_music_options(
             conf.get("Options", "SelectMusicScoreboxCycleHardEx"),
             default.scorebox_cycle_hard_ex,
         ),
+        scorebox_cycle_golf: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicScoreboxCycleGolf"),
+            default.scorebox_cycle_golf,
+        ),
+        scorebox_events_first: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicScoreboxEventsFirst"),
+            default.scorebox_events_first,
+        ),
+        show_golf_pars: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicShowGolfPars"),
+            default.show_golf_pars,
+        ),
         scorebox_cycle_tournaments: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicScoreboxCycleTournaments"),
             default.scorebox_cycle_tournaments,
@@ -1482,6 +1518,17 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         select.step_artist_box_mode.as_str(),
     );
     push_bool(content, "SelectMusicScorebox", select.show_scorebox);
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleGolf",
+        select.scorebox_cycle_golf,
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxEventsFirst",
+        select.scorebox_events_first,
+    );
+    push_bool(content, "SelectMusicShowGolfPars", select.show_golf_pars);
     push_line(
         content,
         "SelectMusicScoreboxPlacement",
@@ -2298,6 +2345,7 @@ pub const fn machine_font_choice_index(font: MachineFont) -> usize {
     match font {
         MachineFont::Wendy => 0,
         MachineFont::Mega => 1,
+        MachineFont::Unprofessional => 2,
     }
 }
 
@@ -2305,6 +2353,7 @@ pub const fn machine_font_choice_index(font: MachineFont) -> usize {
 pub const fn machine_font_from_choice(idx: usize) -> MachineFont {
     match idx {
         1 => MachineFont::Mega,
+        2 => MachineFont::Unprofessional,
         _ => MachineFont::Wendy,
     }
 }
@@ -2432,6 +2481,7 @@ pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
     match variant {
         SrpgVariant::Srpg9 => 0,
         SrpgVariant::Srpg10 => 1,
+        SrpgVariant::Ecs15 => 2,
     }
 }
 
@@ -2439,6 +2489,7 @@ pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
 pub const fn srpg_variant_from_choice(idx: usize) -> SrpgVariant {
     match idx {
         1 => SrpgVariant::Srpg10,
+        2 => SrpgVariant::Ecs15,
         _ => SrpgVariant::Srpg9,
     }
 }
@@ -2639,6 +2690,9 @@ mod tests {
             scorebox_cycle_ex: false,
             scorebox_cycle_hard_ex: false,
             scorebox_cycle_tournaments: false,
+            scorebox_cycle_golf: false,
+            scorebox_events_first: true,
+            show_golf_pars: false,
             chart_info_peak_nps: true,
             chart_info_effective_bpm: true,
             chart_info_matrix_rating: false,
@@ -2657,12 +2711,14 @@ mod tests {
             show_srpg_shop: true,
             srpg_shop_folder: SrpgShopFolder::Unlocks,
             enable_arrowcloud: false,
+            enable_golf: false,
             enable_boogiestats: false,
             submit_arrowcloud_fails: false,
             show_arrowcloud_result_dialogs: true,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: false,
+            share_rips: true,
             mine_hit_sound: true,
             show_stats_mode: 0,
             frame_stats_overlay_anchor: "auto",
@@ -2958,6 +3014,7 @@ mod tests {
             ArrowCloudQrLoginWhen=Always
             GrooveStatsQrLoginWhen=Disabled
             SeparateUnlocksByPlayer=1
+            ShareRips=0
             MineHitSound=0
             ShowStatsMode=9
             FrameStatsOverlayAnchor=bottom-center
@@ -3020,6 +3077,7 @@ mod tests {
             GrooveStatsQrLoginWhen::Disabled
         );
         assert!(loaded.separate_unlocks_by_player);
+        assert!(!loaded.share_rips);
         assert!(!loaded.mine_hit_sound);
         assert_eq!(loaded.show_stats_mode, SHOW_STATS_MODE_MAX);
         assert_eq!(loaded.frame_stats_overlay_anchor, "bottom-center");
@@ -3105,6 +3163,7 @@ mod tests {
         assert_eq!(loaded.log_to_file, default.log_to_file);
         assert_eq!(loaded.show_console, default.show_console);
         assert!(loaded.show_arrowcloud_result_dialogs);
+        assert!(loaded.share_rips, "rips are shared unless turned off");
 
         conf.load_str("[Options]\nShowArrowCloudResultDialogs=0\n");
         assert!(!load_system_options(&conf, default).show_arrowcloud_result_dialogs);
@@ -3130,6 +3189,7 @@ mod tests {
         options.show_arrowcloud_result_dialogs = true;
         options.arrowcloud_qr_login_when = ArrowCloudQrLoginWhen::Always;
         options.groovestats_qr_login_when = GrooveStatsQrLoginWhen::Disabled;
+        options.share_rips = false;
         options.gfx_debug = true;
         options.high_dpi = true;
         options.hide_mouse_cursor = false;
@@ -3158,6 +3218,7 @@ mod tests {
                 "CourseShowRandom=1\n",
                 "DefaultFailType=Immediate\n",
                 "EnableArrowCloud=1\n",
+                "EnableGolf=0\n",
                 "EnableBoogieStats=0\n",
                 "EnableGrooveStats=1\n",
                 "ShowSrpgShop=1\n",
@@ -3166,6 +3227,7 @@ mod tests {
                 "ShowArrowCloudResultDialogs=1\n",
                 "ArrowCloudQrLoginWhen=Always\n",
                 "GrooveStatsQrLoginWhen=Disabled\n",
+                "ShareRips=0\n",
                 "GfxDebug=1\n",
                 "HighDPI=1\n",
                 "HideMouseCursor=0\n",
@@ -3609,6 +3671,45 @@ mod tests {
     }
 
     #[test]
+    fn golf_master_switch_defaults_off_and_round_trips_independently() {
+        let defaults = SystemOptions::default();
+        assert!(!defaults.enable_golf);
+        let legacy = ini("[Options]\nSelectMusicShowGolfPars=1\nSelectMusicScoreboxCycleGolf=1\n");
+        assert!(!load_system_options(&legacy, defaults).enable_golf);
+        for enabled in [true, false] {
+            let options = SystemOptions {
+                enable_golf: enabled,
+                ..defaults
+            };
+            let mut text = String::from("[Options]\n");
+            push_system_online_option_lines(&mut text, options);
+            assert_eq!(
+                load_system_options(&ini(&text), defaults).enable_golf,
+                enabled
+            );
+        }
+    }
+
+    #[test]
+    fn golf_select_music_options_default_off_and_persist() {
+        let defaults = default_select_music_options();
+        assert!(!defaults.show_golf_pars && !defaults.scorebox_cycle_golf);
+        let mut options = defaults;
+        options.show_golf_pars = true;
+        options.scorebox_cycle_golf = true;
+        let mut text = String::from("[Options]\n");
+        push_select_music_option_lines(
+            &mut text,
+            SelectMusicSaveOptions {
+                select_music: options,
+                separate_unlocks_by_player: false,
+            },
+        );
+        let loaded = load_select_music_options(&ini(&text), defaults);
+        assert!(loaded.show_golf_pars && loaded.scorebox_cycle_golf);
+    }
+
+    #[test]
     fn writes_select_music_option_lines() {
         let mut content = String::new();
         let mut select_music = default_select_music_options();
@@ -3656,6 +3757,9 @@ mod tests {
                 "SelectMusicPatternInfo=Auto\n",
                 "SelectMusicStepArtistBox=Default\n",
                 "SelectMusicScorebox=0\n",
+                "SelectMusicScoreboxCycleGolf=0\n",
+                "SelectMusicScoreboxEventsFirst=1\n",
+                "SelectMusicShowGolfPars=0\n",
                 "SelectMusicScoreboxPlacement=Auto\n",
                 "SelectMusicScoreboxCycleItg=1\n",
                 "SelectMusicScoreboxCycleEx=0\n",
@@ -3815,7 +3919,8 @@ mod tests {
         assert_eq!(scorebox_cycle_cursor_index(false, false, true, true), 2);
         assert_eq!(scorebox_cycle_bit_from_choice(0), 0b0001);
         assert_eq!(scorebox_cycle_bit_from_choice(3), 0b1000);
-        assert_eq!(scorebox_cycle_bit_from_choice(4), 0);
+        assert_eq!(scorebox_cycle_bit_from_choice(4), 0b10000);
+        assert_eq!(scorebox_cycle_bit_from_choice(5), 0);
     }
 
     #[test]
@@ -4077,6 +4182,8 @@ mod tests {
 
         assert_eq!(machine_font_choice_index(MachineFont::Wendy), 0);
         assert_eq!(machine_font_from_choice(1), MachineFont::Mega);
+        assert_eq!(machine_font_choice_index(MachineFont::Unprofessional), 2);
+        assert_eq!(machine_font_from_choice(2), MachineFont::Unprofessional);
         assert_eq!(machine_font_from_choice(99), MachineFont::Wendy);
 
         assert_eq!(machine_bar_color_choice_index(MachineBarColor::Default), 0);
@@ -4136,6 +4243,8 @@ mod tests {
 
         assert_eq!(srpg_variant_choice_index(SrpgVariant::Srpg9), 0);
         assert_eq!(srpg_variant_from_choice(1), SrpgVariant::Srpg10);
+        assert_eq!(srpg_variant_choice_index(SrpgVariant::Ecs15), 2);
+        assert_eq!(srpg_variant_from_choice(2), SrpgVariant::Ecs15);
         assert_eq!(srpg_variant_from_choice(99), SrpgVariant::Srpg9);
     }
 
@@ -4197,4 +4306,9 @@ mod tests {
         assert_eq!(srpg_shop_folder_from_choice(2), SrpgShopFolder::Faction);
         assert_eq!(srpg_shop_folder_from_choice(99), SrpgShopFolder::Unlocks);
     }
+}
+
+#[cfg(test)]
+mod legacy_performance {
+    include!("legacy_performance.rs");
 }

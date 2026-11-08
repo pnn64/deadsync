@@ -122,7 +122,7 @@ thread_local! {
 }
 
 fn build_stage_display_uncached(stage_number: usize, machine_font: MachineFont) -> Actor {
-    let text = format!("Stage {stage_number}");
+    let text = crate::i18n::tr_fmt("UiMessages", "StageStageNumber", &[("stage_number", &(stage_number).to_string())]).to_string();
     Actor::Frame {
         align: [0.0, 0.0],
         offset: [screen_center_x(), 40.0],

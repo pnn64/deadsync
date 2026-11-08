@@ -303,6 +303,12 @@ pub fn open_player(path: &Path, looped: bool) -> Result<Player, String> {
     open_player_with_info(path, probe(path, looped)?)
 }
 
+/// Probe decoded texture dimensions without starting a decoder. Load-time only.
+pub fn dimensions(path: &Path) -> Result<(u32, u32), String> {
+    let info = probe(path, false)?;
+    Ok((info.width, info.height))
+}
+
 fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
     let max_frames = queue_capacity(info);
     let (frame_tx, frame_rx) = sync_channel(max_frames);

@@ -1,0 +1,28 @@
+{
+  "source_path": "docs/testing/lua51-locale-replacement-digit.lua",
+  "source_sha256": "1713f83494e0fbca7842a8031cd4e5ba2c5cfc09228770a433f7659e710ca43c",
+  "observations": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\release\\examples\\os_process.exe",
+        "reference",
+        "C:\\GitHub\\deadsync\\docs\\testing\\lua51-locale-replacement-digit.lua"
+      ],
+      "binary_sha256": "296ad40b79bb94a9b8a01f264d798dea448ef1fe9848cd7986739ceaa29a6ab4",
+      "returncode": 3221225477,
+      "stdout_hex": "",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\release\\deadlua.exe",
+        "C:\\GitHub\\deadsync\\docs\\testing\\lua51-locale-replacement-digit.lua"
+      ],
+      "binary_sha256": "858c1e6236d7a3f6a69c524412a16e1fe133ffe6cc369173070ee839dcee9540",
+      "returncode": 0,
+      "stdout_hex": "66616c736509696e76616c6964206361707475726520696e6465780d0a",
+      "stderr_hex": ""
+    }
+  },
+  "limitations": "Separate undefined-reference reproducer, excluded from matching process totals. The Lua 5.1 C replacement path subtracts ASCII one from a signed high byte before accessing the capture array. Native behavior is undefined; the observed child exit is recorded, not a required Rust crash behavior."
+}

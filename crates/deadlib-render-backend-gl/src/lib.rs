@@ -1,9 +1,10 @@
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, RenderTargetFrame,
-    SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
-    TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, MeshSampler, RenderFrame,
+    RenderTargetFrame, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey,
+    TextureHandle, TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -24,7 +25,7 @@ use std::{
     num::NonZeroU32,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
     },
     time::Instant,
 };
@@ -183,20 +184,23 @@ const SPRITE_ATTRIBS: [(u32, &str); 12] = [
 
 const MESH_ATTRIBS: [(u32, &str); 2] = [(0, "a_pos"), (1, "a_color")];
 
-const TMESH_ATTRIBS: [(u32, &str); 13] = [
+const TMESH_ATTRIBS: [(u32, &str); 16] = [
     (0, "a_pos"),
     (1, "a_uv"),
     (2, "a_color"),
     (3, "a_tex_matrix_scale"),
-    (4, "i_model_col0"),
-    (5, "i_model_col1"),
-    (6, "i_model_col2"),
-    (7, "i_model_col3"),
-    (8, "i_tint"),
-    (9, "i_uv_scale"),
-    (10, "i_uv_offset"),
-    (11, "i_uv_tex_shift"),
-    (12, "i_texture_mask"),
+    (4, "a_normal"),
+    (5, "i_model_col0"),
+    (6, "i_model_col1"),
+    (7, "i_model_col2"),
+    (8, "i_model_col3"),
+    (9, "i_tint"),
+    (10, "i_uv_params"),
+    (11, "i_flags"),
+    (12, "i_sphere_row0"),
+    (13, "i_sphere_row1"),
+    (14, "i_sphere_row2"),
+    (15, "i_additive_uv"),
 ];
 
 // A handle to one RGBA texture or three planar video textures on the GPU. The
@@ -204,7 +208,9 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
 // is sufficient because the renderer still owns all mutation ordering; the
 // atomic preserves `Texture: Sync` for shared cross-backend texture lookups.
 #[derive(Debug)]
-pub struct Texture(TextureImages, AtomicBool);
+// The render thread owns GL state. The atomic fixed slot retains Sync for
+// texture lookup; each draw changes at most four parameters and never allocates.
+pub struct Texture(TextureImages, SamplerDesc, AtomicU8);
 
 #[derive(Debug)]
 enum TextureImages {
@@ -248,9 +254,10 @@ struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
     texture: Texture,
     framebuffer: glow::Framebuffer,
-    depth: glow::Renderbuffer,
+    depth: Option<glow::Renderbuffer>,
     initialized: bool,
 }
 
@@ -270,12 +277,15 @@ struct LegacySpriteUniforms {
 
 #[derive(Clone, Copy)]
 struct LegacyTMeshUniforms {
+    sphere_rows: [UniformLocation; 3],
+    additive_uv: UniformLocation,
     model: UniformLocation,
     tint: UniformLocation,
     uv_scale: UniformLocation,
     uv_offset: UniformLocation,
     uv_tex_shift: UniformLocation,
     texture_mask: UniformLocation,
+    cull_mode: UniformLocation,
 }
 
 pub struct State {
@@ -580,94 +590,16 @@ pub fn init(
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
         if let Some(instance_vbo) = instance_vbo {
-            // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
-            let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(
-                1,
-                2,
-                glow::FLOAT,
-                false,
-                stride,
-                (3 * std::mem::size_of::<f32>()) as i32,
-            );
-            gl.enable_vertex_attrib_array(2);
-            gl.vertex_attrib_pointer_f32(
-                2,
-                4,
-                glow::FLOAT,
-                false,
-                stride,
-                (5 * std::mem::size_of::<f32>()) as i32,
-            );
-            gl.enable_vertex_attrib_array(3);
-            gl.vertex_attrib_pointer_f32(
-                3,
-                2,
-                glow::FLOAT,
-                false,
-                stride,
-                (9 * std::mem::size_of::<f32>()) as i32,
-            );
-
-            // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
-            // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask (9..12)
+            for index in 0..5 {
+                gl.enable_vertex_attrib_array(index);
+            }
+            bind_tmesh_vertices(&gl, mem::size_of::<TexturedMeshVertex>() as i32);
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
-            gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
-
-            let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
-            gl.enable_vertex_attrib_array(4);
-            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, 0);
-            gl.vertex_attrib_divisor(4, 1);
-            gl.enable_vertex_attrib_array(5);
-            gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, col_size);
-            gl.vertex_attrib_divisor(5, 1);
-            gl.enable_vertex_attrib_array(6);
-            gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
-            gl.vertex_attrib_divisor(6, 1);
-            gl.enable_vertex_attrib_array(7);
-            gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
-            gl.vertex_attrib_divisor(7, 1);
-            gl.enable_vertex_attrib_array(8);
-            gl.vertex_attrib_pointer_f32(8, 4, glow::FLOAT, false, inst_stride, 4 * col_size);
-            gl.vertex_attrib_divisor(8, 1);
-            gl.enable_vertex_attrib_array(9);
-            gl.vertex_attrib_pointer_f32(9, 2, glow::FLOAT, false, inst_stride, 5 * col_size);
-            gl.vertex_attrib_divisor(9, 1);
-            gl.enable_vertex_attrib_array(10);
-            gl.vertex_attrib_pointer_f32(
-                10,
-                2,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + uv_size,
-            );
-            gl.vertex_attrib_divisor(10, 1);
-            gl.enable_vertex_attrib_array(11);
-            gl.vertex_attrib_pointer_f32(
-                11,
-                2,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + 2 * uv_size,
-            );
-            gl.vertex_attrib_divisor(11, 1);
-            gl.enable_vertex_attrib_array(12);
-            gl.vertex_attrib_pointer_f32(
-                12,
-                1,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + 3 * uv_size,
-            );
-            gl.vertex_attrib_divisor(12, 1);
+            for index in 5..16 {
+                gl.enable_vertex_attrib_array(index);
+                gl.vertex_attrib_divisor(index, 1);
+            }
+            bind_tmesh_instances(&gl, 0);
 
             gl.bind_vertex_array(None);
         }
@@ -716,6 +648,11 @@ pub fn init(
         gl.uniform_1_i32(Some(&texture_yuv_location), 0);
         gl.use_program(Some(tmesh_program));
         gl.uniform_1_i32(Some(&tmesh_texture_location), 0);
+        gl.uniform_1_i32(
+            gl.get_uniform_location(tmesh_program, "u_additive")
+                .as_ref(),
+            1,
+        );
         gl.use_program(None);
     }
 
@@ -878,7 +815,17 @@ pub fn create_texture(
     .map(|texture| {
         Texture(
             TextureImages::Rgba(texture),
-            AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
+            SamplerDesc {
+                mipmaps: false,
+                ..sampler
+            },
+            AtomicU8::new(
+                SamplerDesc {
+                    mipmaps: false,
+                    ..sampler
+                }
+                .slot() as u8,
+            ),
         )
     })
 }
@@ -1015,7 +962,17 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
+        SamplerDesc {
+            mipmaps: false,
+            ..sampler
+        },
+        AtomicU8::new(
+            SamplerDesc {
+                mipmaps: false,
+                ..sampler
+            }
+            .slot() as u8,
+        ),
     ))
 }
 
@@ -1093,6 +1050,8 @@ fn create_offscreen_target(
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
+    with_depth: bool,
 ) -> Result<OffscreenTarget, String> {
     let width = width.max(1);
     let height = height.max(1);
@@ -1124,7 +1083,11 @@ fn create_offscreen_target(
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::RGBA8 as i32,
+            if float_color {
+                glow::RGBA16F
+            } else {
+                glow::RGBA8
+            } as i32,
             width as i32,
             height as i32,
             0,
@@ -1141,22 +1104,29 @@ fn create_offscreen_target(
             Some(raw),
             0,
         );
-        let depth = gl.create_renderbuffer()?;
-        gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
-        gl.renderbuffer_storage(
-            glow::RENDERBUFFER,
-            glow::DEPTH_COMPONENT24,
-            width as i32,
-            height as i32,
-        );
-        gl.framebuffer_renderbuffer(
-            glow::FRAMEBUFFER,
-            glow::DEPTH_ATTACHMENT,
-            glow::RENDERBUFFER,
-            Some(depth),
-        );
+        let depth = if with_depth {
+            let depth = gl.create_renderbuffer()?;
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
+            gl.renderbuffer_storage(
+                glow::RENDERBUFFER,
+                glow::DEPTH_COMPONENT16,
+                width as i32,
+                height as i32,
+            );
+            gl.framebuffer_renderbuffer(
+                glow::FRAMEBUFFER,
+                glow::DEPTH_ATTACHMENT,
+                glow::RENDERBUFFER,
+                Some(depth),
+            );
+            Some(depth)
+        } else {
+            None
+        };
         if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
-            gl.delete_renderbuffer(depth);
+            if let Some(depth) = depth {
+                gl.delete_renderbuffer(depth);
+            }
             gl.delete_framebuffer(framebuffer);
             gl.delete_texture(raw);
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -1167,7 +1137,12 @@ fn create_offscreen_target(
             handle,
             width,
             height,
-            texture: Texture(TextureImages::Rgba(raw), AtomicBool::new(false)),
+            float_color,
+            texture: Texture(
+                TextureImages::Rgba(raw),
+                SamplerDesc::default(),
+                AtomicU8::new(SamplerDesc::default().slot() as u8),
+            ),
             framebuffer,
             depth,
             initialized: false,
@@ -1181,7 +1156,9 @@ fn destroy_offscreen_target(gl: &glow::Context, target: OffscreenTarget) {
     unsafe {
         gl.delete_texture(target.texture.primary());
         gl.delete_framebuffer(target.framebuffer);
-        gl.delete_renderbuffer(target.depth);
+        if let Some(depth) = target.depth {
+            gl.delete_renderbuffer(depth);
+        }
     }
 }
 
@@ -1191,12 +1168,20 @@ fn ensure_offscreen_targets(state: &mut State, frame: &RenderFrame) -> Result<()
             target.handle == pass.texture_handle
                 && target.width == pass.width.max(1)
                 && target.height == pass.height.max(1)
+                && target.float_color == pass.float_color
+                && target.depth.is_some() == pass.depth
         });
         if matches {
             continue;
         }
-        let target =
-            create_offscreen_target(&state.gl, pass.texture_handle, pass.width, pass.height)?;
+        let target = create_offscreen_target(
+            &state.gl,
+            pass.texture_handle,
+            pass.width,
+            pass.height,
+            pass.float_color,
+            pass.depth,
+        )?;
         if index < state.offscreen_targets.len() {
             let old = std::mem::replace(&mut state.offscreen_targets[index], target);
             destroy_offscreen_target(&state.gl, old);
@@ -1223,44 +1208,43 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
     textures.opengl_texture(handle)
 }
 
-fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: TextureHandle) {
-    let Some(filter) = changed_render_target_filter(&texture.1, handle) else {
+fn apply_texture_sampler(
+    gl: &glow::Context,
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) {
+    let desc = texture_sampler_desc(texture.1, handle, repeat, sampler);
+    let Some(changes) = changed_texture_sampler(&texture.2, desc) else {
         return;
     };
-    let gl_filter = match filter {
+    let filter = match desc.filter {
         SamplerFilter::Linear => glow::LINEAR,
         SamplerFilter::Nearest => glow::NEAREST,
     };
-    // SAFETY: callers invoke this immediately after binding the referenced AFT
-    // texture on the live render context.
+    let wrap = match desc.wrap {
+        SamplerWrap::Clamp => glow::CLAMP_TO_EDGE,
+        SamplerWrap::Repeat => glow::REPEAT,
+    };
+    // SAFETY: callers have bound this texture on the live render context.
+    // This backend stores only level zero, so minification cannot sample mips.
     unsafe {
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, gl_filter as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, gl_filter as i32);
+        if changes & 1 != 0 {
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter as i32);
+        }
+        if changes & 2 != 0 {
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, wrap as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, wrap as i32);
+        }
     }
-    texture
-        .1
-        .store(filter == SamplerFilter::Nearest, Ordering::Relaxed);
+    texture.2.store(desc.slot() as u8, Ordering::Relaxed);
 }
-
 #[inline(always)]
-fn changed_render_target_filter(
-    nearest: &AtomicBool,
-    handle: TextureHandle,
-) -> Option<SamplerFilter> {
-    if !is_render_target_texture(handle) {
-        return None;
-    }
-    let current = if nearest.load(Ordering::Relaxed) {
-        SamplerFilter::Nearest
-    } else {
-        SamplerFilter::Linear
-    };
-    let wanted = if render_target_uses_nearest(handle) {
-        SamplerFilter::Nearest
-    } else {
-        SamplerFilter::Linear
-    };
-    (wanted != current).then_some(wanted)
+fn changed_texture_sampler(current: &AtomicU8, wanted: SamplerDesc) -> Option<u8> {
+    let changes = current.load(Ordering::Relaxed) ^ wanted.slot() as u8;
+    (changes != 0).then_some(changes)
 }
 
 #[inline(always)]
@@ -1291,24 +1275,40 @@ fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>
             });
         }
         let (src, dst) = match want {
+            BlendMode::NoEffect => (glow::ZERO, glow::ONE),
             BlendMode::Alpha => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
             BlendMode::Add => (glow::SRC_ALPHA, glow::ONE),
             BlendMode::Multiply => (glow::DST_COLOR, glow::ZERO),
-            BlendMode::Subtract => (glow::ONE, glow::ONE),
+            BlendMode::Subtract => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
         };
-        gl.blend_func(src, dst);
+        let (src_alpha, dst_alpha) = if want == BlendMode::NoEffect {
+            (glow::ZERO, glow::ONE)
+        } else { (glow::ONE, glow::ONE_MINUS_SRC_ALPHA) };
+        gl.blend_func_separate(src, dst, src_alpha, dst_alpha);
     }
 }
 
 #[inline(always)]
-fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
+fn apply_depth_test(
+    gl: &glow::Context,
+    want: deadlib_render_core::DepthMode,
+    last: &mut Option<deadlib_render_core::DepthMode>,
+) {
     if !gl_state_update(last, want) {
         return;
     }
     // SAFETY: depth-state calls only mutate GL state on the current context and
     // do not retain Rust pointers.
     unsafe {
-        if want {
+        gl.depth_mask(want.writes());
+        gl.depth_func(if want.on_fail() {
+            glow::GREATER
+        } else if want.tests() {
+            glow::LEQUAL
+        } else {
+            glow::ALWAYS
+        });
+        if want != deadlib_render_core::DepthMode::Off {
             gl.enable(glow::DEPTH_TEST);
         } else {
             gl.disable(glow::DEPTH_TEST);
@@ -1482,14 +1482,21 @@ fn draw_modern_offscreen_pass(
         let mut last_depth = None;
 
         for op in frame.ops.iter().copied() {
+            if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                gl.depth_mask(true);
+                gl.clear(glow::DEPTH_BUFFER_BIT);
+                last_depth = None;
+            }
             match op {
                 DrawOp::Sprite(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
                         last_prog = Some(0);
+                        // Mesh materials can replace the video U-plane binding.
+                        last_bound_tex = None;
                     }
                     if !state.base_instance
                         && last_sprite_instance_start != Some(run.instance_start)
@@ -1538,7 +1545,7 @@ fn draw_modern_offscreen_pass(
                         bind_sprite_texture(state, texture);
                         last_bound_tex = Some(texture.primary());
                     }
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, false, None);
                     if state.base_instance {
                         gl.draw_elements_instanced_base_vertex_base_instance(
                             glow::TRIANGLES,
@@ -1565,7 +1572,7 @@ fn draw_modern_offscreen_pass(
                         continue;
                     }
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     if last_prog != Some(1) {
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(mesh_vao));
@@ -1591,7 +1598,13 @@ fn draw_modern_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, run.depth_test, &mut last_depth);
+                    apply_depth_test(gl,
+                        if frame.depth {
+                            run.depth_mode()
+                        } else {
+                            deadlib_render_core::DepthMode::Off
+                        }, &mut last_depth,
+                    );
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
@@ -1609,49 +1622,14 @@ fn draw_modern_offscreen_pass(
                             continue;
                         };
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-                        for (location, size, offset) in [
-                            (0, 3, 0),
-                            (1, 2, 3 * mem::size_of::<f32>() as i32),
-                            (2, 4, 5 * mem::size_of::<f32>() as i32),
-                            (3, 2, 9 * mem::size_of::<f32>() as i32),
-                        ] {
-                            gl.vertex_attrib_pointer_f32(
-                                location,
-                                size,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                offset,
-                            );
-                        }
+                        bind_tmesh_vertices(gl, stride);
                     }
                     if !state.base_instance && last_tmesh_instance_start != Some(run.instance_start)
                     {
                         let stride = mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-                        let col = (4 * mem::size_of::<f32>()) as i32;
-                        let uv = (2 * mem::size_of::<f32>()) as i32;
                         let base = run.instance_start as i32 * stride;
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
-                        for (location, size, offset) in [
-                            (4, 4, 0),
-                            (5, 4, col),
-                            (6, 4, 2 * col),
-                            (7, 4, 3 * col),
-                            (8, 4, 4 * col),
-                            (9, 2, 5 * col),
-                            (10, 2, 5 * col + uv),
-                            (11, 2, 5 * col + 2 * uv),
-                            (12, 1, 5 * col + 3 * uv),
-                        ] {
-                            gl.vertex_attrib_pointer_f32(
-                                location,
-                                size,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                base + offset,
-                            );
-                        }
+                        bind_tmesh_instances(gl, base);
                         last_tmesh_instance_start = Some(run.instance_start);
                     }
                     if last_cameras[2].update_required(run.camera) {
@@ -1671,7 +1649,12 @@ fn draw_modern_offscreen_pass(
                         gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                         last_bound_tex = Some(primary);
                     }
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
+                    let additive =
+                        resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                    gl.active_texture(glow::TEXTURE1);
+                    gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                    gl.active_texture(glow::TEXTURE0);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     if state.base_instance {
@@ -1743,6 +1726,11 @@ fn draw_legacy_offscreen_pass(
         let mut last_blend = None;
         let mut last_depth = None;
         for op in frame.ops.iter().copied() {
+            if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                gl.depth_mask(true);
+                gl.clear(glow::DEPTH_BUFFER_BIT);
+                last_depth = None;
+            }
             match op {
                 DrawOp::Sprite(run) => {
                     let Some(texture) = resolved_texture(state, textures, run.texture_handle)
@@ -1750,7 +1738,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     gl.use_program(Some(state.program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
@@ -1775,7 +1763,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     bind_sprite_texture(state, texture);
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, false, None);
                     let end = run.instance_start.saturating_add(run.instance_count);
                     for index in run.instance_start..end {
                         let Some(instance) = frame.sprite_instances.get(index as usize) else {
@@ -1850,7 +1838,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     }
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     gl.use_program(Some(state.mesh_program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
                     let stride = mem::size_of::<deadlib_render_core::MeshVertex>() as i32;
@@ -1889,7 +1877,13 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, run.depth_test, &mut last_depth);
+                    apply_depth_test(gl,
+                        if frame.depth {
+                            run.depth_mode()
+                        } else {
+                            deadlib_render_core::DepthMode::Off
+                        }, &mut last_depth,
+                    );
                     gl.use_program(Some(state.tmesh_program));
                     gl.enable_vertex_attrib_array(0);
                     gl.enable_vertex_attrib_array(1);
@@ -1905,31 +1899,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-                    gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                    gl.vertex_attrib_pointer_f32(
-                        1,
-                        2,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (3 * mem::size_of::<f32>()) as i32,
-                    );
-                    gl.vertex_attrib_pointer_f32(
-                        2,
-                        4,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (5 * mem::size_of::<f32>()) as i32,
-                    );
-                    gl.vertex_attrib_pointer_f32(
-                        3,
-                        2,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (9 * mem::size_of::<f32>()) as i32,
-                    );
+                    bind_tmesh_vertices(gl, stride);
                     let projection = camera(run.camera).to_cols_array_2d();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.tmesh_mvp_location),
@@ -1937,7 +1907,12 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture.primary()));
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
+                    let additive =
+                        resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                    gl.active_texture(glow::TEXTURE1);
+                    gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                    gl.active_texture(glow::TEXTURE0);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     let triangles = source.vertex_count() / 3;
@@ -1988,6 +1963,16 @@ fn draw_legacy_offscreen_pass(
                             instance.uv_tex_shift[1],
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
+                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
+                        for (location, row) in
+                            tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
+                        {
+                            gl.uniform_4_f32_slice(Some(location), &row);
+                        }
+                        gl.uniform_4_f32_slice(
+                            Some(&tmesh_uniforms.additive_uv),
+                            &instance.additive_uv,
+                        );
                         gl.draw_arrays(glow::TRIANGLES, start, count);
                         vertices += u64::from(triangles);
                     }
@@ -2040,6 +2025,8 @@ pub fn draw(
             );
         }
         let target = &state.offscreen_targets[index];
+        let [viewport_width, viewport_height] =
+            deadlib_render_core::render_target_viewport(target_frame);
         // SAFETY: this framebuffer belongs to the current context and remains
         // alive for the whole pass.
         unsafe {
@@ -2048,15 +2035,21 @@ pub fn draw(
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
             state
                 .gl
-                .viewport(0, 0, target.width as i32, target.height as i32);
+                .viewport(0, 0, viewport_width as i32, viewport_height as i32);
             state.gl.color_mask(true, true, true, true);
-            let mut clear = glow::DEPTH_BUFFER_BIT;
+            // Offscreen cameras invert Y to match top-down texture storage.
+            state.gl.front_face(glow::CW);
+            let mut clear = 0;
             if !target_frame.preserve || !target.initialized {
                 state
                     .gl
                     .clear_color(0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 });
                 clear |= glow::COLOR_BUFFER_BIT;
+                if target_frame.depth {
+                    clear |= glow::DEPTH_BUFFER_BIT;
+                }
             }
+            state.gl.depth_mask(true);
             state.gl.clear(clear);
             if !target_frame.alpha {
                 state.gl.color_mask(true, true, true, false);
@@ -2074,6 +2067,7 @@ pub fn draw(
         // passes changed them on this same current context.
         unsafe {
             state.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            state.gl.front_face(glow::CCW);
             state.gl.viewport(0, 0, width as i32, height as i32);
         }
     }
@@ -2107,6 +2101,7 @@ pub fn draw(
         let c = frame.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
+        gl.depth_mask(true);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
@@ -2182,15 +2177,24 @@ pub fn draw(
                 .expect("modern OpenGL path creates a textured mesh instance VBO");
 
             for op in frame.ops.iter().copied() {
+                if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                    gl.depth_mask(true);
+                    gl.clear(glow::DEPTH_BUFFER_BIT);
+                    last_depth_test = None;
+                }
                 match op {
                     DrawOp::Sprite(run) => {
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
                             gl.bind_vertex_array(Some(shared_vao));
                             last_prog = Some(0);
+                            // Mesh materials can replace the video U-plane binding.
+                            last_bound_tex = None;
                         }
 
                         if !state.base_instance
@@ -2301,7 +2305,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, false, None);
 
                         if state.base_instance {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -2330,7 +2334,9 @@ pub fn draw(
                         }
 
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
@@ -2358,7 +2364,7 @@ pub fn draw(
                             continue;
                         };
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+                        apply_depth_test(gl, run.depth_mode(), &mut last_depth_test);
 
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));
@@ -2381,113 +2387,16 @@ pub fn draw(
                                 continue;
                             };
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                            gl.vertex_attrib_pointer_f32(
-                                1,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (3 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                2,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (5 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                3,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (9 * std::mem::size_of::<f32>()) as i32,
-                            );
+                            bind_tmesh_vertices(gl, stride);
                         }
 
                         if !state.base_instance
                             && last_tmesh_instance_start != Some(run.instance_start)
                         {
                             let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-                            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-                            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
                             let base = (run.instance_start as i32) * inst_stride;
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
-                            gl.vertex_attrib_pointer_f32(
-                                4,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                5,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                6,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 2 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                7,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 3 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                8,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 4 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                9,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                10,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + uv_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                11,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + 2 * uv_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                12,
-                                1,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + 3 * uv_size,
-                            );
+                            bind_tmesh_instances(gl, base);
                             last_tmesh_instance_start = Some(run.instance_start);
                         }
 
@@ -2509,7 +2418,12 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                             last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
+                        let additive = resolved_texture(state, textures, run.additive_texture)
+                            .unwrap_or(texture);
+                        gl.active_texture(glow::TEXTURE1);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                        gl.active_texture(glow::TEXTURE0);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2543,10 +2457,17 @@ pub fn draw(
                 .expect("legacy OpenGL path creates textured mesh uniforms");
 
             for op in frame.ops.iter().copied() {
+                if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                    gl.depth_mask(true);
+                    gl.clear(glow::DEPTH_BUFFER_BIT);
+                    last_depth_test = None;
+                }
                 match op {
                     DrawOp::Sprite(run) => {
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
@@ -2567,6 +2488,8 @@ pub fn draw(
                             gl.disable_vertex_attrib_array(2);
                             gl.disable_vertex_attrib_array(3);
                             last_prog = Some(0);
+                            // Mesh materials can replace the video U-plane binding.
+                            last_bound_tex = None;
                         }
 
                         if last_cameras[0].update_required(run.camera) {
@@ -2586,7 +2509,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, false, None);
 
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
@@ -2663,7 +2586,9 @@ pub fn draw(
                         }
 
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
@@ -2706,7 +2631,7 @@ pub fn draw(
                             continue;
                         };
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+                        apply_depth_test(gl, run.depth_mode(), &mut last_depth_test);
 
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));
@@ -2733,31 +2658,7 @@ pub fn draw(
                                 continue;
                             };
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                            gl.vertex_attrib_pointer_f32(
-                                1,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (3 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                2,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (5 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                3,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (9 * std::mem::size_of::<f32>()) as i32,
-                            );
+                            bind_tmesh_vertices(gl, stride);
                         }
 
                         if last_cameras[2].update_required(run.camera) {
@@ -2778,7 +2679,12 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                             last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
+                        let additive = resolved_texture(state, textures, run.additive_texture)
+                            .unwrap_or(texture);
+                        gl.active_texture(glow::TEXTURE1);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                        gl.active_texture(glow::TEXTURE0);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2836,6 +2742,16 @@ pub fn draw(
                             gl.uniform_1_f32(
                                 Some(&tmesh_uniforms.texture_mask),
                                 instance.texture_mask,
+                            );
+                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
+                            for (location, row) in
+                                tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
+                            {
+                                gl.uniform_4_f32_slice(Some(location), &row);
+                            }
+                            gl.uniform_4_f32_slice(
+                                Some(&tmesh_uniforms.additive_uv),
+                                &instance.additive_uv,
                             );
                             gl.draw_arrays(glow::TRIANGLES, draw_start, draw_count);
                             vertices += u64::from(tri_count);
@@ -2969,7 +2885,9 @@ pub fn cleanup(state: &mut State) {
         for target in state.offscreen_targets.drain(..) {
             state.gl.delete_texture(target.texture.primary());
             state.gl.delete_framebuffer(target.framebuffer);
-            state.gl.delete_renderbuffer(target.depth);
+            if let Some(depth) = target.depth {
+                state.gl.delete_renderbuffer(depth);
+            }
         }
         // Release the active program at teardown so deletion is immediate.
         state.gl.use_program(None);
@@ -3322,6 +3240,33 @@ fn create_mesh_program(
     }
 }
 
+unsafe fn bind_tmesh_vertices(gl: &glow::Context, stride: i32) {
+    // SAFETY: caller has bound the mesh vertex buffer in the current context.
+    unsafe {
+        for (index, count, offset) in [(0, 3, 16), (1, 2, 28), (2, 4, 36), (3, 2, 52), (4, 4, 0)] {
+            gl.enable_vertex_attrib_array(index);
+            gl.vertex_attrib_pointer_f32(index, count, glow::FLOAT, false, stride, offset);
+        }
+    }
+}
+
+unsafe fn bind_tmesh_instances(gl: &glow::Context, base: i32) {
+    // SAFETY: caller has bound the mesh instance buffer in the current context.
+    unsafe {
+        let stride = mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+        for index in 5..16 {
+            gl.vertex_attrib_pointer_f32(
+                index,
+                4,
+                glow::FLOAT,
+                false,
+                stride,
+                base + (index as i32 - 5) * 16,
+            );
+        }
+    }
+}
+
 fn create_tmesh_program(
     gl: &glow::Context,
     vert_src: &str,
@@ -3414,12 +3359,19 @@ fn legacy_tmesh_uniforms(
     program: glow::Program,
 ) -> Result<LegacyTMeshUniforms, String> {
     Ok(LegacyTMeshUniforms {
+        sphere_rows: [
+            uniform_location(gl, program, "i_sphere_row0")?,
+            uniform_location(gl, program, "i_sphere_row1")?,
+            uniform_location(gl, program, "i_sphere_row2")?,
+        ],
+        additive_uv: uniform_location(gl, program, "i_additive_uv")?,
         model: uniform_location(gl, program, "u_model")?,
         tint: uniform_location(gl, program, "u_tint")?,
         uv_scale: uniform_location(gl, program, "u_uv_scale")?,
         uv_offset: uniform_location(gl, program, "u_uv_offset")?,
         uv_tex_shift: uniform_location(gl, program, "u_uv_tex_shift")?,
         texture_mask: uniform_location(gl, program, "u_texture_mask")?,
+        cull_mode: uniform_location(gl, program, "u_cull_mode")?,
     })
 }
 
@@ -3487,11 +3439,11 @@ mod vertex_state_tests;
 mod tests {
     use super::{
         GlApi, GlPath, GlVersion, SamplerFilter, Texture, base_instance_capability,
-        changed_render_target_filter, clamp_vertex_count, gl_state_update, parse_gl_version,
+        changed_texture_sampler, clamp_vertex_count, gl_state_update, parse_gl_version,
         surface_extent,
     };
-    use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
-    use std::sync::atomic::AtomicBool;
+    use deadlib_render_core::{SamplerDesc, SamplerWrap};
+    use std::sync::atomic::{AtomicU8, Ordering};
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -3534,34 +3486,23 @@ mod tests {
     }
 
     #[test]
-    fn render_target_filter_changes_only_when_sampling_changes() {
-        let target = render_target_texture_handle(3);
-        let nearest = render_target_sample_handle(target, true);
-
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), target),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), nearest),
-            Some(SamplerFilter::Nearest)
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), nearest),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), target),
-            Some(SamplerFilter::Linear)
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), 42),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), 42),
-            None
-        );
+    fn texture_sampler_changes_restore_defaults() {
+        let desc = SamplerDesc::default();
+        let current = AtomicU8::new(desc.slot() as u8);
+        assert_eq!(changed_texture_sampler(&current, desc), None);
+        let nearest = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..desc
+        };
+        assert_eq!(changed_texture_sampler(&current, nearest), Some(1));
+        let both = SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..nearest
+        };
+        assert_eq!(changed_texture_sampler(&current, both), Some(3));
+        current.store(both.slot() as u8, Ordering::Relaxed);
+        assert_eq!(changed_texture_sampler(&current, both), None);
+        assert_eq!(changed_texture_sampler(&current, desc), Some(3));
     }
 
     #[test]

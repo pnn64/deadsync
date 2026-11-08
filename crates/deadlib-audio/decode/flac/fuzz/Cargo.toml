@@ -1,0 +1,66 @@
+[package]
+name = "deadlib-audio-decode-flac-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[features]
+seed = []
+
+[dependencies]
+deadlib-audio-decode-flac = { path = ".." }
+deadlib-audio-decode-ogg = { path = "../../ogg" }
+libfuzzer-sys = "=0.4.13"
+symphonia = { version = "=0.6.1", default-features = false, features = ["flac"] }
+
+[[bin]]
+name = "primitives"
+path = "fuzz_targets/primitives.rs"
+test = false
+doc = false
+bench = false
+[[bin]]
+name = "frame"
+path = "fuzz_targets/frame.rs"
+test = false
+doc = false
+bench = false
+[[bin]]
+name = "native"
+path = "fuzz_targets/native.rs"
+test = false
+doc = false
+bench = false
+[[bin]]
+name = "ogg"
+path = "fuzz_targets/ogg.rs"
+test = false
+doc = false
+bench = false
+[[bin]]
+name = "encode"
+path = "fuzz_targets/encode.rs"
+test = false
+doc = false
+bench = false
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"
+required-features = ["seed"]
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "replay"
+path = "src/bin/replay.rs"
+required-features = ["seed"]
+test = false
+doc = false
+bench = false

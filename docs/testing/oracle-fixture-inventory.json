@@ -1,0 +1,1725 @@
+{
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "summary": {
+    "song-trace": {
+      "count": 133,
+      "status": {
+        "current-adapter-receipt": 87,
+        "current-receipt": 46
+      }
+    },
+    "native-actor": {
+      "count": 67,
+      "status": {
+        "current-receipt": 67
+      }
+    },
+    "native-gameplay": {
+      "count": 2,
+      "status": {
+        "current-primary-receipt": 2
+      }
+    },
+    "native-notefield": {
+      "count": 2,
+      "status": {
+        "current-capture-long-replay-deferred": 1,
+        "historical-superseded": 1
+      }
+    },
+    "native-rejection": {
+      "count": 1,
+      "status": {
+        "current-receipt": 1
+      }
+    },
+    "native-bitmap": {
+      "count": 1,
+      "status": {
+        "current-primary-codec-receipt": 1
+      }
+    }
+  },
+  "retained_song_archives": {
+    "count": 932,
+    "versions": {
+      "0.1.0": 443,
+      "0.1.23": 2,
+      "0.1.24": 2,
+      "0.1.25": 2,
+      "0.1.26": 1,
+      "0.1.28": 1,
+      "0.1.31": 27,
+      "0.1.32": 2,
+      "0.1.33": 1,
+      "0.1.49": 6,
+      "0.1.50": 2,
+      "0.1.51": 9,
+      "0.1.52": 15,
+      "0.1.53": 2,
+      "0.1.54": 22,
+      "0.1.56": 2,
+      "0.1.58": 11,
+      "0.1.59": 1,
+      "0.1.6": 17,
+      "0.1.61": 15,
+      "0.1.62": 3,
+      "0.1.63": 2,
+      "0.1.64": 25,
+      "0.1.67": 9,
+      "0.1.68": 2,
+      "0.1.80": 308
+    }
+  },
+  "captures": [
+    {
+      "path": "tests/fixtures/itgmania-actors/background-fit-smooth.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/crop-fade-color.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/cyber-multitap-texture.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_animated_texture",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/cyber-tap-repeat.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/draw-order.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/effects-vibration.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/fallback-tweens.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/glow-alpha.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/kenpo-capture.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/kenpo-motion.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/layout-alignment.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/note-zoom-spline-high.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/note-zoom-spline.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/riddle-rotation.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/spooky-doors.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/transform-projection.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/tween-curves.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-actors/tween-queue.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/additive-update.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/affine-skew-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/aft-boundary-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/aft-boundary.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/ancestor-scale-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/attack-flags-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/attenuate-current-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/attenuate-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/beat-family-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_bitmap_loader",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/bounce-tornado-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/bpm-fade-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/bpm-fade.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/callback-phase.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/callback-wag.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/cmd-function-args-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/collapsed-transform-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/collapsed-transform.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/color-inheritance-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/column-xy-offset-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/confusion-spin-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/confusion-x-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/confusion-y-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/consumed-message.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/current-options/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/deferred-effects-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/deferred-effects.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/delayed-pool.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/draw-negative.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/draw-offset.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/effect-switch-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/effect-switch.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/empty-song/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/expand-family-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/fade-clock-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/fg-comment-chain.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/finish-queue.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/foreground-delay.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/foreground-load-order/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/global-probe-sibling.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/global-probe.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/hidden-cache-order.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/immediate-shadow.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native-rejections.json",
+      "kind": "native-rejection",
+      "oracle": "itgmania_native_actor_rejection",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_bitmap_loader",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/judgment-sheet-changes.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/last-child-color.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-colors-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-colors.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-pulse-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-pulse.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-texture.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-wrapper-vibrate.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/late-wrapper.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/manual-player-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-alpha-tail/independent-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-alpha-tail/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-queue-reset-clock.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-queue-reset.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-read-order.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/message-wag-stop.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-clock-offset/independent-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-clock-offset/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-cull-modes/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native-frames.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_surface_utils",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-request/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/motion-body-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/motion-body.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/music-effect-negative.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/music-effect-positive.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/music-negative.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/music-positive.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/native-table-order-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/near-camera-clock-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/near-camera-clock.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/near-camera-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/near-camera.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/nested-start-stop.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/nested-start.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/options-assignment/native-snapshot.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/options-assignment/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/parabola-y-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/parent-rotation-cycle.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/parent-rotation-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/paused-updates.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/perspective-float-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/phase-update.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/player-long-tween-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/player-tail.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/position-spline-looped-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/position-spline-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/position-spline.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/pulse-body-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/pulse-body.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/pulse-driver.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queue-control.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queue-recurring.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queue-vibration.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-alpha-loop/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-blink.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-bounce.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-broadcasts-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-broadcasts.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-chain.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-child-cycle.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-child-tween.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-command-state.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-cycle-start.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-effects.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-fade.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-local-state.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-reset-clock-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-state.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/queued-visibility-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/random-probe.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/receptor-metrics.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-delay-callback.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-delay.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-ease-table.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-follow-offset.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-follow.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-stop.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/recurring-visible.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/rejected-option-parts-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/repeat-boundary.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/retarget-update.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/road-loop-order.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/road-loop-parent.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/road-loop.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/runtime-size-zoom-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/scheduled-fade-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/scheduled-fade.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/screen-camera-change.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/screen-parent-depth-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/screen-parent-transform-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/screen-translation.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst",
+      "kind": "native-notefield",
+      "oracle": "itgmania_notefield_render_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-capture-long-replay-deferred"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/seventh-notefield-native.json",
+      "kind": "native-notefield",
+      "oracle": "itgmania_notefield_render_trace",
+      "declared_version": "0.1.94",
+      "receipt_version": null,
+      "status": "historical-superseded"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native.json",
+      "kind": "native-gameplay",
+      "oracle": "native ITGmania ScreenGameplay, actual song Lua; after-draw observer",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-primary-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json",
+      "kind": "native-gameplay",
+      "oracle": "native ITGmania ScreenGameplay, actual song Lua; after-draw observer",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-primary-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/shared-actor.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/short-glow-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/short-glow.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/shrink-family-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/song-options-string/native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/speed-fields-audit-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/speed-fields-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/spin-tween-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/spin-update.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/spline-clock/negative-native.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/spline-clock/positive-native.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/sprite-load-cycle.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/startup-booleans-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/startup-delay.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/startup-self-queue/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/startup-speed-defaults-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/stop-position.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/subscriber-order.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/text-prefix-native.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/texture-alias.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/native-lua.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_bitmap_loader",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_bitmap_loader",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/texture-surface/native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_surface_utils",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast-native.json.zst",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/update-intrinsics.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/vibration-restart-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/vibration-restart.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/waltz-base-zoom-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/waltz-runtime.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/wave-period-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/wrapper-fade.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/wrapper-transform-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/wrapper-transform.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/z-wave-family-native.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95+primary-codecs.micro-controls2",
+      "receipt_version": "0.1.95+primary-codecs.micro-controls2",
+      "status": "current-adapter-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/zero-approach.json",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/zero-message-size.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/zoom-axis-fit-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/zoom-axis-fit.json.zst",
+      "kind": "song-trace",
+      "oracle": "itgmania_song_lua_headless_semantic_trace",
+      "declared_version": "0.1.95",
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/zoom-clock-native.json",
+      "kind": "native-actor",
+      "oracle": "itgmania_native_actor_conformance",
+      "declared_version": null,
+      "receipt_version": "0.1.95",
+      "status": "current-receipt"
+    },
+    {
+      "path": "tests/fixtures/itgmania-primary-bitmaps/capture.json",
+      "kind": "native-bitmap",
+      "oracle": "",
+      "declared_version": "0.1.95+primary-codecs",
+      "receipt_version": null,
+      "status": "current-primary-codec-receipt"
+    }
+  ]
+}

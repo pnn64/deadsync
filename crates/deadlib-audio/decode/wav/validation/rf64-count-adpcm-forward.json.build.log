@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.64s

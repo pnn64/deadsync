@@ -1,0 +1,308 @@
+//! Per-song semantic parity against `itgmania-harness-rs` fixtures.
+//!
+//! Historical per-song test names remain available for targeted regressions.
+//! Their native captures now resolve through the flat `full_song_lua` fixture
+//! store. Run a self-contained full-song archive with the dedicated harness:
+//!
+//! ```text
+//! cargo test --test full_song_lua <archive.tar.zst>
+//! cargo test --test full_song_lua -- --list
+//! ```
+//!
+//! The legacy manifests retain provenance and source-corpus metadata; they do
+//! not create separate storage folders or affect full-song archive selection.
+
+use super::*;
+use std::io::Write as _;
+
+struct Corpus {
+    fixtures: &'static str,
+    tests: &'static [&'static str],
+}
+
+macro_rules! corpus_tests {
+    ($corpus:ident, $fixtures:literal, $songs:literal, $exclusive:literal,
+     $($name:ident => $simfile:literal,)+) => {
+        const $corpus: Corpus = Corpus {
+            fixtures: $fixtures,
+            tests: &[$($simfile),+],
+        };
+        $(
+            #[test]
+            #[ignore = "compiles one song and reports every semantic check"]
+            fn $name() {
+                assert_song_parity(&$corpus, $simfile);
+            }
+        )+
+
+        #[test]
+        fn fixtures_cover_corpus_and_tests() {
+            assert_corpus_coverage(&$corpus);
+        }
+    };
+}
+
+mod allowed {
+    use super::*;
+
+    corpus_tests! {
+        CORPUS, "tests/fixtures/itgmania-song-lua-allowed", "allowed", true,
+        gemini_in_clockland => "Gemini in Clockland/Gemini in Clockland.ssc",
+        spooky => "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+        riddle => "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+        flip69 => "[10] flip69 (DX) [Telperion]/flip69.ssc",
+        media_offline => "[10] media offline (SM) [Snap]/media offline.ssc",
+        cosmic_railroad => "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+        kenpo_saito => "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+        godspeed => "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+    }
+}
+
+mod lua_songs {
+    use super::*;
+
+    #[test]
+    #[ignore = "compiles feelyourtouch's double chart and reports every semantic check"]
+    fn feelyourtouch_double() {
+        crate::paths::init();
+        let simfile = "feelyourtouch e.d.e.n/feelyourtouch eden.ssc";
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("feelyourtouch e.d.e.n/feelyourtouch eden.ssc.double.semantic.json.zst"),
+        );
+        assert_eq!(trace.steps_type, "dance-double");
+        assert_eq!(trace.difficulty, "Difficulty_Challenge");
+        let song = parse_song(&song_fixture::cached(simfile));
+        assert!(
+            song.charts.iter().any(|chart| {
+                chart.chart_type == trace.steps_type
+                    && chart.difficulty == "Challenge"
+                    && chart.short_hash == "d1ab790f73670414"
+            }),
+            "missing frozen project double chart"
+        );
+        assert_trace_parity(&CORPUS, simfile, &trace);
+    }
+
+    #[test]
+    #[ignore = "compiles every other 666 difficulty and reports all semantic checks"]
+    fn song_666_other_difficulties() {
+        for difficulty in ["Hard", "Medium", "Easy", "Beginner"] {
+            let trace = read_trace_file(&fixture_root(&CORPUS).join(format!(
+                "666/666.ssc.{}.semantic.json.zst",
+                difficulty.to_ascii_lowercase()
+            )));
+            assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
+            assert_trace_parity(&CORPUS, "666/666.ssc", &trace);
+        }
+    }
+
+    #[test]
+    #[ignore = "compiles Waltz's non-Challenge branch and reports every semantic check"]
+    fn waltz_capriccio_medium() {
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("(R6) Waltz Capriccio/waltz_capriccio.ssc.medium.semantic.json.zst"),
+        );
+        assert_eq!(trace.difficulty, "Difficulty_Medium");
+        assert_trace_parity(&CORPUS, "(R6) Waltz Capriccio/waltz_capriccio.ssc", &trace);
+    }
+
+    #[test]
+    #[ignore = "compiles Ultimate taste's reduced-mod difficulty and reports every semantic check"]
+    fn ultimate_taste_medium() {
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("Ultimate taste/Ultimate taste.ssc.medium.semantic.json.zst"),
+        );
+        assert_eq!(trace.difficulty, "Difficulty_Medium");
+        assert_trace_parity(&CORPUS, "Ultimate taste/Ultimate taste.ssc", &trace);
+    }
+
+    corpus_tests! {
+        CORPUS, "tests/fixtures/itgmania-song-lua-selected", "lua-songs", false,
+        botanic_panic => "Cuphead [TaroNuke]/botanic.sm",
+        seventh_gear => "7th Gear/7th Gear.ssc",
+        who_the_hell_is_edgar => "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+        brogamer => "BroGamer/BroGamer.ssc",
+        step_your_game_up => "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+        slamurai => "Slamurai/Slamurai.ssc",
+        bank_account => "Bank Account/Bank Account.ssc",
+        levels => "Levels/levels-fakemines.ssc",
+        ultimate_taste => "Ultimate taste/Ultimate taste.ssc",
+        delightful_day => "Delightful Day/Delightful Day.ssc",
+        let_me_hear_that => "(R5) Let Me Hear That/let me hear that.sm",
+        waltz_capriccio => "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+        warp_zone => "(R10) Warp Zone/warp zone.ssc",
+        apollo => "Apollo/Apollo.ssc",
+        bunny_house => "bunny-house/steps.sm",
+        panopticon => "panopticon/panopticon.ssc",
+        karachi => "Karachi/Jorts - Karachi.ssc",
+        lala => "[TPE2] LALA/lala.ssc",
+        broadcast => "broadcast/broadcast.ssc",
+        feelyourtouch => "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        jumper => "Jumper/Jumper.ssc",
+        lake_of_lost_nostalgia => "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+        crystal_access => "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+        sharkmode => "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+        megalovania => "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+        flying_castle => "Flying Castle/flying castle.ssc",
+        brain_power => "Brain Power - [Cardboard Box]/Brain Power.ssc",
+        bad_apple => "Bad Apple!!/Bad Apple!!.sm",
+        fof_guys => "fof_guys/fof.ssc",
+        song_666 => "666/666.ssc",
+        oshama_scramble => "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+        i_ai => "I (Ai)/I (Ai).ssc",
+        and_drugs => "And Drugs/and drugs.ssc",
+        finite_edit => "finite/sta - Finite.sm",
+        goodbye => "Goodbye/Goodbye.ssc",
+        macarena => "Macarena/Macarena.ssc",
+        rainbow_road => "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+        chikutaku => "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+        kagetsu_no_yume => "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
+        mawaru2 => "mawaru2/mawaru2.sm",
+        mawaru3 => "mawaru3/mawaru3.sm",
+        mawaru4 => "mawaru4/mawaru4.sm",
+        mawaru5 => "mawaru5/mawaru5.sm",
+        mawaru6 => "mawaru6/mawaru6.sm",
+        mawaru7 => "mawaru7/mawaru7.sm",
+        mawaru8 => "mawaru8/mawaru8.sm",
+        mawaru9 => "mawaru9/mawaru9.sm",
+        igaku => "Igaku/Igaku.ssc",
+        flowers => "flowers/flowers.ssc",
+        do_the_mario => "Do the Mario/DoTheMario.ssc",
+        circles => "Circles/Circles.ssc",
+        my_exes_bestfriend => "My Exes Bestfriend/ExBestFriend.ssc",
+        save_your_tears => "Save Your Tears/SaveYourTears.ssc",
+        pale => "Pale/Pale.ssc",
+        someone_special => "Someone Special - hubert/Someone Special.ssc",
+        cursed_metamorph => "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+        spectrum_sequence => "Spectrum Sequence/spectrumsequence.ssc",
+    }
+}
+
+fn fixture_root(corpus: &Corpus) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(corpus.fixtures)
+}
+
+
+fn read_manifest(corpus: &Corpus) -> SemanticManifest {
+    let path = fixture_root(corpus).join(SEMANTIC_MANIFEST);
+    whole_song_archives::reference_json(&path)
+}
+
+
+fn assert_song_parity(corpus: &Corpus, simfile: &str) {
+    crate::paths::init();
+    let manifest = read_manifest(corpus);
+    let entry = manifest
+        .simfiles
+        .iter()
+        .find(|entry| entry.simfile == simfile)
+        .unwrap_or_else(|| panic!("{simfile} has no fixture in {}", corpus.fixtures));
+    assert_eq!(entry.status, "ok", "incomplete fixture: {simfile}");
+    let trace = read_trace_file(&fixture_root(corpus).join(&entry.fixture));
+    assert_trace_parity(corpus, simfile, &trace);
+}
+
+fn assert_trace_parity(_corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
+    assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
+    let pinned_chart = match simfile {
+        "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double", "Challenge")),
+        "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc" => Some(("0866bcc47435a591", 1, "dance-single", "Challenge")),
+        "Spectrum Sequence/spectrumsequence.ssc" => Some(("75df84a1b1e08f31", 1, "dance-single", "Challenge")),
+        "mawaru9/mawaru9.sm" => Some(("824199e7dfc44ef6", 1, "dance-single", "Challenge")),
+        "Someone Special - hubert/Someone Special.ssc" => Some(("59bba16f2331d939", 1, "dance-single", "Challenge")),
+        "mawaru7/mawaru7.sm" => Some(("f7fdd8fafaee6188", 1, "dance-single", "Challenge")),
+        "Ultimate taste/Ultimate taste.ssc" => Some(("d7c1e7bb11c85644", 1, "dance-single", "Challenge")),
+        "(R6) Waltz Capriccio/waltz_capriccio.ssc" => Some(("0d1c59154eff02b7", 1, "dance-single", "Challenge")),
+        "666/666.ssc" => Some(("bcc24d0383531e4d", 1, "dance-single", "Challenge")),
+        "7th Gear/7th Gear.ssc" => Some(("477fed829d289df2", 1, "dance-single", "Challenge")),
+        "Step Your Game Up (Director's Cut)/stepyourgameup.ssc" => Some(("553effff992457a7", 1, "dance-single", "Challenge")),
+        "[TPE2] LALA/lala.ssc" => Some(("4117628540d4ac3d", 1, "dance-single", "Challenge")),
+        "Cuphead [TaroNuke]/botanic.sm" => Some(("30448d01c606fce9", 1, "dance-single", "Challenge")),
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc" => Some(("813d600a24bdd875", 1, "dance-single", "Challenge")),
+        "Flying Castle/flying castle.ssc" => Some(("c9f1235a63d75076", 1, "dance-single", "Challenge")),
+        "BroGamer/BroGamer.ssc" => Some(("e5b7f2be78829f4e", 1, "dance-single", "Challenge")),
+        "bunny-house/steps.sm" => Some(("13c007f1b2cc142d", 1, "dance-single", "Challenge")),
+        "broadcast/broadcast.ssc" => Some(("81612ed8c89ac4b9", 1, "dance-single", "Challenge")),
+        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc" => Some(("47017d8cec7dc992", 1, "dance-single", "Challenge")),
+        "Jumper/Jumper.ssc" => Some(("7c085505e95af69a", 2, "dance-single", "Challenge")),
+        "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc" => {
+            Some(("d5bd4dd7224f68ff", 1, "dance-single", "Challenge"))
+        }
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc" => {
+            Some(("a147dd828cd08fc7", 1, "dance-double", "Challenge"))
+        }
+        "finite/sta - Finite.sm" => Some(("c4ba45c6133c8abd", 1, "dance-single", "Edit")),
+        _ => None,
+    };
+    if let Some((hash, seed, steps_type, difficulty)) = pinned_chart {
+        assert_eq!(trace.random_seed, Some(seed));
+        assert_eq!(trace.steps_type, steps_type);
+        assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
+        let song = parse_song(&song_fixture::cached(simfile));
+        assert!(
+            song.charts.iter().any(|chart| {
+                chart.chart_type == steps_type
+                    && chart.difficulty == difficulty
+                    && chart.short_hash == hash
+                    && chart.description == trace.description
+            }),
+            "missing pinned chart {hash}: {simfile}"
+        );
+    }
+    let (compiled, primary_index, context) =
+        compile_trace_song_at(trace, &song_fixture::cached(simfile));
+    let mut parity = compare_semantics(trace, &compiled, primary_index, &context);
+    runtime_modifiers::compare_runtime_modifiers(trace, &compiled, &context, &mut parity);
+    // Written past libtest's output capture so passing songs report their
+    // tally as well, not only the failing ones.
+    let label = format!("{simfile} ({})", trace.difficulty);
+    writeln!(std::io::stderr().lock(), "\n{}", parity.summary(&label))
+        .expect("stderr accepts the parity summary");
+    parity.assert_complete(&label);
+}
+
+fn assert_corpus_coverage(corpus: &Corpus) {
+    let manifest = read_manifest(corpus);
+    assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
+    assert!(!manifest.itgmania.launches_executable);
+
+    let mut fixtures = manifest
+        .simfiles
+        .iter()
+        .map(|entry| entry.simfile.clone())
+        .collect::<Vec<_>>();
+    fixtures.sort();
+    let mut tests = corpus.tests.to_vec();
+    tests.sort_unstable();
+    assert_eq!(
+        fixtures, tests,
+        "every {} fixture needs its own test",
+        corpus.fixtures
+    );
+    for entry in &manifest.simfiles {
+        assert!(
+            song_fixture::index().iter().any(|archive| archive["source_simfile"] == entry.simfile),
+            "missing song {}",
+            entry.simfile
+        );
+        if entry.simfile == "mawaru9/mawaru9.sm" {
+            // The long replay is deferred, but its hermetic input must remain
+            // available and retain the exact native chart.
+            let input = song_fixture::from_source(&entry.simfile);
+            let song = parse_song(&input.simfile);
+            assert!(song.charts.iter().any(|chart| chart.short_hash == "824199e7dfc44ef6"),
+                "Mawaru9 input bundle lost its pinned native chart");
+        }
+        assert_eq!(entry.status, "ok", "incomplete fixture: {}", entry.simfile);
+        assert_eq!(entry.runtime_errors, 0, "runtime errors: {}", entry.simfile);
+        assert_eq!(entry.dropped_events, 0, "dropped events: {}", entry.simfile);
+        assert!(
+            whole_song_archives::reference_path(&fixture_root(corpus).join(&entry.fixture)).is_file(),
+            "missing fixture {}",
+            entry.fixture.display()
+        );
+    }
+}

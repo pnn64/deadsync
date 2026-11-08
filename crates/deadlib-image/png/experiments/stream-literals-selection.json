@@ -1,0 +1,251 @@
+{
+  "baseline_png_commit": "eb9d4ef9da713af19e82885026b74c7ab3323f16",
+  "selected": "Streaming literal-run loop in src/zlib/inflate.rs",
+  "reason": "Repeated reference-relative comparisons favor reader decoding and streaming inflation. Buffered paths are unchanged controls; shared-host variation remains.",
+  "production_sources_unchanged": 20,
+  "production_sources_changed": [
+    "src/zlib/inflate.rs"
+  ],
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "b642f1de7af3593ead5f85f4706187030945a7fab0b3f410deef87d5ae0c6ef2"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    }
+  ],
+  "reconstruction": [
+    {
+      "experiment": "stream-literals",
+      "patch": "experiments/stream-literals.patch",
+      "patch_sha256": "e44e18093827c9dd24c4f855fefc5232c12f926bf80e9e4680bc2f7dbe96240a",
+      "all_21_recorded_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-stream-literals-roh25a55"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-stream-literals-before-photos-a-manifest.json",
+      "sha256": "5316c618d9344fad5db3b081a83c3db46922a33ba3596bbb546c7f3aa7cd2616",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-stream-literals-before-formats-a-manifest.json",
+      "sha256": "622aaf98831eea4791fb15030ecddd088507c77a0a2959eed852ef58e73cbdf7",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-stream-literals-trial-photos-a-manifest.json",
+      "sha256": "692722fbf66b6f4a51de6de326d2bea18e94836171dd79671212501935ab567b",
+      "variant": "trial",
+      "binary_sha256": "f95eeaf7d7ea143fe164f34bdf9666e812d2918e56bda0bf0fe61aae64f20bbc"
+    },
+    {
+      "manifest": "benchmark-stream-literals-trial-formats-a-manifest.json",
+      "sha256": "528cd0731963816840a5f8cd98a6a6f4e0a7b9f39fa3605f51006323664a8455",
+      "variant": "trial",
+      "binary_sha256": "f95eeaf7d7ea143fe164f34bdf9666e812d2918e56bda0bf0fe61aae64f20bbc"
+    },
+    {
+      "manifest": "benchmark-stream-literals-repeat-photos-a-manifest.json",
+      "sha256": "3faaa685f0cfac4e104c358bde86af6aa9ed6b8d4d24065458a50caaa5722863",
+      "variant": "repeat",
+      "binary_sha256": "f95eeaf7d7ea143fe164f34bdf9666e812d2918e56bda0bf0fe61aae64f20bbc"
+    },
+    {
+      "manifest": "benchmark-stream-literals-repeat-formats-a-manifest.json",
+      "sha256": "883ab2e6356da92203a3cf1f1ce6ffe19056aaa42f70321448e66258867b19f8",
+      "variant": "repeat",
+      "binary_sha256": "f95eeaf7d7ea143fe164f34bdf9666e812d2918e56bda0bf0fe61aae64f20bbc"
+    },
+    {
+      "manifest": "benchmark-stream-literals-control-photos-a-manifest.json",
+      "sha256": "a756e6811c6110dca95884985f76e848f45d996c0143eceef192367bac81f028",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-stream-literals-control-formats-a-manifest.json",
+      "sha256": "d665fff8425d34ce8013c6f5d2c7143ee5a2f469df8331ef50527791b4e49ece",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-stream-literals-photos-summary.json",
+      "sha256": "7d12b2e5ac19e5f7af8c89bae2d818ccd597b6ea148dfed72c3962b031e04320",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 94.97212955800335,
+          "after_mib_s": 93.0985894925794,
+          "absolute_change_percent": -1.9727261820318476,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.155942953082866
+        },
+        "decode-reader": {
+          "before_mib_s": 76.20240451437947,
+          "after_mib_s": 79.1633828400508,
+          "absolute_change_percent": 3.8856757139633213,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 5.811035320674796
+        },
+        "inflate": {
+          "before_mib_s": 120.82302572954087,
+          "after_mib_s": 118.7355971349097,
+          "absolute_change_percent": -1.7276744908738095,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 0.4618097768825269
+        },
+        "inflate-stream": {
+          "before_mib_s": 82.09444519186529,
+          "after_mib_s": 86.96618198381631,
+          "absolute_change_percent": 5.934307468142519,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 8.294498889435587
+        }
+      }
+    },
+    {
+      "path": "benchmark-stream-literals-formats-summary.json",
+      "sha256": "b65fa9cb82e86db23740d88a1c2381dee3b2f236fabed1867950d4d2d52955f8",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 242.76807708769786,
+          "after_mib_s": 243.9119421812194,
+          "absolute_change_percent": 0.47117607357753943,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.506898794669064
+        },
+        "decode-reader": {
+          "before_mib_s": 232.6579854218145,
+          "after_mib_s": 246.0848384821571,
+          "absolute_change_percent": 5.771069080650459,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 4.741400388610861
+        },
+        "inflate": {
+          "before_mib_s": 883.0815279534536,
+          "after_mib_s": 910.9161499537569,
+          "absolute_change_percent": 3.1519877971867727,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -2.0150155293544025
+        },
+        "inflate-stream": {
+          "before_mib_s": 474.8108264845799,
+          "after_mib_s": 557.471169306728,
+          "absolute_change_percent": 17.40911078926981,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 11.527951550659932
+        }
+      }
+    }
+  ],
+  "verifier_sha256": "db0dd028620f5657097ede1b174a8286857bd1d7dc67b9798d1adbbcd198a36d",
+  "final_validation_evidence": [
+    {
+      "path": "stream-literals-validation.json",
+      "sha256": "22d3375ac53a9553aef3bc995fc9e3daa88e250b5d50f484cd69da425f7ee92b"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-source.json",
+      "sha256": "203499c1c29072ef1b23c9325ff10c305c125f0d0e787b9e4c11a46025c4a3b6"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-seeds.json",
+      "sha256": "bbbc569a0fc803928afebeef555dd52c1e97767bf2f63c5c8a4a7b0aa144eb87"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-seed-build.json",
+      "sha256": "cc3ba726f28bec98e30945b5252fada894463e8a79979a396068783671e9cf84"
+    },
+    {
+      "path": "fuzz/reports/generated-seeds-storage-20261027.json",
+      "sha256": "03df0acde32c882b9f85d5fc916b1574554018a8be2c7333ece94553842a6a1a"
+    },
+    {
+      "path": "profiling/reader-stream-literals.json",
+      "sha256": "d7ab9b9a4d45d39b448ecfcf322651de1b6aefc306d05a6b9bbb36a605fb8667"
+    }
+  ]
+}

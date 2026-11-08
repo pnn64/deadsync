@@ -87,8 +87,9 @@ pub struct FinalizedRowOutcome {
 pub struct RowEntry {
     pub row_index: ChartRowIndex,
     pub time_ns: SongTimeNs,
-    // Non-mine, non-fake, judgable notes on this row.
-    pub nonmine_note_indices: [ChartNoteIndex; MAX_COLS],
+    // Non-mine, non-fake, judgable notes on this row. Rows belong to one
+    // player, so they never span more than one player's field.
+    pub nonmine_note_indices: [ChartNoteIndex; MAX_COLS_PER_PLAYER],
     pub nonmine_note_count: u8,
     pub rescore_track_count: u8,
     pub unresolved_count: u8,
@@ -320,7 +321,7 @@ pub fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
 
 fn build_row_entry_compact(
     row_index: ChartRowIndex,
-    nonmine_note_indices: [ChartNoteIndex; MAX_COLS],
+    nonmine_note_indices: [ChartNoteIndex; MAX_COLS_PER_PLAYER],
     nonmine_note_count: u8,
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -370,7 +371,9 @@ pub fn build_row_entry(
 ) -> RowEntry {
     let row_index = ChartRowIndex::try_from_usize(row_index)
         .expect("validated gameplay row index must fit u32");
-    let nonmine_note_indices = nonmine_note_indices.map(|index| {
+    debug_assert!(usize::from(nonmine_note_count) <= MAX_COLS_PER_PLAYER);
+    let nonmine_note_indices = std::array::from_fn(|ix| {
+        let index = nonmine_note_indices[ix];
         if index == usize::MAX {
             ChartNoteIndex::INVALID
         } else {
@@ -423,7 +426,7 @@ pub fn build_gameplay_row_indices(
             let row_index = ChartRowIndex::from_validated(notes[cursor].row_index);
             let row_start = cursor;
             let mut row_flags = 0u8;
-            let mut nonmine_note_indices = [ChartNoteIndex::INVALID; MAX_COLS];
+            let mut nonmine_note_indices = [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER];
             let mut nonmine_note_count = 0u8;
             while cursor < note_end && notes[cursor].row_index == row_index.get() {
                 let note = &notes[cursor];
@@ -434,7 +437,7 @@ pub fn build_gameplay_row_indices(
                 }
                 if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
                     let count = usize::from(nonmine_note_count);
-                    debug_assert!(count < MAX_COLS);
+                    debug_assert!(count < MAX_COLS_PER_PLAYER);
                     nonmine_note_indices[count] = ChartNoteIndex::from_validated(cursor);
                     nonmine_note_count += 1;
                 }
@@ -791,6 +794,7 @@ pub const fn finalized_row_awards_hand(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RowFinalizationPlayerState {
+    pub current_possible_points: i32,
     pub combo: ComboState,
     pub current_combo_window_counts: WindowCounts,
     pub judgment_counts: judgment::JudgeCounts,
@@ -801,6 +805,7 @@ pub struct RowFinalizationPlayerState {
 #[must_use]
 pub const fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
     RowFinalizationPlayerState {
+        current_possible_points: player.current_possible_points,
         combo: player_combo_state(player),
         current_combo_window_counts: player.current_combo_window_counts,
         judgment_counts: player.judgment_counts,
@@ -814,6 +819,7 @@ pub const fn set_row_finalization_player_state(
     state: RowFinalizationPlayerState,
 ) {
     write_player_combo_state(player, state.combo);
+    player.current_possible_points = state.current_possible_points;
     player.current_combo_window_counts = state.current_combo_window_counts;
     player.judgment_counts = state.judgment_counts;
     player.scoring_counts = state.scoring_counts;
@@ -898,6 +904,8 @@ pub fn apply_row_finalization_player_state(
     };
     state.judgment_counts[grade_ix] =
         state.judgment_counts[grade_ix].saturating_add(judgment_count);
+    state.current_possible_points = state.current_possible_points
+        .saturating_add(judgment::TAP_SCORE_MAX);
     let update_grade_totals = !player_dead;
     if update_grade_totals {
         state.scoring_counts[grade_ix] = state.scoring_counts[grade_ix].saturating_add(1);

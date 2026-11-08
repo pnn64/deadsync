@@ -301,7 +301,7 @@ impl CompiledKeymap {
 
 #[derive(Clone, Debug)]
 pub struct Keymap {
-    map: HashMap<VirtualAction, Vec<InputBinding>>,
+    map: [Box<[InputBinding]>; VirtualAction::COUNT],
     key_rev: Box<[Vec<VirtualAction>]>,
     key_rev_extra: HashMap<KeyCode, Vec<VirtualAction>>,
     pad_dir_rev: [Vec<VirtualAction>; 4],
@@ -312,7 +312,7 @@ pub struct Keymap {
 impl Default for Keymap {
     fn default() -> Self {
         Self {
-            map: HashMap::new(),
+            map: std::array::from_fn(|_| Box::default()),
             key_rev: new_key_rev(),
             key_rev_extra: HashMap::new(),
             pad_dir_rev: std::array::from_fn(|_| Vec::new()),
@@ -486,15 +486,21 @@ impl Keymap {
 
     #[inline(always)]
     pub fn bind(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
-        if let Some(prev) = self.map.insert(action, inputs.to_vec()) {
-            self.remove_rev(action, &prev);
-        }
-        self.add_rev(action, inputs);
+        self.bind_owned(action, inputs.to_vec());
+    }
+
+    #[inline]
+    pub(crate) fn bind_owned(&mut self, action: VirtualAction, inputs: Vec<InputBinding>) {
+        let prev = std::mem::take(&mut self.map[action.ix()]);
+        self.remove_rev(action, &prev);
+        drop(prev);
+        self.add_rev(action, &inputs);
+        self.map[action.ix()] = inputs.into_boxed_slice();
     }
 
     #[inline]
     pub(crate) fn bindings_for_action(&self, action: VirtualAction) -> &[InputBinding] {
-        self.map.get(&action).map_or(&[], Vec::as_slice)
+        &self.map[action.ix()]
     }
 
     /// Compares ordered bindings for every action, treating missing and empty
@@ -512,14 +518,12 @@ impl Keymap {
     #[inline(always)]
     #[must_use]
     pub fn first_key_binding(&self, action: VirtualAction) -> Option<KeyCode> {
-        self.map.get(&action).and_then(|bindings| {
-            bindings.iter().find_map(|b| {
-                if let InputBinding::Key(code) = b {
-                    Some(*code)
-                } else {
-                    None
-                }
-            })
+        self.bindings_for_action(action).iter().find_map(|b| {
+            if let InputBinding::Key(code) = b {
+                Some(*code)
+            } else {
+                None
+            }
         })
     }
 
@@ -528,10 +532,7 @@ impl Keymap {
     #[inline(always)]
     #[must_use]
     pub fn binding_at(&self, action: VirtualAction, index: usize) -> Option<InputBinding> {
-        self.map
-            .get(&action)
-            .and_then(|bindings| bindings.get(index))
-            .copied()
+        self.bindings_for_action(action).get(index).copied()
     }
 
     #[inline(always)]
@@ -716,6 +717,14 @@ pub struct KeyEvent {
     binding: CompiledBindingRev,
 }
 
+/// Physical identity retained across delayed debounce delivery.
+#[derive(Clone, Copy, Debug)]
+pub enum PhysicalInput {
+    Key(KeyCode),
+    PadDirection(PadId, PadDir),
+    PadButton(PadId, PadCode),
+}
+
 /// Application-owned bindings and debounce state for one input stream.
 ///
 /// The application thread exclusively owns this session-lifetime state; no
@@ -735,6 +744,8 @@ pub struct InputState {
     keyboard: DebounceStore,
     pad: DebounceStore,
     windows: DebounceWindows,
+    physical_keys: Vec<Option<PhysicalInput>>,
+    physical_pads: Vec<Option<PhysicalInput>>,
 }
 
 impl InputState {
@@ -742,6 +753,8 @@ impl InputState {
     pub fn new(keymap: &Keymap, debounce_seconds: f32) -> Self {
         let mut state = Self {
             compiled: CompiledKeymap::from_keymap(keymap),
+            physical_keys: Vec::new(),
+            physical_pads: Vec::new(),
             keyboard: DebounceStore::new(),
             pad: DebounceStore::new(),
             windows: DebounceWindows::uniform(Duration::from_secs_f32(
@@ -767,6 +780,8 @@ impl InputState {
 
     /// Clears held and pending input, retaining preallocated debounce storage.
     pub fn clear(&mut self) {
+        self.physical_keys.resize(self.compiled.key_slot_count, None);
+        self.physical_pads.resize(self.compiled.pad_slot_capacity, None);
         self.keyboard.prepare_slots(self.compiled.key_slot_count);
         self.pad.prepare_slots(self.compiled.pad_slot_capacity);
         log::debug!(
@@ -774,6 +789,21 @@ impl InputState {
             self.compiled.key_slot_count,
             self.compiled.pad_slot_count
         );
+    }
+
+    /// Current debounced state, including edges received while a screen loads.
+    pub fn is_down(&self, event: &InputEvent) -> bool {
+        match event.source {
+            InputSource::Keyboard => self.keyboard.is_down(event.input_slot as usize),
+            InputSource::Gamepad => self.pad.is_down(event.input_slot as usize),
+        }
+    }
+
+    /// Identity of the physical source that produced a normalized edge.
+    pub fn physical_input(&self, event: &InputEvent) -> Option<PhysicalInput> {
+        let slots = match event.source { InputSource::Keyboard => &self.physical_keys,
+            InputSource::Gamepad => &self.physical_pads };
+        slots.get(event.input_slot as usize).copied().flatten()
     }
 
     /// Resolves system controls and logical bindings with one keyboard lookup.
@@ -806,6 +836,7 @@ impl InputState {
     ) -> impl Iterator<Item = InputEvent> + use<F> {
         let ev = key.raw;
         let binding = key.binding;
+        if binding.mapped() { self.physical_keys[binding.slot as usize] = Some(PhysicalInput::Key(ev.code)); }
         let edges = if (ev.pressed && ev.repeat) || !binding.mapped() {
             DebounceEdges::default()
         } else {
@@ -873,6 +904,14 @@ impl InputState {
             }),
             PadEvent::RawAxis { .. } => None,
         };
+        if let Some((slot, ..)) = binding {
+            if slot >= self.physical_pads.len() { self.physical_pads.resize(slot+1, None); }
+            self.physical_pads[slot] = match *ev {
+                PadEvent::Dir { id, dir, .. } => Some(PhysicalInput::PadDirection(id, dir)),
+                PadEvent::RawButton { id, code, .. } => Some(PhysicalInput::PadButton(id, code)),
+                PadEvent::RawAxis { .. } => None,
+            };
+        }
         let edges = binding.map_or_else(
             DebounceEdges::default,
             |(slot, mask, pressed, timestamp, host_nanos)| {
@@ -1039,3 +1078,7 @@ mod tests {
         assert_eq!(pad_slot_count, 30);
     }
 }
+
+#[cfg(test)]
+#[path = "perf_tests.rs"]
+pub(crate) mod perf_tests;

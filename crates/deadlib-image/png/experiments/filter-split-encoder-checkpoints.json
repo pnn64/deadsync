@@ -1,0 +1,12 @@
+{
+  "baseline_png_commit": "8c5713343",
+  "variant": "split-encoder",
+  "reverse_patch": "filter-split-encoder-before.patch",
+  "reverse_patch_sha256": "d54d644b504211fe074f5b235571d555d77f64fc546810d77061b339717b8541",
+  "source": "src/scanline.rs",
+  "before_sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3",
+  "candidate_sha256": "757f489798e89291965a79d11f347fea5cbc61e19a9ffca728f01f55094b28ea",
+  "reverse_patch_exact_reconstruction_verified": true,
+  "retained_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-filter-checkpoint-_pwe09r4",
+  "selection_role": "Rejected: original encoder predictor did not consistently remove encoding tradeoffs or establish broad benefit"
+}

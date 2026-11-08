@@ -1,0 +1,37 @@
+first	4	24	1	-1
+zero	4	24	-1	0
+state	4	24	1	-1	1	L
+second	4	24	0	3
+first	4	25	1	-2
+zero	4	25	-2	0
+state	4	25	1	-2	1	L
+second	4	25	0	3
+first	4	26	1	-3
+zero	4	26	-3	0
+state	4	26	1	-3	1	L
+second	4	26	0	3
+first	8	24	1	-1
+zero	8	24	-1	0
+state	8	24	1	-1	1	L
+second	8	24	0	3
+first	8	25	1	-2
+zero	8	25	-2	0
+state	8	25	1	-2	1	L
+second	8	25	0	3
+first	8	26	1	-3
+zero	8	26	-3	0
+state	8	26	1	-3	1	L
+second	8	26	0	3
+first	12	24	1	-1
+zero	12	24	-1	0
+state	12	24	1	-1	1	L
+second	12	24	0	3
+first	12	25	1	-2
+zero	12	25	-2	0
+state	12	25	1	-2	1	L
+second	12	25	0	3
+first	12	26	1	-3
+zero	12	26	-3	0
+state	12	26	1	-3	1	L
+second	12	26	0	3
+zero-hook-offsets-complete

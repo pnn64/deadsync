@@ -1,0 +1,113 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes
+0	baseline	sola/mono/360	328859.03	150037.5		0	0	0	0	0	0
+0	baseline	sola/stereo/360	372217.12	169931.25		0	0	0	0	0	0
+0	baseline	sola/left-silent/360	344086.88	157221.88		0	0	0	0	0	0
+0	baseline	sola/right-silent/360	323721.34	147903.12		0	0	0	0	0	0
+0	baseline	sola/mono/720	1240051.59	565871.88		0	0	0	0	0	0
+0	baseline	sola/stereo/720	1534298.09	700371.88		0	0	0	0	0	0
+0	baseline	sola/left-silent/720	1348957.88	615465.62		0	0	0	0	0	0
+0	baseline	sola/right-silent/720	1246355.38	568753.12		0	0	0	0	0	0
+0	baseline	sola/stream-1ch-noise-1.2	1292635.5	589550.0	b136b3511ed0a703	0	0	0	0	0	0
+0	baseline	sola/stream-2ch-noise-0.8	2927911.0	1338550.0	af8cf13a71adbea9	0	0	0	0	0	0
+0	baseline	sola/stream-2ch-tone-1.2	375894.0	170850.0	5907aac396672cd5	0	0	0	0	0	0
+0	baseline	sola/stream-2ch-left-silent-1.2	1707381.0	778800.0	11b0c279269ca04b	0	0	0	0	0	0
+0	baseline	sola/stream-2ch-silence-1.2	144102.0	65250.0	b40ebf824bb571ed	0	0	0	0	0	0
+0	baseline	sola/stream-6ch-noise-1.2	7889818.0	3599750.0	5d00c00f1cc77d00	0	0	0	0	0	0
+0	quiet-channel	sola/mono/360	298890.41	136606.25		0	0	0	0	0	0
+0	quiet-channel	sola/stereo/360	335457.72	152896.88		0	0	0	0	0	0
+0	quiet-channel	sola/left-silent/360	304281.88	138778.12		0	0	0	0	0	0
+0	quiet-channel	sola/right-silent/360	301037.41	137250.0		0	0	0	0	0	0
+0	quiet-channel	sola/mono/720	1244283.69	567859.38		0	0	0	0	0	0
+0	quiet-channel	sola/stereo/720	1338648.12	611043.75		0	0	0	0	0	0
+0	quiet-channel	sola/left-silent/720	1254133.84	572328.12		0	0	0	0	0	0
+0	quiet-channel	sola/right-silent/720	1273580.16	581746.88		0	0	0	0	0	0
+0	quiet-channel	sola/stream-1ch-noise-1.2	1340157.5	609900.0	b136b3511ed0a703	0	0	0	0	0	0
+0	quiet-channel	sola/stream-2ch-noise-0.8	2888730.0	1320350.0	af8cf13a71adbea9	0	0	0	0	0	0
+0	quiet-channel	sola/stream-2ch-tone-1.2	377101.0	171400.0	5907aac396672cd5	0	0	0	0	0	0
+0	quiet-channel	sola/stream-2ch-left-silent-1.2	1734269.5	790900.0	11b0c279269ca04b	0	0	0	0	0	0
+0	quiet-channel	sola/stream-2ch-silence-1.2	143992.0	65200.0	b40ebf824bb571ed	0	0	0	0	0	0
+0	quiet-channel	sola/stream-6ch-noise-1.2	8172534.0	3732850.0	5d00c00f1cc77d00	0	0	0	0	0	0
+1	quiet-channel	sola/mono/360	296180.94	135331.25		0	0	0	0	0	0
+1	quiet-channel	sola/stereo/360	327507.72	149309.38		0	0	0	0	0	0
+1	quiet-channel	sola/left-silent/360	305715.47	139462.5		0	0	0	0	0	0
+1	quiet-channel	sola/right-silent/360	300303.44	136912.5		0	0	0	0	0	0
+1	quiet-channel	sola/mono/720	1247349.88	569225.0		0	0	0	0	0	0
+1	quiet-channel	sola/stereo/720	1393331.09	636146.88		0	0	0	0	0	0
+1	quiet-channel	sola/left-silent/720	1243282.34	567684.38		0	0	0	0	0	0
+1	quiet-channel	sola/right-silent/720	1240421.91	565865.62		0	0	0	0	0	0
+1	quiet-channel	sola/stream-1ch-noise-1.2	1300866.5	593500.0	b136b3511ed0a703	0	0	0	0	0	0
+1	quiet-channel	sola/stream-2ch-noise-0.8	2919679.0	1334600.0	af8cf13a71adbea9	0	0	0	0	0	0
+1	quiet-channel	sola/stream-2ch-tone-1.2	375564.5	170700.0	5907aac396672cd5	0	0	0	0	0	0
+1	quiet-channel	sola/stream-2ch-left-silent-1.2	1679285.0	765650.0	11b0c279269ca04b	0	0	0	0	0	0
+1	quiet-channel	sola/stream-2ch-silence-1.2	144760.5	65550.0	b40ebf824bb571ed	0	0	0	0	0	0
+1	quiet-channel	sola/stream-6ch-noise-1.2	7978056.5	3638150.0	5d00c00f1cc77d00	0	0	0	0	0	0
+1	baseline	sola/mono/360	294829.66	134684.38		0	0	0	0	0	0
+1	baseline	sola/stereo/360	321258.84	146753.12		0	0	0	0	0	0
+1	baseline	sola/left-silent/360	308617.0	140709.38		0	0	0	0	0	0
+1	baseline	sola/right-silent/360	300207.41	136875.0		0	0	0	0	0	0
+1	baseline	sola/mono/720	1242541.47	566800.0		0	0	0	0	0	0
+1	baseline	sola/stereo/720	1332268.97	607968.75		0	0	0	0	0	0
+1	baseline	sola/left-silent/720	1271659.56	580315.62		0	0	0	0	0	0
+1	baseline	sola/right-silent/720	1234783.56	563290.62		0	0	0	0	0	0
+1	baseline	sola/stream-1ch-noise-1.2	1247528.5	568900.0	b136b3511ed0a703	0	0	0	0	0	0
+1	baseline	sola/stream-2ch-noise-0.8	2889717.5	1317800.0	af8cf13a71adbea9	0	0	0	0	0	0
+1	baseline	sola/stream-2ch-tone-1.2	366674.5	166700.0	5907aac396672cd5	0	0	0	0	0	0
+1	baseline	sola/stream-2ch-left-silent-1.2	1723733.5	785950.0	11b0c279269ca04b	0	0	0	0	0	0
+1	baseline	sola/stream-2ch-silence-1.2	145638.0	65900.0	b40ebf824bb571ed	0	0	0	0	0	0
+1	baseline	sola/stream-6ch-noise-1.2	8033809.5	3668600.0	5d00c00f1cc77d00	0	0	0	0	0	0
+2	baseline	sola/mono/360	283648.91	129350.0		0	0	0	0	0	0
+2	baseline	sola/stereo/360	324798.25	148396.88		0	0	0	0	0	0
+2	baseline	sola/left-silent/360	305187.31	139240.62		0	0	0	0	0	0
+2	baseline	sola/right-silent/360	303897.75	138871.88		0	0	0	0	0	0
+2	baseline	sola/mono/720	1193332.41	544362.5		0	0	0	0	0	0
+2	baseline	sola/stereo/720	1342530.62	612659.38		0	0	0	0	0	0
+2	baseline	sola/left-silent/720	1207133.34	550725.0		0	0	0	0	0	0
+2	baseline	sola/right-silent/720	1232005.44	562196.88		0	0	0	0	0	0
+2	baseline	sola/stream-1ch-noise-1.2	1336755.0	609750.0	b136b3511ed0a703	0	0	0	0	0	0
+2	baseline	sola/stream-2ch-noise-0.8	2688875.0	1225700.0	af8cf13a71adbea9	0	0	0	0	0	0
+2	baseline	sola/stream-2ch-tone-1.2	350541.5	159350.0	5907aac396672cd5	0	0	0	0	0	0
+2	baseline	sola/stream-2ch-left-silent-1.2	1585229.0	721800.0	11b0c279269ca04b	0	0	0	0	0	0
+2	baseline	sola/stream-2ch-silence-1.2	133895.0	60650.0	b40ebf824bb571ed	0	0	0	0	0	0
+2	baseline	sola/stream-6ch-noise-1.2	7710046.5	3520150.0	5d00c00f1cc77d00	0	0	0	0	0	0
+2	quiet-channel	sola/mono/360	300131.91	137012.5		0	0	0	0	0	0
+2	quiet-channel	sola/stereo/360	320339.66	146240.62		0	0	0	0	0	0
+2	quiet-channel	sola/left-silent/360	306710.12	140093.75		0	0	0	0	0	0
+2	quiet-channel	sola/right-silent/360	304919.75	139078.12		0	0	0	0	0	0
+2	quiet-channel	sola/mono/720	1223774.25	558443.75		0	0	0	0	0	0
+2	quiet-channel	sola/stereo/720	1317048.03	600803.12		0	0	0	0	0	0
+2	quiet-channel	sola/left-silent/720	1208285.75	550962.5		0	0	0	0	0	0
+2	quiet-channel	sola/right-silent/720	1179696.0	538078.12		0	0	0	0	0	0
+2	quiet-channel	sola/stream-1ch-noise-1.2	1198031.0	545450.0	b136b3511ed0a703	0	0	0	0	0	0
+2	quiet-channel	sola/stream-2ch-noise-0.8	2596355.5	1183300.0	af8cf13a71adbea9	0	0	0	0	0	0
+2	quiet-channel	sola/stream-2ch-tone-1.2	375125.5	170550.0	5907aac396672cd5	0	0	0	0	0	0
+2	quiet-channel	sola/stream-2ch-left-silent-1.2	1678078.0	765050.0	11b0c279269ca04b	0	0	0	0	0	0
+2	quiet-channel	sola/stream-2ch-silence-1.2	143772.5	65100.0	b40ebf824bb571ed	0	0	0	0	0	0
+2	quiet-channel	sola/stream-6ch-noise-1.2	7958630.5	3630200.0	5d00c00f1cc77d00	0	0	0	0	0	0
+3	quiet-channel	sola/mono/360	298478.84	136062.5		0	0	0	0	0	0
+3	quiet-channel	sola/stereo/360	322637.56	147318.75		0	0	0	0	0	0
+3	quiet-channel	sola/left-silent/360	301922.28	137740.62		0	0	0	0	0	0
+3	quiet-channel	sola/right-silent/360	300200.53	136840.62		0	0	0	0	0	0
+3	quiet-channel	sola/mono/720	1122872.78	512134.38		0	0	0	0	0	0
+3	quiet-channel	sola/stereo/720	1235332.25	563709.38		0	0	0	0	0	0
+3	quiet-channel	sola/left-silent/720	1097067.84	500396.88		0	0	0	0	0	0
+3	quiet-channel	sola/right-silent/720	1116232.91	509165.62		0	0	0	0	0	0
+3	quiet-channel	sola/stream-1ch-noise-1.2	1164886.5	531250.0	b136b3511ed0a703	0	0	0	0	0	0
+3	quiet-channel	sola/stream-2ch-noise-0.8	2472338.0	1127750.0	af8cf13a71adbea9	0	0	0	0	0	0
+3	quiet-channel	sola/stream-2ch-tone-1.2	411123.5	186950.0	5907aac396672cd5	0	0	0	0	0	0
+3	quiet-channel	sola/stream-2ch-left-silent-1.2	1522891.0	694350.0	11b0c279269ca04b	0	0	0	0	0	0
+3	quiet-channel	sola/stream-2ch-silence-1.2	122042.0	55250.0	b40ebf824bb571ed	0	0	0	0	0	0
+3	quiet-channel	sola/stream-6ch-noise-1.2	7048145.5	3217950.0	5d00c00f1cc77d00	0	0	0	0	0	0
+3	baseline	sola/mono/360	269813.53	122996.88		0	0	0	0	0	0
+3	baseline	sola/stereo/360	281748.81	128443.75		0	0	0	0	0	0
+3	baseline	sola/left-silent/360	275513.69	125721.88		0	0	0	0	0	0
+3	baseline	sola/right-silent/360	274128.06	124962.5		0	0	0	0	0	0
+3	baseline	sola/mono/720	1117543.06	509596.88		0	0	0	0	0	0
+3	baseline	sola/stereo/720	1205185.34	549821.88		0	0	0	0	0	0
+3	baseline	sola/left-silent/720	1110793.47	506840.62		0	0	0	0	0	0
+3	baseline	sola/right-silent/720	1113523.44	507896.88		0	0	0	0	0	0
+3	baseline	sola/stream-1ch-noise-1.2	1159069.5	527750.0	b136b3511ed0a703	0	0	0	0	0	0
+3	baseline	sola/stream-2ch-noise-0.8	2801149.0	1280150.0	af8cf13a71adbea9	0	0	0	0	0	0
+3	baseline	sola/stream-2ch-tone-1.2	357675.5	162600.0	5907aac396672cd5	0	0	0	0	0	0
+3	baseline	sola/stream-2ch-left-silent-1.2	1693772.0	772250.0	11b0c279269ca04b	0	0	0	0	0	0
+3	baseline	sola/stream-2ch-silence-1.2	143662.5	65100.0	b40ebf824bb571ed	0	0	0	0	0	0
+3	baseline	sola/stream-6ch-noise-1.2	7228135.0	3296550.0	5d00c00f1cc77d00	0	0	0	0	0	0

@@ -1,0 +1,637 @@
+[
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "frames",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "1",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index"
+    ],
+    "exit_code": 0,
+    "stdout": "frames\t1\t5919900\t617400\t416612047156\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t21260300\t194\t1176821272870\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t38832000\t194\t1176821272870\t549954\t76\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t39347000\t194\t1176821272870\t549954\t76\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t22451600\t194\t1176821272870\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t39441800\t194\t1176821272870\t549954\t76\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t23031200\t194\t1176821272870\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t39330800\t194\t1176821272870\t549954\t76\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t22719900\t194\t1176821272870\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t38455700\t194\t1176821272870\t549954\t76\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\01 - blocksize 4096.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t21981600\t194\t1176821272870\t549954\t76\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "frames",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "1",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index"
+    ],
+    "exit_code": 0,
+    "stdout": "frames\t1\t9005400\t617400\t155933097982195\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t1228700\t194\t1683627091364\t959681\t19294\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t11186600\t194\t1683627091364\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t1206600\t194\t1683627091364\t959681\t19294\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t11343600\t194\t1683627091364\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t1394500\t194\t1683627091364\t959681\t19294\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t11263100\t194\t1683627091364\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t1223800\t194\t1683627091364\t959681\t19294\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t10555100\t194\t1683627091364\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t1403600\t194\t1683627091364\t959681\t19294\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\03 - blocksize 16.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t10893000\t194\t1683627091364\t959681\t19294\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "frames",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "1",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index"
+    ],
+    "exit_code": 0,
+    "stdout": "frames\t1\t16464600\t1676072\t1494691926327\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t34575800\t194\t1529039557922\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t59854000\t194\t1529039557922\t3476937\t205\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t34115600\t194\t1529039557922\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t62680400\t194\t1529039557922\t3476937\t205\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t34919100\t194\t1529039557922\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t59788600\t194\t1529039557922\t3476937\t205\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t33827400\t194\t1529039557922\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t61161600\t194\t1529039557922\t3476937\t205\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t59524400\t194\t1529039557922\t3476937\t205\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\28 - high resolution audio, default settings.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t34465800\t194\t1529039557922\t3476937\t205\t24\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "frames",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "1",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index"
+    ],
+    "exit_code": 0,
+    "stdout": "frames\t1\t340262900\t23169256\t6360817110560\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t723019700\t194\t6760292637686\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t831841500\t194\t6760292637686\t42264726\t177\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t832932600\t194\t6760292637686\t42264726\t177\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t746619300\t194\t6760292637686\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t836734100\t194\t6760292637686\t42264726\t177\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t759494100\t194\t6760292637686\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t731116400\t194\t6760292637686\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t865866900\t194\t6760292637686\t42264726\t177\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t880752500\t194\t6760292637686\t42264726\t177\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\subset\\44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t752059200\t194\t6760292637686\t42264726\t177\t24\t8\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "frames",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "1",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index"
+    ],
+    "exit_code": 0,
+    "stdout": "frames\t1\t9133900\t931810\t51539630994\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t265884600\t194\t1408749262978\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t543809500\t194\t1408749262978\t835115\t8\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t279067600\t194\t1408749262978\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t554532300\t194\t1408749262978\t835115\t8\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t275241800\t194\t1408749262978\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t576050100\t194\t1408749262978\t835115\t8\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t552579300\t194\t1408749262978\t835115\t8\t0\t0\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t280214300\t194\t1408749262978\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+      "seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "seek\t194\t284824200\t194\t1408749262978\t835115\t8\t16\t2\n",
+    "stderr": ""
+  },
+  {
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+      "libflac-seek",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance\\uncommon\\08 - blocksize 65535.flac",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\measure-seek\\2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714.index",
+      "194"
+    ],
+    "exit_code": 0,
+    "stdout": "libflac-seek\t194\t539350100\t194\t1408749262978\t835115\t8\t0\t0\n",
+    "stderr": ""
+  }
+]

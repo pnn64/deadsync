@@ -29,13 +29,28 @@ pub(crate) fn evaluation_view(
             continue;
         };
         let prof = &gs.profiles()[player_idx];
-        let score_percent = player.score_percent;
+        // Routine saves one shared score, for the master player only.
+        let routine_shared = gs.routine_shared_stage_itg_score_percent();
+        let score_percent = routine_shared.unwrap_or(player.score_percent);
+        // The shared score needs both participants' scores to be valid.
+        let saves_score =
+            routine_shared.is_none_or(|_| player_idx == 0 && gs.score_valid_for_player(1));
         let noteskin = gs.noteskin_assets.noteskin[player_idx].clone();
         fail_stream_progress[player_idx] = player.fail_stream_progress;
         let machine_records =
             scores::get_machine_leaderboard_local(player.chart.short_hash.as_str(), usize::MAX);
-        let machine_record_highlight_rank =
-            score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
+        let machine_score_passed = player.grade != score_data::Grade::Failed
+            && (routine_shared.is_none()
+                || stage
+                    .players
+                    .iter()
+                    .flatten()
+                    .all(|player| player.grade != score_data::Grade::Failed));
+        let machine_record_highlight_rank = machine_score_passed
+            .then(|| {
+                score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent)
+            })
+            .flatten();
         let personal_records = scores::get_personal_leaderboard_local_for_side(
             player.chart.short_hash.as_str(),
             side,
@@ -58,7 +73,8 @@ pub(crate) fn evaluation_view(
             outcome.fail_time.is_some(),
         );
         let chart_hash = gs.charts()[player_idx].short_hash.as_str();
-        let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
+        let lua_submit_allowed = gs.mods.song_lua_compile_succeeded
+            || score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
         let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
         let expected_groovestats_submit = policy.enable_groovestats
             && passed
@@ -76,6 +92,7 @@ pub(crate) fn evaluation_view(
             && (!gs.course_display_is_course_stage()
                 || policy.autosubmit_course_scores_individually)
             && !prof.arrowcloud_api_key.trim().is_empty();
+        let local_score_valid = local_score_valid && saves_score;
         let earned_machine_record =
             local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
         let earned_top2_personal =
@@ -143,6 +160,8 @@ pub(crate) fn evaluation_view(
                 show_fa_plus_pane: player.show_fa_plus_pane,
                 track_early_judgments: player.track_early_judgments,
                 dim_post_fail_scatter: player.dim_post_fail_scatter,
+                golf_score: player.golf_score,
+                golf_par: player.golf_par,
                 disabled_timing_windows: prof.timing_windows.disabled_windows(),
                 machine_records,
                 machine_record_highlight_rank,
@@ -153,6 +172,7 @@ pub(crate) fn evaluation_view(
     }
     EvaluationInitView {
         score_info,
+        routine_shared_score_percent: gs.routine_shared_stage_itg_score_percent(),
         fail_stream_progress,
         context,
         stage_duration_seconds: stage.duration_seconds,

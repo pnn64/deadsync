@@ -1,0 +1,14 @@
+{
+  "commit": "0a2d9c39a0644563223f8a6eeb040d1fedafb1b8",
+  "exports": {
+    "luaopen_io": false,
+    "luaL_openlibs": false
+  },
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-init-before\\lua51.dll": "590083d6f36fbd5509992d56fd8a9fcfa934d2e99f4c9510fb6c7f647cfc712e",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-init-before\\lua51.lib": "e4ca4c177eeb2ab8007b44fb64a32764178e7c19a19ad2191297422fad91cdb9"
+  },
+  "reference_report": "docs/testing/2026-10-28-rust-lua-io-closers-boundary-current.json",
+  "reference_report_sha256": "df1d5bb29268550beda4a71e7385e78af6d82db0dbf08e4620b83458b8cb608c",
+  "audit_script_sha256": "e552b00c5515d04ed835e07ddffe4750beecb75758f13ee54b756953d0ce5b4d"
+}

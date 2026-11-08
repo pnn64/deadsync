@@ -1,0 +1,73 @@
+{
+  "parent": "a7b93aa06cfc18938e52430caeca6bf779fe1a80",
+  "toolchain": "1.98.1",
+  "scope": "Two passes over ordinary charts without background or foreground song Lua",
+  "verified_build": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "exe_sha256": "720d7ccaf80e6984c8a88ec9758651503cfd79d8001f4d2486f5a29020576c43",
+    "files": {
+      "crates/deadsync-song-lua/src/playback.rs": "0da12f3cab33ba53044a63335418e8eb908445cafa26d536d1a3f5ad2219b983",
+      "crates/deadsync-song-lua/src/playback/native.rs": "2904642dd41a001eefea080e83f76458b60e0375d5dc3690895eb0a26713781b",
+      "crates/deadsync-notefield/src/compose.rs": "b7430f443d8688e521d7f96a3339fc96eed28c62d792166062f70eebe109eecb",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "69931db03492948b07c30d2674952ad9bed6c2542faf8ae9a03322af4d2c4f23",
+      "crates/deadsync-shell/src/gameplay_regression_tests.rs": "853d218023f6737f4d25b6f3ff0f18381716e8b007d9eb34c8a627123620e09e",
+      "crates/deadsync-shell/src/gameplay_prewarm.rs": "0218e25e436a1adcf44933b532cbc3ab712844a27882e802a42e7fdf78a77c91"
+    },
+    "excluded_existing_lua_failures": [
+      "duplicate_root_combo_proxies_use_repeatable_direct_segments",
+      "faded_screen_layers_preserve_player_proxy_draws",
+      "gameplay_handles_generated_song_lua_actor_build",
+      "hidden_score_proxy_keeps_overlay_fade",
+      "late_foreground_keeps_shared_gameplay_tracks",
+      "root_note_field_proxy_uses_repeatable_direct_segment",
+      "root_player_proxy_uses_repeatable_direct_field_and_hud_segments",
+      "single_source_aft_note_field_uses_repeatable_target_pass",
+      "single_source_aft_player_uses_repeatable_target_pass",
+      "song_lua_conditional_spawn_skips_probed_receiver",
+      "song_lua_frame_is_structurally_repeatable",
+      "song_lua_texture_clock_excludes_screen_lead_in",
+      "top_screen_text_stays_outside_song_lua_aft_captures"
+    ]
+  },
+  "core_tests": {
+    "gameplay": {
+      "passed": 818,
+      "failed": 0,
+      "ignored": 2
+    },
+    "notefield": {
+      "passed": 480,
+      "failed": 0,
+      "ignored": 2
+    }
+  },
+  "shell_isolated": {
+    "passed": 18,
+    "failed": 13,
+    "ignored": 8
+  },
+  "frame_comparison_cases": 48,
+  "runtime_no_lua_update_frames": 60,
+  "existing_lua_fixture_failures": [
+    "duplicate_root_combo_proxies_use_repeatable_direct_segments",
+    "faded_screen_layers_preserve_player_proxy_draws",
+    "gameplay_handles_generated_song_lua_actor_build",
+    "hidden_score_proxy_keeps_overlay_fade",
+    "late_foreground_keeps_shared_gameplay_tracks",
+    "root_note_field_proxy_uses_repeatable_direct_segment",
+    "root_player_proxy_uses_repeatable_direct_field_and_hud_segments",
+    "single_source_aft_note_field_uses_repeatable_target_pass",
+    "single_source_aft_player_uses_repeatable_target_pass",
+    "song_lua_conditional_spawn_skips_probed_receiver",
+    "song_lua_frame_is_structurally_repeatable",
+    "song_lua_texture_clock_excludes_screen_lead_in",
+    "top_screen_text_stays_outside_song_lua_aft_captures"
+  ],
+  "older_cached_shell_exe_sha256": "b74f8551c761261a50cf20b31bfacb48adb1626743cf4a438c5f8056ea10862e",
+  "limits": [
+    "RenderFrame comparison, not real-GPU pixel capture or hardware timing",
+    "The older cached executable predates the parent; it is not an exact-parent rebuild",
+    "No claim that the broader song-Lua fixture suite passes"
+  ]
+}

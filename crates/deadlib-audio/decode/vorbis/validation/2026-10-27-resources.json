@@ -1,0 +1,2356 @@
+{
+  "started_utc": "2026-10-26T23:26:13.476547+00:00",
+  "git_head": "140a76c44c61bede319ecdfafa057980bc6a5d9c",
+  "reference_pins": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "arguments": {
+    "reference_root": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference",
+    "run_root": "target\\deadlib-audio-reference\\resources-20261027",
+    "repeats": 5,
+    "resource_repeats": 3,
+    "requests": 100,
+    "window": 256,
+    "seed": 1337,
+    "min_seconds": 0.15
+  },
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_cpus": 44,
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cmake": "cmake version 4.2.1",
+  "workers": {
+    "rust_counted": {
+      "path": "target/release/deps/resources-6da4ed7abe82c964.exe",
+      "sha256": "8e012c7ad97b0b8593cec2dc9e1d1f94fd1d151927d010a59500a366d939b3ce"
+    },
+    "rust_memory": {
+      "path": "target/release/deps/resources-c6b4fd1e2f38e4b3.exe",
+      "sha256": "93347feb932a112be5223eb8513128e15bbc22891dc06441c91115a23789695c"
+    },
+    "rust_timing": {
+      "path": "target/release/deps/pipeline-fc8337bc4aeecfb3.exe",
+      "sha256": "e71bf4cdb20668fdf0cccc08d00d8038c45088bcc0f754fc1cf18816732f3c76"
+    },
+    "c_memory": {
+      "path": "target/deadlib-audio-reference/vorbis-benchmark-build/Release/deadlib_vorbis_resources.exe",
+      "sha256": "ca72e6366be5ed64f3ee55551e0b8562fb0c3744b74801891162d774856f3b37"
+    },
+    "c_counted": {
+      "path": "target/deadlib-audio-reference/vorbis-resource-alloc-build/Release/deadlib_vorbis_resources.exe",
+      "sha256": "7111b3cde44f72b948a69ce6edb10f549fb3721cc941e861456862af9fa80f66"
+    },
+    "oracle": {
+      "path": "target/deadlib-audio-reference/vorbis-oracle-build/Release/deadlib_vorbis_oracle.exe",
+      "sha256": "60e40c7571b2865f919e0cdd14367f1cfcc2360532665e7ffa33f1f290dfdb37"
+    }
+  },
+  "cargo_artifact_profiles": {
+    "rust_counted": {
+      "opt_level": "3",
+      "debuginfo": 1,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    },
+    "rust_memory": {
+      "opt_level": "3",
+      "debuginfo": 1,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    },
+    "rust_timing": {
+      "opt_level": "3",
+      "debuginfo": 1,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    }
+  },
+  "registry_packages": {
+    "rust_counted": [
+      "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2",
+      "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+      "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+      "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34",
+      "registry+https://github.com/rust-lang/crates.io-index#num-complex@0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+      "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2",
+      "registry+https://github.com/rust-lang/crates.io-index#regex-lite@0.1.9",
+      "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.3",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-codec-vorbis@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-common@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-core@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-format-ogg@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-metadata@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia@0.6.1"
+    ],
+    "rust_memory": [
+      "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2",
+      "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+      "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+      "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34",
+      "registry+https://github.com/rust-lang/crates.io-index#num-complex@0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+      "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2",
+      "registry+https://github.com/rust-lang/crates.io-index#regex-lite@0.1.9",
+      "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.3",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-codec-vorbis@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-common@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-core@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-format-ogg@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-metadata@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia@0.6.1"
+    ],
+    "rust_timing": [
+      "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2",
+      "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+      "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+      "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.1",
+      "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34",
+      "registry+https://github.com/rust-lang/crates.io-index#num-complex@0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+      "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2",
+      "registry+https://github.com/rust-lang/crates.io-index#regex-lite@0.1.9",
+      "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.3",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-codec-vorbis@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-common@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-core@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-format-ogg@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia-metadata@0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index#symphonia@0.6.1"
+    ]
+  },
+  "cargo_profiles": {
+    "release": {
+      "opt-level": 3,
+      "overflow-checks": false,
+      "debug-assertions": false,
+      "lto": true,
+      "debug": false,
+      "panic": "abort"
+    },
+    "dev": {
+      "package": {
+        "png": {
+          "opt-level": 3
+        },
+        "fdeflate": {
+          "opt-level": 3
+        },
+        "deadlib-audio": {
+          "opt-level": 3
+        },
+        "deadlib-audio-decode": {
+          "opt-level": 3
+        },
+        "rubato": {
+          "opt-level": 3
+        },
+        "symphonia-core": {
+          "opt-level": 3
+        },
+        "symphonia-codec-vorbis": {
+          "opt-level": 3
+        },
+        "sha2": {
+          "opt-level": 3
+        },
+        "deadsync-song-lua": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy-sys": {
+          "opt-level": 3
+        }
+      }
+    },
+    "local": {
+      "inherits": "release",
+      "lto": "thin"
+    },
+    "profiling": {
+      "inherits": "release",
+      "debug": 1
+    },
+    "bench": {
+      "debug": 1
+    }
+  },
+  "cargo_config": {
+    "target": {
+      "cfg(target_os = \"macos\")": {
+        "rustflags": [
+          "-L",
+          "native=/opt/homebrew/lib",
+          "-L",
+          "native=/opt/homebrew/opt/vulkan-loader/lib",
+          "-L",
+          "native=/usr/local/lib",
+          "-L",
+          "native=/usr/local/opt/vulkan-loader/lib"
+        ]
+      },
+      "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+        "rustflags": [
+          "-C",
+          "target-feature=+crt-static"
+        ]
+      }
+    },
+    "env": {
+      "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+    }
+  },
+  "rustflags_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null
+  },
+  "cmake_release_flags": [
+    "CMAKE_CXX_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_C_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=/INCREMENTAL:NO"
+  ],
+  "source_sha256": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "3c0749be15998357c6528b36f25f3c350b7f018bd9341840f1d33df12246b857",
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "5a74a0204c5095a1d67a6133c8dec2eca742c4106feb00b5eb58dc62107a2b31",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "90f270c7627c5944e171d8ef2325f6f9b8f1cc6a42bfa120e123123872b420f0",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "3e6a9a1c2046d71f7f7d9d195febdb7a59b8d49dc06a6001092194420fb7a1db",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "1780d259a1a73c883eaf5c53dec8dc4d7f66b8a7fd82a54beaa521ae942e81b3",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "5d479af544338dadb1ab99627b4fe1c2581c40e0cb41bc491c7b3ee1b1ab6c77",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "0b6bfd852a4c019d3e6755dc599c29a074eee2095f886dd4340dea079b8c3678",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "cf9d97a231095e94ccc789772ce0660c964ebef4c67de1ca3c2d75ee23750515",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "6ab8912fa5debd81417f73bd642ed57f0759f7ede3da3d0a8e0fe753aadcf9d2",
+    "crates/deadlib-audio/decode/scripts/benchmark_resources.py": "ebef8ba3852edc7f4064fa5c3ec531a20bfc3e1edafbdba45c982bdc5801b1dd",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "814e5651b891db3029382721c423f5eacc3ff36102a6fc42d128cf5860cc94ba",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "003f94d430b8123e6d67b0743b6700af004a89f69d329ba0d77bbdc8800f8d0d",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "0fe5153bc37e1f8eaced24447f3c66638fb95fe64c31e367638db719d2758574",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "acb988b27402c70a62146181f3bf36f0bcc1d04d01f6f4723b29789e49f2e0ed",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "3a303e11ca007bec6eaf156e4615e2ebf58e270af7eeb33190cac35fc739bedb",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "a52cdda5799870a30d6e1a19d41e3548878f9084adef2614dcb37e9dcda3e5a0",
+    "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "d58e98402bb5f67a2a0c3f46a2476ea4c11ffc04eed2657b959dc766cb32b399",
+    "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "52aec945a67b721f8a4eec9c6596acbaf6f9788830ad35de8ea49a209b0d9ad2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "ef798a2aa62694ea01242d31aa93a4fb893159222ef96e4619a93b29243a0763",
+    "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "9c062fa9995065c2cd9f41acef5a519a10f36147b8013fc877e7a1675a0aa27f",
+    "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "a03cf39395f8294c6d782e1ee068b174f4593ecb4705891d56ebea1a4905e6f2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "7c277156db2314c252d1d9704a525efdf9e7e9ebee84e956d6b61e06717bf2ba",
+    "crates/deadlib-audio/decode/vorbis/Cargo.toml": "94ffa02feeae8fcf3b039f1b40ff51dbd13d35fb9d386b5dd9db85a08a59f960",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "6c7302ec167e713b412464fda7b40970a4b4097e73683eb88665575b27f78eef",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "2481396cedcc2b56b4c9e0c5b81050285ea63302250c11cef4e28c9e1b66f822",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "a294f7b7851fd63b67cc18e3cf7aae0b0a45162ced5139f07623d3ee25c20993",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "da628fc86c7f66240045e0807de1ceb61eee9f1b58426feb63ec0464dec6cd38",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "2ea169ccb23a57ed15f676c5c1d9dacf84cd5c6dcc69711560f1b54ec7d7669e",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "2f316bd0102940d77666fd770eaba0a675332af78369a8eb538082675133016a",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "637f9a2e7dc064f57b12e91a1963c57fd338efa166b69e2018f3da209f9dba6b",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "a88f97d7effb1439db90455c2617ce5f2730a56feeea8ff51b1bdb2c5beb9fcd",
+    "crates/deadlib-audio/decode/vorbis/tests/oracle/CMakeLists.txt": "27f48cda9769850554120dfd492a25757fdc08ffac2fa621d5426aa9bf82ea71",
+    "crates/deadlib-audio/decode/vorbis/tests/oracle/oracle.c": "8a38823bf4443689c16ce8316d53cb9fcc009e560e3c394a89738aacbbbf6533",
+    "crates/deadlib-audio/decode/vorbis/tests/oracle/README.md": "33e725790eb032c62b3997b3a513eebe245619e28679cea2e10e17fbde66e9ea",
+    "crates/deadlib-audio/decode/vorbis/tests/oracle/retain_vectors.c": "e74135aa290ae8fcc9ac109eabf82e94bb74d2af30523693debda04aecac5b70",
+    "crates/deadlib-audio/decode/vorbis/tests/oracle/retain_vectors.h": "2337d774ae705bb58c41a65f55fa7d9f8585a02c13d387b64cf7fba84112544d"
+  },
+  "input_sha256": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg": "3e4c0456de37adc014a3aa6b5aebf49f3c66717cf798fd9e6a3b9feff4c1cfb0",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483"
+  },
+  "workloads": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": {
+      "frames": 640,
+      "channels": 1,
+      "rate": 8000,
+      "large_block": 512,
+      "floor0": false,
+      "serial": 902739757,
+      "requests": [
+        [
+          0,
+          256
+        ],
+        [
+          1,
+          256
+        ],
+        [
+          127,
+          256
+        ],
+        [
+          255,
+          256
+        ],
+        [
+          320,
+          256
+        ],
+        [
+          639,
+          1
+        ],
+        [
+          596,
+          44
+        ],
+        [
+          147,
+          256
+        ],
+        [
+          294,
+          256
+        ],
+        [
+          253,
+          256
+        ],
+        [
+          72,
+          256
+        ],
+        [
+          247,
+          256
+        ],
+        [
+          58,
+          256
+        ],
+        [
+          513,
+          127
+        ],
+        [
+          380,
+          256
+        ],
+        [
+          155,
+          256
+        ],
+        [
+          14,
+          256
+        ],
+        [
+          581,
+          59
+        ],
+        [
+          496,
+          144
+        ],
+        [
+          383,
+          256
+        ],
+        [
+          418,
+          222
+        ],
+        [
+          201,
+          256
+        ],
+        [
+          36,
+          256
+        ],
+        [
+          35,
+          256
+        ],
+        [
+          246,
+          256
+        ],
+        [
+          141,
+          256
+        ],
+        [
+          536,
+          104
+        ],
+        [
+          7,
+          256
+        ],
+        [
+          138,
+          256
+        ],
+        [
+          401,
+          239
+        ],
+        [
+          204,
+          256
+        ],
+        [
+          427,
+          213
+        ],
+        [
+          222,
+          256
+        ],
+        [
+          85,
+          256
+        ],
+        [
+          192,
+          256
+        ],
+        [
+          271,
+          256
+        ],
+        [
+          370,
+          256
+        ],
+        [
+          345,
+          256
+        ],
+        [
+          244,
+          256
+        ],
+        [
+          51,
+          256
+        ],
+        [
+          454,
+          186
+        ],
+        [
+          285,
+          256
+        ],
+        [
+          104,
+          256
+        ],
+        [
+          535,
+          105
+        ],
+        [
+          474,
+          166
+        ],
+        [
+          33,
+          256
+        ],
+        [
+          28,
+          256
+        ],
+        [
+          443,
+          197
+        ],
+        [
+          430,
+          210
+        ],
+        [
+          613,
+          27
+        ],
+        [
+          16,
+          256
+        ],
+        [
+          159,
+          256
+        ],
+        [
+          66,
+          256
+        ],
+        [
+          361,
+          256
+        ],
+        [
+          68,
+          256
+        ],
+        [
+          579,
+          61
+        ],
+        [
+          406,
+          234
+        ],
+        [
+          557,
+          83
+        ],
+        [
+          184,
+          256
+        ],
+        [
+          295,
+          256
+        ],
+        [
+          42,
+          256
+        ],
+        [
+          433,
+          207
+        ],
+        [
+          236,
+          256
+        ],
+        [
+          75,
+          256
+        ],
+        [
+          510,
+          130
+        ],
+        [
+          629,
+          11
+        ],
+        [
+          224,
+          256
+        ],
+        [
+          431,
+          209
+        ],
+        [
+          274,
+          256
+        ],
+        [
+          249,
+          256
+        ],
+        [
+          532,
+          108
+        ],
+        [
+          339,
+          256
+        ],
+        [
+          614,
+          26
+        ],
+        [
+          61,
+          256
+        ],
+        [
+          520,
+          120
+        ],
+        [
+          311,
+          256
+        ],
+        [
+          250,
+          256
+        ],
+        [
+          577,
+          63
+        ],
+        [
+          316,
+          256
+        ],
+        [
+          91,
+          256
+        ],
+        [
+          78,
+          256
+        ],
+        [
+          389,
+          251
+        ],
+        [
+          48,
+          256
+        ],
+        [
+          575,
+          65
+        ],
+        [
+          98,
+          256
+        ],
+        [
+          9,
+          256
+        ],
+        [
+          228,
+          256
+        ],
+        [
+          611,
+          29
+        ],
+        [
+          310,
+          256
+        ],
+        [
+          77,
+          256
+        ],
+        [
+          344,
+          256
+        ],
+        [
+          327,
+          256
+        ],
+        [
+          202,
+          256
+        ],
+        [
+          465,
+          175
+        ],
+        [
+          12,
+          256
+        ],
+        [
+          363,
+          256
+        ],
+        [
+          158,
+          256
+        ],
+        [
+          405,
+          235
+        ],
+        [
+          0,
+          256
+        ],
+        [
+          591,
+          49
+        ]
+      ],
+      "expected_channel_samples": 21508,
+      "sha256": "715091614bec1df08ee93fe3681e52bc9101a72aa1048fbb084161a2261012af",
+      "oracle_requests_sha256": "16da1e72fd0f3e89a446e47d5a0b31866df1c01e14b5ee5aaf4f8c0965bbfb8b",
+      "oracle_output_sha256": "a9a8b53e9fd2daee814ebf9ab4f07a508f766f5bfd57b37cd3925fd2782e3b96"
+    },
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": {
+      "frames": 3840,
+      "channels": 2,
+      "rate": 48000,
+      "large_block": 2048,
+      "floor0": false,
+      "serial": 3796873615,
+      "requests": [
+        [
+          0,
+          256
+        ],
+        [
+          1,
+          256
+        ],
+        [
+          127,
+          256
+        ],
+        [
+          255,
+          256
+        ],
+        [
+          1920,
+          256
+        ],
+        [
+          3839,
+          1
+        ],
+        [
+          596,
+          256
+        ],
+        [
+          787,
+          256
+        ],
+        [
+          3494,
+          256
+        ],
+        [
+          893,
+          256
+        ],
+        [
+          1352,
+          256
+        ],
+        [
+          2807,
+          256
+        ],
+        [
+          1978,
+          256
+        ],
+        [
+          3073,
+          256
+        ],
+        [
+          380,
+          256
+        ],
+        [
+          795,
+          256
+        ],
+        [
+          2574,
+          256
+        ],
+        [
+          1221,
+          256
+        ],
+        [
+          3056,
+          256
+        ],
+        [
+          1663,
+          256
+        ],
+        [
+          1698,
+          256
+        ],
+        [
+          201,
+          256
+        ],
+        [
+          676,
+          256
+        ],
+        [
+          1315,
+          256
+        ],
+        [
+          3446,
+          256
+        ],
+        [
+          3341,
+          256
+        ],
+        [
+          2456,
+          256
+        ],
+        [
+          2567,
+          256
+        ],
+        [
+          1418,
+          256
+        ],
+        [
+          2961,
+          256
+        ],
+        [
+          1484,
+          256
+        ],
+        [
+          1067,
+          256
+        ],
+        [
+          222,
+          256
+        ],
+        [
+          2645,
+          256
+        ],
+        [
+          3392,
+          256
+        ],
+        [
+          911,
+          256
+        ],
+        [
+          1650,
+          256
+        ],
+        [
+          2905,
+          256
+        ],
+        [
+          1524,
+          256
+        ],
+        [
+          1331,
+          256
+        ],
+        [
+          1094,
+          256
+        ],
+        [
+          3485,
+          256
+        ],
+        [
+          2024,
+          256
+        ],
+        [
+          1815,
+          256
+        ],
+        [
+          2394,
+          256
+        ],
+        [
+          1313,
+          256
+        ],
+        [
+          28,
+          256
+        ],
+        [
+          2363,
+          256
+        ],
+        [
+          2990,
+          256
+        ],
+        [
+          1253,
+          256
+        ],
+        [
+          1936,
+          256
+        ],
+        [
+          159,
+          256
+        ],
+        [
+          1346,
+          256
+        ],
+        [
+          2281,
+          256
+        ],
+        [
+          2628,
+          256
+        ],
+        [
+          579,
+          256
+        ],
+        [
+          2326,
+          256
+        ],
+        [
+          1837,
+          256
+        ],
+        [
+          2104,
+          256
+        ],
+        [
+          295,
+          256
+        ],
+        [
+          2602,
+          256
+        ],
+        [
+          2993,
+          256
+        ],
+        [
+          2156,
+          256
+        ],
+        [
+          1355,
+          256
+        ],
+        [
+          3710,
+          130
+        ],
+        [
+          629,
+          256
+        ],
+        [
+          2784,
+          256
+        ],
+        [
+          2991,
+          256
+        ],
+        [
+          274,
+          256
+        ],
+        [
+          2169,
+          256
+        ],
+        [
+          1172,
+          256
+        ],
+        [
+          1619,
+          256
+        ],
+        [
+          3814,
+          26
+        ],
+        [
+          701,
+          256
+        ],
+        [
+          1160,
+          256
+        ],
+        [
+          1591,
+          256
+        ],
+        [
+          2810,
+          256
+        ],
+        [
+          577,
+          256
+        ],
+        [
+          956,
+          256
+        ],
+        [
+          91,
+          256
+        ],
+        [
+          1358,
+          256
+        ],
+        [
+          3589,
+          251
+        ],
+        [
+          2608,
+          256
+        ],
+        [
+          3775,
+          65
+        ],
+        [
+          738,
+          256
+        ],
+        [
+          9,
+          256
+        ],
+        [
+          228,
+          256
+        ],
+        [
+          611,
+          256
+        ],
+        [
+          950,
+          256
+        ],
+        [
+          2637,
+          256
+        ],
+        [
+          984,
+          256
+        ],
+        [
+          327,
+          256
+        ],
+        [
+          202,
+          256
+        ],
+        [
+          3025,
+          256
+        ],
+        [
+          1292,
+          256
+        ],
+        [
+          363,
+          256
+        ],
+        [
+          798,
+          256
+        ],
+        [
+          2965,
+          256
+        ],
+        [
+          3200,
+          256
+        ],
+        [
+          1231,
+          256
+        ]
+      ],
+      "expected_channel_samples": 49586,
+      "sha256": "053fa7a769a5680c8dae544aa0f072ee5dab09c3a6834f214f672d8303774f21",
+      "oracle_requests_sha256": "eaf8844f4be91ad4063cb549ffbfd4851b79de21d34ee9a4326fe1f07f2706ab",
+      "oracle_output_sha256": "ceba3f74a88e73ecfb185f4b81c430ce0e5cbf72d921e0554bc2271c904b44a2"
+    },
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg": {
+      "frames": 882,
+      "channels": 8,
+      "rate": 44100,
+      "large_block": 2048,
+      "floor0": false,
+      "serial": 1717421025,
+      "requests": [
+        [
+          0,
+          256
+        ],
+        [
+          1,
+          256
+        ],
+        [
+          127,
+          256
+        ],
+        [
+          255,
+          256
+        ],
+        [
+          441,
+          256
+        ],
+        [
+          881,
+          1
+        ],
+        [
+          338,
+          256
+        ],
+        [
+          325,
+          256
+        ],
+        [
+          698,
+          184
+        ],
+        [
+          185,
+          256
+        ],
+        [
+          152,
+          256
+        ],
+        [
+          509,
+          256
+        ],
+        [
+          502,
+          256
+        ],
+        [
+          337,
+          256
+        ],
+        [
+          320,
+          256
+        ],
+        [
+          357,
+          256
+        ],
+        [
+          282,
+          256
+        ],
+        [
+          237,
+          256
+        ],
+        [
+          380,
+          256
+        ],
+        [
+          157,
+          256
+        ],
+        [
+          168,
+          256
+        ],
+        [
+          387,
+          256
+        ],
+        [
+          634,
+          248
+        ],
+        [
+          67,
+          256
+        ],
+        [
+          710,
+          172
+        ],
+        [
+          473,
+          256
+        ],
+        [
+          62,
+          256
+        ],
+        [
+          821,
+          61
+        ],
+        [
+          674,
+          208
+        ],
+        [
+          51,
+          256
+        ],
+        [
+          746,
+          136
+        ],
+        [
+          785,
+          97
+        ],
+        [
+          558,
+          256
+        ],
+        [
+          827,
+          55
+        ],
+        [
+          398,
+          256
+        ],
+        [
+          329,
+          256
+        ],
+        [
+          72,
+          256
+        ],
+        [
+          25,
+          256
+        ],
+        [
+          594,
+          256
+        ],
+        [
+          749,
+          133
+        ],
+        [
+          26,
+          256
+        ],
+        [
+          323,
+          256
+        ],
+        [
+          452,
+          256
+        ],
+        [
+          615,
+          256
+        ],
+        [
+          456,
+          256
+        ],
+        [
+          725,
+          157
+        ],
+        [
+          832,
+          50
+        ],
+        [
+          455,
+          256
+        ],
+        [
+          464,
+          256
+        ],
+        [
+          293,
+          256
+        ],
+        [
+          244,
+          256
+        ],
+        [
+          543,
+          256
+        ],
+        [
+          716,
+          166
+        ],
+        [
+          325,
+          256
+        ],
+        [
+          252,
+          256
+        ],
+        [
+          381,
+          256
+        ],
+        [
+          346,
+          256
+        ],
+        [
+          499,
+          256
+        ],
+        [
+          268,
+          256
+        ],
+        [
+          7,
+          256
+        ],
+        [
+          328,
+          256
+        ],
+        [
+          209,
+          256
+        ],
+        [
+          512,
+          256
+        ],
+        [
+          455,
+          256
+        ],
+        [
+          356,
+          256
+        ],
+        [
+          473,
+          256
+        ],
+        [
+          630,
+          252
+        ],
+        [
+          531,
+          256
+        ],
+        [
+          202,
+          256
+        ],
+        [
+          561,
+          256
+        ],
+        [
+          164,
+          256
+        ],
+        [
+          209,
+          256
+        ],
+        [
+          514,
+          256
+        ],
+        [
+          41,
+          256
+        ],
+        [
+          548,
+          256
+        ],
+        [
+          223,
+          256
+        ],
+        [
+          764,
+          118
+        ],
+        [
+          37,
+          256
+        ],
+        [
+          440,
+          256
+        ],
+        [
+          847,
+          35
+        ],
+        [
+          62,
+          256
+        ],
+        [
+          751,
+          131
+        ],
+        [
+          232,
+          256
+        ],
+        [
+          691,
+          191
+        ],
+        [
+          510,
+          256
+        ],
+        [
+          795,
+          87
+        ],
+        [
+          72,
+          256
+        ],
+        [
+          389,
+          256
+        ],
+        [
+          254,
+          256
+        ],
+        [
+          81,
+          256
+        ],
+        [
+          114,
+          256
+        ],
+        [
+          639,
+          243
+        ],
+        [
+          88,
+          256
+        ],
+        [
+          673,
+          209
+        ],
+        [
+          530,
+          256
+        ],
+        [
+          723,
+          159
+        ],
+        [
+          822,
+          60
+        ],
+        [
+          169,
+          256
+        ],
+        [
+          326,
+          256
+        ],
+        [
+          841,
+          41
+        ]
+      ],
+      "expected_channel_samples": 181200,
+      "sha256": "2e06dc132d50ccb2e774fefc9c3fc981c96830a29a31f577a23ec6e8a3400d5d",
+      "oracle_requests_sha256": "db1c8ab52788f09ffd2b44fd5db3ca9e6f1c779e3f49954a09a6cb2c8a3482a8",
+      "oracle_output_sha256": "3ea6bc3fcaa478da6cf63a70337b3a2cc3f11702aaf6646cdace51d7093f147b"
+    },
+    "assets/music/in_two (loop).ogg": {
+      "frames": 4445236,
+      "channels": 2,
+      "rate": 44100,
+      "large_block": 2048,
+      "floor0": false,
+      "serial": 2051322966,
+      "requests": [
+        [
+          0,
+          256
+        ],
+        [
+          1,
+          256
+        ],
+        [
+          127,
+          256
+        ],
+        [
+          255,
+          256
+        ],
+        [
+          2222618,
+          256
+        ],
+        [
+          4445235,
+          1
+        ],
+        [
+          2487896,
+          256
+        ],
+        [
+          919035,
+          256
+        ],
+        [
+          1011746,
+          256
+        ],
+        [
+          2613717,
+          256
+        ],
+        [
+          1879952,
+          256
+        ],
+        [
+          2075391,
+          256
+        ],
+        [
+          3346830,
+          256
+        ],
+        [
+          2404249,
+          256
+        ],
+        [
+          658312,
+          256
+        ],
+        [
+          3425539,
+          256
+        ],
+        [
+          1268298,
+          256
+        ],
+        [
+          291097,
+          256
+        ],
+        [
+          4264280,
+          256
+        ],
+        [
+          3104207,
+          256
+        ],
+        [
+          2506550,
+          256
+        ],
+        [
+          1354481,
+          256
+        ],
+        [
+          4143336,
+          256
+        ],
+        [
+          434691,
+          256
+        ],
+        [
+          1151514,
+          256
+        ],
+        [
+          1925445,
+          256
+        ],
+        [
+          3066440,
+          256
+        ],
+        [
+          2539559,
+          256
+        ],
+        [
+          576746,
+          256
+        ],
+        [
+          416173,
+          256
+        ],
+        [
+          867280,
+          256
+        ],
+        [
+          1335939,
+          256
+        ],
+        [
+          3892142,
+          256
+        ],
+        [
+          1204785,
+          256
+        ],
+        [
+          676836,
+          256
+        ],
+        [
+          4020127,
+          256
+        ],
+        [
+          1152634,
+          256
+        ],
+        [
+          4258265,
+          256
+        ],
+        [
+          3444648,
+          256
+        ],
+        [
+          3991851,
+          256
+        ],
+        [
+          1840526,
+          256
+        ],
+        [
+          526153,
+          256
+        ],
+        [
+          1105100,
+          256
+        ],
+        [
+          3648119,
+          256
+        ],
+        [
+          3298234,
+          256
+        ],
+        [
+          322549,
+          256
+        ],
+        [
+          317404,
+          256
+        ],
+        [
+          2191315,
+          256
+        ],
+        [
+          47950,
+          256
+        ],
+        [
+          3316149,
+          256
+        ],
+        [
+          1272760,
+          256
+        ],
+        [
+          3795891,
+          256
+        ],
+        [
+          744374,
+          256
+        ],
+        [
+          3634753,
+          256
+        ],
+        [
+          1541928,
+          256
+        ],
+        [
+          2800439,
+          256
+        ],
+        [
+          2343642,
+          256
+        ],
+        [
+          2196029,
+          256
+        ],
+        [
+          3285464,
+          256
+        ],
+        [
+          3737399,
+          256
+        ],
+        [
+          3743250,
+          256
+        ],
+        [
+          2417345,
+          256
+        ],
+        [
+          2505572,
+          256
+        ],
+        [
+          1996671,
+          256
+        ],
+        [
+          2897706,
+          256
+        ],
+        [
+          3393533,
+          256
+        ],
+        [
+          4238952,
+          256
+        ],
+        [
+          179855,
+          256
+        ],
+        [
+          3094286,
+          256
+        ],
+        [
+          155997,
+          256
+        ],
+        [
+          728292,
+          256
+        ],
+        [
+          3109955,
+          256
+        ],
+        [
+          1821630,
+          256
+        ],
+        [
+          492209,
+          256
+        ],
+        [
+          3965112,
+          256
+        ],
+        [
+          1561199,
+          256
+        ],
+        [
+          3239970,
+          256
+        ],
+        [
+          1048369,
+          256
+        ],
+        [
+          2304672,
+          256
+        ],
+        [
+          2300491,
+          256
+        ],
+        [
+          2526666,
+          256
+        ],
+        [
+          1331657,
+          256
+        ],
+        [
+          1020576,
+          256
+        ],
+        [
+          4226699,
+          256
+        ],
+        [
+          3179514,
+          256
+        ],
+        [
+          3135849,
+          256
+        ],
+        [
+          4424072,
+          256
+        ],
+        [
+          555255,
+          256
+        ],
+        [
+          492430,
+          256
+        ],
+        [
+          4261865,
+          256
+        ],
+        [
+          1643424,
+          256
+        ],
+        [
+          646263,
+          256
+        ],
+        [
+          1890834,
+          256
+        ],
+        [
+          2878513,
+          256
+        ],
+        [
+          2146504,
+          256
+        ],
+        [
+          2438615,
+          256
+        ],
+        [
+          1842786,
+          256
+        ],
+        [
+          1558441,
+          256
+        ],
+        [
+          1101664,
+          256
+        ],
+        [
+          313615,
+          256
+        ]
+      ],
+      "expected_channel_samples": 50690,
+      "sha256": "f6eacf7bd72227f451875bb4957a901e5531534e886982cf404ab2993960ac14",
+      "oracle_requests_sha256": "35c480a5c0b81ccbcf638b24beec1b0c43768f4793295ee7e2cd591edd37ec40",
+      "oracle_output_sha256": "7635c446f648062fddec1a4c55f30129dd9cea03a1e1ef8b4cafad7ea62afe3a"
+    },
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": {
+      "frames": 5443200,
+      "channels": 2,
+      "rate": 44100,
+      "large_block": 2048,
+      "floor0": false,
+      "serial": 14292,
+      "requests": [
+        [
+          0,
+          256
+        ],
+        [
+          1,
+          256
+        ],
+        [
+          127,
+          256
+        ],
+        [
+          255,
+          256
+        ],
+        [
+          2721600,
+          256
+        ],
+        [
+          5443199,
+          1
+        ],
+        [
+          290516,
+          256
+        ],
+        [
+          914707,
+          256
+        ],
+        [
+          1203494,
+          256
+        ],
+        [
+          1874813,
+          256
+        ],
+        [
+          529352,
+          256
+        ],
+        [
+          928247,
+          256
+        ],
+        [
+          3141178,
+          256
+        ],
+        [
+          2779393,
+          256
+        ],
+        [
+          3907580,
+          256
+        ],
+        [
+          3141915,
+          256
+        ],
+        [
+          5315214,
+          256
+        ],
+        [
+          4204101,
+          256
+        ],
+        [
+          5081456,
+          256
+        ],
+        [
+          1001983,
+          256
+        ],
+        [
+          2363298,
+          256
+        ],
+        [
+          2584521,
+          256
+        ],
+        [
+          4489636,
+          256
+        ],
+        [
+          268195,
+          256
+        ],
+        [
+          158966,
+          256
+        ],
+        [
+          1295501,
+          256
+        ],
+        [
+          526616,
+          256
+        ],
+        [
+          4898567,
+          256
+        ],
+        [
+          5026058,
+          256
+        ],
+        [
+          5098641,
+          256
+        ],
+        [
+          3445964,
+          256
+        ],
+        [
+          1450667,
+          256
+        ],
+        [
+          2432862,
+          256
+        ],
+        [
+          31445,
+          256
+        ],
+        [
+          3755072,
+          256
+        ],
+        [
+          2318351,
+          256
+        ],
+        [
+          2303730,
+          256
+        ],
+        [
+          2802265,
+          256
+        ],
+        [
+          1151604,
+          256
+        ],
+        [
+          5181491,
+          256
+        ],
+        [
+          3021254,
+          256
+        ],
+        [
+          4615325,
+          256
+        ],
+        [
+          2941544,
+          256
+        ],
+        [
+          4360215,
+          256
+        ],
+        [
+          4176474,
+          256
+        ],
+        [
+          5310113,
+          256
+        ],
+        [
+          865948,
+          256
+        ],
+        [
+          1880123,
+          256
+        ],
+        [
+          3316910,
+          256
+        ],
+        [
+          1028453,
+          256
+        ],
+        [
+          4707856,
+          256
+        ],
+        [
+          4508319,
+          256
+        ],
+        [
+          364226,
+          256
+        ],
+        [
+          3433321,
+          256
+        ],
+        [
+          4495428,
+          256
+        ],
+        [
+          1060419,
+          256
+        ],
+        [
+          440086,
+          256
+        ],
+        [
+          2924077,
+          256
+        ],
+        [
+          1868344,
+          256
+        ],
+        [
+          2505895,
+          256
+        ],
+        [
+          3397162,
+          256
+        ],
+        [
+          582833,
+          256
+        ],
+        [
+          3840236,
+          256
+        ],
+        [
+          1072715,
+          256
+        ],
+        [
+          1998590,
+          256
+        ],
+        [
+          1006709,
+          256
+        ],
+        [
+          3767904,
+          256
+        ],
+        [
+          3393711,
+          256
+        ],
+        [
+          4608274,
+          256
+        ],
+        [
+          3028089,
+          256
+        ],
+        [
+          4355732,
+          256
+        ],
+        [
+          677459,
+          256
+        ],
+        [
+          3300454,
+          256
+        ],
+        [
+          3224381,
+          256
+        ],
+        [
+          3647240,
+          256
+        ],
+        [
+          2478391,
+          256
+        ],
+        [
+          1049210,
+          256
+        ],
+        [
+          4925377,
+          256
+        ],
+        [
+          5257916,
+          256
+        ],
+        [
+          1975771,
+          256
+        ],
+        [
+          47438,
+          256
+        ],
+        [
+          370309,
+          256
+        ],
+        [
+          5100208,
+          256
+        ],
+        [
+          2136895,
+          256
+        ],
+        [
+          736098,
+          256
+        ],
+        [
+          2703369,
+          256
+        ],
+        [
+          3223908,
+          256
+        ],
+        [
+          1131491,
+          256
+        ],
+        [
+          3472310,
+          256
+        ],
+        [
+          1984077,
+          256
+        ],
+        [
+          4622424,
+          256
+        ],
+        [
+          1899207,
+          256
+        ],
+        [
+          5266762,
+          256
+        ],
+        [
+          3336145,
+          256
+        ],
+        [
+          4323212,
+          256
+        ],
+        [
+          1837803,
+          256
+        ],
+        [
+          2631198,
+          256
+        ],
+        [
+          880405,
+          256
+        ],
+        [
+          4528640,
+          256
+        ],
+        [
+          4532431,
+          256
+        ]
+      ],
+      "expected_channel_samples": 50690,
+      "sha256": "6d3ac5d1c4b2f567c0d68a471309607e546649eca7a6444a1014d5a604967263",
+      "oracle_requests_sha256": "efc280e7d670ab559c54755810c599f350b42634edd6ca335937061eecdc23d8",
+      "oracle_output_sha256": "1931b66e5ce45bedb8b7a1a99bc84f73595b47bc18fbe49d613a3143699d3f34"
+    }
+  },
+  "allocator_self_tests": "passed both actual instrumented workers",
+  "metric_scopes": {
+    "heap": "requested bytes; Rust global allocator / only libogg+libvorbis+libvorbisfile C allocation calls; input and harness excluded",
+    "process_memory": "fresh uninstrumented process PeakWorkingSetSize; input, workload, loader and harness included; seek_batch includes warm/validation",
+    "seek_timing": "uninstrumented; resident input; seek_open constructs+destroys; seek_batch warmed context, exact requested consumption; PCM validation excluded",
+    "api_exposed_samples": "API-visible samples, not hidden synthesized frames; native page callbacks may exceed demand"
+  }
+}

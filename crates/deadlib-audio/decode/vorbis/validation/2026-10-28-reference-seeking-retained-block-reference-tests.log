@@ -1,0 +1,33 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:560
++ ... ng-inputs"; cargo test -p deadlib-audio-decode-vorbis --release --all ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 22.75s
+     Running tests\eos_clamping.rs (target/vorbis-completion\release\deps\eos_clamping-cca5245807ef174c.exe)
+
+running 7 tests
+test eos_reference_is_explicit_and_separate_from_indexed_endpoint_trimming ... ok
+test reference_eos_clamping_witness ... ok
+test eos_stream_pcm_and_declared_duration_golden ... ok
+test real_song_and_ffmpeg_eos_counts_match_reference_without_repair ... ok
+test eos_stream_pull_push_and_reset_preserve_counts_and_bits ... ok
+test bounded_eos_layouts_and_discarded_packets_match_reference ... ok
+test bounded_eos_metadata_and_seek_difference_inventory ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 49.81s
+
+     Running tests\reference_seeking.rs (target/vorbis-completion\release\deps\reference_seeking-a36bb0853bb372a1.exe)
+
+running 7 tests
+test reference_seek_budgets_invalid_arguments_and_io_recovery ... ok
+test captured_eos_and_broadcast_seeks_match_reference_positions_counts_and_pcm ... ok
+test reference_seeks_match_historical_and_shipped_songs ... ok
+test reference_seeks_cover_spanning_packets_large_files_and_repeated_partial_reads ... ok
+test reference_seeks_match_asset_corpus ... ok
+test reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll ... ok
+test reference_seeks_match_upstream_rate_channel_quality_grid ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.06s

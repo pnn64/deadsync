@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "deadlib-image-png",
+    "--release",
+    "--test",
+    "decoder_boundaries",
+    "native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "wall_seconds": 19.519,
+  "expected_failure": "Input-length-only loop guard rejects valid highly compressed 1x4096 plain/Adam7 PNGs; native buffered/reader/push decoders pass before the harness check. This is a fuzz harness defect, not a production decoder fault.",
+  "resource_sha256": "9996bab368bc89dbc772609e55fedbfe005316921c889d61ebc456721e30afd3",
+  "resource_snapshot": "fuzz/reports/boundaries-resource-before.rs",
+  "test_source_sha256": "baac8b9f45860f6515e2b865e786567c269a51e0033108d9cbab31a8a492d375",
+  "fixture_source_sha256": "0d54c20ecead7dbc072de1c39b9fb8699554a493a5d580b41a5a668b0c5c3776",
+  "log_sha256": "b4044646289f7adf04d99af401c7e78d4fd9bee93ecdbe577f80d0b6c44a01bd"
+}

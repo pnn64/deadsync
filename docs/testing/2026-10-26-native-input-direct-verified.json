@@ -1,0 +1,82 @@
+{
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "seconds": 4.186783500015736,
+      "log": "docs/testing/2026-10-26-native-input-direct-verified-0.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-input-native",
+        "--locked",
+        "--release"
+      ],
+      "exit_code": 0,
+      "seconds": 21.13676379993558,
+      "log": "docs/testing/2026-10-26-native-input-direct-verified-1.log"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-input-native",
+        "--locked",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings",
+        "-A",
+        "clippy::field_reassign_with_default"
+      ],
+      "exit_code": 0,
+      "seconds": 2.3755260999314487,
+      "log": "docs/testing/2026-10-26-native-input-direct-verified-2.log"
+    },
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-input-native\\src\\backend\\w32_raw_input.rs",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-input-native\\src\\backend\\wgi.rs",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-input-native\\tests\\native_kernels.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.15487849991768599,
+      "log": "docs/testing/2026-10-26-native-input-direct-verified-3.log"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "crates/deadlib-input-native",
+        "scripts/benchmark_native_input.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2532395999878645,
+      "log": "docs/testing/2026-10-26-native-input-direct-verified-4.log"
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-input-native/src/backend/w32_raw_input.rs": "ebaa01a67bb65fd034a6c9f455e9c666a64ce6f94bf11650fe3216aa1c19776d",
+    "crates/deadlib-input-native/src/backend/wgi.rs": "6d35421704a942b479aea1bcff59f113d0c68b71ce5e843d786f00f44637eb73",
+    "crates/deadlib-input-native/tests/native_kernels.rs": "63139c85e209e5e0599944bfaf79ef260adad9a763e5044da0ca4e04111c73da"
+  }
+}

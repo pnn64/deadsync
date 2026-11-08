@@ -1,0 +1,21 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 13.11s
+     Running tests\book_limits.rs (target\release\deps\book_limits-4723db489e997fc9.exe)
+
+running 1 test
+
+thread 'codebook_extent_decisions_and_positions_match_retained_reference' (36496) panicked at crates\deadlib-audio\decode\vorbis\tests\book_limits.rs:40:9:
+assertion `left == right` failed: Shape { dimensions: 1, entries: 8388608, style: First }, C consumed 64
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test codebook_extent_decisions_and_positions_match_retained_reference ... FAILED
+
+failures:
+
+failures:
+    codebook_extent_decisions_and_positions_match_retained_reference
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.17s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test book_limits`

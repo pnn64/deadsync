@@ -1,0 +1,95 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 2d01ace40..4167fc260 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -73,7 +73,8 @@ impl<'a> Bits<'a> {
+         Ok(value)
+     }
+     fn consumed(&self) -> usize {
+-        (self.pos * 8 - usize::from(self.count)).div_ceil(8)
++        // ceil((pos * 8 - count) / 8), without overflowing the byte cursor.
++        self.pos - usize::from(self.count / 8)
+     }
+     fn align(&mut self) {
+         let n = self.count % 8;
+@@ -295,16 +296,31 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             } else {
+                 dynamic(&mut bits)?
+             };
++            let mut symbol = lit.decode(&mut bits)?;
+             loop {
+-                match lit.decode(&mut bits)? {
++                match symbol {
+                     literal @ 0..=255 => {
+                         if output.len() == limit {
+                             return Err(Error::LimitExceeded);
+                         }
+-                        if output.len() == output.capacity() {
+-                            reserve(&mut output, 1)?;
++                        let next = lit.decode(&mut bits)?;
++                        if next <= 255 {
++                            if limit - output.len() < 2 {
++                                return Err(Error::LimitExceeded);
++                            }
++                            if output.capacity() - output.len() < 2 {
++                                reserve(&mut output, 2)?;
++                            }
++                            output.extend_from_slice(&[literal as u8, next as u8]);
++                            symbol = lit.decode(&mut bits)?;
++                        } else {
++                            if output.len() == output.capacity() {
++                                reserve(&mut output, 1)?;
++                            }
++                            output.push(literal as u8);
++                            symbol = next;
+                         }
+-                        output.push(literal as u8);
++                        continue;
+                     }
+                     256 => break,
+                     symbol @ 257..=285 => {
+@@ -336,6 +352,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                     }
+                     _ => return Err(Error::Invalid("reserved literal symbol")),
+                 }
++                symbol = lit.decode(&mut bits)?;
+             }
+         } else {
+             return Err(Error::Invalid("reserved block type"));
+@@ -566,6 +583,36 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn consumed_prefix_byte_count_avoids_large_position_overflow() {
++        for pos in [
++            0,
++            1,
++            2,
++            7,
++            8,
++            9,
++            usize::MAX / 8,
++            usize::MAX / 8 + 1,
++            usize::MAX - 7,
++            usize::MAX,
++        ] {
++            for count in 0..=64u8 {
++                if pos as u128 * 8 < u128::from(count) {
++                    continue;
++                }
++                let bits = Bits {
++                    input: &[],
++                    pos,
++                    word: 0,
++                    count,
++                };
++                let expected = (pos as u128 * 8 - u128::from(count)).div_ceil(8);
++                assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");
++            }
++        }
++    }
++
+     #[test]
+     fn every_length_and_distance_code_matches_rfc1951_tables() {
+         for length in 3..=258 {

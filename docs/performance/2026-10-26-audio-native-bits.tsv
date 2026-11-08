@@ -1,0 +1,153 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	storage_allocs	storage_reallocs	storage_frees	storage_allocated_bytes	storage_freed_bytes	storage_peak_bytes
+0	native-retained	sola/append-6ch	173226.64	79324.22		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	native-retained	sola/append-8ch	230761.38	105536.72		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	native-retained	sola/append-16ch	495277.75	226422.66		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	native-retained	sola/crossfade-256	179.84	81.15		0	0	0	0	0	0						
+0	native-retained	sola/crossfade-1440	720.66	327.15		0	0	0	0	0	0						
+0	native-retained	sola/mono/360	123852.84	56934.38		0	0	0	0	0	0						
+0	native-retained	sola/stereo/360	242266.28	110856.25		0	0	0	0	0	0						
+0	native-retained	sola/left-silent/360	123036.59	56456.25		0	0	0	0	0	0						
+0	native-retained	sola/right-silent/360	120189.97	55696.88		0	0	0	0	0	0						
+0	native-retained	sola/mono/720	511181.19	233512.5		0	0	0	0	0	0						
+0	native-retained	sola/stereo/720	989478.56	452321.88		0	0	0	0	0	0						
+0	native-retained	sola/left-silent/720	479442.84	218700.0		0	0	0	0	0	0						
+0	native-retained	sola/right-silent/720	464811.78	212353.12		0	0	0	0	0	0						
+0	native-retained	sola/stream-1ch-noise-1.2	615368.0	279600.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	native-retained	sola/stream-2ch-noise-0.8	2208280.0	1010350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	native-retained	sola/stream-2ch-tone-1.2	223341.5	101300.0	5907aac396672cd5	0	0	0	0	0	0						
+0	native-retained	sola/stream-2ch-left-silent-1.2	737190.5	336950.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	native-retained	sola/stream-2ch-silence-1.2	108652.5	49100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	native-retained	sola/stream-6ch-noise-1.2	3561607.0	1621900.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	native-bits	sola/append-6ch	159180.36	72790.62		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	native-bits	sola/append-8ch	222411.81	101628.12		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	native-bits	sola/append-16ch	465331.44	212860.16		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	native-bits	sola/crossfade-256	144.05	64.84		0	0	0	0	0	0						
+0	native-bits	sola/crossfade-1440	700.08	317.97		0	0	0	0	0	0						
+0	native-bits	sola/mono/360	120594.66	54968.75		0	0	0	0	0	0						
+0	native-bits	sola/stereo/360	239666.56	109331.25		0	0	0	0	0	0						
+0	native-bits	sola/left-silent/360	122501.56	56181.25		0	0	0	0	0	0						
+0	native-bits	sola/right-silent/360	118139.0	53878.12		0	0	0	0	0	0						
+0	native-bits	sola/mono/720	476616.84	217815.62		0	0	0	0	0	0						
+0	native-bits	sola/stereo/720	955524.66	436203.12		0	0	0	0	0	0						
+0	native-bits	sola/left-silent/720	480142.53	219559.38		0	0	0	0	0	0						
+0	native-bits	sola/right-silent/720	477584.0	218187.5		0	0	0	0	0	0						
+0	native-bits	sola/stream-1ch-noise-1.2	529544.0	246400.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	native-bits	sola/stream-2ch-noise-0.8	2244058.0	1023650.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	native-bits	sola/stream-2ch-tone-1.2	220817.0	100200.0	5907aac396672cd5	0	0	0	0	0	0						
+0	native-bits	sola/stream-2ch-left-silent-1.2	793931.5	362300.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	native-bits	sola/stream-2ch-silence-1.2	108433.0	48950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	native-bits	sola/stream-6ch-noise-1.2	3519572.5	1605550.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	native-bits	sola/append-6ch	170868.75	78192.19		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	native-bits	sola/append-8ch	236314.04	107996.09		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	native-bits	sola/append-16ch	456175.89	208634.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	native-bits	sola/crossfade-256	143.83	64.75		0	0	0	0	0	0						
+1	native-bits	sola/crossfade-1440	693.23	319.14		0	0	0	0	0	0						
+1	native-bits	sola/mono/360	124806.31	56796.88		0	0	0	0	0	0						
+1	native-bits	sola/stereo/360	253522.5	116068.75		0	0	0	0	0	0						
+1	native-bits	sola/left-silent/360	129834.25	59215.62		0	0	0	0	0	0						
+1	native-bits	sola/right-silent/360	128695.59	58990.62		0	0	0	0	0	0						
+1	native-bits	sola/mono/720	513046.97	234143.75		0	0	0	0	0	0						
+1	native-bits	sola/stereo/720	1013109.06	462953.12		0	0	0	0	0	0						
+1	native-bits	sola/left-silent/720	505830.91	231475.0		0	0	0	0	0	0						
+1	native-bits	sola/right-silent/720	505028.41	230746.88		0	0	0	0	0	0						
+1	native-bits	sola/stream-1ch-noise-1.2	594296.5	270350.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	native-bits	sola/stream-2ch-noise-0.8	2266557.0	1037750.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	native-bits	sola/stream-2ch-tone-1.2	220268.5	100000.0	5907aac396672cd5	0	0	0	0	0	0						
+1	native-bits	sola/stream-2ch-left-silent-1.2	772310.5	353450.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	native-bits	sola/stream-2ch-silence-1.2	108762.5	49150.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	native-bits	sola/stream-6ch-noise-1.2	3619994.0	1651600.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	native-retained	sola/append-6ch	164511.83	75627.34		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	native-retained	sola/append-8ch	220738.12	101004.69		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	native-retained	sola/append-16ch	476191.52	217754.69		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	native-retained	sola/crossfade-256	186.7	84.28		0	0	0	0	0	0						
+1	native-retained	sola/crossfade-1440	726.45	329.59		0	0	0	0	0	0						
+1	native-retained	sola/mono/360	119840.12	54646.88		0	0	0	0	0	0						
+1	native-retained	sola/stereo/360	239213.84	109031.25		0	0	0	0	0	0						
+1	native-retained	sola/left-silent/360	122220.34	56084.38		0	0	0	0	0	0						
+1	native-retained	sola/right-silent/360	117912.69	53775.0		0	0	0	0	0	0						
+1	native-retained	sola/mono/720	494567.81	226078.12		0	0	0	0	0	0						
+1	native-retained	sola/stereo/720	972522.19	444893.75		0	0	0	0	0	0						
+1	native-retained	sola/left-silent/720	503478.16	230206.25		0	0	0	0	0	0						
+1	native-retained	sola/right-silent/720	488305.22	223237.5		0	0	0	0	0	0						
+1	native-retained	sola/stream-1ch-noise-1.2	622502.0	282950.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	native-retained	sola/stream-2ch-noise-0.8	2263374.0	1032250.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	native-retained	sola/stream-2ch-tone-1.2	219280.5	99500.0	5907aac396672cd5	0	0	0	0	0	0						
+1	native-retained	sola/stream-2ch-left-silent-1.2	768908.5	349650.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	native-retained	sola/stream-2ch-silence-1.2	108543.0	49100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	native-retained	sola/stream-6ch-noise-1.2	3592117.5	1637800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	native-retained	sola/append-6ch	169296.23	77454.69		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	native-retained	sola/append-8ch	226542.84	103547.66		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	native-retained	sola/append-16ch	477275.31	218198.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	native-retained	sola/crossfade-256	180.06	81.05		0	0	0	0	0	0						
+2	native-retained	sola/crossfade-1440	642.0	291.7		0	0	0	0	0	0						
+2	native-retained	sola/mono/360	113563.78	52121.88		0	0	0	0	0	0						
+2	native-retained	sola/stereo/360	241580.34	110162.5		0	0	0	0	0	0						
+2	native-retained	sola/left-silent/360	124429.06	56750.0		0	0	0	0	0	0						
+2	native-retained	sola/right-silent/360	122336.94	56125.0		0	0	0	0	0	0						
+2	native-retained	sola/mono/720	490273.84	224162.5		0	0	0	0	0	0						
+2	native-retained	sola/stereo/720	954790.75	436243.75		0	0	0	0	0	0						
+2	native-retained	sola/left-silent/720	510138.56	233615.62		0	0	0	0	0	0						
+2	native-retained	sola/right-silent/720	487509.5	222375.0		0	0	0	0	0	0						
+2	native-retained	sola/stream-1ch-noise-1.2	595503.5	270700.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	native-retained	sola/stream-2ch-noise-0.8	2342064.5	1074250.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	native-retained	sola/stream-2ch-tone-1.2	212915.0	96600.0	5907aac396672cd5	0	0	0	0	0	0						
+2	native-retained	sola/stream-2ch-left-silent-1.2	725118.0	329450.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	native-retained	sola/stream-2ch-silence-1.2	95373.0	43100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	native-retained	sola/stream-6ch-noise-1.2	3598154.0	1660800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	native-bits	sola/append-6ch	172743.07	79016.41		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	native-bits	sola/append-8ch	231555.34	106025.78		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	native-bits	sola/append-16ch	485744.93	222099.22		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	native-bits	sola/crossfade-256	176.63	79.69		0	0	0	0	0	0						
+2	native-bits	sola/crossfade-1440	689.58	313.28		0	0	0	0	0	0						
+2	native-bits	sola/mono/360	117569.69	53521.88		0	0	0	0	0	0						
+2	native-bits	sola/stereo/360	242520.06	110800.0		0	0	0	0	0	0						
+2	native-bits	sola/left-silent/360	105867.59	48275.0		0	0	0	0	0	0						
+2	native-bits	sola/right-silent/360	119071.91	54318.75		0	0	0	0	0	0						
+2	native-bits	sola/mono/720	479566.31	219415.62		0	0	0	0	0	0						
+2	native-bits	sola/stereo/720	973029.78	444440.62		0	0	0	0	0	0						
+2	native-bits	sola/left-silent/720	477920.12	217996.88		0	0	0	0	0	0						
+2	native-bits	sola/right-silent/720	472816.72	215815.62		0	0	0	0	0	0						
+2	native-bits	sola/stream-1ch-noise-1.2	522190.5	237300.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	native-bits	sola/stream-2ch-noise-0.8	2275556.5	1037400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	native-bits	sola/stream-2ch-tone-1.2	235413.5	108850.0	5907aac396672cd5	0	0	0	0	0	0						
+2	native-bits	sola/stream-2ch-left-silent-1.2	765506.0	349950.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	native-bits	sola/stream-2ch-silence-1.2	108872.0	49200.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	native-bits	sola/stream-6ch-noise-1.2	3644797.5	1661300.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	native-bits	sola/append-6ch	168040.96	76828.91		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	native-bits	sola/append-8ch	221888.79	101850.78		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	native-bits	sola/append-16ch	491091.81	224735.94		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	native-bits	sola/crossfade-256	161.84	72.95		0	0	0	0	0	0						
+3	native-bits	sola/crossfade-1440	810.48	367.97		0	0	0	0	0	0						
+3	native-bits	sola/mono/360	124579.94	57250.0		0	0	0	0	0	0						
+3	native-bits	sola/stereo/360	254174.16	116253.12		0	0	0	0	0	0						
+3	native-bits	sola/left-silent/360	124511.41	57150.0		0	0	0	0	0	0						
+3	native-bits	sola/right-silent/360	121795.06	55528.12		0	0	0	0	0	0						
+3	native-bits	sola/mono/720	503635.88	230371.88		0	0	0	0	0	0						
+3	native-bits	sola/stereo/720	998683.81	456015.62		0	0	0	0	0	0						
+3	native-bits	sola/left-silent/720	502469.81	229953.12		0	0	0	0	0	0						
+3	native-bits	sola/right-silent/720	502147.41	229371.88		0	0	0	0	0	0						
+3	native-bits	sola/stream-1ch-noise-1.2	593199.0	271250.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	native-bits	sola/stream-2ch-noise-0.8	2200707.5	1003900.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	native-bits	sola/stream-2ch-tone-1.2	220378.0	100000.0	5907aac396672cd5	0	0	0	0	0	0						
+3	native-bits	sola/stream-2ch-left-silent-1.2	780322.5	354900.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	native-bits	sola/stream-2ch-silence-1.2	101080.0	45700.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	native-bits	sola/stream-6ch-noise-1.2	3533072.0	1611500.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	native-retained	sola/append-6ch	163393.76	74722.66		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	native-retained	sola/append-8ch	228909.34	104557.81		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	native-retained	sola/append-16ch	478594.02	218691.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	native-retained	sola/crossfade-256	196.35	88.48		0	0	0	0	0	0						
+3	native-retained	sola/crossfade-1440	656.57	302.25		0	0	0	0	0	0						
+3	native-retained	sola/mono/360	110586.84	50653.12		0	0	0	0	0	0						
+3	native-retained	sola/stereo/360	236140.81	108240.62		0	0	0	0	0	0						
+3	native-retained	sola/left-silent/360	121726.5	55634.38		0	0	0	0	0	0						
+3	native-retained	sola/right-silent/360	123633.38	56356.25		0	0	0	0	0	0						
+3	native-retained	sola/mono/720	473825.03	216493.75		0	0	0	0	0	0						
+3	native-retained	sola/stereo/720	981233.59	448243.75		0	0	0	0	0	0						
+3	native-retained	sola/left-silent/720	525633.91	240384.38		0	0	0	0	0	0						
+3	native-retained	sola/right-silent/720	508320.81	232518.75		0	0	0	0	0	0						
+3	native-retained	sola/stream-1ch-noise-1.2	610210.0	279700.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	native-retained	sola/stream-2ch-noise-0.8	2250643.0	1038200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	native-retained	sola/stream-2ch-tone-1.2	235962.5	109100.0	5907aac396672cd5	0	0	0	0	0	0						
+3	native-retained	sola/stream-2ch-left-silent-1.2	768250.0	351250.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	native-retained	sola/stream-2ch-silence-1.2	108652.5	49100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	native-retained	sola/stream-6ch-noise-1.2	3581362.0	1632350.0	5d00c00f1cc77d00	0	0	0	0	0	0						

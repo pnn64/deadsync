@@ -36,6 +36,7 @@ pub enum DisplayMode {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
+    pub twitch: crate::streaming::TwitchOptions,
     pub coin: CoinOptions,
     pub vsync: bool,
     /// Stored `MaxFPS` cap value. `0` means "off".
@@ -228,8 +229,7 @@ pub struct Config {
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
     /// Machine font for Bold/Header/Footer/numbers/ScreenEval roles.
-    /// Default `Wendy` keeps Wendy; `Mega` swaps those roles to Mega.
-    /// Body text (Normal role) stays Miso regardless.
+    /// Unprofessional also selects its matching Miso body font.
     pub machine_font: MachineFont,
     /// Machine-wide screen bar color behavior.
     /// Default preserves each screen's current bar background choice.
@@ -297,6 +297,9 @@ pub struct Config {
     pub select_music_scorebox_cycle_ex: bool,
     pub select_music_scorebox_cycle_hard_ex: bool,
     pub select_music_scorebox_cycle_tournaments: bool,
+    pub select_music_scorebox_cycle_golf: bool,
+    pub select_music_scorebox_events_first: bool,
+    pub select_music_show_golf_pars: bool,
     pub select_music_chart_info_peak_nps: bool,
     pub select_music_chart_info_effective_bpm: bool,
     pub select_music_chart_info_matrix_rating: bool,
@@ -335,6 +338,7 @@ pub struct Config {
     /// on disk per song.
     pub enable_replaygain: bool,
     pub enable_arrowcloud: bool,
+    pub enable_golf: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
     pub show_srpg_shop: bool,
@@ -349,6 +353,9 @@ pub struct Config {
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
+    /// List rips made in Find Content's Rip Packs on itgcontent.net's recent
+    /// rips, and mark the kept ones kept.
+    pub share_rips: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     /// Allow Ctrl+Backspace in Select Music to permanently delete a song directory.
@@ -396,6 +403,7 @@ impl Default for Config {
         let runtime = RuntimeOptions::default();
 
         Self {
+            twitch: crate::streaming::TwitchOptions::default(),
             coin: system.coin,
             vsync: DEFAULT_VSYNC,
             max_fps: DEFAULT_MAX_FPS,
@@ -536,6 +544,9 @@ impl Default for Config {
             select_music_scorebox_cycle_ex: select_music.scorebox_cycle_ex,
             select_music_scorebox_cycle_hard_ex: select_music.scorebox_cycle_hard_ex,
             select_music_scorebox_cycle_tournaments: select_music.scorebox_cycle_tournaments,
+            select_music_scorebox_cycle_golf: select_music.scorebox_cycle_golf,
+            select_music_scorebox_events_first: select_music.scorebox_events_first,
+            select_music_show_golf_pars: select_music.show_golf_pars,
             select_music_chart_info_peak_nps: select_music.chart_info_peak_nps,
             select_music_chart_info_effective_bpm: select_music.chart_info_effective_bpm,
             select_music_chart_info_matrix_rating: select_music.chart_info_matrix_rating,
@@ -564,6 +575,7 @@ impl Default for Config {
             rate_mod_preserves_pitch: audio.rate_mod_preserves_pitch,
             enable_replaygain: audio.enable_replaygain,
             enable_arrowcloud: system.enable_arrowcloud,
+            enable_golf: system.enable_golf,
             enable_boogiestats: system.enable_boogiestats,
             enable_groovestats: system.enable_groovestats,
             show_srpg_shop: system.show_srpg_shop,
@@ -573,6 +585,7 @@ impl Default for Config {
             arrowcloud_qr_login_when: system.arrowcloud_qr_login_when,
             groovestats_qr_login_when: system.groovestats_qr_login_when,
             separate_unlocks_by_player: system.separate_unlocks_by_player,
+            share_rips: system.share_rips,
             fastload: runtime.fastload,
             cachesongs: runtime.cachesongs,
             allow_song_deletion: runtime.allow_song_deletion,

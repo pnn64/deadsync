@@ -1,0 +1,150 @@
+{
+  "implementation": "Selected direct-emission adaptive matcher, constant-time code indices, deferred history copy",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "cargo_fuzz": "0.13.2",
+  "sanitizer": "cargo-fuzz default AddressSanitizer; __asan_init verified in both binaries",
+  "production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33D55EE2ECA45B88852D6E2C1FEB0390E3894CD5E576DF7272A8E304E7DBDEA9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548EC2169B7C2C6D8ABE4715F284F65FE9BD70189C670F320D6E2F244FCB2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "7965DC182785951CA947A3EE1253B201816D2144128E452424316D766F84264B"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269EE9CC1083986A2B507F2E3EAD67C8780411C2AAE286257B9B8F8C1DBB035"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1A4431FFDC2D477EA928B8F97F439B0293B31CCA599A47DEC885D454E4690601"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70A7980389A5F9FD7FDD6AEDB9C574E7DA32B67E1CA5602BB901C0F3FB855ED3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "CDA4227E750C1CCF5A77FD300D541E9D6FF45CBE48F0AF2AA60633FBE264495D"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9DE8D5AE51577E8438F8FCA56FC7698B16F9E4E68AEE0548EA61AA569E304CF7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "B9D9A6D9B2CA92D56DB5B81F17BF6F71A590695D7DBAD27276CBAD509122CA9A"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "2CEA15413F1C402AD19CBD9F712302242E0B7AFD94A8629AFC6602760B182AA2"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "F9DB3D3CBF32FB492ED524205E2C0699CC8A116B89B3C03E98B2C9C6253F576E"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+    }
+  ],
+  "shared_source_sha256": [
+    {
+      "path": "crates/deadlib-image/src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "harness_sha256": [
+    {
+      "path": "fuzz/fuzz_targets/deflate_stream.rs",
+      "sha256": "aa137e57e530c0c998a174395a08f3657331a7a302efbeb7c86376cd35824783"
+    },
+    {
+      "path": "fuzz/fuzz_targets/encode_stream.rs",
+      "sha256": "9de7cddbe4bc47c8d50dff62c1cd0a4c008cdf8e0449fcd3cae6a73ab90b6b2a"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "db2d669a816f520261b4fb2e4b4bc7ef003e49c7a5c12af4b00a6b3699c08995"
+    },
+    {
+      "path": "fuzz/Cargo.lock",
+      "sha256": "41b456fb7703d2d1dd65b8e64fca5313a24cfb5efae4efefb82ee30680037ad1"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "78d15bb3c772638c3dcde9a0f0172684f6ef49cf11842e8e31db1ee339a8de81"
+    }
+  ],
+  "binary_sha256": [
+    {
+      "path": "/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/deflate_stream",
+      "sha256": "9be1e5cde473c8caf3dcbd3058b3962e2be5a0c065c73bb3ff8b5dc9a7c1703f"
+    },
+    {
+      "path": "/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream",
+      "sha256": "cc0de8594ee66ccfb63c730e0a06f30da23e7edb253bc2cd26a2efd964f69f18"
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "deflate_stream",
+      "log": "deflate-final-linux.log",
+      "runs": 5000,
+      "elapsed_seconds": 231,
+      "peak_rss_mib": 389,
+      "seed": 782347,
+      "max_len": 131072,
+      "timeout_seconds": 5,
+      "rss_limit_mib": 1024
+    },
+    {
+      "target": "encode_stream",
+      "log": "encode-final-linux.log",
+      "runs": 5000,
+      "elapsed_seconds": 140,
+      "peak_rss_mib": 393,
+      "seed": 782347,
+      "max_len": 256,
+      "timeout_seconds": 5,
+      "rss_limit_mib": 1024
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "binary_sha256": "6a0697aa07dfbd33f3aeddd943ae65e5e26112030f8715784c32353a3ac43de2",
+  "pdb_sha256": "4cbaf4f6f6f0b8bf69721d1dacb45072d68c4d6c345e0edccadcdd76509061e1",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018a60",
+      "code_bytes": 4030,
+      "assembly": "experiments/sentinel-add-decompress_prefix.txt",
+      "assembly_sha256": "f170a1330faf46ceb25122080ddaff72aeabb1e82be54f78d0934f5907f760bc"
+    },
+    {
+      "name": "deadlib_image_png::zlib::Huffman::decode",
+      "address": "0x14001a3b0",
+      "code_bytes": 322,
+      "assembly": "experiments/sentinel-add-decode.txt",
+      "assembly_sha256": "c87f954902cd6fa79e088ac11d4f7e3c616df71041be5b3b91d9ec0967ec84d2"
+    }
+  ]
+}

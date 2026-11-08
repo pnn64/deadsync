@@ -1,0 +1,46 @@
+memory.pcall.status	4
+memory.pcall.top	1
+memory.pcall.value	not enough memory
+memory.handler.status	4
+memory.handler.top	2
+memory.handler.value	not enough memory
+memory.handler.calls	0
+memory.invalid-handler.status	4
+memory.invalid-handler.top	2
+memory.invalid-handler.value	not enough memory
+memory.handler-oom.status	4
+memory.handler-oom.top	2
+memory.handler-oom.value	not enough memory
+memory.ordinary-string.status	2
+memory.ordinary-string.top	2
+memory.ordinary-string.value	handled
+memory.ordinary-string.calls	1
+memory.too-big.status	2
+memory.too-big.top	1
+memory.too-big.value	memory allocation error: block too big
+memory.largest-block.status	4
+memory.largest-block.top	1
+memory.largest-block.value	not enough memory
+memory.first-overflow.status	2
+memory.first-overflow.top	1
+memory.first-overflow.value	memory allocation error: block too big
+memory.call.status	4
+memory.call.top	1
+memory.call.value	not enough memory
+memory.nested.inner	4
+memory.nested.status	0
+memory.nested.top	1
+memory.nested.value	42
+memory.cpcall.status	4
+memory.cpcall.top	1
+memory.cpcall.value	not enough memory
+memory.load.status	4
+memory.load.top	1
+memory.load.value	not enough memory
+memory.coroutine.resume	4
+memory.coroutine.status	4
+memory.coroutine.value	not enough memory
+memory.coroutine.again	2
+memory.coroutine.after	4
+memory.lua.recovery	42
+memory.recovery.bytes	16

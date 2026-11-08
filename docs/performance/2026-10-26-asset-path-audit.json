@@ -1,0 +1,91 @@
+{
+  "starting_commit": "434ea40298d3339611ebf4d197a6670f3f8247ba",
+  "stages": {
+    "baseline": {
+      "binary_sha256": "d601ae98519cf6d5bf7d72ff160745df9315f4dba2c635a90bdfb37b370037bd",
+      "source_hashes": {
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "6d19df69439f83d51eb8b46c7fceeb511ae8bffe01f2c978e6d428841ec58d9a",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_perf.rs": "4a1c54edf0b4c8a05d56b0ee98160828e86417141521c8b8f8acd213f3b710cf",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_original.rs": "b0807e3c5929b477512903d572884a73f7e74c9fda95f14f31a298a881f74308",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\tests\\support\\asset_names.txt": "4aa5bbcd0c6360c5b0c77149d1ae7fa45189af27f603a432ed57e9b752cd4be0",
+        "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+        "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      }
+    },
+    "resolution": {
+      "binary_sha256": "a2972efdfe80b49af103f77f544733efc20008c65f017b0dbe0caf96d083cee9",
+      "source_hashes": {
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "2c0744ebe9249851ebd8f89707ff2bbd14e13908614761c0b3618848e70229aa",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_perf.rs": "4a1c54edf0b4c8a05d56b0ee98160828e86417141521c8b8f8acd213f3b710cf",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_original.rs": "b0807e3c5929b477512903d572884a73f7e74c9fda95f14f31a298a881f74308",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\tests\\support\\asset_names.txt": "4aa5bbcd0c6360c5b0c77149d1ae7fa45189af27f603a432ed57e9b752cd4be0",
+        "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+        "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      }
+    },
+    "sheet": {
+      "binary_sha256": "c11f243526e2b743379c6d0ed957264f32e1d38bd83906f79e8721130ab4b6be",
+      "source_hashes": {
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "f47ec05eb174dbbf2e6f141b24b788aa7bd95101ec7db90bc451bef3a7a6cc2e",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_perf.rs": "4a1c54edf0b4c8a05d56b0ee98160828e86417141521c8b8f8acd213f3b710cf",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_original.rs": "b0807e3c5929b477512903d572884a73f7e74c9fda95f14f31a298a881f74308",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\tests\\support\\asset_names.txt": "4aa5bbcd0c6360c5b0c77149d1ae7fa45189af27f603a432ed57e9b752cd4be0",
+        "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+        "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      }
+    },
+    "double": {
+      "binary_sha256": "d708c45bee0389c2fd53b7991a577d88a23a824677db01e857924c1f365843a6",
+      "source_hashes": {
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "351acfaba4c4fdc7bae9f9f0131d018406a05f11109a61f26b6098657e7e00a3",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_perf.rs": "4a1c54edf0b4c8a05d56b0ee98160828e86417141521c8b8f8acd213f3b710cf",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_original.rs": "b0807e3c5929b477512903d572884a73f7e74c9fda95f14f31a298a881f74308",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\tests\\support\\asset_names.txt": "4aa5bbcd0c6360c5b0c77149d1ae7fa45189af27f603a432ed57e9b752cd4be0",
+        "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+        "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+      }
+    }
+  },
+  "all_stage_patches_replayed_to_matching_source_hashes": true,
+  "benchmark_harness_and_fixture_identical_across_stages": true,
+  "direct_dependencies_unchanged": true,
+  "checks": {
+    "baseline": {
+      "passed": 99,
+      "failed": 0,
+      "ignored": 14
+    },
+    "double": {
+      "passed": 99,
+      "failed": 0,
+      "ignored": 14
+    },
+    "cargo_test": {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-assets",
+        "--locked"
+      ],
+      "passed": 110,
+      "failed": 0,
+      "ignored": 16,
+      "exit_code": 0
+    },
+    "clippy": {
+      "args": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-assets",
+        "--locked",
+        "--lib",
+        "--tests",
+        "--no-deps"
+      ],
+      "exit_code": 0,
+      "warnings": 11
+    }
+  }
+}

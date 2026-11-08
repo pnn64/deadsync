@@ -1,0 +1,14 @@
+{
+  "current": {
+    "path": "target/deadlib-audio-reference/bit-window-pipeline-20261027/binaries/current.exe",
+    "sha256": "2ccbbc38c39eb7f4593731124e9ea036ca4612c5f1bb1db1cb519a9a6be5d3d6"
+  },
+  "baseline": {
+    "path": "target/deadlib-audio-reference/bit-window-pipeline-20261027/binaries/baseline.exe",
+    "sha256": "78071859d6ce05548dc5f820479cea6ad41894f69a1ac9bb5937bf77c9f9b1d9"
+  },
+  "libvorbis": {
+    "path": "target/deadlib-audio-reference/bit-window-pipeline-20261027/binaries/libvorbis.exe",
+    "sha256": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  }
+}

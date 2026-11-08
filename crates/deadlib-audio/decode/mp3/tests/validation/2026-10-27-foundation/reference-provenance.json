@@ -1,0 +1,12 @@
+{
+  "versions": {
+    "lame": "LAME 64bits version 3.100 (http://lame.sf.net)\n\nCopyright (c) 1999-2011 by The LAME Project\nCopyright (c) 1999,2000,2001 by Mark Taylor\nCopyright (c) 1998 by Michael Cheng\nCopyright (c) 1995,1996,1997 by Michael Hipp: mpglib\n\nThis library is free software; you can redistribute it and/or\nmodify it under the terms of the GNU Library General Public\nLicense as published by the Free Software Foundation; either\nversion 2 of the License, or (at your option) any later version.\n\nThis library is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU\nLibrary General Public License for more details.\n\nYou should have received a copy of the GNU Library General Public\nLicense along with this program. If not, see\n<http://www.gnu.org/licenses/>.",
+    "references": "0.15.1b\n1.32.10\n3.100"
+  },
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/build/debug/examples/inspect": "cbbc71822d1a9be46f14553841052af43d3fd6b1e74ddbe7a94d855ea4e154ce",
+    "/home/perfecttaste/.cache/deadlib-mp3/inspect-reference": "708ace462c710200b86b699d7f080c9e0bf6c7fc7ef0cc1f792454fa3320ccfa"
+  },
+  "fixtures": 84,
+  "scope": "frame offsets/counts/rates/channels/sizes, side-info/reservoir acceptance, CRC, LAME raw delay/padding accounting. No native PCM decoding."
+}

@@ -1,0 +1,32 @@
+--- a/crates/deadlib-audio/decode/ogg/src/page.rs
++++ b/crates/deadlib-audio/decode/ogg/src/page.rs
+@@ -193,13 +193,27 @@
+ // Keep the wide scan out of packet loops; most fragments end in the first few laces.
+ #[inline(never)]
+ fn fragment_segment_count(lacing: &[u8]) -> usize {
+-    let (words, tail) = lacing.as_chunks::<8>();
++    let tail = if lacing.len() >= 192 {
++        let (words, tail) = lacing.as_chunks::<16>();
++        for (i, word) in words.iter().enumerate() {
++            // The first differing bit locates the first non-255 byte.
++            let bits = !u128::from_le_bytes(*word);
++            if bits != 0 {
++                return i * 16 + bits.trailing_zeros() as usize / 8 + 1;
++            }
++        }
++        tail
++    } else {
++        lacing
++    };
++    let start = lacing.len() - tail.len();
++    let (words, tail) = tail.as_chunks::<8>();
+     for (i, word) in words.iter().enumerate() {
+         // Only 0xff continues a packet. The first differing bit identifies
+         // the first terminating byte in little-endian order.
+         let bits = !u64::from_le_bytes(*word);
+         if bits != 0 {
+-            return i * 8 + bits.trailing_zeros() as usize / 8 + 1;
++            return start + i * 8 + bits.trailing_zeros() as usize / 8 + 1;
+         }
+     }
+     lacing.len() - tail.len()

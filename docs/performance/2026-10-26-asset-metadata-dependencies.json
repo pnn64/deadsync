@@ -1,0 +1,20 @@
+{
+  "baseline_build_started_mtime_ns": 1793014050972273100,
+  "direct_dependencies": {
+    "image": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libimage-69352b289dd119e1.rlib",
+      "sha256": "7307444d694afd07aae96c81b159a55587bcb4602092db76de8aa5cc0122d2d9",
+      "mtime_ns": 1793013437923281400
+    },
+    "gif": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libgif-46df19da9e94392f.rlib",
+      "sha256": "3d055b9f4d6a4e747a2d5e2747c0b4c0f4902c3492d0ff435b56e10065ec2ea5",
+      "mtime_ns": 1792663491130343100
+    },
+    "memchr": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+      "sha256": "71361e971a86cf1a84d8d4a4107f3510ffa6b7868b1f60ea5e9eb1adf7f56b2a",
+      "mtime_ns": 1792663484659130400
+    }
+  }
+}

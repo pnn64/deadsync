@@ -1,0 +1,98 @@
+
+/mnt/c/GitHub/deadsync/target/png-sentinel-add-trial/decode_bench.exe:	file format coff-x86-64
+
+Disassembly of section .text:
+
+0000000140001000 <.text>:
+14001a3b0:     	pushq	%rsi
+14001a3b1:     	pushq	%rdi
+14001a3b2:     	pushq	%rbx
+14001a3b3:     	subq	$0x20, %rsp
+14001a3b7:     	movq	%rcx, %rax
+14001a3ba:     	movq	0x18(%r8), %r9
+14001a3be:     	cmpq	$0x1ff, %r9             # imm = 0x1FF
+14001a3c5:     	ja	0x14001a46e <.text+0x1946e>
+14001a3cb:     	movq	0x8(%r8), %r10
+14001a3cf:     	movq	0x10(%r8), %rsi
+14001a3d3:     	movq	%r10, %rcx
+14001a3d6:     	subq	%rsi, %rcx
+14001a3d9:     	cmpq	$0x3, %rcx
+14001a3dd:     	jbe	0x14001a41e <.text+0x1941e>
+14001a3df:     	leaq	0x4(%rsi), %r11
+14001a3e3:     	cmpq	$-0x5, %rsi
+14001a3e7:     	ja	0x14001a4db <.text+0x194db>
+14001a3ed:     	cmpq	%r10, %r11
+14001a3f0:     	ja	0x14001a4db <.text+0x194db>
+14001a3f6:     	movq	(%r8), %rcx
+14001a3f9:     	movl	(%rcx,%rsi), %r10d
+14001a3fd:     	movl	$0x7f, %ecx
+14001a402:     	bsrq	%r9, %rcx
+14001a406:     	movl	$0xffffffff, %esi       # imm = 0xFFFFFFFF
+14001a40b:     	addq	%r10, %rsi
+14001a40e:     	shlq	%cl, %rsi
+14001a411:     	addq	%rsi, %r9
+14001a414:     	movq	%r9, 0x18(%r8)
+14001a418:     	movq	%r11, 0x10(%r8)
+14001a41c:     	jmp	0x14001a46e <.text+0x1946e>
+14001a41e:     	movl	$0x7f, %r11d
+14001a424:     	bsrq	%r9, %r11
+14001a428:     	xorq	$0x3f, %r11
+14001a42c:     	movb	$0x3f, %cl
+14001a42e:     	subb	%r11b, %cl
+14001a431:     	cmpb	$0x8, %cl
+14001a434:     	ja	0x14001a46e <.text+0x1946e>
+14001a436:     	cmpq	%rsi, %r10
+14001a439:     	jbe	0x14001a46e <.text+0x1946e>
+14001a43b:     	movq	(%r8), %rdi
+14001a43e:     	movzbl	(%rdi,%rsi), %ebx
+14001a442:     	addq	$0xff, %rbx
+14001a449:     	shlq	%cl, %rbx
+14001a44c:     	addq	%rbx, %r9
+14001a44f:     	movq	%r9, 0x18(%r8)
+14001a453:     	leaq	0x1(%rsi), %rcx
+14001a457:     	movq	%rcx, 0x10(%r8)
+14001a45b:     	cmpl	$0x3f, %r11d
+14001a45f:     	setne	%r11b
+14001a463:     	cmpq	%r10, %rcx
+14001a466:     	sete	%cl
+14001a469:     	orb	%r11b, %cl
+14001a46c:     	je	0x14001a4b9 <.text+0x194b9>
+14001a46e:     	movl	%r9d, %ecx
+14001a471:     	andl	$0x1ff, %ecx            # imm = 0x1FF
+14001a477:     	movzwl	(%rdx,%rcx,2), %r10d
+14001a47c:     	shrq	%r9
+14001a47f:     	movl	%r10d, %ecx
+14001a482:     	andb	$0xf, %cl
+14001a485:     	decb	%cl
+14001a487:     	shrq	%cl, %r9
+14001a48a:     	testq	%r9, %r9
+14001a48d:     	je	0x14001a4aa <.text+0x194aa>
+14001a48f:     	movq	%r9, 0x18(%r8)
+14001a493:     	shrl	$0x4, %r10d
+14001a497:     	movq	%r10, 0x8(%rax)
+14001a49b:     	movq	$-0x1, (%rax)
+14001a4a2:     	addq	$0x20, %rsp
+14001a4a6:     	popq	%rbx
+14001a4a7:     	popq	%rdi
+14001a4a8:     	popq	%rsi
+14001a4a9:     	retq
+14001a4aa:     	movq	%rax, %rcx
+14001a4ad:     	addq	$0x20, %rsp
+14001a4b1:     	popq	%rbx
+14001a4b2:     	popq	%rdi
+14001a4b3:     	popq	%rsi
+14001a4b4:     	jmp	0x1400181c0 <.text+0x171c0>
+14001a4b9:     	movzbl	0x1(%rdi,%rsi), %ecx
+14001a4be:     	shll	$0x8, %ecx
+14001a4c1:     	addq	%rcx, %r9
+14001a4c4:     	addq	$0xff00, %r9            # imm = 0xFF00
+14001a4cb:     	movq	%r9, 0x18(%r8)
+14001a4cf:     	addq	$0x2, %rsi
+14001a4d3:     	movq	%rsi, %r11
+14001a4d6:     	jmp	0x14001a418 <.text+0x19418>
+14001a4db:     	leaq	0x5b3e6(%rip), %r9      # 0x1400758c8
+14001a4e2:     	movq	%rsi, %rcx
+14001a4e5:     	movq	%r11, %rdx
+14001a4e8:     	movq	%r10, %r8
+14001a4eb:     	callq	0x14006abc0 <.text+0x69bc0>
+14001a4f0:     	ud2

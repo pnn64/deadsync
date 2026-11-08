@@ -68,14 +68,16 @@ fn build_gameplay_lane_mine_indices(
     let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] = std::array::from_fn(|player| {
         Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
     });
-    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
-        std::array::from_fn(|player| {
-            Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
-        });
+    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
+    });
 
     let mut covered_end = 0usize;
     for &(start, end) in note_ranges.iter().take(num_players.min(MAX_PLAYERS)) {
-        debug_assert_eq!(start, covered_end, "gameplay player ranges must be contiguous");
+        debug_assert_eq!(
+            start, covered_end,
+            "gameplay player ranges must be contiguous"
+        );
         debug_assert!(end >= start && end <= notes.len());
         covered_end = end;
     }
@@ -177,7 +179,7 @@ pub fn init_gameplay_runtime<
     session: GameplaySession,
     config: GameplayConfig,
     pack_sync_pref: SyncPref,
-    mini_indicator_data: GameplayMiniIndicatorData,
+    mut mini_indicator_data: GameplayMiniIndicatorData,
     noteskin_data: GameplayNoteskinData,
     build_song_lua_runtime: BuildSongLuaRuntime,
     build_crossover_annotations: CrossoverAnnotationBuilder,
@@ -261,22 +263,26 @@ where
             / 1000.0
     });
     let mut timing_base = gameplay_charts[0].timing.clone();
-    timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);
-    timing_base.set_global_offset_seconds(config.global_offset_seconds);
+    timing_base.shift_group_offset_seconds(pack_sync_offset_seconds);
+    timing_base.set_global_offset_seconds_with_rate(config.global_offset_seconds, rate);
     let timing = Arc::new(timing_base);
     let build_player_timing = |player: usize| {
         if player == 0 && player_global_offset_shift_seconds[player] == 0.0 {
             return Arc::clone(&timing);
         }
         let mut t = gameplay_charts[player].timing.clone();
-        t.shift_song_offset_seconds(pack_sync_offset_seconds);
-        t.set_global_offset_seconds(
+        t.shift_group_offset_seconds(pack_sync_offset_seconds);
+        t.set_global_offset_seconds_with_rate(
             config.global_offset_seconds + player_global_offset_shift_seconds[player],
+            rate,
         );
         Arc::new(t)
     };
     let first_player_timing = build_player_timing(0);
-    let timing_players = if num_players == 1 {
+    let timing_players = if num_players == 1
+        || (Arc::ptr_eq(&gameplay_charts[0], &gameplay_charts[1])
+            && player_global_offset_shift_seconds[0] == player_global_offset_shift_seconds[1])
+    {
         [Arc::clone(&first_player_timing), first_player_timing]
     } else {
         [first_player_timing, build_player_timing(1)]
@@ -320,8 +326,14 @@ where
         let timing_player = &timing_players[player];
         let parsed_notes = &gameplay_charts[player].parsed_notes;
         let start = notes.len();
-        let col_offset = player.saturating_mul(cols_per_player);
         for parsed in parsed_notes {
+            // Player::Load keeps only this participant's part of a Routine chart.
+            if play_style.is_routine() && usize::from(parsed.player) != player {
+                continue;
+            }
+            let Some(column) = play_style.runtime_column(parsed.column, player) else {
+                continue;
+            };
             let row_index = parsed.row_index;
             let Some(beat) = timing_player.get_beat_for_row(row_index) else {
                 continue;
@@ -373,9 +385,10 @@ where
 
             let quantization_idx = quantization_index_from_beat(beat);
             notes.push(Note {
+                participant: play_style.is_routine().then_some(parsed.player),
                 beat,
                 quantization_idx,
-                column: parsed.column.saturating_add(col_offset),
+                column,
                 note_type,
                 row_index,
                 result: None,
@@ -390,6 +403,21 @@ where
         note_ranges[player] = (start, end);
     }
     let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
+
+    // Couple and Routine each score part of one authored chart, so the chart's
+    // possible points cover both participants and must be split.
+    let couple = matches!(
+        play_style,
+        GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
+    ) || play_style.is_routine();
+    let base_grade_points: [i32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if couple && player < num_players {
+            let totals = recompute_player_totals(&notes, note_ranges[player]);
+            judgment::max_grade_points(totals.steps, totals.holds, totals.rolls, 0)
+        } else {
+            charts[player].possible_grade_points
+        }
+    });
 
     let transform_started = Instant::now();
     let uncommon_effects = std::array::from_fn(|player| {
@@ -477,7 +505,7 @@ where
     let mut total_steps = [0u32; MAX_PLAYERS];
     let mut hands_total = [0u32; MAX_PLAYERS];
     let mut possible_grade_points = [0i32; MAX_PLAYERS];
-    if chart_layout_changed {
+    if chart_layout_changed || couple {
         holds_total = [0; MAX_PLAYERS];
         rolls_total = [0; MAX_PLAYERS];
         mines_total = [0; MAX_PLAYERS];
@@ -492,7 +520,7 @@ where
                 totals.steps,
                 holds_total[player],
                 rolls_total[player],
-                charts[player].possible_grade_points,
+                base_grade_points[player],
             );
         }
     } else {
@@ -516,8 +544,7 @@ where
         score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
         note_ranges[1] = note_ranges[0];
     }
-    let note_count_stats =
-        build_note_count_stats_for_players(&notes, &note_ranges, num_players);
+    let note_count_stats = build_note_count_stats_for_players(&notes, &note_ranges, num_players);
     // Cached chart rows are u32 and gameplay transforms preserve that domain.
     // Prove the compact note/row index space once before any retained index is
     // constructed; live paths may then convert only at slice boundaries.
@@ -540,17 +567,16 @@ where
     for note in &notes {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
         let timing_player = &timing_players[player];
-        note_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
-            note.beat,
-            &mut head_time_caches[player],
-        ));
-        let displayed_head = timing_player
-            .get_displayed_beat_cached(note.beat, &mut head_display_caches[player]);
+        note_time_cache_ns.push(
+            timing_player.get_time_for_beat_ns_cached(note.beat, &mut head_time_caches[player]),
+        );
+        let displayed_head =
+            timing_player.get_displayed_beat_cached(note.beat, &mut head_display_caches[player]);
         if let Some(hold) = note.hold.as_ref() {
-            hold_end_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
-                hold.end_beat,
-                &mut tail_time_caches[player],
-            ));
+            hold_end_time_cache_ns.push(
+                timing_player
+                    .get_time_for_beat_ns_cached(hold.end_beat, &mut tail_time_caches[player]),
+            );
             note_displayed_beat_cache.push([
                 displayed_head,
                 timing_player
@@ -584,18 +610,27 @@ where
 
     log::debug!("Parsed {} notes from chart data.", notes.len());
 
-    let (row_entries, row_entry_ranges, note_row_entry_indices) =
-        build_gameplay_row_indices(
-            &notes,
-            &note_ranges,
-            &note_time_cache_ns,
-            num_players,
-            notes.len() / 2,
-        );
+    let (row_entries, row_entry_ranges, note_row_entry_indices) = build_gameplay_row_indices(
+        &notes,
+        &note_ranges,
+        &note_time_cache_ns,
+        num_players,
+        notes.len() / 2,
+    );
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
     let timing_prep_started = Instant::now();
     let audio_end_time_ns = song_audio_end_time_ns(&song);
+    // Song.cpp resolves catalog note times with both group and cabinet
+    // offsets, then compares them with the absolute LASTSECONDHINT.
+    let song_last_second = song
+        .precise_note_last_second_seconds
+        .map_or(0.0, |seconds| {
+            (seconds - pack_sync_offset_seconds) - config.global_offset_seconds
+        })
+        .max(song.last_second_hint)
+        .max(0.0);
+    let song_last_second_ns = song_time_ns_from_seconds(song_last_second);
     let GameplayTimeBounds {
         first_judgable_second: first_second,
         notes_end_time_ns,
@@ -606,7 +641,9 @@ where
         &hold_end_time_cache_ns,
         rate,
         audio_end_time_ns,
-        song_time_ns_from_seconds(song.last_second_hint),
+        // Native GetMusicEndTiming adds the late-resolution window to the
+        // whole Song last second, including later rows on unselected charts.
+        song_last_second_ns,
     );
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
@@ -664,22 +701,6 @@ where
         }
         draw_distance_before_targets(viewport.height(), initial_draw_scale[player])
     });
-    let draw_distance_after_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return draw_distance_after_targets(viewport.height(), 1.0, 0.0);
-        }
-        let centered_percent = if player_profiles[player].scroll_effects().centered > 0.5 {
-            1.0
-        } else {
-            0.0
-        };
-        draw_distance_after_targets(
-            viewport.height(),
-            initial_draw_scale[player],
-            centered_percent,
-        )
-    });
-
     let travel_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         let mut tt = scroll_speed[player].travel_time_seconds(
             draw_distance_before_targets[player],
@@ -775,6 +796,7 @@ where
     let notefield_song_position: [BeatInfo; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_info_from_time_ns(init_music_time_ns)
     });
+    let song_lua_compile_succeeded = build_song_lua_runtime.song_lua_compile_succeeded();
     let (song_lua_mask_windows, song_lua_ease_windows, song_lua_visuals) = build_song_lua_runtime
         .build_song_lua_runtime(build_song_lua_runtime_window_build(
             song.title.as_str(),
@@ -787,22 +809,25 @@ where
             config.center_1player_notefield,
             &player_global_offset_shift_seconds,
         ));
-    let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return Vec::new();
-        }
-        let attack_mode = player_profiles[player].attack_mode();
-        let mut windows = if attack_mode == GameplayAttackMode::Off {
-            Vec::new()
-        } else {
-            build_attack_mask_windows_for_player(
+    let attack_option_windows: [Arc<[ChartAttackWindow]>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if player >= num_players {
+                return Arc::from([]);
+            }
+            build_attack_windows_for_mode(
                 gameplay_charts[player].chart_attacks.as_deref(),
-                attack_mode,
+                player_profiles[player].attack_mode(),
                 player,
                 song_seed,
                 attack_song_length_seconds,
             )
-        };
+            .into()
+        });
+    let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return Vec::new();
+        }
+        let mut windows = build_attack_mask_windows(&attack_option_windows[player]);
         windows.extend(song_lua_mask_windows[player].iter().copied());
         if let Some(window) = course_modifiers
             .as_deref()
@@ -918,9 +943,9 @@ where
         .any(GameplayProfileData::step_statistics_density_graph);
     let gameplay_play_style = step_stats_play_style(play_style);
     let wide = viewport.is_wide();
-    let density_graph_enabled = wide && wants_density_graph;
     let sw = viewport.width();
     let sh = viewport.height().max(1.0_f32);
+    let density_graph_enabled = sw >= sh && wants_density_graph;
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {
@@ -1031,22 +1056,47 @@ where
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
-        init_player_runtime_for_song_with_course_life(
+        // Routine's CombinedLifeMeterShared uses the master player's life type.
+        let life_source = if play_style.is_routine() { 0 } else { p };
+        let mut player = init_player_runtime_for_song_with_course_life(
             init_music_time,
             in_course_stage,
             course_carry,
-            course_life_config[p],
+            course_life_config[life_source],
             player_profiles[p].carry_combo_between_songs(),
             replay_mode,
             combo_carry[p],
             caps,
-        )
+        );
+        let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
+        let possible = target.score_type.possible_points(
+            possible_grade_points[p],
+            total_steps[p],
+            holds_total[p],
+            rolls_total[p],
+        );
+        player.ghost = GameplayGhostState::new(
+            total_steps[p] as usize
+                + holds_total[p] as usize
+                + rolls_total[p] as usize
+                + mines_total[p] as usize,
+            target,
+            possible,
+        );
+        if player_profiles[p].target_score() == GameplayTargetScoreSetting::GhostData {
+            if let Some(percent) = player.ghost.target_percent() {
+                mini_indicator_target_score_percent[p] = percent.clamp(0.0, 100.0);
+            }
+        }
+        player.fail_type = song_fail_type(
+            config.default_fail_type,
+            &charts[p].difficulty,
+            in_course_stage,
+        );
+        player
     });
-    let assist_clap_rows = build_assist_clap_rows_with_capacity(
-        &notes,
-        note_ranges[0],
-        note_count_stats[0].len(),
-    );
+    let assist_clap_rows =
+        build_assist_clap_rows_with_capacity(&notes, note_ranges[0], note_count_stats[0].len());
     let song_offset_seconds = song.offset;
     let base_attack_appearance = std::array::from_fn(|player| {
         if player < num_players {
@@ -1058,6 +1108,11 @@ where
     let tick_mode = session.tick_mode;
 
     let mut state = GameplayRuntimeState {
+        note_field_tap_callback: None,
+        step_callback: None,
+        tap_row_judgment_callback: None,
+        hold_judgment_callback: None,
+        avoided_mine_judgment_callback: None,
         source: GameplaySourceRuntimeState {
             song,
             charts,
@@ -1125,7 +1180,8 @@ where
                 notes_end_time_ns,
                 music_end_time_ns,
                 audio_end_time_ns,
-            ),
+            )
+            .with_song_last_second_ns(song_last_second_ns),
             music_rate: GameplayMusicRateState::new(rate),
             offsets: GameplayOffsetState::new(
                 config.global_offset_seconds,
@@ -1173,8 +1229,6 @@ where
                 field_zoom,
                 pixels_per_second,
                 travel_time,
-                draw_distance_before_targets,
-                draw_distance_after_targets,
                 reverse_scroll,
                 column_scroll_dirs,
             ),
@@ -1231,11 +1285,15 @@ where
             profiles: player_profiles,
         },
         mods: GameplayModRuntimeState {
+            song_lua_compile_succeeded,
+            expand_seconds: [0.0; MAX_PLAYERS],
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
+            song_lua_fail_types: [None; MAX_PLAYERS],
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
+                attacks.option_windows = attack_option_windows;
                 attacks.current_appearance = base_attack_appearance;
                 attacks.target_appearance = base_attack_appearance;
                 attacks.speed_appearance = [AppearanceEffects::approach_speeds(); MAX_PLAYERS];
@@ -1260,7 +1318,8 @@ where
     };
     state.control.update_trace =
         GameplayUpdateTraceState::from_capacity_snapshot(&state.capacity_trace_snapshot());
-    state.refresh_seek_dependent_state();
+    refresh_active_attack_masks(&mut state, 0.0);
+    state.refresh_live_notefield_options(state.clock.song_position.current_bpm);
     let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
     let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
     if total_ms >= 50.0 {

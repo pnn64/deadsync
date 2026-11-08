@@ -105,49 +105,59 @@ impl ScoreProfilePaths {
     #[inline(always)]
     #[must_use]
     pub fn scores_dir(&self) -> PathBuf {
-        self.profile_dir.join("scores")
+        self.score_path(&["scores"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_dir(&self) -> PathBuf {
-        self.scores_dir().join("gs")
+        self.score_path(&["scores", "gs"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_chart_dir(&self, chart_hash: &str) -> PathBuf {
-        self.gs_dir().join(score_file_shard(chart_hash))
+        self.score_path(&["scores", "gs", score_file_shard(chart_hash)])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_index_path(&self) -> PathBuf {
-        self.gs_dir().join("index.bin")
+        self.score_path(&["scores", "gs", "index.bin"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn ac_dir(&self) -> PathBuf {
-        self.scores_dir().join("ac")
+        self.score_path(&["scores", "ac"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn ac_index_path(&self) -> PathBuf {
-        self.ac_dir().join("index.bin")
+        self.score_path(&["scores", "ac", "index.bin"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn local_dir(&self) -> PathBuf {
-        self.scores_dir().join("local")
+        self.score_path(&["scores", "local"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn local_index_path(&self) -> PathBuf {
-        self.local_dir().join("index.bin")
+        self.score_path(&["scores", "local", "index.bin"])
+    }
+
+    #[inline]
+    fn score_path(&self, components: &[&str]) -> PathBuf {
+        let mut path = self.profile_dir.clone();
+        path.reserve_exact(components.iter().map(|part| part.len() + 1).sum());
+        for component in components {
+            path.push(component);
+        }
+        path
     }
 }
 
@@ -860,6 +870,7 @@ fn push_local_leaderboard_candidates_from_dir<'a>(
     name: &'a str,
     machine_tag: Option<&'a str>,
     max_entries: usize,
+    include_failed: bool,
     header_buf: &mut Vec<u8>,
     next_ordinal: &mut usize,
     out: &mut Vec<LocalLeaderboardCandidate<'a>>,
@@ -890,13 +901,17 @@ fn push_local_leaderboard_candidates_from_dir<'a>(
         let Some(header) = read_local_score_header_into(&path, header_buf) else {
             continue;
         };
+        let is_fail =
+            grade_from_code(header.grade_code) == Grade::Failed || header.fail_time.is_some();
+        if is_fail && !include_failed {
+            continue;
+        }
         out.push(LocalLeaderboardCandidate {
             name,
             machine_tag,
             score_percent: header.score_percent,
             played_at_ms,
-            is_fail: grade_from_code(header.grade_code) == Grade::Failed
-                || header.fail_time.is_some(),
+            is_fail,
             ordinal: *next_ordinal,
         });
         *next_ordinal = next_ordinal.saturating_add(1);
@@ -914,6 +929,7 @@ fn push_local_leaderboard_candidates_from_root<'a>(
     name: &'a str,
     machine_tag: Option<&'a str>,
     max_entries: usize,
+    include_failed: bool,
     header_buf: &mut Vec<u8>,
     next_ordinal: &mut usize,
     out: &mut Vec<LocalLeaderboardCandidate<'a>>,
@@ -924,6 +940,7 @@ fn push_local_leaderboard_candidates_from_root<'a>(
         name,
         machine_tag,
         max_entries,
+        include_failed,
         header_buf,
         next_ordinal,
         out,
@@ -934,6 +951,7 @@ fn push_local_leaderboard_candidates_from_root<'a>(
         name,
         machine_tag,
         max_entries,
+        include_failed,
         header_buf,
         next_ordinal,
         out,
@@ -1183,6 +1201,9 @@ pub fn machine_leaderboard_local_from_profiles(
         return Vec::new();
     }
 
+    // ITGmania excludes failed songs, but AddCourseScore permits failed
+    // courses. Course summaries use a separate "course-" score namespace.
+    let include_failed = chart_hash.starts_with("course-");
     let mut candidates = Vec::with_capacity(candidate_capacity(max_entries));
     let mut header_buf = Vec::with_capacity(1024);
     let mut next_ordinal = 0;
@@ -1194,6 +1215,7 @@ pub fn machine_leaderboard_local_from_profiles(
                 profile.display_name.as_str(),
                 Some(profile.initials.as_str()),
                 max_entries,
+                include_failed,
                 &mut header_buf,
                 &mut next_ordinal,
                 &mut candidates,
@@ -1205,6 +1227,7 @@ pub fn machine_leaderboard_local_from_profiles(
                 profile.initials.as_str(),
                 None,
                 max_entries,
+                include_failed,
                 &mut header_buf,
                 &mut next_ordinal,
                 &mut candidates,
@@ -1234,6 +1257,7 @@ pub fn personal_leaderboard_local_from_root(
         initials,
         None,
         max_entries,
+        true,
         &mut header_buf,
         &mut next_ordinal,
         &mut candidates,
@@ -1782,6 +1806,57 @@ mod tests {
     }
 
     #[test]
+    fn machine_records_exclude_fails_before_limiting_but_personal_history_keeps_them() {
+        let tree = TempTree::new("failed-machine-records");
+        let hash = "0123456789abcdef";
+        let shard = local_score_shard_dir(tree.path(), hash);
+        write_score(tree.path(), hash, 100, 0.0, true, 1);
+        write_score(&shard, hash, 200, 0.99, true, 1);
+        write_score(tree.path(), hash, 300, 0.75, false, 1);
+        write_score(&shard, hash, 400, 0.80, false, 1);
+        // A fail timestamp also makes an otherwise passing grade a failure.
+        let mut failed = score_entry(500, 1.0, false, 1);
+        failed.fail_time = Some(10.0);
+        fs::write(
+            tree.path().join(format!("{hash}-500.bin")),
+            encode_local_score_entry(&failed).unwrap(),
+        )
+        .unwrap();
+        let profiles = [LocalScoreProfileSource {
+            root: tree.path().to_owned(),
+            initials: "LIS".into(),
+            display_name: "Lisek".into(),
+        }];
+
+        for use_display_names in [false, true] {
+            let machine =
+                machine_leaderboard_local_from_profiles(&profiles, hash, 1, use_display_names);
+            assert_eq!(machine.len(), 1);
+            assert_eq!(machine[0].rank, 1);
+            assert_eq!(machine[0].score, 8000.0);
+            assert!(!machine[0].is_fail);
+        }
+        let personal = personal_leaderboard_local_from_root(tree.path(), hash, "LIS", 10);
+        assert_eq!(personal.len(), 5);
+        assert_eq!(personal.iter().filter(|entry| entry.is_fail).count(), 3);
+        assert!(
+            personal
+                .iter()
+                .any(|entry| entry.score == 0.0 && entry.is_fail)
+        );
+        assert_eq!(
+            machine_replays_local_from_profiles(&profiles, hash, 10).len(),
+            5
+        );
+
+        let course_hash = "course-0123456789abcdef";
+        write_score(tree.path(), course_hash, 600, 0.5, true, 0);
+        let course = machine_leaderboard_local_from_profiles(&profiles, course_hash, 1, false);
+        assert_eq!(course.len(), 1);
+        assert!(course[0].is_fail);
+    }
+
+    #[test]
     fn lazy_replay_loading_skips_corrupt_winners() {
         let tree = TempTree::new("lazy-replays");
         let chart_hash = "0123456789abcdef";
@@ -1884,19 +1959,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod candidates_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/replay_candidates.rs"
-    ));
-}
-
-#[cfg(test)]
-#[path = "../tests/score_storage/mod.rs"]
-mod score_storage;
-
-#[cfg(test)]
-#[path = "../tests/cache_preparation/mod.rs"]
-mod cache_preparation;

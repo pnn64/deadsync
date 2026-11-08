@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "scope": "Independent direct-equation audit of all 90 constructed stereo streams. Does not assert universal reference parity or complete standards certification.",
+  "files": 90,
+  "sample_values": 40628736,
+  "max_error": 2.980220281667556e-08,
+  "max_rms": 7.215296996193106e-09,
+  "source_sha256": {
+    "src/spectral.rs": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2",
+    "src/decoder.rs": "d58465071cc8bba2bbfd4ca4d81a063d36370377d4dcc8c605334b3e294d1cc1",
+    "src/scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+    "src/synthesis.rs": "9ee6f7f70823f886f7a676e68a69cc8174855bf1bf663623a5c0e98b3e3579ef",
+    "src/bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+    "tests/reference_stereo.py": "35f0047d78d384dd892d049e96073311513e412ae6d2c8cd96c3b4f571ec5ccc",
+    "tests/reference_stereo_equations.py": "1f32b3212de9cfc0f398455025b82d06fc70508c34b2020df6a08cc40a3f02be",
+    "tests/data/bands.json": "a291732bebc1754f25335219cc3380fe86661a03eeaac99987d39a7e3388d963",
+    "tests/data/dsp.json": "2f95c1442665900d71443e113ccaa6bef6611ede6c6bee08f3d9cae39048db96"
+  },
+  "reports_sha256": {
+    "provenance.json": "52ca86d5f3ac177dbb1843068e85f779f11ceacae57ba72549a92e7d363e3202",
+    "results.json": "257e665af93724d05633d79ca4d7f23b67403f80088f32dcc25331fc7b0c662e"
+  }
+}

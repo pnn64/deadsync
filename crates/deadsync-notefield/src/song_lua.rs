@@ -4,9 +4,15 @@ use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 
 #[inline(always)]
 #[must_use]
-pub fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
-    if rotation_y_deg.abs() > f32::EPSILON {
-        draw.rot[1] += rotation_y_deg;
+pub fn song_lua_note_model_draw(
+    mut draw: ModelDrawState,
+    rotation_xy_deg: [f32; 2],
+) -> ModelDrawState {
+    if rotation_xy_deg[0] != 0.0 && rotation_xy_deg[0].is_finite() {
+        draw.rot[0] += rotation_xy_deg[0];
+    }
+    if rotation_xy_deg[1].abs() > f32::EPSILON {
+        draw.rot[1] += rotation_xy_deg[1];
     }
     draw
 }
@@ -94,7 +100,8 @@ fn song_lua_player_y_fold_actor_in_place(actor: &mut Actor, pivot_x: f32, cos_y:
         }
         Actor::Shadow { child, .. } => song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y),
         // Shared subtrees keep their established wrapper boundary.
-        Actor::SharedTransform { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::SharedTransform { .. } | Actor::SharedCamera { .. }
+        | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -447,18 +454,20 @@ mod tests {
             * Matrix4::from_scale(Vector3::new(2.0, 4.0, 6.0));
         let texture: Arc<str> = Arc::from("fold-texture");
         let textured_vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: [8.0, 9.0, 10.0],
             uv: [0.2, 0.6],
             color: [0.9, 0.8, 0.7, 0.6],
             tex_matrix_scale: [1.25, 0.75],
         }]);
         let textured_mesh = Actor::TexturedMesh {
+            environment: None,
             align: [0.1, 0.9],
             offset: [140.0, 23.0],
             world_z: 3.5,
             size: [SizeSpec::Fill, SizeSpec::Px(47.0)],
             local_transform,
-            texture: Arc::clone(&texture),
+            texture: Arc::clone(&texture).into(),
             tint: [0.11, 0.22, 0.33, 0.44],
             glow: [0.55, 0.66, 0.77, 0.88],
             vertices: Arc::clone(&textured_vertices),
@@ -467,17 +476,23 @@ mod tests {
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
+            clear_depth: false,
+            clear_depth_after: false,
+            cull_mode: deadlib_render_core::CullMode::Back,
             visible: false,
             blend: BlendMode::Multiply,
             z: -12,
         };
         let Actor::TexturedMesh {
+            environment: None,
             align,
             offset,
             world_z,
             size,
             local_transform: folded_transform,
-            texture: folded_texture,
+            texture: deadlib_present::actors::MeshTexture::Key(folded_texture),
             tint,
             glow,
             vertices,
@@ -486,9 +501,14 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
+            cull_mode,
             visible,
             blend,
             z,
+            clear_depth: false,
+            clear_depth_after: false,
         } = song_lua_player_y_fold_actor(textured_mesh, 100.0, 60.0)
         else {
             panic!("fold should preserve the textured-mesh variant");
@@ -509,6 +529,9 @@ mod tests {
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);
         assert!(depth_test);
+        assert!(depth_write);
+        assert!(!depth_test_on_fail);
+        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(!visible);
         assert_eq!(blend, BlendMode::Multiply);
         assert_eq!(z, -12);

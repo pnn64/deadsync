@@ -1,0 +1,29 @@
+{
+  "name": "dist10-irixnet.tar.gz",
+  "url": "https://nekofiles.irixnet.org/Sound/dist10.tar.gz",
+  "bytes": 523930,
+  "sha256": "3c22fa4dac080d03519843ac4fcc42c0a925cc6e744b5b4ffec33b3eff4397c4",
+  "data_members": [
+    "dist10/lsf/decoder/huffman.c",
+    "dist10/lsf/decoder/huffman.h",
+    "dist10/lsf/decoder/tables/dewindow",
+    "dist10/lsf/decoder/tables/enwindow",
+    "dist10/lsf/decoder/tables/huffdec",
+    "dist10/lsf/encoder/huffman.c",
+    "dist10/lsf/encoder/huffman.h",
+    "dist10/lsf/encoder/tables/dewindow",
+    "dist10/lsf/encoder/tables/enwindow",
+    "dist10/lsf/encoder/tables/huffcode",
+    "dist10/lsf/encoder/tables/huffdec",
+    "dist10/mc/decoder/tables/dewindow",
+    "dist10/mc/decoder/tables/enwindow",
+    "dist10/mc/decoder/tables/huffcode",
+    "dist10/mc/decoder/tables/huffdec",
+    "dist10/mc/encoder/tables/dewindow",
+    "dist10/mc/encoder/tables/enwindow",
+    "dist10/mc/encoder/tables/huffcode",
+    "dist10/mc/encoder/tables/huffdec"
+  ],
+  "numeric_member": "dist10/lsf/encoder/tables/huffcode",
+  "numeric_member_sha256": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7"
+}

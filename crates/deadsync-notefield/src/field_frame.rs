@@ -1,9 +1,12 @@
+use crate::transforms::{
+    attenuate_offset, beat_wave_offset, move_col_extra, visual_note_rotation_x, visual_note_rotation_y,
+};
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
     MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFeedbackFrameView,
-    PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
+    PreparedNotefield, PreparedNotefieldNotes, VisualEffectParams,
     appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
     compose_hold_body_caps, compose_measure_lines, compose_notefield_feedback,
     fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_lane_index,
@@ -11,11 +14,11 @@ use crate::{
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
     note_appearance_cache, note_part_phase_cached, note_part_uv_translation_for_quantization,
-    note_world_z_for_bumpy_cached, note_x_offset_cached as canonical_note_x_offset_cached,
-    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, visual_arrow_effect_zoom_cached,
-    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    note_world_z_cached, note_x_offset_cached as canonical_note_x_offset_cached, offset_center,
+    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
+    tap_replacement_head, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
     Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
@@ -34,7 +37,6 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 use glam::Mat4 as Matrix4;
 use std::ops::Range;
-use std::sync::Arc;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
 ///
@@ -58,7 +60,6 @@ pub struct NotefieldFieldResult {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HoldLaneFrame {
     receptor_draw_y: f32,
-    receptor_center_x: f32,
     target_arrow_px: f32,
     use_legacy_sprites: bool,
 }
@@ -94,7 +95,11 @@ where
     let field_start = actors.len();
     let draw_start = flat_draws.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
-    let Some(notes) = prepared.notes.as_ref() else {
+    let Some(notes) = prepared
+        .notes
+        .as_ref()
+        .filter(|_| request.song_lua.wrapper_visible)
+    else {
         return NotefieldFieldResult::default();
     };
     let field_camera = resolve_field_camera(camera_cache, request, prepared);
@@ -119,6 +124,15 @@ where
         frame,
         sprite_source,
     );
+    // Keep the affine eye camera for sphere mapping; perspective flattening
+    // and clip-depth compression must never change the material's normals.
+    for draw in flat_draws.iter_mut() {
+        if let FlatDraw::TexturedMesh(mesh) = draw
+            && let Some(environment) = &mut mesh.environment
+        {
+            environment.camera = camera_cache.eye_camera();
+        }
+    }
     if request.capture_requests.note_field {
         actors.extend(flat_draws.drain(..).map(actor_from_flat_draw));
     }
@@ -143,6 +157,7 @@ where
             || actor_camera_scope
             || request.capture_requests.note_field
             || request.view.edit_beat_bars
+            || !request.timing_labels.is_empty()
             || request.capture_requests.direct_note_field,
         "ordinary uncaptured gameplay fields must stay on the direct draw stream",
     );
@@ -199,43 +214,47 @@ fn compose_field_contents<S, F>(
     let num_cols = frame_plan.num_cols;
     let col_end = col_start + num_cols;
     let field_zoom = prepared.field_zoom;
+    let fade_travel_scale = if field_zoom.is_finite() && field_zoom.abs() > f32::EPSILON {
+        field_zoom.recip()
+    } else {
+        0.0
+    };
     let scroll_speed = prepared.scroll_speed;
-    let draw_distance_before_targets = request.geometry.draw_distance_before_targets;
-    let draw_distance_after_targets = request.geometry.draw_distance_after_targets;
+    let draw_range = prepared.draw_range;
     let current_beat = prepared.current_beat;
     let field = prepared.field;
     let playfield_center_x = field.playfield_center_x;
     let column_dirs = field.column_dirs;
     let column_receptor_ys = field.column_receptor_ys;
     let mini = prepared.mini;
-    let alpha_params = note_alpha_params(appearance);
-    let appearance_cache = note_appearance_cache(elapsed_screen, mini, alpha_params);
+    // Frame-local lane caches: fixed stack capacity, built before note/hold
+    // composition on this thread. No allocation, lookup misses, or eviction.
+    let alpha_params: [NoteAlphaParams; deadsync_core::input::MAX_COLS] =
+        std::array::from_fn(|col| note_alpha_params(&appearance, col));
+    let appearance_caches = alpha_params
+        .map(|params| note_appearance_cache(prepared.arrow_effect_time_s, mini, params));
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let column_x_offsets = prepared.column_x_offsets;
+    let position_splines = prepared.column_position_splines;
     let column_zooms = prepared.column_zooms;
     let column_rotations_deg = prepared.column_rotations_deg;
-    let scale_sprite =
-        |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
     let scale_mine_slot = |slot: &S| -> [f32; 2] {
         // ActorFrame children retain native logical dimensions relative to
         // the 64-pixel field unit, including differently sized spark layers.
         if let Some(model) = slot.model() {
             let model_size = model.size();
             if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
-                return [model_size[0] * field_zoom, model_size[1] * field_zoom];
+                return model_size;
             }
         }
         if slot.actor_frame_child() {
             slot.logical_size()
-                .map(|size| size * target_arrow_px / 64.0)
         } else {
-            scale_sprite(slot.size())
+            scale_sprite_to_arrow(slot.size(), 64.0)
         }
     };
-    let note_rotation_y = 0.0_f32;
     let prefer_sprite_note_path = false;
-    let flat_tap_face_rotation_y = 0.0_f32;
     let beat_push = note_inputs.beat_factor;
     let col_offsets = note_inputs.col_offsets;
     let invert_distances = note_inputs.invert_distances;
@@ -258,9 +277,56 @@ fn compose_field_contents<S, F>(
         [lane_note_transform_cache(current_beat, VisualEffectParams::default());
             deadsync_core::input::MAX_COLS];
     for local_col in 0..num_cols {
+        lane_effect_params[local_col].col_x = col_offsets[local_col];
+        lane_effect_params[local_col].tornado_z_bounds = note_inputs.tornado_z_bounds[local_col];
         lane_transform_caches[local_col] =
             lane_note_transform_cache(current_beat, lane_effect_params[local_col]);
     }
+    let note_x_params = NoteXParams {
+        screen_height: request.geometry.screen_height,
+        tornado: visual.tornado,
+        tornado_period: visual.tornado_period,
+        tornado_offset: visual.tornado_offset,
+        bounce: visual.bounce,
+        sawtooth: visual.sawtooth,
+        sawtooth_period: visual.sawtooth_period,
+        bounce_period: visual.bounce_period,
+        bounce_offset: visual.bounce_offset,
+        drunk: visual.drunk,
+        drunk_offset: visual.drunk_offset,
+        drunk_speed: visual.drunk_speed,
+        drunk_period: visual.drunk_period,
+        cosecant: visual.cosecant,
+        bumpy_x: visual.bumpy_x,
+        bumpy_x_offset: visual.bumpy_x_offset,
+        bumpy_x_period: visual.bumpy_x_period,
+        tan_bumpy_x: visual.tan_bumpy_x,
+        tan_bumpy_x_offset: visual.tan_bumpy_x_offset,
+        tan_bumpy_x_period: visual.tan_bumpy_x_period,
+        tan_drunk: visual.tan_drunk,
+        tan_drunk_offset: visual.tan_drunk_offset,
+        tan_drunk_speed: visual.tan_drunk_speed,
+        tan_drunk_period: visual.tan_drunk_period,
+        flip: visual.flip,
+        invert: visual.invert,
+        beat: visual.beat,
+        beat_period: visual.beat_period,
+        parabola_x: visual.parabola_x,
+        attenuate_x: visual.attenuate_x,
+        square: visual.square,
+        digital: visual.digital,
+        zigzag: visual.zigzag,
+        zigzag_offset: visual.zigzag_offset,
+        zigzag_period: visual.zigzag_period,
+        square_offset: visual.square_offset,
+        digital_offset: visual.digital_offset,
+        digital_steps: visual.digital_steps,
+        square_period: visual.square_period,
+        digital_period: visual.digital_period,
+        xmode: visual.xmode,
+        player_p2: matches!(request.placement, crate::FieldPlacement::P2),
+        double_style: request.geometry.double_style,
+    };
     let mut static_note_x_offsets = [0.0; deadsync_core::input::MAX_COLS];
     let note_x_is_static = fill_static_note_x_offsets(
         num_cols,
@@ -268,14 +334,7 @@ fn compose_field_contents<S, F>(
         &invert_distances[..num_cols],
         &tornado_bounds[..num_cols],
         &note_inputs.move_x_offsets[..num_cols],
-        NoteXParams {
-            screen_height: request.geometry.screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-        },
+        note_x_params,
         note_inputs.tiny_spacing_scale,
         &mut static_note_x_offsets,
     );
@@ -286,33 +345,43 @@ fn compose_field_contents<S, F>(
             + if note_x_is_static {
                 static_note_x_offsets[local_col]
             } else {
-                note_x_offset(
-                    request.geometry.screen_height,
+                canonical_note_x_offset_cached(
                     local_col,
                     adjusted_travel,
-                    travel.arrow_effect_time_s(),
                     beat_push,
-                    visual,
+                    travel.arrow_effect_time_s(),
                     &col_offsets[..num_cols],
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
                     &note_inputs.tornado_lane_caches[..num_cols],
                     &note_inputs.move_x_offsets[..num_cols],
+                    note_x_params,
                     note_inputs.tiny_spacing_scale,
                 )
             }
     };
     let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
-        appearance_note_alpha_glow_cached(adjusted + lane_offsets[local_col], &appearance_cache)
-    };
-    let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        note_world_z_for_bumpy_cached(
-            travel_offset,
-            note_inputs.bumpy_frame_cache,
-            lane_transform_caches[local_col],
+        let y_offset = adjusted * fade_travel_scale;
+        appearance_note_alpha_glow_cached(
+            y_offset + lane_tipsy_offsets[local_col],
+            y_offset,
+            &appearance_caches[local_col],
         )
     };
-    let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
+    let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
+        // ArrowEffects::GetXYZPos adds the lane move before GetZPos.
+        move_col_extra(&visual.move_z_cols, local_col)
+            + note_world_z_cached(
+                travel_offset,
+                note_inputs.note_depth_frame_cache,
+                lane_transform_caches[local_col],
+            )
+    };
+    let visible_row_range = if field_zoom > 0.0 {
+        crate::note_placement::expand_range(travel.visible_row_range())
+    } else {
+        None
+    };
     let cue_visible_row_range = measure_cue_range_search_enabled(
         options.frame_features.measure_cues,
         scroll_speed,
@@ -361,6 +430,7 @@ fn compose_field_contents<S, F>(
             travel,
         },
     );
+    crate::timing_labels::compose_timing_labels(actors, request, prepared);
     compose_notefield_feedback(
         flat_draws,
         cue_hud_draws,
@@ -373,6 +443,10 @@ fn compose_field_contents<S, F>(
         sprite_source,
     );
 
+    // Receptors and feedback remain visible when a signed draw range is empty.
+    if draw_range.bounds().is_none() {
+        return;
+    }
     let mut visible_note_bounds = [(0, 0); MAX_COLS];
     let mut visible_hold_bounds = [(0, 0); MAX_COLS];
     for local_col in 0..num_cols {
@@ -437,7 +511,6 @@ fn compose_field_contents<S, F>(
         let lane_frame = *hold_lane_frames[local_col].get_or_insert_with(|| {
             hold_lane_frame(
                 lane_receptor_y,
-                lane_center_x_from_adjusted_travel(local_col, 0.0),
                 target_arrow_px * column_zoom,
                 lane_move_y_offsets[local_col],
                 lane_tipsy_offsets[local_col],
@@ -446,8 +519,13 @@ fn compose_field_contents<S, F>(
                 lane_transform_caches[local_col],
             )
         });
-        let receptor_draw_y = lane_frame.receptor_draw_y;
-        let receptor_center_x = lane_frame.receptor_center_x;
+        let receptor_draw_y = lane_frame.receptor_draw_y
+            + beat_wave_offset(
+                0.0,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
+            );
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
@@ -478,8 +556,45 @@ fn compose_field_contents<S, F>(
             travel.adjusted_note_for_row(head_travel_offset, head_note_row, local_col);
         let tail_adjusted_travel =
             travel.adjusted_note(tail_travel_offset, hold.end_beat, local_col);
-        let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y) + lane_offset;
-        let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y) + lane_offset;
+        // NoteDisplay::DrawHoldsInRange includes holds crossing the range or
+        // the Boomerang peak even when neither endpoint is visible.
+        let (_, head_before_peak) = travel.adjusted_with_peak(head_travel_offset);
+        let (_, tail_before_peak) = travel.adjusted_with_peak(tail_travel_offset);
+        if !draw_range.hold_visible(
+            head_adjusted_travel,
+            tail_adjusted_travel,
+            head_before_peak,
+            tail_before_peak,
+        ) {
+            return;
+        }
+        let draw_bounds = draw_range.lane_bounds(lane_receptor_y, dir, lane_offset);
+        let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y)
+            + lane_offset
+            + attenuate_offset(
+                head_adjusted_travel,
+                col_offsets[local_col],
+                visual.attenuate_y,
+            )
+            + beat_wave_offset(
+                head_adjusted_travel,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
+            );
+        let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y)
+            + lane_offset
+            + attenuate_offset(
+                tail_adjusted_travel,
+                col_offsets[local_col],
+                visual.attenuate_y,
+            )
+            + beat_wave_offset(
+                tail_adjusted_travel,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
+            );
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
         let active_state = frame.feedback.lanes[local_col]
@@ -511,7 +626,7 @@ fn compose_field_contents<S, F>(
             head_y,
             tail_y,
             receptor_y: receptor_draw_y,
-            screen_height: request.geometry.screen_height,
+            draw_bounds,
             field_zoom,
             lane_reverse,
             engaged,
@@ -531,7 +646,13 @@ fn compose_field_contents<S, F>(
         let body_flipped = hold_plan.body_flipped;
         let y_head = hold_plan.y_head;
         let y_tail = hold_plan.y_tail;
-        let hold_diffuse = hold_plan.diffuse;
+        let mut hold_diffuse = hold_plan.diffuse;
+        if let Some(owner) = note.participant {
+            let tint = routine_note_tint(owner, 1.0);
+            for channel in 0..3 {
+                hold_diffuse[channel] *= tint[channel];
+            }
+        }
         let head_anchor_y = hold_plan.head_anchor_y;
         let head_anchor_travel = hold_plan.head_anchor_travel;
         let head_anchor_adjusted_travel = travel.adjusted_hold_anchor(
@@ -542,10 +663,14 @@ fn compose_field_contents<S, F>(
             tail_adjusted_travel,
         );
         let hold_parts = hold_plan.parts;
+        let transform_cache = lane_transform_caches[local_col];
+        let note_rotation_x = transform_cache.confusion_rotation_x_deg;
+        let note_rotation_y = transform_cache.confusion_rotation_y_deg
+            + visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
+        let flat_tap_face_rotation_y = note_rotation_y;
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let transform_cache = lane_transform_caches[local_col];
         let note_hides = request.song_lua.note_hides;
         let has_zoom_spline = note_hides.has_column_hides(local_col);
         // NoteDisplay interpolates the beat along the body's original endpoints,
@@ -564,93 +689,141 @@ fn compose_field_contents<S, F>(
             note_hides.zoom_offset(local_col, beat)
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
-        let hold_head_zoom = column_zoom
-            * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
-                + if has_zoom_spline {
+        let hold_head_zoom = prepared.spline_zoom(
+            local_col,
+            if engaged { current_beat } else { note.beat },
+            column_zoom
+                * (visual_arrow_effect_zoom_cached(
+                    head_anchor_adjusted_travel / field_zoom,
+                    transform_cache,
+                    1.0,
+                ) + if has_zoom_spline {
                     note_hides.zoom_offset(local_col, note.beat)
                 } else {
                     0.0
-                });
+                }),
+        );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
-        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites && !has_zoom_spline;
-        let sample_hold_path = |screen_y: f32| {
+        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
+            && !has_zoom_spline
+            && !position_splines[local_col].enabled;
+        let sample_hold_path = |screen_y: f32, spline_y: f32| {
+            // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY/BeatY.
+            // NoteDisplay uses that same offset to sample the hold strip.
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
                 dir,
                 screen_y,
                 lane_offset,
             );
+            let beat = if (y_tail - y_head).abs() <= f32::EPSILON {
+                body_head_beat
+            } else {
+                body_head_beat
+                    + (hold.end_beat - body_head_beat) * ((spline_y - y_head) / (y_tail - y_head))
+            };
+            let center_x = lane_center_x_from_adjusted_travel(local_col, adjusted_travel);
+            let world_z = world_z_for_adjusted_travel(local_col, adjusted_travel);
+            let base = [center_x, screen_y, world_z];
+            let (position, derivative) = prepared.spline_path(local_col, beat, base);
+            let offset = std::array::from_fn(|axis| position[axis] - base[axis]);
             HoldPathSample {
                 adjusted_travel,
-                center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
-                world_z: world_z_for_adjusted_travel(local_col, adjusted_travel),
+                center_x,
+                world_z,
+                position_offset: offset,
+                spline_derivative: derivative,
+                spline_absolute: position_splines[local_col].absolute,
+                spline_step: if position_splines[local_col].enabled {
+                    field_zoom
+                } else {
+                    0.0
+                },
+                cap_step: 0.0,
                 arrow_px: target_arrow_px
-                    * column_zoom
-                    * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
-                        + body_zoom_offset_at_y(screen_y)),
+                    * prepared.spline_zoom(
+                        local_col,
+                        beat,
+                        column_zoom
+                            * (visual_arrow_effect_zoom_cached(
+                                adjusted_travel / field_zoom,
+                                transform_cache,
+                                1.0,
+                            ) + body_zoom_offset_at_y(spline_y)),
+                    ),
             }
         };
-        compose_hold_body_caps(
-            flat_draws,
-            hold_mesh_scratch,
-            HoldBodyCapRequest {
-                body_slot: hold_plan.body_slot,
-                top_cap_slot: hold_plan.top_cap_slot,
-                bottom_cap_slot: hold_plan.bottom_cap_slot,
-                y_head,
-                y_tail,
-                draw_span: hold_plan.draw_span,
-                body_flipped,
-                lane_reverse,
-                top_anchor_reverse: note_display.top_hold_anchor_when_reverse,
-                body_phase: hold_plan.body_phase,
-                top_cap_phase: hold_plan.top_cap_phase,
-                bottom_cap_phase: hold_plan.bottom_cap_phase,
-                body_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.body as usize],
-                    false,
-                ),
-                top_cap_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.topcap as usize],
-                    false,
-                ),
-                bottom_cap_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.bottomcap as usize],
-                    false,
-                ),
-                target_arrow_px: hold_target_arrow_px,
-                diffuse: hold_diffuse,
-                elapsed_s: elapsed_screen,
-                lane_offset,
-                appearance: alpha_params,
-                appearance_cache,
-                use_legacy_sprites: use_legacy_hold_sprites,
-                rotation_y_deg: note_rotation_y,
-                depth_test: hold_depth_test,
-                screen_height: request.geometry.screen_height,
-                body_z: crate::style::HOLD_BODY_Z,
-                cap_z: crate::style::HOLD_CAP_Z,
-                glow_z: crate::style::HOLD_GLOW_Z,
-            },
-            &sample_hold_path,
-            sprite_source,
-        );
+        // Native normalization of an identical-point Offset spline produces
+        // no finite hold strip. Keep the head, and omit its body/caps.
+        let position_spline = position_splines[local_col];
+        let constant = if position_spline.coefficients.is_empty() {
+            position_spline.points[0] == position_spline.points[1]
+        } else {
+            position_spline.constant
+        };
+        if !position_spline.enabled || !constant {
+            compose_hold_body_caps(
+                flat_draws,
+                hold_mesh_scratch,
+                HoldBodyCapRequest {
+                    body_slot: hold_plan.body_slot,
+                    top_cap_slot: hold_plan.top_cap_slot,
+                    bottom_cap_slot: hold_plan.bottom_cap_slot,
+                    y_head,
+                    y_tail,
+                    draw_span: hold_plan.draw_span,
+                    body_flipped,
+                    lane_reverse,
+                    top_anchor_reverse: note_display.top_hold_anchor_when_reverse,
+                    body_phase: hold_plan.body_phase,
+                    top_cap_phase: hold_plan.top_cap_phase,
+                    bottom_cap_phase: hold_plan.bottom_cap_phase,
+                    body_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate[hold_parts.body as usize],
+                        false,
+                    ),
+                    top_cap_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate[hold_parts.topcap as usize],
+                        false,
+                    ),
+                    bottom_cap_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate
+                            [hold_parts.bottomcap as usize],
+                        false,
+                    ),
+                    target_arrow_px: hold_target_arrow_px,
+                    diffuse: hold_diffuse,
+                    elapsed_s: elapsed_screen,
+                    lane_offset: lane_tipsy_offsets[local_col],
+                    fade_travel_scale,
+                    appearance: alpha_params[local_col],
+                    appearance_cache: appearance_caches[local_col],
+                    use_legacy_sprites: use_legacy_hold_sprites,
+                    rotation_y_deg: transform_cache.confusion_rotation_y_deg,
+                    twirl: visual.twirl,
+                    depth_test: hold_depth_test,
+                    draw_bounds,
+                    body_z: crate::style::HOLD_BODY_Z,
+                    cap_z: crate::style::HOLD_CAP_Z,
+                    glow_z: crate::style::HOLD_GLOW_Z,
+                },
+                &sample_hold_path,
+                sprite_source,
+            );
+        }
 
         if hold_head_zoom.abs() <= f32::EPSILON {
             return;
         }
         let head_draw_y = head_anchor_y;
-        let head_draw_delta = (head_draw_y - receptor_draw_y) * dir;
-        if head_draw_delta < -draw_distance_after_targets
-            || head_draw_delta > draw_distance_before_targets
-        {
+        if !draw_range.contains(head_anchor_adjusted_travel) {
             return;
         }
         let (head_alpha, head_glow) =
@@ -658,16 +831,24 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        let hold_head_rot =
-            column_rotations_deg[local_col] + visual_hold_head_rotation_z_cached(transform_cache);
+        // DrawHold passes the original note beat to GetRotationZ even while
+        // engaged or letting go; the advancing head beat controls travel only.
+        let hold_head_rot = column_rotations_deg[local_col]
+            + visual_hold_head_rotation_z_cached(note.beat, transform_cache);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-        let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
-            receptor_center_x
-        } else {
-            lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel)
-        };
-        let head_center = [head_center_x, head_draw_y];
-        let head_world_z = world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
+        let head_center_x =
+            lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel);
+        let position = prepared.spline_position(
+            local_col,
+            if engaged { current_beat } else { note.beat },
+            [
+                head_center_x,
+                head_draw_y,
+                world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel),
+            ],
+        );
+        let head_center = [position[0], position[1]];
+        let head_world_z = position[2];
         let elapsed = elapsed_screen;
         let head_part = if head_slot.is_none() && head_layers.is_none() {
             ns.head_fallback_part(matches!(note.note_type, NoteType::Roll), use_active)
@@ -688,7 +869,7 @@ fn compose_field_contents<S, F>(
         let head_slot = head_slot.and_then(|slot| {
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(slot, elapsed, current_beat),
-                note_rotation_y,
+                [note_rotation_x, note_rotation_y],
             );
             if !draw.visible {
                 return None;
@@ -696,8 +877,8 @@ fn compose_field_contents<S, F>(
             let note_scale = hold_note_scale;
             let model = slot.model();
             let base_size = note_slot_base_size(slot, model, note_scale);
-            (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
-                && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
+            ((base_size[0] * draw.zoom[0].max(0.0)).abs() > f32::EPSILON
+                && (base_size[1] * draw.zoom[1].max(0.0)).abs() > f32::EPSILON)
                 .then_some((slot, draw, note_scale, base_size, model))
         });
         if let Some((head_slot, draw, note_scale, base_size, model)) = head_slot {
@@ -716,7 +897,11 @@ fn compose_field_contents<S, F>(
                 base_size[0] * draw.zoom[0].max(0.0),
                 base_size[1] * draw.zoom[1].max(0.0),
             ];
-            if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+            if !size[0].is_finite()
+                || !size[1].is_finite()
+                || size[0].abs() <= f32::EPSILON
+                || size[1].abs() <= f32::EPSILON
+            {
                 return;
             }
             let color = [
@@ -736,7 +921,14 @@ fn compose_field_contents<S, F>(
                 model_cache,
                 NoteLayerRequest {
                     slot: head_slot,
-                    draw,
+                    draw: deadsync_noteskin::ModelDrawState {
+                        texture_seconds: if head_slot.actor_frame_child() {
+                            draw.texture_seconds
+                        } else {
+                            head_slot.model_seconds_from_phase(hold_part_phase)
+                        },
+                        ..draw
+                    },
                     model_center,
                     sprite_center: offset_center(
                         head_center,
@@ -774,6 +966,7 @@ fn compose_field_contents<S, F>(
                     hold_head_translation,
                     elapsed,
                     current_beat,
+                    note_rotation_x,
                     note_rotation_y,
                     flat_tap_face_rotation_y,
                     hold_head_rot,
@@ -801,7 +994,7 @@ fn compose_field_contents<S, F>(
             let size = scale_sprite_to_arrow(note_slot.size(), hold_head_target_arrow_px);
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(note_slot, elapsed, current_beat),
-                note_rotation_y,
+                [note_rotation_x, note_rotation_y],
             );
             let rotation = -note_slot.sprite_def().rotation_deg as f32;
             compose_flat_note_layer(
@@ -809,7 +1002,14 @@ fn compose_field_contents<S, F>(
                 model_cache,
                 NoteLayerRequest {
                     slot: note_slot,
-                    draw,
+                    draw: deadsync_noteskin::ModelDrawState {
+                        texture_seconds: if note_slot.actor_frame_child() {
+                            draw.texture_seconds
+                        } else {
+                            note_slot.model_seconds_from_phase(hold_part_phase)
+                        },
+                        ..draw
+                    },
                     model_center: head_center,
                     sprite_center: head_center,
                     size,
@@ -867,9 +1067,12 @@ fn compose_field_contents<S, F>(
         &visible_note_bounds[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
+        &lane_tipsy_offsets[..num_cols],
+        fade_travel_scale,
+        note_x_params,
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
-        appearance_cache,
+        &appearance_caches[..num_cols],
         &scale_mine_slot,
         sprite_source,
     );
@@ -901,9 +1104,12 @@ fn compose_visible_notes<S, F>(
     visible_note_bounds: &[(usize, usize)],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
+    lane_tipsy_offsets: &[f32],
+    fade_travel_scale: f32,
+    note_x_params: NoteXParams,
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
-    appearance_cache: crate::NoteAppearanceCache,
+    appearance_caches: &[crate::NoteAppearanceCache],
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
 ) where
@@ -924,8 +1130,6 @@ fn compose_visible_notes<S, F>(
     let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
     let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
     let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
-    let note_rotation_y = 0.0_f32;
-    let flat_tap_face_rotation_y = 0.0_f32;
     let prefer_sprite_note_path = false;
 
     for local_col in 0..num_cols {
@@ -978,54 +1182,89 @@ fn compose_visible_notes<S, F>(
                     note_row,
                     local_col,
                 );
-                if adjusted_travel < -request.geometry.draw_distance_after_targets
-                    || adjusted_travel > request.geometry.draw_distance_before_targets
-                {
+                if !prepared.draw_range.contains(adjusted_travel) {
                     return;
                 }
+                let y_offset = adjusted_travel * fade_travel_scale;
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
-                    adjusted_travel + lane_offset,
-                    &appearance_cache,
+                    y_offset + lane_tipsy_offsets[local_col],
+                    y_offset,
+                    &appearance_caches[local_col],
                 );
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
                 }
-                let column_center_x = prepared.field.playfield_center_x
+                let (spline_offset, _) = prepared.spline_offsets(local_col, note.beat);
+                let mut column_center_x = prepared.field.playfield_center_x
+                    + spline_offset[0]
                     + prepared.column_x_offsets[local_col]
                     + if note_x_is_static {
                         static_note_x_offsets[local_col]
                     } else {
-                        note_x_offset(
-                            request.geometry.screen_height,
+                        canonical_note_x_offset_cached(
                             local_col,
                             adjusted_travel,
-                            travel.arrow_effect_time_s(),
                             notes.beat_factor,
-                            visual,
+                            travel.arrow_effect_time_s(),
                             &notes.col_offsets[..num_cols],
                             &notes.invert_distances[..num_cols],
                             &notes.tornado_bounds[..num_cols],
                             &notes.tornado_lane_caches[..num_cols],
                             &notes.move_x_offsets[..num_cols],
+                            note_x_params,
                             notes.tiny_spacing_scale,
                         )
                     };
-                let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
+                let mut y_pos = direction.mul_add(adjusted_travel, receptor_y)
+                    + lane_offset
+                    + spline_offset[1]
+                    + attenuate_offset(
+                        adjusted_travel,
+                        notes.col_offsets[local_col],
+                        visual.attenuate_y,
+                    )
+                    + beat_wave_offset(
+                        adjusted_travel,
+                        notes.beat_y_factor,
+                        visual.beat_y,
+                        visual.beat_y_period,
+                    );
                 let transform_cache = lane_transform_caches[local_col];
-                let world_z = note_world_z_for_bumpy_cached(
-                    adjusted_travel,
-                    notes.bumpy_frame_cache,
-                    transform_cache,
+                let mut world_z = move_col_extra(&visual.move_z_cols, local_col)
+                    + note_world_z_cached(
+                        adjusted_travel,
+                        notes.note_depth_frame_cache,
+                        transform_cache,
+                    ) + spline_offset[2];
+                if prepared.column_position_splines[local_col].absolute {
+                    [column_center_x, y_pos, world_z] = prepared.spline_position(
+                        local_col,
+                        note.beat,
+                        [column_center_x, y_pos, world_z],
+                    );
+                }
+                let effect_zoom = prepared.spline_zoom(
+                    local_col,
+                    note.beat,
+                    prepared.column_zooms[local_col]
+                        * visual_arrow_effect_zoom_cached(
+                            adjusted_travel / field_zoom,
+                            transform_cache,
+                            1.0,
+                        ),
                 );
-                let effect_zoom = prepared.column_zooms[local_col]
-                    * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
-                    let scale = effect_zoom * request.options.mine_size_scale;
+                    let scale = field_zoom * effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
+                let note_rotation_x = transform_cache.confusion_rotation_x_deg
+                    + visual_note_rotation_x(adjusted_travel, visual.roll);
+                let note_rotation_y = transform_cache.confusion_rotation_y_deg
+                    + visual_note_rotation_y(adjusted_travel, visual.twirl);
+                let flat_tap_face_rotation_y = note_rotation_y;
                 let note_rotation_z = prepared.column_rotations_deg[local_col]
                     + calc_note_rotation_z(note.beat, transform_cache);
 
@@ -1055,6 +1294,7 @@ fn compose_visible_notes<S, F>(
                             display_time_s: note_display_time,
                             current_beat,
                             uv_translation: mine_translation,
+                            rotation_x_deg: note_rotation_x,
                             rotation_y_deg: note_rotation_y,
                             note_rotation_z_deg: note_rotation_z,
                             alpha: note_alpha,
@@ -1106,10 +1346,14 @@ fn compose_visible_notes<S, F>(
                                 translation,
                                 elapsed,
                                 current_beat,
+                                note_rotation_x,
                                 note_rotation_y,
                                 flat_tap_face_rotation_y,
                                 note_rotation_z,
-                                [1.0, 1.0, 1.0, note_alpha],
+                                note.participant
+                                    .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                        routine_note_tint(owner, note_alpha)
+                                    }),
                                 glow_alpha,
                                 crate::style::NOTE_Z,
                                 world_z,
@@ -1134,10 +1378,14 @@ fn compose_visible_notes<S, F>(
                             translation,
                             elapsed,
                             current_beat,
+                            note_rotation_x,
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
-                            [1.0, 1.0, 1.0, note_alpha],
+                            note.participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             crate::style::NOTE_Z,
                             world_z,
@@ -1175,10 +1423,14 @@ fn compose_visible_notes<S, F>(
                             translation,
                             elapsed,
                             current_beat,
+                            note_rotation_x,
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
-                            [1.0, 1.0, 1.0, note_alpha],
+                            note.participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             crate::style::NOTE_Z,
                             world_z,
@@ -1202,7 +1454,7 @@ fn compose_visible_notes<S, F>(
                     let center = [column_center_x, y_pos];
                     let draw = song_lua_note_model_draw(
                         model_cache.draw_at(note_slot, elapsed, current_beat),
-                        note_rotation_y,
+                        [note_rotation_x, note_rotation_y],
                     );
                     let rotation = -note_slot.sprite_def().rotation_deg as f32;
                     compose_flat_note_layer(
@@ -1210,7 +1462,14 @@ fn compose_visible_notes<S, F>(
                         model_cache,
                         NoteLayerRequest {
                             slot: note_slot,
-                            draw,
+                            draw: deadsync_noteskin::ModelDrawState {
+                                texture_seconds: if note_slot.actor_frame_child() {
+                                    draw.texture_seconds
+                                } else {
+                                    note_slot.model_seconds_from_phase(phase)
+                                },
+                                ..draw
+                            },
                             model_center: center,
                             sprite_center: center,
                             size,
@@ -1218,7 +1477,11 @@ fn compose_visible_notes<S, F>(
                             rotation_y_deg: flat_tap_face_rotation_y,
                             model_rotation_z_deg: rotation + note_rotation_z,
                             sprite_rotation_z_deg: rotation + note_rotation_z,
-                            tint: [1.0, 1.0, 1.0, note_alpha],
+                            tint: note
+                                .participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             blend: BlendMode::Alpha,
                             z: crate::style::NOTE_Z,
@@ -1244,6 +1507,7 @@ fn compose_flat_noteskin_layer<S, F>(
     translation: [f32; 2],
     elapsed: f32,
     current_beat: f32,
+    rotation_x_deg: f32,
     rotation_y_deg: f32,
     face_rotation_y_deg: f32,
     rotation_z_deg: f32,
@@ -1259,7 +1523,7 @@ fn compose_flat_noteskin_layer<S, F>(
 {
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
+        [rotation_x_deg, rotation_y_deg],
     );
     if !draw.visible {
         return;
@@ -1270,7 +1534,11 @@ fn compose_flat_noteskin_layer<S, F>(
         base_size[0] * draw.zoom[0].max(0.0),
         base_size[1] * draw.zoom[1].max(0.0),
     ];
-    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+    if !size[0].is_finite()
+        || !size[1].is_finite()
+        || size[0].abs() <= f32::EPSILON
+        || size[1].abs() <= f32::EPSILON
+    {
         return;
     }
     let frame_index = slot.frame_index_from_phase(phase);
@@ -1295,7 +1563,14 @@ fn compose_flat_noteskin_layer<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(phase)
+                },
+                ..draw
+            },
             model_center: model_center(model, center, local_offset, rotation_sin_cos),
             sprite_center: offset_center(center, local_offset, rotation_sin_cos),
             size,
@@ -1325,6 +1600,7 @@ fn compose_flat_single_slot<S, F>(
     translation: [f32; 2],
     elapsed: f32,
     current_beat: f32,
+    rotation_x_deg: f32,
     rotation_y_deg: f32,
     face_rotation_y_deg: f32,
     rotation_z_deg: f32,
@@ -1345,7 +1621,7 @@ fn compose_flat_single_slot<S, F>(
     let size = note_slot_base_size(slot, model, scale);
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
+        [rotation_x_deg, rotation_y_deg],
     );
     let rotation = -slot.sprite_def().rotation_deg as f32;
     compose_flat_note_layer(
@@ -1353,7 +1629,14 @@ fn compose_flat_single_slot<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(phase)
+                },
+                ..draw
+            },
             model_center: center,
             sprite_center: center,
             size,
@@ -1406,13 +1689,16 @@ fn model_center(
 }
 
 #[inline(always)]
-const fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
+const fn note_alpha_params(appearance: &AppearanceEffects, local_col: usize) -> NoteAlphaParams {
     NoteAlphaParams {
         hidden: appearance.hidden,
         hidden_offset: appearance.hidden_offset,
         sudden: appearance.sudden,
         sudden_offset: appearance.sudden_offset,
         stealth: appearance.stealth,
+        stealth_col: appearance.stealth_cols[local_col],
+        stealth_type: appearance.stealth_type,
+        stealth_past_receptors: appearance.stealth_past_receptors,
         blink: appearance.blink,
         random_vanish: appearance.random_vanish,
     }
@@ -1510,57 +1796,28 @@ fn resolved_appearance<S>(
     appearance
 }
 
-#[allow(clippy::too_many_arguments)]
-#[inline(always)]
-fn note_x_offset(
-    screen_height: f32,
-    local_col: usize,
-    y: f32,
-    arrow_effect_time_s: f32,
-    beat_factor: f32,
-    visual: VisualEffects,
-    col_offsets: &[f32],
-    invert_distances: &[f32],
-    tornado_bounds: &[TornadoBounds],
-    tornado_lane_caches: &[crate::TornadoLaneCache],
-    move_x_offsets: &[f32],
-    tiny_spacing_scale: f32,
-) -> f32 {
-    canonical_note_x_offset_cached(
-        local_col,
-        y,
-        beat_factor,
-        arrow_effect_time_s,
-        col_offsets,
-        invert_distances,
-        tornado_bounds,
-        tornado_lane_caches,
-        move_x_offsets,
-        NoteXParams {
-            screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-        },
-        tiny_spacing_scale,
-    )
-}
-
 #[inline(always)]
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
-    visual_hold_body_needs_z_buffer(VisualEffectParams {
-        bumpy: visual.bumpy,
-        ..VisualEffectParams::default()
-    })
+    visual.z_buffer
+        || visual_hold_body_needs_z_buffer(VisualEffectParams {
+            bumpy: visual.bumpy,
+            parabola_z: visual.parabola_z,
+            attenuate_z: visual.attenuate_z,
+            beat_z: visual.beat_z,
+            bounce_z: visual.bounce_z,
+            digital_z: visual.digital_z,
+            sawtooth_z: visual.sawtooth_z,
+            square_z: visual.square_z,
+            zigzag_z: visual.zigzag_z,
+            twirl: visual.twirl,
+            ..VisualEffectParams::default()
+        })
 }
 
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn hold_lane_frame(
     receptor_y: f32,
-    receptor_center_x: f32,
     target_arrow_px: f32,
     move_y_offset: f32,
     tipsy_y_offset: f32,
@@ -1570,21 +1827,88 @@ fn hold_lane_frame(
 ) -> HoldLaneFrame {
     HoldLaneFrame {
         receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
-        receptor_center_x,
-        target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
-        use_legacy_sprites: visual_use_legacy_hold_sprites(
-            effect_params.bumpy,
-            visual.drunk,
-            visual.tornado,
-            visual.beat,
-            visual.pulse_outer,
-        ),
+        target_arrow_px: target_arrow_px
+            * visual_arrow_effect_zoom_cached(0.0, transform_cache, 1.0),
+        use_legacy_sprites: !visual.z_buffer
+            && visual.twirl == 0.0
+            && visual.confusion_y == 0.0
+            && visual.confusion_y_offset == 0.0
+            && visual.shrink_linear == 0.0
+            && visual.shrink_mult == 0.0
+            && visual.parabola_x == 0.0
+            && visual.attenuate_x == 0.0
+            && visual.attenuate_y == 0.0
+            && visual.beat == 0.0
+            && visual.beat_y == 0.0
+            && visual.xmode == 0.0
+            && visual.parabola_z == 0.0
+            && visual.attenuate_z == 0.0
+            && visual.beat_z == 0.0
+            && visual.bounce_z == 0.0
+            && visual.digital_z == 0.0
+            && visual.tornado_z == 0.0
+            && visual.sawtooth_z == 0.0
+            && visual.sawtooth == 0.0
+            && visual.digital == 0.0
+            && visual.zigzag == 0.0
+            && visual.zigzag_z == 0.0
+            && visual.square == 0.0
+            && visual.square_z == 0.0
+            && visual.drunk_z == 0.0
+            && visual.tan_drunk == 0.0
+            && visual.tan_drunk_z == 0.0
+            && visual.bumpy_x == 0.0
+            && visual.tan_bumpy_x == 0.0
+            && visual.tan_bumpy == 0.0
+            && visual_use_legacy_hold_sprites(
+                effect_params.bumpy,
+                visual.drunk,
+                visual.tornado,
+                visual.beat,
+                visual.pulse_outer,
+            ),
     }
 }
 
 #[cfg(test)]
 mod hold_lane_frame_cache_tests {
     use super::*;
+
+    #[test]
+    fn travel_mods_select_hold_meshes_even_below_epsilon() {
+        for (amount, axis) in [-2.5, 2.5, 0.000000025]
+            .into_iter()
+            .flat_map(|amount| (0..12).map(move |axis| (amount, axis)))
+        {
+            let visual = VisualEffects {
+                xmode: if axis == 0 { amount } else { 0.0 },
+                square: if axis == 1 { amount } else { 0.0 },
+                square_z: if axis == 2 { amount } else { 0.0 },
+                drunk_z: if axis == 3 { amount } else { 0.0 },
+                tan_drunk: if axis == 4 { amount } else { 0.0 },
+                tan_drunk_z: if axis == 5 { amount } else { 0.0 },
+                bumpy_x: if axis == 6 { amount } else { 0.0 },
+                tan_bumpy_x: if axis == 7 { amount } else { 0.0 },
+                tan_bumpy: if axis == 8 { amount } else { 0.0 },
+                beat: if axis == 9 { amount } else { 0.0 },
+                beat_y: if axis == 10 { amount } else { 0.0 },
+                beat_z: if axis == 11 { amount } else { 0.0 },
+                ..VisualEffects::default()
+            };
+            let params = VisualEffectParams::default();
+            let frame = hold_lane_frame(
+                240.0,
+                64.0,
+                0.0,
+                0.0,
+                visual,
+                params,
+                lane_note_transform_cache(0.0, params),
+            );
+            assert!(!frame.use_legacy_sprites);
+            assert_eq!(hold_body_needs_z_buffer(&visual), axis == 2 || axis == 11);
+        }
+    }
 
     #[test]
     fn prepared_lane_offset_preserves_hold_receptor_position() {
@@ -1596,11 +1920,16 @@ mod hold_lane_frame_cache_tests {
         };
         visual.move_y_cols[local_col] = -0.2;
         let move_y_offset = crate::move_col_extra(&visual.move_y_cols, local_col);
-        let tipsy_y_offset = crate::tipsy_y_extra(local_col, elapsed, visual.tipsy);
+        let tipsy_y_offset = crate::tipsy_y_extra(
+            local_col,
+            elapsed,
+            visual.tipsy,
+            visual.tipsy_offset,
+            visual.tipsy_speed,
+        );
         let effect_params = VisualEffectParams::default();
         let frame = hold_lane_frame(
             240.0,
-            320.0,
             64.0,
             move_y_offset,
             tipsy_y_offset,
@@ -1629,6 +1958,7 @@ fn resolve_field_camera<S>(
     let field = prepared.field;
     let center_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
     let perspective = request.visual.perspective;
+    cache.set_wrapper(request.song_lua.wrapper);
     cache.resolve(
         request.geometry.screen_width,
         request.geometry.screen_height,
@@ -1673,7 +2003,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             blend: sprite.blend,
             mask_source: false,
             mask_dest: false,
-            rot_x_deg: 0.0,
+            rot_x_deg: sprite.rot_x_deg,
             rot_y_deg: sprite.rot_y_deg,
             rot_z_deg: sprite.rot_z_deg,
             skew: [0.0, 0.0],
@@ -1687,14 +2017,15 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             shadow_color: [0.0; 4],
             effect: EffectState::default(),
         },
-        FlatDraw::TexturedMesh(mesh) => {
-            let make_actor = |vertices| Actor::TexturedMesh {
+        FlatDraw::TexturedMesh(mesh) => match mesh.vertices {
+            FlatMeshVertices::Shared(vertices) => Actor::TexturedMesh {
+                environment: mesh.environment,
                 align: [0.0, 0.0],
                 offset: mesh.offset,
                 world_z: mesh.world_z,
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 local_transform: mesh.local_transform,
-                texture: Arc::clone(&mesh.texture),
+                texture: mesh.texture,
                 tint: mesh.tint,
                 glow: mesh.glow,
                 vertices,
@@ -1703,33 +2034,41 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 uv_offset: mesh.uv_offset,
                 uv_tex_shift: mesh.uv_tex_shift,
                 depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after,
+                cull_mode: deadlib_render_core::CullMode::None,
                 visible: true,
                 blend: mesh.blend,
                 z: mesh.z,
-            };
-            match mesh.vertices {
-                FlatMeshVertices::Shared(vertices) => make_actor(vertices),
-                FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
-                    align: [0.0, 0.0],
-                    offset: mesh.offset,
-                    world_z: mesh.world_z,
-                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                    local_transform: mesh.local_transform,
-                    texture: mesh.texture,
-                    tint: mesh.tint,
-                    glow: mesh.glow,
-                    vertices,
-                    geom_cache_key: mesh.geom_cache_key,
-                    uv_scale: mesh.uv_scale,
-                    uv_offset: mesh.uv_offset,
-                    uv_tex_shift: mesh.uv_tex_shift,
-                    depth_test: mesh.depth_test,
-                    visible: true,
-                    blend: mesh.blend,
-                    z: mesh.z,
-                },
-            }
-        }
+            },
+            FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
+                environment: mesh.environment,
+                align: [0.0, 0.0],
+                offset: mesh.offset,
+                world_z: mesh.world_z,
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                local_transform: mesh.local_transform,
+                texture: mesh.texture,
+                tint: mesh.tint,
+                glow: mesh.glow,
+                vertices,
+                geom_cache_key: mesh.geom_cache_key,
+                uv_scale: mesh.uv_scale,
+                uv_offset: mesh.uv_offset,
+                uv_tex_shift: mesh.uv_tex_shift,
+                depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after,
+                cull_mode: deadlib_render_core::CullMode::None,
+                visible: true,
+                blend: mesh.blend,
+                z: mesh.z,
+            },
+        },
         FlatDraw::PreparedU32(text) => prepared_text_actor(
             text.align,
             text.offset,
@@ -1829,6 +2168,7 @@ mod note_layer_tests {
     use super::*;
     use deadsync_noteskin::{ModelDrawState, ModelMesh, SpriteDefinition};
     use std::cell::Cell;
+    use std::sync::Arc;
 
     struct TestSlot {
         def: SpriteDefinition,
@@ -1895,10 +2235,10 @@ mod note_layer_tests {
             (true, [1.0, -1.0, 1.0], 1.0, false),
             (true, [f32::NAN, 1.0, 1.0], 1.0, false),
             (true, [1.0; 3], 0.0, false),
-            (true, [1.0; 3], -0.5, false),
+            (true, [1.0; 3], -0.5, true),
             (true, [1.0; 3], f32::EPSILON / 64.0, false),
             (true, [1.0; 3], f32::EPSILON / 32.0, true),
-            (true, [1.0; 3], f32::NAN, true),
+            (true, [1.0; 3], f32::NAN, false),
             (false, [1.0; 3], 1.0, false),
         ] {
             let slot = TestSlot {
@@ -1931,6 +2271,7 @@ mod note_layer_tests {
                 [-0.125, 0.125],
                 3.0,
                 4.0,
+                0.0,
                 0.0,
                 13.0,
                 5.0,
@@ -1990,9 +2331,11 @@ mod note_layer_tests {
             },
             draw: ModelDrawState::default(),
             model: Some(ModelMesh {
+                material: None,
                 bounds: [-32.0, -32.0, 0.0, 32.0, 32.0, 0.0],
                 vertices: [[-32.0, 32.0, 0.0], [-32.0, -32.0, 0.0], [32.0, -32.0, 0.0]]
                     .map(|pos| deadsync_noteskin::ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos,
                         uv: [0.0; 2],
                         tex_matrix_scale: [1.0; 2],
@@ -2016,6 +2359,7 @@ mod note_layer_tests {
             [0.5, 0.0],
             3.0,
             4.0,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -2088,6 +2432,7 @@ mod camera_wrap_tests {
             flip_y: false,
             fade: [0.1, 0.2, 0.3, 0.4],
             blend: BlendMode::Add,
+            rot_x_deg: 0.0,
             rot_y_deg: 11.0,
             rot_z_deg: 22.0,
             z: 140,
@@ -2140,10 +2485,17 @@ mod camera_wrap_tests {
     fn capture_preserves_reusable_hold_mesh_storage() {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = actor_from_flat_draw(FlatDraw::TexturedMesh(FlatTexturedMesh {
+            environment: Some(deadlib_present::actors::MeshEnvironment {
+                sampler: None,
+                camera: None,
+                transform: Mat4::from_rotation_y(0.5),
+                additive_texture: Some(Arc::from("reflection")),
+                additive_uv: [0.0, 0.0, 1.0, 1.0],
+            }),
             offset: [12.0, 34.0],
             world_z: 5.0,
             local_transform: Mat4::IDENTITY,
-            texture: Arc::from("capture-hold"),
+            texture: "capture-hold".into(),
             tint: [0.8, 0.7, 0.6, 0.5],
             glow: [1.0, 1.0, 1.0, 0.25],
             vertices: FlatMeshVertices::Reusable(Arc::clone(&vertices)),
@@ -2152,12 +2504,18 @@ mod camera_wrap_tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
+            clear_depth: false,
+            clear_depth_after: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             blend: BlendMode::Alpha,
             z: 140,
         }));
 
         let Actor::ReusableTexturedMesh {
             vertices: captured,
+            environment,
             depth_test,
             ..
         } = actor
@@ -2165,6 +2523,13 @@ mod camera_wrap_tests {
             panic!("hold capture should retain reusable mesh ownership");
         };
         assert!(depth_test);
+        assert_eq!(
+            environment
+                .expect("capture must preserve material")
+                .additive_texture
+                .as_deref(),
+            Some("reflection")
+        );
         assert!(Arc::ptr_eq(&captured, &vertices));
     }
 
@@ -2341,5 +2706,18 @@ mod dynamic_sudden_tests {
     fn dynamic_sudden_is_disabled_for_cmod() {
         let timing = timing(120.0);
         assert!(dynamic_sudden_offset(params(&timing, ScrollSpeedSetting::CMod(600.0))).is_none());
+    }
+}
+
+#[cfg(test)]
+#[path = "mesh_capture_performance.rs"]
+mod capture_performance;
+
+// Ownership is independent of pad position: Routine partners may cross sides.
+fn routine_note_tint(owner: u8, alpha: f32) -> [f32; 4] {
+    if owner == 0 {
+        [0.45, 0.75, 1.0, alpha]
+    } else {
+        [1.0, 0.5, 0.65, alpha]
     }
 }

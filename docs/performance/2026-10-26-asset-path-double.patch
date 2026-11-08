@@ -1,0 +1,19 @@
+--- a/crates/deadlib-assets/src/lib.rs
++++ b/crates/deadlib-assets/src/lib.rs
+@@ -97,7 +96,0 @@
+-}
+-
+-#[inline(always)]
+-fn has_ascii_case_insensitive_substr(haystack: &[u8], needle: &[u8]) -> bool {
+-    haystack
+-        .windows(needle.len())
+-        .any(|window| window.eq_ignore_ascii_case(needle))
+@@ -618 +611,7 @@
+-    has_ascii_case_insensitive_substr(raw.trim().as_bytes(), b"doubleres")
++    raw.as_bytes().windows(9).any(|window| {
++        // All target bytes are ASCII letters: setting bit 5 folds exactly
++        // each letter's uppercase pair, preserving every other byte mismatch.
++        let prefix = u64::from_le_bytes(*window.first_chunk::<8>().expect("nine-byte hint window"));
++        prefix | 0x2020_2020_2020_2020 == u64::from_le_bytes(*b"doublere")
++            && window[8] | 0x20 == b's'
++    })

@@ -1,11 +1,6 @@
 pub mod cabinet_chart;
 pub mod gameplay;
 
-#[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
-#[allow(dead_code)]
-mod perf;
-
 mod fusion;
 mod gpb;
 mod hid_blue_dot;
@@ -65,6 +60,16 @@ impl SerialPortName {
         let trimmed = raw.trim();
         if trimmed.is_empty() || trimmed.len() > SERIAL_PORT_NAME_CAP {
             return default;
+        }
+        if trimmed.len() >= 16 {
+            let bytes = trimmed.as_bytes();
+            if !bytes.iter().all(|byte| (b' '..=b'~').contains(byte)) {
+                return default;
+            }
+            let mut out = Self::empty();
+            out.bytes[..bytes.len()].copy_from_slice(bytes);
+            out.len = bytes.len() as u8;
+            return out;
         }
         let mut out = Self::empty();
         for (i, b) in trimmed.bytes().enumerate() {
@@ -130,13 +135,18 @@ impl FromStr for DriverKind {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
+        let mut key = [0; b"lightsdriverwin32serial".len()];
+        let mut len = 0;
+        for byte in s.bytes() {
+            if byte.is_ascii_alphanumeric() {
+                if len == key.len() {
+                    return Err(());
+                }
+                key[len] = byte.to_ascii_lowercase();
+                len += 1;
             }
         }
-        match key.as_str() {
+        match std::str::from_utf8(&key[..len]).expect("ASCII light driver name") {
             "" | "0" | "false" | "off" | "none" | "disabled" => Ok(Self::Off),
             "snek" | "snekboard" => Ok(Self::Snek),
             "lit" | "litboard" | "sextetstream" => Ok(Self::Litboard),
@@ -218,13 +228,18 @@ impl FromStr for GameplayPadLightMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
+        let mut key = [0; b"notedata".len()];
+        let mut len = 0;
+        for byte in s.bytes() {
+            if byte.is_ascii_alphanumeric() {
+                if len == key.len() {
+                    return Err(());
+                }
+                key[len] = byte.to_ascii_lowercase();
+                len += 1;
             }
         }
-        match key.as_str() {
+        match std::str::from_utf8(&key[..len]).expect("ASCII gameplay pad light mode") {
             "" | "input" | "buttons" | "press" | "pressed" => Ok(Self::Input),
             "chart" | "notes" | "notedata" | "arrows" => Ok(Self::Chart),
             _ => Err(()),
@@ -670,6 +685,12 @@ impl Manager {
     #[must_use]
     pub fn state_snapshot(&self) -> State {
         self.last_sent.unwrap_or_default()
+    }
+
+    /// Chart pulses before physical input is merged into the cabinet state.
+    /// Native pad lighting can select chart mode independently of the cabinet.
+    pub fn chart_directions(&self) -> [[bool; 4]; PLAYER_COUNT] {
+        std::array::from_fn(|p| std::array::from_fn(|b| self.button_blink[p][b] > 0.0))
     }
 
     pub const fn set_test_auto_cycle(&mut self) {
@@ -1294,6 +1315,10 @@ mod tests {
         let input = lights.build_state(0.0);
         assert!(input.button(Player::P1, ButtonLight::Left));
         assert!(!input.button(Player::P1, ButtonLight::Right));
+        assert_eq!(
+            lights.chart_directions(),
+            [[false, false, false, true], [false; 4]]
+        );
 
         lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
         let chart = lights.build_state(0.0);
@@ -1427,3 +1452,7 @@ mod tests {
         assert!(state.button(Player::P1, ButtonLight::Start));
     }
 }
+
+#[cfg(test)]
+#[path = "protocol_performance.rs"]
+mod protocol_performance;

@@ -47,6 +47,12 @@ impl Choice {
             PlayStyle::PumpSingle => 0,
             PlayStyle::PumpVersus => 1,
             PlayStyle::PumpDouble => 2,
+            // Partner styles are chosen from the music wheel's style menu,
+            // as in Simply Love; the style screen shows them as 2 Players.
+            PlayStyle::Couple
+            | PlayStyle::Routine
+            | PlayStyle::PumpCouple
+            | PlayStyle::PumpRoutine => 1,
         }
     }
 }
@@ -219,5 +225,14 @@ mod tests {
         assert_eq!(Choice::index_for_style(PlayStyle::PumpVersus), 1);
         assert_eq!(Choice::index_for_style(PlayStyle::Double), 2);
         assert_eq!(Choice::index_for_style(PlayStyle::PumpDouble), 2);
+        // Partner styles are reached through the music wheel, from 2 Players.
+        for style in [
+            PlayStyle::Couple,
+            PlayStyle::Routine,
+            PlayStyle::PumpCouple,
+            PlayStyle::PumpRoutine,
+        ] {
+            assert_eq!(Choice::index_for_style(style), 1);
+        }
     }
 }

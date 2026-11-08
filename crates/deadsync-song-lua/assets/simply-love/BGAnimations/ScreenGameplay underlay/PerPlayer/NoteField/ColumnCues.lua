@@ -1,0 +1,233 @@
+local player = ...
+local pn = ToEnumShortString(player)
+
+local mods = SL[pn].ActiveModifiers
+if SL.Global.GameMode == "Casual" then return end
+if not mods.ColumnCues then return end
+
+local columnMapping = GetColumnMapping(player)
+
+-- Disable column cues if we couldn't compute valid columnMapping
+if columnMapping == nil then return end
+
+local playerState = GAMESTATE:GetPlayerState(player)
+local columnCues = SL[pn].Streams.ColumnCues
+
+local numColumns = GAMESTATE:GetCurrentStyle():ColumnsPerPlayer()
+local style = GAMESTATE:GetCurrentStyle(player)
+local width = style:GetWidth(player)
+
+local yOffset = 80
+local reverseOffset = THEME:GetMetric("Player", "ReceptorArrowsYReverse")
+local fadeTime = 0.15
+local curIndex = 1
+local updatedFirstTime = false
+local breakTime = 0
+local text = nil
+
+local font = mods.ComboFont
+if font == "Wendy" or font == "Wendy (Cursed)" then
+	font = "Wendy/_wendy small"
+else
+	font = "_Combo Fonts/" .. font .. "/"
+end
+
+local Update = function(self, delta)
+	local topScreen = SCREENMAN:GetTopScreen()
+	if topScreen and topScreen.IsPaused and topScreen:IsPaused() then return end
+
+	if curIndex <= #columnCues then
+		local curTime = playerState:GetSongPosition():GetMusicSecondsVisible()
+		local columnCue = columnCues[curIndex]
+		local startTime = columnCue.startTime
+		local duration = columnCue.duration
+		-- MusicSecondsVisible might be negative before the chart actually starts.
+		-- In addition, sometimes charts might start on beat 0, and we still want to
+		-- accurately display the first column cue. To do this, we just adjust the
+		-- duration and start times of the first cue to account for this negative
+		-- time.
+		-- We only have to do this for the first column cue as the others should
+		-- have accurate start times.
+		-- TODO(teejusb): The timing for this seems to be off by a little bit. It's
+		-- not toooo bad but see if we can make this more accurate.
+		if curIndex == 1 and not updatedFirstTime and curTime < 0 then
+			duration = duration - curTime
+			startTime = startTime + curTime
+			updatedFirstTime = true
+		end
+		if startTime <= curTime then
+			-- Get the current music rate.
+			-- Note that Lua files might change the rate mode so this might not be accurate.
+			-- It's hard to handle that case since we don't exactly know when a file will apply a rate mod.
+			local rate = SL.Global.ActiveModifiers.MusicRate
+			local scaledDuration = duration / rate
+			-- Make sure there's still something to display after any potential scaling.
+			if scaledDuration > 2 * fadeTime then
+				for col_mine in ivalues(columnCue.columns) do
+					local col = columnMapping[col_mine.colNum]
+					local isMine = col_mine.isMine
+					self:GetChild("Column"..col):GetChild("ColumnFlash"):playcommand("Flash", {
+						duration=scaledDuration,
+						isMine=isMine
+					})
+				end
+			end
+			curIndex = curIndex + 1
+		end
+	end
+end
+
+local af = Def.ActorFrame{
+	InitCommand=function(self)
+		self:xy( GetNotefieldX(player), yOffset)
+		local zoom_factor = 1 - scale( mods.Mini:gsub("%%","")/100, 0, 2, 0, 1)
+		self:zoomx( zoom_factor )
+		self:queuecommand("SetUpdate")
+	end,
+	SetUpdateCommand=function(self)
+		self:SetUpdateFunction(Update)
+	end,
+	CurrentSongChangedMessageCommand=function(self)
+		local steps = nil
+		if GAMESTATE:IsCourseMode() then
+			local songIndex = GAMESTATE:GetCourseSongIndex() + 1
+			local trail = GAMESTATE:GetCurrentTrail(player):GetTrailEntries()[songIndex]
+			steps = trail:GetSteps()
+		else
+			steps = GAMESTATE:GetCurrentSteps(player)
+		end
+
+		ParseColumnCues(steps, pn)
+
+		playerState = GAMESTATE:GetPlayerState(player)
+		columnCues = SL[pn].Streams.ColumnCues
+		curIndex = 1
+		updatedFirstTime = false
+	end,
+	PlayingCommand=function(self)
+		curIndex = 1
+	end,
+}
+
+local IsReversedColumn = function(player, columnIndex)
+	local columns = {}
+	for i=1, numColumns do
+		columns[#columns + 1] = false
+	end
+
+	local opts = GAMESTATE:GetPlayerState(player):GetCurrentPlayerOptions()
+	if opts:Reverse() == 1 then
+		for column,val in ipairs(columns) do
+			columns[column] = not val
+		end
+	end
+
+	if opts:Alternate() == 1 then
+		for column,val in ipairs(columns) do
+			if column % 2 == 0 then
+				columns[column] = not val
+			end
+		end
+	end
+
+	if opts:Split() == 1 then
+		for column,val in ipairs(columns) do
+			if column > numColumns / 2 then
+				columns[column] = not val
+			end
+		end
+	end
+
+	if opts:Cross() == 1 then
+		local firstChunk = numColumns / 4
+		local lastChunk = numColumns - firstChunk
+		for column,val in ipairs(columns) do
+			if column > firstChunk and column <= lastChunk then
+				columns[column] = not val
+			end
+		end
+	end
+
+	return columns[columnIndex]
+end
+
+for columnIndex=1,numColumns do
+	af[#af+1] = Def.ActorFrame{
+		Name="Column"..columnIndex,
+		Def.Quad{
+			Name="ColumnFlash",
+			InitCommand=function(self)
+				self:diffuse(0,0,0,0)
+					:x((columnIndex - (numColumns/2 + 0.5)) * (width/numColumns))
+					:vertalign(top)
+					:setsize(width/numColumns, _screen.h - yOffset)
+					:fadebottom(0.333)
+
+				if IsReversedColumn(player, columnIndex) then
+					self:rotationz(180)
+					self:y(yOffset * 2 + reverseOffset + (width/numColumns)/2)
+				end
+			end,
+			FlashCommand=function(self, params)
+				local flashDuration = params.duration
+				local clr = params.isMine and color("1,0,0,0.12") or color("0.3,1,1,0.12")
+				self:stoptweening()
+					:decelerate(fadeTime)
+					:diffuse(clr)
+					:sleep(flashDuration - 2*fadeTime)
+					:accelerate(fadeTime)
+					:diffuse(0,0,0,0)
+
+				if flashDuration >= 5 then
+					breakTime = flashDuration
+					if text ~= nil then
+						text:stoptweening()
+							:x((columnIndex - (numColumns/2 + 0.5)) * (width/numColumns))
+							:decelerate(fadeTime)
+							:diffuse(Color.White)
+							:settext(round(flashDuration, 1))
+							:playcommand("UpdateBreak")
+					end
+				end
+			end
+		},
+		Def.BitmapText {
+			Name="ColumnText",
+			Font=font,
+			Text="",
+			InitCommand=function(self)
+				local zoom_factor = 1 - scale( mods.Mini:gsub("%%","")/100, 0, 2, 0, 1)
+				self:zoom(0.5)
+					:zoomx(0.5/zoom_factor)
+					:diffuse(0,0,0,0)
+					:horizalign(center)
+					:x((columnIndex - (numColumns/2 + 0.5)) * (width/numColumns))
+				
+				if IsReversedColumn(player, columnIndex) then
+					self:y(260)
+				else
+					self:y(80)
+				end
+					
+				text = self
+			end,
+			UpdateBreakCommand=function(self)
+				-- if BreakTime == nil then BreakTime = 0 end
+				if breakTime > 0.5 then
+					breakTime = breakTime - 0.1
+					if breakTime > 0.5 then
+						self:sleep(0.1)
+							:settext(round(breakTime))
+							:queuecommand("UpdateBreak")
+					else
+						self:diffuse(0,0,0,0)
+					end
+				else
+					self:diffuse(0,0,0,0)
+				end
+			end,
+		}
+	}
+end
+
+return af

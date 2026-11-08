@@ -22,10 +22,28 @@ Before building, ensure you have the following installed on your system:
 -   **CMake**: Install from [cmake.org](https://cmake.org/download/).
 -   **Ninja**: Install from [ninja-build.org](https://ninja-build.org/).
 
+#### Windows 7 builds
+
+Use the Windows 7 target so unsupported Windows APIs are excluded:
+
+```powershell
+rustup toolchain install nightly --component rust-src
+cargo +nightly build -Z build-std=std,panic_abort --release --locked --target x86_64-win7-windows-msvc --bin deadsync
+scripts/check-win7-imports.ps1 -Path target/x86_64-win7-windows-msvc/release/deadsync.exe
+```
+
+For 32-bit builds, substitute `i686-win7-windows-msvc`. The import check uses
+`dumpbin` from the Visual Studio C++ tools and also runs before Windows 7 releases
+are packaged. It checks for WinRT startup dependencies; testing on Windows 7 is
+still needed to verify runtime compatibility.
+
+Bluetooth heart-rate monitors are unavailable in Windows 7 builds because their
+Windows backend requires Windows 10 or later.
+
 ### Linux build dependencies (Ubuntu/Debian)
 ```bash
 sudo apt update
-sudo apt install --no-install-recommends build-essential clang cmake pkg-config libclang-dev libdbus-1-dev libudev-dev libasound2-dev libpipewire-0.3-dev libvulkan-dev libgl1-mesa-dev
+sudo apt install --no-install-recommends build-essential clang cmake pkg-config libclang-dev libdbus-1-dev libudev-dev libasound2-dev libpipewire-0.3-dev libvulkan-dev libgl1-mesa-dev libshaderc-dev
 ```
 
 ### macOS build dependencies (Homebrew)
@@ -62,6 +80,7 @@ cargo run                       # fast dev build
 cargo run --profile local       # optimized, but faster to link than full release
 cargo build --release           # fully optimized (LTO) build for benchmarking/play
 ```
+
 Before the first run, grant **Input Monitoring** to your terminal (see the
 macOS run note under [Getting Started](#getting-started)) or the game won't
 receive keystrokes.
@@ -79,6 +98,41 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 ```bash
 pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
 ```
+
+## Test fixtures
+
+Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
+mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
+revision before compiling or running tests, examples, or benchmarks (Python
+3.11 or newer is required to restore split archives):
+
+```sh
+git submodule update --init tests/fixtures
+python scripts/prepare_test_fixtures.py
+```
+
+Normal game builds do not need the fixture submodule.
+
+Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
+command verifies each part and restores the exact archives locally; restored
+files are ignored by Git. Run both commands again after fixture updates.
+
+When updating fixtures, commit and push changes in `tests/fixtures` first, then
+commit the updated submodule pointer in this repository. Test runners and fixture
+maintenance scripts stay in this repository; their existing paths still work.
+
+## Full song Lua tests
+
+Run a full song Lua fixture with live progress and a final comparison tally:
+
+```powershell
+cargo test --test full_song_lua Accendio
+cargo test --test full_song_lua -- --list
+```
+
+Fixtures are consolidated under `tests/fixtures/full_song_lua` and compressed at
+zstd level 22. See its [fixture guide](https://github.com/pnn64/deadsync-tests/blob/main/full_song_lua/README.md) for
+selection, corpus runs, and reference maintenance.
 
 ## Getting Started
 
@@ -215,6 +269,70 @@ A `save` directory is created inside the data directory to store your personal d
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
+### Lua chart score submission
+
+Lua charts can submit scores when all declared song Lua compiles without errors
+for the current play, alongside the existing chart allowlist. Missing layers,
+failed compilation, partial captures, or Lua errors during play do not grant
+automatic approval. This result is never saved against the chart hash, since
+the Lua files can change independently of the notes. Other submission rules
+(such as autoplay, disqualifying modifiers, and course eligibility) still apply.
+
+### Golf extras
+
+Golf features are optional and disabled by default. First enable
+**Options > Online Score Services > ArrowCloud Options > Enable Golf Features**.
+This master switch reveals the golf options below. Turning it off hides them
+and disables golf scoring, displays, and online boards while preserving saved
+player and Select Music choices.
+
+- **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** shows
+  the native stroke counter. It is on by default, so golf packs score as golf as
+  soon as the master switch is enabled. Its **Golf Display** setting selects golf
+  charts only (charts with an authored par, the default) or all charts. **Stroke
+  Feedback** enables ACE and penalty flashes. Each player saves these choices
+  independently.
+- **Player Options > Advanced Modifiers > Results Extras > Golf Results** adds a
+  golf evaluation pane, independently of the gameplay counter. It is also on by
+  default and follows the same **Golf Display** choice.
+- **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
+  Turning the master switch on also turns this on, so pars appear right away;
+  switch it off here if you would rather not see them.
+- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
+  shows the online event board alongside the other selectable leaderboards,
+  framed in fairway green over the In The Golf course pattern.
+  ArrowCloud sends it with the chart's other boards in the same request, so
+  turning it on or off takes effect immediately.
+- **Options > Select Music Options > Lead With Event Boards** (on by default)
+  lists event boards such as Golf, ITL and SRPG ahead of ITG/EX on charts that
+  are in the event, so the scorebox and leaderboard overlay open on the event
+  before cycling to the other boards. Boards keep the order their service
+  returned, so the service decides between events when a chart is in several.
+
+The native display uses the supplied `GolfScoring.lua` curved formula: errors
+below 5 ms are free, hits are rounded to whole raw strokes individually, and
+misses, dropped holds/rolls, and hit mines cost 100 raw strokes each. One displayed
+stroke is 1,000 raw strokes; lower is better. Normal ITG/EX/HardEX scoring and
+ArrowCloud submissions continue alongside it. The online golf board shows
+ArrowCloud's server-calculated event scores, whose formula may differ from the
+native display.
+
+Pack authors can place `Golf.ini` beside the pack's song folders:
+
+```ini
+[Song Folder]
+Par=2.1
+
+[Song Folder:Challenge]
+Par=4
+```
+
+Section names use the actual song folder name; a difficulty-specific entry takes
+precedence over the song-wide entry. Pars are already in displayed strokes.
+`Golf.ini` never enables a feature by itself: the master switch does, after which
+every chart with an authored par scores as golf. Metadata refreshes when the
+library reloads and when entering Select Music with golf extras enabled.
+
 ### Custom sound packs
 
 DeadSync supports zmod-style "drop in a folder, play a random one" custom
@@ -253,6 +371,8 @@ DeadSync can communicate directly with dance pad hardware over USB, bypassing th
 |-----|--------|------|
 | **StepManiaX** | ✅ Supported | [Documentation](docs/stepmaniax.md) |
 | **FSRio** | ✅ Supported | |
+| **Teejusb FSR firmware** | Serial threshold configuration; hardware validation pending | [Documentation](docs/teejusb-fsr.md) |
+| **RE:Flex V2** | Native input, per-sensor calibration/thresholds, and lights; hardware validation pending | [Documentation](docs/reflex-v2.md) |
 
 ## Data Directories
 

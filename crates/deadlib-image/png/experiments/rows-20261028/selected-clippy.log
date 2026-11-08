@@ -1,0 +1,13 @@
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+    Checking cfg-if v1.0.5
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+    Checking bitflags v2.13.2
+    Checking miniz_oxide v0.9.1
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Checking flate2 v1.1.10
+    Checking png v0.18.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.82s

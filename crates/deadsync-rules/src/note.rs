@@ -129,6 +129,8 @@ pub fn advance_hold_life_ns(
 
 #[derive(Clone, Debug)]
 pub struct Note {
+    /// Routine ownership; regular notes use the field's player.
+    pub participant: Option<u8>,
     pub beat: f32,
     pub quantization_idx: u8,
     pub column: usize,
@@ -159,16 +161,27 @@ pub struct PlayerTotals {
     pub hands: u32,
 }
 
-fn carried_holds_for_row(active_hold_ends: &mut [usize; MAX_COLS], row: usize) -> u32 {
-    let mut count = 0u32;
+fn carried_holds_for_row(
+    active_hold_ends: &mut [usize; MAX_COLS],
+    active_count: &mut u32,
+    next_hold_end: &mut usize,
+    row: usize,
+) -> u32 {
+    // No carried hold can expire before this boundary, regardless of lane count.
+    if row <= *next_hold_end {
+        return *active_count;
+    }
+    *active_count = 0;
+    *next_hold_end = usize::MAX;
     for end in active_hold_ends {
         if *end == usize::MAX || *end < row {
             *end = usize::MAX;
         } else {
-            count += 1;
+            *active_count += 1;
+            *next_hold_end = (*next_hold_end).min(*end);
         }
     }
-    count
+    *active_count
 }
 
 /// Recompute post-transform chart totals from notes sorted by row.
@@ -193,12 +206,19 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
 
     let mut totals = PlayerTotals::default();
     let mut active_hold_ends = [usize::MAX; MAX_COLS];
+    let mut active_count = 0u32;
+    let mut next_hold_end = usize::MAX;
     let mut note_ix = 0usize;
     while note_ix < notes.len() {
         let row = notes[note_ix].row_index;
-        let carried_holds = carried_holds_for_row(&mut active_hold_ends, row);
+        let carried_holds = carried_holds_for_row(
+            &mut active_hold_ends,
+            &mut active_count,
+            &mut next_hold_end,
+            row,
+        );
         let mut has_step = false;
-        let mut row_mask = 0u16;
+        let mut row_mask = 0u32;
         while note_ix < notes.len() && notes[note_ix].row_index == row {
             let note = &notes[note_ix];
             note_ix += 1;
@@ -207,19 +227,23 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
             }
             has_step |= note.note_type != NoteType::Mine;
             match note.note_type {
-                NoteType::Tap => row_mask |= 1u16 << note.column.min(15),
+                NoteType::Tap => row_mask |= 1u32 << note.column.min(31),
                 NoteType::Hold | NoteType::Roll => {
                     if note.note_type == NoteType::Hold {
                         totals.holds = totals.holds.saturating_add(1);
                     } else {
                         totals.rolls = totals.rolls.saturating_add(1);
                     }
-                    row_mask |= 1u16 << note.column.min(15);
+                    row_mask |= 1u32 << note.column.min(31);
                     if let Some(hold) = note.hold.as_ref()
                         && let Some(end) = active_hold_ends.get_mut(note.column)
                     {
                         debug_assert!(*end == usize::MAX || *end <= row, "overlapping holds");
+                        active_count += u32::from(hold.end_row_index != usize::MAX);
+                        active_count -= u32::from(*end != usize::MAX);
                         *end = hold.end_row_index;
+                        // An overwritten earliest end may trigger one extra scan.
+                        next_hold_end = next_hold_end.min(*end);
                     }
                 }
                 NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
@@ -246,6 +270,7 @@ mod tests {
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column,

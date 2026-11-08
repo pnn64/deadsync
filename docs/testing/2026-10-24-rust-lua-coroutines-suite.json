@@ -1,0 +1,263 @@
+{
+  "suite_url": "https://www.lua.org/tests/lua5.1-tests.tar.gz",
+  "suite_sha256": "49e4ca6561f82ea605908c5041ab5fad66ed9930fa0686675bd51b02767f18ad",
+  "bootstrap": "_U=true; function Message(s) print(s) end",
+  "command": [
+    "cargo",
+    "build",
+    "--release",
+    "-p",
+    "deadlib-lua",
+    "--example",
+    "official_suite"
+  ],
+  "results": [
+    {
+      "file": "constructs.lua",
+      "source_sha256": "da83de439859ca44d6450d9bd76e4abfa9891624207491238b2227683fdfde5f",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing syntax\r\n+\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 1.2653496999992058
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing syntax\n+\n",
+        "stderr": "FAIL\tRuntime\t189\tattempt to call a nil value\n",
+        "seconds": 0.020318199996836483
+      }
+    },
+    {
+      "file": "locals.lua",
+      "source_sha256": "7ee8a582fef614fa367852d4426b28485fd4dbeded3fa29bf03890a179792ff0",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t2 return values\n",
+        "seconds": 0.022386800032109022
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing local variables plus some extra stuff\n+\nOK\n",
+        "stderr": "PASS\t2 return values\n",
+        "seconds": 0.026272900053299963
+      }
+    },
+    {
+      "file": "calls.lua",
+      "source_sha256": "343fc099d121f0bdc068bd7293a52fd5f32c2f3eff6f1e823c41471bdf7c4639",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing functions and calls\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.02763210004195571
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing functions and calls\n+\n+\n+\n+\n",
+        "stderr": "FAIL\tRuntime\t239\tattempt to call a nil value\n",
+        "seconds": 0.03025419998448342
+      }
+    },
+    {
+      "file": "events.lua",
+      "source_sha256": "6dd484a0c6f17be699e0fdc577ad0341b60784f3f69666956b8af7d6b778d73c",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing metatables\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t1 return values\n",
+        "seconds": 0.019945799955166876
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing metatables\n",
+        "stderr": "FAIL\tRuntime\t7\tattempt to call a nil value\n",
+        "seconds": 0.018648700090125203
+      }
+    },
+    {
+      "file": "nextvar.lua",
+      "source_sha256": "3e81e2ecf908f5576081a691a954b11acaa15dc9eaa6e4c9cd4f53e40baf07b6",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing tables, next, and for\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.04466630006209016
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing tables, next, and for\n+\n+\n",
+        "stderr": "FAIL\tRuntime\t230\tattempt to call a nil value\n",
+        "seconds": 0.08039980009198189
+      }
+    },
+    {
+      "file": "literals.lua",
+      "source_sha256": "633b3cb94fe7652c1a1ea99425f161a6df0b64e572d8354739cc9e4e9a0b0f8b",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing scanner\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.05266580008901656
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing scanner\n+\n+\n+\n+\n+\n",
+        "stderr": "FAIL\tRuntime\t11\tattempt to call a nil value\n",
+        "seconds": 0.02163889992516488
+      }
+    },
+    {
+      "file": "closure.lua",
+      "source_sha256": "9496056e3b89461e06391a565e2c7e8935abbf8f92fbb658c7714985fbbfb830",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing closures and coroutines\r\n+\r\n\u0007\r\n >>> testC not active: skipping yield/hook tests <<<\r\n\u0007\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.027750900015234947
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing closures and coroutines\n",
+        "stderr": "FAIL\tRuntime\t13\tattempt to call a nil value\n",
+        "seconds": 0.019478300004266202
+      }
+    },
+    {
+      "file": "vararg.lua",
+      "source_sha256": "afa3796df77bf56574c2e71f8e4f219a6c4b4ba08d914b8110ea60e363a7d9ff",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.015870600007474422
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing vararg\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.017449400038458407
+      }
+    },
+    {
+      "file": "strings.lua",
+      "source_sha256": "c97c706a6120847472aff5020bedaf29411b5177f4cf98d059bfd41eada730f8",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing strings and string library\r\n+\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.0466526000527665
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing strings and string library\n+\n+\n+\n+\n+\n",
+        "stderr": "FAIL\tRuntime\t150\tattempt to index a nil value\n",
+        "seconds": 0.019054500036872923
+      }
+    },
+    {
+      "file": "pm.lua",
+      "source_sha256": "f7888930a69457635a606fe0597be1dc69114602eaf61293ca510eed9d1971d6",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\r\n+\r\n+\r\n+\r\n+\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.03775069990660995
+      },
+      "rust": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing pattern matching\n+\n+\n+\n+\nOK\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.035978600033558905
+      }
+    },
+    {
+      "file": "sort.lua",
+      "source_sha256": "b8f6fefe976dd484a86b0c0d4989af70421005abbb6005567886fb9a40181cb2",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing sort\r\nSorting 30000 elements in 0.01 sec.\r\nRe-sorting 30000 elements in 0.01 sec.\r\nInvert-sorting other 30000 elements in 0.07 sec., with 476357 comparisons\r\nSorting 30000 equal elements in 0.03 sec.\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.17463130003307015
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing sort\n",
+        "stderr": "FAIL\tRuntime\t25\tattempt to index a nil value\n",
+        "seconds": 0.02685570006724447
+      }
+    },
+    {
+      "file": "math.lua",
+      "source_sha256": "24a862ff81b7099eaa08170d317a5d75a6f7a9debe4328108cc248517f6696ca",
+      "reference": {
+        "status": "pass",
+        "returncode": 0,
+        "stdout": "testing numbers and math lib\r\n+\r\n`querytab' nao ativo\r\nOK\r\n",
+        "stderr": "PASS\t0 return values\n",
+        "seconds": 0.028371899970807135
+      },
+      "rust": {
+        "status": "fail",
+        "returncode": 1,
+        "stdout": "testing numbers and math lib\n",
+        "stderr": "FAIL\tRuntime\t124\tattempt to index a nil value\n",
+        "seconds": 0.015935300034470856
+      }
+    }
+  ],
+  "instruction_limit": 100000000,
+  "file_timeout_seconds": 60,
+  "source_hashes": {
+    "crates/deadlib-lua/benches/baseline.rs": "e208fe7e3913fd6c8824e6e0b776987952034d21b775e89175847b5a41d4ba22",
+    "crates/deadlib-lua/Cargo.toml": "593c0a2ee9101f8057fd13e9108ec78bde817b490182d4e22a27c0a244b13724",
+    "crates/deadlib-lua/examples/official_suite.rs": "80b1bd2bc9d6c51b1f314897066f4026a3b36ebb56beb97fafc9ec9023cf780c",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "0990ea2628d37ade72447caaad2d9f27050a39aff95c35185e8a0897052f0824",
+    "crates/deadlib-lua/src/bytecode.rs": "550fbe9f9fe4d2669804cc917b26927c8e595f01c99f1b7a524cd3c39ee48f86",
+    "crates/deadlib-lua/src/compiler.rs": "d589671b3458008d5c43e9cbc3873ba454e559924707955ec748501bcbc089d7",
+    "crates/deadlib-lua/src/error.rs": "f07fe3ff7161b9a2a218c98b59d6a80b3b866ba1c763a61197119aa6842fa1ea",
+    "crates/deadlib-lua/src/format.rs": "d30690c55ddcb9beba4e1fe0979aa168e14fc67f1eed05c8195efe57a8d2aa3c",
+    "crates/deadlib-lua/src/lexer.rs": "b4f09c15bc93271c489b983d31811c7581a60be1333b3c1513cc376f0a103d20",
+    "crates/deadlib-lua/src/lib.rs": "3159576cd8d37fb90fad606305193941b6fc5d5f3cf93126fe482609fccb9565",
+    "crates/deadlib-lua/src/optimizer.rs": "aefddb71be888bd7d6763e583d254408c7097351c2d9c6a18c9f299b54de7493",
+    "crates/deadlib-lua/src/parser.rs": "98f59f544c85a3c8242787ccf2f3a4a325594c36292e744507e39b2345aa26d6",
+    "crates/deadlib-lua/src/pattern.rs": "973cc3e45d5e389567fc64b4d73b70c219adb96d9f61242f044c2af2badf8bdf",
+    "crates/deadlib-lua/src/table.rs": "9f26289009be43cf999ac8978c37cc0660476cbaba446bc771d98395ec9e40ea",
+    "crates/deadlib-lua/src/value.rs": "fbfbb406ada2cc2e24b422042fb29bbf48a38cee9ebb173d38904646b873c649",
+    "crates/deadlib-lua/src/vm/math.rs": "088e639aa5a4786e1ec817ab4e2065197458382a7fade1038aab4fa2b68b47f4",
+    "crates/deadlib-lua/src/vm/meta.rs": "f77358955029dbac447a4fd725adb02f628e4521d3abe9ff5250869a35627fd0",
+    "crates/deadlib-lua/src/vm/native.rs": "8ed6a2cd1aba1934e2ef52f357711e6efe6b1a17dd3a8972c86b7b4d8401edb2",
+    "crates/deadlib-lua/src/vm/strings.rs": "45083a2806f2d97bf54b9957617b75540db42dee75c8831b6b55f79f65b46ab2",
+    "crates/deadlib-lua/src/vm/tables.rs": "28af8c204242743a913d3d11242ea53aad3f04b1587da2683a8b8487f405b672",
+    "crates/deadlib-lua/src/vm/threads.rs": "7d2e2c944d17dbd3ea50ee3ae0827e1f10ccbcd69f7ae283fb3e4f879912d333",
+    "crates/deadlib-lua/src/vm.rs": "d18aea4130c0e2138ec20bf6bcb43895be268f7f13688f1607438de8720db952",
+    "crates/deadlib-lua/tests/coroutines.rs": "3eef9b1d82da3e2854345c5bce4d96f792889fa5a0fb5a0608dee6234bc26f10",
+    "crates/deadlib-lua/tests/lua51.rs": "14b4d271c3fced9320c30be81dea97309d39651de3ea3c9a933909714dadea02",
+    "crates/deadlib-lua/tests/stdlib.rs": "13f6b4dd67189c8f56b5010fa186b264ee1d13fb400e8560a685c38a5c149528",
+    "scripts/check_rust_lua_suite.py": "67cc1753afa252f64c7a41c0171938060c855ef2d73addd0169a1f09c8ead3bc"
+  },
+  "limitations": "Files are independent probes, not all.lua, the complete suite, or internal C API tests. No tests are removed or rewritten."
+}

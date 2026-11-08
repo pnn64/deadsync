@@ -1,0 +1,174 @@
+{
+  "scope": "Targeted fixed-Huffman checks for large direct frames and source pyramids.",
+  "tools": {
+    "author": "1da2abbe783fd7b45f19ecfd226becc094f3a81202487f23095d19cdf7e99e2b",
+    "ijg": "b57bdb5b0301ec424de9719f2aa758add4575125a5121568154fe71e50d7b38f",
+    "reference": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+  },
+  "driver_sha256": "667fd6687de12b1576f358fd146014e4546cdd5c2146f00e3ccfe7577ea8832a",
+  "cases": 18,
+  "results": [
+    {
+      "count": 5,
+      "precision": 8,
+      "mode": 0,
+      "C_blocks": 45,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "ae04472d61e06672d5b0d66c9ac0ac19da021d8ca558ab88d1752a69251aa577"
+    },
+    {
+      "count": 5,
+      "precision": 8,
+      "mode": 1,
+      "C_blocks": 90,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "ab79d359b1d161be4376df9aba68699667dad076203d9a530f1641e57d1847ba"
+    },
+    {
+      "count": 5,
+      "precision": 8,
+      "mode": 2,
+      "C_blocks": 65,
+      "C_samples": 1615,
+      "C_EXP00_copy": true,
+      "sha256": "2362d632980c2763c8e105b3000a3749f5a2278c727a25d4f7a087d08391798e"
+    },
+    {
+      "count": 5,
+      "precision": 12,
+      "mode": 0,
+      "C_blocks": 45,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "378a747b6dcce17c3ff963fd3e96e30205c55bebdd371bcffcf67a6a2edb61a8"
+    },
+    {
+      "count": 5,
+      "precision": 12,
+      "mode": 1,
+      "C_blocks": 90,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "f29854211f160fc178abc96e034d8a13da5ee71a8f5a2effcfc87b7267bb9aae"
+    },
+    {
+      "count": 5,
+      "precision": 12,
+      "mode": 2,
+      "C_blocks": 65,
+      "C_samples": 1615,
+      "C_EXP00_copy": true,
+      "sha256": "bafb465a1d4e9786be06d4699cb5a2fc1da86245ca3931e32d46dd816073b966"
+    },
+    {
+      "count": 17,
+      "precision": 8,
+      "mode": 0,
+      "C_blocks": 153,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "f68df1c226ca7b5c7545b6cd61022609368eead0c11ae7bf22a11f59440c3d70"
+    },
+    {
+      "count": 17,
+      "precision": 8,
+      "mode": 1,
+      "C_blocks": 306,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "f90a2c42cc498f574760637f978d4227763590fbff507d2a1ab38cf9874a2552"
+    },
+    {
+      "count": 17,
+      "precision": 8,
+      "mode": 2,
+      "C_blocks": 221,
+      "C_samples": 5491,
+      "C_EXP00_copy": true,
+      "sha256": "fb7b6a84fdaa4a63697a4d58e31189a6e960495f8f0d152cbadeec4821301b84"
+    },
+    {
+      "count": 17,
+      "precision": 12,
+      "mode": 0,
+      "C_blocks": 153,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "e6019fe10bf89ffe067473a51a019353da9d38d5fb47f5c08b202e26fa7115fc"
+    },
+    {
+      "count": 17,
+      "precision": 12,
+      "mode": 1,
+      "C_blocks": 306,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "cb714c778c23f467c80e9c9d74cbdb94d3103cd86344fbeaa97f74d24d4caa6b"
+    },
+    {
+      "count": 17,
+      "precision": 12,
+      "mode": 2,
+      "C_blocks": 221,
+      "C_samples": 5491,
+      "C_EXP00_copy": true,
+      "sha256": "fa88824ff40d1de2c75965ca2ae88745bb1caf59dd156220a826bc8017a11633"
+    },
+    {
+      "count": 255,
+      "precision": 8,
+      "mode": 0,
+      "C_blocks": 2295,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "58dd24aa041d11a37adc310d3bfc6afa95e07c98320a89bc4e4e962afdf4556a"
+    },
+    {
+      "count": 255,
+      "precision": 8,
+      "mode": 1,
+      "C_blocks": 4590,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "9df4ff2b9b19d4ea9c3af7134ad3c3658fe4eaa9bc5f0262c05034f77287473b"
+    },
+    {
+      "count": 255,
+      "precision": 8,
+      "mode": 2,
+      "C_blocks": 3315,
+      "C_samples": 82365,
+      "C_EXP00_copy": true,
+      "sha256": "a88c3d1490317659e3ff5a9e9c41cf8d584ef1729bc92124e5a06276ac9dee50"
+    },
+    {
+      "count": 255,
+      "precision": 12,
+      "mode": 0,
+      "C_blocks": 2295,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "ce507d15820ff15291708e2008bee8ac6af2e168b1d97b60f2ebbb34a975f49f"
+    },
+    {
+      "count": 255,
+      "precision": 12,
+      "mode": 1,
+      "C_blocks": 4590,
+      "C_samples": 0,
+      "C_EXP00_copy": false,
+      "sha256": "f753c64e3a8f134d0244fad6c64eace77259ebcf50b4edcafd7b74eb3e231df6"
+    },
+    {
+      "count": 255,
+      "precision": 12,
+      "mode": 2,
+      "C_blocks": 3315,
+      "C_samples": 82365,
+      "C_EXP00_copy": true,
+      "sha256": "fa7cf7717690e141dd0e241129505510dba1abde18c6cc2b6b17861614a40c11"
+    }
+  ]
+}

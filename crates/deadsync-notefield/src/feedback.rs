@@ -270,13 +270,11 @@ enum ColumnCueKind {
 /// resolution; the notefield owns placement, timing, fades, and actor shape.
 pub(crate) fn compose_column_feedback(
     draws: &mut Vec<FlatDraw>,
-    hud_draws: &mut Vec<FlatDraw>,
     request: ColumnFeedbackRequest<'_>,
 ) {
     if let Some(cues) = request.column_cues {
         compose_column_cue(
             draws,
-            hud_draws,
             request,
             cues,
             ColumnCueKind::Regular,
@@ -287,7 +285,6 @@ pub(crate) fn compose_column_feedback(
     if let Some(cues) = request.crossover_cues {
         compose_column_cue(
             draws,
-            hud_draws,
             request,
             cues,
             ColumnCueKind::Crossover,
@@ -302,7 +299,6 @@ pub(crate) fn compose_column_feedback(
 
 fn compose_column_cue(
     draws: &mut Vec<FlatDraw>,
-    hud_draws: &mut Vec<FlatDraw>,
     request: ColumnFeedbackRequest<'_>,
     cues: &[ColumnCue],
     kind: ColumnCueKind,
@@ -447,7 +443,7 @@ fn compose_column_cue(
         debug_assert!(active_index < usize::from(COLUMN_COUNTDOWN_SLOTS_PER_PLAYER));
         let countdown = remaining.round() as i32;
         debug_assert!(countdown >= 0);
-        hud_draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
+        draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
             align: [0.5, 0.5],
             offset: [x, y],
             color: [
@@ -555,6 +551,7 @@ fn append_column_quad(
             [0.0, 0.0, 0.0, fade]
         },
         blend: deadlib_render_core::BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: 0.0,
         z,
@@ -594,50 +591,38 @@ pub(crate) fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _s
 }
 
 pub(crate) fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>) {
+    let base = match params.grade {
+        JudgeGrade::Fantastic => 0,
+        JudgeGrade::Excellent => 1,
+        JudgeGrade::Great => 2,
+        JudgeGrade::Decent => 3,
+        JudgeGrade::WayOff => 4,
+        JudgeGrade::Miss => 5,
+    };
     if params.frame_rows < 7 {
-        let base = match params.grade {
-            JudgeGrade::Fantastic => 0,
-            JudgeGrade::Excellent => 1,
-            JudgeGrade::Great => 2,
-            JudgeGrade::Decent => 3,
-            JudgeGrade::WayOff => 4,
-            JudgeGrade::Miss => 5,
-        };
         return (base, None);
     }
-
+    if params.grade != JudgeGrade::Fantastic {
+        return (base + 1, None);
+    }
     let abs_error_ms = params.time_error_ms.abs();
     let uses_10ms_blue_mode =
         params.fa_plus_10ms_blue_window && !params.split_15_10ms && !params.custom_fantastic_window;
     let split_15_10ms_active = params.show_fa_plus_window
         && params.split_15_10ms
         && !params.custom_fantastic_window
-        && params.grade == JudgeGrade::Fantastic
         && abs_error_ms > deadsync_rules::timing::FA_PLUS_W010_MS
         && abs_error_ms <= deadsync_rules::timing::FA_PLUS_W0_MS;
-
-    let base = match params.grade {
-        JudgeGrade::Fantastic => {
-            let blue_fantastic = !params.show_fa_plus_window
-                || if uses_10ms_blue_mode {
-                    abs_error_ms <= deadsync_rules::timing::FA_PLUS_W010_MS
-                } else {
-                    params.window == Some(TimingWindow::W0)
-                };
-            if split_15_10ms_active || blue_fantastic {
-                0
-            } else {
-                1
-            }
-        }
-        JudgeGrade::Excellent => 2,
-        JudgeGrade::Great => 3,
-        JudgeGrade::Decent => 4,
-        JudgeGrade::WayOff => 5,
-        JudgeGrade::Miss => 6,
-    };
-    let overlay = split_15_10ms_active && params.frame_rows >= 7;
-    (base, overlay.then_some(1))
+    let blue_fantastic = !params.show_fa_plus_window
+        || if uses_10ms_blue_mode {
+            abs_error_ms <= deadsync_rules::timing::FA_PLUS_W010_MS
+        } else {
+            params.window == Some(TimingWindow::W0)
+        };
+    (
+        usize::from(!split_15_10ms_active && !blue_fantastic),
+        split_15_10ms_active.then_some(1),
+    )
 }
 
 pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
@@ -658,9 +643,9 @@ pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
 
 #[cfg(test)]
 mod tests {
-    // Decimal components in these visual fixtures are authored RGB values.
     #![allow(clippy::approx_constant)]
 
+    // Decimal components in these visual fixtures are authored RGB values.
     use super::*;
     use deadlib_present::actors::{FlatDraw, FlatPreparedU32, FlatSprite, SpriteSource, TextAlign};
     use deadsync_gameplay::ColumnCueColumn;
@@ -955,13 +940,12 @@ mod tests {
             .into(),
         }];
         let mut actors = Vec::new();
-        let mut hud = Vec::new();
         let mut request = request(Some(&cues), None, None);
         request.column_cue_cursor = Some(1);
 
-        compose_column_feedback(&mut actors, &mut hud, request);
+        compose_column_feedback(&mut actors, request);
 
-        assert_eq!(actors.len(), 2);
+        assert_eq!(actors.len(), 3);
         assert_quad(
             &actors[0],
             [224.0, 85.0],
@@ -980,8 +964,7 @@ mod tests {
             0.333,
             90,
         );
-        assert_eq!(hud.len(), 1);
-        match &hud[0] {
+        match &actors[2] {
             FlatDraw::PreparedU32(FlatPreparedU32 {
                 align,
                 offset,
@@ -1020,9 +1003,8 @@ mod tests {
             .into(),
         }];
         let mut actors = Vec::new();
-        let mut hud = Vec::new();
 
-        compose_column_feedback(&mut actors, &mut hud, request(None, Some(&cues), None));
+        compose_column_feedback(&mut actors, request(None, Some(&cues), None));
 
         assert_eq!(actors.len(), 1);
         assert_quad(
@@ -1034,7 +1016,6 @@ mod tests {
             0.333,
             90,
         );
-        assert!(hud.is_empty());
     }
 
     #[test]
@@ -1069,19 +1050,20 @@ mod tests {
             },
         ];
         let mut draws = Vec::new();
-        let mut hud = Vec::new();
         let mut request = request(Some(&regular), Some(&crossover), None);
         request.column_cue_cursor = Some(1);
         request.crossover_cue_cursor = Some(2);
         request.crossover_countdown = true;
 
-        compose_column_feedback(&mut draws, &mut hud, request);
+        compose_column_feedback(&mut draws, request);
 
-        let countdowns = hud
+        assert_eq!(draws.len(), 6);
+        let countdowns = draws
             .iter()
-            .map(|draw| match draw {
-                FlatDraw::PreparedU32(text) => (text.slot, text.text.as_str()),
-                other => panic!("expected prepared countdown, got {other:?}"),
+            .filter_map(|draw| match draw {
+                FlatDraw::PreparedU32(text) => Some((text.slot, text.text.as_str())),
+                FlatDraw::Sprite(_) => None,
+                other => panic!("expected cue body or countdown, got {other:?}"),
             })
             .collect::<Vec<_>>();
         assert_eq!(countdowns, [(24, "4"), (25, "4"), (26, "5")]);
@@ -1104,9 +1086,8 @@ mod tests {
             None,
         ];
         let mut actors = Vec::new();
-        let mut hud = Vec::new();
 
-        compose_column_feedback(&mut actors, &mut hud, request(None, None, Some(&flashes)));
+        compose_column_feedback(&mut actors, request(None, None, Some(&flashes)));
 
         assert_eq!(actors.len(), 2);
         assert_quad(
@@ -1127,7 +1108,6 @@ mod tests {
             0.2,
             91,
         );
-        assert!(hud.is_empty());
     }
 
     #[test]
@@ -1152,11 +1132,13 @@ mod tests {
         req.music_rate = f32::NAN;
         req.col_start = 4;
         let mut actors = Vec::new();
-        let mut hud = Vec::new();
 
-        compose_column_feedback(&mut actors, &mut hud, req);
+        compose_column_feedback(&mut actors, req);
 
         assert!(actors.is_empty());
-        assert!(hud.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "hud_performance.rs"]
+mod hud_performance;

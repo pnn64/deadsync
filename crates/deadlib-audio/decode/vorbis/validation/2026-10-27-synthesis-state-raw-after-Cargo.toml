@@ -1,0 +1,7 @@
+[package]
+name="deadlib-raw-refactor-after"
+version="0.0.0"
+edition="2024"
+[workspace]
+[dependencies]
+codec={package="deadlib-audio-decode-vorbis",path="C:/GitHub/deadsync/crates/deadlib-audio/decode/vorbis"}

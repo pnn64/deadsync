@@ -1,0 +1,19 @@
+{
+  "baseline_png_commit": "f1b22d891",
+  "change": "Narrow internal symbol result, exact public error mapping, unchanged Huffman decoding algorithm",
+  "reverse_patch": "huffman-narrow-before.patch",
+  "reverse_patch_sha256": "462dba00c8e98575a189505dfed1e155874696675d77f2740721c12df78c9707",
+  "exact_reconstruction_verified": true,
+  "sources": [
+    {
+      "path": "src/zlib.rs",
+      "before_sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117",
+      "candidate_sha256": "79ee1223f948ca824809e3341563bcadaf66c89558767faf03a1d19c3a1bb1e1"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "before_sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e",
+      "candidate_sha256": "e5b06545a44cc2867e637e4d50f082932fff803ece6480a2fa800fab6c1a6d8c"
+    }
+  ]
+}

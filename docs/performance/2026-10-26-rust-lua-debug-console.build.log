@@ -1,0 +1,3 @@
+   Compiling deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 36.46s
+     Running benches\baseline.rs (target\release\deps\baseline-13461f758967ef58.exe)

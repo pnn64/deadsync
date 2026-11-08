@@ -1,0 +1,19 @@
+﻿Compile-only platform checks; no cross-target linking/runtime/reference guarantee.
+cargo check -p deadlib-lua --lib --target x86_64-unknown-linux-gnu
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.29s
+cargo check -p deadlib-lua --lib --target x86_64-unknown-linux-musl
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.11s
+cargo check -p deadlib-lua --lib --target i586-unknown-linux-gnu
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.10s
+cargo check -p deadlib-lua --lib --target aarch64-apple-darwin
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.22s
+cargo check -p deadlib-lua --lib --target i686-pc-windows-msvc
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.26s
+cargo check -p deadlib-lua --lib --target aarch64-pc-windows-msvc
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.28s

@@ -1,0 +1,87 @@
+{
+  "groups": {
+    "photos": {
+      "all": {
+        "cases": 24,
+        "baseline": {
+          "filtered_bytes": 28325376,
+          "inflate_capacity_bytes": 51036160,
+          "sample_bytes": 28311552,
+          "sample_capacity_bytes": 28311552
+        },
+        "candidate": {
+          "filtered_bytes": 28325376,
+          "inflate_capacity_bytes": 28325376,
+          "sample_bytes": 28311552,
+          "sample_capacity_bytes": 28325376
+        }
+      },
+      "plain8": {
+        "cases": 24,
+        "baseline": {
+          "filtered_bytes": 28325376,
+          "inflate_capacity_bytes": 51036160,
+          "sample_bytes": 28311552,
+          "sample_capacity_bytes": 28311552
+        },
+        "candidate": {
+          "filtered_bytes": 28325376,
+          "inflate_capacity_bytes": 28325376,
+          "sample_bytes": 28311552,
+          "sample_capacity_bytes": 28325376
+        }
+      }
+    },
+    "formats": {
+      "all": {
+        "cases": 60,
+        "baseline": {
+          "filtered_bytes": 4356426,
+          "inflate_capacity_bytes": 7275554,
+          "sample_bytes": 4906644,
+          "sample_capacity_bytes": 4906644
+        },
+        "candidate": {
+          "filtered_bytes": 4356426,
+          "inflate_capacity_bytes": 4356426,
+          "sample_bytes": 4906644,
+          "sample_capacity_bytes": 4907934
+        }
+      },
+      "plain8": {
+        "cases": 10,
+        "baseline": {
+          "filtered_bytes": 730656,
+          "inflate_capacity_bytes": 1255372,
+          "sample_bytes": 729366,
+          "sample_capacity_bytes": 729366
+        },
+        "candidate": {
+          "filtered_bytes": 730656,
+          "inflate_capacity_bytes": 730656,
+          "sample_bytes": 729366,
+          "sample_capacity_bytes": 730656
+        }
+      },
+      "other_formats": {
+        "cases": 50,
+        "baseline": {
+          "filtered_bytes": 3625770,
+          "inflate_capacity_bytes": 6020182,
+          "sample_bytes": 4177278,
+          "sample_capacity_bytes": 4177278
+        },
+        "candidate": {
+          "filtered_bytes": 3625770,
+          "inflate_capacity_bytes": 3625770,
+          "sample_bytes": 4177278,
+          "sample_capacity_bytes": 4177278
+        }
+      }
+    }
+  },
+  "scope": "Untimed observed Vec capacities on the normal global allocator, plus exact saved native sample bytes. Raw and image probes are separate calls: their capacities are not a measured simultaneous allocation peak or process RSS.",
+  "input_evidence": "experiments/row-reuse-buffers.json",
+  "input_evidence_sha256": "5d26fbfd3484c8be569e231297ac7d7f0e47e15989fb12b591a0d2ad238e2d22",
+  "runner_sha256": "57909dfab267f9221b371bbf19f27978bfb567ed00ea41c9ee704e8f4b2f6bbd"
+}

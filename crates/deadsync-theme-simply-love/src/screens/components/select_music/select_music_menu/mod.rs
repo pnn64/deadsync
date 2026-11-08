@@ -79,6 +79,9 @@ pub enum Action {
     SortByFavorites,
     SwitchToSingle,
     SwitchToDouble,
+    SwitchToVersus,
+    SwitchToRoutine,
+    SwitchToCouple,
     TestInput,
     ConfigurePads,
     SongSearch,
@@ -101,6 +104,79 @@ pub struct Item {
     pub top_label: TextContent,
     pub bottom_label: TextContent,
     pub action: Action,
+}
+
+/// Resolve only authored menu labels. User playlist and saved-profile names
+/// remain shared/owned text and must never pass through the label lookup.
+pub(super) fn localized_label(label: &TextContent) -> TextContent {
+    let TextContent::Static(source) = label else { return label.clone(); };
+    let key = match *source {
+        "PRESS &SELECT; TO CANCEL" => "PRESSSELECTTOCANCEL",
+        "Sorts..." => "CategorySorts",
+        "Profile..." => "CategoryProfile",
+        "Advanced..." => "CategoryAdvanced",
+        "Advanced Options" => "AdvancedOptions",
+        "Pad Profile..." => "CategoryPadProfile",
+        "Styles..." => "CategoryStyles",
+        "Playlists..." => "CategoryPlaylists",
+        "Sort By" => "SortBy",
+        "Series" => "Series",
+        "Group" => "Group",
+        "Title" => "Title",
+        "Artist" => "Artist",
+        "BPM" => "BPM",
+        "Length" => "Length",
+        "Level" => "Level",
+        "Most Popular" => "MostPopular",
+        "Recently Played" => "RecentlyPlayed",
+        "Genre" => "Genre",
+        "Machine Top Scores" => "MachineTopScores",
+        "P1 Most Played" => "P1MostPlayed",
+        "P2 Most Played" => "P2MostPlayed",
+        "P1 Recent Songs" => "P1RecentSongs",
+        "P2 Recent Songs" => "P2RecentSongs",
+        "P1 Clear Rank" => "P1ClearRank",
+        "P2 Clear Rank" => "P2ClearRank",
+        "Change Style To" => "ChangeStyleTo",
+        "Single" => "Single",
+        "Double" => "Double",
+        "Feeling salty?" => "FeelingSalty",
+        "Test Input" => "TestInput",
+        "Dial It In" => "DialItIn",
+        "Configure Pads" => "ConfigurePads",
+        "Wherefore Art Thou?" => "WhereforeArtThou",
+        "Song Search" => "SongSearch",
+        "Next Please" => "NextPlease",
+        "Switch Profile" => "SwitchProfile",
+        "Take a Breather~" => "TakeABreather",
+        "Load New Songs" => "LoadNewSongs",
+        "Friends Online?" => "FriendsOnline",
+        "Online Lobbies" => "OnlineLobbies",
+        "Need More RAM" => "NeedMoreRAM",
+        "View Downloads" => "ViewDownloads",
+        "Spend Your Spoils" => "SpendYourSpoils",
+        "SRPG SHOP" => "SRPGSHOP",
+        "Sync pack with" => "SyncPackWith",
+        "NULL-OR-DIE" => "NULLORDIE",
+        "Incorrect offset?" => "IncorrectOffset",
+        "SYNC SONG" => "SYNCSONG",
+        "SYNC PACK" => "SYNCPACK",
+        "Machine Data" => "MachineData",
+        "Play Replay" => "PlayReplay",
+        "Having a hard time?" => "HavingAHardTime",
+        "Practice Mode" => "PracticeMode",
+        "GrooveStats" => "GrooveStats",
+        "Leaderboard" => "Leaderboard",
+        "I'm Lovin' It" => "IMLovinIt",
+        "Add Favorite" => "AddFavorite",
+        "Check Out My Mix Tape" => "CheckOutMyMixTape",
+        "Favorites" => "Favorites",
+        "Go Back" => "GoBack",
+        "Relive Your Memories" => "ReliveYourMemories",
+        "Set Summary" => "SetSummary",
+        _ => return label.clone(),
+    };
+    TextContent::Shared(crate::i18n::tr("SelectMusicMenu", key))
 }
 
 const ITEM_SORT_BY_GROUP: Item = Item {
@@ -197,6 +273,23 @@ pub const ITEM_SWITCH_TO_DOUBLE: Item = Item {
     top_label: TextContent::Static("Change Style To"),
     bottom_label: TextContent::Static("Double"),
     action: Action::SwitchToDouble,
+};
+// Simply Love's SortMenu "Change Style To" labels: Routine is "Couples" and
+// Couple is "Half Couple".
+pub const ITEM_SWITCH_TO_VERSUS: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Versus"),
+    action: Action::SwitchToVersus,
+};
+pub const ITEM_SWITCH_TO_ROUTINE: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Couples"),
+    action: Action::SwitchToRoutine,
+};
+pub const ITEM_SWITCH_TO_COUPLE: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Half Couple"),
+    action: Action::SwitchToCouple,
 };
 pub const ITEM_TEST_INPUT: Item = Item {
     top_label: TextContent::Static("Feeling salty?"),

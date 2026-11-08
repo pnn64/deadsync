@@ -182,10 +182,6 @@ pub(super) fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
     (done, total, progress)
 }
 
-pub(super) fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
-    (reload.line2.clone(), reload.line3.clone())
-}
-
 pub(super) fn push_reload_overlay_actors(
     out: &mut Vec<Actor>,
     reload: &ReloadUiState,
@@ -248,7 +244,7 @@ pub(super) fn push_reload_overlay_actors_unreserved(
     } else {
         String::new()
     };
-    let (line2, line3) = reload_detail_lines(reload);
+    let (line2, line3) = (&reload.line2, &reload.line3);
     let fill = color::decorative_rgba(active_color_index);
 
     let bar_w = widescale(360.0, 520.0);
@@ -288,7 +284,7 @@ pub(super) fn push_reload_overlay_actors_unreserved(
     if !line2.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(line2):
+            settext(inline_or_owned_text(line2.as_str())):
             align(0.5, 0.5):
             xy(screen_width() * 0.5, bar_cy - 74.0):
             zoom(0.95):
@@ -300,7 +296,7 @@ pub(super) fn push_reload_overlay_actors_unreserved(
     if !line3.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(line3):
+            settext(inline_or_owned_text(line3.as_str())):
             align(0.5, 0.5):
             xy(screen_width() * 0.5, bar_cy - 50.0):
             zoom(0.95):
@@ -364,3 +360,10 @@ pub(super) fn push_reload_overlay_actors_unreserved(
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "reload_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "reload_buffers_perf.rs"]
+mod buffers_perf;

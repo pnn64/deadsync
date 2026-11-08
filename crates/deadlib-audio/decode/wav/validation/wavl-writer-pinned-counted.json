@@ -1,0 +1,170 @@
+{
+  "timestamp_utc": "2026-10-28T19:46:39Z",
+  "baseline_revision": "add30e338",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "cpu": "{\"Name\":\"Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\",\"NumberOfCores\":22,\"NumberOfLogicalProcessors\":44}",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "sources": {
+    "crates/deadlib-audio/decode/wav/src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+    "crates/deadlib-audio/decode/wav/src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+    "crates/deadlib-audio/decode/wav/src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+    "crates/deadlib-audio/decode/wav/src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+    "crates/deadlib-audio/decode/wav/src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+    "crates/deadlib-audio/decode/wav/src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+    "crates/deadlib-audio/decode/wav/src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+    "crates/deadlib-audio/decode/wav/src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+    "crates/deadlib-audio/decode/wav/src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+    "crates/deadlib-audio/decode/wav/src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+    "crates/deadlib-audio/decode/wav/src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "crates/deadlib-audio/decode/wav/src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "crates/deadlib-audio/decode/wav/src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "crates/deadlib-audio/decode/wav/src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "crates/deadlib-audio/decode/wav/src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "crates/deadlib-audio/decode/wav/src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+    "crates/deadlib-audio/decode/wav/src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+    "crates/deadlib-audio/decode/wav/src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+    "crates/deadlib-audio/decode/wav/src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+    "crates/deadlib-audio/decode/wav/src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+    "crates/deadlib-audio/decode/wav/src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+    "crates/deadlib-audio/decode/wav/src/wavl_encode.rs": "d44bec23b9e1d5afb7ef7e7078180e08d7975f0310724073b468be66e5c0ab7c",
+    "crates/deadlib-audio/decode/wav/src/wavl_mux.rs": "13cf9bb3f847bfbf39bc2727042474c6f249a08f713d3c516e0efbf37c8f95d5",
+    "crates/deadlib-audio/decode/wav/README.md": "52d25aff479908e48358beb9bc115433c5c53d37c149b4f7700fd8e27e533da3",
+    "crates/deadlib-audio/decode/wav/Cargo.toml": "20cafbd52a482890f418e22b4bbe17b9fb765259ffc94ae99af514fd76dc60dc",
+    "crates/deadlib-audio/decode/wav/benches/wavl_profile.rs": "d22714f74a8d1dda2444bcf69468e6bb9c370ffc56806f60b81d8d03dd308ea2",
+    "crates/deadlib-audio/decode/wav/benches/compare_wavl_profile.py": "8eef3b36958d752440a2fd462be733dac30207e64e3f015f788c0dd0cbeb18df",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "inputs_unchanged": true,
+  "builds": {
+    "baseline": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\baseline\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe",
+      "binary_sha256": "c8f2c2193bcf6d3fc4d09852302e1c17ab04f11c5a1a101d7a7cd7ac1ca1ca90",
+      "sources": {
+        "Cargo.toml": "a274f97dcbcc9cdfd223abc4d55d65ce93a915a8a4d28e56503abebdb06ac345",
+        "benches/wavl_profile.rs": "d22714f74a8d1dda2444bcf69468e6bb9c370ffc56806f60b81d8d03dd308ea2",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+        "src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+        "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+        "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+        "README.md": "52d25aff479908e48358beb9bc115433c5c53d37c149b4f7700fd8e27e533da3"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "0c33a0c337e4d3cbe20927f088617c389291832b18b9205ff0b9a76e2bfd1511",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "wavl_profile",
+        "--no-run",
+        "--message-format=json"
+      ]
+    },
+    "current": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\current\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe",
+      "binary_sha256": "69c7b1b058b98c2c6458150d195a583f3cbb2cee229db11c338841f5da8dbd7b",
+      "sources": {
+        "Cargo.toml": "a274f97dcbcc9cdfd223abc4d55d65ce93a915a8a4d28e56503abebdb06ac345",
+        "benches/wavl_profile.rs": "d22714f74a8d1dda2444bcf69468e6bb9c370ffc56806f60b81d8d03dd308ea2",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "3a1b6a73df4698f72e3e52a05f5e3f7f374b2d5891513eeb54b1b8c869dc6de6",
+        "src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "74afba674a777955b9be0f76c45e1e07389d0662227f6d0b1279655854f25858",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+        "src/wavl_encode.rs": "d44bec23b9e1d5afb7ef7e7078180e08d7975f0310724073b468be66e5c0ab7c",
+        "src/wavl_mux.rs": "13cf9bb3f847bfbf39bc2727042474c6f249a08f713d3c516e0efbf37c8f95d5",
+        "README.md": "52d25aff479908e48358beb9bc115433c5c53d37c149b4f7700fd8e27e533da3"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "759094b946f35dc5ea85dc35604bc4fc8cb1941217565f5bc5d7872335b56010",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "wavl_profile",
+        "--no-run",
+        "--message-format=json"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "label": "control1",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\baseline\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe"
+      ],
+      "exit_code": 0,
+      "output_sha256": "4f8dc0ec57c4e0d08063a5408b916be4f843478db4b908cdec94a767e9b21b88",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current1",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\current\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe"
+      ],
+      "exit_code": 0,
+      "output_sha256": "f490103ff27acdb8477e3e84a99c1b0a5b92df57438774ad5d4e5c807b29d3d5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "control2",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\baseline\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe"
+      ],
+      "exit_code": 0,
+      "output_sha256": "80ce1441b0c901de0f0b08e35d427e690dd4597b9d22793d61c22f3a38921111",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current2",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\wavl-writer-pinned-counted-sources\\current\\target\\release\\deps\\wavl_profile-78b925aa6a406ca9.exe"
+      ],
+      "exit_code": 0,
+      "output_sha256": "1dfebe44b29cd6214293581fe584398413a1a22050fbfdb9954bf65af4daee02",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; heap/RSS excluded; standalone copies use identical explicit bench profiles"
+}

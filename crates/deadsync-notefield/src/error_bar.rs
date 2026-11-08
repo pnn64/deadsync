@@ -63,6 +63,7 @@ pub(crate) struct ErrorBarComposeRequest<'a> {
     pub text: Option<ErrorBarText>,
     pub frame_text_slot: u8,
     pub text_visible: bool,
+    pub text_centered: bool,
     pub text_label: fn(bool, bool) -> &'static str,
 }
 
@@ -417,6 +418,14 @@ fn append_long_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeReque
         return;
     };
     let style = request.style;
+    let alpha = error_bar_tick_alpha(
+        request.elapsed_s - tick.started_at,
+        style.long_average_tick_duration,
+        request.multi_tick,
+    );
+    if alpha <= 0.0 {
+        return;
+    }
     let max_offset_s = request.timing_windows_s[request.max_window_ix.min(4)];
     let width = if request.modes.average {
         style.average_width
@@ -435,12 +444,7 @@ fn append_long_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeReque
     } else {
         0.0
     };
-    let alpha = error_bar_tick_alpha(
-        request.elapsed_s - tick.started_at,
-        style.long_average_tick_duration,
-        request.multi_tick,
-    );
-    if alpha <= 0.0 || !wscale.is_finite() || wscale <= 0.0 {
+    if !wscale.is_finite() || wscale <= 0.0 {
         return;
     }
     let scaled_offset = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -478,7 +482,9 @@ fn append_text_feedback(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeRequ
     if !(0.0..style.text_duration).contains(&age) {
         return;
     }
-    let x = if feedback.early {
+    let x = if request.text_centered {
+        0.0
+    } else if feedback.early {
         -style.text_x_offset
     } else {
         style.text_x_offset
@@ -580,6 +586,7 @@ fn append_quad(
         flip_y: false,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: 0.0,
         z,
@@ -647,7 +654,8 @@ const fn with_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
 }
 
 pub(crate) fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
-    if !age.is_finite() || age < 0.0 {
+    // Negative zero is accepted alongside nonnegative finite ages.
+    if age.to_bits() > f32::MAX.to_bits() && age.to_bits() != (-0.0_f32).to_bits() {
         return 0.0;
     }
     if multi_tick {
@@ -909,6 +917,7 @@ mod tests {
             text: None,
             frame_text_slot: 0,
             text_visible: false,
+            text_centered: false,
             text_label,
         }
     }
@@ -940,6 +949,7 @@ mod tests {
                 flip_y,
                 fade,
                 blend,
+                rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
                 z: actual_z,
@@ -955,6 +965,7 @@ mod tests {
                 assert!(!*flip_y);
                 assert_eq!(*fade, [0.0; 4]);
                 assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_x_deg, 0.0);
                 assert_eq!(*rot_y_deg, 0.0);
                 assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*actual_z, z);
@@ -1480,7 +1491,7 @@ mod tests {
     }
 
     #[test]
-    fn text_feedback_preserves_normal_and_scaled_early_late_fingerprints() {
+    fn text_feedback_preserves_split_and_centered_early_late_fingerprints() {
         let cases = [
             (
                 true,
@@ -1517,24 +1528,46 @@ mod tests {
         ];
 
         for (early, scaled, content, position, zoom, color) in cases {
-            let mut request = request(ErrorBarModes::default(), empty_state());
-            request.visible = false;
-            request.text_visible = true;
-            request.text = Some(ErrorBarText {
-                started_at: 0.8,
-                early,
-                offset_ms: 12.5,
-                scaled,
-                scale_start_ms: 10.0,
-            });
-            let mut draws = Vec::new();
+            for centered in [false, true] {
+                for judgment_back in [false, true] {
+                    let mut request = request(ErrorBarModes::default(), empty_state());
+                    request.visible = false;
+                    request.text_visible = true;
+                    request.text_centered = centered;
+                    request.judgment_back = judgment_back;
+                    // Model user offsets applied to the error bar's base position.
+                    request.position = [75.0, 230.0];
+                    request.text = Some(ErrorBarText {
+                        started_at: 0.8,
+                        early,
+                        offset_ms: 12.5,
+                        scaled,
+                        scale_start_ms: 10.0,
+                    });
+                    let expected_position = if centered {
+                        request.position
+                    } else {
+                        [position[0] - 25.0, position[1] + 30.0]
+                    };
+                    let z = if judgment_back { 90 } else { 184 };
+                    let mut draws = Vec::new();
 
-            compose_error_bar(&mut draws, request);
+                    compose_error_bar(&mut draws, request);
 
-            assert_eq!(draws.len(), 1);
-            assert_prepared_text(
-                &draws[0], "wendy", content, position, zoom, color, 1.0, 184, 3,
-            );
+                    assert_eq!(draws.len(), 1);
+                    assert_prepared_text(
+                        &draws[0],
+                        "wendy",
+                        content,
+                        expected_position,
+                        zoom,
+                        color,
+                        1.0,
+                        z,
+                        3,
+                    );
+                }
+            }
         }
     }
 
@@ -1619,4 +1652,10 @@ mod tests {
             3,
         );
     }
+}
+
+#[cfg(test)]
+#[allow(clippy::approx_constant, reason="Fixture colors are authored RGB values.")]
+mod feedback_kernel_perf {
+    include!("feedback_kernel_perf.rs");
 }

@@ -1,0 +1,92 @@
+{
+  "completed_utc": "2026-10-27T04:30:37.681119+00:00",
+  "scope": "Diagnostic copy instrumented outside the production crates; every PCM sample bit-checked before timing.",
+  "runs": [
+    {
+      "run": "synthesis-profile-final-20261027",
+      "files": 5,
+      "timing_rows": 70,
+      "channel_samples_bit_compared": 19817984,
+      "source_input_generated_binary_hashes_rechecked": true,
+      "instrumented_copy_reconstructed_exactly": true
+    },
+    {
+      "run": "synthesis-profile-floor0-20261027",
+      "files": 1,
+      "timing_rows": 14,
+      "channel_samples_bit_compared": 12525696,
+      "source_input_generated_binary_hashes_rechecked": true,
+      "instrumented_copy_reconstructed_exactly": true
+    }
+  ],
+  "timing_rows": 84,
+  "channel_samples_bit_compared": 32343680,
+  "checks": [
+    {
+      "name": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/profile_synthesis.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "format",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\synthesis-profile-final-20261027\\Cargo.toml",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "production_source_unchanged_from": "c7d23c320",
+  "all_previous_production_validation_source_hashes_match": true,
+  "prior_production_validation": "2026-10-27-single-pass-checks.json",
+  "strict_legacy_policy_separate_and_counted": true,
+  "artifacts": {
+    "2026-10-27-synthesis-main-manifest.json": "05bc9214f1e50e3113104e83fbef99511f141a6e669e4202228400d20634d9a3",
+    "2026-10-27-synthesis-main-trials.tsv": "b3bd997bde53d89d14c0932d13a169a50d10a39759d503dde0b7ca278d30fabd",
+    "2026-10-27-synthesis-main-summary.tsv": "dd008524f3d911f8a94f8362b4055560736d3c53e990333a661b712ca9f301cc",
+    "2026-10-27-synthesis-main-build.log": "2faf5fcbb234e0cd3b2625ec5b826896c3761999f7372e84fab82c3658790dc6",
+    "2026-10-27-synthesis-main-worker-0.log": "c74c094d46792823b7749daf1aba84f2baf52c6e5058264a2279e0e651013bbb",
+    "2026-10-27-synthesis-main-worker-1.log": "d19c68dbd4ab5a6f4270a98e0327beb1f4a8b9fa974da356ecb74c899b81b31c",
+    "2026-10-27-synthesis-main-worker-2.log": "474f6fa294cd756d99a8ada60477e56379679e80a70ef7a009b1664f34d94801",
+    "2026-10-27-synthesis-main-worker-3.log": "ccb0d60f378894a86f4adb400c7ac0c9da22230a0807a9234a7f18dd96d792d0",
+    "2026-10-27-synthesis-main-worker-4.log": "c52a20a570ffbc1342aab31662b8a386e07b6448c9cc41d095411e691f9f251b",
+    "2026-10-27-synthesis-floor0-manifest.json": "da12b57a08e2ef99eed6229578d1d50949118b249c136ea7dcc35791285fc714",
+    "2026-10-27-synthesis-floor0-trials.tsv": "4e2bbcc90af2d2a34be83841721797ec936a5ebfa2fc96a7351042509f7b4188",
+    "2026-10-27-synthesis-floor0-summary.tsv": "08f3d71ed26fa689425259bb393974b4ec229f8e2b0e1032bd04b35cf4212ca5",
+    "2026-10-27-synthesis-floor0-build.log": "19c87582b26b072261ce018ed9e8f02148bcbe2e09fd6240ce0793e5eafe86da",
+    "2026-10-27-synthesis-floor0-worker-0.log": "6bb53d3922e4d274d6789138122815f16dffcf7f52ce0c229ec11fd11707641a",
+    "2026-10-27-synthesis-python.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-synthesis-format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-synthesis-clippy.log": "d6ec280bc20673ae5a76552493508177e77b31cdeee15ad282ed624fc8a829b7",
+    "2026-10-27-synthesis-strict-rejection.log": "9f9ec968e6328a3dccfb96516eef5aeef57cf969771ca6ca0f021c255ccd0306",
+    "2026-10-27-synthesis-strict-rejection.json": "44eaf293e1d4e85c8bbef2fc0c3f01a3956db1b1532bc3cc15932b8c10db6a9b"
+  },
+  "limitations": [
+    "Timers and counter storage alter layout and execution; stage shares are diagnostic.",
+    "Resident raw packets exclude container, setup, granule trimming and seeking.",
+    "No cross-library ranking or new production sanitizer campaign."
+  ]
+}

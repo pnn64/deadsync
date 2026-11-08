@@ -1,0 +1,14 @@
+{
+  "current": {
+    "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/binaries/current.exe",
+    "sha256": "8a277d403d87364fae8704eb3285cfefbfe7c6d40da975d3767ad93ef9402f15"
+  },
+  "baseline": {
+    "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/binaries/baseline.exe",
+    "sha256": "b3f227ec4a894e3ebe51c356155e2019409e4b85682a42a9ae10e09ba7debad1"
+  },
+  "libvorbis": {
+    "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/binaries/libvorbis.exe",
+    "sha256": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "ordered_byte_pairs": 65536,
+  "width_padding_fixtures": 132,
+  "independent_streams": 65668,
+  "exact_c_zlib_matches": 65668,
+  "representative_seeds_per_raw_target": 644,
+  "scope": "Literal-only dynamic streams; independent canonical bit writer/scalar checksum; native buffered EOF/prefix consumption, limits zero/one, four trailer truncations and one-byte input/output fragmentation. Complements rather than replaces length/distance, malformed-tree, block and PNG matrices.",
+  "production_sources_unchanged_from": "23a46c8ed1f5ee7eeb5d58c714fa1d392a399bb8",
+  "rejected_trials": [
+    "512-entry nine-bit literal pairs",
+    "4096-entry twelve-bit single/pair lookup"
+  ],
+  "new_successful_sanitizer_executions": 20000,
+  "evidence": [
+    {
+      "path": "primary-pairs-validation.json",
+      "sha256": "75efcfb51840d59b2b193c66131964f193761c9296935afc2934a47b75616109"
+    },
+    {
+      "path": "fuzz/reports/primary-pairs-source.json",
+      "sha256": "9261a3c75ef16fec1539ee05892af858625cd93c04db74c3365f858089d47361"
+    },
+    {
+      "path": "fuzz/reports/primary-pairs-seeds.json",
+      "sha256": "b24568238e9f3fc1f3d9a7a5755653fbe10d4f7ea4dd0d9a36f56baeece76b92"
+    },
+    {
+      "path": "fuzz/reports/primary-pairs-seed-build.json",
+      "sha256": "0ffda92ecbe87cfd1314e91da70e16691a58b65d5933e5af75c238653514934a"
+    },
+    {
+      "path": "experiments/primary-pairs-selection.json",
+      "sha256": "37d4a712838308cf1b36b5a0c709a562d84adcd12384b6ac7ddf4349d26e5f8a"
+    }
+  ]
+}

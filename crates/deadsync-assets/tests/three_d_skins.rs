@@ -1,23 +1,31 @@
-//! Optional checks against the original third-party 3D skins.
+//! Authored 3D skin parser inputs with generated texture dimensions.
+#[path = "support/skin_fixture.rs"]
+mod skin_fixture;
 use deadsync_assets::{init_paths, noteskin};
 use deadsync_config::dirs::AppDirs;
 use std::path::PathBuf;
 
 #[test]
-#[ignore = "requires DEADSYNC_3D_SKINS pointing to the directory containing the original 3D skins"]
 fn original_skins_keep_model_geometry() {
-    let source =
-        PathBuf::from(std::env::var_os("DEADSYNC_3D_SKINS").expect("set DEADSYNC_3D_SKINS"))
-            .canonicalize()
-            .unwrap();
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("song");
+    for name in [
+        "composite-3d",
+        "FNF-3d",
+        "FNF_Quantize-3d",
+        "enchantment-original-3d",
+        "enchantment-original-3d+",
+    ] {
+        skin_fixture::install(name, &source.join(name));
+    }
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
         .unwrap();
     let dirs = AppDirs {
-        data_dir: workspace.clone(),
+        data_dir: temporary.path().join("data"),
         exe_dir: workspace.clone(),
-        cache_dir: workspace.join("target/three-d-skin-check"),
+        cache_dir: temporary.path().join("cache"),
         portable: true,
     };
     init_paths(dirs.asset_paths(Some(&workspace))).unwrap();
@@ -64,11 +72,18 @@ fn original_skins_keep_model_geometry() {
             let layers = &skin.note_layers[column * noteskin::NUM_QUANTIZATIONS];
             if name == "composite-3d" {
                 assert!(
-                    layers[0]
-                        .texture_key()
+                    deadsync_assets::textures::texture_source_key(layers[0].texture_key())
                         .ends_with(&format!("texcher_{}.png", direction.to_ascii_lowercase()))
                 );
-                assert_eq!(layers[0].uv_velocity, [0.25, 0.0]);
+                assert_eq!(
+                    layers[0].uv_velocity,
+                    [0.0, 0.0],
+                    "plain PNG material stays still"
+                );
+                assert!(
+                    layers.iter().any(|layer| layer.uv_velocity == [0.25, 0.0]),
+                    "animated INI material retains its scrolling texture"
+                );
                 let base = &skin.receptor_off[column];
                 let idle = skin.receptor_idle_glow_layers[column]
                     .as_ref()
@@ -104,8 +119,7 @@ fn original_skins_keep_model_geometry() {
                 }
             } else if name == "FNF-3d" {
                 assert!(
-                    layers[0]
-                        .texture_key()
+                    deadsync_assets::textures::texture_source_key(layers[0].texture_key())
                         .ends_with(&format!("{direction} Tap Note parts.png"))
                 );
             }

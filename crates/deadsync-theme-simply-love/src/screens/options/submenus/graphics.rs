@@ -403,55 +403,20 @@ fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
     aspect_ratio_matches(width as f32 / height as f32, label)
 }
 
-fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
+fn preset_resolutions_for_aspect(label: &str) -> &'static [(u32, u32)] {
     match label {
-        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
-        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
-        "4:3" => vec![
+        "16:9" => &[(1280, 720), (1600, 900), (1920, 1080)],
+        "16:10" => &[(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
+        "4:3" => &[
             (640, 480),
             (800, 600),
             (1024, 768),
             (1280, 960),
             (1600, 1200),
         ],
-        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
-        _ => DEFAULT_RESOLUTIONS.to_vec(),
+        "1:1" => &[(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
+        _ => DEFAULT_RESOLUTIONS,
     }
-}
-
-fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
-    if !target.contains(&(width, height)) {
-        target.push((width, height));
-    }
-}
-
-fn supported_resolutions(spec: Option<&GraphicsMonitorView>) -> Vec<(u32, u32)> {
-    let mut values = spec.map_or_else(Vec::new, |spec| {
-        spec.modes
-            .iter()
-            .map(|mode| (mode.width, mode.height))
-            .collect()
-    });
-    values.sort_unstable();
-    values.dedup();
-    values
-}
-
-fn supported_refresh_rates(
-    spec: Option<&GraphicsMonitorView>,
-    width: u32,
-    height: u32,
-) -> Vec<u32> {
-    let mut values = spec.map_or_else(Vec::new, |spec| {
-        spec.modes
-            .iter()
-            .filter(|mode| mode.width == width && mode.height == height)
-            .map(|mode| mode.refresh_rate_millihertz)
-            .collect()
-    });
-    values.sort_unstable();
-    values.dedup();
-    values
 }
 
 pub(in crate::screens::options) fn build_display_mode_choices(
@@ -728,8 +693,10 @@ pub(in crate::screens::options) fn max_fps_seed_value(state: &State, max_fps: u1
             DisplayModeChoice::Fullscreen(_)
         ) {
             let (width, height) = selected_resolution(state);
-            supported_refresh_rates(Some(spec), width, height)
-                .into_iter()
+            spec.modes
+                .iter()
+                .filter(|mode| mode.width == width && mode.height == height)
+                .map(|mode| mode.refresh_rate_millihertz)
                 .max()
                 .or_else(|| {
                     spec.modes
@@ -915,7 +882,8 @@ pub(in crate::screens::options) fn selected_resolution(state: &State) -> (u32, u
 
 pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut State) {
     if matches!(selected_display_mode(state), DisplayModeChoice::Windowed) {
-        state.refresh_rate_choices = vec![0];
+        state.refresh_rate_choices.clear();
+        state.refresh_rate_choices.push(0);
         if let Some(slot) = get_choice_by_id_mut(
             &mut state.sub[SubmenuKind::Graphics].choice_indices,
             GRAPHICS_OPTIONS_ROWS,
@@ -935,14 +903,6 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
 
     let (width, height) = selected_resolution(state);
     let mon_idx = selected_display_monitor(state);
-    let mut rates = Vec::new();
-
-    // Default choice is always available (0).
-    rates.push(0);
-
-    let supported_rates = supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
-    rates.extend(supported_rates);
-
     // ITGmania keeps the nearest advertised rate within 10 Hz, otherwise Default.
     let current_rate = if let Some(idx) = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
@@ -958,7 +918,20 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
         state.refresh_rate_at_load
     };
 
-    state.refresh_rate_choices = rates;
+    let rates = &mut state.refresh_rate_choices;
+    rates.clear();
+    if let Some(spec) = state.monitor_specs.get(mon_idx) {
+        rates.extend(
+            spec.modes
+                .iter()
+                .filter(|mode| mode.width == width && mode.height == height)
+                .map(|mode| mode.refresh_rate_millihertz),
+        );
+    }
+    rates.sort_unstable();
+    rates.dedup();
+    // Keep Default separate even if the monitor advertises a zero rate.
+    rates.insert(0, 0);
 
     let next_idx = state
         .refresh_rate_choices
@@ -994,26 +967,27 @@ pub(in crate::screens::options) fn rebuild_resolution_choices(
     let aspect_label = selected_aspect_label(state);
     let mon_idx = selected_display_monitor(state);
 
-    let mut list: Vec<(u32, u32)> = supported_resolutions(state.monitor_specs.get(mon_idx))
-        .into_iter()
-        .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
-        .collect();
-
-    // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
+    let list = &mut state.resolution_choices;
+    list.clear();
+    if let Some(spec) = state.monitor_specs.get(mon_idx) {
+        list.extend(
+            spec.modes
+                .iter()
+                .map(|mode| (mode.width, mode.height))
+                .filter(|&(w, h)| aspect_matches(w, h, aspect_label)),
+        );
+    }
     if list.is_empty() {
-        list = preset_resolutions_for_aspect(aspect_label);
+        list.extend_from_slice(preset_resolutions_for_aspect(aspect_label));
     }
 
-    // Keep the selected physical mode even when it uses non-square pixels and
-    // therefore does not match the configured display aspect ratio.
+    // Keep non-square-pixel physical modes, even outside the configured aspect.
     if width > 0 && height > 0 {
-        push_unique_resolution(&mut list, width, height);
+        list.push((width, height));
     }
+    list.sort_unstable();
+    list.dedup();
 
-    // Sort descending by width then height (typical UI preference).
-    list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-
-    state.resolution_choices = list;
     let next_idx = state
         .resolution_choices
         .iter()

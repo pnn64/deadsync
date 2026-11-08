@@ -1,0 +1,220 @@
+{
+  "baseline": "74a02c1808bd693fe4fcdab41ae7b26be339c54d",
+  "kernels": [
+    {
+      "stage": "baseline",
+      "runs": 1,
+      "ablation_runs": 0,
+      "rows": 44,
+      "tests": 5,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "candidate",
+      "runs": 2,
+      "ablation_runs": 2,
+      "rows": 124,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": true
+    },
+    {
+      "stage": "checked-control",
+      "runs": 5,
+      "ablation_runs": 0,
+      "rows": 270,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "checked-debug",
+      "runs": 0,
+      "ablation_runs": 0,
+      "rows": 0,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "checked-final",
+      "runs": 5,
+      "ablation_runs": 5,
+      "rows": 330,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": true
+    },
+    {
+      "stage": "control",
+      "runs": 5,
+      "ablation_runs": 0,
+      "rows": 250,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "debug",
+      "runs": 0,
+      "ablation_runs": 0,
+      "rows": 0,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "early-full",
+      "runs": 2,
+      "ablation_runs": 2,
+      "rows": 124,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "expanded-control",
+      "runs": 1,
+      "ablation_runs": 0,
+      "rows": 50,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "final-debug",
+      "runs": 0,
+      "ablation_runs": 0,
+      "rows": 0,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "final",
+      "runs": 5,
+      "ablation_runs": 5,
+      "rows": 310,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": true
+    },
+    {
+      "stage": "inline-trial",
+      "runs": 2,
+      "ablation_runs": 2,
+      "rows": 124,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    },
+    {
+      "stage": "refined",
+      "runs": 2,
+      "ablation_runs": 2,
+      "rows": 124,
+      "tests": 6,
+      "trace_bytes": 29797483,
+      "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+      "exhaustive": false
+    }
+  ],
+  "full": [
+    {
+      "stage": "full-release",
+      "tests": 191,
+      "fixtures": 0
+    },
+    {
+      "stage": "checked-full-release",
+      "tests": 191,
+      "fixtures": 0
+    },
+    {
+      "stage": "inline-full-release",
+      "tests": 191,
+      "fixtures": 0
+    }
+  ],
+  "source_scope": "two existing bodies, one inline attribute and a test registration; no fields/dependencies/unsafe changes",
+  "normal": {
+    "command": [
+      "cargo",
+      "check",
+      "--offline",
+      "--jobs",
+      "2",
+      "--manifest-path",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+      "-p",
+      "deadlib-present",
+      "--lib",
+      "--release",
+      "--message-format=json"
+    ],
+    "exit_code": 0,
+    "before": {
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml": "67216631b3a2875635711ac280e15a08ed17a78c1e934e3a525bf59be8a280b5",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.lock": "b6d7ef10dbd293a81581b81f1de3d4e8ec855385e13c0cc0db6b59319d693a24",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\lib.rs": "9a93b2417c3acd8837be31bae816f0f7126aa56a70243e82f7f414283d300687",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font.rs": "28009a57ae68a2cfaaf524fd12dc1e43ca2339f84fff2e3a9e101aa8bb5d852a",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_checks.rs": "45f52530465c168826d74b838cd3388f3a73ffb8ce50f986e3246d6011d34a8a",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_original.rs": "e49a6f139b61aceb61449f855e3d4ab6383aa94c982699385776316301a07e5c",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_performance.rs": "a75bbb1931b5bd7dfe538635e0b21b8354ab4ef176f6e44cbda144606bfa0e66",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_ablation.rs": "028c305c7bd816d9f8890458a18d721a67140e3a9464ca6dccb4822b11986feb"
+    },
+    "after": {
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml": "67216631b3a2875635711ac280e15a08ed17a78c1e934e3a525bf59be8a280b5",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.lock": "b6d7ef10dbd293a81581b81f1de3d4e8ec855385e13c0cc0db6b59319d693a24",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\lib.rs": "9a93b2417c3acd8837be31bae816f0f7126aa56a70243e82f7f414283d300687",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font.rs": "28009a57ae68a2cfaaf524fd12dc1e43ca2339f84fff2e3a9e101aa8bb5d852a",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_checks.rs": "45f52530465c168826d74b838cd3388f3a73ffb8ce50f986e3246d6011d34a8a",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_original.rs": "e49a6f139b61aceb61449f855e3d4ab6383aa94c982699385776316301a07e5c",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_performance.rs": "a75bbb1931b5bd7dfe538635e0b21b8354ab4ef176f6e44cbda144606bfa0e66",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-present\\src\\font_cache_ablation.rs": "028c305c7bd816d9f8890458a18d721a67140e3a9464ca6dccb4822b11986feb"
+    },
+    "log_sha256": "dea394d352f1893227d80ebcda25b7cdb139e54f99a9c6a1ad6383345a3cef21"
+  },
+  "clippy": {
+    "command": [
+      "C:\\Users\\PerfectTaste\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\clippy-driver.exe",
+      "--test",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-C",
+      "debuginfo=0",
+      "-C",
+      "lto=fat",
+      "--extern",
+      "rustc_hash=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\librustc_hash-211e77caf41ec2ea.rlib",
+      "--extern",
+      "smallvec=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\libsmallvec-42807898b9216da6.rlib",
+      "-L",
+      "dependency=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps",
+      "D:\\deadsync-font-cache-20261104\\checked-final\\compiled.rs",
+      "-o",
+      "D:\\deadsync-font-cache-20261104\\clippy.rmeta",
+      "--emit=metadata",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

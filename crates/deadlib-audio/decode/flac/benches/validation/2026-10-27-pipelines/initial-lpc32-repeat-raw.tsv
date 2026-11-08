@@ -1,0 +1,19 @@
+mode	iterations	ns	units	checksum	bytes	frames	bits	channels	case	trial	ns_per_unit	ns_per_iteration	unit
+baseline-frames	1	466493753	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	20.134170600903197	466493753.0	channel sample
+frames	1	541901390	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	23.388812743922376	541901390.0	channel sample
+frames	1	505319646	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	21.809921129966366	505319646.0	channel sample
+baseline-frames	1	487734184	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	21.05092127256913	487734184.0	channel sample
+baseline-frames	1	445848713	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	19.243117387973097	445848713.0	channel sample
+frames	1	471403490	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	20.346078009583042	471403490.0	channel sample
+frames	1	682355716	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	29.450911846284576	682355716.0	channel sample
+baseline-frames	1	463716043	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	20.014282849652144	463716043.0	channel sample
+baseline-frames	1	444178806	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	19.17104312715091	444178806.0	channel sample
+frames	1	492208273	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	21.24402583319896	492208273.0	channel sample
+frames	1	478768524	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	5	20.663957616938585	478768524.0	channel sample
+baseline-frames	1	437801610	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	5	18.895799243618352	437801610.0	channel sample
+baseline-frames	1	426447708	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	6	18.405757526266704	426447708.0	channel sample
+frames	1	431148392	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	6	18.608642072926294	431148392.0	channel sample
+frames	1	446789199	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	7	19.28370936900175	446789199.0	channel sample
+baseline-frames	1	465057210	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	7	20.0721684805071	465057210.0	channel sample
+baseline-frames	1	509850980	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	8	22.005496421637364	509850980.0	channel sample
+frames	1	497689793	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	8	21.48061176414124	497689793.0	channel sample

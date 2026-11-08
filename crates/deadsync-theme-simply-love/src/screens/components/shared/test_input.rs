@@ -351,25 +351,13 @@ impl EventRateTracker {
 fn event_source_label(stream: EventStreamKey) -> String {
     match stream {
         EventStreamKey::Keyboard => "Keyboard".to_owned(),
-        EventStreamKey::Pad { dev } => format!("Gamepad {dev}"),
+        EventStreamKey::Pad { dev } => crate::i18n::tr_fmt("UiMessages", "GamepadDev", &[("dev", &(dev).to_string())]).to_string(),
     }
-}
-
-#[inline(always)]
-fn format_hz(hz: u32) -> String {
-    if hz > MAX_DISPLAY_HZ {
-        return format!(">{MAX_DISPLAY_HZ} Hz");
-    }
-    format!("{hz} Hz")
 }
 
 #[inline(always)]
 fn format_event_rate_summary(latest_hz: u32, max_hz: u32) -> String {
-    format!(
-        "{} latest / {} max",
-        format_hz(latest_hz),
-        format_hz(max_hz)
-    )
+    crate::i18n::tr_fmt("UiMessages", "HzLatestHzMax", &[("arg0", &(if latest_hz > MAX_DISPLAY_HZ { ">" } else { "" }).to_string()), ("arg1", &(latest_hz.min(MAX_DISPLAY_HZ)).to_string()), ("arg2", &(if max_hz > MAX_DISPLAY_HZ { ">" } else { "" }).to_string()), ("arg3", &(max_hz.min(MAX_DISPLAY_HZ)).to_string())]).to_string()
 }
 
 impl UnmappedTracker {
@@ -402,18 +390,18 @@ impl UnmappedTracker {
                 continue;
             }
             let line = match *k {
-                UnmappedKey::Dir { dev, dir } => format!("Gamepad {dev}: Dir::{dir:?}"),
+                UnmappedKey::Dir { dev, dir } => crate::i18n::tr_fmt("UiMessages", "GamepadDevDirDir", &[("dev", &(dev).to_string()), ("dir", &format!("{:?}", dir))]).to_string(),
                 UnmappedKey::RawButton { dev, code_u32 } => {
                     deadsync_input::raw_button_label(dev, code_u32)
-                        .unwrap_or_else(|| format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]"))
+                        .unwrap_or_else(|| crate::i18n::tr_fmt("UiMessages", "GamepadDevRawButton0xCodeU3208X", &[("dev", &(dev).to_string()), ("code_u32", &format!("{:08X}", code_u32))]).to_string())
                 }
                 UnmappedKey::RawAxis { dev, code_u32 } => {
                     let value = self.axis_value.get(k).copied().unwrap_or(0.0);
-                    format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})")
+                    crate::i18n::tr_fmt("UiMessages", "GamepadDevRawAxis0xCodeU3208XValue3", &[("dev", &(dev).to_string()), ("code_u32", &format!("{:08X}", code_u32)), ("value", &format!("{:.3}", value))]).to_string()
                 }
-                UnmappedKey::Keyboard { code } => format!("Keyboard: KeyCode::{code:?}"),
+                UnmappedKey::Keyboard { code } => crate::i18n::tr_fmt("UiMessages", "KeyboardKeyCodeCode", &[("code", &format!("{:?}", code))]).to_string(),
             };
-            out.push(format!("{line} (not mapped)"));
+            out.push(crate::i18n::tr_fmt("UiMessages", "LineNotMapped", &[("line", &(line).to_string())]).to_string());
         }
         out.sort();
         out
@@ -769,14 +757,14 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
             TextContent::Shared(state.event_rate.summary_text(latest_hz, max_hz)),
         ),
         None => (
-            TextContent::Static("Waiting for raw input"),
-            TextContent::Static("0 Hz latest / 0 Hz max"),
+            TextContent::Shared(crate::i18n::tr("UiMessages", "WaitingForRawInput")),
+            TextContent::Shared(crate::i18n::tr("UiMessages", "0HzLatest0HzMax")),
         ),
     };
 
     actors.push(act!(text:
         font("miso"):
-        settext("RAW EVENT POLLING"):
+        settext(crate::i18n::tr("TestInput", "RawEventPolling")):
         align(1.0, 1.0):
         xy(screen_width() - 20.0, screen_height() - 60.0):
         zoom(0.55):
@@ -914,7 +902,7 @@ fn push_test_input_screen_content_unreserved(
     };
     actors.push(act!(text:
         font("miso"):
-        settext(return_hint):
+        settext(crate::i18n::tr_ui(return_hint)):
         align(0.5, 0.0):
         xy(cx, screen_height() - 40.0):
         zoom(0.8):
@@ -1382,7 +1370,20 @@ mod tests {
 
     #[test]
     fn caps_display_above_one_thousand_hz() {
-        assert_eq!(format_hz(1000), "1000 Hz");
-        assert_eq!(format_hz(1001), ">1000 Hz");
+        assert_eq!(
+            format_event_rate_summary(1000, 1001),
+            "1000 Hz latest / >1000 Hz max"
+        );
+        assert_eq!(
+            format_event_rate_summary(1001, 1000),
+            ">1000 Hz latest / 1000 Hz max"
+        );
     }
 }
+
+#[cfg(test)]
+#[path = "test_input_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "test_input_pipelines_perf.rs"]
+mod pipelines_perf;

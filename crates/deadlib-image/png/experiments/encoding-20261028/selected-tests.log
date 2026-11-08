@@ -1,0 +1,62 @@
+    Finished `release` profile [optimized] target(s) in 0.80s
+     Running tests\encoder_boundaries.rs (target\png-encoding-20261028\build\release\deps\encoder_boundaries-c3afb39037cf89e0.exe)
+
+running 3 tests
+Encoder image/frame validation: 687 malformed native inputs, both writers reject before output
+test native_image_animation_and_frame_storage_errors_reject_before_output ... ok
+Encoder APNG rectangle audit: 450 valid / 2430 invalid inputs, both default roles and all native formats; both writers, plain/Adam7, independent CRC/control/zlib answers
+test frame_rectangles_and_integer_edges_have_literal_controls_and_exact_frame_streams ... ok
+Encoder writer audit: 2616 exact prefix/failure offsets with short and Interrupted writes; invalid byte counts rejected
+test every_output_byte_failure_short_writes_and_invalid_writer_counts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\encoder_fields.rs (target\png-encoding-20261028\build\release\deps\encoder_fields-f27c0042b87da372.exe)
+
+running 3 tests
+Encoder native boundary audit: 308033 invalid inputs rejected by both writers before any output
+test native_palette_transparency_and_option_boundaries_reject_before_writing ... ok
+Encoder ordering audit: 49419 independently modeled pairs, both writers, exact literal output or rejection before output
+test metadata_placement_multiplicity_and_pairs_follow_table_seven_when_writing ... ok
+Encoder scalar audit: 109376 exact literal files, 82396 rejected inputs, 15576 malformed wire lengths unrepresentable by the native API; each checked through both encoders
+test scalar_input_fields_and_exact_wire_values_for_both_encoders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+
+     Running tests\encoder_filter_bytes.rs (target\png-encoding-20261028\build\release\deps\encoder_filter_bytes-e19e8948db11a59a.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests\encoder_reference.rs (target\png-encoding-20261028\build\release\deps\encoder_reference-eeff3eb1f75b57da.exe)
+
+running 2 tests
+Cross-encoder APNG audit: 8640 native files, 2160 Rust png animations and 180 static reference encodings; exact native samples, palettes, transparency and controls
+test rust_encoder_and_both_native_writers_preserve_static_and_apng_semantics ... ok
+C libpng encoder audit: 1620 reference files and 3240 native files; all 15 formats, three geometries, six filters, plain/Adam7, levels 0/1/9, exact samples/palettes/transparency
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.26s
+
+     Running tests\png_stream.rs (target\png-encoding-20261028\build\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\static_png.rs (target\png-encoding-20261028\build\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+

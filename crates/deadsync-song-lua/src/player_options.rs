@@ -2,6 +2,59 @@ use mlua::{Lua, Value};
 
 use crate::{SongLuaSpeedMod, read_boolish, read_f32};
 
+// PlayerOptions::FromOneModString checks these branches before NoteSkinManager.
+// Later branches only block its final whole-name fallback (skins with spaces).
+pub(crate) fn option_blocks_skin(key: &str, level: f32, whole: bool) -> bool {
+    let family = [
+        "modtimer", "drawsize", "lights", "wave",
+        "expand", "drunk", "shrink",
+        "pulse", "dizzy", "confusion", "bounce",
+        "tiny", "tornado",
+        "tipsy", "bumpy", "beat", "digital",
+        "zigzag", "sawtooth", "square", "parabola",
+        "attenuate", "stealth", "reverse", "dark",
+    ].iter().any(|family| key.contains(family));
+    let early = matches!(key,
+        "alternate" | "attackmines" | "backwards" | "bar" |
+        "battery" | "big" | "blind" | "blink" | "bmrize" |
+        "boomerang" | "boost" | "brake" | "centered" |
+        "clearall" | "cover" | "cross" | "death" |
+        "distant" | "echo" | "flip" | "floored" |
+        "hallway" | "hidden" | "hiddenoffset" | "holdrolls" | "hypershuffle" | "incoming" |
+        "invert" | "land" | "left" | "life" |
+        "lifetime" | "little" | "lives" | "lrmirror" |
+        "mines" | "mini" | "mirror" | "noattacks" |
+        "nofakes" | "nohands" | "noholds" | "nojumps" |
+        "nolifts" | "nomines" | "noquads" | "norecover" |
+        "normal-drain" | "norolls" | "nostretch" | "overhead" |
+        "passmark" | "planted" | "playerautoplay" | "power-drop" | "quick" |
+        "randomattacks" | "randomvanish" | "resetspeed" | "right" |
+        "roll" | "shuffle" | "skippy" | "softshuffle" | "space" |
+        "split" | "stomp" | "sudden" | "suddendeath" |
+        "suddenoffset" | "supershuffle" | "twirl" |
+        "twister" | "udmirror" | "wide" | "xmode"
+    );
+    let speed = key.strip_prefix('c').or_else(|| key.strip_prefix('m'))
+        .is_some_and(|amount| parse_option_float(amount).is_some());
+    family || early || speed || (key == "turn" && level <= 0.5) || (whole && (
+        key.contains("move") || matches!(key,
+            "converge" | "cosecant" | "failarcade" | "failatend" |
+            "faildefault" | "failendofsong" | "failimmediate" | "failimmediatecontinue" |
+            "failoff" | "muteonerror" | "random" |
+            "randomspeed" | "skew" | "tilt" | "visualdelay" |
+            "zbuffer"
+        ) || (key == "noteskin" && level <= 0.5) || (level == 0.0 && key.as_bytes().windows(2)
+            .any(|pair| pair[0] == b'w' && (b'1'..=b'5').contains(&pair[1])))
+    ))
+}
+
+pub const MOD_TIMER_NAMES: [&str; 4] = [
+    "ModTimerType_Game",
+    "ModTimerType_Beat",
+    "ModTimerType_Song",
+    "ModTimerType_Default",
+];
+
 pub const SONG_LUA_PLAYER_OPTION_CAPABILITIES: &[&str] = &[
     "FromString",
     "IsEasierForSongAndSteps",
@@ -274,20 +327,30 @@ pub fn strip_player_option_prefix(mut text: &str) -> &str {
     }
 }
 
-pub fn split_first_word(text: &str) -> (&str, &str) {
-    let text = text.trim_start();
-    match text.find(char::is_whitespace) {
-        Some(index) => (&text[..index], text[index..].trim_start()),
-        None => (text, ""),
-    }
-}
-
 #[must_use]
 pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let text = text.trim();
-    let raw = text.trim_end_matches('%');
-    let value = raw.parse::<f32>().ok()?;
-    Some(value / 100.0)
+    let (raw, divisor) = text
+        .strip_suffix("ms")
+        .map_or((text, 100.0), |raw| (raw, 1000.0));
+    let value = parse_option_float(raw)?;
+    // PlayerOptions::FromOneModString uses StringToFloat, which turns
+    // non-finite numeric strings (for example Lua's `-inf`) into zero.
+    Some(if value.is_finite() {
+        value / divisor
+    } else {
+        0.0
+    })
+}
+
+pub(crate) fn parse_option_float(raw: &str) -> Option<f32> {
+    // Native StringToFloat uses strtof: authored suffixes such as "30+0%"
+    // stop at the end of the first number rather than rejecting the token.
+    raw.parse::<f32>().ok().or_else(|| {
+        (1..raw.len())
+            .rev()
+            .find_map(|end| raw.get(..end)?.parse::<f32>().ok())
+    })
 }
 
 #[must_use]
@@ -393,6 +456,9 @@ pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlu
 
 #[inline(always)]
 pub fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value> {
+    if name == "failsetting" {
+        return Ok(Value::Integer(0));
+    }
     if player_option_uses_bool(name) {
         return Ok(Value::Boolean(false));
     }
@@ -488,7 +554,7 @@ mod tests {
         default_player_option_value, is_player_option_method_name, normalize_player_option_key,
         normalize_player_option_value, parse_player_option_amount, parse_player_speed_option,
         player_option_default_string, player_option_uses_bool, song_lua_speedmod_value,
-        split_first_word, strip_player_option_prefix,
+        strip_player_option_prefix,
     };
 
     #[test]
@@ -503,6 +569,12 @@ mod tests {
         assert_eq!(parse_player_option_amount("50%"), Some(0.5));
         assert_eq!(parse_player_option_amount("-25%"), Some(-0.25));
         assert_eq!(parse_player_option_amount("1.5"), Some(0.015));
+        assert_eq!(parse_player_option_amount("-inf"), Some(0.0));
+        assert_eq!(parse_player_option_amount("-nan"), Some(0.0));
+        assert_eq!(parse_player_option_amount("1e999"), Some(0.0));
+        assert_eq!(parse_player_option_amount("30+0%"), Some(0.3));
+        assert_eq!(parse_player_option_amount("1.5e2suffix"), Some(1.5));
+        assert_eq!(parse_player_option_amount("100ms"), Some(0.1));
         assert_eq!(parse_player_option_amount("Mini"), None);
     }
 
@@ -510,7 +582,6 @@ mod tests {
     fn normalizes_player_option_keys() {
         assert_eq!(normalize_player_option_key("No Mines"), "nomines");
         assert_eq!(normalize_player_option_key("C-Mod!"), "cmod");
-        assert_eq!(split_first_word("  50% Reverse"), ("50%", "Reverse"));
     }
 
     #[test]
@@ -549,12 +620,8 @@ mod tests {
             Value::Boolean(true)
         );
         assert_eq!(
-            default_player_option_value(&lua, "failsetting")
-                .unwrap()
-                .as_string()
-                .unwrap()
-                .to_string_lossy(),
-            "FailType_Immediate"
+            default_player_option_value(&lua, "failsetting").unwrap(),
+            Value::Integer(0)
         );
         assert_eq!(
             normalize_player_option_value(&lua, "reverse", Value::Number(0.5)).unwrap(),
@@ -575,6 +642,166 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/speed_parse.rs"]
-mod speed_parse_perf;
+// PlayerOptions::GetMods emits these scalar fields in native order.
+pub(crate) const OPTION_STRING_NAMES: &[&str] = &[
+    "Boost",
+    "Brake",
+    "Wave",
+    "WavePeriod",
+    "Expand",
+    "ExpandPeriod",
+    "TanExpand",
+    "TanExpandPeriod",
+    "Boomerang",
+    "Drunk",
+    "DrunkSpeed",
+    "DrunkOffset",
+    "DrunkPeriod",
+    "TanDrunk",
+    "TanDrunkSpeed",
+    "TanDrunkOffset",
+    "TanDrunkPeriod",
+    "DrunkZ",
+    "DrunkZSpeed",
+    "DrunkZOffset",
+    "DrunkZPeriod",
+    "TanDrunkZ",
+    "TanDrunkZSpeed",
+    "TanDrunkZOffset",
+    "TanDrunkZPeriod",
+    "ShrinkLinear",
+    "ShrinkMult",
+    "PulseInner",
+    "PulseOuter",
+    "PulsePeriod",
+    "PulseOffset",
+    "AttenuateX",
+    "AttenuateY",
+    "AttenuateZ",
+    "Dizzy",
+    "Confusion",
+    "ConfusionOffset",
+    "ConfusionX",
+    "ConfusionXOffset",
+    "ConfusionY",
+    "ConfusionYOffset",
+    "Bounce",
+    "BouncePeriod",
+    "BounceOffset",
+    "BounceZ",
+    "BounceZPeriod",
+    "BounceZOffset",
+    "Mini",
+    "Tiny",
+    "Flip",
+    "Invert",
+    "Tornado",
+    "TornadoPeriod",
+    "TornadoOffset",
+    "TanTornado",
+    "TanTornadoPeriod",
+    "TanTornadoOffset",
+    "TornadoZ",
+    "TornadoZPeriod",
+    "TornadoZOffset",
+    "TanTornadoZ",
+    "TanTornadoZPeriod",
+    "TanTornadoZOffset",
+    "Tipsy",
+    "TipsySpeed",
+    "TipsyOffset",
+    "TanTipsy",
+    "TanTipsySpeed",
+    "TanTipsyOffset",
+    "Bumpy",
+    "BumpyOffset",
+    "BumpyPeriod",
+    "TanBumpy",
+    "TanBumpyOffset",
+    "TanBumpyPeriod",
+    "BumpyX",
+    "BumpyXOffset",
+    "BumpyXPeriod",
+    "TanBumpyX",
+    "TanBumpyXOffset",
+    "TanBumpyXPeriod",
+    "Beat",
+    "BeatOffset",
+    "BeatPeriod",
+    "BeatMult",
+    "BeatY",
+    "BeatYOffset",
+    "BeatYPeriod",
+    "BeatYMult",
+    "BeatZ",
+    "BeatZOffset",
+    "BeatZPeriod",
+    "BeatZMult",
+    "Zigzag",
+    "ZigzagPeriod",
+    "ZigzagOffset",
+    "ZigzagZ",
+    "ZigzagZPeriod",
+    "ZigzagZOffset",
+    "Sawtooth",
+    "SawtoothPeriod",
+    "SawtoothZ",
+    "SawtoothZPeriod",
+    "Square",
+    "SquareOffset",
+    "SquarePeriod",
+    "SquareZ",
+    "SquareZOffset",
+    "SquareZPeriod",
+    "Digital",
+    "DigitalSteps",
+    "DigitalPeriod",
+    "DigitalOffset",
+    "TanDigital",
+    "TanDigitalSteps",
+    "TanDigitalPeriod",
+    "TanDigitalOffset",
+    "DigitalZ",
+    "DigitalZSteps",
+    "DigitalZPeriod",
+    "DigitalZOffset",
+    "TanDigitalZ",
+    "TanDigitalZSteps",
+    "TanDigitalZPeriod",
+    "TanDigitalZOffset",
+    "ParabolaX",
+    "ParabolaY",
+    "ParabolaZ",
+    "XMode",
+    "Twirl",
+    "Roll",
+    "StealthType",
+    "StealthPastReceptors",
+    "DizzyHolds",
+    "ZBuffer",
+    "Cosecant",
+    "Hidden",
+    "HiddenOffset",
+    "Sudden",
+    "SuddenOffset",
+    "Stealth",
+    "Blink",
+    "RandomVanish",
+    "Reverse",
+    "Split",
+    "Alternate",
+    "Cross",
+    "Centered",
+    "ModTimerMult",
+    "ModTimerOffset",
+    "DrawSize",
+    "DrawSizeBack",
+    "Dark",
+    "Blind",
+    "Cover",
+    "RandomAttacks",
+    "NoAttacks",
+    "PlayerAutoPlay",
+    "Passmark",
+    "RandomSpeed",
+];

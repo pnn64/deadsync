@@ -1,0 +1,12 @@
+bytes64-fragment1: cycles/op 521.53 -> 546.61; ns/op 239.65 -> 247.95; CPU throughput 0.954x
+bytes64-fragment7: cycles/op 144.48 -> 127.33; ns/op 65.23 -> 57.42; CPU throughput 1.135x
+bytes64-fragment63: cycles/op 93.25 -> 115.11; ns/op 41.70 -> 51.66; CPU throughput 0.810x
+bytes64-fragment64: cycles/op 78.67 -> 72.02; ns/op 35.16 -> 32.13; CPU throughput 1.092x
+bytes64-fragment65: cycles/op 87.46 -> 84.67; ns/op 39.16 -> 37.79; CPU throughput 1.033x
+bytes64-fragment5552: cycles/op 87.46 -> 84.46; ns/op 39.16 -> 37.79; CPU throughput 1.036x
+bytes8192-fragment1: cycles/op 65966.62 -> 66899.50; ns/op 30365.62 -> 30443.75; CPU throughput 0.986x
+bytes8192-fragment7: cycles/op 17573.72 -> 15255.25; ns/op 7981.25 -> 7025.00; CPU throughput 1.152x
+bytes8192-fragment63: cycles/op 8560.50 -> 8341.00; ns/op 3881.25 -> 3781.25; CPU throughput 1.026x
+bytes8192-fragment64: cycles/op 9877.50 -> 8100.94; ns/op 4475.00 -> 3665.62; CPU throughput 1.219x
+bytes8192-fragment65: cycles/op 10940.72 -> 8553.62; ns/op 4962.50 -> 3875.00; CPU throughput 1.279x
+bytes8192-fragment5552: cycles/op 9424.78 -> 3237.59; ns/op 4265.62 -> 1568.75; CPU throughput 2.911x

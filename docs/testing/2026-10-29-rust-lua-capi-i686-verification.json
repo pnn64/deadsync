@@ -1,0 +1,14 @@
+{
+  "report_sha256": "bce1f5ea750dcd32a1501890edec85185cb349b33b9489888feeae362c5a5156",
+  "package_manifest_sha256": "42ed7df4147cd26b1ef0b1772a4482a3999bcf76a13a5155f48407ac1ef72cd0",
+  "source_hashes_verified": true,
+  "artifact_hashes_verified": true,
+  "elf32_binaries": 36,
+  "pointer_bits": 32,
+  "observations": 97,
+  "forwarded_entries": 133,
+  "stock_suite_passes": 6,
+  "no_external_lua_dependency": true,
+  "checked_reference_enabled": true,
+  "audit_script_sha256": "68a36f6df46d16c2cd04d39f2fd535fd46b35cddb8e33e0c94241f79eb366673"
+}

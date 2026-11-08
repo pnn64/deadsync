@@ -1,0 +1,105 @@
+{
+  "passed": true,
+  "comparison": "little-endian f64 bits, including signed zero",
+  "all_numeric_tables_unchanged": true,
+  "reproducible_generation": true,
+  "synthesis_numeric_bytes": 16384,
+  "requested_alignment": 64,
+  "command": [
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_dsp.py",
+    "--dewindow",
+    "target/deadlib-mp3-reference/dewindow",
+    "--crate",
+    "target\\mp3-perf-20261028\\aligned-matrix-regenerated"
+  ],
+  "sha256": {
+    "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "3d205526dae02f428ffa1f56261dbab4819128b455f035a3c9cfcd2c7fb51d4a",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_dsp.py": "8cf7ffb74dec1271ebbc7f5f2c5a2b6c8d033f96e98c8bac8ddb933e57ce9076",
+    "target\\deadlib-mp3-reference\\dewindow": "0998ea42d245e615c4bac39afe80f5877bd28db084b3992cb0c95d8c66bf5819"
+  },
+  "tables": {
+    "IMDCT_LONG": {
+      "bytes": 5184,
+      "sha256": "e37b1b345e2773408e12b5f7ffd7d4c44939e202f8d3b2bfd6dd776cd008f041"
+    },
+    "IMDCT_SHORT": {
+      "bytes": 576,
+      "sha256": "fb66a366a8bec98067d2d4fb7cbd9cb6d049cecbb2ac0663f3c29c99fcd1f98e"
+    },
+    "SYNTHESIS": {
+      "bytes": 16384,
+      "sha256": "bdc099f1b38765324c927b70549b92fd949d136011afd125fae0c995f7ae56fd"
+    },
+    "WINDOW_LONG": {
+      "bytes": 1152,
+      "sha256": "820cedebf694560bc9443cf87ec70a9dd78b2c23fac5c5026369e7260dac198f"
+    },
+    "WINDOW_SHORT": {
+      "bytes": 96,
+      "sha256": "cbd918f2cc7005b89dc8d05259d236153a5563f309093526851ded3fb0b73ae3"
+    },
+    "ALIAS_CS": {
+      "bytes": 64,
+      "sha256": "65ea729a340cbde0dc5f98328798034ab0608ec54b4f8ef82d58aefadc90c46c"
+    },
+    "ALIAS_CA": {
+      "bytes": 64,
+      "sha256": "cea167d7ad3103a103a9e8c4414fb69a3f18d38f7f298ef1782f8dacd0d4b96a"
+    },
+    "DEWINDOW": {
+      "bytes": 4096,
+      "sha256": "b0d82ea8f2c385e8dd1bce827423db2b8da01133d91504912bab67424d55dce8"
+    }
+  },
+  "images": [
+    {
+      "stage": "round6-expanded-base",
+      "binary_sha256": "5d66a636fd0ba3c5afe6ef958302ed4a03d500f71de3d4f205c55aea9aef0f2f",
+      "matrix_file_offset": 397448,
+      "matrix_rva": 400520,
+      "modulo_16": 8,
+      "modulo_64": 8
+    },
+    {
+      "stage": "borrowed-payload",
+      "binary_sha256": "3429529092fab3bc4107444e8a1a4c28ca660540da8f3d290cfd76f19deedf75",
+      "matrix_file_offset": 419512,
+      "matrix_rva": 424632,
+      "modulo_16": 8,
+      "modulo_64": 56
+    },
+    {
+      "stage": "zero-width-lsf",
+      "binary_sha256": "c2abc08429f0290da67b98dd81c2428ec9f6238fc090cae90686aa543d0f452b",
+      "matrix_file_offset": 420024,
+      "matrix_rva": 424632,
+      "modulo_16": 8,
+      "modulo_64": 56
+    },
+    {
+      "stage": "zero-synthesis",
+      "binary_sha256": "427665460b00c0d2bf2cfa03f10dd8bacfa526d63087914f1f485ec80870d7b9",
+      "matrix_file_offset": 420024,
+      "matrix_rva": 424632,
+      "modulo_16": 8,
+      "modulo_64": 56
+    },
+    {
+      "stage": "aligned-matrix-final",
+      "binary_sha256": "1132cf46a05263bafa72d060c66a674c331e24b1d57d78fabe91ff73382a2906",
+      "matrix_file_offset": 420096,
+      "matrix_rva": 424704,
+      "modulo_16": 0,
+      "modulo_64": 0
+    },
+    {
+      "stage": "silent-granules",
+      "binary_sha256": "b1b8fb343803caf98ca086a973c74a73b05b665012913446f5a5a0c21fbe7d86",
+      "matrix_file_offset": 428288,
+      "matrix_rva": 432896,
+      "modulo_16": 0,
+      "modulo_64": 0
+    }
+  ]
+}

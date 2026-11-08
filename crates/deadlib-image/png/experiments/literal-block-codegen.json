@@ -1,0 +1,20 @@
+{
+  "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a",
+  "pdb_sha256": "09342892ff1a27224fdb914afb8c07e079f6b39b616a183f2c5cb5115c9b3ef1",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018980",
+      "code_bytes": 2079,
+      "assembly": "experiments/literal-block-decompress_prefix.txt",
+      "assembly_sha256": "01d60119c986f32a98d9f567806b5ca8d99330da082a3c5549a723589418773f"
+    },
+    {
+      "name": "deadlib_image_png::zlib::inflate_codes",
+      "address": "0x1400191d0",
+      "code_bytes": 4502,
+      "assembly": "experiments/literal-block-inflate_codes.txt",
+      "assembly_sha256": "7e130a8b747ec8b74e0dc9b4f573309e098dbca2385b6440a60053e24a97ec57"
+    }
+  ]
+}

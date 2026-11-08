@@ -1,0 +1,55 @@
+{
+  "encoder": "LAME 64bits version 3.100 (http://lame.sf.net)",
+  "encoder_path": "/usr/bin/lame",
+  "encoder_sha256": "09b4b5c27915c767d9ad6591671e0d54705970ea694cfc4de0cb4df4c2133829",
+  "records": [
+    {
+      "source": "target\\deadlib-mp3-reference\\seek-corpus\\44100-2.wav",
+      "source_sha256": "a4d8a54f5d90f8fe6f07c351ba8cc665e66090974da14aae7eb7e3b4fac0f740",
+      "output": "target\\mp3-perf-20261028\\crc-fixtures\\protected-44100-2.mp3",
+      "output_sha256": "d2862094a6b4fbb1ebb5e272a1efe5a6328b0399db16d417482c3b3f8162ee26",
+      "bytes": 48900,
+      "protected_frames": 117,
+      "command": [
+        "wsl",
+        "--distribution",
+        "Debian",
+        "--exec",
+        "lame",
+        "--silent",
+        "--noreplaygain",
+        "-p",
+        "-b",
+        "128",
+        "-m",
+        "j",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2.wav",
+        "/mnt/c/GitHub/deadsync/target/mp3-perf-20261028/crc-fixtures/protected-44100-2.mp3"
+      ]
+    },
+    {
+      "source": "target\\deadlib-mp3-reference\\seek-corpus\\22050-1.wav",
+      "source_sha256": "62d72bcebe869e559f86393ccba69f69e5ec9c17f268d6292f49eff2d7926724",
+      "output": "target\\mp3-perf-20261028\\crc-fixtures\\protected-22050-1.mp3",
+      "output_sha256": "02189ce79870741eb340e8dac746b3d65bbb9dbb7a323ff55932588ce84ce088",
+      "bytes": 24867,
+      "protected_frames": 119,
+      "command": [
+        "wsl",
+        "--distribution",
+        "Debian",
+        "--exec",
+        "lame",
+        "--silent",
+        "--noreplaygain",
+        "-p",
+        "-b",
+        "64",
+        "-m",
+        "m",
+        "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1.wav",
+        "/mnt/c/GitHub/deadsync/target/mp3-perf-20261028/crc-fixtures/protected-22050-1.mp3"
+      ]
+    }
+  ]
+}

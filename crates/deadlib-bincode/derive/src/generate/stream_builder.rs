@@ -105,7 +105,7 @@ impl StreamBuilder {
     /// Add a lifetime to the stream.
     ///
     /// Note that this is the only way to add lifetimes, if you were to do:
-    /// ```ignore
+    /// ```text
     /// builder.punct('\'');
     /// builder.ident_str("static");
     /// ```
@@ -121,7 +121,7 @@ impl StreamBuilder {
     /// Add a lifetime to the stream.
     ///
     /// Note that this is the only way to add lifetimes, if you were to do:
-    /// ```ignore
+    /// ```text
     /// builder.punct('\'');
     /// builder.ident_str("static");
     /// ```

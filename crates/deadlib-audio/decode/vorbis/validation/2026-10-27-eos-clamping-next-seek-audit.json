@@ -1,0 +1,28 @@
+{
+  "scope": "Read-only next-step notes; no seek implementation change or parity claim.",
+  "source": "target\\deadlib-audio-reference\\vorbis\\lib\\vorbisfile.c",
+  "source_sha256": "cbb0f6b604846b31847a9c0c438b617dd7ec85dbf1a22bb1d4327f8792ff1f5d",
+  "findings": [
+    {
+      "function": "ov_pcm_seek_page",
+      "behavior": "Select marked pages with granule strictly less than target. A selected page may end in a non-audio packet; page landmarks are not limited to accepted audio."
+    },
+    {
+      "function": "ov_pcm_seek",
+      "behavior": "Start synthesis from the selected queued packet, skip non-audio packets, and reconstruct overlap only from accepted packets after that anchor."
+    },
+    {
+      "inventory_example": "eos-seek-115 target 1",
+      "sequential_frames": 576,
+      "reference_seek_position": 1,
+      "reference_suffix_frames": 0,
+      "native_suffix_frames": 575,
+      "reason_from_source": "Page anchor falls on the inserted non-audio packet at granule zero. The last accepted audio packet becomes the first overlap-priming packet after restart and emits no PCM."
+    },
+    {
+      "function": "ov_pcm_seek",
+      "behavior": "Track-only skipping trusts marked granules; subsequent PCM discard stops when pcm_offset reaches or exceeds the target. Trace these transitions and the fetch-path granule adjustment for the broadcast-offset overshoot cases; their exact cause remains to be validated."
+    }
+  ],
+  "next_validation": "Trace reference page anchors and track-only/PCM transitions before introducing an explicit vorbisfile seek state machine. Cover the 172 EOS inventory differences, positive broadcast offsets, backward/repeated requests, nil pages, continuations, chaining and malformed prefixes."
+}

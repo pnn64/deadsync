@@ -180,6 +180,7 @@ fn flat_sprite_passes_match_independent_composition() {
                     flip_y: false,
                     fade: [0.1, 0.2, 0.3, 0.4],
                     blend: BlendMode::Alpha,
+                    rot_x_deg: 0.0,
                     rot_y_deg: 160.0,
                     rot_z_deg: 32.0,
                     z: 3,

@@ -1,0 +1,302 @@
+--- a/src/zlib.rs
++++ b/src/zlib.rs
+@@ -534,32 +534,3 @@
+     bytes.extend_from_slice(&adler32(input).to_be_bytes());
+     Ok(bytes)
+ }
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn every_length_and_distance_code_matches_rfc1951_tables() {
+-        for length in 3..=258 {
+-            assert_eq!(
+-                length_code(length),
+-                LENGTH_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= length)
+-                    .unwrap(),
+-                "length={length}"
+-            );
+-        }
+-        for distance in 1..=32768 {
+-            assert_eq!(
+-                distance_code(distance),
+-                DIST_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= distance)
+-                    .unwrap(),
+-                "distance={distance}"
+-            );
+-        }
+-    }
+-}
+--- a/src/zlib/matcher.rs
++++ b/src/zlib/matcher.rs
+@@ -1,132 +1,132 @@
+-use crate::{Error, reserve};
+-
+-pub(super) const WINDOW: usize = 32768;
+-pub(super) const SEARCH: usize = 16;
+-
+-/// Spend deeper searches only after the current block shows useful repetition.
+-#[inline]
+-pub(super) fn searches(bits: usize, consumed: usize) -> usize {
+-    if consumed >= 256 && bits <= consumed * 4 {
+-        SEARCH
+-    } else {
+-        1
+-    }
+-}
+-
+-/// Sample long matches while retaining every position near the next search.
+-#[inline]
+-pub(super) fn positions(start: usize, length: usize) -> impl Iterator<Item = usize> {
+-    let end = start + length;
+-    let tail = end.saturating_sub(8).max(start + 1);
+-    (start + 1..tail).step_by(4).chain(tail..end)
+-}
+-
+-/// Flat four-byte hash heads and a 32 KiB ring of backward links. Low 32-bit
+-/// positions wrap independently of stream length; candidates are bounded by
+-/// distance and their bytes are always verified before emitting a match.
+-pub(super) struct Matcher {
+-    heads: Vec<u32>,
+-    previous: Vec<u16>,
+-}
+-impl Matcher {
+-    pub(super) fn new() -> Result<Self, Error> {
+-        let mut heads = Vec::new();
+-        reserve(&mut heads, 65536)?;
+-        heads.resize(65536, u32::MAX);
+-        let mut previous = Vec::new();
+-        reserve(&mut previous, WINDOW)?;
+-        previous.resize(WINDOW, 0);
+-        Ok(Self { heads, previous })
+-    }
+-    pub(super) fn memory(&self) -> usize {
+-        self.heads.capacity() * 4 + self.previous.capacity() * 2
+-    }
+-    #[inline]
+-    pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
+-        let word = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+-        let hash = (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize;
+-        let head = self.heads[hash];
+-        self.heads[hash] = position as u32;
+-        let distance = (position as u32).wrapping_sub(head) as usize;
+-        let candidate = if head != u32::MAX && (1..=WINDOW).contains(&distance) {
+-            position.checked_sub(distance)
+-        } else {
+-            None
+-        };
+-        self.previous[position & (WINDOW - 1)] = if candidate.is_some() {
+-            distance as u16
+-        } else {
+-            0
+-        };
+-        candidate
+-    }
+-    #[inline]
+-    pub(super) fn next(&self, candidate: usize, position: usize) -> Option<usize> {
+-        let distance = self.previous[candidate & (WINDOW - 1)] as usize;
+-        if distance == 0 {
+-            return None;
+-        }
+-        candidate
+-            .checked_sub(distance)
+-            .filter(|&next| position - next <= WINDOW)
+-    }
+-}
+-
+-/// Equal-prefix length in portable eight-byte groups. Little-endian words make
+-/// trailing-zero counts identify the first differing byte on every host.
+-#[inline(always)]
+-pub(super) fn prefix(a: &[u8], b: &[u8]) -> usize {
+-    debug_assert_eq!(a.len(), b.len());
+-    let mut equal = 0;
+-    for (a, b) in a.as_chunks::<8>().0.iter().zip(b.as_chunks::<8>().0) {
+-        let different = u64::from_le_bytes(*a) ^ u64::from_le_bytes(*b);
+-        if different != 0 {
+-            return equal + different.trailing_zeros() as usize / 8;
+-        }
+-        equal += 8;
+-    }
+-    for (&a, &b) in a[equal..].iter().zip(&b[equal..]) {
+-        if a != b {
+-            break;
+-        }
+-        equal += 1;
+-    }
+-    equal
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn every_prefix_mismatch_and_tail() {
+-        for size in 0..=258 {
+-            let a: Vec<_> = (0..size).map(|n| (n * 71) as u8).collect();
+-            assert_eq!(prefix(&a, &a), size);
+-            for mismatch in 0..size {
+-                let mut b = a.clone();
+-                b[mismatch] ^= 0x81;
+-                assert_eq!(prefix(&a, &b), mismatch);
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn bounded_history_chains_and_wrapping_head_positions() {
+-        let mut bases = vec![0];
+-        if let Some(wrapped) = (u32::MAX as usize).checked_add(1) {
+-            bases.extend([wrapped - 65, wrapped]);
+-        }
+-        for base in bases {
+-            let mut matcher = Matcher::new().unwrap();
+-            let bytes = [1, 2, 3, 4];
+-            assert_eq!(matcher.insert(&bytes, base), None);
+-            assert_eq!(matcher.insert(&bytes, base + 32), Some(base));
+-            assert_eq!(matcher.insert(&bytes, base + WINDOW), Some(base + 32));
+-            assert_eq!(matcher.next(base + 32, base + WINDOW), Some(base));
+-            assert_eq!(matcher.next(base, base + WINDOW), None);
+-            assert_eq!(matcher.insert(&bytes, base + WINDOW * 2 + 1), None);
+-            assert_eq!(matcher.memory(), 65536 * 4 + WINDOW * 2);
+-        }
+-    }
+-}
++use crate::{Error, reserve};
++
++pub(super) const WINDOW: usize = 32768;
++pub(super) const SEARCH: usize = 16;
++
++/// Spend deeper searches only after the current block shows useful repetition.
++#[inline]
++pub(super) fn searches(bits: usize, consumed: usize) -> usize {
++    if consumed >= 256 && bits <= consumed * 3 {
++        SEARCH
++    } else {
++        1
++    }
++}
++
++/// Sample long matches while retaining every position near the next search.
++#[inline]
++pub(super) fn positions(start: usize, length: usize) -> impl Iterator<Item = usize> {
++    let end = start + length;
++    let tail = end.saturating_sub(8).max(start + 1);
++    (start + 1..tail).step_by(4).chain(tail..end)
++}
++
++/// Flat four-byte hash heads and a 32 KiB ring of backward links. Low 32-bit
++/// positions wrap independently of stream length; candidates are bounded by
++/// distance and their bytes are always verified before emitting a match.
++pub(super) struct Matcher {
++    heads: Vec<u32>,
++    previous: Vec<u16>,
++}
++impl Matcher {
++    pub(super) fn new() -> Result<Self, Error> {
++        let mut heads = Vec::new();
++        reserve(&mut heads, 65536)?;
++        heads.resize(65536, u32::MAX);
++        let mut previous = Vec::new();
++        reserve(&mut previous, WINDOW)?;
++        previous.resize(WINDOW, 0);
++        Ok(Self { heads, previous })
++    }
++    pub(super) fn memory(&self) -> usize {
++        self.heads.capacity() * 4 + self.previous.capacity() * 2
++    }
++    #[inline]
++    pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
++        let word = u32::from_le_bytes(bytes[..4].try_into().unwrap());
++        let hash = (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize;
++        let head = self.heads[hash];
++        self.heads[hash] = position as u32;
++        let distance = (position as u32).wrapping_sub(head) as usize;
++        let candidate = if head != u32::MAX && (1..=WINDOW).contains(&distance) {
++            position.checked_sub(distance)
++        } else {
++            None
++        };
++        self.previous[position & (WINDOW - 1)] = if candidate.is_some() {
++            distance as u16
++        } else {
++            0
++        };
++        candidate
++    }
++    #[inline]
++    pub(super) fn next(&self, candidate: usize, position: usize) -> Option<usize> {
++        let distance = self.previous[candidate & (WINDOW - 1)] as usize;
++        if distance == 0 {
++            return None;
++        }
++        candidate
++            .checked_sub(distance)
++            .filter(|&next| position - next <= WINDOW)
++    }
++}
++
++/// Equal-prefix length in portable eight-byte groups. Little-endian words make
++/// trailing-zero counts identify the first differing byte on every host.
++#[inline(always)]
++pub(super) fn prefix(a: &[u8], b: &[u8]) -> usize {
++    debug_assert_eq!(a.len(), b.len());
++    let mut equal = 0;
++    for (a, b) in a.as_chunks::<8>().0.iter().zip(b.as_chunks::<8>().0) {
++        let different = u64::from_le_bytes(*a) ^ u64::from_le_bytes(*b);
++        if different != 0 {
++            return equal + different.trailing_zeros() as usize / 8;
++        }
++        equal += 8;
++    }
++    for (&a, &b) in a[equal..].iter().zip(&b[equal..]) {
++        if a != b {
++            break;
++        }
++        equal += 1;
++    }
++    equal
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn every_prefix_mismatch_and_tail() {
++        for size in 0..=258 {
++            let a: Vec<_> = (0..size).map(|n| (n * 71) as u8).collect();
++            assert_eq!(prefix(&a, &a), size);
++            for mismatch in 0..size {
++                let mut b = a.clone();
++                b[mismatch] ^= 0x81;
++                assert_eq!(prefix(&a, &b), mismatch);
++            }
++        }
++    }
++
++    #[test]
++    fn bounded_history_chains_and_wrapping_head_positions() {
++        let mut bases = vec![0];
++        if let Some(wrapped) = (u32::MAX as usize).checked_add(1) {
++            bases.extend([wrapped - 65, wrapped]);
++        }
++        for base in bases {
++            let mut matcher = Matcher::new().unwrap();
++            let bytes = [1, 2, 3, 4];
++            assert_eq!(matcher.insert(&bytes, base), None);
++            assert_eq!(matcher.insert(&bytes, base + 32), Some(base));
++            assert_eq!(matcher.insert(&bytes, base + WINDOW), Some(base + 32));
++            assert_eq!(matcher.next(base + 32, base + WINDOW), Some(base));
++            assert_eq!(matcher.next(base, base + WINDOW), None);
++            assert_eq!(matcher.insert(&bytes, base + WINDOW * 2 + 1), None);
++            assert_eq!(matcher.memory(), 65536 * 4 + WINDOW * 2);
++        }
++    }
++}

@@ -1,0 +1,72 @@
+    Finished `release` profile [optimized] target(s) in 0.56s
+     Running tests\seeking.rs (target\vorbis-completion\release\deps\seeking-b2a2d9238e931d44.exe)
+
+running 1 test
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\BACK UP\backup.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.885958672e-7, RMS 6.713909101e-8, signal peak 1.048037
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\BOSSY\bossy.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 5.582065450e-8, signal peak 1.061128
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\COOL_EXCEPTION\cool_exception.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.066394806e-7, RMS 6.901392055e-8, signal peak 1.090747
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Can't You Bounce\bounce.ogg
+libvorbisfile/seek: 393218 samples, peak error 7.748603821e-7, RMS 7.276764197e-8, signal peak 1.133734
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Dysangel\dysangel.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 5.576375033e-8, signal peak 1.040201
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Fantastic World\fantasticworld.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.172325134e-7, RMS 5.894056459e-8, signal peak 1.026467
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Horsepower\horsepower.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.513429642e-7, RMS 6.261447145e-8, signal peak 1.144961
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Melody Mountain\melodymountain.ogg
+libvorbisfile/seek: 393218 samples, peak error 3.874301910e-7, RMS 4.150831932e-8, signal peak 1.034870
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Oceania 909\oceania909.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.470348358e-7, RMS 7.950746964e-8, signal peak 1.071965
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Roadman\roadman.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 6.225041450e-8, signal peak 1.121292
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Shoes (Club Fantastic Edit)\shoes.ogg
+libvorbisfile/seek: 393218 samples, peak error 6.109476089e-7, RMS 7.891047914e-8, signal peak 1.028021
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Six Million\sixmillion.ogg
+libvorbisfile/seek: 393218 samples, peak error 6.556510925e-7, RMS 9.187130391e-8, signal peak 1.171563
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Wandering (VIP)\wanderingvip.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.960464478e-7, RMS 9.197349709e-8, signal peak 1.126934
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Y.E.A.H\Y.E.A.H.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.960464478e-7, RMS 1.022618785e-7, signal peak 1.255368
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Adore\adore.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.246830940e-7, RMS 5.519262257e-8, signal peak 0.939370
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Artifacts\artifacts.ogg
+libvorbisfile/seek: 393218 samples, peak error 3.576278687e-7, RMS 5.215422633e-8, signal peak 1.006757
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\BOSSY (Jorts Speedy Mix)\bossyremix.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.960464478e-7, RMS 8.024426598e-8, signal peak 1.069379
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Beachside Photoshoot\Beachside Photoshoot.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.960464478e-7, RMS 6.253685217e-8, signal peak 1.072427
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\DNA\dna.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.662441254e-7, RMS 7.174378267e-8, signal peak 1.025097
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Oceania 909 (T2KAZUYA Remix)\oceaniat2k.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 6.572593233e-8, signal peak 1.022755
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\POT\pot.ogg
+libvorbisfile/seek: 393218 samples, peak error 7.748603821e-7, RMS 7.521741325e-8, signal peak 1.021470
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\SSS\sss.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 5.241577506e-8, signal peak 1.046075
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\SWEETHEART\sweetheart.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 6.428688359e-8, signal peak 0.902029
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Save New Jersey\Save New Jersey.ogg
+libvorbisfile/seek: 393218 samples, peak error 6.258487701e-7, RMS 8.820954717e-8, signal peak 1.030477
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Singularity\Singularity.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.066394806e-7, RMS 5.565363671e-8, signal peak 1.040164
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Step It\stepit.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 5.735990553e-8, signal peak 1.039748
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\TerpZone\terpzone.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 6.804974381e-8, signal peak 1.027808
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\WRVTH\wrvth.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 6.762688933e-8, signal peak 1.153724
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\We Can Bounce\WeCanBounce_CleanUp.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.401670933e-7, RMS 6.347407535e-8, signal peak 1.105090
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Wipeout\wipeout.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.768371582e-7, RMS 5.452021260e-8, signal peak 1.052951
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\demonstration protocol\demonstration_protocol.ogg
+libvorbisfile/seek: 393218 samples, peak error 4.172325134e-7, RMS 4.238682427e-8, signal peak 0.736705
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\succulynt\succulynt.ogg
+libvorbisfile/seek: 393218 samples, peak error 5.364418030e-7, RMS 5.632408506e-8, signal peak 1.059163
+32 files, 1600 seeks: 12582976 samples, peak error 7.748603821e-7, RMS 6.781256003e-8, signal peak 1.255368
+test libvorbisfile_local_corpus_repeated_sample_accurate_seeks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 4.22s

@@ -1,0 +1,288 @@
+--- a/src/zlib.rs
++++ b/src/zlib.rs
+@@ -405,31 +405,6 @@
+     }
+ }
+ 
+-#[inline(always)]
+-fn length_code(length: usize) -> usize {
+-    debug_assert!((3..=258).contains(&length));
+-    if length <= 10 {
+-        length - 3
+-    } else if length == 258 {
+-        28
+-    } else {
+-        let value = length - 3;
+-        let high = value.ilog2() as usize;
+-        (high - 1) * 4 + ((value >> (high - 2)) & 3)
+-    }
+-}
+-#[inline(always)]
+-fn distance_code(distance: usize) -> usize {
+-    debug_assert!((1..=32768).contains(&distance));
+-    let value = distance - 1;
+-    if value < 4 {
+-        value
+-    } else {
+-        let high = value.ilog2() as usize;
+-        high * 2 + ((value >> (high - 1)) & 1)
+-    }
+-}
+-
+ /// Encode a standards-compliant zlib stream with stored or fixed Huffman LZ77 blocks.
+ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+     let bound = input
+@@ -465,17 +440,13 @@
+             let final_block = end == input.len();
+             let checkpoint = w.start_fixed(final_block);
+             let mut pos = block_start;
+-            let mut misses = 0usize;
+             while pos < end {
+                 let mut length = 0;
+                 let mut distance = 0;
+                 if pos + 3 < input.len() {
+                     let mut candidate = matcher.insert(&input[pos..], pos);
+                     let max = (end - pos).min(258);
+-                    let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
+-                        - checkpoint.count as usize;
+-                    let searches = matcher::searches(bits, pos - block_start);
+-                    for attempt in 0..searches {
++                    for _ in 0..matcher::SEARCH {
+                         let Some(previous) = candidate else {
+                             break;
+                         };
+@@ -495,35 +466,25 @@
+                                 break;
+                             }
+                         }
+-                        if attempt + 1 == searches {
+-                            break;
+-                        }
+                         candidate = matcher.next(previous, pos);
+                     }
+                 }
+                 if length >= 3 {
+-                    misses = 0;
+-                    let index = length_code(length);
++                    let index = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
+                     w.literal(257 + index);
+                     w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+-                    let index = distance_code(distance);
++                    let index = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
+                     w.write((index as u32).reverse_bits() >> 27, 5);
+                     w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+-                    for next in matcher::positions(pos, length) {
++                    for next in pos + 1..pos + length {
+                         if next + 3 < input.len() {
+                             matcher.insert(&input[next..], next);
+                         }
+                     }
+                     pos += length;
+                 } else {
+-                    // Bound work on sustained incompressible input. Search
+-                    // resumes within at most 15 literal bytes of new structure.
+-                    let count = (1 + (misses >> 8)).min(16).min(end - pos);
+-                    for &byte in &input[pos..pos + count] {
+-                        w.literal(byte as usize);
+-                    }
+-                    misses += count;
+-                    pos += count;
++                    w.literal(input[pos] as usize);
++                    pos += 1;
+                 }
+             }
+             w.finish_fixed(checkpoint, &input[block_start..end], final_block);
+@@ -534,32 +495,3 @@
+     bytes.extend_from_slice(&adler32(input).to_be_bytes());
+     Ok(bytes)
+ }
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn every_length_and_distance_code_matches_rfc1951_tables() {
+-        for length in 3..=258 {
+-            assert_eq!(
+-                length_code(length),
+-                LENGTH_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= length)
+-                    .unwrap(),
+-                "length={length}"
+-            );
+-        }
+-        for distance in 1..=32768 {
+-            assert_eq!(
+-                distance_code(distance),
+-                DIST_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= distance)
+-                    .unwrap(),
+-                "distance={distance}"
+-            );
+-        }
+-    }
+-}
+--- a/src/zlib/deflate.rs
++++ b/src/zlib/deflate.rs
+@@ -1,6 +1,5 @@
+ use super::{
+-    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer,
+-    distance_code, length_code, matcher,
++    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer, matcher,
+ };
+ use crate::{Error, checksum::Adler32, reserve};
+ 
+@@ -164,7 +163,7 @@
+             self.writer.stored(&self.block, final_block);
+         } else {
+             let checkpoint = self.writer.start_fixed(final_block);
+-            // Hash the previous block's three trailing positions once their
++            // Hash the previous block's two trailing positions once their
+             // lookahead is available. Absolute positions retain full history.
+             for back in (1..=3).rev() {
+                 if self.encoded >= back && self.block.len() >= 4 - back {
+@@ -179,7 +178,6 @@
+                 }
+             }
+             let mut pos = 0;
+-            let mut misses = 0usize;
+             while pos < self.block.len() {
+                 let global = self.encoded + pos;
+                 let mut length = 0;
+@@ -190,11 +188,7 @@
+                         .as_mut()
+                         .unwrap()
+                         .insert(&self.block[pos..], global);
+-                    let bits = (self.writer.bytes.len() - checkpoint.bytes) * 8
+-                        + self.writer.count as usize
+-                        - checkpoint.count as usize;
+-                    let searches = matcher::searches(bits, pos);
+-                    for attempt in 0..searches {
++                    for _ in 0..matcher::SEARCH {
+                         let Some(previous) = candidate else {
+                             break;
+                         };
+@@ -212,49 +206,34 @@
+                                 break;
+                             }
+                         }
+-                        if attempt + 1 == searches {
+-                            break;
+-                        }
+                         candidate = self.matcher.as_ref().unwrap().next(previous, global);
+                     }
+                 }
+                 let count = if length >= 3 {
+-                    misses = 0;
+-                    let index = length_code(length);
++                    let index = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
+                     self.writer.literal(257 + index);
+                     self.writer
+                         .write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+-                    let index = distance_code(distance);
++                    let index = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
+                     self.writer.write((index as u32).reverse_bits() >> 27, 5);
+                     self.writer
+                         .write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+                     length
+                 } else {
+-                    let count = (1 + (misses >> 8)).min(16).min(self.block.len() - pos);
+-                    for &byte in &self.block[pos..pos + count] {
+-                        self.writer.literal(byte as usize);
++                    self.writer.literal(self.block[pos] as usize);
++                    1
++                };
++                for next in pos..pos + count {
++                    if next != pos && next + 3 < self.block.len() {
++                        self.matcher
++                            .as_mut()
++                            .unwrap()
++                            .insert(&self.block[next..], self.encoded + next);
+                     }
+-                    misses += count;
+-                    count
+-                };
+-                if length >= 3 {
+-                    for next in matcher::positions(pos, count) {
+-                        if next + 3 < self.block.len() {
+-                            self.matcher
+-                                .as_mut()
+-                                .unwrap()
+-                                .insert(&self.block[next..], self.encoded + next);
+-                        }
+-                    }
++                    self.history[(self.encoded + next) & (BLOCK - 1)] = self.block[next];
+                 }
+                 pos += count;
+             }
+-            // Current-block references read from `block`; keep the previous
+-            // block intact until all matches have been selected.
+-            let at = self.encoded & (BLOCK - 1);
+-            let first = self.block.len().min(BLOCK - at);
+-            self.history[at..at + first].copy_from_slice(&self.block[..first]);
+-            self.history[..self.block.len() - first].copy_from_slice(&self.block[first..]);
+             self.writer
+                 .finish_fixed(checkpoint, &self.block, final_block);
+         }
+@@ -268,7 +247,6 @@
+             self.finishing = true;
+         }
+     }
+-    #[inline(always)]
+     fn match_length(&self, previous: usize, pos: usize, max: usize) -> usize {
+         let mut length = 0;
+         while length < max {
+--- a/src/zlib/matcher.rs
++++ b/src/zlib/matcher.rs
+@@ -2,24 +2,6 @@
+ 
+ pub(super) const WINDOW: usize = 32768;
+ pub(super) const SEARCH: usize = 16;
+-
+-/// Spend deeper searches only after the current block shows useful repetition.
+-#[inline]
+-pub(super) fn searches(bits: usize, consumed: usize) -> usize {
+-    if consumed >= 256 && bits <= consumed * 4 {
+-        SEARCH
+-    } else {
+-        1
+-    }
+-}
+-
+-/// Sample long matches while retaining every position near the next search.
+-#[inline]
+-pub(super) fn positions(start: usize, length: usize) -> impl Iterator<Item = usize> {
+-    let end = start + length;
+-    let tail = end.saturating_sub(8).max(start + 1);
+-    (start + 1..tail).step_by(4).chain(tail..end)
+-}
+ 
+ /// Flat four-byte hash heads and a 32 KiB ring of backward links. Low 32-bit
+ /// positions wrap independently of stream length; candidates are bounded by
+@@ -41,7 +23,6 @@
+     pub(super) fn memory(&self) -> usize {
+         self.heads.capacity() * 4 + self.previous.capacity() * 2
+     }
+-    #[inline]
+     pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
+         let word = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+         let hash = (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize;
+@@ -60,7 +41,6 @@
+         };
+         candidate
+     }
+-    #[inline]
+     pub(super) fn next(&self, candidate: usize, position: usize) -> Option<usize> {
+         let distance = self.previous[candidate & (WINDOW - 1)] as usize;
+         if distance == 0 {
+@@ -74,7 +54,6 @@
+ 
+ /// Equal-prefix length in portable eight-byte groups. Little-endian words make
+ /// trailing-zero counts identify the first differing byte on every host.
+-#[inline(always)]
+ pub(super) fn prefix(a: &[u8], b: &[u8]) -> usize {
+     debug_assert_eq!(a.len(), b.len());
+     let mut equal = 0;

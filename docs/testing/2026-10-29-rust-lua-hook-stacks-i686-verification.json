@@ -1,0 +1,11 @@
+{
+  "corpus_report_sha256": "83c3582968dc454ae4423ad02fbbfe94ad8f121b76a009a2fb6db3b79a9e6719",
+  "suite_report_sha256": "54230ffa4d2708c0edbc307801b11e7e06c55015fcc87eed4b7e7b5c6bf342d8",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_checks": 4,
+  "checked_reference_enabled": true,
+  "observations": 172,
+  "audit_script_sha256": "752670c92c52335b01854c40436ae540da43646baae1f3407030373bf3921206"
+}

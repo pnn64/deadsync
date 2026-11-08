@@ -1,0 +1,10 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\ogg\Release\ogg.lib
+  vorbis.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\vorbis\lib\Release\vorbis.lib
+  vorbisfile.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\vorbis\lib\Release\vorbisfile.lib
+  oracle.c
+  deadlib_vorbis_oracle.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\Release\deadlib_vorbis_oracle.exe
+  vorbisenc.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\vorbis\lib\Release\vorbisenc.lib
+  deadlib_vorbis_upstream_vectors.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-oracle-build\Release\deadlib_vorbis_upstream_vectors.exe
+  Building Custom Rule C:/GitHub/deadsync/crates/deadlib-audio/decode/vorbis/tests/oracle/CMakeLists.txt

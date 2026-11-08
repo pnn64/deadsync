@@ -72,7 +72,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         if matches!(code, KeyCode::F4 | KeyCode::Escape) {
             return ThemeEffect::Navigate(Screen::Menu);
         }
-        let key_str = format!("Keyboard: KeyCode::{code:?}");
+        let key_str = crate::i18n::tr_fmt("UiMessages", "KeyboardKeyCodeCode", &[("code", &format!("{:?}", code))]).to_string();
         state.last_inputs.push_front((key_str, Instant::now()));
         if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
             state.last_inputs.pop_back();
@@ -184,11 +184,11 @@ pub fn push_actors(
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 20.0):
-        zoomtoheight(15.0): font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext("Actor System & Input Sandbox"): horizalign(center)
+        zoomtoheight(15.0): font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(crate::i18n::tr("Sandbox", "Title")): horizalign(center)
     ));
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 60.0):
-        zoomtoheight(15.0): font("miso"): settext("Press ESC or F4 to return to Menu"): horizalign(center)
+        zoomtoheight(15.0): font("miso"): settext(crate::i18n::tr("Sandbox", "ReturnHint")): horizalign(center)
     ));
 
     // Display the input log

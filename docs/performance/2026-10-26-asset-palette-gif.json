@@ -1,0 +1,10 @@
+{
+  "before": {
+    "sha256": "409a54f4f6afa4b713a5054aa940dd112f7ba7100303fc94101826013717bf56",
+    "checks": "\nrunning 2 tests\ntest decode::palette_perf::palette_decoders_match_frozen_pixels_and_truncation_errors ... ok\ntest upload::upload_perf::prepared_and_ordinary_replacements_match_frozen_queue_state ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 49.78s\n\n"
+  },
+  "after": {
+    "sha256": "160b460f7085f0414dd8fa09affbbdb41fc1f7be5d7377cf8e81562414821649",
+    "checks": "\nrunning 2 tests\ntest decode::palette_perf::palette_decoders_match_frozen_pixels_and_truncation_errors ... ok\ntest upload::upload_perf::prepared_and_ordinary_replacements_match_frozen_queue_state ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 41.01s\n\n"
+  }
+}

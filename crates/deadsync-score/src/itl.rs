@@ -843,6 +843,24 @@ pub fn runtime_set_online_srpg_self_score_for_profile_dirs<P>(
     );
 }
 
+// Hashbrown's cache can use the existing bincode map layout directly:
+// a u64 entry count followed by key/value pairs, with no second hash table.
+struct OnlineItlSelfIndexRef<'a>(&'a OnlineItlSelfCacheMap);
+
+impl Encode for OnlineItlSelfIndexRef<'_> {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        (self.0.len() as u64).encode(encoder)?;
+        for (key, value) in self.0 {
+            key.encode(encoder)?;
+            value.encode(encoder)?;
+        }
+        Ok(())
+    }
+}
+
 pub fn save_online_itl_self_index_file(
     path: &Path,
     by_key: &OnlineItlSelfCacheMap,
@@ -855,12 +873,10 @@ pub fn save_online_itl_self_index_file(
         error,
     })?;
 
-    let std_by_key: HashMap<_, _> = by_key.iter().collect();
-    let buf = bincode::encode_to_vec(&std_by_key, bincode::config::standard()).map_err(|_| {
-        OnlineItlSelfIndexWriteError::Encode {
+    let buf = bincode::encode_to_vec(OnlineItlSelfIndexRef(by_key), bincode::config::standard())
+        .map_err(|_| OnlineItlSelfIndexWriteError::Encode {
             path: path.to_path_buf(),
-        }
-    })?;
+        })?;
     let tmp_path = path.with_extension("tmp");
     fs::write(&tmp_path, buf).map_err(|error| OnlineItlSelfIndexWriteError::WriteTemp {
         path: tmp_path.clone(),
@@ -1873,6 +1889,7 @@ pub fn itl_song_folder_unlocked(data: &ItlFileData, song_folder: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[inline]
 pub fn itl_mark_unlock_folders<'a, I>(data: &mut ItlFileData, folders: I) -> bool
 where
     I: IntoIterator<Item = &'a str>,
@@ -1881,7 +1898,13 @@ where
     for folder in folders {
         let folder = folder.trim();
         if !folder.is_empty() {
-            changed |= data.unlock_folders.insert(folder.to_string(), true) != Some(true);
+            changed |= match data.unlock_folders.entry_ref(folder) {
+                hashbrown::hash_map::EntryRef::Occupied(mut entry) => !entry.insert(true),
+                hashbrown::hash_map::EntryRef::Vacant(entry) => {
+                    entry.insert(true);
+                    true
+                }
+            };
         }
     }
     changed
@@ -1909,15 +1932,19 @@ pub fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
         while offset < bytes.len() && !bytes[offset].is_ascii_digit() {
             offset += 1;
         }
-        let mut value = (offset < bytes.len()).then_some(0_u32);
+        if offset == bytes.len() {
+            return None;
+        }
+        let mut value = u64::from(bytes[offset] - b'0');
+        offset += 1;
         while offset < bytes.len() && bytes[offset].is_ascii_digit() {
-            value = value
-                .and_then(|value| value.checked_mul(10))
-                .and_then(|value| value.checked_add(u32::from(bytes[offset] - b'0')));
+            // Keep overflow sticky without carrying an Option through each digit.
+            // This cap also keeps the next multiplication within u64 in debug builds.
+            value = (value * 10 + u64::from(bytes[offset] - b'0')).min(u64::from(u32::MAX) + 1);
             offset += 1;
         }
-        if let Some(value) = value {
-            values[found] = value;
+        if value <= u64::from(u32::MAX) {
+            values[found] = value as u32;
             found += 1;
         }
     }
@@ -2204,6 +2231,7 @@ mod tests {
             chart_name: String::new(),
             meter: 0,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -2271,10 +2299,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts,
         })
@@ -3316,11 +3346,5 @@ mod tests {
                 total_points: 150,
             }
         );
-    }
-    mod ranking_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/itl_ranking.rs"));
-    }
-    mod online_cache_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/online_itl.rs"));
     }
 }

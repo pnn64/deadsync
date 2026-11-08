@@ -165,3 +165,6 @@ fn derive_borrow_decode_inner(input: TokenStream) -> Result<TokenStream> {
     generator.export_to_file("bincode", "BorrowDecode");
     generator.finish()
 }
+
+#[cfg(test)]
+mod embedded_doc_tests;

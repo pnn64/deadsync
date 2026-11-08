@@ -33,13 +33,20 @@ impl FromStr for CoinMode {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "pay" => Ok(Self::Pay),
-            "free" => Ok(Self::Free),
-            "home" => Ok(Self::Home),
-            _ => Err(()),
+    match value.trim().as_bytes() {
+        [a, b, c] if [*a | 0x20, *b | 0x20, *c | 0x20] == *b"pay" => Ok(Self::Pay),
+        [a, b, c, d] => {
+            const FREE: u32 = u32::from_le_bytes(*b"free");
+            const HOME: u32 = u32::from_le_bytes(*b"home");
+            match u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020 {
+                FREE => Ok(Self::Free),
+                HOME => Ok(Self::Home),
+                _ => Err(()),
+            }
         }
+        _ => Err(()),
     }
+}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

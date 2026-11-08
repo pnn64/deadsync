@@ -12,7 +12,7 @@ pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
 
 pub fn timing_window_arg_index(value: Value) -> Option<i32> {
     match value {
-        Value::Integer(value) => Some(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Value::Integer(value) => Some(value.clamp(i32::MIN.into(), i32::MAX.into()) as i32),
         Value::Number(value) if value.is_finite() => Some(
             value
                 .round()
@@ -40,22 +40,16 @@ pub fn timing_window_arg_index(value: Value) -> Option<i32> {
 }
 
 pub fn timing_window_name(value: Value) -> Option<&'static str> {
-    let index = match value {
-        Value::Integer(value) => i32::try_from(value).ok(),
-        Value::Number(value) if value.is_finite() => Some(value.round() as i32),
-        Value::String(text) => text
-            .to_str()
-            .ok()?
-            .chars()
-            .rev()
-            .find(char::is_ascii_digit)
-            .and_then(|ch| ch.to_digit(10))
-            .map(|value| value as i32),
-        _ => None,
-    }?;
-    (1..=5)
-        .contains(&index)
-        .then(|| SONG_LUA_TIMING_WINDOW_NAMES[index as usize - 1])
+    // GameConstantsAndTypes::TimingWindow is zero-based. GetDisabledTimingWindows
+    // only lists W1..W5, but the native bitset accepts every TimingWindow.
+    const NAMES: [&str; 10] = [
+        "TimingWindow_W1", "TimingWindow_W2", "TimingWindow_W3",
+        "TimingWindow_W4", "TimingWindow_W5", "TimingWindow_Mine",
+        "TimingWindow_Attack", "TimingWindow_Hold", "TimingWindow_Roll",
+        "TimingWindow_Checkpoint",
+    ];
+    crate::song_tables::option_enum(Some(&value), &NAMES, "TimingWindow")
+        .ok().map(|index| NAMES[index])
 }
 
 #[must_use]
@@ -129,16 +123,14 @@ mod tests {
         let lua = mlua::Lua::new();
         assert_eq!(
             timing_window_name(Value::Integer(1)),
-            Some("TimingWindow_W1")
+            Some("TimingWindow_W2")
         );
         assert_eq!(
             timing_window_name(Value::String(lua.create_string("TimingWindow_W5").unwrap())),
             Some("TimingWindow_W5")
         );
-        assert_eq!(timing_window_name(Value::Integer(8)), None);
+        assert_eq!(timing_window_name(Value::Integer(0)), Some("TimingWindow_W1"));
+        assert_eq!(timing_window_name(Value::Integer(8)), Some("TimingWindow_Roll"));
+        assert_eq!(timing_window_name(Value::Integer(10)), None);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/judgment_offsets.rs"]
-mod judgment_offsets_perf;

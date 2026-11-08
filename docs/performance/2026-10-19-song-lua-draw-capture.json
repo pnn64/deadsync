@@ -1,0 +1,4942 @@
+{
+  "baseline_commit": "3d8094d9e",
+  "worktree_head": "3d8094d9e904ef5db711264f3ad9de7f94d1af75",
+  "executable_sha256": "0567cfbea11802b02710e89034d6e80324bf56d4b95ed1b7ded33712652e581f",
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/draw_capture.rs": "cb48c1a6501186af94c78460fdf9cf4fa71b27813441cbebc7eca41bf07c00f9",
+    "crates/deadsync-song-lua/tests/perf/draw_capture.rs": "edbe0d2e06a9140d0978bf96725ac3a45d9fcc24e5736384bb132ab4969790ff",
+    "crates/deadsync-song-lua/tests/perf/draw_capture/baseline.rs": "8c39fb0ee55c54955aa7ed77e550c1d5033145924576ac06b583aeb27b4971e0",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "Cargo.lock": "39c34b9fa61f001ec0cfb60593ace95563c05fc5e11300c398a63a06141ce61d",
+    "Cargo.toml": "605048d1b7213e8ef0d763d15a73772680f954f1e42614a548f72068fa237a93",
+    "scripts/benchmark_song_lua_draw_capture.py": "8f468655bc7a1da708369f5a6d62f751537f4c12fefece9c8d78eb7018f9a014"
+  },
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-pc-windows-msvc\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "system": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_processors": 44,
+  "logical_cpu": 2,
+  "profile": "release, opt-level=3, LTO disabled; identical executable and allocator for both variants",
+  "cycles": "QueryThreadCycleTime: scheduled current-thread CPU cycles, including kernel time; not a user-only PMU counter",
+  "allocation_scope": "current-thread Rust GlobalAlloc, including mlua; direct native malloc excluded",
+  "timing_scope": "capture: run calls retaining frames; conversion: consume capture, construct and drop output frames; fixture setup and Lua teardown excluded",
+  "samples_per_variant_per_workload": 54,
+  "summary": [
+    {
+      "before": {
+        "ns": 108215.625,
+        "thread_cycles": 237029.140625,
+        "allocations": 48.40625,
+        "reallocations": 8.1875,
+        "allocated_bytes": 64827.34375,
+        "frames_per_second": 9240.809725952236
+      },
+      "after": {
+        "ns": 99917.1875,
+        "thread_cycles": 218748.890625,
+        "allocations": 36.40625,
+        "reallocations": 2.1875,
+        "allocated_bytes": 40354.34375,
+        "frames_per_second": 10008.28811359407
+      },
+      "workload": "capture_shallow",
+      "throughput_gain_percent": 8.305315339265329,
+      "cycle_reduction_percent": 7.7122373864236815
+    },
+    {
+      "before": {
+        "ns": 2227525.0,
+        "thread_cycles": 4877289.916666667,
+        "allocations": 602.0,
+        "reallocations": 83.25,
+        "allocated_bytes": 1078797.3333333333,
+        "frames_per_second": 448.92874378514273
+      },
+      "after": {
+        "ns": 2162854.1666666665,
+        "thread_cycles": 4735520.375,
+        "allocations": 505.0,
+        "reallocations": 7.25,
+        "allocated_bytes": 641633.3333333334,
+        "frames_per_second": 462.35202327171856
+      },
+      "workload": "capture_wrapped",
+      "throughput_gain_percent": 2.990069063833478,
+      "cycle_reduction_percent": 2.9067277953318316
+    },
+    {
+      "before": {
+        "ns": 3946.09375,
+        "thread_cycles": 8598.2265625,
+        "allocations": 4.03125,
+        "reallocations": 2.0625,
+        "allocated_bytes": 8851.0,
+        "frames_per_second": 253415.16531379925
+      },
+      "after": {
+        "ns": 3312.5,
+        "thread_cycles": 7121.75,
+        "allocations": 3.03125,
+        "reallocations": 2.0625,
+        "allocated_bytes": 8499.0,
+        "frames_per_second": 301886.7924528302
+      },
+      "workload": "convert_one_owner",
+      "throughput_gain_percent": 19.12735849056604,
+      "cycle_reduction_percent": 17.17187319696195
+    },
+    {
+      "before": {
+        "ns": 211731.25,
+        "thread_cycles": 463412.5,
+        "allocations": 193.0625,
+        "reallocations": 68.28125,
+        "allocated_bytes": 251919.0,
+        "frames_per_second": 4722.968385630369
+      },
+      "after": {
+        "ns": 202571.875,
+        "thread_cycles": 443719.25,
+        "allocations": 192.0625,
+        "reallocations": 64.40625,
+        "allocated_bytes": 241172.0,
+        "frames_per_second": 4936.5194452586275
+      },
+      "workload": "convert_many_owners",
+      "throughput_gain_percent": 4.521543279391582,
+      "cycle_reduction_percent": 4.249615623229841
+    }
+  ],
+  "records": [
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3479200,
+          "thread_cycles": 7618187,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9197.516670498966
+        },
+        {
+          "ns": 3189200,
+          "thread_cycles": 6981856,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10033.86429198545
+        },
+        {
+          "ns": 3292400,
+          "thread_cycles": 7215184,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9719.353662981412
+        },
+        {
+          "ns": 3254400,
+          "thread_cycles": 7036292,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9832.84169124877
+        },
+        {
+          "ns": 3464600,
+          "thread_cycles": 7585920,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9236.27547191595
+        },
+        {
+          "ns": 3460700,
+          "thread_cycles": 7572311,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9246.68419683879
+        },
+        {
+          "ns": 3030700,
+          "thread_cycles": 6641192,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10558.616821196423
+        },
+        {
+          "ns": 3040700,
+          "thread_cycles": 6574245,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10523.89252474759
+        },
+        {
+          "ns": 3071600,
+          "thread_cycles": 6724822,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10418.023180101576
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 2873000,
+          "thread_cycles": 6295260,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11138.183083884442
+        },
+        {
+          "ns": 2904100,
+          "thread_cycles": 6357598,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11018.904307702904
+        },
+        {
+          "ns": 2949300,
+          "thread_cycles": 6377572,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10850.032211033127
+        },
+        {
+          "ns": 3050800,
+          "thread_cycles": 6678946,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10489.052051920808
+        },
+        {
+          "ns": 3069400,
+          "thread_cycles": 6680482,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10425.490323841794
+        },
+        {
+          "ns": 2828000,
+          "thread_cycles": 6196485,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11315.417256011315
+        },
+        {
+          "ns": 2909000,
+          "thread_cycles": 6367256,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11000.343760742524
+        },
+        {
+          "ns": 2873800,
+          "thread_cycles": 6213387,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11135.082469204537
+        },
+        {
+          "ns": 2860900,
+          "thread_cycles": 6261896,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 11185.29134188542
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 23795500,
+          "thread_cycles": 52129272,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 504.2970309512303
+        },
+        {
+          "ns": 25351400,
+          "thread_cycles": 55464796,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 473.3466396333141
+        },
+        {
+          "ns": 29516900,
+          "thread_cycles": 64653943,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 406.54675795899976
+        },
+        {
+          "ns": 29094300,
+          "thread_cycles": 63706364,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 412.4519235726586
+        },
+        {
+          "ns": 24416300,
+          "thread_cycles": 53479421,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 491.47495730311306
+        },
+        {
+          "ns": 22743200,
+          "thread_cycles": 49824526,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 527.6302367300996
+        },
+        {
+          "ns": 24185700,
+          "thread_cycles": 52824210,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 496.16095461367667
+        },
+        {
+          "ns": 23137200,
+          "thread_cycles": 50524947,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 518.6452984803693
+        },
+        {
+          "ns": 25509600,
+          "thread_cycles": 55755632,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 470.41113933577947
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 25633400,
+          "thread_cycles": 56063154,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 468.13922460539766
+        },
+        {
+          "ns": 25199500,
+          "thread_cycles": 55107670,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 476.1999246016786
+        },
+        {
+          "ns": 25549800,
+          "thread_cycles": 55931893,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 469.6709954676749
+        },
+        {
+          "ns": 28070300,
+          "thread_cycles": 61451660,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 427.49810297716806
+        },
+        {
+          "ns": 27637900,
+          "thread_cycles": 60519880,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 434.1863889803494
+        },
+        {
+          "ns": 24920600,
+          "thread_cycles": 54583941,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 481.52933717486735
+        },
+        {
+          "ns": 23765900,
+          "thread_cycles": 51982650,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 504.9251238118481
+        },
+        {
+          "ns": 22939500,
+          "thread_cycles": 50177263,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 523.1151507225528
+        },
+        {
+          "ns": 23005800,
+          "thread_cycles": 50231916,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 521.6075946065774
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 207900,
+          "thread_cycles": 452389,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 307840.3078403078
+        },
+        {
+          "ns": 219400,
+          "thread_cycles": 478071,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 291704.64904284413
+        },
+        {
+          "ns": 216700,
+          "thread_cycles": 471706,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 295339.17858790956
+        },
+        {
+          "ns": 194900,
+          "thread_cycles": 423635,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 328373.5248845562
+        },
+        {
+          "ns": 298800,
+          "thread_cycles": 651696,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 214190.093708166
+        },
+        {
+          "ns": 206600,
+          "thread_cycles": 450194,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 309777.34753146174
+        },
+        {
+          "ns": 236800,
+          "thread_cycles": 509240,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 270270.2702702703
+        },
+        {
+          "ns": 200900,
+          "thread_cycles": 437025,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 318566.45097063214
+        },
+        {
+          "ns": 207600,
+          "thread_cycles": 451951,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 308285.1637764933
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 154400,
+          "thread_cycles": 334737,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 414507.7720207254
+        },
+        {
+          "ns": 184900,
+          "thread_cycles": 402124,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 346133.04488912923
+        },
+        {
+          "ns": 237000,
+          "thread_cycles": 514947,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 270042.194092827
+        },
+        {
+          "ns": 221200,
+          "thread_cycles": 481363,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 289330.9222423147
+        },
+        {
+          "ns": 178700,
+          "thread_cycles": 371614,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 358142.1376608842
+        },
+        {
+          "ns": 227400,
+          "thread_cycles": 487948,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 281442.3922603342
+        },
+        {
+          "ns": 203500,
+          "thread_cycles": 442951,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 314496.3144963145
+        },
+        {
+          "ns": 296500,
+          "thread_cycles": 639404,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 215851.60202360878
+        },
+        {
+          "ns": 244000,
+          "thread_cycles": 524385,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 262295.08196721313
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 8369000,
+          "thread_cycles": 18333958,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 3823.6348428725055
+        },
+        {
+          "ns": 5863500,
+          "thread_cycles": 12845140,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5457.491259486655
+        },
+        {
+          "ns": 6394100,
+          "thread_cycles": 13907958,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5004.6136281884865
+        },
+        {
+          "ns": 5393200,
+          "thread_cycles": 11728323,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5933.3976118074615
+        },
+        {
+          "ns": 5364000,
+          "thread_cycles": 11749396,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5965.697240865026
+        },
+        {
+          "ns": 6695500,
+          "thread_cycles": 14670940,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4779.329400343514
+        },
+        {
+          "ns": 5425100,
+          "thread_cycles": 11873194,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5898.508783248235
+        },
+        {
+          "ns": 5815300,
+          "thread_cycles": 12738901,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5502.725568758276
+        },
+        {
+          "ns": 6761300,
+          "thread_cycles": 14812738,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4732.8176534098475
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 6001500,
+          "thread_cycles": 13132027,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5332.000333250021
+        },
+        {
+          "ns": 6264700,
+          "thread_cycles": 13688240,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5107.986016888279
+        },
+        {
+          "ns": 5895900,
+          "thread_cycles": 12899138,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5427.500466425821
+        },
+        {
+          "ns": 6423000,
+          "thread_cycles": 14014856,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4982.0955939592095
+        },
+        {
+          "ns": 6404600,
+          "thread_cycles": 13948128,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4996.408831152609
+        },
+        {
+          "ns": 7899200,
+          "thread_cycles": 17288260,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4051.0431436094796
+        },
+        {
+          "ns": 6661100,
+          "thread_cycles": 14578751,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4804.011349476813
+        },
+        {
+          "ns": 6458200,
+          "thread_cycles": 14144360,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4954.941005233656
+        },
+        {
+          "ns": 7661000,
+          "thread_cycles": 16672781,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4177.000391593787
+        }
+      ],
+      "round": 1,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 3538700,
+          "thread_cycles": 7745496,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9042.868850142708
+        },
+        {
+          "ns": 3210800,
+          "thread_cycles": 7034756,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9966.363523109505
+        },
+        {
+          "ns": 3273900,
+          "thread_cycles": 7174357,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9774.275329118178
+        },
+        {
+          "ns": 3153100,
+          "thread_cycles": 6886154,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10148.742507373696
+        },
+        {
+          "ns": 4257700,
+          "thread_cycles": 9323922,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 7515.794912746318
+        },
+        {
+          "ns": 4165200,
+          "thread_cycles": 9122199,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 7682.704311917795
+        },
+        {
+          "ns": 3567500,
+          "thread_cycles": 7818810,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 8969.866853538893
+        },
+        {
+          "ns": 3210000,
+          "thread_cycles": 7009733,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9968.847352024923
+        },
+        {
+          "ns": 3942500,
+          "thread_cycles": 8635789,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 8116.677235256817
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3437800,
+          "thread_cycles": 7534119,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9308.278550235616
+        },
+        {
+          "ns": 3795000,
+          "thread_cycles": 8311148,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8432.147562582346
+        },
+        {
+          "ns": 3950200,
+          "thread_cycles": 8650494,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8100.855652878336
+        },
+        {
+          "ns": 3973200,
+          "thread_cycles": 8700980,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8053.961542333635
+        },
+        {
+          "ns": 3955000,
+          "thread_cycles": 8644348,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8091.02402022756
+        },
+        {
+          "ns": 4215800,
+          "thread_cycles": 9198148,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 7590.492907633189
+        },
+        {
+          "ns": 4198200,
+          "thread_cycles": 9194196,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 7622.314325186985
+        },
+        {
+          "ns": 3861200,
+          "thread_cycles": 8456017,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8287.578990987258
+        },
+        {
+          "ns": 3996000,
+          "thread_cycles": 8751245,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8008.008008008008
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 29367200,
+          "thread_cycles": 64319866,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 408.6191397205045
+        },
+        {
+          "ns": 28009600,
+          "thread_cycles": 61302840,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 428.4245401576602
+        },
+        {
+          "ns": 29073200,
+          "thread_cycles": 63676950,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 412.751262330944
+        },
+        {
+          "ns": 28005000,
+          "thread_cycles": 61298450,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 428.49491162292446
+        },
+        {
+          "ns": 29338000,
+          "thread_cycles": 64246555,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 409.0258367986911
+        },
+        {
+          "ns": 29778800,
+          "thread_cycles": 65217403,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 402.9712412857469
+        },
+        {
+          "ns": 26526100,
+          "thread_cycles": 58093968,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 452.3846324940342
+        },
+        {
+          "ns": 24556200,
+          "thread_cycles": 53800109,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 488.6749578517849
+        },
+        {
+          "ns": 28538900,
+          "thread_cycles": 62432387,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 420.4787150170469
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 27355700,
+          "thread_cycles": 59852159,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 438.66543352939243
+        },
+        {
+          "ns": 27022400,
+          "thread_cycles": 59177638,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 444.07602581561963
+        },
+        {
+          "ns": 25451100,
+          "thread_cycles": 55735002,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 471.4923912915355
+        },
+        {
+          "ns": 28978600,
+          "thread_cycles": 63468204,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 414.0986797153762
+        },
+        {
+          "ns": 27572100,
+          "thread_cycles": 60244190,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 435.22256193761086
+        },
+        {
+          "ns": 24814300,
+          "thread_cycles": 54355441,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 483.592122284328
+        },
+        {
+          "ns": 24785200,
+          "thread_cycles": 54221107,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 484.15990187692654
+        },
+        {
+          "ns": 24376800,
+          "thread_cycles": 53255748,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 492.2713399625874
+        },
+        {
+          "ns": 31886200,
+          "thread_cycles": 69823389,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 376.3383532688122
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 271600,
+          "thread_cycles": 591772,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 235640.64801178203
+        },
+        {
+          "ns": 213200,
+          "thread_cycles": 464023,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 300187.617260788
+        },
+        {
+          "ns": 250000,
+          "thread_cycles": 543921,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 256000.0
+        },
+        {
+          "ns": 211600,
+          "thread_cycles": 460511,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 302457.4669187146
+        },
+        {
+          "ns": 367300,
+          "thread_cycles": 790200,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 174244.486795535
+        },
+        {
+          "ns": 255100,
+          "thread_cycles": 554896,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 250882.00705605643
+        },
+        {
+          "ns": 290800,
+          "thread_cycles": 633697,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 220082.53094910592
+        },
+        {
+          "ns": 214300,
+          "thread_cycles": 465998,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 298646.75688287447
+        },
+        {
+          "ns": 326700,
+          "thread_cycles": 710741,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 195898.37771655954
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 365900,
+          "thread_cycles": 798980,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 174911.1779174638
+        },
+        {
+          "ns": 314000,
+          "thread_cycles": 684840,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 203821.6560509554
+        },
+        {
+          "ns": 330600,
+          "thread_cycles": 721058,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 193587.41681790684
+        },
+        {
+          "ns": 307600,
+          "thread_cycles": 663110,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 208062.4187256177
+        },
+        {
+          "ns": 325400,
+          "thread_cycles": 709424,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 196681.00799016596
+        },
+        {
+          "ns": 266000,
+          "thread_cycles": 579699,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 240601.5037593985
+        },
+        {
+          "ns": 388000,
+          "thread_cycles": 838052,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 164948.45360824742
+        },
+        {
+          "ns": 228100,
+          "thread_cycles": 495850,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 280578.69355545816
+        },
+        {
+          "ns": 345300,
+          "thread_cycles": 753544,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 185346.0758760498
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 7813800,
+          "thread_cycles": 17114634,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4095.3185389951113
+        },
+        {
+          "ns": 8451800,
+          "thread_cycles": 18487609,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3786.1757258808775
+        },
+        {
+          "ns": 8113800,
+          "thread_cycles": 17773573,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3943.8980502354016
+        },
+        {
+          "ns": 7913600,
+          "thread_cycles": 17312844,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4043.6716538617065
+        },
+        {
+          "ns": 8169500,
+          "thread_cycles": 17856544,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3917.008384846074
+        },
+        {
+          "ns": 7833300,
+          "thread_cycles": 17140536,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4085.123766484113
+        },
+        {
+          "ns": 9370300,
+          "thread_cycles": 20497569,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3415.0454094319284
+        },
+        {
+          "ns": 8535100,
+          "thread_cycles": 18573651,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3749.2237935114995
+        },
+        {
+          "ns": 8334300,
+          "thread_cycles": 18112261,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3839.5546116650467
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 7891800,
+          "thread_cycles": 17288260,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4054.841734458552
+        },
+        {
+          "ns": 7818700,
+          "thread_cycles": 17125390,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4092.7519920191335
+        },
+        {
+          "ns": 7205800,
+          "thread_cycles": 15788635,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4440.8670792972325
+        },
+        {
+          "ns": 7889900,
+          "thread_cycles": 17267626,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4055.818197949277
+        },
+        {
+          "ns": 7168000,
+          "thread_cycles": 15696225,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4464.285714285715
+        },
+        {
+          "ns": 8003900,
+          "thread_cycles": 17494369,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 3998.050950161796
+        },
+        {
+          "ns": 7490600,
+          "thread_cycles": 16392039,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4272.020932902571
+        },
+        {
+          "ns": 7420600,
+          "thread_cycles": 16238171,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4312.319758510093
+        },
+        {
+          "ns": 7799500,
+          "thread_cycles": 17086100,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4102.8271043015575
+        }
+      ],
+      "round": 2,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3398800,
+          "thread_cycles": 7441269,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9415.087678004002
+        },
+        {
+          "ns": 3472700,
+          "thread_cycles": 7584603,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9214.732052869525
+        },
+        {
+          "ns": 3400900,
+          "thread_cycles": 7452465,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9409.274015701725
+        },
+        {
+          "ns": 4090900,
+          "thread_cycles": 8960429,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 7822.2396049768995
+        },
+        {
+          "ns": 3576500,
+          "thread_cycles": 7831980,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8947.294841325318
+        },
+        {
+          "ns": 3452900,
+          "thread_cycles": 7566165,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9267.572185698979
+        },
+        {
+          "ns": 3658100,
+          "thread_cycles": 8016579,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8747.710560126841
+        },
+        {
+          "ns": 3510200,
+          "thread_cycles": 7693036,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9116.289670104268
+        },
+        {
+          "ns": 3512800,
+          "thread_cycles": 7675476,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9109.542245502163
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 3349900,
+          "thread_cycles": 7334593,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9552.523955938983
+        },
+        {
+          "ns": 3543600,
+          "thread_cycles": 7756691,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9030.364600970765
+        },
+        {
+          "ns": 3344700,
+          "thread_cycles": 7306056,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9567.37525039615
+        },
+        {
+          "ns": 3071300,
+          "thread_cycles": 6729212,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10419.040797056621
+        },
+        {
+          "ns": 3028600,
+          "thread_cycles": 6629778,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10565.93805718814
+        },
+        {
+          "ns": 3007600,
+          "thread_cycles": 6584122,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10639.71272775635
+        },
+        {
+          "ns": 3302100,
+          "thread_cycles": 7236037,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9690.802822446321
+        },
+        {
+          "ns": 2990200,
+          "thread_cycles": 6531003,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10701.625309343857
+        },
+        {
+          "ns": 3029800,
+          "thread_cycles": 6631974,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10561.753251039672
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 26703500,
+          "thread_cycles": 58480286,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 449.37929484898984
+        },
+        {
+          "ns": 27612200,
+          "thread_cycles": 60489591,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 434.59050709469005
+        },
+        {
+          "ns": 26757100,
+          "thread_cycles": 58574672,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 448.4790952681718
+        },
+        {
+          "ns": 28162900,
+          "thread_cycles": 61676867,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 426.09248337351625
+        },
+        {
+          "ns": 26641500,
+          "thread_cycles": 58310615,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 450.4250886774393
+        },
+        {
+          "ns": 26850400,
+          "thread_cycles": 58804049,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 446.9207162649346
+        },
+        {
+          "ns": 27685600,
+          "thread_cycles": 60636878,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 433.4383217268183
+        },
+        {
+          "ns": 28513900,
+          "thread_cycles": 62450162,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 420.8473761919625
+        },
+        {
+          "ns": 26227900,
+          "thread_cycles": 57429105,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 457.5280521886998
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 26510400,
+          "thread_cycles": 58072896,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 452.6525439072968
+        },
+        {
+          "ns": 25562100,
+          "thread_cycles": 55981939,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 469.4449986503456
+        },
+        {
+          "ns": 26648600,
+          "thread_cycles": 58363074,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 450.3050816928469
+        },
+        {
+          "ns": 26779600,
+          "thread_cycles": 58643376,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 448.10228681533704
+        },
+        {
+          "ns": 25907300,
+          "thread_cycles": 56744922,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 463.1899117237227
+        },
+        {
+          "ns": 26135600,
+          "thread_cycles": 57231331,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 459.1438497681324
+        },
+        {
+          "ns": 25906600,
+          "thread_cycles": 56665242,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 463.2024271807184
+        },
+        {
+          "ns": 26812200,
+          "thread_cycles": 58690129,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 447.5574551883098
+        },
+        {
+          "ns": 25702600,
+          "thread_cycles": 56303286,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 466.8788371604429
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 250200,
+          "thread_cycles": 545458,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 255795.36370903277
+        },
+        {
+          "ns": 269700,
+          "thread_cycles": 587382,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 237300.70448646645
+        },
+        {
+          "ns": 305500,
+          "thread_cycles": 666621,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 209492.6350245499
+        },
+        {
+          "ns": 203300,
+          "thread_cycles": 435488,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 314805.7058534186
+        },
+        {
+          "ns": 236000,
+          "thread_cycles": 514508,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 271186.4406779661
+        },
+        {
+          "ns": 289200,
+          "thread_cycles": 631062,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 221300.13831258644
+        },
+        {
+          "ns": 246800,
+          "thread_cycles": 537555,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 259319.2868719611
+        },
+        {
+          "ns": 221600,
+          "thread_cycles": 482900,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 288808.6642599278
+        },
+        {
+          "ns": 230900,
+          "thread_cycles": 503094,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 277176.2667821568
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 166700,
+          "thread_cycles": 362395,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 383923.2153569286
+        },
+        {
+          "ns": 207400,
+          "thread_cycles": 451073,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 308582.4493731919
+        },
+        {
+          "ns": 157700,
+          "thread_cycles": 341761,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 405833.8617628408
+        },
+        {
+          "ns": 205300,
+          "thread_cycles": 446243,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 311738.9186556259
+        },
+        {
+          "ns": 175700,
+          "thread_cycles": 382149,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 364257.25668753556
+        },
+        {
+          "ns": 240300,
+          "thread_cycles": 522849,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 266333.7494798169
+        },
+        {
+          "ns": 153900,
+          "thread_cycles": 333859,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 415854.4509421702
+        },
+        {
+          "ns": 227400,
+          "thread_cycles": 495192,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 281442.3922603342
+        },
+        {
+          "ns": 157800,
+          "thread_cycles": 342639,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 405576.6793409379
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 7496000,
+          "thread_cycles": 16403894,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4268.943436499467
+        },
+        {
+          "ns": 7220500,
+          "thread_cycles": 15695567,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4431.826050827505
+        },
+        {
+          "ns": 7607400,
+          "thread_cycles": 16663344,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4206.430580750322
+        },
+        {
+          "ns": 6986600,
+          "thread_cycles": 15252177,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4580.196375919618
+        },
+        {
+          "ns": 7196200,
+          "thread_cycles": 15722128,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4446.791362107779
+        },
+        {
+          "ns": 7860600,
+          "thread_cycles": 17201337,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4070.9360608604943
+        },
+        {
+          "ns": 6179600,
+          "thread_cycles": 13523834,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5178.328694413878
+        },
+        {
+          "ns": 6369700,
+          "thread_cycles": 13905983,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5023.784479645823
+        },
+        {
+          "ns": 7023200,
+          "thread_cycles": 15390022,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4556.327599954437
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 5957100,
+          "thread_cycles": 13047958,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5371.741283510433
+        },
+        {
+          "ns": 6498300,
+          "thread_cycles": 14223380,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4924.36483387963
+        },
+        {
+          "ns": 6662800,
+          "thread_cycles": 14581605,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4802.7856156570815
+        },
+        {
+          "ns": 5806300,
+          "thread_cycles": 12718268,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5511.255016103199
+        },
+        {
+          "ns": 5616900,
+          "thread_cycles": 12303634,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5697.092702380317
+        },
+        {
+          "ns": 6713400,
+          "thread_cycles": 14710011,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4766.586230524026
+        },
+        {
+          "ns": 5459900,
+          "thread_cycles": 11959677,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5860.913203538526
+        },
+        {
+          "ns": 6359500,
+          "thread_cycles": 13927714,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5031.842125953298
+        },
+        {
+          "ns": 6522300,
+          "thread_cycles": 14291865,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4906.24472961992
+        }
+      ],
+      "round": 3,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 3380600,
+          "thread_cycles": 7376297,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9465.77530615867
+        },
+        {
+          "ns": 3197500,
+          "thread_cycles": 6983173,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10007.818608287726
+        },
+        {
+          "ns": 3145900,
+          "thread_cycles": 6892958,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10171.969865539273
+        },
+        {
+          "ns": 3052000,
+          "thread_cycles": 6681141,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10484.927916120576
+        },
+        {
+          "ns": 3290600,
+          "thread_cycles": 7202454,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9724.67027289856
+        },
+        {
+          "ns": 3135000,
+          "thread_cycles": 6851473,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10207.336523125998
+        },
+        {
+          "ns": 3197200,
+          "thread_cycles": 6999416,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10008.757662955086
+        },
+        {
+          "ns": 3076400,
+          "thread_cycles": 6734700,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10401.768300611104
+        },
+        {
+          "ns": 3458400,
+          "thread_cycles": 7571872,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9252.833680314596
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3575500,
+          "thread_cycles": 7836809,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8949.79723115648
+        },
+        {
+          "ns": 3285000,
+          "thread_cycles": 7198283,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9741.248097412481
+        },
+        {
+          "ns": 3312200,
+          "thread_cycles": 7252280,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9661.252339834551
+        },
+        {
+          "ns": 4024000,
+          "thread_cycles": 8794927,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 7952.286282306163
+        },
+        {
+          "ns": 3543300,
+          "thread_cycles": 7759325,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9031.129173369458
+        },
+        {
+          "ns": 3217900,
+          "thread_cycles": 7044852,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9944.373659840268
+        },
+        {
+          "ns": 3442500,
+          "thread_cycles": 7537849,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9295.570079883806
+        },
+        {
+          "ns": 3788900,
+          "thread_cycles": 8244200,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8445.723033070284
+        },
+        {
+          "ns": 4194300,
+          "thread_cycles": 9185636,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 7629.401807214553
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 25955300,
+          "thread_cycles": 56831185,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 462.3333192064819
+        },
+        {
+          "ns": 25655800,
+          "thread_cycles": 56210876,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 467.7304936895361
+        },
+        {
+          "ns": 24961400,
+          "thread_cycles": 54642990,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 480.74226605879477
+        },
+        {
+          "ns": 25301100,
+          "thread_cycles": 55415627,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 474.2876791918138
+        },
+        {
+          "ns": 25371100,
+          "thread_cycles": 55583547,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 472.97909826534914
+        },
+        {
+          "ns": 25953200,
+          "thread_cycles": 56821304,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 462.37072885039225
+        },
+        {
+          "ns": 25626000,
+          "thread_cycles": 56131200,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 468.2744088035589
+        },
+        {
+          "ns": 25401700,
+          "thread_cycles": 55555230,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 472.4093269348115
+        },
+        {
+          "ns": 25579300,
+          "thread_cycles": 56018378,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 469.1293350482617
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 29887100,
+          "thread_cycles": 65434047,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 401.51101980453103
+        },
+        {
+          "ns": 31646900,
+          "thread_cycles": 69287590,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 379.18405910215535
+        },
+        {
+          "ns": 27513300,
+          "thread_cycles": 60259994,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 436.15269705924044
+        },
+        {
+          "ns": 26420300,
+          "thread_cycles": 57874248,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 454.19620519070565
+        },
+        {
+          "ns": 25459400,
+          "thread_cycles": 55711077,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 471.33868040880776
+        },
+        {
+          "ns": 27323500,
+          "thread_cycles": 59853478,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 439.1823887862097
+        },
+        {
+          "ns": 25613000,
+          "thread_cycles": 56100468,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 468.5120837074923
+        },
+        {
+          "ns": 25789800,
+          "thread_cycles": 56488542,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 465.30023497661864
+        },
+        {
+          "ns": 26939900,
+          "thread_cycles": 59015647,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 445.4359518780693
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 271100,
+          "thread_cycles": 567407,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 236075.24898561416
+        },
+        {
+          "ns": 176800,
+          "thread_cycles": 384345,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 361990.95022624434
+        },
+        {
+          "ns": 336700,
+          "thread_cycles": 735106,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 190080.19008019008
+        },
+        {
+          "ns": 197800,
+          "thread_cycles": 430000,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 323559.15065722953
+        },
+        {
+          "ns": 192500,
+          "thread_cycles": 418806,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 332467.5324675325
+        },
+        {
+          "ns": 181000,
+          "thread_cycles": 392905,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 353591.1602209945
+        },
+        {
+          "ns": 298100,
+          "thread_cycles": 649281,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 214693.0560214693
+        },
+        {
+          "ns": 232000,
+          "thread_cycles": 505070,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 275862.0689655172
+        },
+        {
+          "ns": 240400,
+          "thread_cycles": 523507,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 266222.9617304492
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 244000,
+          "thread_cycles": 531409,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 262295.08196721313
+        },
+        {
+          "ns": 249400,
+          "thread_cycles": 536677,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 256615.8781074579
+        },
+        {
+          "ns": 316500,
+          "thread_cycles": 690327,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 202211.69036334913
+        },
+        {
+          "ns": 233700,
+          "thread_cycles": 509459,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 273855.3701326487
+        },
+        {
+          "ns": 263200,
+          "thread_cycles": 573773,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 243161.09422492402
+        },
+        {
+          "ns": 212400,
+          "thread_cycles": 448219,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 301318.2674199623
+        },
+        {
+          "ns": 363100,
+          "thread_cycles": 793492,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 176259.98347562656
+        },
+        {
+          "ns": 197100,
+          "thread_cycles": 428244,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 324708.26991374936
+        },
+        {
+          "ns": 328500,
+          "thread_cycles": 717106,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 194824.9619482496
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 6589500,
+          "thread_cycles": 14400297,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4856.210638136429
+        },
+        {
+          "ns": 6319500,
+          "thread_cycles": 13838159,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5063.691747764855
+        },
+        {
+          "ns": 6186500,
+          "thread_cycles": 13548637,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5172.553139901398
+        },
+        {
+          "ns": 8084800,
+          "thread_cycles": 17695432,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 3958.0447259054026
+        },
+        {
+          "ns": 7257100,
+          "thread_cycles": 15902335,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4409.474859103499
+        },
+        {
+          "ns": 6167500,
+          "thread_cycles": 13482569,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5188.488042156466
+        },
+        {
+          "ns": 7034000,
+          "thread_cycles": 15399022,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4549.331816889395
+        },
+        {
+          "ns": 6427600,
+          "thread_cycles": 14068194,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4978.530088991225
+        },
+        {
+          "ns": 5837000,
+          "thread_cycles": 12783680,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5482.268288504369
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 5987400,
+          "thread_cycles": 13100857,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5344.556902829275
+        },
+        {
+          "ns": 6055400,
+          "thread_cycles": 13265922,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5284.539419361231
+        },
+        {
+          "ns": 7115200,
+          "thread_cycles": 15565404,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4497.413986957499
+        },
+        {
+          "ns": 6536200,
+          "thread_cycles": 14321058,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4895.811021694562
+        },
+        {
+          "ns": 6818100,
+          "thread_cycles": 14918317,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4693.389654009182
+        },
+        {
+          "ns": 6561200,
+          "thread_cycles": 14360568,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4877.156617691886
+        },
+        {
+          "ns": 6664600,
+          "thread_cycles": 14575678,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4801.488461423041
+        },
+        {
+          "ns": 6834100,
+          "thread_cycles": 14973191,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4682.401486662472
+        },
+        {
+          "ns": 6150400,
+          "thread_cycles": 13449204,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5202.913631633714
+        }
+      ],
+      "round": 4,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3535800,
+          "thread_cycles": 7740229,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9050.285649640817
+        },
+        {
+          "ns": 3158600,
+          "thread_cycles": 6920615,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10131.070727537517
+        },
+        {
+          "ns": 3294800,
+          "thread_cycles": 7221111,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9712.273886123588
+        },
+        {
+          "ns": 3556200,
+          "thread_cycles": 7770959,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8998.369045610483
+        },
+        {
+          "ns": 3528000,
+          "thread_cycles": 7723985,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9070.2947845805
+        },
+        {
+          "ns": 3719800,
+          "thread_cycles": 8143230,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8602.613043712028
+        },
+        {
+          "ns": 3632400,
+          "thread_cycles": 7953144,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 8809.602466688691
+        },
+        {
+          "ns": 3306600,
+          "thread_cycles": 7223744,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9677.61446803363
+        },
+        {
+          "ns": 3461200,
+          "thread_cycles": 7585262,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9245.348434069108
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 2987200,
+          "thread_cycles": 6547027,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10712.372790573112
+        },
+        {
+          "ns": 3274600,
+          "thread_cycles": 7153286,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9772.185915837048
+        },
+        {
+          "ns": 3302000,
+          "thread_cycles": 7229672,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9691.096305269533
+        },
+        {
+          "ns": 3758500,
+          "thread_cycles": 8230811,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 8514.034854330184
+        },
+        {
+          "ns": 3226200,
+          "thread_cycles": 7069875,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9918.78990763127
+        },
+        {
+          "ns": 3350200,
+          "thread_cycles": 7335910,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9551.66855710107
+        },
+        {
+          "ns": 3206600,
+          "thread_cycles": 7020268,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9979.417451506268
+        },
+        {
+          "ns": 3532200,
+          "thread_cycles": 7732986,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9059.509654039975
+        },
+        {
+          "ns": 3125700,
+          "thread_cycles": 6848619,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10237.706753687175
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 28748500,
+          "thread_cycles": 62959184,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 417.41308242169157
+        },
+        {
+          "ns": 31217100,
+          "thread_cycles": 68291061,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 384.4047012694965
+        },
+        {
+          "ns": 29677600,
+          "thread_cycles": 64964539,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 404.3453648543009
+        },
+        {
+          "ns": 30874500,
+          "thread_cycles": 67623338,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 388.67026186658893
+        },
+        {
+          "ns": 30530300,
+          "thread_cycles": 66861236,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 393.0521481937616
+        },
+        {
+          "ns": 27471500,
+          "thread_cycles": 60178337,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 436.8163369310012
+        },
+        {
+          "ns": 28369600,
+          "thread_cycles": 62146155,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 422.9879871411652
+        },
+        {
+          "ns": 29957000,
+          "thread_cycles": 65543141,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 400.57415629068333
+        },
+        {
+          "ns": 30233000,
+          "thread_cycles": 66190443,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 396.91727582443025
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 29738700,
+          "thread_cycles": 65135308,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 403.51461227289695
+        },
+        {
+          "ns": 27410200,
+          "thread_cycles": 59996375,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 437.7932302573495
+        },
+        {
+          "ns": 29858700,
+          "thread_cycles": 65358101,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 401.8929156326297
+        },
+        {
+          "ns": 29868800,
+          "thread_cycles": 65400680,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 401.75701735590314
+        },
+        {
+          "ns": 27595100,
+          "thread_cycles": 60437789,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 434.8598120680846
+        },
+        {
+          "ns": 27461700,
+          "thread_cycles": 60161659,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 436.97221949114584
+        },
+        {
+          "ns": 29000700,
+          "thread_cycles": 63487741,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 413.78311557996875
+        },
+        {
+          "ns": 28370700,
+          "thread_cycles": 62091502,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 422.97158688365107
+        },
+        {
+          "ns": 29201300,
+          "thread_cycles": 63976128,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 410.94060880851197
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 232800,
+          "thread_cycles": 506606,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 274914.08934707905
+        },
+        {
+          "ns": 220200,
+          "thread_cycles": 479169,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 290644.86830154405
+        },
+        {
+          "ns": 280100,
+          "thread_cycles": 611088,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 228489.8250624777
+        },
+        {
+          "ns": 221600,
+          "thread_cycles": 482022,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 288808.6642599278
+        },
+        {
+          "ns": 336700,
+          "thread_cycles": 734886,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 190080.19008019008
+        },
+        {
+          "ns": 303000,
+          "thread_cycles": 616137,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 211221.12211221122
+        },
+        {
+          "ns": 312300,
+          "thread_cycles": 682206,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 204931.15593980148
+        },
+        {
+          "ns": 260200,
+          "thread_cycles": 566968,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 245964.64258262876
+        },
+        {
+          "ns": 264700,
+          "thread_cycles": 577066,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 241783.15073668305
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 158200,
+          "thread_cycles": 343737,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 404551.201011378
+        },
+        {
+          "ns": 212400,
+          "thread_cycles": 462706,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 301318.2674199623
+        },
+        {
+          "ns": 160900,
+          "thread_cycles": 349883,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 397762.5854568055
+        },
+        {
+          "ns": 213200,
+          "thread_cycles": 464462,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 300187.617260788
+        },
+        {
+          "ns": 170700,
+          "thread_cycles": 371175,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 374926.7721148213
+        },
+        {
+          "ns": 204900,
+          "thread_cycles": 446243,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 312347.48657881893
+        },
+        {
+          "ns": 185300,
+          "thread_cycles": 388296,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 345385.86076632485
+        },
+        {
+          "ns": 198200,
+          "thread_cycles": 431537,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 322906.1553985873
+        },
+        {
+          "ns": 169000,
+          "thread_cycles": 367882,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 378698.224852071
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 8185900,
+          "thread_cycles": 17887714,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 3909.1608741861005
+        },
+        {
+          "ns": 6789500,
+          "thread_cycles": 14845662,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4713.160026511525
+        },
+        {
+          "ns": 6980300,
+          "thread_cycles": 15278296,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4584.330186381674
+        },
+        {
+          "ns": 5536700,
+          "thread_cycles": 12134400,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5779.616016760887
+        },
+        {
+          "ns": 6557100,
+          "thread_cycles": 14305254,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4880.206188711473
+        },
+        {
+          "ns": 7425100,
+          "thread_cycles": 16258365,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4309.706266582269
+        },
+        {
+          "ns": 6190600,
+          "thread_cycles": 13561368,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5169.127386683035
+        },
+        {
+          "ns": 6947400,
+          "thread_cycles": 15131891,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4606.039669516654
+        },
+        {
+          "ns": 6984000,
+          "thread_cycles": 15296295,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4581.901489117984
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 6495400,
+          "thread_cycles": 14230404,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4926.563414108446
+        },
+        {
+          "ns": 6250000,
+          "thread_cycles": 13691972,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5120.0
+        },
+        {
+          "ns": 6560600,
+          "thread_cycles": 14281987,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4877.602658293449
+        },
+        {
+          "ns": 6312600,
+          "thread_cycles": 13828720,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5069.226626112853
+        },
+        {
+          "ns": 7938300,
+          "thread_cycles": 17335451,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4031.0897799276922
+        },
+        {
+          "ns": 6672400,
+          "thread_cycles": 14618481,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4795.875547029555
+        },
+        {
+          "ns": 5961200,
+          "thread_cycles": 13059153,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5368.046702006308
+        },
+        {
+          "ns": 6256200,
+          "thread_cycles": 13687801,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5114.925993414533
+        },
+        {
+          "ns": 7254900,
+          "thread_cycles": 15639155,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4410.812002922163
+        }
+      ],
+      "round": 5,
+      "order": "before-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 3291800,
+          "thread_cycles": 7194332,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9721.125220244243
+        },
+        {
+          "ns": 3194800,
+          "thread_cycles": 7000513,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10016.27644923
+        },
+        {
+          "ns": 3291000,
+          "thread_cycles": 7205528,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9723.488301428137
+        },
+        {
+          "ns": 3161200,
+          "thread_cycles": 6920834,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10122.738200683285
+        },
+        {
+          "ns": 2993400,
+          "thread_cycles": 6559538,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10690.18507382909
+        },
+        {
+          "ns": 3414800,
+          "thread_cycles": 7460367,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9370.973409862949
+        },
+        {
+          "ns": 3144900,
+          "thread_cycles": 6885056,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10175.204299023817
+        },
+        {
+          "ns": 3104200,
+          "thread_cycles": 6802524,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 10308.614135687134
+        },
+        {
+          "ns": 3292300,
+          "thread_cycles": 7215404,
+          "frames": 32,
+          "allocations": 1165,
+          "reallocations": 70,
+          "allocated_bytes": 1291339,
+          "frees": 874,
+          "frames_per_second": 9719.648877684294
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_shallow",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 3362200,
+          "thread_cycles": 7362030,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9517.577776455892
+        },
+        {
+          "ns": 3186000,
+          "thread_cycles": 6975490,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10043.942247332077
+        },
+        {
+          "ns": 3235800,
+          "thread_cycles": 7092046,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9889.362754187527
+        },
+        {
+          "ns": 3392500,
+          "thread_cycles": 7342056,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9432.571849668386
+        },
+        {
+          "ns": 3503500,
+          "thread_cycles": 7672402,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9133.723419437705
+        },
+        {
+          "ns": 3184700,
+          "thread_cycles": 6973954,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10048.042201777247
+        },
+        {
+          "ns": 3078900,
+          "thread_cycles": 6746772,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10393.3222904284
+        },
+        {
+          "ns": 3262000,
+          "thread_cycles": 7125410,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 9809.932556713673
+        },
+        {
+          "ns": 3184300,
+          "thread_cycles": 6934006,
+          "frames": 32,
+          "allocations": 1549,
+          "reallocations": 262,
+          "allocated_bytes": 2074475,
+          "frees": 1258,
+          "frames_per_second": 10049.304399711082
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 24199700,
+          "thread_cycles": 53018470,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 495.8739157923445
+        },
+        {
+          "ns": 29550700,
+          "thread_cycles": 64674795,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 406.0817510245104
+        },
+        {
+          "ns": 26606600,
+          "thread_cycles": 58130406,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 451.0159133448092
+        },
+        {
+          "ns": 25356600,
+          "thread_cycles": 55531083,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 473.24956815976907
+        },
+        {
+          "ns": 24630600,
+          "thread_cycles": 53950684,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 487.1988502107135
+        },
+        {
+          "ns": 23579200,
+          "thread_cycles": 51660204,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 508.92311868087126
+        },
+        {
+          "ns": 24920500,
+          "thread_cycles": 54545750,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 481.53126943680905
+        },
+        {
+          "ns": 24532500,
+          "thread_cycles": 53740185,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 489.1470498318557
+        },
+        {
+          "ns": 24303500,
+          "thread_cycles": 53239726,
+          "frames": 12,
+          "allocations": 6060,
+          "reallocations": 87,
+          "allocated_bytes": 7699600,
+          "frees": 5471,
+          "frames_per_second": 493.75604336823915
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "capture_wrapped",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 24657600,
+          "thread_cycles": 54007099,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 486.66536889234965
+        },
+        {
+          "ns": 24358100,
+          "thread_cycles": 53333670,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 492.649262463
+        },
+        {
+          "ns": 25263900,
+          "thread_cycles": 55233003,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 474.986047284861
+        },
+        {
+          "ns": 24632700,
+          "thread_cycles": 53805597,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 487.1573152760355
+        },
+        {
+          "ns": 24394000,
+          "thread_cycles": 53318086,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 491.9242436664754
+        },
+        {
+          "ns": 24815900,
+          "thread_cycles": 54270498,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 483.56094278265147
+        },
+        {
+          "ns": 25134500,
+          "thread_cycles": 54956654,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 477.43141896596313
+        },
+        {
+          "ns": 26052900,
+          "thread_cycles": 56800673,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 460.60131501675437
+        },
+        {
+          "ns": 24902100,
+          "thread_cycles": 54542240,
+          "frames": 12,
+          "allocations": 7224,
+          "reallocations": 999,
+          "allocated_bytes": 12945568,
+          "frees": 6635,
+          "frames_per_second": 481.8870697652005
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 265200,
+          "thread_cycles": 577943,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 241327.30015082957
+        },
+        {
+          "ns": 219300,
+          "thread_cycles": 477193,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 291837.66529867763
+        },
+        {
+          "ns": 196600,
+          "thread_cycles": 427366,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 325534.07934893185
+        },
+        {
+          "ns": 170500,
+          "thread_cycles": 370516,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 375366.568914956
+        },
+        {
+          "ns": 190900,
+          "thread_cycles": 415952,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 335254.0597171294
+        },
+        {
+          "ns": 173700,
+          "thread_cycles": 377101,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 368451.35290731146
+        },
+        {
+          "ns": 238100,
+          "thread_cycles": 512752,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 268794.6241075178
+        },
+        {
+          "ns": 224200,
+          "thread_cycles": 402783,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 285459.4112399643
+        },
+        {
+          "ns": 244700,
+          "thread_cycles": 533824,
+          "frames": 64,
+          "allocations": 194,
+          "reallocations": 132,
+          "allocated_bytes": 543936,
+          "frees": 585,
+          "frames_per_second": 261544.74867184306
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_one_owner",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 238400,
+          "thread_cycles": 519556,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 268456.3758389262
+        },
+        {
+          "ns": 246300,
+          "thread_cycles": 536458,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 259845.71660576534
+        },
+        {
+          "ns": 254900,
+          "thread_cycles": 555115,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 251078.85445272655
+        },
+        {
+          "ns": 272000,
+          "thread_cycles": 592869,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 235294.11764705883
+        },
+        {
+          "ns": 434200,
+          "thread_cycles": 937265,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 147397.51266697375
+        },
+        {
+          "ns": 184300,
+          "thread_cycles": 400148,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 347259.9023331525
+        },
+        {
+          "ns": 438300,
+          "thread_cycles": 955264,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 146018.7086470454
+        },
+        {
+          "ns": 189900,
+          "thread_cycles": 413099,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 337019.48393891525
+        },
+        {
+          "ns": 313000,
+          "thread_cycles": 682206,
+          "frames": 64,
+          "allocations": 258,
+          "reallocations": 132,
+          "allocated_bytes": 566464,
+          "frees": 649,
+          "frames_per_second": 204472.84345047924
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "after",
+      "samples": [
+        {
+          "ns": 6469200,
+          "thread_cycles": 14174652,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4946.51579793483
+        },
+        {
+          "ns": 6219700,
+          "thread_cycles": 13624804,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5144.942682122932
+        },
+        {
+          "ns": 7651900,
+          "thread_cycles": 16752678,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4181.967877259242
+        },
+        {
+          "ns": 6390500,
+          "thread_cycles": 13997297,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5007.432908223143
+        },
+        {
+          "ns": 6258300,
+          "thread_cycles": 13710190,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5113.209657574741
+        },
+        {
+          "ns": 5405900,
+          "thread_cycles": 11841148,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5919.4583695591855
+        },
+        {
+          "ns": 7133400,
+          "thread_cycles": 15625984,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 4485.9393837440775
+        },
+        {
+          "ns": 6170500,
+          "thread_cycles": 13519443,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5185.965480917268
+        },
+        {
+          "ns": 6380600,
+          "thread_cycles": 13964809,
+          "frames": 32,
+          "allocations": 6146,
+          "reallocations": 2061,
+          "allocated_bytes": 7717504,
+          "frees": 10437,
+          "frames_per_second": 5015.202332069084
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    },
+    {
+      "workload": "convert_many_owners",
+      "variant": "before",
+      "samples": [
+        {
+          "ns": 7180800,
+          "thread_cycles": 15629278,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 4456.32798573975
+        },
+        {
+          "ns": 6367700,
+          "thread_cycles": 13950761,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5025.362375740063
+        },
+        {
+          "ns": 6073500,
+          "thread_cycles": 13174391,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5268.7906478966
+        },
+        {
+          "ns": 5687100,
+          "thread_cycles": 12374532,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5626.769355207399
+        },
+        {
+          "ns": 5973900,
+          "thread_cycles": 13002961,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5356.6346942533355
+        },
+        {
+          "ns": 6103700,
+          "thread_cycles": 13370404,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5242.721627865066
+        },
+        {
+          "ns": 5629000,
+          "thread_cycles": 12241515,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5684.846331497602
+        },
+        {
+          "ns": 5620600,
+          "thread_cycles": 12229004,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5693.3423477920505
+        },
+        {
+          "ns": 6252600,
+          "thread_cycles": 13697240,
+          "frames": 32,
+          "allocations": 6178,
+          "reallocations": 2185,
+          "allocated_bytes": 8061408,
+          "frees": 10469,
+          "frames_per_second": 5117.870965678278
+        }
+      ],
+      "round": 6,
+      "order": "after-first"
+    }
+  ],
+  "validation": {
+    "command": "release library test executable --test-threads=1",
+    "summary": "test result: FAILED. 679 passed; 13 failed; 1 ignored; 0 measured; 0 filtered out; finished in 221.13s",
+    "log_sha256": "a579ace011eeeb6c212829e45bce18d65930cba1f4e7c400d16785ffbcfd0d2b",
+    "new_differential_checks_passed": 4,
+    "draw_checks_passed": 16,
+    "draw_checks": [
+      "draw_capture::perf::captured_frames_match_frozen_baseline",
+      "draw_capture::perf::draw_type_coercions_and_errors_match_frozen_baseline",
+      "draw_capture::perf::immediate_draws_and_nested_targets_match_frozen_baseline",
+      "draw_capture::perf::source_binding_errors_match_frozen_baseline",
+      "live::tests::live_draw_follows_owned_update_and_replaces_automatic_children",
+      "tests::compile_song_lua_accepts_actorframetexture_draw_call",
+      "tests::compile_song_lua_accepts_set_draw_function",
+      "tests::compile_song_lua_captures_actor_draw_order",
+      "tests::compile_song_lua_captures_draw_by_z_position_commands",
+      "tests::compile_song_lua_exposes_player_draw_distance_metrics",
+      "tests::compile_song_lua_preserves_player_state_at_manual_draw",
+      "tests::compile_song_lua_reports_draw_function_errors",
+      "tests::custom_draws_keep_capture_order_and_snapshots",
+      "tests::custom_draws_keep_empty_tail_frames",
+      "tests::custom_draws_skip_uncreated_afts_and_wrap_created_callbacks",
+      "tests::draw_callbacks_replay_after_each_update"
+    ],
+    "original_module_failure_comparison": {
+      "original_module_sha256": "739bf96f1e7520cc645e70369cd92781e688c41fcc8bc7d2030588bc6257139c",
+      "baseline_executable_sha256": "6d60a188d3e6fc98dede662523fab2b0d4ce7e269d138472a5658f68bf1513e3",
+      "candidate_executable_sha256": "0567cfbea11802b02710e89034d6e80324bf56d4b95ed1b7ded33712652e581f",
+      "scope": "Original draw_capture module from 3d8094d9e, all other current sources and Cargo-built dependencies unchanged; same counted System allocator. Re-run all 13 failures individually.",
+      "diagnostic_normalization": "Rust source locations, copied crate-root filename, workspace prefix, temporary directory process IDs, test thread IDs and one-time RUST_BACKTRACE hint.",
+      "failures": [
+        {
+          "test": "tests::compile_song_lua_accepts_skewy_probe_calls",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "70c0a8752d7f6f13fe133061c7f353a3403758b24a75584a452a522086650f5e",
+          "normalized_diagnostic_sha256": "51fc22786dba6587c74ee118fce21612ecfd1ee7d6e712c90a52ffec680aa764"
+        },
+        {
+          "test": "tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "e39927da964e39b5fec1ae98d25393571c22b26694d9ee9e26ce2ca5926e0874",
+          "normalized_diagnostic_sha256": "97ac827006ebf98af87fd22ab38bc386191636ed1234bfae2dee0c9e2ce2e737"
+        },
+        {
+          "test": "tests::compile_song_lua_exposes_save_your_tears_compat_helpers",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "203a4520bf2d664c39fd83172f4dd3f60b9f66352f6313ecd785ba595230dd70",
+          "normalized_diagnostic_sha256": "112103ec056f83e9c91111b12c0923d67ad61109a135577859614ea6d09f3c13"
+        },
+        {
+          "test": "tests::compile_song_lua_extracts_sound_actor_assets",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "45174cfd6d93193b8cec1c6f9f0fd67899766833da6df1c0ba0d2551d58a45b4",
+          "normalized_diagnostic_sha256": "4e237a4da5022ec5ab228102874b59273c36301c60d95b01709faec99e2831a9"
+        },
+        {
+          "test": "tests::compile_song_lua_keeps_combo_child_callback",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "1283be27adb70f418dc6bd2e81b795efebdd27bf4793816019b96061776ffa07",
+          "normalized_diagnostic_sha256": "d976ddc43381da2efaa3bbefee505e400a7d18f0a98b0b6eb13dbe2f62ab86bc"
+        },
+        {
+          "test": "tests::compile_song_lua_supports_named_player_tap_note_shim",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "629637ce6791048bd48bce3a40ad81b4df05cce0c843a9039e4023e74014e410",
+          "normalized_diagnostic_sha256": "576a766fb21cbfa90ff039d6a42de0e52c054ee9bac084cf3b5654ad27740f84"
+        },
+        {
+          "test": "tests::screen_request_keeps_current_name",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "0f0af859d644ce69b66130322a14a356b67a6e5392cdcab442db0e221deaf599",
+          "normalized_diagnostic_sha256": "856f01a188f1e0cbfc92c5f416458ddb6a8e07685e06d49f51ef8f96ab55221f"
+        },
+        {
+          "test": "tests::song_steps_match_native",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "f5ac3834587765831da5501beb2af1df2f21d2397391a67cf9e1410ac441555e",
+          "normalized_diagnostic_sha256": "5040bbdd5c49b157c722bcfb61b9f3c5fa0a351dd8f60294acfb66a41d7e3290"
+        },
+        {
+          "test": "tests::sound_length_reload",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "09df73aed2897a13e54bffa51c1a2f1c11f431a1be45097f04dfaab0a25bbaab",
+          "normalized_diagnostic_sha256": "be3d64e0508671eb8b5e895196513d37849784e6710b10b9981f858193d98e00"
+        },
+        {
+          "test": "tests::startup_reload_accepts_zero_delta_updates",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "4426cdfdeded07c3b79abf111839889bd5e443b4a6f412e7ad587d3d0079de2b",
+          "normalized_diagnostic_sha256": "5e481fb8ca7ed7f4517ca6b4ee2366c2942bf8002247dd695d90b293739bf05d"
+        },
+        {
+          "test": "tests::startup_reload_bounds_endless_requests",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "3685776a7785620addb944b03fb731b331df719ebaab7c6ac9b721f76a265d66",
+          "normalized_diagnostic_sha256": "2e73ed764791432608ba378f6df7e3a4e5d6dd904f51876a7b8bc5a0afee8239"
+        },
+        {
+          "test": "tests::startup_reload_keeps_globals_and_deletes_old_queues",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "2389d98be637f0c4d3504f0740b8e9b63324fb72a9ffdb95317d5b6dc0bc8e0f",
+          "normalized_diagnostic_sha256": "c296ca54b8182fe3779bb4fc021aa02c05027774d02483579745858611f98a15"
+        },
+        {
+          "test": "tests::startup_reload_matches_native",
+          "baseline_exit": 101,
+          "same_diagnostic": true,
+          "baseline_log_sha256": "25bfe94115d8e2c3266510a3346abe43e9f0006dacdec9b8c7b82f3d4c6aced2",
+          "normalized_diagnostic_sha256": "cf63cc85f206db3cdef3be0a4d9904c4219ec46908a73574f1065a6e8928d09a"
+        }
+      ]
+    }
+  },
+  "build_receipt_sha256": "283547c4d64fcb7d8484d24f9085adb20cbe898dfa2cf7a9ea0847b7100b62b1"
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "mode": "symphonia",
+    "file": "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+    "exit_code": 101,
+    "stderr": "\nthread 'main' (536542) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:178:13:\nassertion `left == right` failed: PCM endpoint check\n  left: 1103064073212\n right: 1076370157036\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "arguments": [
+      "/tmp/deadlib-flac-decode-dispatch",
+      "symphonia",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+      "1"
+    ]
+  },
+  {
+    "mode": "symphonia-crc",
+    "file": "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+    "exit_code": 101,
+    "stderr": "\nthread 'main' (536543) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:178:13:\nassertion `left == right` failed: PCM endpoint check\n  left: 1103064073212\n right: 1076370157036\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "arguments": [
+      "/tmp/deadlib-flac-decode-dispatch",
+      "symphonia-crc",
+      "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+      "1"
+    ]
+  }
+]

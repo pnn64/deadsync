@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-10-28T20:05:19Z",
+  "package": "deadlib-audio-decode-wav",
+  "workspace_member": true,
+  "production_dependencies": [],
+  "other_workspace_consumers": [],
+  "dev_dependencies": [
+    {
+      "name": "hound",
+      "version": "=3.5.1"
+    }
+  ],
+  "check_report_sha256": "9941f9a17032727f75c2d2f8b8ea7fc75ec42a157d8baa9f2650291cf1135ec0",
+  "all_checked_source_bytes_unchanged": true
+}

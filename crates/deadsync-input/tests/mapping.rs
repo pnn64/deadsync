@@ -11,6 +11,33 @@ use std::time::{Duration, Instant};
 static TEST_GUARD: std::sync::LazyLock<std::sync::Mutex<()>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
 
+#[test]
+fn held_state_tracks_releases_while_a_replacement_screen_loads() {
+    let _guard = lock_test_guard();
+    let mut keymap = Keymap::default();
+    keymap.bind(VirtualAction::p1_right, &[InputBinding::Key(KeyCode::ArrowRight)]);
+    let mut input = InputState::new(&keymap, 0.008);
+    let start = Instant::now();
+    let raw = |pressed, at| RawKeyboardEvent {
+        code: KeyCode::ArrowRight, pressed, repeat: false,
+        timestamp: at, host_nanos: 0,
+    };
+    let press = input.map_key(input.key_event(raw(true, start)), || start).next().unwrap();
+    assert!(input.is_down(&press));
+    let release = start + Duration::from_millis(1);
+    assert_eq!(input.map_key(input.key_event(raw(false, release)), || release).count(), 0);
+    assert!(input.is_down(&press), "pending debounce is still held");
+    let due = start + Duration::from_millis(8);
+    let events = input.next_due(due).unwrap().collect::<Vec<_>>();
+    assert!(!events[0].pressed);
+    assert!(!input.is_down(&press), "release survives the absence of a screen recipient");
+    let next = start + Duration::from_millis(16);
+    let press = input.map_key(input.key_event(raw(true, next)), || next).next().unwrap();
+    assert!(input.is_down(&press));
+    input.clear();
+    assert!(!input.is_down(&press), "focus clear invalidates prior held slots");
+}
+
 fn lock_test_guard() -> std::sync::MutexGuard<'static, ()> {
     TEST_GUARD
         .lock()

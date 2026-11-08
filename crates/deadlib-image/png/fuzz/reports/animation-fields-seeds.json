@@ -1,0 +1,20 @@
+{
+  "archive_sha256": "fb49995980c59e997362ba8018b0fe053ab260c225b0942f76c4080ace77d185",
+  "initial_corpora": [
+    {
+      "target": "png_stream",
+      "files": 45101,
+      "bytes": 10776415,
+      "maximum_file_bytes": 63435,
+      "sha256": "28fb75382c41bcc6349bbb0e1a651eb1a64a26a13e6551358bec2065d304c67c"
+    }
+  ],
+  "runner_sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610",
+  "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents",
+  "included_archives": [
+    {
+      "path": "/tmp/deadlib-image-scalar-fields-seeds-20261027-a.zip",
+      "sha256": "7b5d927b5f52efc06da75d29ea91f3b0c6891c4420d320c1912f73d44d95d2f9"
+    }
+  ]
+}

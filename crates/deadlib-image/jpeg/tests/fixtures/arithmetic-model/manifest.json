@@ -1,0 +1,44 @@
+{
+  "reference": "libjpeg-turbo 3.2.1 progressive arithmetic coefficient encoder/decoder",
+  "tools": {
+    "transcode": "0d8d729c382535943e03be51e41f592affcb7affc952da9c633f097eec972bc1",
+    "oracle": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "inspect": "85667467b087588f7ec7213fcc32f51c05f7305bc13bcfa923e9a74762e6e871"
+  },
+  "cases": [
+    {
+      "case": "p12-ycck-17x17-w1-d1-s3-r1",
+      "coefficients": "exact",
+      "bytes": 7098,
+      "sha256": "3ed39fe24fc547ba7084f2bb3af0b750febccb22dcddad78aaa20f9132578273",
+      "source_sha256": "0b88ca2daae75d14df0794f7580e2edec712617b4c265da0ae5b609b3964f35f",
+      "coefficient_sha256": "97b138c6af65534fdd3bede7717f638115b0305ce90d2801fb9e675577f20e1f",
+      "file": "p12-ycck-17x17-w1-d1.jpg",
+      "scan_layout": 3,
+      "restart_interval": 1,
+      "conditioning": [
+        0,
+        0,
+        1
+      ],
+      "table_layout": 2
+    },
+    {
+      "case": "p8-gray-17x17-w0-d1-s3-r1",
+      "coefficients": "exact",
+      "bytes": 2172,
+      "sha256": "5531575edca805ae6b3aca8b3d87979ccf20f31b737a3fd6bb33e16a9111268c",
+      "source_sha256": "0c7f7b168083e445943b085ba878f3ae97bde0c5f3a15d649da63128810a5610",
+      "coefficient_sha256": "43ead4efb0e786730fbe550d701db37bc31b5a6040c341f31b4c39bdfd09bedc",
+      "file": "p8-gray-17x17-w0-d1.jpg",
+      "scan_layout": 3,
+      "restart_interval": 1,
+      "conditioning": [
+        0,
+        0,
+        1
+      ],
+      "table_layout": 2
+    }
+  ]
+}

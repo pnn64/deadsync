@@ -1,0 +1,1114 @@
+{
+  "objective": "Optimize fixture testing and production pre-game Lua compilation without behavior changes",
+  "complete": true,
+  "base_runtime_commit": "591cb2db0",
+  "optimization_commit": "7579c6775",
+  "optimizations": [
+    {
+      "name": "Intern live capture-reset keys",
+      "files": [
+        "crates/deadsync-song-lua/src/lua_util.rs"
+      ]
+    },
+    {
+      "name": "Intern batched scalar-state keys",
+      "files": [
+        "crates/deadsync-song-lua/src/lua_util.rs"
+      ]
+    },
+    {
+      "name": "Batch ordinary global environment reads",
+      "files": [
+        "crates/deadsync-song-lua/src/host.rs"
+      ]
+    },
+    {
+      "name": "Deliver structured trace JSON without encode/parse round trips",
+      "files": [
+        "crates/deadsync-song-lua/src/trace_capture.rs",
+        "crates/deadsync-song-lua/src/live.rs"
+      ]
+    },
+    {
+      "name": "Transfer complete event arrays into comparisons and reports",
+      "files": [
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs"
+      ]
+    },
+    {
+      "name": "Avoid path-string allocation without backslashes",
+      "files": [
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs"
+      ]
+    },
+    {
+      "name": "Replay independent fixtures using multiple processes",
+      "files": [
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs"
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "name": "production-seventh-gear-null",
+      "kind": "compile",
+      "before": [
+        {
+          "wall_seconds": 29.557484676,
+          "allocations": 51149347,
+          "reallocations": 418201,
+          "allocated_bytes": 1872574842,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 95588393126.0,
+            "instructions:u": 127063474544.0,
+            "task-clock": 29561.26
+          },
+          "items": 1,
+          "items_per_second": 0.033832378193262735,
+          "items_per_cycle": 1.0461521187848072e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78412
+        },
+        {
+          "wall_seconds": 28.352758196,
+          "allocations": 51149431,
+          "reallocations": 418212,
+          "allocated_bytes": 1872600770,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 93081186397.0,
+            "instructions:u": 127058543725.0,
+            "task-clock": 28348.02
+          },
+          "items": 1,
+          "items_per_second": 0.03526993716403506,
+          "items_per_cycle": 1.0743309563491231e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78412
+        },
+        {
+          "wall_seconds": 28.63408666,
+          "allocations": 51149426,
+          "reallocations": 418212,
+          "allocated_bytes": 1872604023,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 94092620784.0,
+            "instructions:u": 127060424569.0,
+            "task-clock": 28629.44
+          },
+          "items": 1,
+          "items_per_second": 0.03492341180195339,
+          "items_per_cycle": 1.062782598324698e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78740
+        }
+      ],
+      "after": [
+        {
+          "wall_seconds": 27.076358059,
+          "allocations": 44054884,
+          "reallocations": 418223,
+          "allocated_bytes": 1840174982,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 88497579709.0,
+            "instructions:u": 122036425369.0,
+            "task-clock": 27078.37
+          },
+          "items": 1,
+          "items_per_second": 0.03693258885929109,
+          "items_per_cycle": 1.1299744052755177e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78336
+        },
+        {
+          "wall_seconds": 26.235184522,
+          "allocations": 44054789,
+          "reallocations": 418239,
+          "allocated_bytes": 1840194009,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 86549698880.0,
+            "instructions:u": 122036403947.0,
+            "task-clock": 26231.49
+          },
+          "items": 1,
+          "items_per_second": 0.038116751157646005,
+          "items_per_cycle": 1.1554055218453003e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78340
+        },
+        {
+          "wall_seconds": 27.006636903,
+          "allocations": 44054761,
+          "reallocations": 418245,
+          "allocated_bytes": 1840203552,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 88096597749.0,
+            "instructions:u": 122037132646.0,
+            "task-clock": 27002.72
+          },
+          "items": 1,
+          "items_per_second": 0.03702793515504021,
+          "items_per_cycle": 1.135117615834774e-11,
+          "fingerprint": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+          "exit_code": 0,
+          "max_rss_kb": 78336
+        }
+      ],
+      "output_sha256": "743af381ad44648d24d068d29515c82e7b7f636d26315d84b1440f0d4dd41f98",
+      "behavior_unchanged": true,
+      "before_median": {
+        "wall_seconds": 28.63408666,
+        "allocations": 51149426,
+        "reallocations": 418212,
+        "allocated_bytes": 1872600770,
+        "items_per_second": 0.03492341180195339,
+        "items_per_cycle": 1.062782598324698e-11,
+        "max_rss_kb": 78412,
+        "cycles:u": 94092620784.0,
+        "instructions:u": 127060424569.0,
+        "task-clock": 28629.44
+      },
+      "after_median": {
+        "wall_seconds": 27.006636903,
+        "allocations": 44054789,
+        "reallocations": 418239,
+        "allocated_bytes": 1840194009,
+        "items_per_second": 0.03702793515504021,
+        "items_per_cycle": 1.135117615834774e-11,
+        "max_rss_kb": 78336,
+        "cycles:u": 88096597749.0,
+        "instructions:u": 122036425369.0,
+        "task-clock": 27002.72
+      },
+      "change": {
+        "throughput_ratio": 1.0602611040702818,
+        "cycles_reduction_percent": 6.372468940752041,
+        "allocation_reduction_percent": 13.870413716861652,
+        "requested_bytes_reduction_percent": 1.7305750119925412,
+        "instruction_reduction_percent": 3.9540236206842883
+      }
+    },
+    {
+      "name": "full-vtubers",
+      "kind": "fixture",
+      "before": [
+        {
+          "wall_seconds": 94.368020838,
+          "allocations": 60680432,
+          "reallocations": 789614,
+          "allocated_bytes": 2732759677,
+          "counters": {
+            "cycles:u": 300447808031.0,
+            "instructions:u": 391169336192.0,
+            "task-clock": 94358.17
+          },
+          "items": 67455,
+          "items_per_second": 714.8078279166082,
+          "items_per_cycle": 2.245148681299084e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150992
+        },
+        {
+          "wall_seconds": 95.258157233,
+          "allocations": 60680743,
+          "reallocations": 789614,
+          "allocated_bytes": 2732775206,
+          "counters": {
+            "cycles:u": 301613927233.0,
+            "instructions:u": 391163799863.0,
+            "task-clock": 95237.99
+          },
+          "items": 67455,
+          "items_per_second": 708.1283320966004,
+          "items_per_cycle": 2.236468342786117e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150672
+        },
+        {
+          "wall_seconds": 97.903081519,
+          "allocations": 60680935,
+          "reallocations": 789614,
+          "allocated_bytes": 2732799868,
+          "counters": {
+            "cycles:u": 307896345281.0,
+            "instructions:u": 391253183624.0,
+            "task-clock": 97881.52
+          },
+          "items": 67455,
+          "items_per_second": 688.9977205355793,
+          "items_per_cycle": 2.190834708948479e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150672
+        }
+      ],
+      "after": [
+        {
+          "wall_seconds": 89.967100329,
+          "allocations": 60677926,
+          "reallocations": 789557,
+          "allocated_bytes": 2732593168,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 290326860933.0,
+            "instructions:u": 341906756097.0,
+            "task-clock": 89949.81
+          },
+          "items": 67455,
+          "items_per_second": 749.7740813400045,
+          "items_per_cycle": 2.3234157453852292e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150352
+        },
+        {
+          "wall_seconds": 90.055124621,
+          "allocations": 60677959,
+          "reallocations": 789557,
+          "allocated_bytes": 2732593278,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 285707534478.0,
+            "instructions:u": 341899060384.0,
+            "task-clock": 90035.57
+          },
+          "items": 67455,
+          "items_per_second": 749.0412154098572,
+          "items_per_cycle": 2.3609807883870896e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150672
+        },
+        {
+          "wall_seconds": 89.050264767,
+          "allocations": 60677857,
+          "reallocations": 789557,
+          "allocated_bytes": 2732588977,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 286036033984.0,
+            "instructions:u": 341885458580.0,
+            "task-clock": 89030.68
+          },
+          "items": 67455,
+          "items_per_second": 757.4935366727543,
+          "items_per_cycle": 2.3582693082569182e-07,
+          "fingerprint": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+          "exit_code": 0,
+          "max_rss_kb": 150672
+        }
+      ],
+      "output_sha256": "f287d755c82af2e9c8179507b87b775422a7fe0af0f11883198201ee1aee4de1",
+      "behavior_unchanged": true,
+      "before_median": {
+        "wall_seconds": 95.258157233,
+        "allocations": 60680743,
+        "reallocations": 789614,
+        "allocated_bytes": 2732775206,
+        "items_per_second": 708.1283320966004,
+        "items_per_cycle": 2.236468342786117e-07,
+        "max_rss_kb": 150672,
+        "cycles:u": 301613927233.0,
+        "instructions:u": 391169336192.0,
+        "task-clock": 95237.99
+      },
+      "after_median": {
+        "wall_seconds": 89.967100329,
+        "allocations": 60677926,
+        "reallocations": 789557,
+        "allocated_bytes": 2732593168,
+        "items_per_second": 749.7740813400045,
+        "items_per_cycle": 2.3582693082569182e-07,
+        "max_rss_kb": 150672,
+        "cycles:u": 286036033984.0,
+        "instructions:u": 341899060384.0,
+        "task-clock": 89949.81
+      },
+      "change": {
+        "throughput_ratio": 1.058811019635524,
+        "cycles_reduction_percent": 5.164845467154411,
+        "allocation_reduction_percent": 0.004642329445436744,
+        "requested_bytes_reduction_percent": 0.006661287016962447,
+        "instruction_reduction_percent": 12.595638576285639
+      }
+    },
+    {
+      "name": "compile-seventh-gear-opengl",
+      "kind": "compile",
+      "simfile": "/home/parity/jobs/song-lua-perf-20261017/compiler-inputs/7th Gear/7th Gear.ssc",
+      "renderer": "opengl,software",
+      "before": [
+        {
+          "wall_seconds": 74.129023389,
+          "allocations": 94296240,
+          "reallocations": 503511,
+          "allocated_bytes": 3400244975,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 233025281196.0,
+            "instructions:u": 260063954615.0,
+            "task-clock": 74121.02
+          },
+          "items": 1,
+          "items_per_second": 0.013489992910771168,
+          "items_per_cycle": 4.291379866027882e-12,
+          "fingerprint": "3cc945ee551e7cf3b0d6372f2fa4b6ebfcdb97502896ce7d5e572ef517a2d807",
+          "exit_code": 0,
+          "max_rss_kb": 198240
+        }
+      ],
+      "after": [
+        {
+          "wall_seconds": 65.582726608,
+          "allocations": 86588197,
+          "reallocations": 503531,
+          "allocated_bytes": 3358060949,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 211557056705.0,
+            "instructions:u": 254486947280.0,
+            "task-clock": 65569.55
+          },
+          "items": 1,
+          "items_per_second": 0.015247917427666336,
+          "items_per_cycle": 4.726857215613577e-12,
+          "fingerprint": "3cc945ee551e7cf3b0d6372f2fa4b6ebfcdb97502896ce7d5e572ef517a2d807",
+          "exit_code": 0,
+          "max_rss_kb": 198400
+        }
+      ],
+      "output_sha256": "3cc945ee551e7cf3b0d6372f2fa4b6ebfcdb97502896ce7d5e572ef517a2d807",
+      "behavior_unchanged": true,
+      "before_median": {
+        "wall_seconds": 74.129023389,
+        "allocations": 94296240,
+        "reallocations": 503511,
+        "allocated_bytes": 3400244975,
+        "items_per_second": 0.013489992910771168,
+        "items_per_cycle": 4.291379866027882e-12,
+        "max_rss_kb": 198240,
+        "cycles:u": 233025281196.0,
+        "instructions:u": 260063954615.0,
+        "task-clock": 74121.02
+      },
+      "after_median": {
+        "wall_seconds": 65.582726608,
+        "allocations": 86588197,
+        "reallocations": 503531,
+        "allocated_bytes": 3358060949,
+        "items_per_second": 0.015247917427666336,
+        "items_per_cycle": 4.726857215613577e-12,
+        "max_rss_kb": 198400,
+        "cycles:u": 211557056705.0,
+        "instructions:u": 254486947280.0,
+        "task-clock": 65569.55
+      },
+      "change": {
+        "throughput_ratio": 1.1303132276290184,
+        "cycles_reduction_percent": 9.21283063400441,
+        "allocation_reduction_percent": 8.174284573806979,
+        "requested_bytes_reduction_percent": 1.24061725876089,
+        "instruction_reduction_percent": 2.144475324639372
+      }
+    },
+    {
+      "name": "full-mountain-king",
+      "kind": "fixture",
+      "archive": "/home/parity/jobs/mountain-listed-lua-final-repair-v1/chart-244/candidates/0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd.tar",
+      "before": [
+        {
+          "wall_seconds": 245.719543241,
+          "allocations": 146476460,
+          "reallocations": 3351133,
+          "allocated_bytes": 5315307954,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 773711737192.0,
+            "instructions:u": 1071472769104.0,
+            "task-clock": 245663.82
+          },
+          "items": 56068,
+          "items_per_second": 228.17883860792017,
+          "items_per_cycle": 7.246626528309532e-08,
+          "fingerprint": "406e78585a673aa1b7c2bba0c311e5c62981a299d5664fd20f84f94dd23ff4af",
+          "exit_code": 0,
+          "max_rss_kb": 225676
+        }
+      ],
+      "after": [
+        {
+          "wall_seconds": 219.996402028,
+          "allocations": 146279354,
+          "reallocations": 3340669,
+          "allocated_bytes": 5295767515,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 693116339326.0,
+            "instructions:u": 849121435375.0,
+            "task-clock": 219952.58
+          },
+          "items": 56068,
+          "items_per_second": 254.85871352052365,
+          "items_per_cycle": 8.089262482907506e-08,
+          "fingerprint": "406e78585a673aa1b7c2bba0c311e5c62981a299d5664fd20f84f94dd23ff4af",
+          "exit_code": 0,
+          "max_rss_kb": 225356
+        }
+      ],
+      "output_sha256": "406e78585a673aa1b7c2bba0c311e5c62981a299d5664fd20f84f94dd23ff4af",
+      "behavior_unchanged": true,
+      "before_median": {
+        "wall_seconds": 245.719543241,
+        "allocations": 146476460,
+        "reallocations": 3351133,
+        "allocated_bytes": 5315307954,
+        "items_per_second": 228.17883860792017,
+        "items_per_cycle": 7.246626528309532e-08,
+        "max_rss_kb": 225676,
+        "cycles:u": 773711737192.0,
+        "instructions:u": 1071472769104.0,
+        "task-clock": 245663.82
+      },
+      "after_median": {
+        "wall_seconds": 219.996402028,
+        "allocations": 146279354,
+        "reallocations": 3340669,
+        "allocated_bytes": 5295767515,
+        "items_per_second": 254.85871352052365,
+        "items_per_cycle": 8.089262482907506e-08,
+        "max_rss_kb": 225356,
+        "cycles:u": 693116339326.0,
+        "instructions:u": 849121435375.0,
+        "task-clock": 219952.58
+      },
+      "change": {
+        "throughput_ratio": 1.116925281394948,
+        "cycles_reduction_percent": 10.416721627941373,
+        "allocation_reduction_percent": 0.1345649669578286,
+        "requested_bytes_reduction_percent": 0.3676257174392905,
+        "instruction_reduction_percent": 20.75193510656713
+      }
+    },
+    {
+      "name": "mawaru7-through-30",
+      "kind": "fixture",
+      "archive": "/home/parity/jobs/song-lua-perf-20261017/52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef.tar",
+      "through_second": 30,
+      "expected_exit": 2,
+      "before": [
+        {
+          "wall_seconds": 617.75720437,
+          "allocations": 504415455,
+          "reallocations": 22295168,
+          "allocated_bytes": 36048593667,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 1737976562841.0,
+            "instructions:u": 2334426221340.0,
+            "task-clock": 617643.51
+          },
+          "items": 21438,
+          "items_per_second": 34.70295424860785,
+          "items_per_cycle": 1.2335034003540398e-08,
+          "fingerprint": "a1c92cc9d34b91f939905059e1bbe2eaff853a0ad39416ed4675fe1031a7d879",
+          "exit_code": 2,
+          "max_rss_kb": 16812480
+        }
+      ],
+      "after": [
+        {
+          "wall_seconds": 526.142384797,
+          "allocations": 497978282,
+          "reallocations": 21979865,
+          "allocated_bytes": 35424182608,
+          "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+          "counters": {
+            "cycles:u": 1546190928664.0,
+            "instructions:u": 1968649656876.0,
+            "task-clock": 526002.45
+          },
+          "items": 21438,
+          "items_per_second": 40.745624415473316,
+          "items_per_cycle": 1.3865040599173412e-08,
+          "fingerprint": "a1c92cc9d34b91f939905059e1bbe2eaff853a0ad39416ed4675fe1031a7d879",
+          "exit_code": 2,
+          "max_rss_kb": 16812160
+        }
+      ],
+      "output_sha256": "a1c92cc9d34b91f939905059e1bbe2eaff853a0ad39416ed4675fe1031a7d879",
+      "behavior_unchanged": true,
+      "before_median": {
+        "wall_seconds": 617.75720437,
+        "allocations": 504415455,
+        "reallocations": 22295168,
+        "allocated_bytes": 36048593667,
+        "items_per_second": 34.70295424860785,
+        "items_per_cycle": 1.2335034003540398e-08,
+        "max_rss_kb": 16812480,
+        "cycles:u": 1737976562841.0,
+        "instructions:u": 2334426221340.0,
+        "task-clock": 617643.51
+      },
+      "after_median": {
+        "wall_seconds": 526.142384797,
+        "allocations": 497978282,
+        "reallocations": 21979865,
+        "allocated_bytes": 35424182608,
+        "items_per_second": 40.745624415473316,
+        "items_per_cycle": 1.3865040599173412e-08,
+        "max_rss_kb": 16812160,
+        "cycles:u": 1546190928664.0,
+        "instructions:u": 1968649656876.0,
+        "task-clock": 526002.45
+      },
+      "change": {
+        "throughput_ratio": 1.1741255261317665,
+        "cycles_reduction_percent": 11.03499542384483,
+        "allocation_reduction_percent": 1.2761649025999855,
+        "requested_bytes_reduction_percent": 1.732137083537899,
+        "instruction_reduction_percent": 15.668799515713038
+      }
+    }
+  ],
+  "multicore": {
+    "fixtures": [
+      {
+        "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+        "archive": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6.tar.zst",
+        "archive_sha256": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6"
+      },
+      {
+        "source_simfile": "freg/freg.sm",
+        "archive": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554.tar.zst",
+        "archive_sha256": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554"
+      }
+    ],
+    "results": [
+      {
+        "jobs": 1,
+        "passed_fixtures": 2,
+        "wall_seconds": 43.303880102,
+        "allocations_all_processes": 29324045,
+        "reallocations_all_processes": 348450,
+        "allocated_bytes_all_processes": 1393706759,
+        "counters_all_processes": {
+          "cycles:u": 135109017933.0,
+          "instructions:u": 153750971884.0,
+          "task-clock": 43310.22
+        },
+        "fixtures_per_second": 0.04618523779599208,
+        "fixtures_per_cycle": 1.4802860908897966e-11,
+        "parent_allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+        "children": []
+      },
+      {
+        "jobs": 2,
+        "passed_fixtures": 2,
+        "wall_seconds": 31.207154734,
+        "allocations_all_processes": 29358209,
+        "reallocations_all_processes": 349491,
+        "allocated_bytes_all_processes": 1411731132,
+        "counters_all_processes": {
+          "cycles:u": 135521054831.0,
+          "instructions:u": 153860444720.0,
+          "task-clock": 42411.66
+        },
+        "fixtures_per_second": 0.06408786757547662,
+        "fixtures_per_cycle": 1.475785443445727e-11,
+        "parent_allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded",
+        "children": [
+          {
+            "wall_seconds": 11.216400819,
+            "allocations": 8398334,
+            "reallocations": 95883,
+            "allocated_bytes": 436114531,
+            "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"
+          },
+          {
+            "wall_seconds": 31.186319904,
+            "allocations": 20953824,
+            "reallocations": 253499,
+            "allocated_bytes": 974551164,
+            "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"
+          }
+        ]
+      }
+    ],
+    "throughput_ratio": 1.3876266667406465,
+    "cycles_ratio": 1.0030496624452139
+  },
+  "correctness": {
+    "suites": [
+      {
+        "suite": "compiler",
+        "baseline_summary": [
+          "309",
+          "7"
+        ],
+        "current_summary": [
+          "309",
+          "7"
+        ],
+        "baseline_failures": [
+          "tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers",
+          "tests::compile_song_lua_accepts_skewy_probe_calls",
+          "tests::compile_song_lua_exposes_save_your_tears_compat_helpers",
+          "tests::compile_song_lua_exposes_theme_branch_and_path_helpers",
+          "tests::compile_song_lua_extracts_sound_actor_assets",
+          "tests::compile_song_lua_keeps_combo_child_callback",
+          "tests::compile_song_lua_supports_named_player_tap_note_shim"
+        ],
+        "current_failures": [
+          "tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers",
+          "tests::compile_song_lua_accepts_skewy_probe_calls",
+          "tests::compile_song_lua_exposes_save_your_tears_compat_helpers",
+          "tests::compile_song_lua_exposes_theme_branch_and_path_helpers",
+          "tests::compile_song_lua_extracts_sound_actor_assets",
+          "tests::compile_song_lua_keeps_combo_child_callback",
+          "tests::compile_song_lua_supports_named_player_tap_note_shim"
+        ],
+        "same_names": true,
+        "same_failure_diagnostics": true,
+        "baseline_log_sha256": "3f5e91aaca43fe5bbb4a830d1ae12e90a3dad6008e1125181558f2ecb31d4451",
+        "current_log_sha256": "c8196c999950aa043427f29d86ff11fac81af4d8a1af7f67f9e0dd7b5f8748e8"
+      },
+      {
+        "suite": "native",
+        "baseline_summary": [
+          "47",
+          "0"
+        ],
+        "current_summary": [
+          "47",
+          "0"
+        ],
+        "baseline_failures": [],
+        "current_failures": [],
+        "same_names": true,
+        "same_failure_diagnostics": true,
+        "baseline_log_sha256": "3397a4563e3e1a51a9ca8f6fa9823b99f7d40d510d34109127419db724a0fe19",
+        "current_log_sha256": "832b2340ea1aa11358a62fd07a04039a9744850731f43dbee94772e088d87e8a"
+      }
+    ],
+    "normalization": [
+      "Rust panic source locations (inserted source lines)",
+      "test thread IDs",
+      "process IDs in test temporary directories",
+      "one libtest backtrace hint"
+    ],
+    "additional_checks": {
+      "scalar_capture_and_reset": {
+        "passed": 2,
+        "failed": 0
+      },
+      "chunk_environment_differential": {
+        "passed": 1,
+        "failed": 0
+      },
+      "benchmark_fingerprint": {
+        "passed": 4,
+        "failed": 0
+      },
+      "full_native_replays": {
+        "charts": [
+          "VTubers Never Die",
+          "Mountain King"
+        ],
+        "complete_reports_unchanged": true
+      },
+      "multicore": {
+        "fixtures_passed_serial": 2,
+        "fixtures_passed_parallel": 2,
+        "comparisons_each_mode": 484,
+        "failed_comparisons_each_mode": 0
+      }
+    }
+  },
+  "builds": {
+    "current": {
+      "command": [
+        "/home/parity/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--release",
+        "--jobs",
+        "8",
+        "--target-dir",
+        "/home/parity/build/deadsync-sweep-release",
+        "--config",
+        "profile.release.lto=false",
+        "--test",
+        "full_song_lua",
+        "--test",
+        "song_lua_performance",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "artifacts": {
+        "song_lua_performance": {
+          "path": "/home/parity/jobs/song-lua-perf-20261017/current-v3-song_lua_performance",
+          "sha256": "237aaba2c7b726bad8fae47de2568248f650d3d69d2c4f24b88cc2f7ce960ea7"
+        },
+        "full_song_lua": {
+          "path": "/home/parity/jobs/song-lua-perf-20261017/current-v3-full_song_lua",
+          "sha256": "a4062249ad3b9870015ed9391945cb68daa37e8a49f944db9bd4335c49826677"
+        }
+      },
+      "targeted_checks": [
+        {
+          "command": [
+            "/home/parity/.cargo/bin/cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "--release",
+            "--jobs",
+            "8",
+            "--target-dir",
+            "/home/parity/build/deadsync-sweep-release",
+            "--config",
+            "profile.release.lto=false",
+            "-p",
+            "deadsync-song-lua",
+            "--lib",
+            "actor_state_read_tests"
+          ],
+          "exit_code": 0,
+          "log": "/home/parity/jobs/song-lua-perf-20261017/current-v3-unit-0.log",
+          "sha256": "932c1518445a42e68c36ac2292797fdc5939c44d3209968a02d070ca37273de5"
+        },
+        {
+          "command": [
+            "/home/parity/.cargo/bin/cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "--release",
+            "--jobs",
+            "8",
+            "--target-dir",
+            "/home/parity/build/deadsync-sweep-release",
+            "--config",
+            "profile.release.lto=false",
+            "-p",
+            "deadsync-song-lua",
+            "--lib",
+            "chunk_environment_tests"
+          ],
+          "exit_code": 0,
+          "log": "/home/parity/jobs/song-lua-perf-20261017/current-v3-unit-1.log",
+          "sha256": "f2ad6cb287c5dcbefcec9cd591f19460d482757b0bb5cd84708e35a305a60ba6"
+        },
+        {
+          "command": [
+            "/home/parity/.cargo/bin/cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "--release",
+            "--jobs",
+            "8",
+            "--target-dir",
+            "/home/parity/build/deadsync-sweep-release",
+            "--config",
+            "profile.release.lto=false",
+            "-p",
+            "deadsync-song-lua",
+            "--lib",
+            "compile_song_lua_"
+          ],
+          "exit_code": 101,
+          "log": "/home/parity/jobs/song-lua-perf-20261017/current-v3-unit-2.log",
+          "sha256": "c8196c999950aa043427f29d86ff11fac81af4d8a1af7f67f9e0dd7b5f8748e8"
+        },
+        {
+          "command": [
+            "/home/parity/.cargo/bin/cargo",
+            "test",
+            "--offline",
+            "--locked",
+            "--release",
+            "--jobs",
+            "8",
+            "--target-dir",
+            "/home/parity/build/deadsync-sweep-release",
+            "--config",
+            "profile.release.lto=false",
+            "--test",
+            "song_lua_itgmania_semantic_parity",
+            "native_gameplay::tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "log": "/home/parity/jobs/song-lua-perf-20261017/current-v3-unit-3.log",
+          "sha256": "832b2340ea1aa11358a62fd07a04039a9744850731f43dbee94772e088d87e8a"
+        }
+      ],
+      "source_sha256": {
+        "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+        "crates/deadsync-song-lua/src/compile.rs": "99ba9e8a8e4f54405d9242a295e1fc5a763dcabd45796c990c8f4942b71ce181",
+        "crates/deadsync-song-lua/src/host.rs": "8555b9d5719c9cccadd2f9861cd39ddd67198945a82080eb76994417cedeff0c",
+        "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+        "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+        "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+        "crates/deadsync-song-lua/src/lua_util.rs": "063565fb32c37d58b647e7afccca8cdaf48fd229ccd57dff27fb19125f638be2",
+        "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+        "crates/deadsync-song-lua/src/live.rs": "8f6c1b9f77956cd05bed2dc16c9269f663c9f19154d089415e69c1395a289f52",
+        "crates/deadsync-song-lua/src/lib.rs": "887d86eca42c7bec5f0a40892183999a1346dde7f8ffd446cbfa4f06e37a8047",
+        "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+        "crates/deadsync-song-lua/src/playback/prepare.rs": "7dd55de9887d1b911df221ff8c673b4469c9707c2f44177f2aa1aef7c71d7b18",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "3e4516cd176b7f95238276467f1794440ef053fa0710fb7c25fe29e95f56f7a6",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+        "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+        "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+        "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702"
+      },
+      "production_compiler": {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "-p",
+          "deadsync-shell",
+          "--features",
+          "song-lua-performance",
+          "--bin",
+          "song_lua_compile_performance",
+          "--message-format=json"
+        ],
+        "binary": "/home/parity/jobs/song-lua-perf-20261017/current-v3-production-compiler",
+        "binary_sha256": "9686042867d6537812ffee9432c07047a947434dd918ce3fad49edd938bd88af",
+        "song_lua_features": [
+          "performance"
+        ]
+      }
+    },
+    "baseline_production": {
+      "command": [
+        "/home/parity/.cargo/bin/cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--jobs",
+        "8",
+        "--target-dir",
+        "/home/parity/build/deadsync-sweep-release",
+        "--config",
+        "profile.release.lto=false",
+        "-p",
+        "deadsync-shell",
+        "--features",
+        "song-lua-performance",
+        "--bin",
+        "song_lua_compile_performance",
+        "--message-format=json"
+      ],
+      "binary": "/home/parity/jobs/song-lua-perf-20261017/baseline-production-compiler",
+      "binary_sha256": "6c06aef47c9f93de28d46b054cc3e438c8ba3eac5fe530949dcc70a6fb6a66c7",
+      "song_lua_features": [
+        "performance"
+      ],
+      "runtime_source_commit": "591cb2db0",
+      "source_sha256": {
+        "crates/deadsync-song-lua/src/lib.rs": "1a966235480b452af855a97c6a563d89ce1bfafa120cfbbcaa5635bba11dada3",
+        "crates/deadsync-song-lua/src/live.rs": "9b5f636731c01a823956655907f468f5c51d95f57f73050734e61935c6aedf56",
+        "crates/deadsync-song-lua/src/lua_util.rs": "a1ceba3472d079bbd02ae5037e0b9826127b16d90db55b05436c0c102bc5edb9",
+        "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "388f336694264aa13bbee31c3126bca020860f474676401b1b4847b21427328f",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "7c694d1321718a25fc186b9e8024431e57dcdd860e9e91d5d1bf38eac89fc69e"
+      }
+    },
+    "baseline_fixture": {
+      "command": [
+        "/home/parity/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--release",
+        "--jobs",
+        "8",
+        "--target-dir",
+        "/home/parity/build/deadsync-sweep-release",
+        "--config",
+        "profile.release.lto=false",
+        "--test",
+        "full_song_lua",
+        "--test",
+        "song_lua_performance",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "artifacts": {
+        "song_lua_performance": {
+          "path": "/home/parity/jobs/song-lua-perf-20261017/baseline-v3-song_lua_performance",
+          "sha256": "c20ae3ae9303ac70ab8cdcae950213a5fd9eec4ebd23f4fad2f416cf821987e6"
+        },
+        "full_song_lua": {
+          "path": "/home/parity/jobs/song-lua-perf-20261017/baseline-v3-full_song_lua",
+          "sha256": "8dd21f05751bc702337d1957f3b2ea4588731e0544531ae0ce449f2dfaadb3f2"
+        }
+      },
+      "source_commit": "591cb2db0",
+      "measurement_only_sources": [
+        "Cargo.toml",
+        "tests/full_song_lua.rs",
+        "tests/song_lua_performance.rs",
+        "tests/support/song_lua_metrics.rs",
+        "crates/deadsync-song-lua/src/playback/prepare.rs"
+      ],
+      "source_sha256": {
+        "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+        "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+        "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+        "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+        "crates/deadsync-song-lua/src/playback/prepare.rs": "cc2f80374ed36b78cf962cf64007ecee2d9ed28d757272d361b6160a94beefe7",
+        "crates/deadsync-song-lua/src/compile.rs": "99ba9e8a8e4f54405d9242a295e1fc5a763dcabd45796c990c8f4942b71ce181",
+        "crates/deadsync-song-lua/src/live.rs": "9b5f636731c01a823956655907f468f5c51d95f57f73050734e61935c6aedf56",
+        "crates/deadsync-song-lua/src/lua_util.rs": "a1ceba3472d079bbd02ae5037e0b9826127b16d90db55b05436c0c102bc5edb9",
+        "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+        "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "388f336694264aa13bbee31c3126bca020860f474676401b1b4847b21427328f",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "7c694d1321718a25fc186b9e8024431e57dcdd860e9e91d5d1bf38eac89fc69e"
+      },
+      "provenance": "Runtime and loader source hashes match immutable baseline-v2; only benchmark renderer/chart options and post-measurement allocation scope metadata changed for v3, then the build copied immutable executables before performance sources were uploaded."
+    }
+  },
+  "baseline_host_source_sha256": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+  "measurement_environment": {
+    "cpu": "Intel Xeon E5-2697 v2 KVM, 40 virtual CPUs, 64GB RAM",
+    "os": "Linux 6.8.0-142-generic x86_64",
+    "compiler": "rustc1.98.1",
+    "profile": "release opt-level3, LTOdisabled, Cargojobs8",
+    "affinity": "CPU2 for comparisons; CPU2,3 for serial/multicore batch",
+    "counters": "Hardware perf user cycles/instructions and task-clock, enabled only inside measured scopes",
+    "allocator": "System wrapper; all Rust GlobalAlloc calls including mlua; direct native malloc excluded",
+    "input": "Retained complete captures compared uncompressed; song source and capture bytes unchanged",
+    "scope": "Compiler: production prepare_song_lua including context/timing, excludes initial parsing and output hashing. Fixture: complete CLI. Expensive graphics/heavy cases have one pair; primary null and fullVTubers have three repeats."
+  },
+  "normalization": [
+    "Temporary extraction directories and process-specific addresses in typed actor/name/path handles; first-observation identities preserve aliases within each scene. All other report bytes, including field/event order, are exact.",
+    "Compiler hashes include complete compiled layer debug data without preparation times"
+  ],
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "generated_utc": "2026-10-17T17:44:42Z",
+  "input_provenance": {
+    "uncompressed_captures": [
+      {
+        "case": "full-vtubers",
+        "path": "/home/parity/jobs/song-lua-perf-20261017/7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1.tar",
+        "bytes": 118693376,
+        "sha256": "7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1"
+      },
+      {
+        "case": "full-mountain-king",
+        "path": "/home/parity/jobs/mountain-listed-lua-final-repair-v1/chart-244/candidates/0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd.tar",
+        "bytes": 15893504,
+        "sha256": "0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd"
+      },
+      {
+        "case": "mawaru7-through-30",
+        "path": "/home/parity/jobs/song-lua-perf-20261017/52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef.tar",
+        "bytes": 1994558976,
+        "sha256": "52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef"
+      }
+    ],
+    "compiler_input_files": [
+      {
+        "path": "7th Gear/7th Gear.ogg",
+        "bytes": 4290966,
+        "sha256": "c189ea9341e96f76827e749c0b5f69841f1431efc6c5f435748c59335d57bd72"
+      },
+      {
+        "path": "7th Gear/7th Gear.ssc",
+        "bytes": 40283,
+        "sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd"
+      },
+      {
+        "path": "7th Gear/7th background.png",
+        "bytes": 3012752,
+        "sha256": "d4ad0ba8b0f6ea378ee875ecfb33a71336c1ddf35fa93a6724a64eb5882287f2"
+      },
+      {
+        "path": "7th Gear/7th_banner.png",
+        "bytes": 476808,
+        "sha256": "206665d7b72456161a1c331fce18d9f4ae38d0caa07fd4e3715f826579dd90b9"
+      },
+      {
+        "path": "7th Gear/lua/default.lua",
+        "bytes": 38984,
+        "sha256": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f"
+      },
+      {
+        "path": "7th Gear/lua/easing.lua",
+        "bytes": 9952,
+        "sha256": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e"
+      },
+      {
+        "path": "7th Gear/lua/modhelpers.lua",
+        "bytes": 10953,
+        "sha256": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a"
+      },
+      {
+        "path": "7th Gear/lua/mods.lua",
+        "bytes": 7204,
+        "sha256": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      }
+    ],
+    "multicore_archives": [
+      {
+        "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+        "archive": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6.tar.zst",
+        "archive_sha256": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6",
+        "bytes": 2371625
+      },
+      {
+        "source_simfile": "freg/freg.sm",
+        "archive": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554.tar.zst",
+        "archive_sha256": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554",
+        "bytes": 1508259
+      }
+    ],
+    "verification": "Archive bytes unchanged; each CLI also validates member manifests and hashes the input archive before and after replay.",
+    "compiler_files_match_original_corpus": true
+  },
+  "oversize_file_audit": {
+    "limit_bytes": 100000000,
+    "no_tracked_or_unignored_oversize_files": true,
+    "oversized_local_fixtures_gitignored": 13
+  },
+  "measurement_tool_commits": [
+    "2029bd41c",
+    "8042681c1",
+    "c69bffc66",
+    "8a56ecd6b"
+  ],
+  "measurement_script_sha256": {
+    "scripts/benchmark_song_lua.py": "743b44dbd9764be2690123458a055ac28ced46368b8bbb39200c35e065516faa",
+    "scripts/test_benchmark_song_lua.py": "eed94f2291017085668e3b714397afb5f85055f9c73d094e6b96cfa6434f293e"
+  }
+}

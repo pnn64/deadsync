@@ -1,0 +1,494 @@
+{
+  "reference": "libjpeg-turbo version 3.2.1 (build 20261028)",
+  "cases": [
+    {
+      "file": "8-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-444.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.015053763440860216,
+      "sha256": "f2fe1666f5fcdb75b23f267aded7ebf9fb26f19f0ce2013ba06e85f98b361401"
+    },
+    {
+      "file": "8-422.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "2x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-422.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012063492063492064,
+      "sha256": "6530b8a9943027ba8e3f12027003b85ee841e30f9273ef69d6749ef8c183945f"
+    },
+    {
+      "file": "8-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "2x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-420.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "aea8886c7098ae2eb98cab5a5d6751eccac76fb7a24788d9bdaac1248e5fe5e2"
+    },
+    {
+      "file": "8-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "4x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-411.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.009361702127659575,
+      "sha256": "5f903b74bc527f034859f206ca63797f58db0d6c3b7168677b13b02a565caa02"
+    },
+    {
+      "file": "8-440.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "1x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-440.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013282732447817837,
+      "sha256": "494d5659aab96d460ce6fbe860b9a17ef9757a842a591adc8b0c9068d4d46a97"
+    },
+    {
+      "file": "8-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "4x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-410.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014242115971515769,
+      "sha256": "eb71017a22e090d87fd300fbbf3f1698e7219029ac1d150faf01d8c00416ea65"
+    },
+    {
+      "file": "8-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-rgb",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012473118279569893,
+      "sha256": "2d43798b3da722e5ee3bb3cbb1a245b77094554634b94eb9ff9bfd3ccbf91deb"
+    },
+    {
+      "file": "8-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-grayscale",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "b9bd3b23beb2c530791987efb625c65728e764e5fe024937cf70938fe05a072c"
+    },
+    {
+      "file": "8-restart.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-restart",
+        "1B",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-restart.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.015053763440860216,
+      "sha256": "82f41cd0d44a03e4c5f1a4d4e080a7da681d1704344c513997d2bf8c92817d01"
+    },
+    {
+      "file": "8-optimized.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-optimize",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-optimized.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "aea8886c7098ae2eb98cab5a5d6751eccac76fb7a24788d9bdaac1248e5fe5e2"
+    },
+    {
+      "file": "8-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-progressive",
+        "-quality",
+        "1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 0,
+      "mean_idct_error": 0.0,
+      "sha256": "158dc25e3481a151ea8900616d48bfb3c11de81f67bc3c08e91d09d5c0f77470"
+    },
+    {
+      "file": "8-multiscan.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-scans",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\sequential.scans",
+        "-restart",
+        "2B",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\8-multiscan.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014273719563392108,
+      "sha256": "2d540c6ab3afe60614c70114d99b4f60096a3bb6f557e17d5263552f7f74813a"
+    },
+    {
+      "file": "12-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-444.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "6ae9b154f95d3ae5294e9b2da558b18e25b70afa407373a54c2167737d871e46"
+    },
+    {
+      "file": "12-422.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "2x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-422.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013968253968253968,
+      "sha256": "c33b2cb4a2b022fc786569aef7b43934187b28aa7e479469f6844a3b730ce707"
+    },
+    {
+      "file": "12-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "2x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-420.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01595298068849706,
+      "sha256": "d70191097ca7d59a4899d0c53ac2b932d79b07d0d8410f319edff12794fd5873"
+    },
+    {
+      "file": "12-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "4x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-411.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013617021276595745,
+      "sha256": "00440923826818cbfd4034dc91639b75592f0ed0a3af980218a15ea538c65f01"
+    },
+    {
+      "file": "12-440.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "1x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-440.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012017710309930424,
+      "sha256": "7a883b89743af955f7a551290b5f00c7d7200c08a721d311f5eabdde22e99d74"
+    },
+    {
+      "file": "12-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-sample",
+        "4x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-410.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01627670396744659,
+      "sha256": "97f8c476343371ef7e44e9c381dd06fcfe6692b079940d1b77a2b27ce37864ce"
+    },
+    {
+      "file": "12-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-rgb",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01935483870967742,
+      "sha256": "ff0b65ff6b73d2dae4d18093296bcbc2b706f78b842639bb42b362fdd4a2bfb3"
+    },
+    {
+      "file": "12-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-grayscale",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014193548387096775,
+      "sha256": "db6c53311de596ed70b805165448930ddfc853a1de1850bfef1d07abf31da307"
+    },
+    {
+      "file": "12-restart.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-restart",
+        "1B",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-restart.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "4e136df30fb97f893eff05354f9d23718ee1009d716dbff3daaff838f1c7b2d5"
+    },
+    {
+      "file": "12-optimized.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-optimize",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-optimized.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01595298068849706,
+      "sha256": "d70191097ca7d59a4899d0c53ac2b932d79b07d0d8410f319edff12794fd5873"
+    },
+    {
+      "file": "12-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-progressive",
+        "-quality",
+        "1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "07863cf835b6968fdb6d27c1ef021943455018ce83ed0014ef4bd5e7a137e1f2"
+    },
+    {
+      "file": "12-multiscan.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-scans",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\sequential.scans",
+        "-restart",
+        "2B",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\12-multiscan.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\progressive\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.007556675062972292,
+      "sha256": "8b68d927685f2f4575cf97208a1aa11096a7cfe1adeb9408e97d543f78612191"
+    },
+    {
+      "file": "8-cmyk.jpg",
+      "command": [
+        "Pillow",
+        "12.3.0",
+        "CMYK",
+        "quality=83"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012580645161290323,
+      "sha256": "086f39e36ce605209949fc5dc9a3c7be811881f915da8751cd556d4a86f767b3"
+    }
+  ]
+}

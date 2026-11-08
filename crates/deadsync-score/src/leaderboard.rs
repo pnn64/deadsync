@@ -2,6 +2,7 @@ use chrono::{Local, TimeZone};
 use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -17,6 +18,7 @@ pub struct LeaderboardEntry {
     pub rank: u32,
     pub name: String,
     pub machine_tag: Option<String>,
+    /// Hundredths of a percent, or raw strokes for a Golf pane.
     pub score: f64,
     pub date: String,
     pub is_rival: bool,
@@ -154,7 +156,8 @@ pub fn scorebox_machine_tag(machine_tag: Option<&str>, name: &str) -> String {
     if src.is_empty() {
         return "----".to_string();
     }
-    let mut out = String::with_capacity(4);
+    // Four UTF-8 scalar values occupy at most sixteen bytes.
+    let mut out = String::with_capacity(16);
     for ch in src.chars().take(4) {
         out.push(ch.to_ascii_uppercase());
     }
@@ -171,22 +174,92 @@ pub fn scorebox_score_percent(score_10000: f64) -> f64 {
     }
 }
 
+const SCOREBOX_DIGIT_PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+#[inline]
+fn format_scorebox_fixed(score_10000: f64, with_percent: bool) -> String {
+    // Preserve the existing finite clamp and its signed-zero result.
+    let bits = scorebox_score_percent(score_10000).to_bits();
+    let shift = 1075 - ((bits >> 52) & 0x7ff) as u32;
+    let units = if shift >= 61 {
+        // The scaled significand is below half a unit at this denominator.
+        0
+    } else {
+        // Exact significand * 100 fits in 60 bits. Round its binary fraction
+        // directly, avoiding a second floating-point rounding at half cents.
+        let scaled = ((bits & 0x000f_ffff_ffff_ffff) | (1 << 52)) * 100;
+        let whole = scaled >> shift;
+        let remainder = scaled & ((1u64 << shift) - 1);
+        let half = 1u64 << (shift - 1);
+        whole + u64::from(remainder > half || (remainder == half && whole & 1 != 0))
+    } as u32;
+    let mut bytes = [b'0'; 8];
+    let mut len = 0;
+    if bits >> 63 != 0 {
+        bytes[len] = b'-';
+        len += 1;
+    }
+    let whole = units / 100;
+    if whole == 100 {
+        bytes[len..len + 3].copy_from_slice(b"100");
+        len += 3;
+    } else if whole >= 10 {
+        let pair = whole as usize * 2;
+        bytes[len..len + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+        len += 2;
+    } else {
+        bytes[len] = b'0' + whole as u8;
+        len += 1;
+    }
+    bytes[len] = b'.';
+    let pair = (units % 100) as usize * 2;
+    bytes[len + 1..len + 3].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+    len += 3;
+    if with_percent {
+        bytes[len] = b'%';
+        len += 1;
+    }
+    std::str::from_utf8(&bytes[..len])
+        .expect("score display contains only ASCII")
+        .to_owned()
+}
+
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_score_percent(score_10000: f64) -> String {
-    format!("{:.2}%", scorebox_score_percent(score_10000))
+    format_scorebox_fixed(score_10000, true)
 }
 
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_score_value(score_10000: f64) -> String {
-    format!("{:.2}", scorebox_score_percent(score_10000))
+    format_scorebox_fixed(score_10000, false)
 }
 
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_rank(rank: u32) -> String {
-    format!("{rank}.")
+    let mut bytes = [b'0'; 11];
+    bytes[10] = b'.';
+    let mut cursor = 10;
+    let mut value = rank;
+    while value >= 100 {
+        let pair = (value % 100) as usize * 2;
+        cursor -= 2;
+        bytes[cursor..cursor + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+        value /= 100;
+    }
+    if value >= 10 {
+        let pair = value as usize * 2;
+        cursor -= 2;
+        bytes[cursor..cursor + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+    } else {
+        cursor -= 1;
+        bytes[cursor] = b'0' + value as u8;
+    }
+    std::str::from_utf8(&bytes[cursor..])
+        .expect("rank contains only ASCII")
+        .to_owned()
 }
 
 #[inline(always)]
@@ -359,6 +432,7 @@ pub fn machine_leaderboard_entries(
     mut plays: Vec<MachineLeaderboardPlay>,
     max_entries: usize,
 ) -> Vec<LeaderboardEntry> {
+    plays.retain(|play| !play.is_fail);
     plays.sort_by(|a, b| {
         b.score_percent
             .partial_cmp(&a.score_percent)
@@ -446,7 +520,7 @@ fn replay_edges_from_local(replay: Vec<LocalReplayEdge>) -> Vec<ReplayEdge> {
 #[inline(always)]
 #[must_use]
 pub fn leaderboard_username_matches(entry_name: &str, username: &str) -> bool {
-    !username.trim().is_empty() && entry_name.eq_ignore_ascii_case(username)
+    entry_name.eq_ignore_ascii_case(username) && !username.trim().is_empty()
 }
 
 #[inline(always)]
@@ -484,23 +558,32 @@ pub enum ArrowCloudPaneKind {
     Itg,
     Ex,
     HardEx,
+    /// The golf event's hole board, served with the core boards on golf holes.
+    Golf,
 }
+
+/// Pane name of the golf event board. The scorebox and overlay key golf
+/// rendering (strokes instead of percents) off this name.
+pub const GOLF_LEADERBOARD_PANE_NAME: &str = "Golf (ArrowCloud)";
 
 #[must_use]
 pub fn arrowcloud_pane_kind_from_type(lb_type: &str) -> Option<ArrowCloudPaneKind> {
-    if lb_type.is_empty() {
-        return None;
-    }
-    let mut compact = String::with_capacity(lb_type.len());
-    for ch in lb_type.chars() {
-        if ch.is_ascii_alphanumeric() {
-            compact.push(ch.to_ascii_lowercase());
+    let mut compact = [0; b"hardex".len()];
+    let mut len = 0;
+    for byte in lb_type.bytes() {
+        if byte.is_ascii_alphanumeric() {
+            if len == compact.len() {
+                return None;
+            }
+            compact[len] = byte.to_ascii_lowercase();
+            len += 1;
         }
     }
-    match compact.as_str() {
-        "itg" => Some(ArrowCloudPaneKind::Itg),
-        "ex" => Some(ArrowCloudPaneKind::Ex),
-        "hardex" | "hex" => Some(ArrowCloudPaneKind::HardEx),
+    match &compact[..len] {
+        b"itg" => Some(ArrowCloudPaneKind::Itg),
+        b"ex" => Some(ArrowCloudPaneKind::Ex),
+        b"hardex" | b"hex" => Some(ArrowCloudPaneKind::HardEx),
+        b"golf" => Some(ArrowCloudPaneKind::Golf),
         _ => None,
     }
 }
@@ -518,17 +601,18 @@ pub fn arrowcloud_user_id(raw: &str) -> Option<&str> {
 }
 
 #[must_use]
-pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<String> {
+/// Borrow the identities whose scores are still needed during pagination.
+pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<&str> {
     let Some(context) = context else {
         return HashSet::new();
     };
     let mut out = HashSet::with_capacity(
         usize::from(context.self_user_id.is_some()) + context.rival_user_ids.len(),
     );
-    if let Some(self_user_id) = context.self_user_id.as_ref() {
-        out.insert(self_user_id.clone());
+    if let Some(self_user_id) = context.self_user_id.as_deref() {
+        out.insert(self_user_id);
     }
-    out.extend(context.rival_user_ids.iter().cloned());
+    out.extend(context.rival_user_ids.iter().map(String::as_str));
     out
 }
 
@@ -576,6 +660,37 @@ pub fn arrowcloud_leaderboard_entry(
     }
 }
 
+/// Raw strokes per displayed stroke. `ArrowCloud` sends displayed strokes
+/// (`"3.82"`); golf rows store raw strokes so the scorebox formats them the
+/// same way as the native counter.
+const GOLF_RAW_STROKES_PER_STROKE: f64 = 1000.0;
+
+#[must_use]
+pub fn arrowcloud_golf_leaderboard_entry(
+    rank: u32,
+    alias: String,
+    strokes: f64,
+    date: String,
+    is_self: bool,
+    is_rival: bool,
+) -> LeaderboardEntry {
+    let score = if strokes.is_finite() {
+        (strokes * GOLF_RAW_STROKES_PER_STROKE).round().max(0.0)
+    } else {
+        0.0
+    };
+    LeaderboardEntry {
+        rank,
+        name: alias,
+        machine_tag: None,
+        score,
+        date,
+        is_rival,
+        is_self,
+        is_fail: false,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LeaderboardPane {
     pub name: String,
@@ -596,7 +711,9 @@ impl LeaderboardPane {
     #[inline(always)]
     #[must_use]
     pub fn is_arrowcloud(&self) -> bool {
-        self.arrowcloud_kind.is_some() || self.name.eq_ignore_ascii_case("ArrowCloud")
+        self.arrowcloud_kind.is_some()
+            || self.name.eq_ignore_ascii_case("ArrowCloud")
+            || self.name == GOLF_LEADERBOARD_PANE_NAME
     }
 
     #[inline(always)]
@@ -609,6 +726,7 @@ impl LeaderboardPane {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScoreboxPaneKind {
+    Golf,
     Gs,
     Ex,
     HardEx,
@@ -619,10 +737,14 @@ pub enum ScoreboxPaneKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicScoreboxFilter {
+    pub golf: bool,
     pub itg: bool,
     pub ex: bool,
     pub hard_ex: bool,
     pub tournaments: bool,
+    /// Show event boards ahead of the core ITG/EX boards on charts that are
+    /// in an event.
+    pub events_first: bool,
 }
 
 impl Default for SelectMusicScoreboxFilter {
@@ -632,6 +754,8 @@ impl Default for SelectMusicScoreboxFilter {
             ex: true,
             hard_ex: true,
             tournaments: true,
+            golf: false,
+            events_first: true,
         }
     }
 }
@@ -639,7 +763,7 @@ impl Default for SelectMusicScoreboxFilter {
 #[inline(always)]
 #[must_use]
 pub const fn select_music_scorebox_filter_has_any(filter: SelectMusicScoreboxFilter) -> bool {
-    filter.itg || filter.ex || filter.hard_ex || filter.tournaments
+    filter.itg || filter.ex || filter.hard_ex || filter.tournaments || filter.golf
 }
 
 #[inline(always)]
@@ -649,6 +773,7 @@ pub const fn select_music_scorebox_filter_allows_kind(
     filter: SelectMusicScoreboxFilter,
 ) -> bool {
     match kind {
+        ScoreboxPaneKind::Golf => filter.golf,
         ScoreboxPaneKind::Gs => filter.itg,
         ScoreboxPaneKind::Ex => filter.ex,
         ScoreboxPaneKind::HardEx => filter.hard_ex,
@@ -668,6 +793,9 @@ pub fn select_music_scorebox_filtered_panes(
         if select_music_scorebox_filter_allows_kind(scorebox_pane_kind(pane), filter) {
             out.push(pane);
         }
+    }
+    if filter.events_first {
+        prioritize_event_panes(&mut out);
     }
     out
 }
@@ -690,6 +818,9 @@ pub fn select_music_scorebox_pane_refs(
         if select_music_scorebox_filter_allows_kind(scorebox_pane_kind(pane), filter) {
             out.push(pane);
         }
+    }
+    if filter.events_first {
+        prioritize_event_panes(&mut out[..]);
     }
     out
 }
@@ -714,6 +845,10 @@ pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
 }
 
 fn known_scorebox_pane_kind(pane: &LeaderboardPane) -> Option<ScoreboxPaneKind> {
+    if pane.arrowcloud_kind == Some(ArrowCloudPaneKind::Golf) || pane.name == GOLF_LEADERBOARD_PANE_NAME
+    {
+        return Some(ScoreboxPaneKind::Golf);
+    }
     if pane.is_arrowcloud() {
         Some(if pane.is_hard_ex() {
             ScoreboxPaneKind::HardEx
@@ -747,6 +882,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 #[must_use]
 pub const fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
     match kind {
+        ScoreboxPaneKind::Golf => "GOLF (AC)",
         ScoreboxPaneKind::Gs => "ITG",
         ScoreboxPaneKind::Ex => "EX",
         ScoreboxPaneKind::HardEx => "H.EX",
@@ -766,12 +902,25 @@ pub const fn default_scorebox_mode_text(show_ex_score: bool) -> &'static str {
 pub fn preferred_primary_scorebox_pane<'a>(
     panes: &'a [&'a LeaderboardPane],
     show_ex: bool,
+    events_first: bool,
 ) -> Option<&'a LeaderboardPane> {
     let want = if show_ex {
         ScoreboxPaneKind::Ex
     } else {
         ScoreboxPaneKind::Gs
     };
+    // An event board only exists for a chart that is in the event, and there
+    // the event score is the one that matters, so it leads whatever scoring
+    // mode the player uses. Panes keep the service's order, so the first event
+    // board wins when a chart is in more than one event.
+    if events_first
+        && let Some(event) = panes
+            .iter()
+            .copied()
+            .find(|pane| scorebox_pane_is_event(scorebox_pane_kind(pane)))
+    {
+        return Some(event);
+    }
     let mut first_gs = None;
     let mut first_ex = None;
     for &pane in panes {
@@ -786,6 +935,24 @@ pub fn preferred_primary_scorebox_pane<'a>(
         }
     }
     first_gs.or(first_ex).or_else(|| panes.first().copied())
+}
+
+/// Event boards are every board that is not one of the core ITG/EX/Hard EX
+/// boards: golf, ITL, SRPG and whatever a service adds next. A service only
+/// returns one for a chart that is in the event.
+#[inline(always)]
+#[must_use]
+pub const fn scorebox_pane_is_event(kind: ScoreboxPaneKind) -> bool {
+    !matches!(
+        kind,
+        ScoreboxPaneKind::Gs | ScoreboxPaneKind::Ex | ScoreboxPaneKind::HardEx
+    )
+}
+
+/// Move event boards ahead of the core boards, keeping each group's order so
+/// the service decides between events when a chart is in more than one.
+pub fn prioritize_event_panes<P: std::borrow::Borrow<LeaderboardPane>>(panes: &mut [P]) {
+    panes.sort_by_key(|pane| !scorebox_pane_is_event(scorebox_pane_kind(pane.borrow())));
 }
 
 #[must_use]
@@ -808,24 +975,33 @@ pub fn leaderboard_pane(
 }
 
 #[must_use]
-pub fn arrowcloud_hard_ex_leaderboard_pane(
+pub fn arrowcloud_leaderboard_pane(
+    kind: ArrowCloudPaneKind,
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
 ) -> LeaderboardPane {
+    let name = if kind == ArrowCloudPaneKind::Golf {
+        GOLF_LEADERBOARD_PANE_NAME
+    } else {
+        "ArrowCloud"
+    };
     LeaderboardPane {
-        name: "ArrowCloud".to_string(),
+        name: name.to_string(),
         entries,
-        is_ex: false,
+        is_ex: kind == ArrowCloudPaneKind::Ex,
         disabled: false,
         personalized,
-        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
+        arrowcloud_kind: Some(kind),
     }
 }
 
 #[inline(always)]
 #[must_use]
-pub fn arrowcloud_empty_hard_ex_leaderboard_pane() -> LeaderboardPane {
-    arrowcloud_hard_ex_leaderboard_pane(Vec::new(), false)
+pub fn arrowcloud_hard_ex_leaderboard_pane(
+    entries: Vec<LeaderboardEntry>,
+    personalized: bool,
+) -> LeaderboardPane {
+    arrowcloud_leaderboard_pane(ArrowCloudPaneKind::HardEx, entries, personalized)
 }
 
 #[derive(Debug, Clone)]
@@ -913,7 +1089,28 @@ impl PlayerLeaderboardCacheState {
         refresh_cached: bool,
         now: Instant,
     ) -> PlayerLeaderboardRequestDecision {
-        let entry = self.by_key.get(key);
+        self.request_leaderboard_with_key(
+            key,
+            || Cow::Borrowed(key),
+            max_entries,
+            refresh_cached,
+            now,
+        )
+    }
+
+    // Cache hits need only a borrowed probe; create owned keys for fetch bookkeeping.
+    fn request_leaderboard_with_key<'a, Q>(
+        &mut self,
+        key_ref: &Q,
+        make_key: impl FnOnce() -> Cow<'a, PlayerLeaderboardCacheKey>,
+        max_entries: usize,
+        refresh_cached: bool,
+        now: Instant,
+    ) -> PlayerLeaderboardRequestDecision
+    where
+        Q: std::hash::Hash + hashbrown::Equivalent<PlayerLeaderboardCacheKey> + ?Sized,
+    {
+        let entry = self.by_key.get(key_ref);
         let requested_max_entries =
             entry.map_or(max_entries, |entry| max_entries.max(entry.max_entries));
         let snapshot = entry.map_or_else(
@@ -924,7 +1121,8 @@ impl PlayerLeaderboardCacheState {
         let mut should_spawn = false;
         if should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached, now)
         {
-            if let Some(in_flight_max_entries) = self.in_flight.get(key).copied() {
+            let key = make_key();
+            if let Some(in_flight_max_entries) = self.in_flight.get(key.as_ref()).copied() {
                 if should_rerun_in_flight_player_leaderboard_fetch(
                     in_flight_max_entries,
                     requested_max_entries,
@@ -932,12 +1130,13 @@ impl PlayerLeaderboardCacheState {
                 ) {
                     queue_player_leaderboard_refresh(
                         &mut self.pending_refresh,
-                        key,
+                        key.as_ref(),
                         requested_max_entries,
                     );
                 }
             } else {
-                self.in_flight.insert(key.clone(), requested_max_entries);
+                self.in_flight
+                    .insert(key.into_owned(), requested_max_entries);
                 should_spawn = true;
             }
         }
@@ -999,8 +1198,9 @@ impl PlayerLeaderboardCacheState {
         if !request_invalidated {
             match fetched {
                 Ok(fetched) => {
+                    let cached = self.by_key.get_mut(key);
                     if !should_keep_newer_player_leaderboard_entry(
-                        self.by_key.get(key),
+                        cached.as_deref(),
                         request_started_at,
                     ) {
                         let PlayerLeaderboardFetchSuccess {
@@ -1015,15 +1215,17 @@ impl PlayerLeaderboardCacheState {
                         if should_auto_populate && auto_profile_id_exists {
                             fetched_imported_score = imported_score;
                         }
-                        self.by_key.insert(
-                            key.clone(),
-                            PlayerLeaderboardCacheEntry {
-                                value: PlayerLeaderboardCacheValue::Ready(Arc::new(data)),
-                                max_entries: requested_max_entries,
-                                refreshed_at: refresh_finished_at,
-                                retry_after: None,
-                            },
-                        );
+                        let ready = PlayerLeaderboardCacheEntry {
+                            value: PlayerLeaderboardCacheValue::Ready(Arc::new(data)),
+                            max_entries: requested_max_entries,
+                            refreshed_at: refresh_finished_at,
+                            retry_after: None,
+                        };
+                        if let Some(cached) = cached {
+                            *cached = ready;
+                        } else {
+                            self.by_key.insert(key.clone(), ready);
+                        }
                         self.invalidated_after.remove(key);
                     }
                 }
@@ -1072,6 +1274,10 @@ impl PlayerLeaderboardCacheState {
     }
 }
 
+#[cfg(test)]
+#[path = "leaderboard_perf.rs"]
+mod performance_refresh;
+
 static RUNTIME_PLAYER_LEADERBOARD_CACHE: LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
 static RUNTIME_PLAYER_LEADERBOARD_GENERATION: AtomicU64 = AtomicU64::new(1);
@@ -1112,20 +1318,29 @@ pub fn runtime_plan_player_leaderboard_request(
     if max_entries == 0 {
         return None;
     }
-    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
-    let gs_username = profile_snapshot.gs_username().to_string();
-    let persistent_profile_id = profile_snapshot.persistent_profile_id().map(str::to_string);
-    let auto_profile_id = profile_snapshot.auto_profile_id().map(str::to_string);
-    let should_auto_populate = profile_snapshot.should_auto_populate();
-    let decision = runtime_request_player_leaderboard(&key, max_entries, refresh_cached, now);
+    let key_ref = player_leaderboard_cache_key_ref(chart_hash, profile_snapshot)?;
+    let make_key = || PlayerLeaderboardCacheKey {
+        chart_hash: key_ref.chart_hash.to_string(),
+        api_key: key_ref.api_key.to_string(),
+        arrowcloud_api_key: key_ref.arrowcloud_api_key.to_string(),
+        include_arrowcloud: key_ref.include_arrowcloud,
+        show_ex_score: key_ref.show_ex_score,
+    };
+    let decision = runtime_lock_player_leaderboard_cache().request_leaderboard_with_key(
+        &key_ref,
+        || Cow::Owned(make_key()),
+        max_entries,
+        refresh_cached,
+        now,
+    );
     let fetch = decision
         .should_spawn
-        .then_some(PlayerLeaderboardFetchRequest {
-            key,
-            gs_username,
-            persistent_profile_id,
-            auto_profile_id,
-            should_auto_populate,
+        .then(|| PlayerLeaderboardFetchRequest {
+            key: make_key(),
+            gs_username: profile_snapshot.gs_username().to_string(),
+            persistent_profile_id: profile_snapshot.persistent_profile_id().map(str::to_string),
+            auto_profile_id: profile_snapshot.auto_profile_id().map(str::to_string),
+            should_auto_populate: profile_snapshot.should_auto_populate(),
             max_entries: decision.requested_max_entries,
         });
 
@@ -1383,7 +1598,10 @@ pub fn player_leaderboard_snapshot_from_entry(
 #[derive(Debug, Clone, Default)]
 pub struct GameplayScoreboxProfileSnapshot {
     pub display_scorebox: bool,
+    /// `GrooveStats` (or `BoogieStats`) can serve this side: enabled, joined, keyed.
     pub gs_active: bool,
+    /// `ArrowCloud` can serve this side: enabled, joined, keyed.
+    pub ac_active: bool,
     pub show_ex_score: bool,
     api_key: String,
     arrowcloud_api_key: String,
@@ -1399,6 +1617,7 @@ impl GameplayScoreboxProfileSnapshot {
     pub const fn new(
         display_scorebox: bool,
         gs_active: bool,
+        ac_active: bool,
         show_ex_score: bool,
         api_key: String,
         arrowcloud_api_key: String,
@@ -1411,6 +1630,7 @@ impl GameplayScoreboxProfileSnapshot {
         Self {
             display_scorebox,
             gs_active,
+            ac_active,
             show_ex_score,
             api_key,
             arrowcloud_api_key,
@@ -1420,6 +1640,13 @@ impl GameplayScoreboxProfileSnapshot {
             auto_profile_id,
             should_auto_populate,
         }
+    }
+
+    /// Whether any online leaderboard service can serve this side.
+    #[inline(always)]
+    #[must_use]
+    pub const fn online_active(&self) -> bool {
+        self.gs_active || self.ac_active
     }
 
     #[inline(always)]
@@ -1492,6 +1719,7 @@ pub fn scorebox_snapshot(
     GameplayScoreboxProfileSnapshot::new(
         display_scorebox,
         enable_groovestats && side_joined && !api_key.is_empty(),
+        include_arrowcloud && side_joined,
         show_ex_score,
         api_key,
         arrowcloud_api_key,
@@ -1509,7 +1737,7 @@ pub fn player_leaderboard_cache_key(
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
 ) -> Option<PlayerLeaderboardCacheKey> {
     let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+    if chart_hash.is_empty() || !profile_snapshot.online_active() {
         return None;
     }
 
@@ -1528,7 +1756,7 @@ pub fn player_leaderboard_cache_key_ref<'a>(
     profile_snapshot: &'a GameplayScoreboxProfileSnapshot,
 ) -> Option<PlayerLeaderboardCacheKeyRef<'a>> {
     let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+    if chart_hash.is_empty() || !profile_snapshot.online_active() {
         return None;
     }
     Some(PlayerLeaderboardCacheKeyRef {
@@ -1641,10 +1869,11 @@ pub fn queue_player_leaderboard_refresh(
     key: &PlayerLeaderboardCacheKey,
     requested_max_entries: usize,
 ) {
-    pending_refresh
-        .entry(key.clone())
-        .and_modify(|max_entries| *max_entries = (*max_entries).max(requested_max_entries))
-        .or_insert(requested_max_entries);
+    if let Some(max_entries) = pending_refresh.get_mut(key) {
+        *max_entries = (*max_entries).max(requested_max_entries);
+    } else {
+        pending_refresh.insert(key.clone(), requested_max_entries);
+    }
 }
 
 #[cfg(test)]
@@ -1872,6 +2101,8 @@ mod tests {
             ex: true,
             hard_ex: false,
             tournaments: true,
+            golf: false,
+            events_first: true,
         };
 
         assert!(select_music_scorebox_filter_has_any(filter));
@@ -1901,6 +2132,8 @@ mod tests {
             ex: true,
             hard_ex: false,
             tournaments: true,
+            golf: false,
+            events_first: false,
         };
 
         let filtered = select_music_scorebox_filtered_panes(&panes, filter);
@@ -1912,6 +2145,21 @@ mod tests {
         assert_eq!(names, vec!["GrooveStats", "ITL 2025"]);
         assert_eq!(scorebox_pane_kind(filtered[0]), ScoreboxPaneKind::Ex);
         assert_eq!(scorebox_pane_kind(filtered[1]), ScoreboxPaneKind::Itl);
+
+        let events_first = SelectMusicScoreboxFilter {
+            events_first: true,
+            ..filter
+        };
+        let names = select_music_scorebox_filtered_panes(&panes, events_first)
+            .iter()
+            .map(|pane| pane.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["ITL 2025", "GrooveStats"]);
+        let names = select_music_scorebox_pane_refs(&panes, events_first)
+            .iter()
+            .map(|pane| pane.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["ITL 2025", "GrooveStats"]);
     }
 
     #[test]
@@ -1923,18 +2171,98 @@ mod tests {
         let mixed = [&itl, &gs, &ex];
 
         assert_eq!(
-            preferred_primary_scorebox_pane(&mixed, true).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&mixed, true, false).map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Ex)
         );
         assert_eq!(
-            preferred_primary_scorebox_pane(&mixed, false).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&mixed, false, false).map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Gs)
         );
         assert_eq!(
-            preferred_primary_scorebox_pane(&only_tournament, true).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&only_tournament, true, false)
+                .map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Itl)
         );
-        assert!(preferred_primary_scorebox_pane(&[], true).is_none());
+        assert!(preferred_primary_scorebox_pane(&[], true, true).is_none());
+    }
+
+    #[test]
+    fn event_boards_lead_the_scorebox_when_enabled() {
+        let gs = pane("GrooveStats", false, None);
+        let ex = pane("GrooveStats", true, None);
+        let golf = pane("Golf (ArrowCloud)", false, None);
+        let srpg = pane("SRPG 9", false, None);
+        let itl = pane("ITL Online 2026", true, None);
+        let with_golf = [&gs, &ex, &golf];
+        let two_events = [&gs, &ex, &srpg, &itl];
+        for show_ex in [false, true] {
+            assert_eq!(
+                preferred_primary_scorebox_pane(&with_golf, show_ex, true)
+                    .map(scorebox_pane_kind),
+                Some(ScoreboxPaneKind::Golf)
+            );
+            // The service's order decides between events.
+            assert_eq!(
+                preferred_primary_scorebox_pane(&two_events, show_ex, true)
+                    .map(scorebox_pane_kind),
+                Some(ScoreboxPaneKind::Srpg)
+            );
+        }
+        assert_eq!(
+            preferred_primary_scorebox_pane(&with_golf, true, false).map(scorebox_pane_kind),
+            Some(ScoreboxPaneKind::Ex)
+        );
+    }
+
+    #[test]
+    fn core_boards_are_never_event_boards() {
+        for kind in [
+            ScoreboxPaneKind::Gs,
+            ScoreboxPaneKind::Ex,
+            ScoreboxPaneKind::HardEx,
+        ] {
+            assert!(!scorebox_pane_is_event(kind));
+        }
+        for kind in [
+            ScoreboxPaneKind::Golf,
+            ScoreboxPaneKind::Itl,
+            ScoreboxPaneKind::Srpg,
+            ScoreboxPaneKind::Other,
+        ] {
+            assert!(scorebox_pane_is_event(kind));
+        }
+    }
+
+    #[test]
+    fn prioritize_event_panes_moves_events_first_and_keeps_each_groups_order() {
+        let mut panes = vec![
+            pane("GrooveStats", false, None),
+            pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
+            pane("SRPG 9", false, None),
+            pane("Golf (ArrowCloud)", false, None),
+            pane("GrooveStats", true, None),
+            pane("ITL Online 2026", true, None),
+        ];
+        prioritize_event_panes(&mut panes);
+        let kinds: Vec<_> = panes.iter().map(scorebox_pane_kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                ScoreboxPaneKind::Srpg,
+                ScoreboxPaneKind::Golf,
+                ScoreboxPaneKind::Itl,
+                ScoreboxPaneKind::Gs,
+                ScoreboxPaneKind::HardEx,
+                ScoreboxPaneKind::Ex,
+            ]
+        );
+        let mut refs: Vec<&LeaderboardPane> = panes.iter().rev().collect();
+        prioritize_event_panes(&mut refs);
+        assert_eq!(scorebox_pane_kind(refs[0]), ScoreboxPaneKind::Itl);
+        let mut without_events =
+            vec![pane("GrooveStats", true, None), pane("GrooveStats", false, None)];
+        prioritize_event_panes(&mut without_events);
+        assert!(without_events[0].is_ex && !without_events[1].is_ex);
     }
 
     #[test]
@@ -2329,9 +2657,42 @@ mod tests {
 }
 
 #[cfg(test)]
-pub(crate) mod replay_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/replay_preparation.rs"
-    ));
+#[path = "leaderboard_request_perf.rs"]
+mod request_perf;
+
+#[cfg(test)]
+mod golf_tests {
+    use super::*;
+
+    #[test]
+    fn golf_board_type_maps_to_the_golf_pane() {
+        assert_eq!(arrowcloud_pane_kind_from_type("Golf"), Some(ArrowCloudPaneKind::Golf));
+        let pane = arrowcloud_leaderboard_pane(ArrowCloudPaneKind::Golf, Vec::new(), true);
+        assert_eq!(pane.name, GOLF_LEADERBOARD_PANE_NAME);
+        assert!(pane.is_arrowcloud());
+        assert!(!pane.is_ex);
+        assert!(!pane.is_hard_ex());
+        assert_eq!(scorebox_pane_kind(&pane), ScoreboxPaneKind::Golf);
+    }
+
+    #[test]
+    fn golf_entries_store_raw_strokes_instead_of_percents() {
+        let entry = arrowcloud_golf_leaderboard_entry(1, "ACE".into(), 3.82, String::new(), true, false);
+        assert_eq!(entry.score, 3820.0, "displayed strokes become raw strokes, never a clamped percent");
+        assert!(entry.is_self);
+        let invalid = arrowcloud_golf_leaderboard_entry(2, "NaN".into(), f64::NAN, String::new(), false, false);
+        assert_eq!(invalid.score, 0.0);
+        let negative = arrowcloud_golf_leaderboard_entry(3, "Neg".into(), -1.0, String::new(), false, false);
+        assert_eq!(negative.score, 0.0);
+    }
+    #[test]
+    fn golf_board_requires_explicit_filter_selection() {
+        let panes = [LeaderboardPane { name: "Golf (ArrowCloud)".into(), entries: Vec::new(), is_ex: false, disabled: false, personalized: false, arrowcloud_kind: None }];
+        let mut filter = SelectMusicScoreboxFilter::default();
+        assert!(select_music_scorebox_pane_refs(&panes, filter).is_empty());
+        filter.golf = true;
+        assert_eq!(select_music_scorebox_pane_refs(&panes, filter).len(), 1);
+        assert_eq!(scorebox_pane_kind(&panes[0]), ScoreboxPaneKind::Golf);
+        assert!(!panes[0].is_hard_ex());
+    }
 }

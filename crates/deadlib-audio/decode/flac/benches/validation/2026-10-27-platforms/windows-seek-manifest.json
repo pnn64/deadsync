@@ -1,0 +1,68 @@
+{
+  "timestamp_utc": "2026-10-27T19:52:00Z",
+  "native": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\windows-perf-build\\decode.exe",
+  "native_sha256": "7339d970d26330211c87a1f4b58fe634bd8d16a081a023fa19f56616d5e9e249",
+  "oracle": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build\\Release\\flac_latency_benchmark.exe",
+  "oracle_sha256": "77778e451cb87ddd9c8034084c26e792a83fec9a26f55ae600f141c7b21e97eb",
+  "cpu": 2,
+  "cpuinfo": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "rounds": 5,
+  "iterations": 194,
+  "cases": [
+    {
+      "case": "subset/01 - blocksize 4096.flac",
+      "sha256": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f",
+      "bytes": 549954
+    },
+    {
+      "case": "subset/03 - blocksize 16.flac",
+      "sha256": "164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3",
+      "bytes": 959681
+    },
+    {
+      "case": "subset/28 - high resolution audio, default settings.flac",
+      "sha256": "62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346",
+      "bytes": 3476937
+    },
+    {
+      "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "sha256": "1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197",
+      "bytes": 42264726
+    },
+    {
+      "case": "uncommon/08 - blocksize 65535.flac",
+      "sha256": "2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714",
+      "bytes": 835115
+    }
+  ],
+  "native_sources": {
+    "src\\bitstream.rs": "b6bb752fd629420541a85c2bd419ef613b0e971e1341f7fa6d8c86ea6c1d4d84",
+    "src\\checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+    "src\\encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src\\encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src\\frame.rs": "17ff70a782c633a952c3ba32744aecd64b8d44cb1c041a3051e628d42f4d16a5",
+    "src\\lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+    "src\\metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src\\native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "src\\ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src\\ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src\\ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src\\pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "src\\predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+    "src\\sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128"
+  },
+  "driver_sources": {
+    "benches\\run_seek.py": "3976165f32a407943eafaefbb32c5c7d2feff3ce125d2308eaf0f314950c5059",
+    "benches\\bench_host.py": "4697e3a580563d4155c52f0d505af6ea2b3c6fadb5240dd27d73043a9165f118",
+    "benches\\decode.rs": "c0f395534929d33812e53720d203f6b6ee20b470eca0db8ee64631aaf750d9d3",
+    "benches\\libflac\\benchmark.cpp": "57a1483f1e220f2059833dd42cd6341577c50465ff159d011046b346c59a4dab",
+    "benches\\libflac\\CMakeLists.txt": "a79066abb6d6173cb6b9ce250abaa14fcf672e716cabd38640b405e8ef1887aa",
+    "benches\\libflac\\opaque.c": "28bfb8fb9c458c872596930c3da1c56e4158cad7ca5d15f4f3438501fac7deef"
+  },
+  "policy": "Resident-input exact seeks. Both APIs return PCM beginning at the target.\n\nConstruct metadata-only readers before timing; retain their seek state across\nrequests. Warm up at zero, then visit two full cycles of 97 deterministic targets.\nNative uses its lazy frame index, libFLAC its own seek table/search algorithm.\n",
+  "warmup": "target zero; initialization outside clock",
+  "target": "(total_samples-1)*(iteration%97)/97; iteration 1..iterations",
+  "consumption": "returned trimmed frame endpoints of every channel; exact equal checksums",
+  "integrity": "frame CRC enabled; whole-stream MD5 unavailable after arbitrary seeks",
+  "commands_sha256": "de96a8ed148563b470798f66fd6443242311c088690220746576dd0d7fe85f08"
+}

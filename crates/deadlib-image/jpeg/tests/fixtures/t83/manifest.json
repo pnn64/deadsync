@@ -1,0 +1,471 @@
+{
+  "source": "https://www.itu.int/wftp3/public/t/testsignal/SpeImage/T83/v1994_11/T83_data_files.zip",
+  "archive_sha256": "9f5ed0a74a3087c6c93f4cbb0bd5128c2a87b128e4f59f5b6649e32941da7069",
+  "archive_bytes": 3924283,
+  "catalogue": "https://www.itu.int/ITU-T/recommendations/rec.aspx?id=2635",
+  "public_file_catalogue": "https://www.itu.int/mws/api/testsignals/signalfiles?ts_id=6",
+  "copyright": "ITU & ISO/IEC 1994; see the original archive Readme.txt",
+  "scope": "Unmodified official compressed streams and numeric references. Twenty images and one table packet; absent test streams remain absent. No claim of exhaustive conformance.",
+  "files": [
+    {
+      "file": "A1.JPG",
+      "bytes": 32108,
+      "sha256": "f893c20d82e35701ed96c28e4857f1f42b709e3fd592c1102fe97a6e54cc8e40",
+      "archive_members": [
+        "T83_process1/A1.JPG",
+        "T83_process10/A1.JPG",
+        "T83_process11/A1.JPG",
+        "T83_process13/A1.JPG",
+        "T83_process2/A1.JPG",
+        "T83_process3/A1.JPG",
+        "T83_process4/A1.JPG",
+        "T83_process5/A1.JPG",
+        "T83_process6/A1.JPG",
+        "T83_process7/A1.JPG",
+        "T83_process9/A1.JPG"
+      ]
+    },
+    {
+      "file": "A16.SRC",
+      "bytes": 11050,
+      "sha256": "635f91a5a2ffec6ad43542e3e74bb9854c213b7d01d2b7186472bf1f50629e19",
+      "archive_members": [
+        "T83_process14/A16.SRC",
+        "T83_process15/A16.SRC"
+      ]
+    },
+    {
+      "file": "A8.SRC",
+      "bytes": 5525,
+      "sha256": "5c1f8f32976c493af4298b53033fddfb227fc04e520f467b0a9dd68ed505685d",
+      "archive_members": [
+        "T83_encoder_12/A8.SRC",
+        "T83_encoder_8/A8.SRC"
+      ]
+    },
+    {
+      "file": "B1.JPG",
+      "bytes": 971,
+      "sha256": "48d3dc5026b4e8ca751e2cf9fb6c576364f92bafd339c19997c12c470946950c",
+      "archive_members": [
+        "T83_process1/B1.JPG",
+        "T83_process10/B1.JPG",
+        "T83_process11/B1.JPG",
+        "T83_process13/B1.JPG",
+        "T83_process2/B1.JPG",
+        "T83_process3/B1.JPG",
+        "T83_process4/B1.JPG",
+        "T83_process5/B1.JPG",
+        "T83_process6/B1.JPG",
+        "T83_process7/B1.JPG",
+        "T83_process9/B1.JPG"
+      ]
+    },
+    {
+      "file": "B16.SRC",
+      "bytes": 21930,
+      "sha256": "aabd8d8a253f20b13a64b94541dd4687f1f73d9f3f4b5ccc69c6dd19d860fcc8",
+      "archive_members": [
+        "T83_process14/B16.SRC",
+        "T83_process15/B16.SRC"
+      ]
+    },
+    {
+      "file": "B2.JPG",
+      "bytes": 854774,
+      "sha256": "b07e02e8ff185462285685ff6768d7e80133adc4fc9793bc2b35e3b23a48a739",
+      "archive_members": [
+        "T83_process1/B2.JPG",
+        "T83_process10/B2.JPG",
+        "T83_process11/B2.JPG",
+        "T83_process13/B2.JPG",
+        "T83_process2/B2.JPG",
+        "T83_process3/B2.JPG",
+        "T83_process4/B2.JPG",
+        "T83_process5/B2.JPG",
+        "T83_process6/B2.JPG",
+        "T83_process7/B2.JPG",
+        "T83_process9/B2.JPG"
+      ]
+    },
+    {
+      "file": "B8.SRC",
+      "bytes": 10965,
+      "sha256": "59ae497eb623ac4f4f0080291d41c183f70d6b6391a5f6d8fcd3944195bd02f8",
+      "archive_members": [
+        "T83_encoder_12/B8.SRC",
+        "T83_encoder_8/B8.SRC"
+      ]
+    },
+    {
+      "file": "C1.JPG",
+      "bytes": 27773,
+      "sha256": "382463b80d3a9f552cb1820a09c0bfc9482113099c466252f1ee26af856aefd8",
+      "archive_members": [
+        "T83_process10/C1.JPG",
+        "T83_process2/C1.JPG",
+        "T83_process4/C1.JPG",
+        "T83_process6/C1.JPG"
+      ]
+    },
+    {
+      "file": "C16.SRC",
+      "bytes": 33150,
+      "sha256": "2b53d17a9669a1db6138d5829878fcbbf58fbc27f3be5687c1a93fdd88d7ae3a",
+      "archive_members": [
+        "T83_process14/C16.SRC",
+        "T83_process15/C16.SRC"
+      ]
+    },
+    {
+      "file": "C2.JPG",
+      "bytes": 27923,
+      "sha256": "b965fef07a5d731e409491fba9a423ea6d2e6078f6adde7339c53e2534ed85eb",
+      "archive_members": [
+        "T83_process10/C2.JPG",
+        "T83_process2/C2.JPG",
+        "T83_process4/C2.JPG",
+        "T83_process6/C2.JPG"
+      ]
+    },
+    {
+      "file": "C8.SRC",
+      "bytes": 16575,
+      "sha256": "bae5e98a04051f6121bd0651c16d60e327dce6d22b2ea72287882fff1adbf76a",
+      "archive_members": [
+        "T83_encoder_12/C8.SRC",
+        "T83_encoder_8/C8.SRC"
+      ]
+    },
+    {
+      "file": "D1.JPG",
+      "bytes": 28297,
+      "sha256": "e340bd5014555136dffd2f1461bc9e63c4844830d02c8bc9d03f1ad1c69465dd",
+      "archive_members": [
+        "T83_process11/D1.JPG",
+        "T83_process13/D1.JPG",
+        "T83_process3/D1.JPG",
+        "T83_process5/D1.JPG",
+        "T83_process7/D1.JPG",
+        "T83_process9/D1.JPG"
+      ]
+    },
+    {
+      "file": "D16.SRC",
+      "bytes": 43690,
+      "sha256": "46d2fe3d1765fe9c9852e26eba429352866ce2b8f8187f350f4d3029eeddb6e8",
+      "archive_members": [
+        "T83_process14/D16.SRC",
+        "T83_process15/D16.SRC"
+      ]
+    },
+    {
+      "file": "D2.JPG",
+      "bytes": 30324,
+      "sha256": "48e06aa5406ee331aab569374d76929381df022b71a18f48aa89b98d6e76c5c4",
+      "archive_members": [
+        "T83_process11/D2.JPG",
+        "T83_process13/D2.JPG",
+        "T83_process3/D2.JPG",
+        "T83_process5/D2.JPG",
+        "T83_process7/D2.JPG",
+        "T83_process9/D2.JPG"
+      ]
+    },
+    {
+      "file": "D8.SRC",
+      "bytes": 21845,
+      "sha256": "36f942051a8756ed41b43b968b7fee803f48d6e100374ff16379aeaf76a17622",
+      "archive_members": [
+        "T83_encoder_12/D8.SRC",
+        "T83_encoder_8/D8.SRC"
+      ]
+    },
+    {
+      "file": "DREF_A12.DCT",
+      "bytes": 12672,
+      "sha256": "c1ee66f26c295063df67992f48bbbe05aa569eecfc5d0a412f95bde15209eff1",
+      "archive_members": [
+        "T83_process13/DREF_A12.DCT",
+        "T83_process4/DREF_A12.DCT",
+        "T83_process5/DREF_A12.DCT",
+        "T83_process9/DREF_A12.DCT"
+      ]
+    },
+    {
+      "file": "DREF_A8.DCT",
+      "bytes": 12672,
+      "sha256": "fe10f8945ad965a84de12c36b19133689a34b852f8999348eac013b6a4db0647",
+      "archive_members": [
+        "T83_process1/DREF_A8.DCT",
+        "T83_process10/DREF_A8.DCT",
+        "T83_process11/DREF_A8.DCT",
+        "T83_process2/DREF_A8.DCT",
+        "T83_process3/DREF_A8.DCT",
+        "T83_process6/DREF_A8.DCT",
+        "T83_process7/DREF_A8.DCT"
+      ]
+    },
+    {
+      "file": "DREF_B12.DCT",
+      "bytes": 23936,
+      "sha256": "6f52602d394e0b889d8d0cb0d119ac3e2ba32552a159415efbdeff8b69425bc3",
+      "archive_members": [
+        "T83_process13/DREF_B12.DCT",
+        "T83_process4/DREF_B12.DCT",
+        "T83_process5/DREF_B12.DCT",
+        "T83_process9/DREF_B12.DCT"
+      ]
+    },
+    {
+      "file": "DREF_B8.DCT",
+      "bytes": 23936,
+      "sha256": "de58bd2921caf2da59e7e5632c447bff932db5cc4ef70aa13d916439ffce2f0c",
+      "archive_members": [
+        "T83_process1/DREF_B8.DCT",
+        "T83_process10/DREF_B8.DCT",
+        "T83_process11/DREF_B8.DCT",
+        "T83_process2/DREF_B8.DCT",
+        "T83_process3/DREF_B8.DCT",
+        "T83_process6/DREF_B8.DCT",
+        "T83_process7/DREF_B8.DCT"
+      ]
+    },
+    {
+      "file": "DREF_C12.DCT",
+      "bytes": 36864,
+      "sha256": "5ff2db21dd7410f11151a86052e649648c5031d6a50ed3039cdb87fedc56a778",
+      "archive_members": [
+        "T83_process13/DREF_C12.DCT",
+        "T83_process4/DREF_C12.DCT",
+        "T83_process5/DREF_C12.DCT",
+        "T83_process9/DREF_C12.DCT"
+      ]
+    },
+    {
+      "file": "DREF_C8.DCT",
+      "bytes": 36864,
+      "sha256": "24ce45330fe27b3b3d272b551c5b4bbe0624c94fbea11e589a935c1f96f1a9f9",
+      "archive_members": [
+        "T83_process1/DREF_C8.DCT",
+        "T83_process10/DREF_C8.DCT",
+        "T83_process11/DREF_C8.DCT",
+        "T83_process2/DREF_C8.DCT",
+        "T83_process3/DREF_C8.DCT",
+        "T83_process6/DREF_C8.DCT",
+        "T83_process7/DREF_C8.DCT"
+      ]
+    },
+    {
+      "file": "DREF_D12.DCT",
+      "bytes": 46464,
+      "sha256": "1026e4d0a0c081ef148b1f215c03535f879c7a0f86355ee79a55c61a132eeb59",
+      "archive_members": [
+        "T83_process13/DREF_D12.DCT",
+        "T83_process4/DREF_D12.DCT",
+        "T83_process5/DREF_D12.DCT",
+        "T83_process9/DREF_D12.DCT"
+      ]
+    },
+    {
+      "file": "DREF_D8.DCT",
+      "bytes": 46464,
+      "sha256": "f1466dbf049a31b81d57cf13fdc745502c69c8ceaca4857c850fbec2908a99c9",
+      "archive_members": [
+        "T83_process1/DREF_D8.DCT",
+        "T83_process10/DREF_D8.DCT",
+        "T83_process11/DREF_D8.DCT",
+        "T83_process2/DREF_D8.DCT",
+        "T83_process3/DREF_D8.DCT",
+        "T83_process6/DREF_D8.DCT",
+        "T83_process7/DREF_D8.DCT"
+      ]
+    },
+    {
+      "file": "E1.JPG",
+      "bytes": 47369,
+      "sha256": "cb4cdde947327de26b7dc180059f9793e5e9e556adbcee6902907c7709482391",
+      "archive_members": [
+        "T83_process4/E1.JPG"
+      ]
+    },
+    {
+      "file": "E2.JPG",
+      "bytes": 47578,
+      "sha256": "0db8d2dd1d35bf4cad4df399b892533d212b1b471c278c9edc0754d98865a831",
+      "archive_members": [
+        "T83_process4/E2.JPG"
+      ]
+    },
+    {
+      "file": "EREF_A12.DCT",
+      "bytes": 12672,
+      "sha256": "ecafe12e72e2987d3577b807200de26dfc20d929de5a252df2823495819864d1",
+      "archive_members": [
+        "T83_encoder_12/EREF_A12.DCT"
+      ]
+    },
+    {
+      "file": "EREF_A8.DCT",
+      "bytes": 12672,
+      "sha256": "9c774394d8592d6d73940301579b0caab5f034c156868041322f68c9cd8930c1",
+      "archive_members": [
+        "T83_encoder_8/EREF_A8.DCT"
+      ]
+    },
+    {
+      "file": "EREF_B12.DCT",
+      "bytes": 23936,
+      "sha256": "a1f74bf8f68593b342fc19493420ef9ea61f0fbccc4ef59d5bfcd571622e1316",
+      "archive_members": [
+        "T83_encoder_12/EREF_B12.DCT"
+      ]
+    },
+    {
+      "file": "EREF_B8.DCT",
+      "bytes": 23936,
+      "sha256": "cb2903872e09160362bd60381783f1473e1f615c9f2eabf9838d738b3f774324",
+      "archive_members": [
+        "T83_encoder_8/EREF_B8.DCT"
+      ]
+    },
+    {
+      "file": "EREF_C12.DCT",
+      "bytes": 36864,
+      "sha256": "c9a5d027fc2292dca03d976fa2f7a679b950eccbfc7d7e17e16fae87fa27ceee",
+      "archive_members": [
+        "T83_encoder_12/EREF_C12.DCT"
+      ]
+    },
+    {
+      "file": "EREF_C8.DCT",
+      "bytes": 36864,
+      "sha256": "24ce45330fe27b3b3d272b551c5b4bbe0624c94fbea11e589a935c1f96f1a9f9",
+      "archive_members": [
+        "T83_encoder_8/EREF_C8.DCT"
+      ]
+    },
+    {
+      "file": "EREF_D12.DCT",
+      "bytes": 46464,
+      "sha256": "c739bdefe05ebd14d6fce0962dfbcf3139962794641104c331db42eea2b0dab2",
+      "archive_members": [
+        "T83_encoder_12/EREF_D12.DCT"
+      ]
+    },
+    {
+      "file": "EREF_D8.DCT",
+      "bytes": 46464,
+      "sha256": "f1466dbf049a31b81d57cf13fdc745502c69c8ceaca4857c850fbec2908a99c9",
+      "archive_members": [
+        "T83_encoder_8/EREF_D8.DCT"
+      ]
+    },
+    {
+      "file": "F1.JPG",
+      "bytes": 44118,
+      "sha256": "2534675d5f7468d311cf296d4b9a03f96e303cbd0e63432a5c6bfa90c3c7db70",
+      "archive_members": [
+        "T83_process13/F1.JPG",
+        "T83_process5/F1.JPG",
+        "T83_process9/F1.JPG"
+      ]
+    },
+    {
+      "file": "F2.JPG",
+      "bytes": 46614,
+      "sha256": "a7332faf71fbe7bfa3509fc4b3f839029cdcee457627c795b7c646c2b2eb8dd0",
+      "archive_members": [
+        "T83_process13/F2.JPG",
+        "T83_process5/F2.JPG",
+        "T83_process9/F2.JPG"
+      ]
+    },
+    {
+      "file": "G1.JPG",
+      "bytes": 28160,
+      "sha256": "6784b3037fb6c19f35c7b2c2f9b0072555132521d8cda6b5192c1f923350e8f6",
+      "archive_members": [
+        "T83_process10/G1.JPG",
+        "T83_process6/G1.JPG"
+      ]
+    },
+    {
+      "file": "H1.JPG",
+      "bytes": 30590,
+      "sha256": "e729dd0f2b43ef6dd4d0ca70184b9e40d25cdcb5e224b07fa04d67bf419878e9",
+      "archive_members": [
+        "T83_process11/H1.JPG",
+        "T83_process13/H1.JPG",
+        "T83_process7/H1.JPG",
+        "T83_process9/H1.JPG"
+      ]
+    },
+    {
+      "file": "J1.JPG",
+      "bytes": 46769,
+      "sha256": "10d06d88e0bcbe499c2a8d1a8019043c957af9526de1bc70fbe774b0326bcfa6",
+      "archive_members": [
+        "T83_process13/J1.JPG",
+        "T83_process9/J1.JPG"
+      ]
+    },
+    {
+      "file": "K1.JPG",
+      "bytes": 28863,
+      "sha256": "a393d8fb87caf52d1072e32e98786024e1baf6273443e10430138c9cdfbc724b",
+      "archive_members": [
+        "T83_process10/K1.JPG"
+      ]
+    },
+    {
+      "file": "L1.JPG",
+      "bytes": 31220,
+      "sha256": "d8233b544fadfa3695b0dcf88320d1a949d0191cee80ea59e19b908fb663bee1",
+      "archive_members": [
+        "T83_process11/L1.JPG",
+        "T83_process13/L1.JPG"
+      ]
+    },
+    {
+      "file": "N1.JPG",
+      "bytes": 46722,
+      "sha256": "f6852ba8e276435028cfe1b8fe58fc87a41d8577f9ff23335419d26b4d7e5ccb",
+      "archive_members": [
+        "T83_process13/N1.JPG"
+      ]
+    },
+    {
+      "file": "O1.JPG",
+      "bytes": 85600,
+      "sha256": "363aeaa186e1d9484143a1136793e6a7399aec6ffe7355b0beb5b411d265efaf",
+      "archive_members": [
+        "T83_process14/O1.JPG"
+      ]
+    },
+    {
+      "file": "O2.JPG",
+      "bytes": 253503,
+      "sha256": "4be6fee2379105443b9802f50759185116e9685a098f3b917277a894ca968350",
+      "archive_members": [
+        "T83_process14/O2.JPG"
+      ]
+    },
+    {
+      "file": "P1.JPG",
+      "bytes": 66522,
+      "sha256": "1be4511fd156e4924ea3e947d836e5a228646932efc182560234e642867b2007",
+      "archive_members": [
+        "T83_process15/P1.JPG"
+      ]
+    },
+    {
+      "file": "P2.JPG",
+      "bytes": 91716,
+      "sha256": "0957c509e1abf4a2d97819457a6d8a78c1eedd59ba5e85d1fcff634cf8dd1d8b",
+      "archive_members": [
+        "T83_process15/P2.JPG"
+      ]
+    }
+  ]
+}

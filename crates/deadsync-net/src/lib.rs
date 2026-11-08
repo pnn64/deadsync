@@ -7,6 +7,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// What a pooled agent keeps open in all, at the least: ureq's own default.
+const MIN_IDLE_CONNECTIONS: usize = 10;
 
 // Match Simply Love / ITGmania's GrooveStats request timeout (60s).
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -57,12 +59,15 @@ pub fn is_timeout_message(text: &str) -> bool {
     while let Some(relative) = memchr::memchr2(b't', b'T', &bytes[offset..]) {
         let start = offset + relative;
         let candidate = &bytes[start..];
-        if candidate
-            .get(..b"timeout".len())
-            .is_some_and(|window| window.eq_ignore_ascii_case(b"timeout"))
-            || candidate
-                .get(..b"timed out".len())
-                .is_some_and(|window| window.eq_ignore_ascii_case(b"timed out"))
+        // Both forms share this ASCII-case-folded four-byte prefix.
+        if candidate.first_chunk::<4>().is_some_and(|prefix| {
+            u32::from_le_bytes(*prefix) | 0x2020_2020 == u32::from_le_bytes(*b"time")
+        }) && (candidate[4..]
+            .get(..3)
+            .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"out"))
+            || candidate[4..]
+                .get(..5)
+                .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"d out")))
         {
             return true;
         }
@@ -195,9 +200,18 @@ fn body_too_large(max_bytes: usize) -> NetworkError {
 #[must_use]
 pub fn log_body_snippet(text: impl Into<String>) -> String {
     let mut text = text.into();
-    if let Some((end, _)) = text.char_indices().nth(MAX_LOG_CHARS) {
-        text.truncate(end);
+    if text.len() <= MAX_LOG_CHARS {
+        return text;
     }
+    let end = if text.as_bytes()[..MAX_LOG_CHARS].is_ascii() {
+        // An ASCII prefix has one byte per character and ends on a boundary.
+        MAX_LOG_CHARS
+    } else if let Some((end, _)) = text.char_indices().nth(MAX_LOG_CHARS) {
+        end
+    } else {
+        return text;
+    };
+    text.truncate(end);
     text
 }
 
@@ -206,6 +220,35 @@ pub fn build_agent(config: AgentConfig) -> ureq::Agent {
     ureq::Agent::config_builder()
         .user_agent(deadsync_version::user_agent())
         .timeout_global(Some(config.timeout))
+        .build()
+        .into()
+}
+
+/// [`build_agent`], with connecting held to `connect` as well: for requests
+/// nobody waits on, which give up on a server that does not answer well
+/// before the whole-request deadline.
+#[must_use]
+pub fn build_agent_with_connect(config: AgentConfig, connect: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
+        .timeout_global(Some(config.timeout))
+        .timeout_connect(Some(connect))
+        .build()
+        .into()
+}
+
+/// [`build_agent`], keeping up to `per_host` connections to one site open
+/// between requests, for a caller that asks one site that many things at
+/// once: each asks over a connection already open, where the shared agents
+/// keep three and the rest connect afresh every time -- which, on a page the
+/// site answers in a tenth of a second, costs more than the answer.
+#[must_use]
+pub fn build_agent_with_pool(config: AgentConfig, per_host: usize) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
+        .timeout_global(Some(config.timeout))
+        .max_idle_connections(per_host.max(MIN_IDLE_CONNECTIONS))
+        .max_idle_connections_per_host(per_host)
         .build()
         .into()
 }
@@ -289,6 +332,31 @@ mod tests {
     fn agents_use_dead_sync_user_agent() {
         assert_dead_sync_user_agent(&build_agent(AgentConfig::default()));
         assert_dead_sync_user_agent(&get_streaming_agent());
+        let short = build_agent_with_connect(
+            AgentConfig {
+                timeout: Duration::from_secs(15),
+            },
+            Duration::from_secs(10),
+        );
+        assert_dead_sync_user_agent(&short);
+        let timeouts = short.config().timeouts();
+        assert_eq!(timeouts.global, Some(Duration::from_secs(15)));
+        assert_eq!(timeouts.connect, Some(Duration::from_secs(10)));
+
+        let pooled = build_agent_with_pool(AgentConfig::default(), 8);
+        assert_dead_sync_user_agent(&pooled);
+        assert_eq!(pooled.config().max_idle_connections_per_host(), 8);
+        assert_eq!(pooled.config().max_idle_connections(), MIN_IDLE_CONNECTIONS);
+        let wide = build_agent_with_pool(AgentConfig::default(), 16);
+        assert_eq!(
+            wide.config().max_idle_connections(),
+            16,
+            "room for every one"
+        );
+        assert_eq!(
+            pooled.config().timeouts().global,
+            Some(DEFAULT_REQUEST_TIMEOUT)
+        );
     }
 
     #[test]

@@ -11,7 +11,7 @@ use deadsync_gameplay::{
     draw_distance_after_targets, draw_distance_before_targets,
     effective_mini_value_with_visual_mask, gameplay_error_bar_trim_max_window_ix,
     hold_explosion_enabled_for_options, perspective_effects_from_profile,
-    player_draw_scale_for_tilt_with_visual_mask, scroll_effects_from_flags,
+    scroll_effects_from_flags,
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
@@ -521,6 +521,15 @@ pub(crate) fn gameplay_notefield_plan(
         split_15_10ms: profile.split_15_10ms,
         custom_fantastic_window: profile.custom_fantastic_window,
         judgment_tilt_enabled: profile.judgment_tilt,
+        judgment_animation: match profile.judgment_animation {
+            profile_data::JudgmentAnimation::Default => {
+                deadsync_notefield::TapJudgmentAnimation::Default
+            }
+            profile_data::JudgmentAnimation::Still => {
+                deadsync_notefield::TapJudgmentAnimation::Still
+            }
+            profile_data::JudgmentAnimation::Itg => deadsync_notefield::TapJudgmentAnimation::Itg,
+        },
         judgment_tilt_min_ms: profile.tilt_min_threshold_ms as f32,
         judgment_tilt_max_ms: profile.tilt_max_threshold_ms as f32,
         judgment_tilt_multiplier: profile.tilt_multiplier,
@@ -534,6 +543,7 @@ pub(crate) fn gameplay_notefield_plan(
         error_bar_max_window_ix: error_bar_trim_max_window_ix(profile.error_bar_trim),
         monochrome_background: profile.background_filter.is_off(),
         error_bar_multi_tick: profile.error_bar_multi_tick,
+        text_error_bar_centered: profile.text_error_bar_centered,
         short_average_error_bar: profile.short_average_error_bar_enabled,
         center_tick: profile.center_tick,
         error_ms_display: profile.error_ms_display,
@@ -600,7 +610,7 @@ pub(crate) fn compose_frame(
     resolved_combo_assets: &ResolvedComboMilestoneAssets,
     notefield_plan: &GameplayNotefieldPlan,
     player_idx: usize,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     noteskin_assets: &GameplayNoteskinAssets,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
@@ -621,8 +631,11 @@ pub(crate) fn compose_frame(
     show_song_visuals: bool,
     apply_attacks: bool,
     capture_requests: ProxyCaptureRequests,
+    field_wrapper: glam::Mat4,
+    field_wrapper_visible: bool,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
+    timing_labels: &[deadsync_notefield::TimingSegmentLabel],
     view: ViewOverride,
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
@@ -702,34 +715,21 @@ pub(crate) fn compose_frame(
     } else {
         profile.mini_percent as f32
     };
-    let (field_zoom, draw_distance_before, draw_distance_after) = if apply_attacks {
-        (
-            state.field_zoom_for_player(player_idx),
-            state.notefield_draw_distance_before_targets(player_idx),
-            state.notefield_draw_distance_after_targets(player_idx),
-        )
+    let field_zoom = if apply_attacks {
+        state.field_zoom_for_player(player_idx)
     } else {
         let visual_mask = profile.visual_effects_active_mask.bits();
         let runtime_profile = &state.profiles()[player_idx];
         let mini =
             effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        let mut field_zoom = mini.mul_add(-0.5, 1.0);
-        if field_zoom.abs() < 0.01 {
-            field_zoom = 0.01;
-        }
-        let draw_scale = player_draw_scale_for_tilt_with_visual_mask(
-            perspective.tilt,
-            runtime_profile,
-            visual_mask,
-            mini_percent,
-        );
-        let viewport_height = state.setup.viewport.height();
-        (
-            field_zoom,
-            draw_distance_before_targets(viewport_height, draw_scale),
-            draw_distance_after_targets(viewport_height, draw_scale, scroll.centered),
-        )
+        let zoom = mini.mul_add(-0.5, 1.0);
+        if zoom.abs() < 0.01 { 0.01 } else { zoom }
     };
+    // Canonical composition applies current DrawSize, Tilt, Mini, and the
+    // Centered/Boomerang extension to these unscaled theme metrics.
+    let viewport_height = state.setup.viewport.height();
+    let draw_distance_before = draw_distance_before_targets(viewport_height, 1.0);
+    let draw_distance_after = draw_distance_after_targets(viewport_height, 1.0, 0.0);
     let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
     let player_col_start = player_idx.saturating_mul(state.cols_per_player());
     let column_dirs = from_fn(|local_col| {
@@ -768,6 +768,7 @@ pub(crate) fn compose_frame(
     };
     let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
     let request = NotefieldComposeRequest {
+        timing_labels,
         hud_style: style,
         placement,
         view,
@@ -779,6 +780,7 @@ pub(crate) fn compose_frame(
             total_cols: state.num_cols(),
             single_style: play_style.is_single(),
             double_style: play_style.is_double(),
+            shared_sides: play_style.is_routine(),
             center_one_player: center_1player_notefield,
             screen_width: screen_width(),
             screen_height: screen_height(),
@@ -801,6 +803,7 @@ pub(crate) fn compose_frame(
         },
         visual: NotefieldVisualState {
             elapsed_screen_s: elapsed_screen,
+            expand_seconds: state.mods.expand_seconds[player_idx],
             current_display_beat: state.current_beat_display(),
             accel,
             scroll,
@@ -847,6 +850,13 @@ pub(crate) fn compose_frame(
             tap_explosion: tap_explosion_noteskin,
         },
         song_lua: NotefieldSongLuaView {
+            wrapper: field_wrapper,
+            wrapper_visible: field_wrapper_visible,
+            column_splines: if show_song_visuals {
+                &state.song_lua_visuals().column_splines[player_idx]
+            } else {
+                &[]
+            },
             note_hides: if show_song_visuals {
                 &state.song_lua_visuals().note_hides[player_idx]
             } else {
@@ -863,6 +873,7 @@ pub(crate) fn compose_frame(
         edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
             + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
         arrow_effect_time_s,
+        music_time_s: state.current_music_time_seconds(),
     };
     let Some(prepared) = prepare_notefield(&request) else {
         return BuiltNotefield::empty(request.geometry.screen_center_x);
@@ -1082,22 +1093,41 @@ pub(crate) fn compose_frame(
             },
         );
 
+    let judgment_sprite = show_song_visuals
+        .then(|| {
+            deadsync_song_lua::judgment_texture_at(
+                &state.song_lua_visuals().player_actors[player_idx].judgment,
+                state.current_music_time_display(),
+            )
+        })
+        .flatten()
+        .map(|texture| TapJudgmentSprite {
+            source: SpriteSource::TextureHandle {
+                key: texture.key.clone(),
+                handle: textures.texture_handle(&texture.key),
+                generation: textures.texture_registry_generation(),
+            },
+            frame_size: texture.frame_size,
+            frame_cols: texture.frame_cols,
+            frame_rows: texture.frame_rows,
+        })
+        .or_else(|| {
+            judgment_texture
+                .zip(judgment_assets.judgment_sprite_metadata())
+                .map(|(texture, sprite)| TapJudgmentSprite {
+                    source: texture.actor_texture_source(actor_resources, textures),
+                    frame_size: sprite.frame_size,
+                    frame_cols: sprite.frame_cols,
+                    frame_rows: sprite.frame_rows,
+                })
+        });
     let tap = if song_lua_judgment_visible
         && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
-        && TapJudgmentHudFrame::render_active(render, elapsed_screen)
-        && let Some(texture) = judgment_texture
-        && let Some(sprite) = judgment_assets.judgment_sprite_metadata()
+        && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
+        && let Some(sprite) = judgment_sprite
     {
-        Some(TapJudgmentHudFrame {
-            render,
-            sprite: TapJudgmentSprite {
-                source: texture.actor_texture_source(actor_resources, textures),
-                frame_size: sprite.frame_size,
-                frame_cols: sprite.frame_cols,
-                frame_rows: sprite.frame_rows,
-            },
-        })
+        Some(TapJudgmentHudFrame { render, sprite })
     } else {
         None
     };
@@ -1174,6 +1204,7 @@ pub(crate) fn compose_frame(
         judgment_draw_range: hud_result.judgment_draw_range,
         combo_actors: hud_result.combo_actors,
         combo_draw_range: hud_result.combo_draw_range,
+        hud_parts: hud_result.parts,
     }
 }
 

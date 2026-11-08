@@ -1,0 +1,306 @@
+cargo :     Blocking waiting for file lock on package cache
+At line:2 char:307
++ ... odak).Path; cargo test -p deadlib-image-png --release -- --ignored -- ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...n package cache:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized] target(s) in 1.12s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests\ancillary_order.rs (target\release\deps\ancillary_order-2f5014e7a33e5bcf.exe)
+
+running 1 test
+C libpng ancillary order: 678 exact native-sample files
+test c_libpng_checks_all_valid_single_placements_and_both_hdr_orders ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 10.87s
+
+     Running tests\animation_fields.rs (target\release\deps\animation_fields-e85df0f0a8ec908c.exe)
+
+running 1 test
+Rust png APNG scalar audit: 136352 exact valid files, control values and native samples; invalid-input recovery is independently asserted
+test rust_png_control_fields_and_all_delay_words ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.85s
+
+     Running tests\apng.rs (target\release\deps\apng-77c0bbcbea7889e9.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\apng_recovery.rs (target\release\deps\apng_recovery-d2c2d3b61989e332.exe)
+
+running 1 test
+libpng APNG static images: exact native defaults=2880, strict CRC rejections=240
+test libpng_static_fallback_known_answers_and_crc_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 49.39s
+
+     Running tests\apng_rendered.rs (target\release\deps\apng_rendered-fa325d642438bc3b.exe)
+
+running 1 test
+Regenerated 35 libpng/fraction APNG answers at C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-apng-goldens-25436-1793180990041083700
+test regenerate_exact_render_goldens_with_independent_libpng_and_fractions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.81s
+
+     Running tests\chunks.rs (target\release\deps\chunks-15218bf4cdb85b68.exe)
+
+running 1 test
+libpng: 1893 comparisons, 312/312 reserved-bit ancillary rejections, 3/719 malformed-order recoveries: [[0, 1, 3, 4, 2, 5], [0, 1, 3, 4, 5, 2], [0, 2, 1, 3, 4, 5]]
+test libpng_unknown_chunk_and_core_order_comparison ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 27.95s
+
+     Running tests\cicp.rs (target\release\deps\cicp-084f232061c26f3b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\compositing.rs (target\release\deps\compositing-0f1dae3a20ee358a.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\compositor_precision.rs (target\release\deps\compositor_precision-eae43670fcd8c69d.exe)
+
+running 1 test
+Regenerated 240 independent libpng/Fraction precision animations at C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-compositor-goldens-41540-1793181024898946700
+test regenerate_precision_goldens_from_independent_c_frames_and_python_fractions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 54.06s
+
+     Running tests\compression.rs (target\release\deps\compression-ddb515d2c371b818.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\decoder_boundaries.rs (target\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\deflate_prefix.rs (target\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\deflate_stream.rs (target\release\deps\deflate_stream-67b7281eda2a22db.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\encoder_boundaries.rs (target\release\deps\encoder_boundaries-c3afb39037cf89e0.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\encoder_fields.rs (target\release\deps\encoder_fields-f27c0042b87da372.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\encoder_reference.rs (target\release\deps\encoder_reference-eeff3eb1f75b57da.exe)
+
+running 1 test
+C libpng encoder audit: 1620 reference files and 3240 native files; all 15 formats, three geometries, six filters, plain/Adam7, levels 0/1/9, exact samples/palettes/transparency
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 46.76s
+
+     Running tests\hdr.rs (target\release\deps\hdr-8a249dbf233477f4.exe)
+
+running 1 test
+test libpng_exact_hdr_fixed_values_and_invalid_integer_policy has been running for over 60 seconds
+libpng HDR: exact valid fixed values=7728, invalid integer chunks ignored=524, native writer exact=60
+test libpng_exact_hdr_fixed_values_and_invalid_integer_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 138.07s
+
+     Running tests\huffman.rs (target\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 1 test
+C zlib checked 19645 Huffman fixtures (3091 valid, 16554 malformed); 68 published-range definitions rejected by default policy
+test c_zlib_huffman_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.60s
+
+     Running tests\huffman_permutations.rs (target\release\deps\huffman_permutations-08761b4270a07dfa.exe)
+
+running 1 test
+C zlib checked 10744 symbol-permutation streams with exact outputs
+test c_zlib_symbol_permutations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.84s
+
+     Running tests\inflate_stream.rs (target\release\deps\inflate_stream-728da3b48ec71039.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\keywords.rs (target\release\deps\keywords-77045a3b3e0667aa.exe)
+
+running 2 tests
+libpng suggested palettes: 158 files; valid exact=114, valid empty ignored=2, invalid ascending retained=42, invalid ignored/rejected=0
+test libpng_suggested_palette_field_boundaries ... ok
+libpng named metadata: 3710 files; [valid exact, invalid fatal, invalid ignored, invalid retained, invalid name changed]: {"IText": [386, 0, 7, 137, 0], "IZText": [386, 0, 7, 137, 0], "Icc": [386, 0, 7, 137, 0], "Palette16": [386, 0, 1, 142, 1], "Palette8": [386, 0, 2, 142, 0], "Text": [386, 0, 0, 142, 2], "ZText": [386, 0, 7, 137, 0]}
+test libpng_exact_named_metadata_and_invalid_name_policies ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 54.35s
+
+     Running tests\language_extensions.rs (target\release\deps\language_extensions-19daeb7449d7c922.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\language_registry.rs (target\release\deps\language_registry-88ea3c5ee7049d33.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\libpng.rs (target\release\deps\libpng-48c7a432a6079b75.exe)
+
+running 2 tests
+Verified 24 corpus files, 216 native-sample libpng comparisons
+test libpng_external_corpus ... ok
+test libpng_native_sample_conformance ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.46s
+
+     Running tests\malformed.rs (target\release\deps\malformed-efd83949295c2a93.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\metadata.rs (target\release\deps\metadata-c23ce7b1437048f7.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\metadata_fields.rs (target\release\deps\metadata_fields-f6c85eb78d9eb2a0.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\palette.rs (target\release\deps\palette-14b9150ceacbb782.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\png_stream.rs (target\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 0 tests
+     Running tests\png_write.rs (target\release\deps\png_write-219f888ba9167922.exe)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\pngsuite.rs (target\release\deps\pngsuite-10919ea585f5aaaa.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\primary_pairs.rs (target\release\deps\primary_pairs-94e2582b21b93e9e.exe)
+
+running 1 test
+C primary literal audit: 65668 exact independent streams; batch retained in C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-primary-pairs-29088-1793181342841380800.bin
+test c_zlib_literal_pair_values_and_widths ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.65s
+
+     Running tests\profiles.rs (target\release\deps\profiles-7a2d6fff86ad10ba.exe)
+
+running 1 test
+libpng preserved exact ICC and Exif bytes in 480 files
+test libpng_preserves_independent_icc_and_exif_payloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7.89s
+
+     Running tests\reference_samples.rs (target\release\deps\reference_samples-f143a3abbd5b4c4e.exe)
+
+running 1 test
+libpng reference scaling: 576 exact stored-sample files and 576 exact sBIT/unshift recoveries
+test libpng_native_and_sbit_shift_recover_exact_reference_samples ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 24.29s
+
+     Running tests\scalar_fields.rs (target\release\deps\scalar_fields-57dd6c21bdff14e8.exe)
+
+running 1 test
+C scalar metadata audit: 440 cases, 408 exact integer/byte matches, 32 pinned hIST drops; fixtures retained in C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-scalar-fields-42356-1793181375842672800
+test libpng_scalar_integer_getters_match_independent_known_answers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 12.34s
+
+     Running tests\static_png.rs (target\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\stream_literals.rs (target\release\deps\stream_literals-5ff2483d4ae64c6a.exe)
+
+running 1 test
+C streaming literal audit: 172 exact independent streams; batch retained in C:\Users\PERFEC~1\AppData\Local\Temp\deadlib-stream-literals-47888-1793181388238289700.bin
+test c_zlib_literal_runs_and_history_wraps ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.16s
+
+     Running tests\text.rs (target\release\deps\text-2e8087f1ed8711bc.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\text_body.rs (target\release\deps\text_body-d80ab3a1ab966e65.exe)
+
+running 1 test
+libpng text bodies: raw valid exact=384, native writer exact=768, malformed retained=126, malformed changed=2, ignored/rejected=0
+test libpng_all_body_bytes_and_native_writer_values ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 35.67s
+
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 1 test
+C zlib checked 65652 cases; accepted 28/28 over-advertised-window references
+C libpng rejected all 24 pre-output-reference PNGs at DEFLATE distance validation
+test c_zlib_header_and_history_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.53s
+
+   Doc-tests deadlib_image_png
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+all doctests ran in 5.59s; merged doctests compilation took 5.43s

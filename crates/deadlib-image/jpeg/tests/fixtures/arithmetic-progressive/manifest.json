@@ -1,0 +1,320 @@
+{
+  "reference": "libjpeg-turbo 3.2.1 arithmetic encoder/decoder",
+  "cases": [
+    {
+      "case": "sequential-12-410-r1-c0-0-1-t0-s3",
+      "sha256": "db492d85513b37ed6936b6a93ede5a8203e338dd861a4c457d6b407fb26d65d8",
+      "source_sha256": "574b3c23e9d156c6d0938bc5b20557e09dd28df911cfefd605b84b07f024f54b",
+      "coefficient_sha256": "83f2f64e11c74945183a442a3b249873d9db8add564203d6f28df8517cf4fd74",
+      "bytes": 4130,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-410.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-410-r1-c0-0-1-t0-s3.jpg",
+        "1",
+        "0",
+        "0",
+        "1",
+        "0",
+        "3"
+      ]
+    },
+    {
+      "case": "sequential-12-411-r1-c0-1-5-t1-s1",
+      "sha256": "958562327db6c3d9cad4439bbc5f1254356fb46c4117eff8b37885defa16d281",
+      "source_sha256": "d65e4a1fb1bc994f82e7cca5e1094479f07c1c7a644a28e9874263fe09108f77",
+      "coefficient_sha256": "b7a31eb290a54c3ac191e97184f3c4d1e87165b48489cd74e94c1adb0b187968",
+      "bytes": 2084,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-411.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-411-r1-c0-1-5-t1-s1.jpg",
+        "1",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-12-420-r0-c15-15-32-t3-s1",
+      "sha256": "4a4ec1c7fea279736fa2d9b74f87bf4f82e3965c1932f9ea80d1c2490bc25af1",
+      "source_sha256": "331d608440b5ace9bd1ac20ecbe9615b5d1ec9275912d6f86d10c59840da89cb",
+      "coefficient_sha256": "783f628d82e7b4e58a8b28484a6da832f27748be049043818fd08ca4e5e77944",
+      "bytes": 1778,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-420.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-420-r0-c15-15-32-t3-s1.jpg",
+        "0",
+        "15",
+        "15",
+        "32",
+        "3",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-12-444-r1-c0-0-1-t0-s3",
+      "sha256": "c3f0e0662294525172d062df58f43f62a54d8e9944e027ccfefbb99d7390f53f",
+      "source_sha256": "8664165e2e027ad24c9bd77fed02ff0312717b3d9a397c9790b1b6bd939ea337",
+      "coefficient_sha256": "900c243ce31e90a289b0e5dbff59fdd4c9b6d1b3cde7ab735e09d3881e0ee5ce",
+      "bytes": 7986,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-444.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-444-r1-c0-0-1-t0-s3.jpg",
+        "1",
+        "0",
+        "0",
+        "1",
+        "0",
+        "3"
+      ]
+    },
+    {
+      "case": "sequential-12-gray-r1-c0-1-5-t1-s1",
+      "sha256": "06ee51836299d51910f29d47683dab390f0a6b1b332afc3304d932a3fb62850e",
+      "source_sha256": "906f3f928d3385071b6bb03f8dc45365d39505e26b3f76a300771255f03c487f",
+      "coefficient_sha256": "75032a776e4cb64ae45730e924666037918f61d76d6f411d545ff528dc5f4c2c",
+      "bytes": 1499,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-gray-r1-c0-1-5-t1-s1.jpg",
+        "1",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-12-rgb-r0-c15-15-32-t3-s1",
+      "sha256": "5c8ecc01fb99ab17f8bf61ce8d9d608906f4f02f0aa6a97918d351bdff8c58ef",
+      "source_sha256": "a84579b2c47a1ac54b310896c926347377bc23c2009035a7be9ce25d962e0944",
+      "coefficient_sha256": "18f002b78b31a2e0229a4a0e09f78a904576a6a44fdcdbae97a7a1f02c568bc2",
+      "bytes": 3345,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-rgb-r0-c15-15-32-t3-s1.jpg",
+        "0",
+        "15",
+        "15",
+        "32",
+        "3",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-12-wide-quant-r7-c0-1-5-t1-s1",
+      "sha256": "b1b20fcc3bfa211c2e01860d9aac42843dd18d5f9f3abf8d119b66412e912ea0",
+      "source_sha256": "409dfa90c3f80027cd02f693622ca7f6b56655d36624dbbce7734b1a5ecf7ef6",
+      "coefficient_sha256": "511285adfd59e43f065faea074588f09f870830aa3cdf0e2b545257e0b1b459d",
+      "bytes": 642,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "12-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-12-wide-quant-r7-c0-1-5-t1-s1.jpg",
+        "7",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-410-r7-c0-1-5-t1-s1",
+      "sha256": "327e49b4255645c4c2294e39c357f81b62ada1d4525f252f032a03fab2a5b280",
+      "source_sha256": "e42a22374ac49f115edd1afa06b44558e9e97a56fe460794b993e0e873f7edf9",
+      "coefficient_sha256": "f85775c7e74f4bc454f601048f16c53e7a899217f005225e57d8d92303eadc47",
+      "bytes": 912,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-410.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-410-r7-c0-1-5-t1-s1.jpg",
+        "7",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-411-r0-c0-1-5-t1-s1",
+      "sha256": "cdbcc6fc4064501575ce7b40b0317bdad0af60681ad4a960eee4ea9b5d79a1ae",
+      "source_sha256": "dcdffaef08d5eaec536c1c08c8cc71664eded6d6f4c2d9e6c64cac1d9fccbed2",
+      "coefficient_sha256": "b4124ba5427a5164102ea11b634ede135feee1eef7b49fb60c9070609d8fedd2",
+      "bytes": 962,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-411.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-411-r0-c0-1-5-t1-s1.jpg",
+        "0",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-420-r7-c3-7-63-t2-s3",
+      "sha256": "4daf7a5d1ecf2946f4004528b816cff52193c9e1cc8038a3fa0b407863d08c4f",
+      "source_sha256": "4fe868ed2973986bbcf72b8babf345e9ac619c42929a7ead30dcef4237cb88f1",
+      "coefficient_sha256": "2e4d5d0554ee6d794fa5fb83092f200fe528138d42cd88f91bb820aff6b950e0",
+      "bytes": 2207,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-420.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-420-r7-c3-7-63-t2-s3.jpg",
+        "7",
+        "3",
+        "7",
+        "63",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "case": "sequential-8-444-r7-c0-1-5-t1-s1",
+      "sha256": "05ab88f1842af110b6c1126af874d8a4cdba358053a83d5a28b953de2ff30905",
+      "source_sha256": "a8b7fa2af52ecef117d2d522b400fb47403e6d2077909b921e34c56a83f3504d",
+      "coefficient_sha256": "1f360c2268c894aa73356c4ec483b4f7ed20ee715b9f18e43cba8eb8293c7b9e",
+      "bytes": 1598,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-444.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-444-r7-c0-1-5-t1-s1.jpg",
+        "7",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-cmyk-r0-c0-1-5-t1-s1",
+      "sha256": "cfb9316860ed55001c3e61452b371240b5ca7b9b32cef1d168e989b21f99e85c",
+      "source_sha256": "476d2f2c1e7a3545433812a5bd3895e233a116d1e4df074824d16877ead40c67",
+      "coefficient_sha256": "772a94c8cec36f018f4bfaa1d4763ad3111fa41e7d93f118f471449a8c8339c6",
+      "bytes": 1937,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-cmyk.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-cmyk.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-cmyk-r0-c0-1-5-t1-s1.jpg",
+        "0",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-gray-r0-c0-1-5-t1-s1",
+      "sha256": "4d073d011186d4bf68f131e243722def0d4ece0967af658d9a40747c6ee36614",
+      "source_sha256": "eac7883abb81aaeadca166fc9b0247a4a6d47ba4bb07fa2de1299c8f29165df8",
+      "coefficient_sha256": "94bc2c6850d3a515f3c403879a9db860654abaa24ac69b25847743fb74c7848d",
+      "bytes": 639,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-gray-r0-c0-1-5-t1-s1.jpg",
+        "0",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "case": "sequential-8-rgb-r7-c3-7-63-t2-s3",
+      "sha256": "7109adfd35cd4da7eb5e34a5e36a89002a1dbf73c6f2979f0e082776de86e6f8",
+      "source_sha256": "5b279fe320bd5a2662eefcf5383a94f0aff81a7c589e396538affd4551f39a09",
+      "coefficient_sha256": "cf2a931891e8b3f0bc2332cc8d1a2bda9af625e51f8b1f868b383f26f230816f",
+      "bytes": 3357,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-rgb-r7-c3-7-63-t2-s3.jpg",
+        "7",
+        "3",
+        "7",
+        "63",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "case": "sequential-8-wide-quant-r1-c0-1-5-t1-s1",
+      "sha256": "5fe059a3bde05f6516b329aea0ff9c0c4c8a9485ece0362722a132e8b6c6ffe5",
+      "source_sha256": "c59bc6da30f5356f432788678c356d097a3195625301bd11baee5ee7d2f87888",
+      "coefficient_sha256": "ae32ba00891b53b3d95c72710b788ab376b0e9e56bb7222bf83f22d29d33ff0e",
+      "bytes": 723,
+      "decoded_coefficients": "exact",
+      "native_huffman_rewrites": 2,
+      "file": "8-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-tools\\jpeg-arithmetic-transcode.exe",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\experiments\\arithmetic-progressive-final\\sequential-8-wide-quant-r1-c0-1-5-t1-s1.jpg",
+        "1",
+        "0",
+        "1",
+        "5",
+        "1",
+        "1"
+      ]
+    }
+  ]
+}

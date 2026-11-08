@@ -4,12 +4,13 @@ mod encoder_cache;
 
 use core_graphics_types::geometry::CGSize;
 use deadlib_render_core::{
-    BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame, SamplerCache, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
-    TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshSampler, MeshVertex,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
+    SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey,
+    TextureHandle, TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, resolve_textured_mesh_geometries,
+    resolve_textured_meshes, texture_sampler_desc, texture_sampler_variants,
 };
 use foreign_types::ForeignType;
 use glam::Mat4 as Matrix4;
@@ -40,16 +41,14 @@ const SHADER: &str = include_str!("shaders/renderer.metal");
 
 const _: () = assert!(mem::size_of::<SpriteInstanceRaw>() == 100);
 const _: () = assert!(mem::size_of::<MeshVertex>() == 24);
-const _: () = assert!(mem::size_of::<TexturedMeshVertex>() == 44);
-const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 108);
+const _: () = assert!(mem::size_of::<TexturedMeshVertex>() == 60);
+const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 184);
 
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    sampler: SamplerState,
-    repeat_sampler: SamplerState,
-    nearest_sampler: Option<SamplerState>,
-    nearest_repeat_sampler: Option<SamplerState>,
+    sampler_desc: SamplerDesc,
+    samplers: SamplerCache<SamplerState>,
     mipmaps: bool,
 }
 
@@ -86,6 +85,7 @@ struct PipelineSet {
     add: RenderPipelineState,
     multiply: RenderPipelineState,
     subtract: RenderPipelineState,
+    no_effect: RenderPipelineState,
 }
 
 impl PipelineSet {
@@ -96,6 +96,7 @@ impl PipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -226,8 +227,9 @@ pub struct State {
     opaque_mesh_pipelines: PipelineSet,
     tmesh_pipelines: PipelineSet,
     opaque_tmesh_pipelines: PipelineSet,
-    depth_disabled: DepthStencilState,
-    depth_enabled: DepthStencilState,
+    depth_states: [DepthStencilState; 6],
+    depth_clear: DepthStencilState,
+    depth_clear_pipeline: RenderPipelineState,
     depth: metal::Texture,
     render_pass: FramePass,
     offscreen_targets: Vec<OffscreenTarget>,
@@ -321,7 +323,26 @@ pub fn init(
         "textured_mesh_fragment",
         false,
     )?;
-    let (depth_disabled, depth_enabled) = build_depth_states(&device);
+    let depth_states = build_depth_states(&device);
+    let clear_desc = DepthStencilDescriptor::new();
+    clear_desc.set_depth_compare_function(MTLCompareFunction::Always);
+    clear_desc.set_depth_write_enabled(true);
+    let depth_clear = device.new_depth_stencil_state(&clear_desc);
+    let clear_pipeline_desc = RenderPipelineDescriptor::new();
+    let clear_vertex = library
+        .get_function("depth_clear_vertex", None)
+        .map_err(std::io::Error::other)?;
+    clear_pipeline_desc.set_vertex_function(Some(&clear_vertex));
+    clear_pipeline_desc.set_depth_attachment_pixel_format(DEPTH_FORMAT);
+    let clear_color = clear_pipeline_desc
+        .color_attachments()
+        .object_at(0)
+        .expect("color attachment");
+    clear_color.set_pixel_format(COLOR_FORMAT);
+    clear_color.set_write_mask(MTLColorWriteMask::empty());
+    let depth_clear_pipeline = device
+        .new_render_pipeline_state(&clear_pipeline_desc)
+        .map_err(std::io::Error::other)?;
     let depth = create_depth_target(&device, size.width, size.height);
     let render_pass = create_render_pass(&depth);
     let queue = device.new_command_queue_with_max_command_buffer_count(FRAMES_IN_FLIGHT as u64);
@@ -341,8 +362,9 @@ pub fn init(
         opaque_mesh_pipelines,
         tmesh_pipelines,
         opaque_tmesh_pipelines,
-        depth_disabled,
-        depth_enabled,
+        depth_states,
+        depth_clear,
+        depth_clear_pipeline,
         depth,
         render_pass,
         offscreen_targets: Vec::new(),
@@ -391,24 +413,14 @@ pub fn create_texture(
         image,
         sampler_desc.mipmaps,
     );
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     Ok(Texture {
         id,
         images: TextureImages::Rgba(raw),
-        sampler,
-        repeat_sampler,
-        nearest_sampler: None,
-        nearest_repeat_sampler: None,
+        sampler_desc,
+        samplers,
         mipmaps: sampler_desc.mipmaps,
     })
 }
@@ -475,15 +487,7 @@ pub fn create_yuv420_texture(
             plane_height,
         );
     }
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     Ok(Texture {
@@ -493,10 +497,8 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        sampler,
-        repeat_sampler,
-        nearest_sampler: None,
-        nearest_repeat_sampler: None,
+        sampler_desc,
+        samplers,
         mipmaps: false,
     })
 }
@@ -709,6 +711,13 @@ fn draw_inner(
     let mut cache = EncoderCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
     for op in &frame.ops {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
+            encoder.set_depth_stencil_state(&state.depth_clear);
+            encoder.set_cull_mode(MTLCullMode::None);
+            encoder.draw_primitives(MTLPrimitiveType::Triangle, 0, 3);
+            cache = EncoderCache::default();
+        }
         match op {
             DrawOp::Sprite(run) => {
                 let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
@@ -729,8 +738,8 @@ fn draw_inner(
                 if cache.cull_changed(CullMode::Back) {
                     encoder.set_cull_mode(MTLCullMode::Back);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 let yuv420 = texture.images.is_yuv420();
                 if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
@@ -775,7 +784,7 @@ fn draw_inner(
                         }
                     }
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, false);
+                let sampler = texture_sampler(texture, run.texture_handle, false, None);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -797,8 +806,8 @@ fn draw_inner(
                 if cache.cull_changed(CullMode::None) {
                     encoder.set_cull_mode(MTLCullMode::None);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
@@ -847,12 +856,8 @@ fn draw_inner(
                 if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
                 }
-                if cache.depth_changed(run.depth_test) {
-                    encoder.set_depth_stencil_state(if run.depth_test {
-                        &state.depth_enabled
-                    } else {
-                        &state.depth_disabled
-                    });
+                if cache.depth_changed(run.depth_mode()) {
+                    encoder.set_depth_stencil_state(&state.depth_states[run.depth_mode() as usize]);
                 }
                 let cull = if run.depth_test {
                     CullMode::Back
@@ -878,10 +883,17 @@ fn draw_inner(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, true);
+                let sampler = texture_sampler(texture, run.texture_handle, true, run.sampler);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                encoder.set_fragment_texture(1, Some(additive.images.primary()));
+                encoder.set_fragment_sampler_state(
+                    1,
+                    Some(texture_sampler(additive, run.additive_texture, true, None)),
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(index) = cached_tmesh_index(buffer_key) else {
@@ -1090,6 +1102,7 @@ fn build_pipeline_set(
         add: build_pipeline(device, &vertex, &fragment, BlendMode::Add, write_alpha)?,
         multiply: build_pipeline(device, &vertex, &fragment, BlendMode::Multiply, write_alpha)?,
         subtract: build_pipeline(device, &vertex, &fragment, BlendMode::Subtract, write_alpha)?,
+        no_effect: build_pipeline(device, &vertex, &fragment, BlendMode::NoEffect, write_alpha)?,
     })
 }
 
@@ -1126,6 +1139,14 @@ fn build_pipeline(
 
 fn configure_blend(attachment: &RenderPipelineColorAttachmentDescriptorRef, blend: BlendMode) {
     let (src, dst, op, src_alpha, dst_alpha, alpha_op) = match blend {
+        BlendMode::NoEffect => (
+            MTLBlendFactor::Zero,
+            MTLBlendFactor::One,
+            MTLBlendOperation::Add,
+            MTLBlendFactor::Zero,
+            MTLBlendFactor::One,
+            MTLBlendOperation::Add,
+        ),
         BlendMode::Alpha => (
             MTLBlendFactor::SourceAlpha,
             MTLBlendFactor::OneMinusSourceAlpha,
@@ -1168,16 +1189,19 @@ fn configure_blend(attachment: &RenderPipelineColorAttachmentDescriptorRef, blen
     attachment.set_alpha_blend_operation(alpha_op);
 }
 
-fn build_depth_states(device: &DeviceRef) -> (DepthStencilState, DepthStencilState) {
-    let disabled_desc = DepthStencilDescriptor::new();
-    disabled_desc.set_depth_compare_function(MTLCompareFunction::Always);
-    disabled_desc.set_depth_write_enabled(false);
-    let disabled = device.new_depth_stencil_state(&disabled_desc);
-    let enabled_desc = DepthStencilDescriptor::new();
-    enabled_desc.set_depth_compare_function(MTLCompareFunction::LessEqual);
-    enabled_desc.set_depth_write_enabled(true);
-    let enabled = device.new_depth_stencil_state(&enabled_desc);
-    (disabled, enabled)
+fn build_depth_states(device: &DeviceRef) -> [DepthStencilState; 6] {
+    deadlib_render_core::DepthMode::ALL.map(|mode| {
+    let desc = DepthStencilDescriptor::new();
+        desc.set_depth_compare_function(if mode.on_fail() {
+            MTLCompareFunction::Greater
+        } else if mode.tests() {
+            MTLCompareFunction::LessEqual
+        } else {
+            MTLCompareFunction::Always
+        });
+        desc.set_depth_write_enabled(mode.writes());
+        device.new_depth_stencil_state(&desc)
+    })
 }
 
 fn create_depth_target(device: &DeviceRef, width: u32, height: u32) -> metal::Texture {
@@ -1255,33 +1279,7 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
         wrap: SamplerWrap::Clamp,
         mipmaps: false,
     };
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
-    let nearest_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-    );
-    let nearest_repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Repeat,
-            mipmaps: false,
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     let depth = create_depth_target(&state.device, width, height);
@@ -1296,10 +1294,8 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
         texture: Texture {
             id,
             images: TextureImages::Rgba(raw),
-            sampler,
-            repeat_sampler,
-            nearest_sampler: Some(nearest_sampler),
-            nearest_repeat_sampler: Some(nearest_repeat_sampler),
+            sampler_desc,
+            samplers,
             mipmaps: false,
         },
         _depth: depth,
@@ -1353,16 +1349,28 @@ fn resolved_texture<'a>(
 }
 
 #[inline(always)]
-fn texture_sampler(texture: &Texture, handle: TextureHandle, repeat: bool) -> &SamplerState {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture.nearest_sampler.as_ref().unwrap_or(&texture.sampler),
-        (true, true) => texture
-            .nearest_repeat_sampler
-            .as_ref()
-            .unwrap_or(&texture.repeat_sampler),
-        (false, false) => &texture.sampler,
-        (false, true) => &texture.repeat_sampler,
+fn texture_sampler(
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> &SamplerState {
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    texture
+        .samplers
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
+}
+
+fn create_texture_samplers(state: &mut State, desc: SamplerDesc) -> SamplerCache<SamplerState> {
+    let mut samplers = SamplerCache::default();
+    for choice in texture_sampler_variants(desc) {
+        if samplers.get(choice).is_none() {
+            let sampler = get_sampler(&state.device, &mut state.samplers, choice);
+            samplers.insert(choice, sampler);
+        }
     }
+    samplers
 }
 
 fn record_offscreen_pass(
@@ -1397,6 +1405,13 @@ fn record_offscreen_pass(
         &state.opaque_tmesh_pipelines
     };
     for op in &frame.ops {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
+            encoder.set_depth_stencil_state(&state.depth_clear);
+            encoder.set_cull_mode(MTLCullMode::None);
+            encoder.draw_primitives(MTLPrimitiveType::Triangle, 0, 3);
+            cache = EncoderCache::default();
+        }
         match *op {
             DrawOp::Sprite(run) => {
                 let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
@@ -1412,8 +1427,8 @@ fn record_offscreen_pass(
                 if cache.cull_changed(CullMode::Back) {
                     encoder.set_cull_mode(MTLCullMode::Back);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 let yuv420 = texture.images.is_yuv420();
                 if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
@@ -1458,7 +1473,7 @@ fn record_offscreen_pass(
                         }
                     }
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, false);
+                let sampler = texture_sampler(texture, run.texture_handle, false, None);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -1480,8 +1495,8 @@ fn record_offscreen_pass(
                 if cache.cull_changed(CullMode::None) {
                     encoder.set_cull_mode(MTLCullMode::None);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(mesh_pipelines.get(run.blend));
@@ -1528,12 +1543,8 @@ fn record_offscreen_pass(
                 if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(tmesh_pipelines.get(run.blend));
                 }
-                if cache.depth_changed(run.depth_test) {
-                    encoder.set_depth_stencil_state(if run.depth_test {
-                        &state.depth_enabled
-                    } else {
-                        &state.depth_disabled
-                    });
+                if cache.depth_changed(run.depth_mode()) {
+                    encoder.set_depth_stencil_state(&state.depth_states[run.depth_mode() as usize]);
                 }
                 let cull = if run.depth_test {
                     CullMode::Back
@@ -1559,10 +1570,17 @@ fn record_offscreen_pass(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, true);
+                let sampler = texture_sampler(texture, run.texture_handle, true, run.sampler);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                encoder.set_fragment_texture(1, Some(additive.images.primary()));
+                encoder.set_fragment_sampler_state(
+                    1,
+                    Some(texture_sampler(additive, run.additive_texture, true, None)),
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(index) = cached_tmesh_index(buffer_key) else {
@@ -1892,6 +1910,7 @@ const fn blend_key(blend: BlendMode) -> u8 {
         BlendMode::Add => 1,
         BlendMode::Multiply => 2,
         BlendMode::Subtract => 3,
+        BlendMode::NoEffect => 4,
     }
 }
 

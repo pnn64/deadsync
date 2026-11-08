@@ -1,0 +1,18 @@
+[
+  {
+    "line": 10,
+    "source": ".map_err(|_| Error::Invalid(\"image samples\"))?;"
+  },
+  {
+    "line": 19,
+    "source": "_ => return Err(Error::Invalid(\"transparency for color type\")),"
+  },
+  {
+    "line": 72,
+    "source": "_ => 255,"
+  },
+  {
+    "line": 128,
+    "source": "return Err(Error::Invalid(\"no APNG animation\"));"
+  }
+]

@@ -1,14 +1,18 @@
 use super::*;
+
+#[cfg(test)]
+#[path = "prepare_tests.rs"]
+mod submission_tests;
 pub(crate) type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct GameplayCompiledSongLua<S> {
     pub(crate) compiled: CompiledSongLua<S>,
     pub(crate) compile_ms: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct GameplaySongLuaLayer<S> {
     pub(crate) start_beat: f32,
     pub(crate) compiled: CompiledSongLua<S>,
@@ -18,14 +22,84 @@ pub(crate) struct GameplaySongLuaLayer<S> {
 ///
 /// The shell may build this on a worker during Select Music's options prompt,
 /// then hand it to the shared gameplay runtime builder.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PreparedGameplaySongLua<S> {
+    pub(crate) compile_succeeded: bool,
     pub(crate) primary: Option<GameplayCompiledSongLua<S>>,
     pub(crate) background_layers: Vec<GameplaySongLuaLayer<S>>,
     pub(crate) foreground_layers: Vec<GameplaySongLuaLayer<S>>,
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// Approval belongs to this preparation, never to a persistent chart hash.
+    /// Failed sessions, skipped layers, and unsupported captures do not qualify.
+    pub fn compile_succeeded(&self) -> bool {
+        self.compile_succeeded
+    }
+
+    /// Inspect compiled data without preparation timings or transferring a VM.
+    #[cfg(any(feature = "test-support", feature = "performance"))]
+    pub fn compiled_layers(&self) -> impl Iterator<Item = &CompiledSongLua<S>> {
+        self.background_layers.iter().map(|layer| &layer.compiled)
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.primary.iter().map(|primary| &primary.compiled))
+    }
+
+    /// Transfer the shared VM to the screen before the domain consumes the
+    /// prepared visual windows. Bind global actor positions to their final
+    /// root/background/foreground slots without cloning the VM.
+    pub fn take_live_scene(&mut self) -> Result<Option<crate::SongLuaLiveScene>, String> {
+        use crate::SongLuaLiveTarget as LiveTarget;
+        let count = self.primary.iter().map(|p| &p.compiled)
+            .chain(self.background_layers.iter().map(|p| &p.compiled))
+            .chain(self.foreground_layers.iter().map(|p| &p.compiled))
+            .filter(|compiled| compiled.live_scene.is_some()).count();
+        if count == 0 { return Ok(None); }
+        if count != 1 {
+            self.compile_succeeded = false;
+            return Err("live gameplay requires one shared Lua session".into());
+        }
+        let mut scene = None;
+        let mut targets = Vec::new();
+        if let Some(primary) = &mut self.primary {
+            scene = primary.compiled.live_scene.take();
+            targets.extend(primary.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Root(local))));
+        }
+        for (layer, data) in self.background_layers.iter_mut().enumerate() {
+            if let Some(owned) = data.compiled.live_scene.take() { scene = Some(owned); }
+            targets.extend(data.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Background(layer, local))));
+        }
+        for (layer, data) in self.foreground_layers.iter_mut().enumerate() {
+            if let Some(owned) = data.compiled.live_scene.take() { scene = Some(owned); }
+            targets.extend(data.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Foreground(layer, local))));
+        }
+        let mut scene = scene.expect("one scene counted before transferring ownership");
+        if let Err(error) = scene.bind_targets(targets) {
+            self.compile_succeeded = false;
+            return Err(error);
+        }
+        Ok(Some(scene))
+    }
+
+    /// A shared session reports the note fields constructed by its final scene.
+    pub fn loaded_steps(&self) -> Option<[Option<usize>; crate::LUA_PLAYERS]> {
+        self.primary.iter().map(|primary| &primary.compiled)
+            .chain(self.background_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .find_map(|compiled| compiled.loaded_steps)
+    }
+
+    /// Style that owns the constructed note fields, including a Lua reload.
+    pub fn loaded_style(&self) -> Option<&str> {
+        self.primary.iter().map(|primary| &primary.compiled)
+            .chain(self.background_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .find_map(|compiled| compiled.loaded_style.as_deref())
+    }
+
     pub fn startup(&self) -> crate::SongLuaStartup {
         let mut startup = crate::SongLuaStartup::default();
         for compiled in self
@@ -54,6 +128,7 @@ impl<S> PreparedGameplaySongLua<S> {
     }
 }
 
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SongLuaSoundEvent {
     second: f32,
@@ -67,6 +142,10 @@ impl<S: Clone + std::fmt::Debug>
         SongLuaRuntimeOverlayStateDelta,
     > for PreparedGameplaySongLua<S>
 {
+    fn song_lua_compile_succeeded(&self) -> bool {
+        self.compile_succeeded
+    }
+
     fn build_song_lua_runtime(
         self,
         params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
@@ -109,6 +188,8 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
     song_title: &str,
     path: &Path,
     start_beat: f32,
+    background: bool,
+    entry_name: &str,
     label: &str,
     context: &crate::SongLuaCompileContext,
     compile_song_lua: &impl Fn(
@@ -116,7 +197,11 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
         &crate::SongLuaCompileContext,
     ) -> Result<CompiledSongLua<S>, String>,
 ) -> Option<GameplaySongLuaLayer<S>> {
-    match compile_song_lua(path, context) {
+    let mut context = context.clone();
+    context.background_layer_count = usize::from(background);
+    context.layer_start_beats = vec![start_beat];
+    context.foreground_names = if background { Vec::new() } else { vec![entry_name.to_owned()] };
+    match compile_song_lua(path, &context) {
         Ok(compiled) => Some(GameplaySongLuaLayer {
             start_beat,
             compiled,
@@ -145,7 +230,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     song: &SongData,
     primary_ix: Option<usize>,
     context: &crate::SongLuaCompileContext,
-    compile_song_lua_layers: &impl Fn(
+    compile_song_lua_layers: impl FnOnce(
         &[&Path],
         usize,
         &crate::SongLuaCompileContext,
@@ -153,15 +238,27 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
 ) -> Result<PreparedGameplaySongLua<S>, String> {
     let mut paths = Vec::new();
     let mut targets = Vec::new();
+    let mut start_beats = Vec::new();
     for change in &song.background_lua_changes {
         paths.push(change.path.as_path());
+        start_beats.push(change.start_beat);
         targets.push(SongLuaLayerTarget::Background(change.start_beat));
     }
+    let mut context = context.clone();
+    context.background_layer_count = paths.len();
+    context.background_activations = song.background_lua_changes.iter()
+        .map(|change| (change.layer, change.activations.clone())).collect();
+    context.background_upper_left_colors = song.background_lua_changes.iter().map(|owner|
+        (owner.effect.is_empty() || owner.effect.eq_ignore_ascii_case("UpperLeft"))
+            .then_some(owner.color1.unwrap_or([1.0; 4]))).collect();
+    context.foreground_names.clear();
     for (index, change) in song.foreground_lua_changes.iter().enumerate() {
         if !change.path.is_file() {
             continue;
         }
         paths.push(change.path.as_path());
+        context.foreground_names.push(change.name.clone());
+        start_beats.push(change.start_beat);
         targets.push(if Some(index) == primary_ix {
             SongLuaLayerTarget::Primary
         } else {
@@ -173,15 +270,46 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
         .position(|target| matches!(target, SongLuaLayerTarget::Primary))
         .unwrap_or(0);
     if paths.is_empty() {
-        return Ok(PreparedGameplaySongLua::default());
+        if !context.live {
+            return Ok(PreparedGameplaySongLua::default());
+        }
+        // Native ScreenGameplay owns its theme actors even when a song has
+        // no declared Lua layers. Compile the host with no authored entries.
+        let compile_started = Instant::now();
+        let mut compiled = compile_song_lua_layers(&[], 0, &context)?;
+        if compiled.len() != 1 || compiled[0].live_scene.is_none() {
+            return Err("empty song layers did not retain the owned gameplay scene".into());
+        }
+        return Ok(PreparedGameplaySongLua {
+            compile_succeeded: false,
+            primary: Some(GameplayCompiledSongLua {
+                compiled: compiled.pop().expect("one owned scene checked"),
+                compile_ms: compile_started.elapsed().as_secs_f64() * 1000.0,
+            }),
+            background_layers: Vec::new(),
+            foreground_layers: Vec::new(),
+        });
     }
+    context.layer_start_beats = start_beats;
     let compile_started = Instant::now();
-    let compiled = compile_song_lua_layers(&paths, primary_index, context)?;
+    let compiled = compile_song_lua_layers(&paths, primary_index, &context)?;
     if compiled.len() != targets.len() {
         return Err("song lua session returned the wrong layer count".to_string());
     }
     let compile_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
     let mut data = PreparedGameplaySongLua::default();
+    data.compile_succeeded = targets.len()
+        == song.background_lua_changes.len() + song.foreground_lua_changes.len()
+        && compiled.iter().all(|compiled| {
+            let info = &compiled.info;
+            info.unsupported_perframes == 0
+                && info.unsupported_function_eases == 0
+                && info.unsupported_function_actions == 0
+                && info.unsupported_perframe_captures.is_empty()
+                && info.unsupported_function_ease_captures.is_empty()
+                && info.unsupported_function_action_captures.is_empty()
+                && info.skipped_message_command_captures.is_empty()
+        });
     for (compiled, target) in compiled.into_iter().zip(targets) {
         match target {
             SongLuaLayerTarget::Primary => {
@@ -216,10 +344,14 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
         &crate::SongLuaCompileContext,
     ) -> Result<CompiledSongLua<S>, String>,
 ) -> PreparedGameplaySongLua<S> {
+    let mut primary_context = context.clone();
+    primary_context.background_layer_count = 0;
+    primary_context.layer_start_beats = vec![song.foreground_lua_changes[primary_ix].start_beat];
+    primary_context.foreground_names = vec![song.foreground_lua_changes[primary_ix].name.clone()];
     let primary = compile_primary_song_lua(
         song.title.as_str(),
         &song.foreground_lua_changes[primary_ix].path,
-        context,
+        &primary_context,
         &compile_song_lua,
     );
     let background_layers = song
@@ -230,6 +362,8 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                true,
+                "",
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -246,6 +380,8 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                false,
+                &change.name,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,
@@ -256,6 +392,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
         primary,
         background_layers,
         foreground_layers,
+        compile_succeeded: false,
     }
 }
 
@@ -275,6 +412,8 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                true,
+                "",
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -290,6 +429,8 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                false,
+                &change.name,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,
@@ -300,10 +441,14 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
         primary: None,
         background_layers,
         foreground_layers,
+        compile_succeeded: false,
     }
 }
 
 /// Compile all song layers with one session, retaining the independent-layer fallback.
+///
+/// This entry point preserves the requested execution mode. Application loading
+/// may use [`prepare_song_lua_with_runtime_fallback`] for interactive sources.
 pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     song: &SongData,
     context: &crate::SongLuaCompileContext,
@@ -324,6 +469,7 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     if primary_ix.is_none()
         && song.background_lua_changes.is_empty()
         && song.foreground_lua_changes.is_empty()
+        && !context.live
     {
         return PreparedGameplaySongLua::default();
     }
@@ -338,6 +484,54 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
             || compile_song_lua_without_primary(song, &context, &compile_song_lua),
             |primary_ix| compile_song_lua_separately(song, primary_ix, &context, &compile_song_lua),
         )
+    })
+}
+
+/// Prefer compiled playback, retrying input-dependent sources as one live
+/// session. The first runtime update waits for the gameplay clock handoff.
+/// Other compiler errors retain the ordinary preparation behavior.
+pub fn prepare_song_lua_with_runtime_fallback<S: Clone + std::fmt::Debug>(
+    song: &SongData,
+    context: &crate::SongLuaCompileContext,
+    compile_song_lua: impl Fn(
+        &Path,
+        &crate::SongLuaCompileContext,
+    ) -> Result<CompiledSongLua<S>, String>,
+    compile_song_lua_layers: impl Fn(
+        &[&Path],
+        usize,
+        &crate::SongLuaCompileContext,
+    ) -> Result<Vec<CompiledSongLua<S>>, String>,
+) -> PreparedGameplaySongLua<S> {
+    prepare_song_lua(
+        song,
+        context,
+        |path, context| {
+            crate::runtime_fallback::compile(context, |context| compile_song_lua(path, context))
+        },
+        |paths, primary, context| {
+            crate::runtime_fallback::compile(context, |context| {
+                compile_song_lua_layers(paths, primary, context)
+            })
+        },
+    )
+}
+
+/// Load the same song's replacement screen while transferring its Lua VM.
+/// Errors stay visible; retrying with independent VMs would lose song state.
+pub fn reload_song_lua<S: Clone + std::fmt::Debug>(
+    song: &SongData,
+    scene: crate::SongLuaLiveScene,
+    reload: impl FnOnce(crate::SongLuaLiveScene) -> Result<Vec<CompiledSongLua<S>>, String>,
+) -> Result<PreparedGameplaySongLua<S>, String> {
+    let primary_ix = song.foreground_lua_changes.iter()
+        .position(|change| change.start_beat <= 0.0 && change.path.is_file());
+    let context = scene.context().clone();
+    compile_song_lua_session(song, primary_ix, &context, move |paths, primary, _| {
+        if !scene.matches_entries(paths, primary) {
+            return Err("song Lua reload entries differ from the retained scene".into());
+        }
+        reload(scene)
     })
 }
 
@@ -486,9 +680,17 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
         timing_player,
         global_offset_seconds,
     );
-    if !tracks.is_empty() {
+    if !tracks.is_empty() || !compiled.draw_frames.is_empty() {
+        let mut draw_frames = compiled.draw_frames.clone();
+        for frame in &mut draw_frames {
+            // Match the chart-second clock used by rendered update tracks.
+            frame.second -= global_offset_seconds * timing_player.global_offset_rate();
+        }
         overlays.push(SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::UpdateTracks { tracks },
+            kind: SongLuaOverlayKind::UpdateTracks {
+                tracks,
+                draw_frames: draw_frames.into(),
+            },
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -714,6 +916,77 @@ fn log_unsupported_song_lua_ease_target(
     }
 }
 
+/// Shared gameplay tracks live on the session's primary compilation output.
+/// With no foreground at beat zero, that output is the first background (or
+/// first later foreground). Its graphics still belong to their timed layer.
+fn song_lua_shared_screen<S: Clone>(compiled: &CompiledSongLua<S>) -> CompiledSongLua<S> {
+    let Some(index) = compiled.screen_overlay_index else {
+        return CompiledSongLua::default();
+    };
+    let Some(actor) = compiled.overlays.get(index) else {
+        return CompiledSongLua::default();
+    };
+    let mut actor = actor.clone();
+    actor.parent_index = None;
+    let mut screen = CompiledSongLua {
+        screen_width: compiled.screen_width,
+        screen_height: compiled.screen_height,
+        messages: compiled.messages.clone(),
+        overlays: vec![actor],
+        screen_overlay_index: Some(0),
+        overlay_update_unit: compiled.overlay_update_unit,
+        ..Default::default()
+    };
+    screen.overlay_eases = compiled
+        .overlay_eases
+        .iter()
+        .filter(|ease| ease.overlay_index == index)
+        .cloned()
+        .map(|mut ease| {
+            ease.overlay_index = 0;
+            ease
+        })
+        .collect();
+    screen.overlay_updates = compiled
+        .overlay_updates
+        .iter()
+        .filter(|track| track.overlay_index == index)
+        .cloned()
+        .map(|mut track| {
+            track.overlay_index = 0;
+            track
+        })
+        .collect();
+    for capture in &compiled.stateful_message_captures {
+        let targets: Vec<_> = capture
+            .overlay_targets
+            .iter()
+            .filter(|(target, _)| *target == index)
+            .map(|(_, targets)| (0, targets.clone()))
+            .collect();
+        if targets.is_empty() {
+            continue;
+        }
+        screen
+            .stateful_message_captures
+            .push(crate::SongLuaStatefulMessageCapture {
+                message: capture.message.clone(),
+                overlay_targets: targets,
+                writes: capture
+                    .writes
+                    .iter()
+                    .filter(|write| write.overlay_index == index)
+                    .cloned()
+                    .map(|mut write| {
+                        write.overlay_index = 0;
+                        write
+                    })
+                    .collect(),
+            });
+    }
+    screen
+}
+
 fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
     song_lua_data: PreparedGameplaySongLua<S>,
@@ -751,14 +1024,18 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
         std::array::from_fn(|_| Vec::new());
     let mut player_combo_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
+    let mut screen_overlay_index = None;
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
-    let mut hidden_screen_layers = [false; 2];
+    let mut screen_layers = std::array::from_fn(|_| SongLuaCapturedActor::default());
+    let mut screen_layer_events = std::array::from_fn(|_| Vec::new());
     let mut note_hides: [deadsync_gameplay::SongLuaNoteHideWindows; MAX_PLAYERS] =
         std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default());
     let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
         MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+
+    let mut column_splines = std::array::from_fn(|_| Vec::new());
 
     if song_lua_data.primary.is_none()
         && song_lua_data.background_layers.is_empty()
@@ -769,6 +1046,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             ease_windows,
             deadsync_gameplay::build_song_lua_runtime_visuals(
                 overlays,
+                screen_overlay_index,
                 overlay_eases,
                 overlay_ease_ranges,
                 overlay_events,
@@ -781,9 +1059,11 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 song_foreground,
                 song_foreground_events,
                 hidden_players,
-                hidden_screen_layers,
+                screen_layers,
+                screen_layer_events,
                 note_hides,
                 column_offsets,
+                column_splines,
                 params.screen_width,
                 params.screen_height,
             ),
@@ -793,11 +1073,35 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     let mut out_screen_width = params.screen_width;
     let mut out_screen_height = params.screen_height;
 
-    if let Some(primary) = song_lua_data.primary.as_ref() {
-        let compiled = &primary.compiled;
+    let shared = song_lua_data
+        .primary
+        .as_ref()
+        .map(|primary| (&primary.compiled, primary.compile_ms))
+        .or_else(|| {
+            song_lua_data
+                .background_layers
+                .first()
+                .map(|layer| (&layer.compiled, 0.0))
+        })
+        .or_else(|| {
+            song_lua_data
+                .foreground_layers
+                .first()
+                .map(|layer| (&layer.compiled, 0.0))
+        });
+    if let Some((compiled, compile_ms)) = shared {
+        let shared_screen;
+        let visual_compiled = if song_lua_data.primary.is_some() {
+            compiled
+        } else {
+            // Keep late/background graphics in their original layers. Only
+            // ScreenGameplay's shared pose belongs to the always-owned root.
+            shared_screen = song_lua_shared_screen(compiled);
+            &shared_screen
+        };
         let runtime_started = Instant::now();
         overlays = song_lua_runtime_overlays(
-            compiled,
+            visual_compiled,
             params.timing_players[0],
             params.machine_global_offset_seconds,
         );
@@ -807,18 +1111,18 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             params.machine_global_offset_seconds,
         );
         overlay_events = crate::gameplay::build_song_lua_overlay_message_events_with_seconds(
-            compiled,
+            visual_compiled,
             &message_seconds,
         );
         let overlay_runtime_eases =
             crate::gameplay::build_song_lua_overlay_ease_windows_with_events(
-                compiled,
+                visual_compiled,
                 params.timing_players[0],
                 params.machine_global_offset_seconds,
                 &overlay_events,
             );
         (overlay_eases, overlay_ease_ranges) = deadsync_gameplay::group_song_lua_overlay_eases(
-            compiled.overlays.len(),
+            visual_compiled.overlays.len(),
             overlay_runtime_eases,
         );
         deadsync_gameplay::apply_song_lua_player_actor_overrides(
@@ -855,6 +1159,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 )
             },
         );
+        screen_overlay_index = visual_compiled.screen_overlay_index;
         song_foreground = compiled.song_foreground.clone();
         song_foreground_events = crate::gameplay::build_song_lua_actor_message_events_for_commands(
             &compiled.messages,
@@ -862,7 +1167,14 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             &compiled.song_foreground.message_commands,
         );
         hidden_players = deadsync_gameplay::build_song_lua_hidden_players(&compiled.hidden_players);
-        hidden_screen_layers = compiled.hidden_screen_layers;
+        screen_layers = compiled.screen_layers.clone();
+        screen_layer_events = std::array::from_fn(|index| {
+            crate::gameplay::build_song_lua_actor_message_events_for_commands(
+                &compiled.messages,
+                &message_seconds,
+                &compiled.screen_layers[index].message_commands,
+            )
+        });
         note_hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
             compiled
                 .note_hides
@@ -918,6 +1230,11 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             constant_windows[player] = player_windows.constant_windows;
             ease_windows[player] = player_windows.ease_windows;
             column_offsets[player] = player_windows.column_offsets;
+            column_splines[player] = crate::gameplay::song_lua_column_spline_tracks(
+                compiled,
+                player,
+                params.timing_players[player],
+            );
         }
 
         let runtime_ms = runtime_started.elapsed().as_secs_f64() * 1000.0;
@@ -937,7 +1254,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 total_eases,
                 total_column_offsets,
                 unsupported_targets,
-                primary.compile_ms,
+                compile_ms,
                 runtime_ms,
             );
             log_song_lua_runtime_debug(
@@ -988,6 +1305,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
         ease_windows,
         deadsync_gameplay::build_song_lua_runtime_visuals(
             overlays,
+            screen_overlay_index,
             overlay_eases,
             overlay_ease_ranges,
             overlay_events,
@@ -1000,9 +1318,11 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             song_foreground,
             song_foreground_events,
             hidden_players,
-            hidden_screen_layers,
+            screen_layers,
+            screen_layer_events,
             note_hides,
             column_offsets,
+            column_splines,
             out_screen_width,
             out_screen_height,
         ),
@@ -1117,6 +1437,7 @@ mod tests {
 impl<S> Default for PreparedGameplaySongLua<S> {
     fn default() -> Self {
         Self {
+            compile_succeeded: false,
             primary: None,
             background_layers: Vec::new(),
             foreground_layers: Vec::new(),

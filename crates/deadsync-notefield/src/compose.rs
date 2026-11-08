@@ -1,19 +1,21 @@
 use crate::{
-    BumpyFrameCache, ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement,
-    HudLayoutOffsets, HudLayoutParams, LayoutMiniIndicatorPosition, NotePartPhaseCache,
+    ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
+    HudLayoutParams, LayoutMiniIndicatorPosition, NoteDepthFrameCache, NotePartPhaseCache,
     NotefieldFrameFeatures, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
     ScrollTravel, ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride,
-    ZmodLayoutParams, beat_factor, bumpy_frame_cache, compute_active_note_geometry,
-    compute_tornado_lane_caches, effective_mini_value, field_effect_height, field_layout,
-    fill_lane_col_offsets, fill_move_col_extras, note_part_phase_cache, notefield_frame_plan,
+    ZmodLayoutParams, beat_factor, compute_active_note_geometry, compute_tornado_lane_caches,
+    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
+    fill_move_col_extras, note_depth_frame_cache, note_part_phase_cache, notefield_frame_plan,
     scroll_travel, song_time_ns_to_seconds, tiny_spacing_scale,
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, ChartNoteIndex, PerspectiveEffects, ScrollEffects,
-    SongLuaColumnOffsetWindowRuntime, SongLuaColumnTransformTarget, SongLuaNoteHideWindows,
-    VisibilityEffects, VisualEffects, song_lua_column_offset_window_value,
+    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
+    song_lua_column_transforms,
 };
+#[cfg(test)]
+use deadsync_gameplay::{SongLuaColumnTransformTarget, song_lua_column_offset_window_value};
 use deadsync_noteskin::{NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteskinRuntime};
 use deadsync_rules::note::{Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -32,6 +34,8 @@ pub struct NotefieldGeometry {
     pub total_cols: usize,
     pub single_style: bool,
     pub double_style: bool,
+    /// Routine's two fields share the pads and are both centered.
+    pub shared_sides: bool,
     pub center_one_player: bool,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -39,6 +43,7 @@ pub struct NotefieldGeometry {
     pub screen_center_y: f32,
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
+    /// Unscaled theme draw metrics; the back distance is a positive magnitude.
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
     pub column_dirs: [f32; MAX_COLS],
@@ -49,6 +54,7 @@ pub struct NotefieldGeometry {
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldVisualState {
     pub elapsed_screen_s: f32,
+    pub expand_seconds: f32,
     pub current_display_beat: f32,
     pub accel: AccelEffects,
     pub scroll: ScrollEffects,
@@ -158,6 +164,10 @@ pub struct NotefieldNoteskinView<'a, S> {
 pub struct NotefieldSongLuaView<'a> {
     pub note_hides: &'a SongLuaNoteHideWindows,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
+    pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
+    /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
+    pub wrapper: glam::Mat4,
+    pub wrapper_visible: bool,
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
@@ -184,6 +194,7 @@ pub struct NotefieldOptions {
     pub split_15_10ms: bool,
     pub custom_fantastic_window: bool,
     pub judgment_tilt_enabled: bool,
+    pub judgment_animation: crate::TapJudgmentAnimation,
     pub judgment_tilt_min_ms: f32,
     pub judgment_tilt_max_ms: f32,
     pub judgment_tilt_multiplier: f32,
@@ -192,6 +203,7 @@ pub struct NotefieldOptions {
     pub error_bar_max_window_ix: usize,
     pub monochrome_background: bool,
     pub error_bar_multi_tick: bool,
+    pub text_error_bar_centered: bool,
     pub short_average_error_bar: bool,
     pub center_tick: bool,
     pub error_ms_display: bool,
@@ -216,6 +228,8 @@ pub struct MeasureCounterOptions {
 /// Canonical inputs for one player notefield composition pass.
 pub struct NotefieldComposeRequest<'a, S> {
     pub hud_style: NotefieldHudStyle,
+    /// Empty in regular gameplay; Practice supplies annotations in both views.
+    pub timing_labels: &'a [crate::TimingSegmentLabel],
     pub placement: FieldPlacement,
     pub view: ViewOverride,
     pub geometry: NotefieldGeometry,
@@ -226,7 +240,10 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub options: NotefieldOptions,
     pub capture_requests: ProxyCaptureRequests,
     pub edit_measure_text_slot_base: u8,
-    pub arrow_effect_time_s: f32,
+    /// Global game clock, kept in native double precision until selection.
+    pub arrow_effect_time_s: f64,
+    /// Global music seconds, before player-specific visual delay/split timing.
+    pub music_time_s: f32,
 }
 
 /// Noteskin-dependent values shared by all note, hold, receptor, and cue passes.
@@ -237,12 +254,14 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub tap_explosion: Option<&'a NoteskinRuntime<S>>,
     pub target_arrow_px: f32,
     pub beat_factor: f32,
+    pub(crate) beat_y_factor: f32,
     pub col_offsets: [f32; MAX_COLS],
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
+    pub(crate) tornado_z_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
     pub(crate) move_x_offsets: [f32; MAX_COLS],
-    pub(crate) bumpy_frame_cache: BumpyFrameCache,
+    pub(crate) note_depth_frame_cache: NoteDepthFrameCache,
     pub(crate) tiny_spacing_scale: f32,
     pub(crate) part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
     pub(crate) mine_phase_cache: NotePartPhaseCache,
@@ -251,22 +270,240 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub travel: ScrollTravel<'a>,
 }
 
+/// Native NoteField limits are measured before its outer zoom and Reverse.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NoteDrawRange {
+    after: f32,
+    before: f32,
+    zoom: f32,
+}
+
+impl NoteDrawRange {
+    pub(crate) fn new(
+        geometry: NotefieldGeometry,
+        visual: NotefieldVisualState,
+        mini: f32,
+        zoom: f32,
+    ) -> Self {
+        // NoteField::CalcPixelsBeforeAndAfterTargets: signed, unrestricted
+        // amounts, a separately truncated Centered/Boomerang extension, and
+        // whole-pixel truncation only after Tilt and Mini scale the range.
+        let scale = (1.0 + 0.5 * visual.perspective.tilt.abs()) * (1.0 + mini.abs());
+        let centered_boomerang = visual.scroll.centered * visual.accel.boomerang;
+        let extension = (centered_boomerang * (-geometry.screen_height / 2.0)) as i32;
+        let after = -(geometry.draw_distance_after_targets as i32 as f32)
+            * (1.0 + visual.visual.draw_size_back)
+            + extension as f32;
+        let before =
+            geometry.draw_distance_before_targets as i32 as f32 * (1.0 + visual.visual.draw_size);
+        Self {
+            after: (after * scale) as i32 as f32,
+            before: (before * scale) as i32 as f32,
+            zoom,
+        }
+    }
+
+    pub(crate) fn contains(self, travel: f32) -> bool {
+        let native_travel = travel / self.zoom;
+        self.after <= native_travel && native_travel <= self.before
+    }
+
+    pub(crate) fn hold_visible(
+        self,
+        head: f32,
+        tail: f32,
+        head_peak: bool,
+        tail_peak: bool,
+    ) -> bool {
+        self.contains(head)
+            || self.contains(tail)
+            || (head / self.zoom <= self.after && self.before <= tail / self.zoom)
+            || (head_peak && !tail_peak)
+    }
+
+    pub(crate) fn bounds(self) -> Option<[f32; 2]> {
+        if self.after > self.before || !self.zoom.is_finite() || self.zoom == 0.0 {
+            return None;
+        }
+        let a = self.after * self.zoom;
+        let b = self.before * self.zoom;
+        Some([a.min(b), a.max(b)])
+    }
+
+    pub(crate) fn lane_bounds(self, receptor_y: f32, dir: f32, offset: f32) -> [f32; 2] {
+        let a = receptor_y + self.after * self.zoom * dir + offset;
+        let b = receptor_y + self.before * self.zoom * dir + offset;
+        [a.min(b), a.max(b)]
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CompiledSplineBlend<'a> {
+    other: deadsync_gameplay::SongLuaPositionSpline<'a>,
+    fraction: f32,
+}
+
+impl CompiledSplineBlend<'_> {
+    fn sample(
+        self,
+        spline: deadsync_gameplay::SongLuaPositionSpline<'_>,
+        current_beat: f32,
+        note_beat: f32,
+    ) -> ([f32; 3], [f32; 3]) {
+        // Interpolate captured coefficients as CubicSplineN::weighted_average
+        // does, then use NoteDisplay's draw beat. Evaluating both curves
+        // at that same beat is algebraically equivalent and avoids allocating
+        // an interpolated spline. Blending poses at two capture beats instead
+        // replaces the curve with chords and changes its motion each sample.
+        let a = spline.sample(current_beat, note_beat);
+        let b = self.other.sample(current_beat, note_beat);
+        (
+            std::array::from_fn(|axis| a.0[axis] + (b.0[axis] - a.0[axis]) * self.fraction),
+            std::array::from_fn(|axis| a.1[axis] + (b.1[axis] - a.1[axis]) * self.fraction),
+        )
+    }
+
+    fn receptor(
+        self,
+        spline: deadsync_gameplay::SongLuaPositionSpline<'_>,
+        current_beat: f32,
+    ) -> [f32; 3] {
+        let a = spline.receptor(current_beat);
+        let b = self.other.receptor(current_beat);
+        std::array::from_fn(|axis| a[axis] + (b[axis] - a[axis]) * self.fraction)
+    }
+}
+
 /// Purely prepared composition state consumed by actor emission.
 pub struct PreparedNotefield<'a, S> {
     pub frame_plan: NotefieldFramePlan,
     pub field: FieldLayout,
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
+    pub arrow_effect_time_s: f32,
     pub current_time_s: f32,
     pub current_beat: f32,
     pub is_in_delay: bool,
     pub mini: f32,
-    pub receptor_alpha: f32,
+    pub(crate) draw_range: NoteDrawRange,
+    pub receptor_alphas: [f32; MAX_COLS],
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
+    pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub(crate) column_position_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
+    pub(crate) column_zoom_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
+    // Resolved once for each lane by prepare_notefield, valid for this frame.
+    pub(crate) column_spline_receptors: [[f32; 3]; MAX_COLS],
+    pub spline_origin_y: f32,
     pub column_zooms: [f32; MAX_COLS],
     pub column_rotations_deg: [f32; MAX_COLS],
     pub notes: Option<PreparedNotefieldNotes<'a, S>>,
+}
+
+impl<S> PreparedNotefield<'_, S> {
+    pub(crate) fn spline_sample(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
+        let spline = self.column_position_splines[col];
+        // SetPoint writes move the receptor immediately. Interpolating its
+        // pinned point can invent a sweep across the field during a teleport.
+        // Held heads and the first body row must retain that same anchor.
+        if beat == self.current_beat {
+            return spline.sample(self.current_beat, beat);
+        }
+        self.column_position_blends[col].map_or_else(
+            || spline.sample(self.current_beat, beat),
+            |blend| blend.sample(spline, self.current_beat, beat),
+        )
+    }
+
+    pub(crate) fn spline_position(&self, col: usize, beat: f32, base: [f32; 3]) -> [f32; 3] {
+        let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return base;
+        }
+        if spline.enabled && spline.absolute {
+            let position = self.spline_sample(col, beat).0;
+            [
+                self.field.playfield_center_x + position[0] * self.field_zoom,
+                self.spline_origin_y + position[1] * self.field_zoom,
+                position[2] * self.field_zoom,
+            ]
+        } else {
+            let offset = self.spline_offsets(col, beat).0;
+            std::array::from_fn(|axis| base[axis] + offset[axis])
+        }
+    }
+
+    /// Resolve hold position and direction from a single spline evaluation.
+    pub(crate) fn spline_path(
+        &self,
+        col: usize,
+        beat: f32,
+        base: [f32; 3],
+    ) -> ([f32; 3], [f32; 3]) {
+        let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return (base, [0.0; 3]);
+        }
+        if spline.enabled && spline.absolute {
+            let (position, derivative) = self.spline_sample(col, beat);
+            (
+                [
+                    self.field.playfield_center_x + position[0] * self.field_zoom,
+                    self.spline_origin_y + position[1] * self.field_zoom,
+                    position[2] * self.field_zoom,
+                ],
+                derivative,
+            )
+        } else {
+            let (offset, derivative) = self.spline_offsets(col, beat);
+            (
+                std::array::from_fn(|axis| base[axis] + offset[axis]),
+                derivative,
+            )
+        }
+    }
+
+    pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
+        let spline = self.column_zoom_splines[col];
+        if spline.enabled {
+            let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+                blend.sample(spline, self.current_beat, beat).0[0]
+            } else {
+                spline.sample(self.current_beat, beat).0[0]
+            };
+            zoom + if spline.absolute { 0.0 } else { base }
+        } else {
+            base
+        }
+    }
+
+    pub(crate) fn spline_receptor_zoom(&self, col: usize, base: f32) -> f32 {
+        let spline = self.column_zoom_splines[col];
+        if !spline.enabled {
+            return base;
+        }
+        let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+            blend.receptor(spline, self.current_beat)[0]
+        } else {
+            spline.receptor(self.current_beat)[0]
+        };
+        zoom + if spline.absolute { 0.0 } else { base }
+    }
+
+    pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
+        if !self.column_position_splines[col].enabled && self.column_position_blends[col].is_none() {
+            return ([0.0; 3], [0.0; 3]);
+        }
+        let (position, derivative) = self.spline_sample(col, beat);
+        let receptor = self.column_spline_receptors[col];
+        (
+            std::array::from_fn(|axis| {
+                (position[axis] - if axis < 2 { receptor[axis] } else { 0.0 }) * self.field_zoom
+            }),
+            derivative,
+        )
+    }
 }
 
 /// Resolve canonical layout and travel inputs without reading clocks or globals.
@@ -294,17 +531,146 @@ pub fn prepare_notefield<'a, S>(
         .scroll_speed
         .unwrap_or(request.geometry.scroll_speed);
     let current_time_s = song_time_ns_to_seconds(request.chart.visible_music_time_ns);
-    let [
-        column_x_offsets,
-        column_y_offsets,
-        column_zooms,
-        column_rotations_deg,
-    ] = song_lua_column_transforms(
+    let (
+        [
+            mut column_x_offsets,
+            mut column_y_offsets,
+            column_zooms,
+            column_rotations_deg,
+        ],
+        mut column_position_splines,
+    ) = song_lua_column_transforms(
         request.song_lua.column_offsets,
         frame_plan.num_cols,
         current_time_s,
     );
-    let field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
+    let mut column_zoom_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
+    let mut column_position_blends = [None; MAX_COLS];
+    let mut column_zoom_blends = [None; MAX_COLS];
+    for track in request.song_lua.column_splines {
+        if track.column >= frame_plan.num_cols {
+            continue;
+        }
+        let index = track
+            .frames
+            .partition_point(|frame| frame.second + track.time_offset <= current_time_s + 1e-5);
+        if let Some(frame) = index.checked_sub(1).map(|index| &track.frames[index]) {
+            if let Some(position) = &frame.position {
+                column_position_splines[track.column] = position.view();
+            }
+            column_zoom_splines[track.column] = frame
+                .zoom
+                .as_ref()
+                .map_or_else(Default::default, |zoom| zoom.view());
+            if let Some(next) = track.frames.get(index) {
+                let span = next.second - frame.second;
+                // Only adjacent reference samples describe continuous motion.
+                // Sparse constant intervals and enable/disable boundaries keep
+                // their authored step instead of anticipating a later change.
+                if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001 {
+                    let elapsed = (current_time_s - track.time_offset - frame.second).clamp(0.0, span);
+                    let adjacent = |span: f32| {
+                        span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
+                    };
+                    let previous = index
+                        .checked_sub(2)
+                        .map(|at| &track.frames[at])
+                        .filter(|previous| adjacent(frame.second - previous.second));
+                    let following = track
+                        .frames
+                        .get(index + 1)
+                        .filter(|following| adjacent(following.second - next.second));
+                    // A jump between two plateaus is a discrete point write,
+                    // not continuous motion starting from rest. Keep the old
+                    // plateau and the other components' prior slope until the
+                    // new sample. Blending across the jump leaks the new bend
+                    // into incoming notes and hold caps a frame early.
+                    let point_step = previous.zip(following).is_some_and(|(previous, following)| {
+                        let (Some(a), Some(b), Some(c), Some(d)) = (
+                            &previous.position, &frame.position,
+                            &next.position, &following.position,
+                        ) else {
+                            return false;
+                        };
+                        let compatible = |other: &deadsync_gameplay::SongLuaSplineData| {
+                            b.beats_per_t == other.beats_per_t
+                                && b.receptor_t == other.receptor_t
+                                && b.subtract_song_beat == other.subtract_song_beat
+                                && b.looping == other.looping
+                                && b.coefficients.len() == other.coefficients.len()
+                        };
+                        [a, c, d].into_iter().all(compatible)
+                            && (0..3).any(|axis| {
+                                a.coefficients.iter().zip(b.coefficients.iter())
+                                    .all(|(a, b)| a[axis] == b[axis])
+                                    && c.coefficients.iter().zip(d.coefficients.iter())
+                                        .all(|(c, d)| c[axis] == d[axis])
+                                    && b.coefficients.iter().zip(c.coefficients.iter())
+                                        .any(|(b, c)| b[axis] != c[axis])
+                            })
+                    });
+                    let (other, fraction) = if point_step {
+                        let previous = previous.unwrap();
+                        (previous, -elapsed / (frame.second - previous.second))
+                    } else {
+                        (next, elapsed / span)
+                    };
+                    for (spline, other_spline, blend) in [
+                        (
+                            &frame.position,
+                            &other.position,
+                            &mut column_position_blends[track.column],
+                        ),
+                        (
+                            &frame.zoom,
+                            &other.zoom,
+                            &mut column_zoom_blends[track.column],
+                        ),
+                    ] {
+                        if let (Some(spline), Some(other_spline)) = (spline, other_spline)
+                            && spline.beats_per_t == other_spline.beats_per_t
+                            && spline.receptor_t == other_spline.receptor_t
+                            && spline.subtract_song_beat == other_spline.subtract_song_beat
+                            && spline.looping == other_spline.looping
+                            && spline.coefficients.len() == other_spline.coefficients.len()
+                        {
+                            *blend = Some(CompiledSplineBlend {
+                                other: other_spline.view(),
+                                fraction,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut column_spline_receptors = [[0.0; 3]; MAX_COLS];
+    for col in 0..frame_plan.num_cols {
+        let spline = column_position_splines[col];
+        if !spline.enabled {
+            continue;
+        }
+        let receptor = spline.receptor(request.chart.visible_beat);
+        column_spline_receptors[col] = receptor;
+        if !column_position_splines[col].absolute {
+            column_x_offsets[col] += receptor[0] * field_zoom;
+            column_y_offsets[col] += receptor[1];
+        }
+    }
+    let mut field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
+    // Player::Load positions NoteField at the midpoint of the two native
+    // receptor metrics. Absolute spline coordinates retain that local origin.
+    let spline_origin_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
+    for (col, spline) in column_position_splines
+        .iter()
+        .enumerate()
+        .take(frame_plan.num_cols)
+    {
+        if spline.enabled && spline.absolute {
+            field.column_receptor_ys[col] =
+                spline_origin_y + column_spline_receptors[col][1] * field_zoom;
+        }
+    }
     let mini = effective_mini_value(
         request.visual.mini_percent,
         request.options.fallback_mini_percent,
@@ -314,23 +680,62 @@ pub fn prepare_notefield<'a, S>(
         request.geometry.screen_height,
         request.visual.perspective.tilt,
     );
-    let notes = prepare_notes(request, frame_plan, field_zoom, scroll_speed, effect_height)?;
+    let draw_range = NoteDrawRange::new(request.geometry, request.visual, mini, field_zoom);
+    let arrow_effect_time_s = mod_timer_time(
+        request.visual.visual,
+        request.arrow_effect_time_s,
+        request.visual.current_display_beat,
+        request.music_time_s,
+    );
+    let notes = prepare_notes(
+        request,
+        frame_plan,
+        field_zoom,
+        scroll_speed,
+        effect_height,
+        draw_range,
+        arrow_effect_time_s,
+    )?;
     Some(PreparedNotefield {
         frame_plan,
         field,
         field_zoom,
         scroll_speed,
         current_time_s,
+        arrow_effect_time_s,
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
-        receptor_alpha: (1.0 - request.visual.visibility.dark).clamp(0.0, 1.0),
+        draw_range,
+        // ITGmania adds global and column Dark before clamping receptor opacity.
+        receptor_alphas: request
+            .visual
+            .visibility
+            .dark_cols
+            .map(|dark| (1.0 - request.visual.visibility.dark - dark).clamp(0.0, 1.0)),
         blind_active: request.visual.visibility.blind > f32::EPSILON,
         column_x_offsets,
+        column_position_splines,
+        column_zoom_splines,
+        column_position_blends,
+        column_zoom_blends,
+        column_spline_receptors,
+        spline_origin_y,
         column_zooms,
         column_rotations_deg,
         notes,
     })
+}
+
+// ArrowEffects::GetTime uses global GAMESTATE clocks, adds the offset first,
+// computes in double precision, and rounds once on return to float.
+fn mod_timer_time(visual: VisualEffects, game: f64, beat: f32, song: f32) -> f32 {
+    let time = match visual.mod_timer_type {
+        deadsync_gameplay::ModTimerType::Game | deadsync_gameplay::ModTimerType::Default => game,
+        deadsync_gameplay::ModTimerType::Beat => f64::from(beat),
+        deadsync_gameplay::ModTimerType::Song => f64::from(song),
+    };
+    ((time + f64::from(visual.mod_timer_offset)) * (1.0 + f64::from(visual.mod_timer_mult))) as f32
 }
 
 fn prepare_field<S>(
@@ -347,6 +752,7 @@ fn prepare_field<S>(
         num_players: request.geometry.num_players,
         single_style: request.geometry.single_style,
         double_style: request.geometry.double_style,
+        shared_sides: request.geometry.shared_sides,
         center_one_player: request.geometry.center_one_player,
         screen_width: request.geometry.screen_width,
         screen_center_x: request.geometry.screen_center_x,
@@ -384,6 +790,8 @@ fn prepare_notes<'a, S>(
     field_zoom: f32,
     scroll_speed: ScrollSpeedSetting,
     effect_height: f32,
+    draw_range: NoteDrawRange,
+    arrow_effect_time_s: f32,
 ) -> Option<Option<PreparedNotefieldNotes<'a, S>>> {
     let Some(base) = request.noteskin.base else {
         return Some(None);
@@ -406,6 +814,13 @@ fn prepare_notes<'a, S>(
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
+    let mut tornado_z_bounds = [TornadoBounds::default(); MAX_COLS];
+    if request.visual.visual.tornado_z != 0.0 {
+        crate::transforms::compute_tornado_z_bounds(
+            &col_offsets[..num_cols],
+            &mut tornado_z_bounds[..num_cols],
+        );
+    }
     let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
     compute_tornado_lane_caches(
         &col_offsets[..num_cols],
@@ -418,9 +833,11 @@ fn prepare_notes<'a, S>(
         &request.visual.visual.move_x_cols,
         &mut move_x_offsets[..num_cols],
     );
-    let bumpy_frame_cache = bumpy_frame_cache(
+    let note_depth_frame_cache = note_depth_frame_cache(
         request.visual.visual.bumpy_offset,
         request.visual.visual.bumpy_period,
+        arrow_effect_time_s,
+        request.geometry.screen_height,
     );
     let tiny_spacing_scale = tiny_spacing_scale(request.visual.visual.tiny);
     let mine = request.noteskin.mine.unwrap_or(base);
@@ -438,14 +855,18 @@ fn prepare_notes<'a, S>(
         mine.note_display_metrics.part_animation[NoteAnimPart::Mine as usize],
         mine.part_animation_is_beat_based[NoteAnimPart::Mine as usize],
     );
+    let [after, before] = draw_range.bounds().unwrap_or([0.0; 2]);
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
             boost: request.visual.accel.boost,
             brake: request.visual.accel.brake,
             wave: request.visual.accel.wave,
+            wave_period: request.visual.accel.wave_period,
+            parabola_y: request.visual.visual.parabola_y,
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
+            expand_period: request.visual.accel.expand_period,
         },
         random_speed: request.visual.visual.random_speed,
         stage_seed: request.geometry.stage_seed,
@@ -456,15 +877,17 @@ fn prepare_notes<'a, S>(
         scroll_reference_bpm: request.chart.scroll_reference_bpm,
         music_rate: request.chart.music_rate,
         edit_beat_spacing: request.view.edit_beat_bars,
-        draw_distance_after_targets: request.geometry.draw_distance_after_targets,
-        draw_distance_before_targets: request.geometry.draw_distance_before_targets,
+        draw_distance_after_targets: -after,
+        draw_distance_before_targets: before,
         field_zoom,
-        elapsed_screen_s: request.visual.elapsed_screen_s,
+        expand_seconds: request.visual.expand_seconds,
         effect_height,
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,
-        arrow_effect_time_s: request.arrow_effect_time_s,
+        arrow_effect_time_s,
         lane_tipsy: request.visual.visual.tipsy,
+        lane_tipsy_offset: request.visual.visual.tipsy_offset,
+        lane_tipsy_speed: request.visual.visual.tipsy_speed,
         lane_move_y: &request.visual.visual.move_y_cols,
     });
     let measure_column_xs =
@@ -475,13 +898,23 @@ fn prepare_notes<'a, S>(
         receptor: request.noteskin.receptor.unwrap_or(base),
         tap_explosion: request.noteskin.tap_explosion,
         target_arrow_px: ScrollSpeedSetting::ARROW_SPACING * field_zoom,
-        beat_factor: beat_factor(request.chart.visible_beat),
+        beat_factor: beat_factor(
+            request.chart.visible_beat,
+            request.visual.visual.beat_offset,
+            request.visual.visual.beat_mult,
+        ),
+        beat_y_factor: beat_factor(
+            request.chart.visible_beat,
+            request.visual.visual.beat_y_offset,
+            request.visual.visual.beat_y_mult,
+        ),
         col_offsets,
         invert_distances,
         tornado_bounds,
+        tornado_z_bounds,
         tornado_lane_caches,
         move_x_offsets,
-        bumpy_frame_cache,
+        note_depth_frame_cache,
         tiny_spacing_scale,
         part_phase_caches,
         mine_phase_cache,
@@ -508,35 +941,6 @@ fn column_reverse_percents(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_
     out
 }
 
-fn song_lua_column_transforms(
-    windows: &[SongLuaColumnOffsetWindowRuntime],
-    num_cols: usize,
-    current_time_s: f32,
-) -> [[f32; MAX_COLS]; 4] {
-    let active_cols = num_cols.min(MAX_COLS);
-    let mut x_offsets = [0.0; MAX_COLS];
-    let mut y_offsets = [0.0; MAX_COLS];
-    let mut zooms = [1.0; MAX_COLS];
-    let mut rotations_deg = [0.0; MAX_COLS];
-    for window in windows {
-        if window.column >= active_cols {
-            continue;
-        }
-        let Some(value) = song_lua_column_offset_window_value(window, current_time_s) else {
-            continue;
-        };
-        match window.target {
-            SongLuaColumnTransformTarget::OffsetX => x_offsets[window.column] = value,
-            SongLuaColumnTransformTarget::OffsetY => y_offsets[window.column] = value,
-            SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
-            SongLuaColumnTransformTarget::RotationZ => {
-                rotations_deg[window.column] = value.to_degrees();
-            }
-        }
-    }
-    [x_offsets, y_offsets, zooms, rotations_deg]
-}
-
 const fn resolved_frame_features(
     mut features: NotefieldFrameFeatures,
     view: ViewOverride,
@@ -552,6 +956,112 @@ const fn resolved_frame_features(
 mod tests {
     use super::*;
     use crate::MeasureLineMode;
+
+    #[test]
+    fn mod_timer_matches_native_get_time_bits() {
+        // Golden bits from the unmodified ArrowEffects::GetTime compiled with
+        // MSVC /O2. Large game times detect premature float conversion.
+        let cases: [(u8, f64, f32, f32, f32, f32, u32); 20] = [
+            (0, 17.125, 3.25, -0.5, 0.0, 0.0, 0x41890000u32),
+            (1, 17.125, 3.25, -0.5, 0.0, 0.0, 0x40500000u32),
+            (2, 17.125, 3.25, -0.5, 0.0, 0.0, 0xbf000000u32),
+            (3, 17.125, 3.25, -0.5, 0.0, 0.0, 0x41890000u32),
+            (
+                0,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x44cdaa9au32,
+            ),
+            (
+                1,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x41b5511du32,
+            ),
+            (
+                2,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x414da99du32,
+            ),
+            (
+                3,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x44cdaa9au32,
+            ),
+            (
+                0,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x40000000u32,
+            ),
+            (
+                1,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x3f80181du32,
+            ),
+            (
+                2,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x3f7ffffcu32,
+            ),
+            (
+                3,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x40000000u32,
+            ),
+            (0, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xceb09b3au32),
+            (1, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0x4339d000u32),
+            (2, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xbf400000u32),
+            (3, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xceb09b3au32),
+            (0, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (1, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (2, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (3, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+        ];
+        for (mode, game, beat, song, mult, offset, bits) in cases {
+            let visual = VisualEffects {
+                mod_timer_type: deadsync_gameplay::ModTimerType::from_value(f32::from(mode))
+                    .expect("valid native mode"),
+                mod_timer_mult: mult,
+                mod_timer_offset: offset,
+                ..Default::default()
+            };
+            assert_eq!(
+                mod_timer_time(visual, game, beat, song).to_bits(),
+                bits,
+                "mode {mode}, game {game}"
+            );
+        }
+    }
 
     fn features() -> NotefieldFrameFeatures {
         NotefieldFrameFeatures {
@@ -649,7 +1159,8 @@ mod tests {
             ),
         ];
 
-        let [x_offsets, y_offsets, zooms, rotations] = song_lua_column_transforms(&windows, 4, 2.0);
+        let ([x_offsets, y_offsets, zooms, rotations], _) =
+            song_lua_column_transforms(&windows, 4, 2.0);
         assert!((x_offsets[1] - 32.0).abs() <= f32::EPSILON);
         assert!((zooms[1] - 0.5).abs() <= f32::EPSILON);
         assert!((rotations[1] - 180.0).abs() <= 0.001);
@@ -690,7 +1201,7 @@ mod tests {
                 5.1,
                 f32::NAN,
             ] {
-                let actual = song_lua_column_transforms(&windows, num_cols, time);
+                let (actual, _) = song_lua_column_transforms(&windows, num_cols, time);
                 for (target_index, target) in targets.into_iter().enumerate() {
                     for column in 0..MAX_COLS {
                         let expected = windows

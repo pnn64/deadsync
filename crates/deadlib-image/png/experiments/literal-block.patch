@@ -1,0 +1,139 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..63c11f278 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -243,6 +243,79 @@ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+     ))
+ }
+ 
++// Keep the Huffman tables and coded-block loop out of stored-block decoding.
++#[inline(never)]
++fn inflate_codes(
++    bits: &mut Bits<'_>,
++    output: &mut Vec<u8>,
++    fixed_codes: bool,
++    window: usize,
++    limit: usize,
++) -> Result<(), Error> {
++    let (lit, dist) = if fixed_codes { fixed() } else { dynamic(bits)? };
++    loop {
++        match lit.decode(bits)? {
++            literal @ 0..=255 => {
++                if output.len() == limit {
++                    return Err(Error::LimitExceeded);
++                }
++                if output.len() == output.capacity() {
++                    reserve(output, 1)?;
++                }
++                output.push(literal as u8);
++                let mut room = (limit - output.len()).min(output.capacity() - output.len());
++                let mut word = bits.word;
++                let mut count = bits.count;
++                // Append complete primary literals from prefetched
++                // bits, without a refill or capacity growth here.
++                while room != 0 && count >= 9 {
++                    let entry = lit.fast[(word & 511) as usize];
++                    if !(1..4096).contains(&entry) {
++                        break;
++                    }
++                    let n = (entry & 15) as u8;
++                    output.push((entry >> 4) as u8);
++                    word >>= n;
++                    count -= n;
++                    room -= 1;
++                }
++                bits.word = word;
++                bits.count = count;
++            }
++            256 => break,
++            symbol @ 257..=285 => {
++                let index = symbol - 257;
++                let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
++                let symbol = dist.decode(bits)?;
++                if symbol >= 30 {
++                    return Err(Error::Invalid("reserved distance symbol"));
++                }
++                let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
++                if distance > output.len() || distance > window {
++                    return Err(Error::Invalid("distance outside history window"));
++                }
++                if len > limit.saturating_sub(output.len()) {
++                    return Err(Error::LimitExceeded);
++                }
++                reserve(output, len)?;
++                let start = output.len() - distance;
++                if distance == 1 {
++                    output.resize(output.len() + len, output[start]);
++                } else {
++                    let mut left = len;
++                    while left != 0 {
++                        let count = (output.len() - start).min(left);
++                        output.extend_from_within(start..start + count);
++                        left -= count;
++                    }
++                }
++            }
++            _ => return Err(Error::Invalid("reserved literal symbol")),
++        }
++    }
++    Ok(())
++}
++
+ /// Decode exactly one zlib stream, rejecting trailing data. `limit` bounds output.
+ pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+     let (output, used) = decompress_prefix(input, limit)?;
+@@ -291,53 +364,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             output.extend_from_slice(bits.input.get(bits.pos..end).ok_or(Error::Truncated)?);
+             bits.pos = end;
+         } else if kind == 1 || kind == 2 {
+-            let (lit, dist) = if kind == 1 {
+-                fixed()
+-            } else {
+-                dynamic(&mut bits)?
+-            };
+-            loop {
+-                match lit.decode(&mut bits)? {
+-                    literal @ 0..=255 => {
+-                        if output.len() == limit {
+-                            return Err(Error::LimitExceeded);
+-                        }
+-                        if output.len() == output.capacity() {
+-                            reserve(&mut output, 1)?;
+-                        }
+-                        output.push(literal as u8);
+-                    }
+-                    256 => break,
+-                    symbol @ 257..=285 => {
+-                        let index = symbol - 257;
+-                        let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
+-                        let symbol = dist.decode(&mut bits)?;
+-                        if symbol >= 30 {
+-                            return Err(Error::Invalid("reserved distance symbol"));
+-                        }
+-                        let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
+-                        if distance > output.len() || distance > window {
+-                            return Err(Error::Invalid("distance outside history window"));
+-                        }
+-                        if len > limit.saturating_sub(output.len()) {
+-                            return Err(Error::LimitExceeded);
+-                        }
+-                        reserve(&mut output, len)?;
+-                        let start = output.len() - distance;
+-                        if distance == 1 {
+-                            output.resize(output.len() + len, output[start]);
+-                        } else {
+-                            let mut left = len;
+-                            while left != 0 {
+-                                let count = (output.len() - start).min(left);
+-                                output.extend_from_within(start..start + count);
+-                                left -= count;
+-                            }
+-                        }
+-                    }
+-                    _ => return Err(Error::Invalid("reserved literal symbol")),
+-                }
+-            }
++            inflate_codes(&mut bits, &mut output, kind == 1, window, limit)?;
+         } else {
+             return Err(Error::Invalid("reserved block type"));
+         }

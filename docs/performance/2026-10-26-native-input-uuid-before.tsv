@@ -1,0 +1,13 @@
+run	stage	workload	cycles_per_op	ns_per_op	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	sha256
+0	baseline	native/uuid/len=0	171.65	77.4	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+0	baseline	native/uuid/len=8	1444.09	657.1	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+0	baseline	native/uuid/len=32	7761.52	3543.9	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+0	baseline	native/uuid/len=96	31452.15	14357.9	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+0	baseline	native/uuid/len=256	97170.67	44343.0	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+0	baseline	native/uuid/len=1024	407101.17	185798.6	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=0	171.43	77.4	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=8	1440.14	655.3	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=32	7720.04	3520.2	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=96	31278.97	14272.1	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=256	97173.97	44348.2	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31
+1	baseline	native/uuid/len=1024	407636.3	186089.0	0	0	0	0	0	0	4ea89aa1d560e0625051a55b34f449b91db5adcb6030ec58fc849ef762babe31

@@ -1,0 +1,51 @@
+{
+  "repository": "https://github.com/saucecontrol/Compact-ICC-Profiles",
+  "commit": "bdd84663061bc4ae95ca70decff54f581e27f702",
+  "files": {
+    "sRGB-v2-magic.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sRGB-v2-magic.icc",
+      "sha256": "af4efe28f6d311799865f325ba39184a2e978b113ca74124d60af7de22b105f4",
+      "bytes": 736
+    },
+    "sRGB-v2-micro.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sRGB-v2-micro.icc",
+      "sha256": "0a8a33aea66a6f154a5642ebe168ef287e73265d9f7b51c42a45e6eedbacda7a",
+      "bytes": 456
+    },
+    "sRGB-v2-nano.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sRGB-v2-nano.icc",
+      "sha256": "72c1355ac9fa7c7e626e1faa30bd4ef89e57a3d039df249f9ca3f0aed98b3c58",
+      "bytes": 410
+    },
+    "sRGB-v4.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sRGB-v4.icc",
+      "sha256": "c56e1685d888f5edb92fe07f2750f387f8fe8e91b32ff8fb0b56bfbbb9458353",
+      "bytes": 480
+    },
+    "sGrey-v2-magic.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sGrey-v2-magic.icc",
+      "sha256": "4110169287e5f1b5149ca9f1da1814d32943905bba8030e849d1a3b729a19481",
+      "bytes": 616
+    },
+    "sGrey-v2-micro.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sGrey-v2-micro.icc",
+      "sha256": "010676406dbfc641776154fd3603adef7bace317a26027a33066891975621820",
+      "bytes": 336
+    },
+    "sGrey-v2-nano.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sGrey-v2-nano.icc",
+      "sha256": "ac2805b9e07b6fa3ba7406aa48e84d87041097da66220cc2a385e17bb2893cc1",
+      "bytes": 290
+    },
+    "sGrey-v4.icc": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/profiles/sGrey-v4.icc",
+      "sha256": "00c0f94e09127520a17dc0e1d9264b5702081d96dbdb1549ee88e3631ce42a9d",
+      "bytes": 360
+    },
+    "license": {
+      "url": "https://raw.githubusercontent.com/saucecontrol/Compact-ICC-Profiles/bdd84663061bc4ae95ca70decff54f581e27f702/license",
+      "sha256": "469d87b5fa48f8aaf69e25f4fcac3a309c97dbb7d561b917638abdb640e004d9",
+      "bytes": 6552
+    }
+  }
+}

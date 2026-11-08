@@ -199,6 +199,7 @@ mod tests {
 
     fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
         Note {
+            participant: None,
             beat: 0.0,
             quantization_idx: 0,
             column,

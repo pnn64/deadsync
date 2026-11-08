@@ -1,0 +1,87 @@
+diff --git a/crates/deadlib-assets/src/decode.rs b/crates/deadlib-assets/src/decode.rs
+index 128035c5a..13c8bb3a3 100644
+--- a/crates/deadlib-assets/src/decode.rs
++++ b/crates/deadlib-assets/src/decode.rs
+@@ -230 +229,0 @@ pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
+-    drop(input);
+@@ -232 +231 @@ pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
+-        let reader = gif_reader(path)?;
++        let reader = gif_reader_from_reader(image_reader(input, path)?)?;
+@@ -237,0 +237 @@ pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
++    drop(input);
+@@ -276,0 +277 @@ fn gif_error(error: gif::DecodingError) -> image::ImageError {
++#[cfg(test)]
+@@ -1075,0 +1077,3 @@ mod open_seek;
++
++#[cfg(test)]
++mod metadata_perf;
+diff --git a/crates/deadlib-assets/src/lib.rs b/crates/deadlib-assets/src/lib.rs
+index cf0b58e8e..911df61e6 100644
+--- a/crates/deadlib-assets/src/lib.rs
++++ b/crates/deadlib-assets/src/lib.rs
+@@ -27,0 +28,3 @@ mod path_scan_perf;
++#[cfg(test)]
++mod texture_hint_perf;
++
+@@ -125,12 +128,13 @@ fn texture_hint_flags(bytes: &[u8]) -> u16 {
+-        let (first, second) = match bytes[index].to_ascii_lowercase() {
+-            b'1' => (b"16bpp".as_slice(), HINT_16BPP),
+-            b'3' => (b"32bpp".as_slice(), HINT_32BPP),
+-            b'a' => (b"alphamap".as_slice(), HINT_ALPHAMAP),
+-            b'c' => (b"clamp".as_slice(), HINT_CLAMP),
+-            b'g' => (b"grayscale".as_slice(), HINT_GRAYSCALE),
+-            b'l' => (b"linear".as_slice(), HINT_LINEAR),
+-            b'm' => (b"mipmaps".as_slice(), HINT_MIPMAPS),
+-            b'p' => (b"point".as_slice(), HINT_POINT),
+-            b'r' => (b"repeat".as_slice(), HINT_REPEAT),
+-            b's' => (b"stretch".as_slice(), HINT_STRETCH),
+-            b'w' => (b"wrap".as_slice(), HINT_WRAP),
++        // Keep each needle constant so the compiler can compare packed bytes.
++        flags |= match bytes[index].to_ascii_lowercase() {
++            b'1' => u16::from(hint_starts_with(bytes, index, b"16bpp")) * HINT_16BPP,
++            b'3' => u16::from(hint_starts_with(bytes, index, b"32bpp")) * HINT_32BPP,
++            b'a' => u16::from(hint_starts_with(bytes, index, b"alphamap")) * HINT_ALPHAMAP,
++            b'c' => u16::from(hint_starts_with(bytes, index, b"clamp")) * HINT_CLAMP,
++            b'g' => u16::from(hint_starts_with(bytes, index, b"grayscale")) * HINT_GRAYSCALE,
++            b'l' => u16::from(hint_starts_with(bytes, index, b"linear")) * HINT_LINEAR,
++            b'm' => u16::from(hint_starts_with(bytes, index, b"mipmaps")) * HINT_MIPMAPS,
++            b'p' => u16::from(hint_starts_with(bytes, index, b"point")) * HINT_POINT,
++            b'r' => u16::from(hint_starts_with(bytes, index, b"repeat")) * HINT_REPEAT,
++            b's' => u16::from(hint_starts_with(bytes, index, b"stretch")) * HINT_STRETCH,
++            b'w' => u16::from(hint_starts_with(bytes, index, b"wrap")) * HINT_WRAP,
+@@ -138,4 +142,2 @@ fn texture_hint_flags(bytes: &[u8]) -> u16 {
+-                if hint_starts_with(bytes, index, b"dither") {
+-                    flags |= HINT_DITHER;
+-                }
+-                (b"doubleres".as_slice(), HINT_DOUBLERES)
++                (u16::from(hint_starts_with(bytes, index, b"dither")) * HINT_DITHER)
++                    | (u16::from(hint_starts_with(bytes, index, b"doubleres")) * HINT_DOUBLERES)
+@@ -144,4 +146,2 @@ fn texture_hint_flags(bytes: &[u8]) -> u16 {
+-                if hint_starts_with(bytes, index, b"nearest") {
+-                    flags |= HINT_NEAREST;
+-                }
+-                (b"nomipmaps".as_slice(), HINT_NOMIPMAPS)
++                (u16::from(hint_starts_with(bytes, index, b"nearest")) * HINT_NEAREST)
++                    | (u16::from(hint_starts_with(bytes, index, b"nomipmaps")) * HINT_NOMIPMAPS)
+@@ -149 +149 @@ fn texture_hint_flags(bytes: &[u8]) -> u16 {
+-            _ => continue,
++            _ => 0,
+@@ -151,3 +150,0 @@ fn texture_hint_flags(bytes: &[u8]) -> u16 {
+-        if hint_starts_with(bytes, index, first) {
+-            flags |= second;
+-        }
+@@ -372 +369,13 @@ pub fn texture_filename_has_multiframe_hint(filename: &str) -> bool {
+-            continue;
++            if i == bytes.len() {
++                break;
++            }
++            if bytes[i] != b' ' {
++                let Some(offset) = (if bytes.len() - i < 16 {
++                    bytes[i..].iter().position(|&byte| byte == b' ')
++                } else {
++                    memchr::memchr(b' ', &bytes[i..])
++                }) else {
++                    break;
++                };
++                i += offset;
++            }

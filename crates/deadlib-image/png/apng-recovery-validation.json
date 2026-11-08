@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-27",
+  "baseline_commit": "14f1cafad",
+  "production_change": "Explicit APNG recovery policy/event/diagnostic with continued static PNG validation; strict remains default. Frame inflater exact-length overrun classified as malformed frame data.",
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 45.691
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.049
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "crates/deadlib-image/png/fuzz/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.431
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "apng_recovery",
+        "libpng_static_fallback_known_answers_and_crc_policy",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 43.429
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "libpng",
+        "libpng_native_sample_conformance",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 20.659
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--example",
+        "seed_fuzz",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\png-apng-recovery-fresh-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 28.692
+    },
+    {
+      "argv": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 172.01
+    }
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "oracle_sha256": "7ed72b51b6e183b9f11220ee0dc22d12876e1f898a8827158c9851cc2a60a512",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "b5a01d3a00991e78df823911551ec2cd91386c552bf721cace3e1aa54c3d2594"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "a22f2e776caaf8ee303ca7ae3c9cce451b13ee7fd31e5e29aada5d7355a62420"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "67e57fcb942e9813593df8c3f36b98f23f215cc1ff99a31e87ad39a5cfa4d8ab"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "02f09191af54b0703c09a5d1a849d1f920201ab54ff9a660c1e4a916bbc9bc61"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "6392decf44c844cfa1594c2c8febc73becdb3e041f418e94bb5f708fe1418979"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "tests/apng_recovery.rs",
+      "sha256": "fc0ce5025283457dae8444c8b3a79f4917303a06c6fc655065db7192ed12ca20"
+    },
+    {
+      "path": "tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "c01cf2567544cf3c18c3a73b6fe9a8e91c8017b0cdddea000c57aeb98a50576e"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "8086f7cfbec9a7327d219372396122b5078d70e5ac0f684eb71ee1a252852454"
+    },
+    {
+      "path": "fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "07fd59e9332af020cf72f0e51a4ccea6b23932a3877e2d724b98e92e7cc4e493"
+    }
+  ],
+  "results": {
+    "release_tests": {
+      "passed": 96,
+      "failed": 0,
+      "optional_c_ignored": 10
+    },
+    "independent_offline_tests": {
+      "passed": 96,
+      "failed": 0,
+      "optional_c_ignored": 10,
+      "production_dependencies": [
+        "deadlib-image"
+      ]
+    },
+    "libpng_static_comparisons": {
+      "files": 3120,
+      "exact_native_defaults": 2880,
+      "strict_apng_crc_rejections": 240
+    },
+    "libpng_previous_native_matrix": 1061,
+    "independent_animation_fixtures": {
+      "valid": 60,
+      "faults": 3000,
+      "control_data_permutations": 120
+    },
+    "fresh_asan_manifest": "fuzz/reports/apng-recovery-source.json",
+    "fresh_asan_successful_input_executions": 60000,
+    "historical_successful_asan_input_executions": 470000,
+    "scope": "Explicit APNG recovery milestone. Complete conformance, external rendered-frame coverage and competitive performance remain open."
+  },
+  "final_hash_audit": {
+    "validation_source_entries": 26,
+    "asan_source_entries": 34,
+    "source_mismatches": 0,
+    "fresh_corpora_rehashed": [
+      "png_stream",
+      "decode",
+      "encode_stream"
+    ],
+    "instrumented_binaries_rehashed": [
+      "png_stream",
+      "decode",
+      "encode_stream"
+    ]
+  }
+}

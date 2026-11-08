@@ -1,0 +1,1335 @@
+{
+  "scope": "Seventeen independently spliced unused scalar-book setups, both sides of the reference extent guard, empty/nonempty and zero-dimensional books, and page-spanning setup. Header cap controls 2/17/224/242 and stream 0/16/64/80/56/120. Base packet granules from prior C golden (368 frames); over-cap setups are accepted only under the explicit native extent override. Other element caps remain active.",
+  "base_request_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+  "reference_binary_sha256": "ce9e8c877a0a1e73445f11657eb9ebed9bc047b8f1bc4a4aa3fa385e41aed102",
+  "probes": [
+    {
+      "case": 0,
+      "dimensions": 65535,
+      "entries": 127,
+      "style": "first",
+      "reference_setup_accepted": true,
+      "request_sha256": "97396e6deab87d1e1872814230682681ad2a27cc01d6c723e8a71d8e41a27825"
+    },
+    {
+      "case": 1,
+      "dimensions": 65535,
+      "entries": 127,
+      "style": "last",
+      "reference_setup_accepted": true,
+      "request_sha256": "5b23187c30541b5be429c2a5e8d85cca4cdbfe965d9ace54b6d3abe49bc69d1d"
+    },
+    {
+      "case": 2,
+      "dimensions": 65535,
+      "entries": 127,
+      "style": "empty",
+      "reference_setup_accepted": true,
+      "request_sha256": "f6750ea17801c0cb7e07c202fa8f22a813ca39e8dbe3b87ec6deeba6cfab2177"
+    },
+    {
+      "case": 3,
+      "dimensions": 65535,
+      "entries": 128,
+      "style": "first",
+      "reference_setup_accepted": true,
+      "request_sha256": "5db84d3bd9c1ccb975d8d829ad345e3940cedbdf04232162e0754d95d9c3d45b"
+    },
+    {
+      "case": 4,
+      "dimensions": 65535,
+      "entries": 128,
+      "style": "last",
+      "reference_setup_accepted": true,
+      "request_sha256": "6dddb651e74f2ccf3f3e424b8f8b2415eaf90b2231737de5303a8a705691d2bc"
+    },
+    {
+      "case": 5,
+      "dimensions": 65535,
+      "entries": 128,
+      "style": "empty",
+      "reference_setup_accepted": true,
+      "request_sha256": "f96044bec75429b7bacef44f569ce7548486f5ec827c61bf77c8d182aabc599c"
+    },
+    {
+      "case": 6,
+      "dimensions": 65535,
+      "entries": 255,
+      "style": "first",
+      "reference_setup_accepted": true,
+      "request_sha256": "a4fd1c56baf1d90081012f8d468dacba0a2429effa5f2100a200f676caefb181"
+    },
+    {
+      "case": 7,
+      "dimensions": 65535,
+      "entries": 255,
+      "style": "last",
+      "reference_setup_accepted": true,
+      "request_sha256": "41592cfa3e8f847b8ddd15855894e7cb81292cb1d1f0fc4939e3a9c0e2592c18"
+    },
+    {
+      "case": 8,
+      "dimensions": 65535,
+      "entries": 255,
+      "style": "empty",
+      "reference_setup_accepted": true,
+      "request_sha256": "c2201df81b4379932e7b20785c7a231b36701b41f683b6d9d802d3c72757ae51"
+    },
+    {
+      "case": 9,
+      "dimensions": 65535,
+      "entries": 256,
+      "style": "first",
+      "reference_setup_accepted": false,
+      "request_sha256": "70f59561ac893bb9b8fe6b8ef35d0b470decc98eaaa4bb2a26b243336613c8b9"
+    },
+    {
+      "case": 10,
+      "dimensions": 65535,
+      "entries": 256,
+      "style": "last",
+      "reference_setup_accepted": false,
+      "request_sha256": "99a2cab6acafbc614466d710faa289639dd0103bf413082113904f8c923a5de6"
+    },
+    {
+      "case": 11,
+      "dimensions": 65535,
+      "entries": 256,
+      "style": "empty",
+      "reference_setup_accepted": false,
+      "request_sha256": "564adc4883924e45ca7b30417b5ae982bf96a1b75c7d2b34eae97727b8ae68c0"
+    },
+    {
+      "case": 12,
+      "dimensions": 65535,
+      "entries": 257,
+      "style": "first",
+      "reference_setup_accepted": false,
+      "request_sha256": "5a993949a0673057a51e6ab85cfc7d1b4d1a7dd8b130ab88abbed43299b65be9"
+    },
+    {
+      "case": 13,
+      "dimensions": 65535,
+      "entries": 257,
+      "style": "last",
+      "reference_setup_accepted": false,
+      "request_sha256": "b60c132086c99b27e85345167e2d5f84bff84feda75857303154ec3b3a4b15ca"
+    },
+    {
+      "case": 14,
+      "dimensions": 65535,
+      "entries": 257,
+      "style": "empty",
+      "reference_setup_accepted": false,
+      "request_sha256": "c1b45bef1e276bbbf4681ffa8f686292a7e8dd9f853aa76980942eb62f0f4ccf"
+    },
+    {
+      "case": 15,
+      "dimensions": 8,
+      "entries": 524289,
+      "style": "first",
+      "reference_setup_accepted": true,
+      "request_sha256": "cda7cdc328801ff53b67562ce6d8329e1761a48416f8935e4d7e66e6bceefb95"
+    },
+    {
+      "case": 16,
+      "dimensions": 0,
+      "entries": 1,
+      "style": "first",
+      "reference_setup_accepted": true,
+      "request_sha256": "d5d90f1f0d68ec9f94ca251e988d9523217a1e51734abad810711ce19f7c27f7"
+    }
+  ],
+  "seeds": [
+    {
+      "path": "vorbis_headers/extent-0-control-2.bin",
+      "bytes": 196,
+      "sha256": "6e54502616a58a201edf0df3a6851fa9f3fcc084a2de269a5b07bd9f4fe469a0",
+      "case": 0,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-0-control-17.bin",
+      "bytes": 196,
+      "sha256": "304f1ba9764a45b363762927f406914bf77020c9edc53bbfda38a2a632c62161",
+      "case": 0,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-0-control-224.bin",
+      "bytes": 196,
+      "sha256": "640f3eb3e4d622be576310fb945be6166f51d61fc57e464f88ef9edfe4626cee",
+      "case": 0,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-0-control-242.bin",
+      "bytes": 196,
+      "sha256": "881e9e8780e37a3e3ee4596222d1480a1d2e5cee20ffcffe502042995f3a519f",
+      "case": 0,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-0.bin",
+      "bytes": 547,
+      "sha256": "2a54366503d0ed65586af1ab48e65c788b5fdf82aaec49e678a11a4dddbd2f8e",
+      "case": 0,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-16.bin",
+      "bytes": 547,
+      "sha256": "11cd1cb59740d726e1ff539c678077d5966db7908b3de12245febcd80aa1af29",
+      "case": 0,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-64.bin",
+      "bytes": 547,
+      "sha256": "998d60e8862288a42852fcb1ff39a2b09f1b931a1e07bb40171780a6f2c9a458",
+      "case": 0,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-80.bin",
+      "bytes": 547,
+      "sha256": "666e89bdb4cbbdf56a8a00d861f83fd012a51af81ca51a44656c3b242945cda5",
+      "case": 0,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-56.bin",
+      "bytes": 547,
+      "sha256": "623ea0d35df66a8f1aef01937e6c9332bb1853ec95ae62037720195f9312b96e",
+      "case": 0,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-0-control-120.bin",
+      "bytes": 547,
+      "sha256": "dabea458e5cfdb626bc141bb4c094833c11d69e60f9347519c853ef2130626f3",
+      "case": 0,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-1-control-2.bin",
+      "bytes": 196,
+      "sha256": "abfcad931caf1f6fed141fe293ef04337786ab7f7600707b1b5ce0851adbba62",
+      "case": 1,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-1-control-17.bin",
+      "bytes": 196,
+      "sha256": "f1fa6cbce77c96394fffa261be8276ce8ff3caad3928e8af96f91ba155e545a5",
+      "case": 1,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-1-control-224.bin",
+      "bytes": 196,
+      "sha256": "ae7477c2f748483a002b93a6850da76fb48e590f854bc9670fe843836595948b",
+      "case": 1,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-1-control-242.bin",
+      "bytes": 196,
+      "sha256": "e3d579508996b1741eb32d418a53b393bf17c29e43fc1db78dce223c86a6e999",
+      "case": 1,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-0.bin",
+      "bytes": 547,
+      "sha256": "8b4f947ec4820f52aaed30aab0693f83fe53d238d193c79a390f11937ccc65da",
+      "case": 1,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-16.bin",
+      "bytes": 547,
+      "sha256": "a5de8e1e2439dcc5841e6244efd46b1f9970a9c24d5db20a0a7c89385fead3dc",
+      "case": 1,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-64.bin",
+      "bytes": 547,
+      "sha256": "399cb680688a220ac8a9330a84b5e59ff3f85c84acb0cd639c2191152b053ea9",
+      "case": 1,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-80.bin",
+      "bytes": 547,
+      "sha256": "0bd43a21bfcd273351c56e169105afc35492e30868b92b40bdab7b075d2f242d",
+      "case": 1,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-56.bin",
+      "bytes": 547,
+      "sha256": "3c2d9079ba1b984190938c0e1829926d842535193f7daaabc43a04c53f2b5ea3",
+      "case": 1,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-1-control-120.bin",
+      "bytes": 547,
+      "sha256": "001607340220a4cb3df29edd4bbd6caa4b5140023a435f733c0b5c65011d9bac",
+      "case": 1,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-2-control-2.bin",
+      "bytes": 195,
+      "sha256": "e43c766397237d617b143b8df141b05775d6c4e06c34d9e615055413cf3ce6e2",
+      "case": 2,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-2-control-17.bin",
+      "bytes": 195,
+      "sha256": "88dbafdd909ffc51eb3f3c3a49dfc120ad9e74c7a182b4edacd80620caee2d23",
+      "case": 2,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-2-control-224.bin",
+      "bytes": 195,
+      "sha256": "fa543e05c834ebd57b106c2e8f1b7b7997edc853fe14536f4beed6cf0315279b",
+      "case": 2,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-2-control-242.bin",
+      "bytes": 195,
+      "sha256": "342682a72c5e45863b70fb8a1a09e1f5027d818fa89eff04767b9d99eb4ec25a",
+      "case": 2,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-0.bin",
+      "bytes": 546,
+      "sha256": "4f1c745aa712af4b7eadb2c4cbac126483a1b147eea50988c2d924b44c88eb1b",
+      "case": 2,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-16.bin",
+      "bytes": 546,
+      "sha256": "2fabcebd7e97804adbc5fa330f0befa5c86ca0c20ef0316634ac1ed389a6f6dd",
+      "case": 2,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-64.bin",
+      "bytes": 546,
+      "sha256": "a0165bd70161fd7ab785cdb445b00005b7c26a2e6e47433583b3432fc05c2708",
+      "case": 2,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-80.bin",
+      "bytes": 546,
+      "sha256": "9ccd102602d5252f2af67e817aad8405d5aece21072c35a89e47c4350f8a8994",
+      "case": 2,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-56.bin",
+      "bytes": 546,
+      "sha256": "903b80fe6deca15963dd171295247649b0793fc8786f26560a11aabab7817cd4",
+      "case": 2,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-2-control-120.bin",
+      "bytes": 546,
+      "sha256": "518cc7b26ce9a5ec87d76ab4fb2881294634685f6d4a6f741c16887de1af3a33",
+      "case": 2,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-3-control-2.bin",
+      "bytes": 196,
+      "sha256": "ce10cbfebcca64234c1ed042fc799fea282697d8d552135853dfa0e6b7dbef91",
+      "case": 3,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-3-control-17.bin",
+      "bytes": 196,
+      "sha256": "fb1cbf169d221276113f93a4a31cd834fc75dd0fdf407f7f19080c1ab172cc14",
+      "case": 3,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-3-control-224.bin",
+      "bytes": 196,
+      "sha256": "403bda92fec6e97a800b987538c1ae09c099f09942d7f2580725f8d0b01793e9",
+      "case": 3,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-3-control-242.bin",
+      "bytes": 196,
+      "sha256": "76291e1be961e32937e74cf2e73b4ea9786227a467e08950a0e0f5fd8179ae47",
+      "case": 3,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-0.bin",
+      "bytes": 547,
+      "sha256": "60687dd7617c9b29c97289f61168a7c6cbac07b52d701be87709e4de4355ccd7",
+      "case": 3,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-16.bin",
+      "bytes": 547,
+      "sha256": "a4d1a5ff746cf33acde7ca52be0094ece1a696f541dc99cddce79ed8e28ebc95",
+      "case": 3,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-64.bin",
+      "bytes": 547,
+      "sha256": "f472bc820f8fb87dad0546fc0a03a96a22a2ab0336840e5c722c9740777a1438",
+      "case": 3,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-80.bin",
+      "bytes": 547,
+      "sha256": "e5bcc61b595843e7c613207d4703388bf4bc475adf6fbf4fa616b248d073129e",
+      "case": 3,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-56.bin",
+      "bytes": 547,
+      "sha256": "913bcc187e237fe07204b160e6cb89f878d854bbb073aa30886e148f45d53ba4",
+      "case": 3,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-3-control-120.bin",
+      "bytes": 547,
+      "sha256": "bd5662689438fc58ba8b33b3b01e98bce7c03476fa48f1e9871154afebf0c5ac",
+      "case": 3,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-4-control-2.bin",
+      "bytes": 196,
+      "sha256": "62f8d8635527f5f7c467c2ecdfa8004259741a14040c964ba743610c57f13f80",
+      "case": 4,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-4-control-17.bin",
+      "bytes": 196,
+      "sha256": "cc995d3c252d78c3f94cd97d6b040c79e5fc2e85cca7a3cfc2f73f8613af72ac",
+      "case": 4,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-4-control-224.bin",
+      "bytes": 196,
+      "sha256": "ef92e89b86d6971f46f64937fe2f64646f7f3309c9f58b8b27b4a479a7e85dd4",
+      "case": 4,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-4-control-242.bin",
+      "bytes": 196,
+      "sha256": "eabc8c7ea0edb1adff7867b0f0c8dd8363faabe06c0b7a4a3fb50384afa51b16",
+      "case": 4,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-0.bin",
+      "bytes": 547,
+      "sha256": "8fac2eb1707c6894bd710f4fe9fcc3d600fc1d550020ef9365989bdf77f6ddd6",
+      "case": 4,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-16.bin",
+      "bytes": 547,
+      "sha256": "3cc5479e90803537921c7e43ad70df4bc657afd29b1c45cf09b6df559ed8dc24",
+      "case": 4,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-64.bin",
+      "bytes": 547,
+      "sha256": "174aaa561376e36aa47423d10784ad9944aa579258e600bb25a98306aaf13b20",
+      "case": 4,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-80.bin",
+      "bytes": 547,
+      "sha256": "e7970deb292bbb50a0eb5c3a4063b13849d96f1a01d24f7ee192a67b027091ec",
+      "case": 4,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-56.bin",
+      "bytes": 547,
+      "sha256": "467a01449e83b54f1166bad0ff0993ed943fc4354c94214838a79f77c1e36b56",
+      "case": 4,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-4-control-120.bin",
+      "bytes": 547,
+      "sha256": "644ce8120cfaedb03fc591fda054bf0db8ca5f08bab26736de02bb14d9045471",
+      "case": 4,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-5-control-2.bin",
+      "bytes": 195,
+      "sha256": "f3a76b3e9c6fdea04efd694d5feb36be7eed4446928602998933f526da0fa358",
+      "case": 5,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-5-control-17.bin",
+      "bytes": 195,
+      "sha256": "b59cbbe458994956473cc00769ea0df255fe26d19f18a9e3b13931132086cbbe",
+      "case": 5,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-5-control-224.bin",
+      "bytes": 195,
+      "sha256": "62b2f444732b1a207dbb4323d3f899534dbe19aaefcaf1135e216f0ebc33085a",
+      "case": 5,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-5-control-242.bin",
+      "bytes": 195,
+      "sha256": "64e97de318e5469035b2ff4da2ed65e39bf00d67384b33c5593ab14504d930ac",
+      "case": 5,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-0.bin",
+      "bytes": 546,
+      "sha256": "0f5a76f4f8aafa1a346b23de6330b219d79d219dcdd3ba7eff11dd17d692b731",
+      "case": 5,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-16.bin",
+      "bytes": 546,
+      "sha256": "9dfd924e5f21f163b75ca6fc92e7289fb95e5d50ab1350c63f00fd98cd1541eb",
+      "case": 5,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-64.bin",
+      "bytes": 546,
+      "sha256": "a1f2ac571a4235a674cc702ea0dbe7beff793dc56db40b8687e8d26d6181a0c1",
+      "case": 5,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-80.bin",
+      "bytes": 546,
+      "sha256": "122fadaad800ccb902caece99e54467bf764be9ff30f070e7954e889981ad027",
+      "case": 5,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-56.bin",
+      "bytes": 546,
+      "sha256": "983ddc471a2a513dbd945b41667df2b371f59365cb2522bae7ddda6c36389e29",
+      "case": 5,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-5-control-120.bin",
+      "bytes": 546,
+      "sha256": "fd0ca14014175fb06514ec59b459ff9683554fa159af937ac4f4331a011d63ca",
+      "case": 5,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-6-control-2.bin",
+      "bytes": 212,
+      "sha256": "7c3274d2ba69a3c8affa5f90a790458ed8f2ea82135739d52bc80bec9d4507f6",
+      "case": 6,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-6-control-17.bin",
+      "bytes": 212,
+      "sha256": "58ddccf2e3f9af94a25b859947dbb25b4bf171ec312c5c25f4b1da54e393656c",
+      "case": 6,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-6-control-224.bin",
+      "bytes": 212,
+      "sha256": "241afa0f4154dcdc997edd948135762c38266085dc4750090b6cb0ec5e088484",
+      "case": 6,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-6-control-242.bin",
+      "bytes": 212,
+      "sha256": "29505eeff3010746fcdf69f6a3507be5123ff66a997ef682bfc11e07485367e4",
+      "case": 6,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-0.bin",
+      "bytes": 563,
+      "sha256": "6fa5c9984fb6e0b29257adb0426f6246577efbce37a76927b82a4a8e66dc10d8",
+      "case": 6,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-16.bin",
+      "bytes": 563,
+      "sha256": "0fb3b0058b49da8cef7889ee28bd4fbbce269dc8aab6c5dfa66a03dfb6184fe5",
+      "case": 6,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-64.bin",
+      "bytes": 563,
+      "sha256": "b114ae512e6b692d0297369220dd6361874afaa2e0b2a4eaa4ec6e2e5ecec1c8",
+      "case": 6,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-80.bin",
+      "bytes": 563,
+      "sha256": "4f3f0c2681edd6f7a2daace642fd7eb84c306c3b957c7bff6c0ea486e57f2b4f",
+      "case": 6,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-56.bin",
+      "bytes": 563,
+      "sha256": "731f764fb1852a22b30ac8b47b9536830e5cbb21d8fb985968c0975a0868abae",
+      "case": 6,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-6-control-120.bin",
+      "bytes": 563,
+      "sha256": "fc61bdc6b2d233db0c77e38fc310a8fe4dc7d0627b0d6396ec93b7c48cd75213",
+      "case": 6,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-7-control-2.bin",
+      "bytes": 212,
+      "sha256": "f43fc2f41738359e9aa94d1512f85e7155e9d0e75f121b2404242db8b56ec548",
+      "case": 7,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-7-control-17.bin",
+      "bytes": 212,
+      "sha256": "ec8c42fd164c0acfd570eb72224b91401fa58710efa853a6f732d0a692967757",
+      "case": 7,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-7-control-224.bin",
+      "bytes": 212,
+      "sha256": "c842ec9e86eca87d9c63f410a45e066b60e9a56222226dbe17e54c8073dbc2ed",
+      "case": 7,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-7-control-242.bin",
+      "bytes": 212,
+      "sha256": "b0fcce799170ab67867fb623472d8f766a1dddaa82a7616190d705214a8a5d68",
+      "case": 7,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-0.bin",
+      "bytes": 563,
+      "sha256": "7e391ba9d1d5d6b40279c69452d149435ab6d38793a10950bb08353132fc245e",
+      "case": 7,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-16.bin",
+      "bytes": 563,
+      "sha256": "1983ccdac60e3c28ccf6530e4891fb994e9a164f2fba4d8cf22256173a15aff0",
+      "case": 7,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-64.bin",
+      "bytes": 563,
+      "sha256": "d180f13411654f601259a0705def3514ec3f23c37862cd1f7091e951d9db6b6a",
+      "case": 7,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-80.bin",
+      "bytes": 563,
+      "sha256": "d680db1011642c36cbbd7c9f41c0f064c42c43968427f97381c285061ea7bfe2",
+      "case": 7,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-56.bin",
+      "bytes": 563,
+      "sha256": "014e548ea9d04cc8480665a132118007fe6effb7776c47eb72708824f343a09e",
+      "case": 7,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-7-control-120.bin",
+      "bytes": 563,
+      "sha256": "ec0d889dbae44463b16b90540c47e6e5ed23583dd6936f593c7ce73131688be4",
+      "case": 7,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-8-control-2.bin",
+      "bytes": 211,
+      "sha256": "79c443bbbad27089af02796d0879f329549c73f1a61a254bb5d5092a360ba5d7",
+      "case": 8,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-8-control-17.bin",
+      "bytes": 211,
+      "sha256": "63e95cf686f3a6c95cc2be24176bf8770fed6bef1d2bec38be20f8286c14d5bc",
+      "case": 8,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-8-control-224.bin",
+      "bytes": 211,
+      "sha256": "ca29dd35d9474190360e4034213fa38a27f78c83756a6fbb19581d1a493425f9",
+      "case": 8,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-8-control-242.bin",
+      "bytes": 211,
+      "sha256": "6d366ce90a3cc08a70022f01027691673707b35628a5fa1c2c35e1e81a425ff5",
+      "case": 8,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-0.bin",
+      "bytes": 562,
+      "sha256": "4442106fa123db3617ede220c72646eb3a946ec0156b242333e1e9ce514b2b0f",
+      "case": 8,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-16.bin",
+      "bytes": 562,
+      "sha256": "e57fc4384447913d5c10b0a33809487b3c206595f14b92d06b9907569367cb5a",
+      "case": 8,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-64.bin",
+      "bytes": 562,
+      "sha256": "42b7f9db1d3582606b3d1714b5212629abad8b342feb0f937fdec74ba5344ce4",
+      "case": 8,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-80.bin",
+      "bytes": 562,
+      "sha256": "1143de96a517907bacbf1fdd9be819be5f48819917f5f8501730b6b42d2361e7",
+      "case": 8,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-56.bin",
+      "bytes": 562,
+      "sha256": "00ab8c259af978574f269e5239d6ae6b7cd9627e9519c0c33d19e3dfeba2ba40",
+      "case": 8,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-8-control-120.bin",
+      "bytes": 562,
+      "sha256": "e3ee34ec74407141fb878d3d5b2772ebe4a3887f58963c1e6bc941952c6f5ab5",
+      "case": 8,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-9-control-2.bin",
+      "bytes": 212,
+      "sha256": "992aae42f54530c8d03cb20987b41d2c91b5106448654814493a7f12c76ab3f2",
+      "case": 9,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-9-control-17.bin",
+      "bytes": 212,
+      "sha256": "3c3c9ea76900d434f46f6a5e64420fa84a16c00702e33ceff2ae2e955ca58894",
+      "case": 9,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-9-control-224.bin",
+      "bytes": 212,
+      "sha256": "f2d9a4d7cfff28f3861b3ab79984dfa7922e8216a1cd0bb49001e4dc4d46114e",
+      "case": 9,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-9-control-242.bin",
+      "bytes": 212,
+      "sha256": "1847f3d9d25704c5b70c9f976cbcf46b589c7390d96703a34622765a58e000c8",
+      "case": 9,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-0.bin",
+      "bytes": 563,
+      "sha256": "06ce38d2246cde23eb8a53666d27c844b3acc8c33274c5440eecbf97d6162a76",
+      "case": 9,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-16.bin",
+      "bytes": 563,
+      "sha256": "3ad2424b2b199da80971aae62985c581622347d0297103b1f993b21073df00e8",
+      "case": 9,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-64.bin",
+      "bytes": 563,
+      "sha256": "9213984aed2db9f274a225418d8ef89f064b3f4952f7178ab189e62c6ae61f97",
+      "case": 9,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-80.bin",
+      "bytes": 563,
+      "sha256": "d536c6a5cc165ecef751fcc36dbc273bee330a4424fd8a8e01627288cb75252b",
+      "case": 9,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-56.bin",
+      "bytes": 563,
+      "sha256": "2f2be2856dc9beacfa4486645d74166082052f4ca3746cf1e3d542c36c3dd6f1",
+      "case": 9,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-9-control-120.bin",
+      "bytes": 563,
+      "sha256": "a7a860fe541ff8c5378ad53033ed0c326fde57307e896315a53e961a68d16f23",
+      "case": 9,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-10-control-2.bin",
+      "bytes": 212,
+      "sha256": "08b5d4143420693569129ca81a8bd0bb703bba41a0bdc10de26babeb05d257c4",
+      "case": 10,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-10-control-17.bin",
+      "bytes": 212,
+      "sha256": "46f58e64fb7f0e464412141a2249ed0b9f889968c26c951159a67838412376c3",
+      "case": 10,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-10-control-224.bin",
+      "bytes": 212,
+      "sha256": "cd98dbeaecc50c17e8ecc969a9e8ec592141ccbaa93874aa667dd1044a75fe8d",
+      "case": 10,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-10-control-242.bin",
+      "bytes": 212,
+      "sha256": "ee261f6ea4bd292205c5f75d0da861d69970c518bbda32bfae5c0fe39818109c",
+      "case": 10,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-0.bin",
+      "bytes": 563,
+      "sha256": "f03b8aee46227c319db50405fe7ad9177ff45d48f4bced0ce9a27dbaca6bed4a",
+      "case": 10,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-16.bin",
+      "bytes": 563,
+      "sha256": "911b6b7c5af2de53b0889155a3127393b908c83bfa64de7a4e19598eb8d50a90",
+      "case": 10,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-64.bin",
+      "bytes": 563,
+      "sha256": "2415d0083c66ec6ababfaac49b6abda451ae62b24a383ef2e33ee83283eff215",
+      "case": 10,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-80.bin",
+      "bytes": 563,
+      "sha256": "1ecb9ea294b57b80342cbcd9b5394c76336e40eacfd912bdeb50ad945ea4b519",
+      "case": 10,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-56.bin",
+      "bytes": 563,
+      "sha256": "ddb7bddb6f5a5a2214b3afca76d6b6faf86167cba9655a022144d89b97bee957",
+      "case": 10,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-10-control-120.bin",
+      "bytes": 563,
+      "sha256": "4ecc36340bd762d976b679bf5abc97a91d8c3bef149f1d9276fbcdefb9cdd50e",
+      "case": 10,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-11-control-2.bin",
+      "bytes": 211,
+      "sha256": "cb7b29c71fad254273296523b2871c43d9e273e57aed603b4ca5dae440c4bc55",
+      "case": 11,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-11-control-17.bin",
+      "bytes": 211,
+      "sha256": "23edb89d5b5f7acbe5c961a74781f5ea6f3871757913374549bd0c34a88ab4e9",
+      "case": 11,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-11-control-224.bin",
+      "bytes": 211,
+      "sha256": "e8ff6df7eb5240aa4a45befe220810ca0b150b1bf57c04c1141d6db655372a2c",
+      "case": 11,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-11-control-242.bin",
+      "bytes": 211,
+      "sha256": "ef2803581e8e2e9561b5f5b3546f38dab4fa132c9c40c8ba9563ae3563b61101",
+      "case": 11,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-0.bin",
+      "bytes": 562,
+      "sha256": "4b308d8c45ef4b5688dd866e65ee2403d98432d24993f7a45e9dee30389e9e39",
+      "case": 11,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-16.bin",
+      "bytes": 562,
+      "sha256": "84e2190513547adc55c291a05eef2d1981ed7be3dc7136378e23ba53da869f31",
+      "case": 11,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-64.bin",
+      "bytes": 562,
+      "sha256": "64640fe00d5ef0b47664dbda5e67a2ab25bb0c187f86245c6098153574c57279",
+      "case": 11,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-80.bin",
+      "bytes": 562,
+      "sha256": "1d6088587ef61de2c0022e90ab4441199ab5d2e835e84719a93a3b6ae69ec970",
+      "case": 11,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-56.bin",
+      "bytes": 562,
+      "sha256": "e60f96bfa687d0b8cf33089e9b5f8549a7a5fa0488368998fccd46b714df5147",
+      "case": 11,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-11-control-120.bin",
+      "bytes": 562,
+      "sha256": "1826411d281bc83451333d39e80c04a6670df77c6f8c58f6e5db1f573e06d4b3",
+      "case": 11,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-12-control-2.bin",
+      "bytes": 212,
+      "sha256": "c8c684faab1631f777b77a68c48d594fdb5cdadd97f76e5f2caed2fdb8661de9",
+      "case": 12,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-12-control-17.bin",
+      "bytes": 212,
+      "sha256": "96581be77455da47e810e5f5c22d0143d933f3abf27c1dcfa16d577be5ec754b",
+      "case": 12,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-12-control-224.bin",
+      "bytes": 212,
+      "sha256": "f2eecf3ebe066d099f2b436277537f7910b5257c67bad574600e95611b0f9df0",
+      "case": 12,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-12-control-242.bin",
+      "bytes": 212,
+      "sha256": "62babf5a289a263380693c6123017a905c0b8f4689fb6c9db62d0a4193c2581b",
+      "case": 12,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-0.bin",
+      "bytes": 563,
+      "sha256": "9e3439c9a130d6334eeb7fd40fccf5b276fad09508ace5be077e7f775f26ce67",
+      "case": 12,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-16.bin",
+      "bytes": 563,
+      "sha256": "130652c063c440d50eb4fdbdd66db73a76d5838beb2afacdec6f43f9233274b7",
+      "case": 12,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-64.bin",
+      "bytes": 563,
+      "sha256": "f181f209c2b630b6b874b8bd90bc3ce73d36277170eb495bc1ab1a63d0bd445b",
+      "case": 12,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-80.bin",
+      "bytes": 563,
+      "sha256": "be96382339ac2e97edf28b4cd7aaccd562076c67e1c6f34461192381abcbfd4b",
+      "case": 12,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-56.bin",
+      "bytes": 563,
+      "sha256": "5f7ee49bb0bebc3c4bfdcbb8360bd1cac1dfe4f8759c2048715af0a9a065a840",
+      "case": 12,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-12-control-120.bin",
+      "bytes": 563,
+      "sha256": "90167ba1640854b76bcd0199b748a376502afe4dfc0539815f2bc0b03fbca3be",
+      "case": 12,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-13-control-2.bin",
+      "bytes": 212,
+      "sha256": "5e4cee5765083d42200b773d781346cd35da46f379b567322d3da59335e58892",
+      "case": 13,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-13-control-17.bin",
+      "bytes": 212,
+      "sha256": "72bb767920fe76200ade3b35e7942f4823bd0a130437dea7d5dd9bcc310adc5a",
+      "case": 13,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-13-control-224.bin",
+      "bytes": 212,
+      "sha256": "d57c36c1476daa26e85c048657f6b80c79d630eb6df425fa40ca0ed31fb7d3b0",
+      "case": 13,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-13-control-242.bin",
+      "bytes": 212,
+      "sha256": "1338d5cbee68ef29e1a183a17758ea7484fefe037ff286aa33da294259f8c4f2",
+      "case": 13,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-0.bin",
+      "bytes": 563,
+      "sha256": "fa25784d8da36c46ddeb7cb747b6f1533da60d33262e7a0623e3ca7a68b14423",
+      "case": 13,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-16.bin",
+      "bytes": 563,
+      "sha256": "07667e4a5d105a34b1f56084d7ab059a91d8de74e66e6cc23e5b24f067ab0c4e",
+      "case": 13,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-64.bin",
+      "bytes": 563,
+      "sha256": "c4ddf39935f6cd922c4559c1b1d4f19665819cab037a76ea78b8f29f3bc707f4",
+      "case": 13,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-80.bin",
+      "bytes": 563,
+      "sha256": "918161882accaa212c56fe4da8407f246df9749fddba16c9bda18c82b9c4e06e",
+      "case": 13,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-56.bin",
+      "bytes": 563,
+      "sha256": "335a7de9cf785f27cd5d79d7f467ab53f5e470dffc2be4ef62d3b9efee4f7bd9",
+      "case": 13,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-13-control-120.bin",
+      "bytes": 563,
+      "sha256": "d02762bb18b6ee11ebd7fbeb92e115c1754966578a4566a0894a05c418d27239",
+      "case": 13,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-14-control-2.bin",
+      "bytes": 211,
+      "sha256": "01cb1c48928d5ca50a32846a0f30a1c4c3b58f9630e7293b8aebd500dc612660",
+      "case": 14,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-14-control-17.bin",
+      "bytes": 211,
+      "sha256": "cc48fbae286b6012697bde575c256fa0ca8b6390f1a9c662d9e152ba9bdd3c61",
+      "case": 14,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-14-control-224.bin",
+      "bytes": 211,
+      "sha256": "49ce8f902da3d8dfafcf9e09dc7a1bd9142a11287d2dcb9b72f3ada3e424fb41",
+      "case": 14,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-14-control-242.bin",
+      "bytes": 211,
+      "sha256": "113a730d88d7688b57218faefc568a3fa04c62f6f2af6a5576f18783afa818c6",
+      "case": 14,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-0.bin",
+      "bytes": 562,
+      "sha256": "8ca692e164d7d41b387518dff646f6079f10fc8f0baf0ff09500e094dae2c0d2",
+      "case": 14,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-16.bin",
+      "bytes": 562,
+      "sha256": "51dc5ece95a6ecbdaa51a2cb99099b85c9d8342a3910d1a930cb3c96a9ee245e",
+      "case": 14,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-64.bin",
+      "bytes": 562,
+      "sha256": "e6c04be49729fb00639e2249ab2f8243037904b4f2f85da99648d9e6f5c8ed66",
+      "case": 14,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-80.bin",
+      "bytes": 562,
+      "sha256": "62c103e9f17543077af44602420fce7f949c193b8449f919b05368eb2c8be0d5",
+      "case": 14,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-56.bin",
+      "bytes": 562,
+      "sha256": "f6497b7f260905b8e7bee3a3d1843257592f8a036cfad7b8e36a6e49cc505232",
+      "case": 14,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-14-control-120.bin",
+      "bytes": 562,
+      "sha256": "4b21062a33aec01c14b28dd081b0c66a2851ab0300bd8acec01f7f1594433b29",
+      "case": 14,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-15-control-2.bin",
+      "bytes": 65716,
+      "sha256": "9a4b0e2ef60141cc1db4ddddf86ca4d9b58eb03831c4dce7c579e3eba44d2aed",
+      "case": 15,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-15-control-17.bin",
+      "bytes": 65716,
+      "sha256": "2d82b3b80653005ef03196627918798c765655d18c1c7b8cac718d52f4859a42",
+      "case": 15,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-15-control-224.bin",
+      "bytes": 65716,
+      "sha256": "f14df8b506271ff3f7f7a54c87dc6f419e02ad24713de48f81273b8f03933054",
+      "case": 15,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-15-control-242.bin",
+      "bytes": 65716,
+      "sha256": "0dac812dc54ab4284eba0191f42134f212c4e7c8aae8a6f3bc722c9aa39fc3e5",
+      "case": 15,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-0.bin",
+      "bytes": 66351,
+      "sha256": "36f37baf7832724c34b89b20dda82a57be598cf9d22e01328c83a1826389d4c9",
+      "case": 15,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-16.bin",
+      "bytes": 66351,
+      "sha256": "23f33260f49d7e185d09a3512069cdd604622c6d2c4ad74896da13b526233e54",
+      "case": 15,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-64.bin",
+      "bytes": 66351,
+      "sha256": "5c768f09238971d8cdb06e101b19812fd0e1a332905cf62056d0f21083efe340",
+      "case": 15,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-80.bin",
+      "bytes": 66351,
+      "sha256": "eaf3a242fb3a687b212b9766b7e36ee5093c35f0099598353f425a57655b33a9",
+      "case": 15,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-56.bin",
+      "bytes": 66351,
+      "sha256": "32776159331a87fd35f8a803979c36f600eda804091d37e9dafbf30070fd269a",
+      "case": 15,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-15-control-120.bin",
+      "bytes": 66351,
+      "sha256": "0436c3c775b360f4820b12a90f19c3f5841dd49f7cee41336c358fcfd2ffb14b",
+      "case": 15,
+      "control": 120
+    },
+    {
+      "path": "vorbis_headers/extent-16-control-2.bin",
+      "bytes": 180,
+      "sha256": "11a3edb5c5db86c3f719a611a983936f2c630bbb381c98ee6ea610c4e10f65c0",
+      "case": 16,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/extent-16-control-17.bin",
+      "bytes": 180,
+      "sha256": "cdf16709bb74d3178e91837dd1b7d1b42536a29b0a0c782c0253d6eb5226714b",
+      "case": 16,
+      "control": 17
+    },
+    {
+      "path": "vorbis_headers/extent-16-control-224.bin",
+      "bytes": 180,
+      "sha256": "a9ceb20f651c80772e6bedddef35012c61d9debf96d0b2ad0873c4d2bb1d57c8",
+      "case": 16,
+      "control": 224
+    },
+    {
+      "path": "vorbis_headers/extent-16-control-242.bin",
+      "bytes": 180,
+      "sha256": "f9d41697c824ae63a50522029e1c81d9e90a7d6430439813502e904753cdac42",
+      "case": 16,
+      "control": 242
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-0.bin",
+      "bytes": 531,
+      "sha256": "3c73587504f2c4767e4250afb16a2cb411abede7ade564a88632694881936968",
+      "case": 16,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-16.bin",
+      "bytes": 531,
+      "sha256": "98ecf9d6ace448da23605a87ae3d7efd6b45d834fea1f491f9c8071007a6bc0a",
+      "case": 16,
+      "control": 16
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-64.bin",
+      "bytes": 531,
+      "sha256": "935841bed30e1d761ee0b13b92a1e20b4958747a7171b34c8a5454dd44405fd8",
+      "case": 16,
+      "control": 64
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-80.bin",
+      "bytes": 531,
+      "sha256": "da9adb99d23daa4a54b3590d52cbd27e0a2c786eea6e6bdfdfaa6d56156730dc",
+      "case": 16,
+      "control": 80
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-56.bin",
+      "bytes": 531,
+      "sha256": "2f63cfb41d37abd61ad1159e78986cf72f326bf4c4be3e778d77e7bfb1f355f3",
+      "case": 16,
+      "control": 56
+    },
+    {
+      "path": "vorbis_stream/extent-16-control-120.bin",
+      "bytes": 531,
+      "sha256": "4be869f8dfd949a375996560fa423937aae6bf3a8ed3098daa81ca563f834076",
+      "case": 16,
+      "control": 120
+    }
+  ]
+}

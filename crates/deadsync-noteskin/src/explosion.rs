@@ -5,7 +5,7 @@ use crate::script::{
     parse_script_number, parse_script_sleep, parse_script_tween, split_script_token,
     tween_type_from_script_tween,
 };
-use arrayvec::ArrayString;
+use arrayvec::{ArrayString, ArrayVec};
 use log::warn;
 use std::collections::HashMap;
 
@@ -78,7 +78,7 @@ impl GlowEffect {
             return [0.0, 0.0, 0.0, 0.0];
         }
 
-        let phase = (time / self.period).rem_euclid(1.0);
+        let phase = time / self.period;
         if !phase.is_finite() {
             return [0.0, 0.0, 0.0, 0.0];
         }
@@ -104,6 +104,7 @@ impl GlowEffect {
             return color;
         }
 
+        let phase = phase.rem_euclid(1.0);
         let percent_between = ((phase + 0.25) * std::f32::consts::TAU)
             .sin()
             .mul_add(0.5, 0.5);
@@ -144,6 +145,12 @@ pub struct ExplosionAnimation {
     pub glow: Option<GlowEffect>,
     pub blend_add: bool,
     pub animation_seconds: Option<f32>,
+    /// Sprite states advance with the screen unless a hit explicitly seeks them.
+    pub animation_uses_screen_clock: bool,
+    /// Immediate Actor metadata, independent of tweens and render depth.
+    /// ITGmania only reorders siblings when their ActorFrame explicitly sorts.
+    pub draw_order: i32,
+    pub parents: Vec<ExplosionAnimation>,
 }
 
 impl Default for ExplosionAnimation {
@@ -172,6 +179,9 @@ impl Default for ExplosionAnimation {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
+            draw_order: 0,
+            parents: Vec::new(),
         }
     }
 }
@@ -184,6 +194,7 @@ impl ExplosionAnimation {
             .map(|segment| segment.duration.max(0.0))
             .sum::<f32>()
             .max(0.0)
+            .max(self.parents.iter().map(Self::duration).fold(0.0, f32::max))
     }
 
     #[must_use]
@@ -202,6 +213,26 @@ impl ExplosionAnimation {
     /// are sampled per hit, never per frame or at noteskin load.
     #[must_use]
     pub fn state_at_seeded(&self, time: f32, effect_time: f32, seed: u64) -> ExplosionVisualState {
+        let mut state = self.local_state_at_seeded(time, effect_time, seed);
+        for parent in &self.parents {
+            let parent = parent.state_at_seeded(time, effect_time, seed);
+            state.zoom *= parent.zoom;
+            state.rotation_z += parent.rotation_z;
+            state.visible &= parent.visible;
+            for channel in 0..4 {
+                state.diffuse[channel] *= parent.diffuse[channel];
+            }
+            state.glow[3] *= parent.diffuse[3];
+        }
+        state
+    }
+
+    fn local_state_at_seeded(
+        &self,
+        time: f32,
+        effect_time: f32,
+        seed: u64,
+    ) -> ExplosionVisualState {
         if time.is_finite()
             && let Some(state) = self.canonical_fade_state_at(time)
         {
@@ -229,7 +260,7 @@ impl ExplosionAnimation {
                 continue;
             }
 
-            if elapsed > duration {
+            if elapsed >= duration {
                 if let Some(zoom) = segment.end_zoom {
                     current.zoom = zoom;
                 }
@@ -428,12 +459,25 @@ pub(crate) fn parse_explosion_animation_with_init(
 fn parse_explosion_animation_parts<'a>(
     scripts: impl IntoIterator<Item = &'a str>,
 ) -> ExplosionAnimation {
+    parse_explosion_animation_parts_with_clock(
+        scripts.into_iter().map(|script| (script, true)),
+        false,
+    )
+}
+
+fn parse_explosion_animation_parts_with_clock<'a>(
+    scripts: impl IntoIterator<Item = (&'a str, bool)>,
+    screen_clock: bool,
+) -> ExplosionAnimation {
     let mut animation = ExplosionAnimation {
         initial: ExplosionState::default(),
         segments: Vec::new(),
         glow: None,
         blend_add: false,
         animation_seconds: None,
+        animation_uses_screen_clock: screen_clock,
+        draw_order: 0,
+        parents: Vec::new(),
     };
 
     let mut current_state = ExplosionState::default();
@@ -455,7 +499,10 @@ fn parse_explosion_animation_parts<'a>(
         }
     };
 
-    for raw_token in scripts.into_iter().flat_map(|script| script.split(';')) {
+    for (raw_token, hit_event) in scripts
+        .into_iter()
+        .flat_map(|(script, hit)| script.split(';').map(move |token| (token, hit)))
+    {
         let token = raw_token.trim();
         if token.is_empty() {
             continue;
@@ -473,10 +520,23 @@ fn parse_explosion_animation_parts<'a>(
             recognized_command = true;
             continue;
         }
+        if command == ScriptCommand::DrawOrder {
+            if let Some(order) = args.first().and_then(|arg| parse_script_number(arg)) {
+                // Actor::SetDrawOrder writes an integer immediately, even
+                // after linear/sleep. It does not flush or join the tween,
+                // change Z, or automatically sort the enclosing ActorFrame.
+                animation.draw_order = order as i32;
+                recognized_command = true;
+            }
+            continue;
+        }
         if command == ScriptCommand::SetSecondsIntoAnimation {
             if let Some(seconds) = args.first().and_then(|arg| parse_script_number(arg)) {
                 // This setter executes immediately, even after linear/sleep.
-                animation.animation_seconds = Some(seconds);
+                if hit_event {
+                    animation.animation_seconds = Some(seconds);
+                    animation.animation_uses_screen_clock = false;
+                }
                 recognized_command = true;
             }
             continue;
@@ -503,9 +563,20 @@ fn parse_explosion_animation_parts<'a>(
         if let Some(duration) = parse_script_sleep(command, args) {
             recognized_command = true;
             finish_pending(&mut pending, &mut animation, &mut current_state, true);
+            animation.segments.push(ExplosionSegment {
+                duration: duration.max(0.0),
+                tween: TweenType::Linear,
+                start: current_state,
+                end_zoom: None,
+                end_color: None,
+                end_rotation_z: None,
+                end_visible: None,
+            });
+            // Actor::Sleep adds a hold followed by a zero-duration destination.
+            // A setter after sleep jumps at its end instead of fading across it.
             pending = Some(PendingSegment {
                 tween: TweenType::Linear,
-                duration: duration.max(0.0),
+                duration: 0.0,
                 start: current_state,
                 target_zoom: None,
                 target_color: None,
@@ -520,6 +591,9 @@ fn parse_explosion_animation_parts<'a>(
         }
         if let Some(control) = parse_script_control(command) {
             recognized_command = true;
+            if control == ScriptControl::SetState && hit_event {
+                animation.animation_uses_screen_clock = false;
+            }
             match control {
                 ScriptControl::FinishTweening => {
                     finish_pending(&mut pending, &mut animation, &mut current_state, false);
@@ -933,46 +1007,145 @@ pub fn itg_partition_tap_explosion_sources<T>(
     (dim, bright)
 }
 
-#[cfg(test)]
-pub(crate) fn parse_itg_tap_explosion_animation<T>(
-    source: &ItgTapExplosionSource<T>,
+pub(crate) fn parse_itg_tap_explosion_animation_commands(
+    commands: &HashMap<String, String>,
     mode: ItgTapExplosionMode,
+    command_key: &str,
     command: &str,
 ) -> ExplosionAnimation {
-    parse_itg_tap_explosion_animation_commands(&source.commands, mode, command)
+    let mut animation = parse_itg_tap_explosion_actor_commands(commands, mode, command);
+    if let Some(parents) = commands
+        .get(crate::actor::ITG_PARENT_COMMANDS)
+        .and_then(|value| serde_json::from_str::<Vec<HashMap<String, String>>>(value).ok())
+    {
+        animation.parents = parents
+            .iter()
+            .map(|parent| {
+                parse_itg_tap_explosion_actor_commands(
+                    parent,
+                    mode,
+                    parent.get(command_key).map_or("", String::as_str),
+                )
+            })
+            .collect();
+    }
+    animation
 }
 
-pub(crate) fn parse_itg_tap_explosion_animation_commands(
+fn parse_itg_tap_explosion_actor_commands(
     commands: &HashMap<String, String>,
     mode: ItgTapExplosionMode,
     command: &str,
 ) -> ExplosionAnimation {
-    let mut sequence = [""; 4];
-    let mut len = 0;
-    for command in [
-        commands.get("initcommand"),
-        commands.get("judgmentcommand"),
-        commands.get(mode.command_key()),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|command| command.trim())
-    .filter(|command| !command.is_empty())
-    {
-        sequence[len] = command;
-        len += 1;
+    let sequence = [
+        (
+            commands.get("initcommand").map_or("", String::as_str),
+            false,
+        ),
+        (
+            commands.get("judgmentcommand").map_or("", String::as_str),
+            true,
+        ),
+        (
+            commands.get(mode.command_key()).map_or("", String::as_str),
+            true,
+        ),
+        (command, true),
+    ];
+    if sequence.iter().all(|(script, _)| {
+        !script.contains("self:")
+            && !script
+                .as_bytes()
+                .windows(11)
+                .any(|word| word.eq_ignore_ascii_case(b"playcommand"))
+    }) {
+        return parse_explosion_animation_parts_with_clock(sequence, true);
     }
-    sequence[len] = command.trim();
-    len += 1;
 
-    if sequence[..len]
-        .iter()
-        .all(|command| !command.contains("self:"))
-    {
-        parse_explosion_animation_parts(sequence[..len].iter().copied())
-    } else {
-        parse_explosion_animation(&sequence[..len].join(";"))
+    // Keep Init separate from hit events: its initial state offset persists
+    // across hits, while a seek in Wn/Judgment/Bright/Dim restarts the states.
+    let mut expanded: [String; 4] = std::array::from_fn(|_| String::new());
+    let mut stack = ArrayVec::new();
+    let mut remaining = 4096;
+    for ((script, _), output) in sequence.iter().zip(&mut expanded) {
+        if !expand_explosion_cmd(commands, script, &mut stack, &mut remaining, output) {
+            break;
+        }
     }
+    parse_explosion_animation_parts_with_clock(
+        expanded
+            .iter()
+            .zip(sequence)
+            .map(|(script, (_, hit))| (script.as_str(), hit)),
+        true,
+    )
+}
+
+// Actor::playcommand runs the target immediately on the same actor. Inline its
+// setters into the current tween rather than treating the call as a boundary.
+// This runs at skin load; bound both recursion and expansion of untrusted scripts.
+fn expand_explosion_cmd<'a>(
+    commands: &'a HashMap<String, String>,
+    script: &str,
+    stack: &mut ArrayVec<&'a str, 16>,
+    remaining: &mut usize,
+    output: &mut String,
+) -> bool {
+    let script = normalized_script_command(script);
+    for raw in script
+        .split(';')
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        if *remaining == 0 || output.len().saturating_add(raw.len() + 1) > 256 * 1024 {
+            warn!("Noteskin explosion command expansion exceeds its size limit");
+            return false;
+        }
+        *remaining -= 1;
+        if let Some(token) = split_script_token(raw)
+            && token.command() == ScriptCommand::PlayCommand
+        {
+            let Some(name) = token.args().first() else {
+                continue;
+            };
+            let name = name.trim().trim_matches(['\'', '"']);
+            // Most actor command names are short. Preserve arbitrary UTF-8
+            // and oversized names with one exact-capacity heap fallback.
+            let mut inline_key = ArrayString::<128>::new();
+            let mut heap_key;
+            let key = if name.len() <= inline_key.capacity() - "command".len() {
+                inline_key.push_str(name);
+                inline_key.as_mut_str().make_ascii_lowercase();
+                inline_key.push_str("command");
+                inline_key.as_str()
+            } else {
+                heap_key = String::with_capacity(name.len() + "command".len());
+                heap_key.push_str(name);
+                heap_key.make_ascii_lowercase();
+                heap_key.push_str("command");
+                heap_key.as_str()
+            };
+            let Some((key, command)) = commands.get_key_value(key) else {
+                continue;
+            };
+            if stack.is_full() || stack.contains(&key.as_str()) {
+                warn!("Recursive noteskin explosion command '{key}' skipped");
+                continue;
+            }
+            stack.push(key);
+            let complete = expand_explosion_cmd(commands, command, stack, remaining, output);
+            stack.pop();
+            if !complete {
+                return false;
+            }
+        } else {
+            if !output.is_empty() {
+                output.push(';');
+            }
+            output.push_str(raw);
+        }
+    }
+    true
 }
 
 pub fn itg_explosion_wrapper<'a, T>(
@@ -1415,6 +1588,82 @@ mod tests {
 
         assert_eq!(state.diffuse, [1.0, 1.0, 1.0, 1.0]);
         assert!(state.glow.iter().all(|c| *c >= 0.0 && *c <= 1.0));
+    }
+
+    #[test]
+    fn named_commands_preserve_pending_tweens() {
+        let commands = HashMap::from([
+            ("initcommand".into(), "diffusealpha,0".into()),
+            ("judgmentcommand".into(), "finishtweening".into()),
+            ("dimcommand".into(), "visible,true".into()),
+            (
+                "flashcommand".into(),
+                "diffusealpha,1;linear,0.4;playcommand,'Fade'".into(),
+            ),
+            (
+                "fadecommand".into(),
+                "function(self) self:diffusealpha(0):zoom(2) end".into(),
+            ),
+        ]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            "playcommand,\"Flash\"",
+        );
+        assert_eq!(animation.segments.len(), 1);
+        assert!((animation.duration() - 0.4).abs() < 1e-6);
+        for (time, alpha, zoom) in [(0.0, 1.0, 1.0), (0.2, 0.5, 1.5), (0.4, 0.0, 2.0)] {
+            let state = animation.state_at(time);
+            assert!((state.diffuse[3] - alpha).abs() < 1e-6, "{time}: {state:?}");
+            assert!((state.zoom - zoom).abs() < 1e-6, "{time}: {state:?}");
+        }
+    }
+
+    #[test]
+    fn missing_command_keeps_pending_tween() {
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &HashMap::new(),
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            "diffusealpha,1;linear,0.4;playcommand,'Missing';diffusealpha,0",
+        );
+        assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
+        assert_eq!(animation.segments.len(), 1);
+    }
+
+    #[test]
+    fn recursive_commands_are_bounded() {
+        let commands = HashMap::from([(
+            "loopcommand".into(),
+            "playcommand,'Loop';diffusealpha,0".into(),
+        )]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            "diffusealpha,1;linear,0.4;playcommand,'Loop'",
+        );
+        assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
+
+        // Acyclic calls can also grow exponentially; cap total expanded work.
+        let mut commands = HashMap::new();
+        for depth in 0..14 {
+            commands.insert(
+                format!("c{depth}command"),
+                format!("playcommand,'C{}';playcommand,'C{}'", depth + 1, depth + 1),
+            );
+        }
+        commands.insert("c14command".into(), "linear,0.01;diffusealpha,0".into());
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            "playcommand,'C0'",
+        );
+        assert!(!animation.segments.is_empty());
+        assert!(animation.segments.len() < 4096);
+        assert!(animation.duration().is_finite());
     }
 
     #[test]
@@ -1879,4 +2128,97 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn frame_child_flash_retains_native_sleep_timing() {
+        let parent = HashMap::from([
+            ("initcommand".to_owned(), "diffusealpha,0".to_owned()),
+            ("w1command".to_owned(), "diffusealpha,1".to_owned()),
+        ]);
+        let command = "diffusealpha,1;sleep,0.31;diffusealpha,0";
+        let commands = HashMap::from([
+            ("w1command".into(), command.into()),
+            (
+                crate::actor::ITG_PARENT_COMMANDS.into(),
+                serde_json::to_string(&[parent]).unwrap(),
+            ),
+        ]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            command,
+        );
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/actor-layers/native-timing-expected.json"
+        ))
+        .unwrap();
+        assert!((animation.duration() - 0.31).abs() < 1e-6);
+        for sample in expected["samples"].as_array().unwrap() {
+            assert_eq!(
+                animation
+                    .state_at(sample["time"].as_f64().unwrap() as f32)
+                    .diffuse[3],
+                sample["alpha"].as_f64().unwrap() as f32
+            );
+        }
+    }
+
+    #[test]
+    fn sprite_clock_only_restarts_for_hit_animation_seeks() {
+        let commands = HashMap::from([
+            ("initcommand".into(), "SetSecondsIntoAnimation,1".into()),
+            ("resetcommand".into(), "setstate,0".into()),
+        ]);
+        for (command, screen_clock, seconds) in [
+            ("diffusealpha,1;linear,0.22;diffusealpha,0", true, None),
+            ("setstate,0;diffusealpha,1", false, None),
+            ("playcommand,'Reset';diffusealpha,1", false, None),
+            (
+                "SetSecondsIntoAnimation,0.15;diffusealpha,1",
+                false,
+                Some(0.15),
+            ),
+        ] {
+            let animation = parse_itg_tap_explosion_animation_commands(
+                &commands,
+                ItgTapExplosionMode::Dim,
+                "w1command",
+                command,
+            );
+            assert_eq!(
+                animation.animation_uses_screen_clock, screen_clock,
+                "{command}"
+            );
+            assert_eq!(animation.animation_seconds, seconds, "{command}");
+        }
+    }
+
+    #[test]
+    fn draw_order_is_immediate_metadata_and_preserves_native_tweens() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/draw-order/cases.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let script = case["script"].as_str().unwrap();
+            let animation = parse_explosion_animation(script);
+            assert_eq!(
+                animation.draw_order,
+                case["order"].as_i64().unwrap() as i32,
+                "{script}"
+            );
+            assert!((animation.duration() - case["duration"].as_f64().unwrap() as f32).abs() < 1e-6);
+            for sample in case["samples"].as_array().unwrap() {
+                let state = animation.state_at(sample[0].as_f64().unwrap() as f32);
+                assert!(
+                    (state.diffuse[3] - sample[1].as_f64().unwrap() as f32).abs() < 1e-6,
+                    "{script}: {sample}"
+                );
+            }
+        }
+        assert_eq!(parse_explosion_animation("draworder,90").duration(), 0.0);
+    }
 }
+
+#[cfg(test)]
+#[path = "explosion_perf_tests.rs"]
+mod explosion_perf_tests;

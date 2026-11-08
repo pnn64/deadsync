@@ -14,8 +14,6 @@ pub(super) const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 
 pub(super) const PANE_FADE_SECONDS: f32 = 0.2;
 
-pub(super) const TAP_EXPLOSION_PREVIEW_SPEED: f32 = 0.7;
-
 pub(super) const INLINE_SPACING: f32 = 15.75;
 
 pub(super) const TILT_INTENSITY_MIN: f32 = 0.05;
@@ -169,7 +167,7 @@ pub(super) const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
     Perspective::Space,
 ];
 
-pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 9] = [
+pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 10] = [
     ComboFont::Wendy,
     ComboFont::ArialRounded,
     ComboFont::Asap,
@@ -178,6 +176,7 @@ pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 9] = [
     ComboFont::Work,
     ComboFont::WendyCursed,
     ComboFont::Mega,
+    ComboFont::Unprofessional,
     ComboFont::None,
 ];
 
@@ -205,7 +204,7 @@ pub(super) const SCORE_POSITION_VARIANTS: [ScorePosition; 2] =
 pub(super) const SCORE_DISPLAY_MODE_VARIANTS: [ScoreDisplayMode; 2] =
     [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive];
 
-pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
+pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 20] = [
     TargetScoreSetting::CMinus,
     TargetScoreSetting::C,
     TargetScoreSetting::CPlus,
@@ -225,6 +224,7 @@ pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
     TargetScoreSetting::SpecifiedValue,
     TargetScoreSetting::MachineBest,
     TargetScoreSetting::PersonalBest,
+    TargetScoreSetting::GhostData,
 ];
 
 pub(super) const LIFE_METER_TYPE_VARIANTS: [LifeMeterType; 3] = [

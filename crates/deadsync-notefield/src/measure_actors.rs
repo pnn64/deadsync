@@ -269,6 +269,7 @@ fn append_measure_quad(
         flip_y: false,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: 0.0,
         z,

@@ -1,0 +1,22 @@
+{
+  "fixture_name": "scalar-hIST-2-8-0-palette-1-length-2.png",
+  "fixture_hex": "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de00000003504c544511589fa84cad1400000002684953540101dc97315b0000000f494441547801010400fbff00000000000400016549c3600000000049454e44ae426082",
+  "fixture_sha256": "01b6e2643ad3ff5bb5bbe92ec4b474fa4aa289cdd8faf6a2d967a4dc7d409ad8",
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-scalar-fields-build\\Release\\deadlib_png_oracle.exe",
+    "--scalar-metadata",
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-scalar-fields-51928\\scalar-hIST-2-8-0-palette-1-length-2.png"
+  ],
+  "exit_code": 0,
+  "stdout_hex": "00000001504c54450000000300000011000000580000009f",
+  "stderr": "libpng warning: hIST: out of place\r\n",
+  "oracle_sha256": "0d513eccf7790d73aba151e5284481c5754c8e60d35487f2751764b2afca3479",
+  "oracle_source_sha256": "2cc24303f0a60a1d1df6316f5e5b7b5b3689df53135c29a37a2b905766469973",
+  "libpng_commit": "2b978915d82377df13fcbb1fb56660195ded868a",
+  "libpng_pngrutil_sha256": "e3c3f2445bfef81223644d94ff753b2b4db3950b269b157dfbd1335618519698",
+  "source_entry": "CDhIST: before=PNG_HAVE_PLTE, after=PNG_HAVE_IHDR",
+  "native_expected_histogram": [
+    257
+  ],
+  "interpretation": "PNG requires hIST after PLTE. The pinned libpng ordering table places it before PLTE and drops this legal hIST as out of place. Native known answers remain authoritative for this reference difference."
+}

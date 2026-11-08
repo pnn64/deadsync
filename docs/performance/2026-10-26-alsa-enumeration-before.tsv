@@ -1,0 +1,4 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	owned-pcm	enumerate	20000	250642.4515	451697.0043	135367.0	136644.55535	58	9	2990
+1	owned-pcm	enumerate	20000	251673.644	451696.9763	140152.5	141815.9697	58	9	2990
+2	owned-pcm	enumerate	20000	261870.05585	451696.98285	145751.0	147545.2392	58	9	2990

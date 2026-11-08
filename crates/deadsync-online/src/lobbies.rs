@@ -3400,11 +3400,3 @@ mod tests {
         assert_eq!(status.message.as_deref(), Some("Bad password"));
     }
 }
-
-#[cfg(test)]
-mod outbound_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/lobby_outbound.rs"
-    ));
-}

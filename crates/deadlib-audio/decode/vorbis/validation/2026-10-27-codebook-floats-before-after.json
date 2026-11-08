@@ -1,0 +1,188 @@
+{
+  "scope": "Before/after finite PCM witness at exponent field 852 and mantissa one. Before is committed b5953ce15 with published defaults; after explicitly selects reference codebook behavior. Default published semantics remain separately tested. Counts/positions agree; only the reference selection satisfies the original PCM bounds. No timing run.",
+  "before_source_commit": "b5953ce158c79d75d3cfae5bb62333fbab00e804",
+  "input_sha256": "7f3bbd70a513f4c36aa2fdfc0cb6bb4bb0628a486e359d953b8bac96818fc0e0",
+  "reference_response_sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+  "reference_binary_sha256": "3f10dfffa755fcefbc384f000d9df984b21d6f4266ca7bc3d7d7ab2bce58b092",
+  "old_reference_binary_sha256": "59536dbebb66be5d84299c3a9a6cf6df8df6c82228ddccc6a1886f8fa3d47fda",
+  "reference_helpers_byte_identical": true,
+  "before_sources_sha256": {
+    "src/main.rs": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42",
+    "vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "vorbis/src/codebook.rs": "01a2eb8028e0818db2062917468f33dd8d8b665b8f08955312aec8ccd6a191b2",
+    "vorbis/src/decoder.rs": "9d7c403cc9005d4aebbe87140e76b74fca344aeb0750687a403e9fbf8a013dd4",
+    "vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+    "vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "vorbis/src/lib.rs": "d793acb0e961a2a81ff68c862874a5fbc78ed58577f238a1d707cde070ad2a52",
+    "vorbis/src/ogg.rs": "cda05e3f145dd6cca0b7021fee1a4b030134848bece16988d950c6b48c8d169c",
+    "vorbis/src/residue.rs": "4581655db4d773d3a4a4fecf5f4f3ba2ea66e033bc3f9d85ca25d34c47376c0a",
+    "vorbis/src/seek.rs": "19976eea03b8f52c0e0972c3f2f814c660807b8349dfefe278154b9a0b07cb44",
+    "vorbis/src/setup.rs": "eea0a3c3e82fd7fe002c42fc1d4b2b59880dd1ae8b540fa563314790909c25e8",
+    "vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+    "ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2"
+  },
+  "after_codec_source_sha256": {
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "9d7c403cc9005d4aebbe87140e76b74fca344aeb0750687a403e9fbf8a013dd4",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+    "crates/deadlib-audio/decode/vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "a921e05f215b8df89aaec8f2afc14dbd0576e3f4a456ef073c9211583ebb32ae",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "d1a6832927a7e2ff3a9902212787fe0fd2575056ca3b4748ba652dff7e77bdab",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "4581655db4d773d3a4a4fecf5f4f3ba2ea66e033bc3f9d85ca25d34c47376c0a",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "e24b8a0d312ca1fe173787bac9f74bfe00ee5542d80cf9dfb77dee8209dbfc90",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "732b6d347a2f0bc46b3f06543d487fd564ca5a6e866ed21a8f7efaa208331ead",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda"
+  },
+  "results": [
+    {
+      "variant": "before",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-floats-before-after-verified-20261027\\before\\Cargo.toml"
+      ],
+      "source_sha256": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42",
+      "manifest_sha256": "e0e5ba4880753dc91a6f33b51d011c169e7600ea92791a65c2680f0c9ea7893d",
+      "binary_sha256": "02565401fbb4c702ddf6c0c694860582b00a4d4dad836789d6633e2a80c610e2",
+      "pcm_sha256": "2c12401025f586366e2c7034d08c5dd9f9117bf50216cbbd4a711197cadcdbe4",
+      "frames": 368,
+      "finite_values": 736,
+      "peak_error": 2.2281529249699253e+20,
+      "rms_error": 2.226363595148968e+19,
+      "reference_peak": 2.2281522212824836e+20,
+      "matches_original_pcm_bounds": false,
+      "blocks": [
+        {
+          "block_size": 64,
+          "start_frame": 0,
+          "frames": 0,
+          "finite_values": 0,
+          "peak_error": 0.0,
+          "reference_peak": 0.0
+        },
+        {
+          "block_size": 256,
+          "start_frame": 0,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 7.620810969529398e+19,
+          "reference_peak": 7.620809210310794e+19
+        },
+        {
+          "block_size": 256,
+          "start_frame": 80,
+          "frames": 128,
+          "finite_values": 256,
+          "peak_error": 2.2281529249699253e+20,
+          "reference_peak": 2.2281522212824836e+20
+        },
+        {
+          "block_size": 64,
+          "start_frame": 208,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 2.088137771773581e+20,
+          "reference_peak": 2.0881374199298602e+20
+        },
+        {
+          "block_size": 256,
+          "start_frame": 288,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 5.536993662726465e+19,
+          "reference_peak": 5.536997181163674e+19
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-floats-before-after-verified-20261027\\after\\Cargo.toml"
+      ],
+      "source_sha256": "21650d55e7cdd31db57ccc2c8ec7ace5563c39f048429db4d0bdeacdfae420bd",
+      "manifest_sha256": "26b90ad71e3ef816f7d0aaf1e23b8d527086721f9452657035f2da380a339e46",
+      "binary_sha256": "c64b7bd8e84d0ec6ceb4d7d43c041714f8036462750568345af84102b482cb92",
+      "pcm_sha256": "a25504275c72321f3169b1a961bd70bfe945066842502d08482c64fc5649d139",
+      "frames": 368,
+      "finite_values": 736,
+      "peak_error": 37108517437440.0,
+      "rms_error": 5197767755205.817,
+      "reference_peak": 2.2281522212824836e+20,
+      "matches_original_pcm_bounds": true,
+      "blocks": [
+        {
+          "block_size": 64,
+          "start_frame": 0,
+          "frames": 0,
+          "finite_values": 0,
+          "peak_error": 0.0,
+          "reference_peak": 0.0
+        },
+        {
+          "block_size": 256,
+          "start_frame": 0,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 37108517437440.0,
+          "reference_peak": 7.620809210310794e+19
+        },
+        {
+          "block_size": 256,
+          "start_frame": 80,
+          "frames": 128,
+          "finite_values": 256,
+          "peak_error": 35184372088832.0,
+          "reference_peak": 2.2281522212824836e+20
+        },
+        {
+          "block_size": 64,
+          "start_frame": 208,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 18416819765248.0,
+          "reference_peak": 2.0881374199298602e+20
+        },
+        {
+          "block_size": 256,
+          "start_frame": 288,
+          "frames": 80,
+          "finite_values": 160,
+          "peak_error": 31336081391616.0,
+          "reference_peak": 5.536997181163674e+19
+        }
+      ]
+    }
+  ]
+}

@@ -1,22 +1,23 @@
+use crate::string_args::string_value;
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
 use crate::{
-    SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
+    SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
     SONG_LUA_THEME_PATH_PREFIX, create_actor_util_table, create_author_table,
     create_background_filter_values, create_color_constants_table, create_credits_table,
     create_cryptman_table, create_debug_table, create_ex_judgment_counts, create_fileman_table,
-    create_find_files_function, create_index_array, create_ini_file_table, create_lua_compat_table,
-    create_network_table, create_rage_file_util_table, create_range_table, create_split_table,
+    create_find_files_function, create_ini_file_table, create_lua_compat_table,
+    create_network_table, create_rage_file_util_table, create_range_table,
     create_string_array, create_version_parts_table, current_gamestate_player_value,
     current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
     install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
     lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
-    parse_chart_info, path_basename, preprocess_lua_cmd_syntax, read_color_call, read_color_value,
-    read_f32, read_string, retarget_loader_env, rotate_lua_table, seconds_to_hhmmss,
-    set_string_method, song_lua_is_minimum_product_version, song_lua_is_product_version,
-    stringify_lua_table, strip_sprite_hints, timing_window_arg_index, timing_window_seconds,
-    truthy, worst_judgment_from_offsets,
+    parse_chart_info, read_color_call, read_color_value, read_f32, read_string,
+    retarget_loader_env, rotate_lua_table, seconds_to_hhmmss, set_string_method,
+    song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
+    strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
+    worst_judgment_from_offsets,
 };
 
 #[derive(Clone, Copy)]
@@ -33,16 +34,20 @@ pub fn install_stdlib_compat(
     song_dir: &Path,
     callbacks: SongLuaCompatCallbacks,
 ) -> mlua::Result<()> {
+    install_random_compat(lua)?;
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
+    // _fallback/Scripts/02 Utilities.lua:113 returns the matching pairs key.
     table.set(
-        "getn",
-        lua.create_function(|_, value: Value| {
-            Ok(match value {
-                Value::Table(table) => table.raw_len() as i64,
-                _ => 0,
-            })
-        })?,
+        "find",
+        lua.load(r#"
+            return function(t, sFind)
+                for key, value in pairs(t) do
+                    if value == sFind then return key end
+                end
+                return nil
+            end
+        "#).eval::<Function>()?,
     )?;
     table.set(
         "rotate_right",
@@ -75,17 +80,7 @@ pub fn install_stdlib_compat(
     string.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let separator = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 0, 1)
         })?,
     )?;
     let math: Table = globals.get("math")?;
@@ -115,43 +110,28 @@ pub fn install_stdlib_compat(
             })?,
         )?;
     }
-    globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let separator = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let text = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 1, 0)
         })?,
     )?;
     globals.set(
         "Basename",
-        lua.create_function(|lua, value: Value| {
-            Ok(Value::String(lua.create_string(path_basename(
-                &read_string(value).unwrap_or_default(),
-            ))?))
-        })?,
+        lua.create_function(crate::string_args::basename)?,
     )?;
     globals.set(
         "Var",
         lua.create_function(move |lua, args: MultiValue| {
-            let name = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            if name == "GameCommand" {
-                return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+            if let Some(Value::String(name)) = args.front()
+                && let Ok(text) = name.to_str()
+            {
+                if text.as_ref() == "GameCommand" {
+                    return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+                }
+                return Ok(Value::String(name.clone()));
             }
-            Ok(Value::String(lua.create_string(&name)?))
+            Ok(Value::String(lua.create_string("")?))
         })?,
     )?;
     globals.set("ActorUtil", create_actor_util_table(lua, song_dir)?)?;
@@ -159,24 +139,15 @@ pub fn install_stdlib_compat(
     globals.set(
         "cleanGSub",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let needle = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let replacement = args
-                .get(2)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(Value::String(
-                lua.create_string(text.replace(&needle, &replacement))?,
-            ))
+            let text = args.front().and_then(string_value);
+            let needle = args.get(1).and_then(string_value);
+            let replacement = args.get(2).and_then(string_value);
+            Ok(Value::String(lua.create_string(
+                text.as_deref().unwrap_or_default().replace(
+                    needle.as_deref().unwrap_or_default(),
+                    replacement.as_deref().unwrap_or_default(),
+                ),
+            )?))
         })?,
     )?;
     globals.set(
@@ -218,12 +189,11 @@ pub fn install_stdlib_compat(
     globals.set(
         "GetVersionParts",
         lua.create_function(|lua, args: MultiValue| {
-            let version = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_else(|| SONG_LUA_PRODUCT_VERSION.to_string());
-            create_version_parts_table(lua, &version)
+            let version = args.front().and_then(string_value);
+            create_version_parts_table(
+                lua,
+                version.as_deref().unwrap_or(SONG_LUA_PRODUCT_VERSION),
+            )
         })?,
     )?;
     globals.set(
@@ -311,7 +281,9 @@ pub fn install_stdlib_compat(
     )?;
     globals.set(
         "IsSpooky",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.load(r#"return function()
+    return PREFSMAN:GetPreference('EasterEggs') and MonthOfYear() == 9 and ThemePrefs.Get('VisualStyle') == 'Spooky'
+end"#).set_name("@theme:/Scripts/SL-Helpers.lua:IsSpooky").eval::<Function>()?,
     )?;
     globals.set(
         "StripSpriteHints",
@@ -331,13 +303,150 @@ pub fn install_stdlib_compat(
     )?;
     globals.set(
         "GetComboFonts",
-        lua.create_function(|lua, _args: MultiValue| create_string_array(lua, &["None"]))?,
+        // SL-Helpers.lua scans only the current theme, without fallback fonts.
+        // No matching assets means an empty list, not a synthetic font name.
+        lua.load(r#"local FilenameIsMultiFrameSprite = function(filename)
+    return string.match(filename, " %d+x%d+") and string.match(filename, "%.[A-Za-z]+")
+end
+return function()
+	local path = THEME:GetCurrentThemeDirectory().."Fonts/_Combo Fonts/"
+	local dirs = FILEMAN:GetDirListing(path, true, false)
+	local fonts = {}
+	local has_wendy_cursed = false
+
+	for directory_name in ivalues(dirs) do
+		local files = FILEMAN:GetDirListing(path..directory_name.."/")
+		local has_png, has_ini = false, false
+
+		for filename in ivalues(files) do
+			if FilenameIsMultiFrameSprite(filename) and StripSpriteHints(filename)==directory_name then has_png = true end
+			if filename:match(".ini") and filename:gsub(".ini","")==directory_name then has_ini = true end
+		end
+
+		if has_png and has_ini then
+			-- special-case Wendy to always appear first in the list
+			if directory_name == "Wendy" then
+				table.insert(fonts, 1, directory_name)
+
+			-- special-case Wendy (Cursed) to always appear last in the last
+			elseif directory_name == "Wendy (Cursed)" then
+				has_wendy_cursed = true
+			else
+				table.insert(fonts, directory_name)
+			end
+		end
+	end
+
+	if has_wendy_cursed then table.insert(fonts, "Wendy (Cursed)") end
+
+	return fonts
+end"#).set_name("Simply Love/Scripts/SL-Helpers.lua:GetComboFonts").eval::<Function>()?,
     )?;
     globals.set(
         "GetColumnMapping",
-        lua.create_function(|lua, _args: MultiValue| {
-            create_index_array(lua, SONG_LUA_NOTE_COLUMNS)
-        })?,
+        // SL-Helpers.lua also handles eight-column turns and declines cue
+        // mappings for insertion/removal/shuffle modifiers. Retain that logic
+        // instead of synthesizing a four-column identity map.
+        lua.load(r#"return function(player)
+	local po = GAMESTATE:GetPlayerState(player):GetPlayerOptions('ModsLevel_Preferred')
+
+	local shuffle = po:Shuffle() or po:SoftShuffle() or po:SuperShuffle()
+	local notes_inserted = (po:Wide() or po:Skippy() or po:Quick() or po:Echo() or
+													po:BMRize() or po:Stomp() or po:Big())
+	local notes_removed = (po:Little()  or po:NoHolds() or po:NoStretch() or
+													po:NoHands() or po:NoJumps() or po:NoFakes() or
+													po:NoLifts() or po:NoQuads() or po:NoRolls())
+
+	-- If shuffle is used or notes were inserted/removed, we can't compute it
+	-- return early
+	-- TODO(teejusb): Add support for Backwards()
+	if shuffle or notes_inserted or notes_removed or po:Backwards() then
+		return nil
+	end
+
+	local flip = po:Flip() > 0
+	local invert = po:Invert() > 0
+	local left = po:Left()
+	local right = po:Right()
+	local mirror = po:Mirror()
+	local udmirror = po:UDMirror()
+	local lrmirror = po:LRMirror()
+
+	-- Combining flip and invert results in unusual spacing so ignore it.
+	if flip and invert then
+		return nil
+	end
+
+	local has_turn = flip or invert or left or right or mirror
+	local style = GAMESTATE:GetCurrentStyle()
+	local num_columns = style:ColumnsPerPlayer()
+
+	-- We only resolve turn mods in 4 and 8 panel.
+	if num_columns ~= 4 and num_columns ~= 8 then
+		if not has_turn then
+			-- Not turn mod used, return 1-to-1 mapping.
+			return range(num_columns)
+		else
+			-- If we are using turn mods in modes without 4 or 8 columns then return
+			-- early since we don't try to resolve them.
+			return nil
+		end
+	end
+
+	local column_mapping = {1, 2, 3, 4}
+
+	if flip then
+		column_mapping = {column_mapping[4], column_mapping[3], column_mapping[2], column_mapping[1]}
+	end
+
+	if invert then
+		column_mapping = {column_mapping[2], column_mapping[1], column_mapping[4], column_mapping[3]}
+	end
+
+	if left then
+		column_mapping = {column_mapping[2], column_mapping[4], column_mapping[1], column_mapping[3]}
+	end
+
+	if right then
+		column_mapping = {column_mapping[3], column_mapping[1], column_mapping[4], column_mapping[2]}
+	end
+
+	if mirror then
+		column_mapping = {column_mapping[4], column_mapping[3], column_mapping[2], column_mapping[1]}
+	end
+
+	if udmirror then
+		column_mapping = {column_mapping[1], column_mapping[3], column_mapping[2], column_mapping[4]}
+	end
+
+	if lrmirror then
+		column_mapping = {column_mapping[4], column_mapping[2], column_mapping[3], column_mapping[1]}
+	end
+
+	if num_columns == 8 then
+		for i=1,4 do
+			column_mapping[4+i] = column_mapping[i] + 4
+		end
+
+		-- Flip, Mirror. and LRMirror all swap left and right sides.
+		-- If an odd number of them are set then swap.
+		local swapCount = 0
+		if flip then swapCount = swapCount + 1 end
+		if mirror then swapCount = swapCount + 1 end
+		if lrmirror then swapCount = swapCount + 1 end
+
+		if swapCount % 2 == 1 then
+			for i=1,4 do
+				column_mapping[i] = column_mapping[i] + 4
+				column_mapping[i+4] = column_mapping[i+4] - 4
+			end
+		end
+	end
+
+	return column_mapping
+end"#)
+            .set_name("@theme:/Scripts/SL-Helpers.lua")
+            .eval::<Function>()?,
     )?;
     globals.set(
         "GetPlayerOptionsString",
@@ -358,6 +467,17 @@ pub fn install_stdlib_compat(
     globals.set(
         "TotalCourseLengthPlayed",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    globals.set(
+        "IsRoutine",
+        // _fallback/Scripts/02 Utilities.lua; used by gameplay-out's Off.
+        lua.load(r#"return function()
+    local style = GAMESTATE:GetCurrentStyle()
+    if style and style:GetStyleType() == "StyleType_TwoPlayersSharedSides" then
+        return true
+    end
+    return false
+end"#).set_name("@theme:/Scripts/02 Utilities.lua:IsRoutine").eval::<Function>()?,
     )?;
     globals.set(
         "IsGameAndMenuButton",
@@ -399,16 +519,88 @@ pub fn install_stdlib_compat(
         lua.create_function(|lua, args: MultiValue| parse_chart_info(lua, &args))?,
     )?;
     globals.set(
+        "ParseColumnCues",
+        lua.load(
+            r#"
+return function(steps, pn)
+    local cues = steps:GetColumnCues(SL.Global.ColumnCueMinTime)
+    for _, cue in ipairs(cues) do
+        for _, column in ipairs(cue.columns) do
+            column.isMine = column.noteType == 4
+            column.noteType = nil
+        end
+    end
+    SL[pn].Streams.ColumnCues = cues
+end
+"#,
+        )
+        .set_name("@theme:/Scripts/SL-ChartParser.lua")
+        .eval::<Function>()?,
+    )?;
+    globals.set(
         "ivalues",
-        lua.create_function(|lua, table: Table| {
-            let mut index = 0_i64;
-            lua.create_function_mut(move |_, ()| {
-                index += 1;
-                table.raw_get::<Value>(index)
-            })
-        })?,
+        // Native 01 base.lua uses normal indexing, accepts input before the
+        // first lookup, and observes changes through the captured table.
+        lua.load(
+            "return function(t) local n = 0; return function() n = n + 1; return t[n] end end",
+        )
+        .eval::<mlua::Function>()?,
     )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
+    // _fallback/Scripts/02 Utilities.lua: preserve actor and shared-name walks.
+    lua.load(
+        r#"
+-- Allocated native actors are userdata. Their independent handles use tables,
+-- so this debug walk must not traverse the owned actor's internal cycles.
+local function rec_print_type(value)
+    local kind = type(value)
+    if kind == "table" and rawget(value, "__songlua_def_owned") == true then
+        return "userdata"
+    end
+    return kind
+end
+function rec_print_table(t, indent, depth_remaining)
+    if not indent then indent = "" end
+    if rec_print_type(t) ~= "table" then
+        Trace(indent .. "rec_print_table passed a " .. rec_print_type(t))
+        return
+    end
+    depth_remaining = depth_remaining or -1
+    if depth_remaining == 0 then return end
+    for k, v in pairs(t) do
+        if rec_print_type(v) == "table" then
+            Trace(indent .. k .. ": table")
+            rec_print_table(v, indent .. "  ", depth_remaining - 1)
+        else
+            Trace(indent .. "(" .. rec_print_type(k) .. ")" .. k .. ": " ..
+                "(" .. rec_print_type(v) .. ")" .. tostring(v))
+        end
+    end
+    Trace(indent .. "end")
+end
+function rec_print_children(parent, indent)
+    indent = indent or ""
+    if #parent > 0 and type(parent) == "table" then
+        for i, child in ipairs(parent) do rec_print_children(child, indent .. i .. "->") end
+    elseif parent.GetChildren then
+        local name = (parent.GetName and parent:GetName()) or ""
+        Trace(indent .. name .. " children:")
+        for key, child in pairs(parent:GetChildren()) do
+            if #child > 0 then
+                Trace(indent .. name .. "->" .. key .. " shared name:")
+                rec_print_children(child, indent .. name .. "->")
+                Trace(indent .. name .. "->" .. key .. " shared name over.")
+            else rec_print_children(child, indent .. name .. "->") end
+        end
+        Trace(indent .. name .. " children over.")
+    else
+        local name = (parent.GetName and parent:GetName()) or ""
+        Trace(indent .. name .. "(" .. tostring(parent) .. ")")
+    end
+end
+"#,
+    )
+    .exec()?;
     globals.set("debug", create_debug_table(lua)?)?;
     globals.set("lua", create_lua_compat_table(lua, song_dir)?)?;
     globals.set(
@@ -491,8 +683,8 @@ pub fn install_stdlib_compat(
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
-            let mut chunk = lua.load(&code);
+            let code = crate::cmd::preprocess_lua_cmd_syntax_cow(&code).map_err(mlua::Error::external)?;
+            let mut chunk = lua.load(code.as_ref());
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);
             }
@@ -506,7 +698,7 @@ pub fn install_stdlib_compat(
         "IniFile",
         create_ini_file_table(lua, SONG_LUA_THEME_NAME, SONG_LUA_PRODUCT_VERSION)?,
     )?;
-    globals.set("RageFileUtil", create_rage_file_util_table(lua)?)?;
+    globals.set("RageFileUtil", create_rage_file_util_table(lua, song_dir)?)?;
     globals.set(
         "JsonDecode",
         lua.create_function(|lua, value: Value| match value {
@@ -566,6 +758,187 @@ pub fn install_stdlib_compat(
         lua.create_function(|_, value: Value| Ok(worst_judgment_from_offsets(value)))?,
     )?;
     Ok(())
+}
+
+// ITGmania's _fallback/Scripts/00 init.lua replaces Lua's generator with
+// RageUtil/RandomNumbers.cpp. Keep its MT19937 state local to this song VM;
+// compilation and cached playback must not consume another song's stream.
+#[derive(Debug, Clone)]
+pub(crate) struct SongLuaRandom {
+    words: [u32; 624],
+    index: usize,
+}
+
+impl SongLuaRandom {
+    pub(crate) fn seeded(seed: u32) -> Self {
+        let mut words = [0; 624];
+        words[0] = seed;
+        for index in 1..words.len() {
+            let previous = words[index - 1];
+            words[index] = 1_812_433_253_u32
+                .wrapping_mul(previous ^ (previous >> 30))
+                .wrapping_add(index as u32);
+        }
+        Self { words, index: 624 }
+    }
+
+    fn next(&mut self) -> u32 {
+        if self.index == self.words.len() {
+            for index in 0..self.words.len() {
+                let pair = (self.words[index] & 0x8000_0000)
+                    | (self.words[(index + 1) % 624] & 0x7fff_ffff);
+                self.words[index] = self.words[(index + 397) % 624]
+                    ^ (pair >> 1)
+                    ^ if pair % 2 == 0 { 0 } else { 0x9908_b0df };
+            }
+            self.index = 0;
+        }
+        let mut value = self.words[self.index];
+        self.index += 1;
+        value ^= value >> 11;
+        value ^= (value << 7) & 0x9d2c_5680;
+        value ^= (value << 15) & 0xefc6_0000;
+        value ^ (value >> 18)
+    }
+
+    pub(crate) fn real(&mut self) -> f64 {
+        let low = self.next();
+        let high = self.next();
+        // Match std::uniform_real_distribution<double> in the platform's
+        // native C++ library, including MSVC's discarded low eleven bits.
+        #[cfg(target_os = "windows")]
+        {
+            ((u64::from(low >> 11) + (u64::from(high) << 21)) as f64) / 9_007_199_254_740_992.0
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            (f64::from(low) + f64::from(high) * 4_294_967_296.0) / 18_446_744_073_709_551_616.0
+        }
+    }
+
+    fn integer(&mut self, lower: i32, upper: i32) -> f64 {
+        let width = (i64::from(upper) - i64::from(lower) + 1) as u64;
+        if width == 1_u64 << 32 {
+            return (i64::from(lower) + i64::from(self.next())) as f64;
+        }
+        let width = width as u32;
+        #[cfg(target_vendor = "apple")]
+        let offset = {
+            // libc++ uses independent_bits_engine and rejects above the bound.
+            if width == 1 {
+                return f64::from(lower);
+            }
+            let mask = u32::MAX >> width.wrapping_sub(1).leading_zeros();
+            loop {
+                let value = self.next() & mask;
+                if value < width {
+                    break value;
+                }
+            }
+        };
+        #[cfg(not(target_vendor = "apple"))]
+        let offset = {
+            // MSVC and libstdc++ use multiply-high with unbiased rejection.
+            let threshold = width.wrapping_neg() % width;
+            loop {
+                let product = u64::from(self.next()) * u64::from(width);
+                if product as u32 >= threshold {
+                    break (product >> 32) as u32;
+                }
+            }
+        };
+        (i64::from(lower) + i64::from(offset)) as f64
+    }
+}
+
+fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i32> {
+    let value = lua
+        .coerce_number(args.get(index).cloned().unwrap_or(Value::Nil))?
+        .filter(|value| {
+            value.is_finite()
+                && value.trunc() >= i32::MIN as f64
+                && value.trunc() <= i32::MAX as f64
+        })
+        .ok_or_else(|| {
+            mlua::Error::RuntimeError(format!("bad argument #{} (number expected)", index + 1))
+        })?;
+    Ok(value as i32)
+}
+
+struct SongLuaRandomState(SongLuaRandom);
+
+impl Default for SongLuaRandom {
+    fn default() -> Self { Self::seeded(1) }
+}
+
+pub(crate) struct RandomSnapshot {
+    lua: Lua,
+    previous: SongLuaRandom,
+}
+
+impl Drop for RandomSnapshot {
+    fn drop(&mut self) {
+        if let Some(mut state) = self.lua.app_data_mut::<SongLuaRandomState>() {
+            state.0 = self.previous.clone();
+        }
+    }
+}
+
+pub(crate) fn preserve_random(lua: &Lua) -> Option<RandomSnapshot> {
+    let state = lua.app_data_ref::<SongLuaRandomState>()?;
+    Some(RandomSnapshot {
+        previous: state.0.clone(),
+        lua: lua.clone(),
+    })
+}
+
+fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
+    // VM-owned state moves with Lua and is accessed under mlua's VM lock.
+    // No separately shared mutable cell or application mutex is needed.
+    lua.set_app_data(SongLuaRandomState(SongLuaRandom::seeded(1)));
+    let seed = lua.create_function(|lua, args: MultiValue| {
+        let seed = random_int_arg(lua, &args, 0)?;
+        // Native MersenneTwister treats an explicit zero seed as wall time.
+        let seed = if seed == 0 {
+            chrono::Utc::now().timestamp() as u32
+        } else {
+            seed as u32
+        };
+        lua.app_data_mut::<SongLuaRandomState>()
+            .ok_or_else(|| mlua::Error::runtime("missing Lua random state"))?.0 = SongLuaRandom::seeded(seed);
+        Ok(())
+    })?;
+    let random = lua.create_function(|lua, args: MultiValue| {
+        let mut state = lua.app_data_mut::<SongLuaRandomState>()
+            .ok_or_else(|| mlua::Error::runtime("missing Lua random state"))?;
+        match args.len() {
+            0 => Ok(state.0.real()),
+            1 | 2 => {
+                let (lower, upper) = if args.len() == 1 {
+                    (1, random_int_arg(lua, &args, 0)?)
+                } else {
+                    (
+                        random_int_arg(lua, &args, 0)?,
+                        random_int_arg(lua, &args, 1)?,
+                    )
+                };
+                if lower > upper || (args.len() == 2 && lower == upper) {
+                    return Err(mlua::Error::RuntimeError("interval is empty".into()));
+                }
+                Ok(state.0.integer(lower, upper))
+            }
+            _ => Err(mlua::Error::RuntimeError(
+                "wrong number of arguments".into(),
+            )),
+        }
+    })?;
+    let namespace = lua.create_table()?;
+    namespace.set("Seed", seed.clone())?;
+    namespace.set("Random", random.clone())?;
+    lua.globals().set("MersenneTwister", namespace)?;
+    let math: Table = lua.globals().get("math")?;
+    math.set("randomseed", seed)?;
+    math.set("random", random)
 }
 
 pub fn install_default_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
@@ -667,3 +1040,7 @@ fn create_game_command_table(lua: &Lua, callbacks: SongLuaCompatCallbacks) -> ml
     )?;
     Ok(table)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/borrowed_compat.rs"]
+mod borrowed_compat_perf;

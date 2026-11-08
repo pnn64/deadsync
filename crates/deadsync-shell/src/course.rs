@@ -1,8 +1,8 @@
-use deadsync_chart::SongData;
+use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, course_display_timing_for_stages,
-    course_display_totals_for_chart,
+    course_display_totals_for_chart, course_display_totals_for_chart_side,
 };
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
@@ -40,18 +40,21 @@ pub struct CourseRunState {
     pub stages: Vec<CourseStageRuntime>,
     pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
     pub next_stage_index: usize,
+    /// A loading error ends the course without marking its players as failed.
+    pub interrupted: bool,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
 }
 
 impl CourseRunState {
     pub fn has_next_stage(&self) -> bool {
-        !self.stages.is_empty()
+        !self.interrupted
+            && !self.stages.is_empty()
             && (self.course_type == CourseTypeView::Endless
                 || self.next_stage_index < self.stages.len())
     }
 
     pub fn next_stage(&self) -> Option<&CourseStageRuntime> {
-        if self.stages.is_empty() {
+        if self.interrupted || self.stages.is_empty() {
             return None;
         }
         let index = if self.course_type == CourseTypeView::Endless {
@@ -64,6 +67,7 @@ impl CourseRunState {
 
     pub fn is_finished(&self, failed: bool) -> bool {
         failed
+            || self.interrupted
             || (self.course_type != CourseTypeView::Endless
                 && self.next_stage_index >= self.stages.len())
     }
@@ -102,35 +106,81 @@ pub fn course_life_config_for_stage(
 }
 
 fn course_stage_runtime_from_plan(
-    plan: &CourseStagePlan,
+    plan: CourseStagePlan,
     chart_type: &str,
 ) -> Option<CourseStageRuntime> {
     let steps_idx = plan
         .song
         .steps_index_for_chart_hash(chart_type, plan.chart_hash.as_str())?;
     Some(CourseStageRuntime {
-        song: plan.song.clone(),
+        song: plan.song,
         steps_index: [steps_idx; MAX_PLAYERS],
         preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
-        modifiers: plan.modifiers.clone(),
+        modifiers: plan.modifiers,
         gain_seconds: plan.gain_seconds,
         gain_lives: plan.gain_lives,
     })
 }
 
-fn add_course_stage_totals(
+/// Loading can fail if a simfile disappears or changes after course selection.
+/// Keep the loader explicit so this boundary can be exercised without global
+/// scan configuration or external song packs.
+fn add_course_stage_totals_with_loader(
     totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
     stage: &CourseStageRuntime,
     chart_type: &str,
-) {
-    for (player_idx, total) in totals.iter_mut().enumerate() {
-        let Some(chart) = stage
-            .song
-            .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
-        else {
-            continue;
+    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+) -> Result<(), String> {
+    use deadsync_gameplay::GameplayInputPlayStyle as Style;
+    let partner_style = [
+        ("dance-couple", Style::Couple),
+        ("pump-couple", Style::PumpCouple),
+        ("dance-routine", Style::Routine),
+        ("pump-routine", Style::PumpRoutine),
+    ]
+    .into_iter()
+    .find_map(|(name, style)| name.eq_ignore_ascii_case(chart_type).then_some(style));
+    let mut updated = *totals;
+    let mut loaded: Option<(usize, GameplayChartData)> = None;
+    for (player_idx, total) in updated.iter_mut().enumerate() {
+        let steps_index = stage.steps_index[player_idx];
+        let context = || {
+            format!(
+                "{}: {chart_type} chart at steps index {steps_index}",
+                stage.song.simfile_path.display()
+            )
         };
-        let add = course_display_totals_for_chart(chart);
+        let chart = stage
+            .song
+            .chart_for_steps_index(chart_type, steps_index)
+            .ok_or_else(|| format!("{} is missing", context()))?;
+        let add = if let Some(style) = partner_style {
+            let index = stage
+                .song
+                .charts
+                .iter()
+                .position(|entry| std::ptr::eq(entry, chart))
+                .ok_or_else(|| format!("{} is not in its song", context()))?;
+            if loaded
+                .as_ref()
+                .is_none_or(|(loaded_index, _)| *loaded_index != index)
+            {
+                let mut payloads = load(&stage.song, &[index], 0.0)
+                    .map_err(|error| format!("Cannot load {}: {error}", context()))?;
+                if payloads.len() != 1 {
+                    return Err(format!(
+                        "Loader returned {} payloads for {} (expected one)",
+                        payloads.len(),
+                        context()
+                    ));
+                }
+                loaded = payloads.pop().map(|payload| (index, payload));
+            }
+            let (_, payload) = loaded.as_ref().expect("one validated payload was loaded");
+            course_display_totals_for_chart_side(chart, payload, style, player_idx)
+        } else {
+            course_display_totals_for_chart(chart)
+        };
         total.possible_grade_points = total
             .possible_grade_points
             .saturating_add(add.possible_grade_points);
@@ -139,6 +189,21 @@ fn add_course_stage_totals(
         total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
         total.mines_total = total.mines_total.saturating_add(add.mines_total);
     }
+    *totals = updated;
+    Ok(())
+}
+
+fn add_course_stage_totals(
+    totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
+    stage: &CourseStageRuntime,
+    chart_type: &str,
+) -> Result<(), String> {
+    add_course_stage_totals_with_loader(
+        totals,
+        stage,
+        chart_type,
+        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+    )
 }
 
 pub fn append_endless_cycle(
@@ -146,22 +211,51 @@ pub fn append_endless_cycle(
     selection: SelectedCoursePlan,
     chart_type: &str,
 ) -> bool {
-    if course.course_type != CourseTypeView::Endless || selection.path != course.path {
-        return false;
+    match append_endless_cycle_with_loader(
+        course,
+        selection,
+        chart_type,
+        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+    ) {
+        Ok(appended) => appended,
+        Err(error) => {
+            log::warn!("Unable to append Endless course cycle: {error}");
+            false
+        }
     }
-    let stages: Vec<_> = selection
+}
+
+fn append_endless_cycle_with_loader(
+    course: &mut CourseRunState,
+    selection: SelectedCoursePlan,
+    chart_type: &str,
+    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+) -> Result<bool, String> {
+    if course.interrupted
+        || course.course_type != CourseTypeView::Endless
+        || selection.path != course.path
+    {
+        return Ok(false);
+    }
+    let previous_len = course.stages.len();
+    let mut totals = course.course_display_totals;
+    for stage in selection
         .stages
-        .iter()
-        .filter_map(|stage| course_stage_runtime_from_plan(stage, chart_type))
-        .collect();
-    if stages.is_empty() {
-        return false;
+        .into_iter()
+        .filter_map(|plan| course_stage_runtime_from_plan(plan, chart_type))
+    {
+        if let Err(error) =
+            add_course_stage_totals_with_loader(&mut totals, &stage, chart_type, load)
+        {
+            // The only mutations so far are appended stages. Drop those on
+            // failure, retaining the original stages, cursor and totals.
+            course.stages.truncate(previous_len);
+            return Err(error);
+        }
+        course.stages.push(stage);
     }
-    for stage in &stages {
-        add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
-    }
-    course.stages.extend(stages);
-    true
+    course.course_display_totals = totals;
+    Ok(course.stages.len() != previous_len)
 }
 
 pub fn build_course_run_from_selection(
@@ -169,18 +263,20 @@ pub fn build_course_run_from_selection(
     chart_type: &str,
 ) -> Option<CourseRunState> {
     let mut stages = Vec::with_capacity(selection.stages.len());
-    for stage in &selection.stages {
+    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
+    for stage in selection.stages {
         if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
+            if let Err(error) =
+                add_course_stage_totals(&mut course_display_totals, &runtime, chart_type)
+            {
+                log::warn!("Unable to build course run: {error}");
+                return None;
+            }
             stages.push(runtime);
         }
     }
     if stages.is_empty() {
         return None;
-    }
-
-    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
-    for stage in &stages {
-        add_course_stage_totals(&mut course_display_totals, stage, chart_type);
     }
 
     Some(CourseRunState {
@@ -197,6 +293,7 @@ pub fn build_course_run_from_selection(
         stages,
         course_display_totals,
         next_stage_index: 0,
+        interrupted: false,
         stage_summaries: Vec::new(),
     })
 }
@@ -220,8 +317,10 @@ pub fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTi
     })
 }
 
-pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    let totals = if course.course_type == CourseTypeView::Endless {
+fn course_summary_totals(
+    course: &CourseRunState,
+) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
+    if course.course_type == CourseTypeView::Endless {
         [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
     } else {
         course
@@ -233,7 +332,11 @@ pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats
                 rolls_total: total.rolls_total,
                 mines_total: total.mines_total,
             })
-    };
+    }
+}
+
+pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
+    let totals = course_summary_totals(course);
     stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
         path: course.path.as_path(),
         name: course.name.as_str(),
@@ -248,9 +351,52 @@ pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats
     })
 }
 
+/// The Routine course result both participants share, which the course saves
+/// for the master player only.
+pub fn routine_shared_course_player(
+    course: &CourseRunState,
+    summary: &stage_stats::StageSummary,
+    play_style: PlayStyle,
+) -> Option<stage_stats::PlayerStageSummary> {
+    if !play_style.is_routine() {
+        return None;
+    }
+    let [Some(first), Some(second)] = &summary.players else {
+        return None;
+    };
+    Some(stage_stats::routine_shared_course_player(
+        first,
+        second,
+        course_summary_totals(course),
+    ))
+}
+
+/// The result each side saves for a course: StageStats::CommitScores saves
+/// one shared Routine result, for the master player.
+pub fn course_summary_records<'a>(
+    summary: &'a stage_stats::StageSummary,
+    routine_shared: Option<&'a stage_stats::PlayerStageSummary>,
+) -> [Option<&'a stage_stats::PlayerStageSummary>; MAX_PLAYERS] {
+    match routine_shared {
+        Some(shared) => std::array::from_fn(|idx| (idx == 0).then_some(shared)),
+        None => summary.players.each_ref().map(Option::as_ref),
+    }
+}
+
 pub fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: PlayerSide,
+) -> Option<ScoreInfo> {
+    let idx = profile_data::player_side_index(side);
+    score_info_from_stage_with_record(stage, side, stage.players[idx].as_ref())
+}
+
+/// `record` is the result saved for `side`, which record highlights rank.
+/// None means nothing is saved for `side`, so it highlights no record.
+fn score_info_from_stage_with_record(
+    stage: &stage_stats::StageSummary,
+    side: PlayerSide,
+    record: Option<&stage_stats::PlayerStageSummary>,
 ) -> Option<ScoreInfo> {
     let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
@@ -258,11 +404,12 @@ pub fn score_info_from_stage(
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
     let personal_records =
         scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
+    let record_percent = record.map_or(player.score_percent, |record| record.score_percent);
     let machine_record_highlight_rank =
-        score_data::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
+        score_data::leaderboard_rank_for_score(machine_records.as_slice(), record_percent);
     let personal_record_highlight_rank =
-        score_data::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
-    let local_score_valid = player.score_valid && !player.disqualified;
+        score_data::leaderboard_rank_for_score(personal_records.as_slice(), record_percent);
+    let local_score_valid = record.is_some_and(|record| record.score_valid && !record.disqualified);
     let earned_machine_record =
         local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
     let earned_top2_personal =
@@ -337,6 +484,8 @@ pub fn score_info_from_stage(
         show_fa_plus_pane: player.show_fa_plus_pane,
         track_early_judgments: player.track_early_judgments,
         dim_post_fail_scatter: player.dim_post_fail_scatter,
+        golf_score: player.golf_score,
+        golf_par: player.golf_par,
         disabled_timing_windows,
         machine_records,
         machine_record_highlight_rank,
@@ -348,16 +497,23 @@ pub fn score_info_from_stage(
 
 pub fn build_course_summary_score_info(
     stage: &stage_stats::StageSummary,
+    routine_shared: Option<&stage_stats::PlayerStageSummary>,
     course_graph_stages: &[Vec<CourseGraphStage>; MAX_PLAYERS],
     play_style: PlayStyle,
     active_side: PlayerSide,
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
+    let records = course_summary_records(stage, routine_shared);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             for side in [PlayerSide::P1, PlayerSide::P2] {
                 let idx = profile_data::player_side_index(side);
-                score_info[idx] = score_info_from_stage(stage, side);
+                score_info[idx] = score_info_from_stage_with_record(stage, side, records[idx]);
                 if let Some(score) = score_info[idx].as_mut() {
                     score
                         .course_graph_stages
@@ -382,20 +538,36 @@ pub fn build_course_graph_stages(
     course: &CourseRunState,
     chart_type: &str,
 ) -> [Vec<CourseGraphStage>; MAX_PLAYERS] {
-    std::array::from_fn(|player_idx| {
-        let mut out = Vec::with_capacity(course.stages.len());
-        for stage in &course.stages {
-            let Some(chart) = stage
+    let mut out = std::array::from_fn(|_| Vec::with_capacity(course.stages.len()));
+    for stage in &course.stages {
+        let build = |index| {
+            stage
                 .song
-                .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
-            else {
+                .chart_for_steps_index(chart_type, index)
+                .map(|chart| CourseGraphStage {
+                    chart: Arc::new(chart.clone()),
+                    song_last_second: stage.song.precise_last_second(),
+                })
+        };
+        let first = build(stage.steps_index[0]);
+        let second = if stage.steps_index[0] == stage.steps_index[1] {
+            let Some(first) = &first else {
                 continue;
             };
-            out.push(CourseGraphStage {
-                chart: Arc::new(chart.clone()),
-                song_last_second: stage.song.precise_last_second(),
-            });
-        }
-        out
-    })
+            Some(first.clone())
+        } else {
+            build(stage.steps_index[1])
+        };
+        let [p1, p2] = &mut out;
+        p1.extend(first);
+        p2.extend(second);
+    }
+    out
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_updates.rs"]
+mod update_tests;
+
+#[cfg(test)]
+mod partner_tests;

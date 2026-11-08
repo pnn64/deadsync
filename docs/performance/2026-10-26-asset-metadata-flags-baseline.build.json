@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=1",
+    "-C",
+    "target-feature=+crt-static",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata-flags\\baseline.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata-flags\\baseline.exe"
+  ],
+  "dependencies": {},
+  "source_sha256": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "202bb4ad2927649d6f9326b18a048ea13bd41212330621e4da145afc69609363",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\texture_hint_perf.rs": "2dfadd6602f5ddc7bf651dc1638dc856ad814362af7512f962fa97411b13ef34",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\texture_hint_original.rs": "4650c3edce2e8466e653ace94d7320c6a1fcf801849cf42391ba2fa508e3ee70",
+    "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "C:\\GitHub\\deadsync\\scripts\\benchmark_asset_metadata.py": "c67e1238d32ef652588d4421c71b6d59a3e69edc7b8d4992c94c1c65a5480f3e"
+  },
+  "body_sha256": {
+    "hint_starts_with": "a85fe0ebc5b1cc55710b57907917509dbc56331e78e3e3584784ad8d2d47cb71",
+    "texture_hint_flags": "028a842e9afcf278e18ecbc600e516ab48b17c294067dc5f3ad88cbc8f408a94"
+  },
+  "binary_sha256": "922486b1af5d3405a1fc135a0efb653cf34b07ddcbb579ec2be8388b5c180452"
+}

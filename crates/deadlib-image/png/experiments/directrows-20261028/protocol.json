@@ -1,0 +1,14 @@
+{
+  "source_base": "68a288d39",
+  "selected_checkpoint": "sub",
+  "benchmark_stage": "rowbuffers",
+  "pipeline_cases": 124,
+  "checkpoint_scope_note": "The four freeze-only checkpoint manifests inherit the driver's default 12-iteration scope description but contain no timed outputs. Actual paired measurements request three iterations, as recorded in every paired manifest and TSV; the pipeline protocol below describes those measurements.",
+  "shared_image_checkout": "The unchanged shared deadlib-image/src/lib.rs checkout uses CRLF while Git stores LF. The audit checks the normalized Git content against its recorded checkout hash; PNG source files match Git bytes directly.",
+  "comparisons": ["buffered-paired", "writer-paired", "sub-paired", "selected-paired"],
+  "pipeline_protocol": "Logical CPU 2; Windows thread cycles; three warmups; separate untimed allocation probe; seven batches; four alternating processes per version. Requested iterations are three, with a minimum of 64 for readers up to 65536 native bytes and 2048 for other outputs below 4096 bytes. Measurement jobs are serialized; other host workloads/frequency are uncontrolled.",
+  "in_process_protocol": "Immutable baseline and current crate linked into one caller with a shared deadlib-image dependency. Before/after PNG wire bytes must match exactly. Three processes, each retaining eleven alternating batches per variant after one warmup batch. Large encoder cases use three iterations, the small case 1024, reader controls 64. Same optimized/LTO bench settings copied from the workspace.",
+  "in_process_scope": "22 encoder case/operations plus four one-row reader controls. This isolates caller/process effects without replacing full-library correctness or allocation probes. The baseline crate name is changed solely to allow both versions to link.",
+  "correctness": ["final-validation.json", "library-validation.json"],
+  "allocation_expectations": "None removes three buffered and two writer row allocations. Sub removes one previous-row allocation in each encoder, along with its writer growth reallocations. Other filter allocations remain unchanged."
+}

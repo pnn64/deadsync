@@ -5,13 +5,13 @@ use ash::{
     vk,
 };
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
+    BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshSampler,
+    MeshVertex, PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
     SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
     TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshUploads, TexturedMeshVertex,
     Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries,
+    resolve_textured_mesh_geometries, texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -78,10 +78,78 @@ struct PipelinePair {
 pub struct Texture {
     device: Arc<Device>,
     images: TextureImages,
-    descriptor_set: vk::DescriptorSet,
-    descriptor_set_repeat: vk::DescriptorSet,
-    pool: vk::DescriptorPool,
-    nearest_sets: Option<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool)>,
+    sampler_desc: SamplerDesc,
+    samplers: TextureSamplers,
+}
+
+// Texture-lifetime, render-thread-owned fixed descriptor table. Creation warms
+// all filter/wrap choices; draws index retained sets without allocation or
+// eviction. The three allocation pairs are freed with the texture, including
+// partial creation failures; descriptor work is bounded to six sets per texture.
+struct TextureSamplers {
+    device: Arc<Device>,
+    sets: SamplerCache<vk::DescriptorSet>,
+    pairs: [Option<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool)>; 3],
+}
+impl Drop for TextureSamplers {
+    fn drop(&mut self) {
+        for &(set, repeat, pool) in self.pairs.iter().flatten() {
+            // SAFETY: this table owns both sets allocated from each retained pool;
+            // the device outlives the table and texture retirement waits for GPU use.
+            unsafe {
+                let _ = self.device.free_descriptor_sets(pool, &[set, repeat]);
+            }
+        }
+    }
+}
+fn create_texture_samplers(
+    state: &mut State,
+    views: [vk::ImageView; 3],
+    desc: SamplerDesc,
+) -> Result<TextureSamplers, Box<dyn Error>> {
+    let mut table = TextureSamplers {
+        device: Arc::clone(
+            state
+                .device
+                .as_ref()
+                .expect("texture creation requires an initialized Vulkan device"),
+        ),
+        sets: SamplerCache::default(),
+        pairs: [None; 3],
+    };
+    let choices = [
+        desc,
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(desc),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(desc),
+    ];
+    for (index, choice) in choices.into_iter().enumerate() {
+        let clamp = SamplerDesc {
+            wrap: SamplerWrap::Clamp,
+            ..choice
+        };
+        let repeat = SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..choice
+        };
+        if table.sets.get(clamp).is_some() {
+            continue;
+        }
+        let a = get_sampler(state, clamp)?;
+        let b = get_sampler(state, repeat)?;
+        let pair = create_texture_descriptor_sets(state, views, a, b)?;
+        table.sets.insert(clamp, pair.0);
+        table.sets.insert(repeat, pair.1);
+        table.pairs[index] = Some(pair);
+    }
+    Ok(table)
 }
 
 #[derive(Debug)]
@@ -114,15 +182,8 @@ pub trait TextureLookup {
 impl Drop for Texture {
     fn drop(&mut self) {
         // SAFETY: `Texture` owns these Vulkan objects, the `Device` outlives `self` via `Arc`,
-        // and both descriptor sets were allocated from `self.pool` and are not freed elsewhere.
+        // and descriptor ownership is retained independently by `self.samplers`.
         unsafe {
-            let _ = self.device.free_descriptor_sets(
-                self.pool,
-                &[self.descriptor_set, self.descriptor_set_repeat],
-            );
-            if let Some((set, repeat, pool)) = self.nearest_sets {
-                let _ = self.device.free_descriptor_sets(pool, &[set, repeat]);
-            }
             let mut destroy = |image: &TextureImage| {
                 self.device.destroy_image_view(image.view, None);
                 self.device.destroy_image(image.image, None);
@@ -163,12 +224,73 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+// Render-thread-owned depth images live with their swapchain/target dimensions.
+// Allocated at backend creation or resize, reused each frame, and freed after
+// the device is idle. No gameplay cache misses, pruning, or image allocation.
+struct DepthTarget {
+    device: Arc<Device>,
+    image: TextureImage,
+}
+
+impl Drop for DepthTarget {
+    fn drop(&mut self) {
+        // SAFETY: this target exclusively owns the image; its owner retires
+        // framebuffers and waits for in-flight GPU use before dropping it.
+        unsafe {
+            self.device.destroy_image_view(self.image.view, None);
+            self.device.destroy_image(self.image.image, None);
+            self.device.free_memory(self.image.memory, None);
+        }
+    }
+}
+
+fn create_depth_target(
+    state: &State,
+    width: u32,
+    height: u32,
+    format: vk::Format,
+) -> Result<DepthTarget, vk::Result> {
+    let (image, memory) = create_image(
+        state,
+        width,
+        height,
+        format,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+    let mut target = DepthTarget {
+        device: Arc::clone(state.device.as_ref().unwrap()),
+        image: TextureImage {
+            image,
+            memory,
+            view: vk::ImageView::null(),
+        },
+    };
+    let info = vk::ImageViewCreateInfo::default()
+        .image(image)
+        .view_type(vk::ImageViewType::TYPE_2D)
+        .format(format)
+        .subresource_range(vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::DEPTH,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        });
+    // SAFETY: the image is owned by target and was allocated on the same device.
+    target.image.view = unsafe { target.device.create_image_view(&info, None)? };
+    Ok(target)
+}
+
 struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
     texture: Texture,
     framebuffer: vk::Framebuffer,
+    _depth: Option<DepthTarget>,
     initialized: bool,
 }
 
@@ -233,6 +355,7 @@ struct SwapchainResources {
     _images: Vec<vk::Image>,
     image_views: Vec<vk::ImageView>,
     framebuffers: Vec<vk::Framebuffer>,
+    depths: Vec<DepthTarget>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
     present_mode: vk::PresentModeKHR,
@@ -306,25 +429,9 @@ pub struct State {
     command_pool: vk::CommandPool,
     swapchain_resources: SwapchainResources,
     render_pass: vk::RenderPass,
-    offscreen_clear_pass: vk::RenderPass,
-    offscreen_preserve_pass: vk::RenderPass,
+    capture_passes: [[CapturePass; 2]; 2],
+    main_pipelines: PassPipelines,
     offscreen_targets: Vec<OffscreenTarget>,
-    sprite_pipeline_layout: vk::PipelineLayout,
-    sprite_pipeline: vk::Pipeline,
-    opaque_sprite_pipeline_layout: vk::PipelineLayout,
-    opaque_sprite_pipeline: vk::Pipeline,
-    yuv_pipeline_layout: vk::PipelineLayout,
-    yuv_pipeline: vk::Pipeline,
-    opaque_yuv_pipeline_layout: vk::PipelineLayout,
-    opaque_yuv_pipeline: vk::Pipeline,
-    mesh_pipeline_layout: vk::PipelineLayout,
-    mesh_pipeline: vk::Pipeline,
-    opaque_mesh_pipeline_layout: vk::PipelineLayout,
-    opaque_mesh_pipeline: vk::Pipeline,
-    textured_mesh_pipeline_layout: vk::PipelineLayout,
-    textured_mesh_pipeline: vk::Pipeline,
-    opaque_textured_mesh_pipeline_layout: vk::PipelineLayout,
-    opaque_textured_mesh_pipeline: vk::Pipeline,
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     descriptor_set_layout: vk::DescriptorSetLayout,
@@ -410,7 +517,7 @@ pub fn init(
     let command_pool = create_command_pool(device.as_ref().unwrap(), queue_family_index)?;
 
     let initial_size = window.inner_size();
-    let mut swapchain_resources = create_swapchain(
+    let swapchain_resources = create_swapchain(
         &instance,
         device.as_ref().unwrap(),
         pdevice,
@@ -423,108 +530,47 @@ pub fn init(
     )?;
     let render_pass =
         create_render_pass(device.as_ref().unwrap(), swapchain_resources.format.format)?;
-    let offscreen_clear_pass = create_offscreen_render_pass(
-        device.as_ref().unwrap(),
-        swapchain_resources.format.format,
-        false,
-    )?;
-    let offscreen_preserve_pass = create_offscreen_render_pass(
-        device.as_ref().unwrap(),
-        swapchain_resources.format.format,
-        true,
-    )?;
-    recreate_framebuffers(
-        device.as_ref().unwrap(),
-        &mut swapchain_resources,
-        render_pass,
-    )?;
-
     let descriptor_set_layout = create_descriptor_set_layout(device.as_ref().unwrap())?;
     let descriptor_pools = vec![create_descriptor_pool(device.as_ref().unwrap())?];
-
-    let PipelinePair {
-        layout: sprite_pipeline_layout,
-        pipe: sprite_pipeline,
-    } = create_sprite_pipeline(
+    // Fixed format/alpha/blend variants are built at backend creation, never on
+    // a gameplay draw. Both main and capture passes use the same recording path.
+    let main_pipelines = create_pass_pipelines(
         device.as_ref().unwrap(),
         render_pass,
         descriptor_set_layout,
-        BlendMode::Alpha,
-        false,
-        true,
-    )?;
-    let PipelinePair {
-        layout: opaque_sprite_pipeline_layout,
-        pipe: opaque_sprite_pipeline,
-    } = create_sprite_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        descriptor_set_layout,
-        BlendMode::Alpha,
-        false,
-        false,
-    )?;
-    let PipelinePair {
-        layout: yuv_pipeline_layout,
-        pipe: yuv_pipeline,
-    } = create_sprite_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        descriptor_set_layout,
-        BlendMode::Alpha,
         true,
         true,
     )?;
-    let PipelinePair {
-        layout: opaque_yuv_pipeline_layout,
-        pipe: opaque_yuv_pipeline,
-    } = create_sprite_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        descriptor_set_layout,
-        BlendMode::Alpha,
-        true,
-        false,
-    )?;
-
-    let PipelinePair {
-        layout: mesh_pipeline_layout,
-        pipe: mesh_pipeline,
-    } = create_mesh_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        BlendMode::Alpha,
-        true,
-    )?;
-    let PipelinePair {
-        layout: opaque_mesh_pipeline_layout,
-        pipe: opaque_mesh_pipeline,
-    } = create_mesh_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        BlendMode::Alpha,
-        false,
-    )?;
-    let PipelinePair {
-        layout: textured_mesh_pipeline_layout,
-        pipe: textured_mesh_pipeline,
-    } = create_textured_mesh_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        descriptor_set_layout,
-        BlendMode::Alpha,
-        true,
-    )?;
-    let PipelinePair {
-        layout: opaque_textured_mesh_pipeline_layout,
-        pipe: opaque_textured_mesh_pipeline,
-    } = create_textured_mesh_pipeline(
-        device.as_ref().unwrap(),
-        render_pass,
-        descriptor_set_layout,
-        BlendMode::Alpha,
-        false,
-    )?;
+    let capture_passes = [
+        [
+            create_capture_pass(
+                device.as_ref().unwrap(),
+                swapchain_resources.format.format,
+                descriptor_set_layout,
+                false,
+            )?,
+            create_capture_pass(
+                device.as_ref().unwrap(),
+                swapchain_resources.format.format,
+                descriptor_set_layout,
+                true,
+            )?,
+        ],
+        [
+            create_capture_pass(
+                device.as_ref().unwrap(),
+                vk::Format::R16G16B16A16_SFLOAT,
+                descriptor_set_layout,
+                false,
+            )?,
+            create_capture_pass(
+                device.as_ref().unwrap(),
+                vk::Format::R16G16B16A16_SFLOAT,
+                descriptor_set_layout,
+                true,
+            )?,
+        ],
+    ];
 
     let command_buffers =
         create_command_buffers(device.as_ref().unwrap(), command_pool, MAX_FRAMES_IN_FLIGHT)?;
@@ -554,25 +600,9 @@ pub fn init(
         command_pool,
         swapchain_resources,
         render_pass,
-        offscreen_clear_pass,
-        offscreen_preserve_pass,
+        capture_passes,
+        main_pipelines,
         offscreen_targets: Vec::new(),
-        sprite_pipeline_layout,
-        sprite_pipeline,
-        opaque_sprite_pipeline_layout,
-        opaque_sprite_pipeline,
-        yuv_pipeline_layout,
-        yuv_pipeline,
-        opaque_yuv_pipeline_layout,
-        opaque_yuv_pipeline,
-        mesh_pipeline_layout,
-        mesh_pipeline,
-        opaque_mesh_pipeline_layout,
-        opaque_mesh_pipeline,
-        textured_mesh_pipeline_layout,
-        textured_mesh_pipeline,
-        opaque_textured_mesh_pipeline_layout,
-        opaque_textured_mesh_pipeline,
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
@@ -622,6 +652,7 @@ pub fn init(
         screenshot_requested: false,
         captured_frame: None,
     };
+    recreate_framebuffers(&mut state)?;
 
     // Static unit quad buffers
     let vertices: [[f32; 4]; 4] = [
@@ -814,6 +845,7 @@ fn create_sprite_pipeline(
     // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default();
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -821,6 +853,7 @@ fn create_sprite_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -907,6 +940,7 @@ fn create_mesh_pipeline(
     // for the mesh shaders.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default();
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -914,6 +948,7 @@ fn create_mesh_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -944,6 +979,7 @@ fn create_textured_mesh_pipeline(
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
     write_alpha: bool,
+    depth_mode: deadlib_render_core::DepthMode,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.vert.spv"));
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
@@ -962,7 +998,7 @@ fn create_textured_mesh_pipeline(
             .name(main_name),
     ];
 
-    let (binding_descriptions, attribute_descriptions) = vertex_input_descriptions_tmesh();
+    let (binding_descriptions, attribute_descriptions) = textured_mesh_vertex_input();
     let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::default()
         .vertex_binding_descriptions(&binding_descriptions)
         .vertex_attribute_descriptions(&attribute_descriptions);
@@ -993,14 +1029,25 @@ fn create_textured_mesh_pipeline(
 
     let push_constant_range = projection_push_constant_range();
 
+    let material_layouts = [set_layout, set_layout];
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
-        .set_layouts(std::slice::from_ref(&set_layout))
+        .set_layouts(&material_layouts)
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
     // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
     // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default()
+        .depth_test_enable(depth_mode != deadlib_render_core::DepthMode::Off)
+        .depth_write_enable(depth_mode.writes())
+        .depth_compare_op(if depth_mode.on_fail() {
+            vk::CompareOp::GREATER
+        } else if depth_mode.tests() {
+            vk::CompareOp::LESS_OR_EQUAL
+        } else {
+            vk::CompareOp::ALWAYS
+        });
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -1008,6 +1055,7 @@ fn create_textured_mesh_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -1364,7 +1412,10 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
 
 fn best_fit_staging_index(pool: &[TextureStagingBuffer], needed: vk::DeviceSize) -> Option<usize> {
     // An exact fit is optimal; keep the first entry on ties.
-    if pool.first().is_some_and(|staging| staging.capacity == needed) {
+    if pool
+        .first()
+        .is_some_and(|staging| staging.capacity == needed)
+    {
         return Some(0);
     }
     pool.iter()
@@ -1666,16 +1717,7 @@ pub fn create_texture(
 
     state.pending_tex_staging.push(staging);
     let view = create_image_view(device, tex_image, fmt)?;
-    let sampler_default = get_sampler(state, sampler)?;
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler
-        },
-    )?;
-    let (set, set_repeat, pool) =
-        create_texture_descriptor_sets(state, [view, view, view], sampler_default, sampler_repeat)?;
+    let samplers = create_texture_samplers(state, [view; 3], sampler)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -1684,10 +1726,8 @@ pub fn create_texture(
             memory: tex_mem,
             view,
         }),
-        descriptor_set: set,
-        descriptor_set_repeat: set_repeat,
-        pool,
-        nearest_sets: None,
+        sampler_desc: sampler,
+        samplers,
     })
 }
 
@@ -1825,32 +1865,9 @@ pub fn create_yuv420_texture(
         .try_into()
         .expect("three YUV plane resources were created");
 
-    let sampler_default = match get_sampler(state, sampler) {
-        Ok(sampler) => sampler,
-        Err(error) => {
-            destroy_texture_images(device, &images);
-            destroy_buffer(device, &staging.resource);
-            return Err(error.into());
-        }
-    };
-    let sampler_repeat = match get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler
-        },
-    ) {
-        Ok(sampler) => sampler,
-        Err(error) => {
-            destroy_texture_images(device, &images);
-            destroy_buffer(device, &staging.resource);
-            return Err(error.into());
-        }
-    };
     let views = [images[0].view, images[1].view, images[2].view];
-    let descriptors = create_texture_descriptor_sets(state, views, sampler_default, sampler_repeat);
-    let (descriptor_set, descriptor_set_repeat, pool) = match descriptors {
-        Ok(descriptors) => descriptors,
+    let samplers = match create_texture_samplers(state, views, sampler) {
+        Ok(samplers) => samplers,
         Err(error) => {
             destroy_texture_images(device, &images);
             destroy_buffer(device, &staging.resource);
@@ -1860,10 +1877,6 @@ pub fn create_yuv420_texture(
     let cmd = match begin_pending_texture_upload_cmd(state) {
         Ok(cmd) => cmd,
         Err(error) => {
-            // SAFETY: neither descriptor set nor any image has been submitted.
-            unsafe {
-                let _ = device.free_descriptor_sets(pool, &[descriptor_set, descriptor_set_repeat]);
-            }
             destroy_texture_images(device, &images);
             destroy_buffer(device, &staging.resource);
             return Err(error);
@@ -1886,10 +1899,8 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        descriptor_set,
-        descriptor_set_repeat,
-        pool,
-        nearest_sets: None,
+        sampler_desc: sampler,
+        samplers,
     })
 }
 
@@ -2116,17 +2127,14 @@ fn texture_descriptor_set(
     texture: &Texture,
     handle: TextureHandle,
     repeat: bool,
+    sampler: Option<MeshSampler>,
 ) -> vk::DescriptorSet {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture
-            .nearest_sets
-            .map_or(texture.descriptor_set, |sets| sets.0),
-        (true, true) => texture
-            .nearest_sets
-            .map_or(texture.descriptor_set_repeat, |sets| sets.1),
-        (false, false) => texture.descriptor_set,
-        (false, true) => texture.descriptor_set_repeat,
-    }
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    *texture
+        .samplers
+        .sets
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
 }
 
 fn record_render_pass(
@@ -2138,48 +2146,26 @@ fn record_render_pass(
     render_pass: vk::RenderPass,
     framebuffer: vk::Framebuffer,
     extent: vk::Extent2D,
+    viewport: vk::Extent2D,
     clear_color: [f32; 4],
     offsets: VulkanPassOffsets,
-    write_alpha: bool,
+    pipelines: &PassPipelines,
 ) -> u64 {
     let device = state.device.as_ref().unwrap();
-    let (sprite_pipeline, sprite_pipeline_layout) = if write_alpha {
-        (state.sprite_pipeline, state.sprite_pipeline_layout)
-    } else {
-        (
-            state.opaque_sprite_pipeline,
-            state.opaque_sprite_pipeline_layout,
-        )
-    };
-    let (yuv_pipeline, yuv_pipeline_layout) = if write_alpha {
-        (state.yuv_pipeline, state.yuv_pipeline_layout)
-    } else {
-        (state.opaque_yuv_pipeline, state.opaque_yuv_pipeline_layout)
-    };
-    let (mesh_pipeline, mesh_pipeline_layout) = if write_alpha {
-        (state.mesh_pipeline, state.mesh_pipeline_layout)
-    } else {
-        (
-            state.opaque_mesh_pipeline,
-            state.opaque_mesh_pipeline_layout,
-        )
-    };
-    let (textured_mesh_pipeline, textured_mesh_pipeline_layout) = if write_alpha {
-        (
-            state.textured_mesh_pipeline,
-            state.textured_mesh_pipeline_layout,
-        )
-    } else {
-        (
-            state.opaque_textured_mesh_pipeline,
-            state.opaque_textured_mesh_pipeline_layout,
-        )
-    };
     let clear_value = vk::ClearValue {
         color: vk::ClearColorValue {
             float32: clear_color,
         },
     };
+    let clear_values = [
+        clear_value,
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
     let rp_info = vk::RenderPassBeginInfo::default()
         .render_pass(render_pass)
         .framebuffer(framebuffer)
@@ -2187,7 +2173,7 @@ fn record_render_pass(
             offset: vk::Offset2D::default(),
             extent,
         })
-        .clear_values(std::slice::from_ref(&clear_value));
+        .clear_values(&clear_values[..1 + pipelines.depth.is_some() as usize]);
     // SAFETY: the command buffer is recording; all render resources and ring
     // slices referenced here stay live through queue submission and its fence.
     unsafe {
@@ -2197,9 +2183,9 @@ fn record_render_pass(
             0,
             &[vk::Viewport {
                 x: 0.0,
-                y: extent.height as f32,
-                width: extent.width as f32,
-                height: -(extent.height as f32),
+                y: viewport.height as f32,
+                width: viewport.width as f32,
+                height: -(viewport.height as f32),
                 min_depth: 0.0,
                 max_depth: 1.0,
             }],
@@ -2225,28 +2211,53 @@ fn record_render_pass(
         let mut descriptor = DescriptorBindingCache::default();
         let mut last_camera = CameraUploadCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+        let mut last_pipeline = vk::Pipeline::null();
         let mut vertices_drawn = 0u64;
         for op in pass.ops {
+            if pipelines.depth.is_some()
+                && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth)
+            {
+                let clear = vk::ClearAttachment::default()
+                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    });
+                let rect = vk::ClearRect::default()
+                    .rect(vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: extent,
+                    })
+                    .layer_count(1);
+                device.cmd_clear_attachments(cmd, &[clear], &[rect]);
+            }
             match *op {
                 DrawOp::Sprite(run) => {
                     let Some(texture) = resolved_texture(state, textures, run.texture_handle)
                     else {
                         continue;
                     };
-                    let set = texture_descriptor_set(texture, run.texture_handle, false);
+                    let set = texture_descriptor_set(texture, run.texture_handle, false, None);
                     let yuv420 = texture.images.is_yuv420();
                     let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
                         && matches!(bound, Bound::Sprite | Bound::YuvSprite);
-                    if !pipeline_bound {
+                    let selected = if yuv420 {
+                        &pipelines.video
+                    } else {
+                        &pipelines.sprites
+                    };
+                    let pipeline = &selected[blend_index(run.blend)];
+                    let sprite_pipeline_layout = pipeline.layout;
+                    let yuv_pipeline_layout = pipeline.layout;
+                    if !pipeline_bound || last_pipeline != pipeline.pipe {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            if yuv420 {
-                                yuv_pipeline
-                            } else {
-                                sprite_pipeline
-                            },
+                            pipeline.pipe,
                         );
+                        last_pipeline = pipeline.pipe;
                         // RGBA and YUV sprites share vertex and index bindings.
                         if !matches!(bound, Bound::Sprite | Bound::YuvSprite) {
                             let vertex = state.vertex_buffer.as_ref().unwrap().buffer;
@@ -2332,12 +2343,15 @@ fn record_render_pass(
                     vertices_drawn += 4 * u64::from(run.instance_count);
                 }
                 DrawOp::Mesh(run) => {
-                    if !matches!(bound, Bound::Mesh) {
+                    let pipeline = &pipelines.meshes[blend_index(run.blend)];
+                    let mesh_pipeline_layout = pipeline.layout;
+                    if !matches!(bound, Bound::Mesh) || last_pipeline != pipeline.pipe {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            mesh_pipeline,
+                            pipeline.pipe,
                         );
+                        last_pipeline = pipeline.pipe;
                         device.cmd_bind_vertex_buffers(
                             cmd,
                             0,
@@ -2366,17 +2380,27 @@ fn record_render_pass(
                     let Some(source) = uploads.source(run.geometry) else {
                         continue;
                     };
-                    let Some(set) = resolved_texture(state, textures, run.texture_handle)
-                        .map(|texture| texture_descriptor_set(texture, run.texture_handle, true))
+                    let Some(set) =
+                        resolved_texture(state, textures, run.texture_handle).map(|texture| {
+                            texture_descriptor_set(texture, run.texture_handle, true, run.sampler)
+                        })
                     else {
                         continue;
                     };
-                    if !matches!(bound, Bound::TexturedMesh) {
+                    let selected = pipelines
+                        .depth
+                        .as_ref()
+                        .map(|depth| &depth[run.depth_mode() as usize])
+                        .unwrap_or(&pipelines.textured);
+                    let pipeline = &selected[blend_index(run.blend)];
+                    let textured_mesh_pipeline_layout = pipeline.layout;
+                    if !matches!(bound, Bound::TexturedMesh) || last_pipeline != pipeline.pipe {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            textured_mesh_pipeline,
+                            pipeline.pipe,
                         );
+                        last_pipeline = pipeline.pipe;
                         if bindings.instance_required(InstanceBinding::TexturedMesh) {
                             device.cmd_bind_vertex_buffers(
                                 cmd,
@@ -2427,6 +2451,19 @@ fn record_render_pass(
                             &[],
                         );
                     }
+                    let additive = resolved_texture(state, textures, run.additive_texture)
+                        .map(|texture| {
+                            texture_descriptor_set(texture, run.additive_texture, true, None)
+                        })
+                        .unwrap_or(set);
+                    device.cmd_bind_descriptor_sets(
+                        cmd,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        textured_mesh_pipeline_layout,
+                        1,
+                        &[additive],
+                        &[],
+                    );
                     let first_vertex = if source.buffer_key().is_some() {
                         0
                     } else {
@@ -2723,13 +2760,6 @@ pub fn draw(
             tmesh_instance: target_base.tmesh_instance + target_cursor.tmesh_instance,
         };
         upload_vulkan_pass(state, VulkanPass::from(frame), &state.uploads, main_offsets);
-        let base_first_instance =
-            (!frame.sprite_instances.is_empty()).then_some(main_offsets.sprite);
-        let base_first_vertex = (!frame.mesh_vertices.is_empty()).then_some(main_offsets.mesh);
-        let base_first_tmesh_vertex =
-            (!state.uploads.vertices.is_empty()).then_some(main_offsets.tmesh);
-        let base_first_tmesh_instance =
-            (!frame.tmesh_instances.is_empty()).then_some(main_offsets.tmesh_instance);
         stats.backend_upload_us = stats
             .backend_upload_us
             .saturating_add(elapsed_us_since(backend_upload_started));
@@ -2746,6 +2776,8 @@ pub fn draw(
             };
             let target = &state.offscreen_targets[index];
             let preserve = target_frame.preserve && target.initialized;
+            let [viewport_width, viewport_height] =
+                deadlib_render_core::render_target_viewport(target_frame);
             offscreen_vertices += record_render_pass(
                 state,
                 cmd,
@@ -2753,18 +2785,28 @@ pub fn draw(
                 &state.target_uploads[index],
                 textures,
                 if preserve {
-                    state.offscreen_preserve_pass
+                    state.capture_passes[target_frame.float_color as usize]
+                        [target_frame.depth as usize]
+                        .preserve
                 } else {
-                    state.offscreen_clear_pass
+                    state.capture_passes[target_frame.float_color as usize]
+                        [target_frame.depth as usize]
+                        .clear
                 },
                 target.framebuffer,
                 vk::Extent2D {
                     width: target.width,
                     height: target.height,
                 },
+                vk::Extent2D {
+                    width: viewport_width,
+                    height: viewport_height,
+                },
                 [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
                 offsets,
-                target_frame.alpha,
+                &state.capture_passes[target_frame.float_color as usize]
+                    [target_frame.depth as usize]
+                    .pipelines[target_frame.alpha as usize],
             );
             state.offscreen_targets[index].initialized = true;
             target_cursor.sprite += target_frame.sprite_instances.len() as u32;
@@ -2772,260 +2814,20 @@ pub fn draw(
             target_cursor.tmesh += state.target_uploads[index].vertices.len() as u32;
             target_cursor.tmesh_instance += target_frame.tmesh_instances.len() as u32;
         }
-        let c = frame.clear_color;
-        let clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [c[0], c[1], c[2], c[3]],
-            },
-        };
-        let rp_info = vk::RenderPassBeginInfo::default()
-            .render_pass(state.render_pass)
-            .framebuffer(state.swapchain_resources.framebuffers[image_index as usize])
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D::default(),
-                extent: state.swapchain_resources.extent,
-            })
-            .clear_values(std::slice::from_ref(&clear_value));
-        device.cmd_begin_render_pass(cmd, &rp_info, vk::SubpassContents::INLINE);
-
-        let vp = vk::Viewport {
-            x: 0.0,
-            y: state.swapchain_resources.extent.height as f32,
-            width: state.swapchain_resources.extent.width as f32,
-            height: -(state.swapchain_resources.extent.height as f32),
-            min_depth: 0.0,
-            max_depth: 1.0,
-        };
-        device.cmd_set_viewport(cmd, 0, &[vp]);
-        let sc = vk::Rect2D {
-            offset: vk::Offset2D::default(),
-            extent: state.swapchain_resources.extent,
-        };
-        device.cmd_set_scissor(cmd, 0, &[sc]);
-
-        enum Bound {
-            None,
-            Sprite,
-            YuvSprite,
-            Mesh,
-            TexturedMesh,
-        }
-        let mut bound = Bound::None;
-        let mut bindings = VertexBindingCache::default();
-        let mut descriptor = DescriptorBindingCache::default();
-        // These pipelines declare the same vertex push-constant range, so the
-        // projection remains compatible when only the pipeline kind changes.
-        let mut last_camera = CameraUploadCache::default();
-        let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-        let mut vertices_drawn = 0u64;
-        for op in &frame.ops {
-            match op {
-                DrawOp::Sprite(run) => {
-                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
-                    else {
-                        continue;
-                    };
-                    let set = texture_descriptor_set(texture, run.texture_handle, false);
-                    let yuv420 = texture.images.is_yuv420();
-                    let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
-                        && matches!(bound, Bound::Sprite | Bound::YuvSprite);
-                    if !pipeline_bound {
-                        device.cmd_bind_pipeline(
-                            cmd,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            if yuv420 {
-                                state.yuv_pipeline
-                            } else {
-                                state.sprite_pipeline
-                            },
-                        );
-                        // RGBA and YUV sprites share vertex and index bindings.
-                        if !matches!(bound, Bound::Sprite | Bound::YuvSprite) {
-                            let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
-                            let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
-                            if bindings.instance_required(InstanceBinding::Sprite) {
-                                device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
-                            } else {
-                                device.cmd_bind_vertex_buffers(cmd, 0, &[vb0], &[0]);
-                            }
-                            if bindings.index_required() {
-                                let ib = state.index_buffer.as_ref().unwrap().buffer;
-                                device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
-                            }
-                        }
-                        bound = if yuv420 {
-                            Bound::YuvSprite
-                        } else {
-                            Bound::Sprite
-                        };
-                        last_camera = CameraUploadCache::default();
-                    }
-
-                    if last_camera.update_required(run.camera) {
-                        let vp = frame
-                            .cameras
-                            .get(run.camera as usize)
-                            .unwrap_or(&state.projection);
-                        device.cmd_push_constants(
-                            cmd,
-                            if yuv420 {
-                                state.yuv_pipeline_layout
-                            } else {
-                                state.sprite_pipeline_layout
-                            },
-                            vk::ShaderStageFlags::VERTEX,
-                            0,
-                            bytemuck::cast_slice(vp.as_ref()),
-                        );
-                    }
-
-                    if descriptor.update_required(set) {
-                        if let TextureImages::Yuv420 { levels, coeffs, .. } = &texture.images {
-                            let conversion = YuvPush {
-                                levels: *levels,
-                                coeffs: *coeffs,
-                            };
-                            device.cmd_push_constants(
-                                cmd,
-                                state.yuv_pipeline_layout,
-                                vk::ShaderStageFlags::FRAGMENT,
-                                PROJECTION_PUSH_BYTES,
-                                bytemuck::bytes_of(&conversion),
-                            );
-                        }
-                        device.cmd_bind_descriptor_sets(
-                            cmd,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            if yuv420 {
-                                state.yuv_pipeline_layout
-                            } else {
-                                state.sprite_pipeline_layout
-                            },
-                            0,
-                            &[set],
-                            &[],
-                        );
-                    }
-
-                    let first_instance = base_first_instance.unwrap_or(0) + run.instance_start;
-                    device.cmd_draw_indexed(cmd, 6, run.instance_count, 0, 0, first_instance);
-                    vertices_drawn += 4 * u64::from(run.instance_count);
-                }
-                DrawOp::Mesh(draw) => {
-                    if !matches!(bound, Bound::Mesh) {
-                        device.cmd_bind_pipeline(
-                            cmd,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            state.mesh_pipeline,
-                        );
-                        let vb = state.mesh_ring.as_ref().unwrap().buffer;
-                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
-                        bound = Bound::Mesh;
-                    }
-
-                    if last_camera.update_required(draw.camera) {
-                        let vp = frame
-                            .cameras
-                            .get(draw.camera as usize)
-                            .unwrap_or(&state.projection);
-                        device.cmd_push_constants(
-                            cmd,
-                            state.mesh_pipeline_layout,
-                            vk::ShaderStageFlags::VERTEX,
-                            0,
-                            bytemuck::cast_slice(vp.as_ref()),
-                        );
-                    }
-
-                    let first_vertex = base_first_vertex.unwrap_or(0) + draw.vertex_start;
-                    device.cmd_draw(cmd, draw.vertex_count, 1, first_vertex, 0);
-                    vertices_drawn += u64::from(draw.vertex_count);
-                }
-                DrawOp::TexturedMesh(draw) => {
-                    let Some(source) = state.uploads.source(draw.geometry) else {
-                        continue;
-                    };
-                    let Some(set) = resolved_texture(state, textures, draw.texture_handle)
-                        .map(|texture| texture_descriptor_set(texture, draw.texture_handle, true))
-                    else {
-                        continue;
-                    };
-                    if !matches!(bound, Bound::TexturedMesh) {
-                        device.cmd_bind_pipeline(
-                            cmd,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            state.textured_mesh_pipeline,
-                        );
-                        if bindings.instance_required(InstanceBinding::TexturedMesh) {
-                            let inst = state.tmesh_instance_ring.as_ref().unwrap().buffer;
-                            device.cmd_bind_vertex_buffers(cmd, 1, &[inst], &[0]);
-                        }
-                        bound = Bound::TexturedMesh;
-                        tmesh_buffer_cache.reset();
-                    }
-
-                    if tmesh_buffer_cache.update_required(source) {
-                        let vb = if let Some(buffer_key) = source.buffer_key() {
-                            let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
-                                tmesh_buffer_cache.reset();
-                                continue;
-                            };
-                            entry.buffer.buffer
-                        } else {
-                            let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer) else {
-                                continue;
-                            };
-                            vb
-                        };
-                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
-                    }
-
-                    if last_camera.update_required(draw.camera) {
-                        let vp = frame
-                            .cameras
-                            .get(draw.camera as usize)
-                            .unwrap_or(&state.projection);
-                        device.cmd_push_constants(
-                            cmd,
-                            state.textured_mesh_pipeline_layout,
-                            vk::ShaderStageFlags::VERTEX,
-                            0,
-                            bytemuck::cast_slice(vp.as_ref()),
-                        );
-                    }
-
-                    if descriptor.update_required(set) {
-                        device.cmd_bind_descriptor_sets(
-                            cmd,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            state.textured_mesh_pipeline_layout,
-                            0,
-                            &[set],
-                            &[],
-                        );
-                    }
-
-                    let first_vertex = if source.buffer_key().is_some() {
-                        0
-                    } else {
-                        base_first_tmesh_vertex.unwrap_or(0) + source.vertex_start()
-                    };
-                    let first_instance =
-                        base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;
-                    device.cmd_draw(
-                        cmd,
-                        source.vertex_count(),
-                        draw.instance_count,
-                        first_vertex,
-                        first_instance,
-                    );
-                    let tri_count = source.vertex_count() / 3;
-                    vertices_drawn += u64::from(tri_count) * u64::from(draw.instance_count);
-                }
-            }
-        }
-
-        device.cmd_end_render_pass(cmd);
+        let vertices_drawn = record_render_pass(
+            state,
+            cmd,
+            VulkanPass::from(frame),
+            &state.uploads,
+            textures,
+            state.render_pass,
+            state.swapchain_resources.framebuffers[image_index as usize],
+            state.swapchain_resources.extent,
+            state.swapchain_resources.extent,
+            frame.clear_color,
+            main_offsets,
+            &state.main_pipelines,
+        );
         let screenshot_staging = if state.screenshot_requested {
             state.screenshot_requested = false;
             state.captured_frame = None;
@@ -3371,101 +3173,34 @@ pub fn cleanup(state: &mut State) {
             .as_ref()
             .unwrap()
             .destroy_descriptor_set_layout(state.descriptor_set_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.sprite_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.sprite_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.opaque_sprite_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.opaque_sprite_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.yuv_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.yuv_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.opaque_yuv_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.opaque_yuv_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.mesh_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.mesh_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.opaque_mesh_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.opaque_mesh_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.textured_mesh_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.textured_mesh_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline(state.opaque_textured_mesh_pipeline, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_pipeline_layout(state.opaque_textured_mesh_pipeline_layout, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_render_pass(state.render_pass, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_render_pass(state.offscreen_clear_pass, None);
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_render_pass(state.offscreen_preserve_pass, None);
+        let device = state.device.as_ref().unwrap();
+        for pipelines in state
+            .capture_passes
+            .iter()
+            .flatten()
+            .flat_map(|c| &c.pipelines)
+            .chain(std::iter::once(&state.main_pipelines))
+        {
+            for set in [
+                &pipelines.sprites,
+                &pipelines.video,
+                &pipelines.meshes,
+                &pipelines.textured,
+            ]
+            .into_iter()
+            .chain(pipelines.depth.iter().flat_map(|modes| modes.iter()))
+            {
+                for pipeline in set {
+                    device.destroy_pipeline(pipeline.pipe, None);
+                    device.destroy_pipeline_layout(pipeline.layout, None);
+                }
+            }
+        }
+        for capture in state.capture_passes.iter().flatten() {
+            device.destroy_render_pass(capture.clear, None);
+            device.destroy_render_pass(capture.preserve, None);
+        }
+        device.destroy_render_pass(state.render_pass, None);
         state
             .device
             .as_ref()
@@ -3593,6 +3328,15 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
         vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B
     };
     match mode {
+        BlendMode::NoEffect => vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(write_mask)
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::ZERO)
+            .dst_color_blend_factor(vk::BlendFactor::ONE)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE)
+            .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Alpha => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
             .blend_enable(true)
@@ -3600,7 +3344,7 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Add => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
@@ -3609,7 +3353,7 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
             .dst_color_blend_factor(vk::BlendFactor::ONE)
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Multiply => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
@@ -3618,17 +3362,17 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Subtract => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
             .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::ONE)
-            .dst_color_blend_factor(vk::BlendFactor::ONE)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .color_blend_op(vk::BlendOp::REVERSE_SUBTRACT)
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .alpha_blend_op(vk::BlendOp::ADD),
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .alpha_blend_op(vk::BlendOp::REVERSE_SUBTRACT),
     }
 }
 
@@ -3835,103 +3579,40 @@ fn vertex_input_descriptions_mesh() -> (
 }
 
 #[inline(always)]
-fn vertex_input_descriptions_tmesh() -> (
+fn textured_mesh_vertex_input() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 13],
+    [vk::VertexInputAttributeDescription; 16],
 ) {
-    let b0 = vk::VertexInputBindingDescription::default()
-        .binding(0)
-        .stride(std::mem::size_of::<TexturedMeshVertex>() as u32)
-        .input_rate(vk::VertexInputRate::VERTEX);
-    let b1 = vk::VertexInputBindingDescription::default()
-        .binding(1)
-        .stride(std::mem::size_of::<TexturedMeshInstanceGpu>() as u32)
-        .input_rate(vk::VertexInputRate::INSTANCE);
-
-    let a_pos = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(0)
-        .format(vk::Format::R32G32B32_SFLOAT)
-        .offset(0);
-    let a_uv = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(1)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(12);
-    let a_color = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(2)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(20);
-    let a_tex_matrix_scale = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(3)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(36);
-    let a_model0 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(4)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(0);
-    let a_model1 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(5)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(16);
-    let a_model2 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(6)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(32);
-    let a_model3 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(7)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(48);
-    let a_tint = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(8)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(64);
-    let a_uv_scale = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(9)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(80);
-    let a_uv_offset = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(10)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(88);
-    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(11)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(96);
-    let a_texture_mask = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(12)
-        .format(vk::Format::R32_SFLOAT)
-        .offset(104);
-
-    (
-        [b0, b1],
-        [
-            a_pos,
-            a_uv,
-            a_color,
-            a_tex_matrix_scale,
-            a_model0,
-            a_model1,
-            a_model2,
-            a_model3,
-            a_tint,
-            a_uv_scale,
-            a_uv_offset,
-            a_uv_tex_shift,
-            a_texture_mask,
-        ],
-    )
+    let bindings = [
+        vk::VertexInputBindingDescription::default()
+            .binding(0)
+            .stride(mem::size_of::<TexturedMeshVertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX),
+        vk::VertexInputBindingDescription::default()
+            .binding(1)
+            .stride(mem::size_of::<TexturedMeshInstanceGpu>() as u32)
+            .input_rate(vk::VertexInputRate::INSTANCE),
+    ];
+    let attributes = std::array::from_fn(|location| {
+        let (binding, offset, format) = match location {
+            0 => (0, 16, vk::Format::R32G32B32_SFLOAT),
+            1 => (0, 28, vk::Format::R32G32_SFLOAT),
+            2 => (0, 36, vk::Format::R32G32B32A32_SFLOAT),
+            3 => (0, 52, vk::Format::R32G32_SFLOAT),
+            4 => (0, 0, vk::Format::R32G32B32A32_SFLOAT),
+            _ => (
+                1,
+                (location as u32 - 5) * 16,
+                vk::Format::R32G32B32A32_SFLOAT,
+            ),
+        };
+        vk::VertexInputAttributeDescription::default()
+            .location(location as u32)
+            .binding(binding)
+            .offset(offset)
+            .format(format)
+    });
+    (bindings, attributes)
 }
 
 fn begin_single_time_commands(
@@ -5070,6 +4751,7 @@ fn create_swapchain(
         _images: images,
         image_views,
         framebuffers: vec![],
+        depths: Vec::new(),
         extent,
         format,
         present_mode,
@@ -5077,27 +4759,32 @@ fn create_swapchain(
     })
 }
 
-fn recreate_framebuffers(
-    device: &Device,
-    swapchain_resources: &mut SwapchainResources,
-    render_pass: vk::RenderPass,
-) -> Result<(), vk::Result> {
-    swapchain_resources.framebuffers = swapchain_resources
-        .image_views
-        .iter()
-        .map(|view| {
-            let attachments = [*view];
-            let create_info = vk::FramebufferCreateInfo::default()
-                .render_pass(render_pass)
-                .attachments(&attachments)
-                .width(swapchain_resources.extent.width)
-                .height(swapchain_resources.extent.height)
-                .layers(1);
-            // SAFETY: The framebuffer create info references the live render pass and image view
-            // for this swapchain image, and all borrowed data lives through the call.
-            unsafe { device.create_framebuffer(&create_info, None) }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+fn recreate_framebuffers(state: &mut State) -> Result<(), vk::Result> {
+    let extent = state.swapchain_resources.extent;
+    for index in 0..state.swapchain_resources.image_views.len() {
+        let depth =
+            create_depth_target(state, extent.width, extent.height, vk::Format::D32_SFLOAT)?;
+        let attachments = [
+            state.swapchain_resources.image_views[index],
+            depth.image.view,
+        ];
+        let info = vk::FramebufferCreateInfo::default()
+            .render_pass(state.render_pass)
+            .attachments(&attachments)
+            .width(extent.width)
+            .height(extent.height)
+            .layers(1);
+        // SAFETY: both owned image views and the compatible render pass are live.
+        let framebuffer = unsafe {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .create_framebuffer(&info, None)?
+        };
+        state.swapchain_resources.depths.push(depth);
+        state.swapchain_resources.framebuffers.push(framebuffer);
+    }
     Ok(())
 }
 
@@ -5114,29 +4801,176 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
     let color_attachment_ref = vk::AttachmentReference::default()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+    let depth_attachment = vk::AttachmentDescription::default()
+        .format(vk::Format::D32_SFLOAT)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let attachments = [color_attachment, depth_attachment];
+    let depth_ref = vk::AttachmentReference::default()
+        .attachment(1)
+        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     let subpass = vk::SubpassDescription::default()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(std::slice::from_ref(&color_attachment_ref));
+        .color_attachments(std::slice::from_ref(&color_attachment_ref))
+        .depth_stencil_attachment(&depth_ref);
     let dependency = vk::SubpassDependency::default()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+        )
+        .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+        .dst_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+        )
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+        );
     let create_info = vk::RenderPassCreateInfo::default()
-        .attachments(std::slice::from_ref(&color_attachment))
+        .attachments(&attachments)
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(std::slice::from_ref(&dependency));
     // SAFETY: The render-pass create info references only stack data for the duration of the
-    // call and describes a single-color-attachment pass compatible with the swapchain format.
+    // call and describes color/depth attachments compatible with the swapchain format.
     unsafe { device.create_render_pass(&create_info, None) }
+}
+
+// Render-thread, backend-lifetime ownership of two formats, two alpha modes,
+// five geometry kinds and four blends. Initialization warms all variants;
+// gameplay only selects handles. No misses, pruning, I/O or frame allocations.
+struct PassPipelines {
+    sprites: [PipelinePair; 5],
+    video: [PipelinePair; 5],
+    meshes: [PipelinePair; 5],
+    textured: [PipelinePair; 5],
+    depth: Option<[[PipelinePair; 5]; 6]>,
+}
+
+struct CapturePass {
+    format: vk::Format,
+    clear: vk::RenderPass,
+    preserve: vk::RenderPass,
+    pipelines: [PassPipelines; 2],
+}
+
+const fn blend_index(mode: BlendMode) -> usize {
+    match mode {
+        BlendMode::Alpha => 0,
+        BlendMode::Add => 1,
+        BlendMode::Multiply => 2,
+        BlendMode::Subtract => 3,
+        BlendMode::NoEffect => 4,
+    }
+}
+
+fn build_blend_pipelines(
+    mut build: impl FnMut(BlendMode) -> Result<PipelinePair, Box<dyn Error>>,
+) -> Result<[PipelinePair; 5], Box<dyn Error>> {
+    Ok([
+        build(BlendMode::Alpha)?,
+        build(BlendMode::Add)?,
+        build(BlendMode::Multiply)?,
+        build(BlendMode::Subtract)?,
+        build(BlendMode::NoEffect)?,
+    ])
+}
+
+fn create_capture_pass(
+    device: &Device,
+    format: vk::Format,
+    descriptor_layout: vk::DescriptorSetLayout,
+    with_depth: bool,
+) -> Result<CapturePass, Box<dyn Error>> {
+    let clear = create_offscreen_render_pass(device, format, false, with_depth)?;
+    let preserve = create_offscreen_render_pass(device, format, true, with_depth)?;
+    Ok(CapturePass {
+        format,
+        clear,
+        preserve,
+        pipelines: [
+            create_pass_pipelines(device, clear, descriptor_layout, false, with_depth)?,
+            create_pass_pipelines(device, clear, descriptor_layout, true, with_depth)?,
+        ],
+    })
+}
+
+fn create_pass_pipelines(
+    device: &Device,
+    render_pass: vk::RenderPass,
+    descriptor_layout: vk::DescriptorSetLayout,
+    write_alpha: bool,
+    with_depth: bool,
+) -> Result<PassPipelines, Box<dyn Error>> {
+    Ok(PassPipelines {
+        sprites: build_blend_pipelines(|blend| {
+            create_sprite_pipeline(
+                device,
+                render_pass,
+                descriptor_layout,
+                blend,
+                false,
+                write_alpha,
+            )
+        })?,
+        video: build_blend_pipelines(|blend| {
+            create_sprite_pipeline(
+                device,
+                render_pass,
+                descriptor_layout,
+                blend,
+                true,
+                write_alpha,
+            )
+        })?,
+        meshes: build_blend_pipelines(|blend| {
+            create_mesh_pipeline(device, render_pass, blend, write_alpha)
+        })?,
+        textured: build_blend_pipelines(|blend| {
+            create_textured_mesh_pipeline(
+                device,
+                render_pass,
+                descriptor_layout,
+                blend,
+                write_alpha,
+                deadlib_render_core::DepthMode::Off,
+            )
+        })?,
+        depth: if with_depth {
+            let mut variants = Vec::with_capacity(6);
+            for depth_mode in deadlib_render_core::DepthMode::ALL {
+                variants.push(build_blend_pipelines(|blend| {
+                create_textured_mesh_pipeline(
+                    device,
+                    render_pass,
+                    descriptor_layout,
+                    blend,
+                    write_alpha,
+                        depth_mode,
+                )
+            })?);
+            }
+            Some(variants.try_into().ok().expect("six depth modes"))
+        } else {
+            None
+        },
+    })
 }
 
 fn create_offscreen_render_pass(
     device: &Device,
     format: vk::Format,
     preserve: bool,
+    with_depth: bool,
 ) -> Result<vk::RenderPass, vk::Result> {
     let color_attachment = vk::AttachmentDescription::default()
         .format(format)
@@ -5158,30 +4992,73 @@ fn create_offscreen_render_pass(
     let color_attachment_ref = vk::AttachmentReference::default()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-    let subpass = vk::SubpassDescription::default()
+    let depth_attachment = vk::AttachmentDescription::default()
+        .format(vk::Format::D16_UNORM)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(if preserve {
+            vk::AttachmentLoadOp::LOAD
+        } else {
+            vk::AttachmentLoadOp::CLEAR
+        })
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(if preserve {
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        } else {
+            vk::ImageLayout::UNDEFINED
+        })
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let attachments = [color_attachment, depth_attachment];
+    let depth_ref = vk::AttachmentReference::default()
+        .attachment(1)
+        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let mut subpass = vk::SubpassDescription::default()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
         .color_attachments(std::slice::from_ref(&color_attachment_ref));
+    if with_depth {
+        subpass = subpass.depth_stencil_attachment(&depth_ref);
+    }
     let dependencies = [
         vk::SubpassDependency::default()
             .src_subpass(vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .src_access_mask(vk::AccessFlags::SHADER_READ)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE),
+            .src_stage_mask(
+                vk::PipelineStageFlags::FRAGMENT_SHADER
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .src_access_mask(
+                vk::AccessFlags::SHADER_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
+            .dst_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            ),
         vk::SubpassDependency::default()
             .src_subpass(0)
             .dst_subpass(vk::SUBPASS_EXTERNAL)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .src_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .src_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .dst_access_mask(vk::AccessFlags::SHADER_READ),
     ];
     let create_info = vk::RenderPassCreateInfo::default()
-        .attachments(std::slice::from_ref(&color_attachment))
+        .attachments(&attachments[..1 + with_depth as usize])
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(&dependencies);
-    // SAFETY: the create info contains one attachment and one subpass and all
+    // SAFETY: the create info contains color/depth attachments and one subpass and all
     // borrowed arrays remain alive for the duration of the driver call.
     unsafe { device.create_render_pass(&create_info, None) }
 }
@@ -5192,7 +5069,7 @@ fn create_offscreen_target(
 ) -> Result<OffscreenTarget, Box<dyn Error>> {
     let width = pass.width.max(1);
     let height = pass.height.max(1);
-    let format = state.swapchain_resources.format.format;
+    let format = state.capture_passes[pass.float_color as usize][pass.depth as usize].format;
     let (image, memory) = create_image(
         state,
         width,
@@ -5209,34 +5086,7 @@ fn create_offscreen_target(
         wrap: SamplerWrap::Clamp,
         mipmaps: false,
     };
-    let sampler = get_sampler(state, sampler_desc)?;
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    )?;
-    let (descriptor_set, descriptor_set_repeat, pool) =
-        create_texture_descriptor_sets(state, [view; 3], sampler, sampler_repeat)?;
-    let nearest_sampler = get_sampler(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-    )?;
-    let nearest_repeat_sampler = get_sampler(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Repeat,
-            mipmaps: false,
-        },
-    )?;
-    let nearest_sets =
-        create_texture_descriptor_sets(state, [view; 3], nearest_sampler, nearest_repeat_sampler)?;
+    let samplers = create_texture_samplers(state, [view; 3], sampler_desc)?;
     let texture = Texture {
         device: Arc::clone(&device),
         images: TextureImages::Rgba(TextureImage {
@@ -5244,15 +5094,28 @@ fn create_offscreen_target(
             memory,
             view,
         }),
-        descriptor_set,
-        descriptor_set_repeat,
-        pool,
-        nearest_sets: Some(nearest_sets),
+        sampler_desc,
+        samplers,
     };
-    let attachments = [view];
+    let depth = if pass.depth {
+        Some(create_depth_target(
+            state,
+            width,
+            height,
+            vk::Format::D16_UNORM,
+        )?)
+    } else {
+        None
+    };
+    let attachments = [
+        view,
+        depth
+            .as_ref()
+            .map_or(vk::ImageView::null(), |d| d.image.view),
+    ];
     let framebuffer_info = vk::FramebufferCreateInfo::default()
-        .render_pass(state.offscreen_clear_pass)
-        .attachments(&attachments)
+        .render_pass(state.capture_passes[pass.float_color as usize][pass.depth as usize].clear)
+        .attachments(&attachments[..1 + pass.depth as usize])
         .width(width)
         .height(height)
         .layers(1);
@@ -5263,8 +5126,10 @@ fn create_offscreen_target(
         handle: pass.texture_handle,
         width,
         height,
+        float_color: pass.float_color,
         texture,
         framebuffer,
+        _depth: depth,
         initialized: false,
     })
 }
@@ -5298,6 +5163,8 @@ fn ensure_offscreen_targets(
                 target.handle == pass.texture_handle
                     && target.width == pass.width.max(1)
                     && target.height == pass.height.max(1)
+                    && target.float_color == pass.float_color
+                    && target._depth.is_some() == pass.depth
             });
     if matches {
         return Ok(());
@@ -5387,6 +5254,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
                 .unwrap()
                 .destroy_framebuffer(framebuffer, None);
         }
+        state.swapchain_resources.depths.clear();
         for &view in &state.swapchain_resources.image_views {
             state
                 .device
@@ -5403,7 +5271,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
 
 fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Error>> {
     debug!("Recreating swapchain...");
-    let device = state.device.as_ref().unwrap();
+    let device = Arc::clone(state.device.as_ref().unwrap());
 
     // Some platforms (notably under certain compositors or when minimized)
     // can temporarily report a surface with all extents set to zero. In that
@@ -5445,7 +5313,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let new_resources = create_swapchain(
         &state.instance,
-        device,
+        &device,
         state.pdevice,
         state.surface,
         &state.surface_loader,
@@ -5457,7 +5325,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
 
-    recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
+    recreate_framebuffers(state)?;
 
     // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
     // longer referenced by in-flight work and can be destroyed here.

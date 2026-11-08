@@ -1,0 +1,97 @@
+{
+  "baseline": {
+    "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/baseline/asm-target/release/deps/pipeline-4c7c47277ac13427.s",
+    "sha256": "03ac98d790087298638ae78e2b9a41d64129383f31dd577fef70c9a9a17a5cfd",
+    "decode_vector_calls": [
+      {
+        "line": 121372,
+        "caller": ".seh_proc _RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+        "context": ".LBB324_231:\n\t.cv_loc\t14819 253 167 0\n\tmovq\t%rsi, %rcx\n\tmovq\t120(%rsp), %rdx\n\tleaq\t152(%rsp), %r8\n\tcallq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector\n.Ltmp17337:\n\t.cv_inline_site_id 14978 within 14819 inlined_at 253 167 0\n\t.cv_loc\t14978 24 2177 0\n\tmovq\t1976(%rsp), %rax\n\tmovq\t1984(%rsp), %r8\n\tmovq\t1992(%rsp), %rdx\n\tcmpq\t$-1, %rax\n\tjne\t.LBB324_248"
+      },
+      {
+        "line": 123783,
+        "caller": ".seh_proc _RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+        "context": ".LBB324_470:\n\t.cv_loc\t15061 255 94 0\n\tleaq\t952(%rsp), %rcx\n\tmovq\t120(%rsp), %rdx\n\tleaq\t152(%rsp), %r8\n\tcallq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector\n.Ltmp17749:\n\t.cv_inline_site_id 15165 within 15061 inlined_at 255 94 0\n\t.cv_loc\t15165 24 2177 0\n\tmovq\t952(%rsp), %r8\n\tmovq\t960(%rsp), %rdx\n\tmovq\t968(%rsp), %rax\n\tcmpq\t$-1, %r8\n\tjne\t.LBB324_510"
+      },
+      {
+        "line": 123960,
+        "caller": ".seh_proc _RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+        "context": ".Ltmp17777:\n\t.cv_loc\t15061 255 120 0\n\tleaq\t952(%rsp), %rcx\n\tmovq\t120(%rsp), %rdx\n\tleaq\t152(%rsp), %r8\n\tcallq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector\n.Ltmp17778:\n\t.cv_inline_site_id 15176 within 15061 inlined_at 255 120 0\n\t.cv_loc\t15176 24 2177 0\n\tmovq\t952(%rsp), %r8\n\tmovq\t960(%rsp), %rdx\n\tmovq\t968(%rsp), %rax\n\tcmpq\t$-1, %r8\n\tjne\t.LBB324_512"
+      },
+      {
+        "line": 124111,
+        "caller": ".seh_proc _RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+        "context": ".LBB324_499:\n\t.cv_loc\t15061 255 107 0\n\tleaq\t952(%rsp), %rcx\n\tmovq\t120(%rsp), %rdx\n\tleaq\t152(%rsp), %r8\n\tcallq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector\n.Ltmp17804:\n\t.cv_inline_site_id 15181 within 15061 inlined_at 255 107 0\n\t.cv_loc\t15181 24 2177 0\n\tmovq\t952(%rsp), %r8\n\tmovq\t960(%rsp), %rdx\n\tmovq\t968(%rsp), %rax\n\tcmpq\t$-1, %r8\n\tjne\t.LBB324_510"
+      }
+    ],
+    "packet_decoder_codebook_calls": [
+      {
+        "line": 120415,
+        "instruction": "callq\t_RNvMNtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 120498,
+        "instruction": "callq\t_RNvMNtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 121372,
+        "instruction": "callq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector"
+      },
+      {
+        "line": 123783,
+        "instruction": "callq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector"
+      },
+      {
+        "line": 123960,
+        "instruction": "callq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector"
+      },
+      {
+        "line": 124111,
+        "instruction": "callq\t_RNvMs_NtCsjtA4o9adR9V_27deadlib_audio_decode_vorbis8codebookNtB4_8Codebook13decode_vector"
+      }
+    ]
+  },
+  "forced_inline": {
+    "path": "target/deadlib-audio-reference/inline-vq-assembly/release/deps/pipeline-536b18ea81cc8d27.s",
+    "sha256": "b40ab35a19764e784dc181139b8f6d8439469971ff6792e69b65d60522169a1d",
+    "decode_vector_calls": [],
+    "packet_decoder_codebook_calls": [
+      {
+        "line": 119802,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 120504,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 120588,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 121986,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 122236,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 122450,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 122632,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 122724,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      },
+      {
+        "line": 122773,
+        "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman6decode"
+      }
+    ]
+  }
+}

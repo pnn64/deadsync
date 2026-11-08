@@ -136,7 +136,24 @@ fn compatible_frame(first: Mpeg3Header, next: Mpeg3Header) -> bool {
 }
 
 fn info_frames_in_prefix(bytes: &[u8]) -> u64 {
-    for offset in 0..bytes.len().saturating_sub(4) {
+    let limit = bytes.len().saturating_sub(4);
+    let mut cursor = 0;
+    while cursor < limit {
+        // Search sparse sync bytes in packed blocks; dense candidates avoid a
+        // search call. Advance before validation so failed headers make progress.
+        let offset = if bytes[cursor] == 0xff {
+            cursor
+        } else {
+            let Some(skip) = memchr::memchr(0xff, &bytes[cursor..limit]) else {
+                break;
+            };
+            cursor + skip
+        };
+        cursor = offset + 1;
+        // The second byte must contain the remaining sync and Layer III bits.
+        if bytes[offset + 1] & 0xe6 != 0xe2 {
+            continue;
+        }
         let Some(header) = parse_mpeg3_header(&bytes[offset..]) else {
             continue;
         };

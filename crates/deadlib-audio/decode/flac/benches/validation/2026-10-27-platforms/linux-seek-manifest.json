@@ -1,0 +1,68 @@
+{
+  "timestamp_utc": "2026-10-27T19:53:13Z",
+  "native": "/tmp/deadlib-flac-decode-separated-checkpoints",
+  "native_sha256": "ac6d46b823141c6de911f4c936aac1f1bc35db577eb274c09a107bdf479c81be",
+  "oracle": "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+  "oracle_sha256": "3c41450b36fccc4a0c2de1bec3349f073454e671983742869701390a77c9d1a0",
+  "cpu": 2,
+  "cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 79\nmodel name\t: Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2194.917\ncache size\t: 56320 KB\nphysical id\t: 0\nsiblings\t: 44\ncore id\t\t: 0\ncpu cores\t: 22\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 20\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap xsaveopt vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb tsc_offset vtpr ept vpid unrestricted_guest tsc_scaling\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs taa itlb_multihit mmio_stale_data bhi\nbogomips\t: 4389.83\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 46 bits physical, 48 bits virtual\npower management:",
+  "rounds": 5,
+  "iterations": 194,
+  "cases": [
+    {
+      "case": "subset/01 - blocksize 4096.flac",
+      "sha256": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f",
+      "bytes": 549954
+    },
+    {
+      "case": "subset/03 - blocksize 16.flac",
+      "sha256": "164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3",
+      "bytes": 959681
+    },
+    {
+      "case": "subset/28 - high resolution audio, default settings.flac",
+      "sha256": "62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346",
+      "bytes": 3476937
+    },
+    {
+      "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "sha256": "1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197",
+      "bytes": 42264726
+    },
+    {
+      "case": "uncommon/08 - blocksize 65535.flac",
+      "sha256": "2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714",
+      "bytes": 835115
+    }
+  ],
+  "native_sources": {
+    "src/bitstream.rs": "b6bb752fd629420541a85c2bd419ef613b0e971e1341f7fa6d8c86ea6c1d4d84",
+    "src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+    "src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src/frame.rs": "17ff70a782c633a952c3ba32744aecd64b8d44cb1c041a3051e628d42f4d16a5",
+    "src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+    "src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "src/predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+    "src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128"
+  },
+  "driver_sources": {
+    "benches/run_seek.py": "3976165f32a407943eafaefbb32c5c7d2feff3ce125d2308eaf0f314950c5059",
+    "benches/bench_host.py": "4697e3a580563d4155c52f0d505af6ea2b3c6fadb5240dd27d73043a9165f118",
+    "benches/decode.rs": "c0f395534929d33812e53720d203f6b6ee20b470eca0db8ee64631aaf750d9d3",
+    "benches/libflac/CMakeLists.txt": "a79066abb6d6173cb6b9ce250abaa14fcf672e716cabd38640b405e8ef1887aa",
+    "benches/libflac/benchmark.cpp": "57a1483f1e220f2059833dd42cd6341577c50465ff159d011046b346c59a4dab",
+    "benches/libflac/opaque.c": "28bfb8fb9c458c872596930c3da1c56e4158cad7ca5d15f4f3438501fac7deef"
+  },
+  "policy": "Resident-input exact seeks. Both APIs return PCM beginning at the target.\n\nConstruct metadata-only readers before timing; retain their seek state across\nrequests. Warm up at zero, then visit two full cycles of 97 deterministic targets.\nNative uses its lazy frame index, libFLAC its own seek table/search algorithm.\n",
+  "warmup": "target zero; initialization outside clock",
+  "target": "(total_samples-1)*(iteration%97)/97; iteration 1..iterations",
+  "consumption": "returned trimmed frame endpoints of every channel; exact equal checksums",
+  "integrity": "frame CRC enabled; whole-stream MD5 unavailable after arbitrary seeks",
+  "commands_sha256": "be7f07852bb77dc23f16338a45f4bfd0fb277e2a27b24ce35a4da87182eedcb3"
+}

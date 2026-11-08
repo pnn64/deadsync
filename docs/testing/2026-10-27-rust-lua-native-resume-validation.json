@@ -1,0 +1,3856 @@
+{
+  "core_c_api_declarations": {
+    "declared": [
+      "lua_call",
+      "lua_checkstack",
+      "lua_concat",
+      "lua_cpcall",
+      "lua_createtable",
+      "lua_dump",
+      "lua_equal",
+      "lua_error",
+      "lua_gc",
+      "lua_getfenv",
+      "lua_getfield",
+      "lua_getmetatable",
+      "lua_gettable",
+      "lua_gettop",
+      "lua_getupvalue",
+      "lua_insert",
+      "lua_iscfunction",
+      "lua_isnumber",
+      "lua_isstring",
+      "lua_isuserdata",
+      "lua_lessthan",
+      "lua_load",
+      "lua_newthread",
+      "lua_newuserdata",
+      "lua_next",
+      "lua_objlen",
+      "lua_pcall",
+      "lua_pushboolean",
+      "lua_pushcclosure",
+      "lua_pushfstring",
+      "lua_pushinteger",
+      "lua_pushlightuserdata",
+      "lua_pushlstring",
+      "lua_pushnil",
+      "lua_pushnumber",
+      "lua_pushstring",
+      "lua_pushthread",
+      "lua_pushvalue",
+      "lua_pushvfstring",
+      "lua_rawequal",
+      "lua_rawget",
+      "lua_rawgeti",
+      "lua_rawset",
+      "lua_rawseti",
+      "lua_remove",
+      "lua_replace",
+      "lua_resume",
+      "lua_setfenv",
+      "lua_setfield",
+      "lua_setmetatable",
+      "lua_settable",
+      "lua_settop",
+      "lua_setupvalue",
+      "lua_status",
+      "lua_toboolean",
+      "lua_tointeger",
+      "lua_tolstring",
+      "lua_tonumber",
+      "lua_topointer",
+      "lua_tothread",
+      "lua_touserdata",
+      "lua_type",
+      "lua_typename",
+      "lua_xmove",
+      "lua_yield"
+    ],
+    "missing": [
+      "lua_atpanic",
+      "lua_close",
+      "lua_getallocf",
+      "lua_gethook",
+      "lua_gethookcount",
+      "lua_gethookmask",
+      "lua_getinfo",
+      "lua_getlocal",
+      "lua_getstack",
+      "lua_newstate",
+      "lua_setallocf",
+      "lua_sethook",
+      "lua_setlevel",
+      "lua_setlocal",
+      "lua_tocfunction"
+    ],
+    "declaration_counts_are_semantic_proof": false
+  },
+  "source_base": "1a91a2ab058f031ba447e09cbb32c3fa88beccea",
+  "snapshot": {
+    "base": "1a91a2ab058f031ba447e09cbb32c3fa88beccea",
+    "work": "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+    "target": "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\cargo-final-1793111672017388000",
+    "linux_target": "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native",
+    "i686_target": "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686",
+    "linux_run_root": "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs",
+    "fresh_targets_initially_absent": true,
+    "source_hashes": {
+      "crates/deadlib-lua/build.rs": "70cb94f79cfa22187fedec21f4f01e809a2bcb13a775f3058f32f91be0977921",
+      "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+      "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+      "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+      "crates/deadlib-lua/examples/native_boundary.rs": "4087330f613ba9f23e1c4b5da7e56b363f12b1ff76537a0154eb3c8620e9e5d7",
+      "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+      "crates/deadlib-lua/examples/os_process.rs": "455cd7c3c926e458d726098f39d203e83f04dcb3eaa4c1c8536886cb19a9e03d",
+      "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+      "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+      "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+      "crates/deadlib-lua/src/chunk51.rs": "dd7e3149ce0d9d0c8a8d7ed0ae254844ad01448f885e64705971fc35cd022119",
+      "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+      "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+      "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+      "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+      "crates/deadlib-lua/src/lib.rs": "7475c5e7ec5e7341b654bf31a26e4365953f5f69834fe341d870134b236a5bca",
+      "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+      "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+      "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+      "crates/deadlib-lua/src/parser.rs": "453f1bd0715b1c73da6d6af612f1012201ec154c78af6f8d07517a211cb4ca7a",
+      "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+      "crates/deadlib-lua/src/table.rs": "74977623a283c0775e021194c28d1f09aacf1f249467edd77e95766056ca7dda",
+      "crates/deadlib-lua/src/value.rs": "94f8c20c159bb196d65da871d06f14faccf58fc0f8307f273ccee5472e57ea08",
+      "crates/deadlib-lua/src/vm.rs": "a2e58b4e8923f25baf5fed4895b1cacd9483ff26e881741f4a6fe26584a14bf0",
+      "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+      "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+      "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+      "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+      "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+      "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+      "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+      "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+      "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+      "crates/deadlib-lua/tests/debug_locals.rs": "0831ee7dc45a9612e8a528d889576c14a35c5c211457da86deb0ffad2764f96d",
+      "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+      "crates/deadlib-lua/tests/gc.rs": "6c13af6eb1b688c5e727cf3c90a092e5a8d9222ae6414b86234d4498b7177fa3",
+      "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+      "crates/deadlib-lua/tests/hooks.rs": "a6acd5066289f71ed0a6428cc34ca7568185169db660b58fed0e1fd4f9ed30f7",
+      "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+      "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+      "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+      "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+      "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+      "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+      "crates/deadlib-lua/tests/loading.rs": "2e3d1898bed58d1f22623079f55132a349ac9b4d9cf6e8309a2a839aa61bcebc",
+      "crates/deadlib-lua/tests/lua51.rs": "deda152310c325a1a31c9148fcb82844df24eeb0defd77b9d53fd88b3515cb2f",
+      "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+      "crates/deadlib-lua/tests/native_dump.rs": "eb389c0a57a6c19d45aad6b7d144285d136360fddea7bf5dd96c1b547da030d0",
+      "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+      "crates/deadlib-lua/tests/native_file.rs": "4b54ff853a9d60e15b95458cc92857d69e8d64ef4b2490624e0146f30872210c",
+      "crates/deadlib-lua/tests/native_gc.rs": "e39148913effd10d6c8bb043bc8d5dc12c1d98856ad4068bf1a103aa37018693",
+      "crates/deadlib-lua/tests/native_load.rs": "3b0f13ca0be1b10ae5c47a17efe4b0961302dadf800f2a2be018ba35b4f11687",
+      "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+      "crates/deadlib-lua/tests/native_pointers.rs": "a0e2607ce38313fa17d39519567192a6e7ea2b5b35a9cad4201af8e87e2812dc",
+      "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+      "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+      "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+      "crates/deadlib-lua/tests/native_threads.rs": "5c36b9164bbb047873b7f7a7ab42289c0cbb2d1732a4653df6d9695d7a0a6d39",
+      "crates/deadlib-lua/tests/native_thread_stacks.rs": "36fafbb3dd505dada2069c7eac951e46a02646353136ab90b06886e4a1fc3f4d",
+      "crates/deadlib-lua/tests/native_upvalues.rs": "7f1738de213929b97fefb27a8d47deef77123d6e65126d8d8cf3f1d4131c2471",
+      "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+      "crates/deadlib-lua/tests/os.rs": "eef37368f3867ef546053e2635187cd21f31e30a24c0e19fa2505df84099655a",
+      "crates/deadlib-lua/tests/package.rs": "a82a5c577f4f2af8ccde28f160a0948706e4997d3b92212bb77a86acbef8a219",
+      "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+      "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+      "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+      "crates/deadlib-lua/tests/standalone.rs": "923cfd4d761dfc70ce3f20aeb38d5456dcd0fc10038c3cd51c01c09830d1c3ed",
+      "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+      "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+      "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+      "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+      "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+      "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+      "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+      "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+      "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+      "crates/deadlib-lua/src/chunk51/dump.rs": "41bcd264f09f950a68ef9ea4148a42d1a5ddbefc3ce70a98b579fd61be64d391",
+      "crates/deadlib-lua/src/chunk51/tests.rs": "b04092bb62be23f1311eeb3d16eafefec8d590ffada9abbab814937eaad344f9",
+      "crates/deadlib-lua/src/chunk51/translate.rs": "fb6a0342e9d2952fef77b83e6b2a3727a91de60612262bb7f359dfca7bbed568",
+      "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+      "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+      "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+      "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+      "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+      "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+      "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+      "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+      "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+      "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+      "crates/deadlib-lua/src/parser/resources.rs": "750acb3001bc0745102e474d340561f8d9ae404a499d58d3cff140420375fb25",
+      "crates/deadlib-lua/src/parser/resume.rs": "338b8c0c2e0823983ead3ddca5593a2e08cd2eb93f07f975d97d6a0edc4e3e53",
+      "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+      "crates/deadlib-lua/src/vm/debug.rs": "24fd0d8bff4b3ef0312aa649284476d603554c669c8c3e2dd8b432812d8d673e",
+      "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+      "crates/deadlib-lua/src/vm/gc.rs": "7d523c5f2b1cfda3bfe633500c04bbaf582379790f94f805f1498260cd67c540",
+      "crates/deadlib-lua/src/vm/hooks.rs": "9ebb9b64b98a77b758bb36a7767112c4b8d43902172389579664ac04e694a92f",
+      "crates/deadlib-lua/src/vm/host.rs": "e361d95c1a6afe890d4b2fa4bd759af5bc3fdd53c948509b0e92b1ab2105ee91",
+      "crates/deadlib-lua/src/vm/identity.rs": "c9359466570bec0b2d24a753cc96fa220b2896ca85d2979074728e01f8245d1e",
+      "crates/deadlib-lua/src/vm/io.rs": "e1deca1b0ef89afb21fecbbcec4141dc9fa029182b16891fdb0ef78ad4073808",
+      "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+      "crates/deadlib-lua/src/vm/loads.rs": "af767b4d5a5902166e27fe21b13eb56c170e72bd6ce491b80edcbe57081f273f",
+      "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+      "crates/deadlib-lua/src/vm/meta.rs": "9d6b6c4f6c9d59eaa83f6fd654f90ebfca94e22e8b13c9338cd955cffea0cfaa",
+      "crates/deadlib-lua/src/vm/native.rs": "d80778350b8adc4da51515cf9442010e51c5e3db506d9b7cbc5acf1e7682e594",
+      "crates/deadlib-lua/src/vm/os.rs": "09ad1346652180310dbef385095c2baf9e4c2bbc27b487aab9fb16e561e2015f",
+      "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+      "crates/deadlib-lua/src/vm/standalone.rs": "68ea7b13d2f5c45b300dcd1e0c70dd29fcd34ebfcf408824811a2c0fcecd4795",
+      "crates/deadlib-lua/src/vm/strings.rs": "dbf817f6580f0e916bf6e1e410d258673fdae8b25ab06f879d2e10de2e6a2027",
+      "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+      "crates/deadlib-lua/src/vm/threads.rs": "5b6ed5bb1e71260068f528e0817a65f1f16ac8079dd9eebb4ffc717e42e2b8df",
+      "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+      "crates/deadlib-lua/src/vm/userdata.rs": "2edb9b2d19e70302dcee40a7ed4cd9424b871eb6a7978a35fd2c8a4413516d4c",
+      "crates/deadlib-lua/src/vm/host/stack.rs": "d10508eab66b18d195582d35708dd8a54a6132e2d0152526ead6387788bf0bf6",
+      "crates/deadlib-lua/src/vm/host/thread.rs": "c3698184771333f983807c5cfc320c0ffc383198dd1427ff26520f31ad577ef2",
+      "crates/deadlib-lua/src/vm/io/number.rs": "d2c3459749a329e9a277d584008e05c4b1e017c1f217c195d8dd23d174d61419",
+      "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+      "crates/deadlib-lua/src/vm/io/stream.rs": "e39a786a6f6412ec609f64ba225d8b27588b0d54cf51283bd66e73b05cdad972",
+      "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+      "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+      "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+      "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+      "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+      "crates/deadlib-lua/src/vm/host/stack/coroutine.rs": "2e0a122ae06c94c377683918eb1065750c8f5d96ad58a6f5e2f08a11c3c791d0",
+      "crates/deadlib-lua/src/vm/host/stack/dump.rs": "5a01c2d892b99d10b57c49f7e8ca7847e1ca51bc1d938f917f912361c46637d0",
+      "crates/deadlib-lua/src/vm/host/stack/file.rs": "ed9833335594ed8aed4e1715a0cafe83bb73540f7aef1df7f80dd62e3fdf47de",
+      "crates/deadlib-lua/src/vm/host/stack/loader.rs": "8c8b34afe363d3ea3e6c62f4ce171a0936b9dc7caff19103fd436042d0dde0d9",
+      "crates/deadlib-lua/src/vm/host/stack/objects.rs": "33d050b17c933a1b2548833f3d39eb39562d55305ab893ff99c5591deffb10cf",
+      "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": "0acaac943ec562d34f2cce94161ba4b3ee8afe7420cc09e6aee6975d7624bdfa",
+      "crates/deadlib-lua/src/vm/host/stack/protected.rs": "4ecf6e26487225ae838f03c52436f67d1a76e6db0a78ceed4ae115ba2229cc01",
+      "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "d008e6be20cdac81befb215f866245e7ed61e903862fb1ab717ce034d9fca9d0",
+      "crates/deadlib-lua/src/vm/host/stack/tables.rs": "e806fbc72c8399ca21ab8b1a740ade9334d6241a26d74154f4dd73eb75320d1d",
+      "crates/deadlib-lua/src/vm/host/stack/thread.rs": "7e8f4f03b29e48fde6f1717464e2dceef44a4e7f418a6591abc77d319a8fb69d",
+      "crates/deadlib-lua/src/vm/host/stack/thread_stack.rs": "fbb3db14b8a5631f4bcf4aeaded26e6a17ff789f20e22d5fd87008091abde273",
+      "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": "bce0065c223445cfd50537f7a35a1950f6058770713831e8d29aee872ab657fc",
+      "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+      "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+      "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+      "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+      "crates/deadlib-lua/tests/native-boundary/api.h": "0a46eb8dfc121dfca37030265d8866e6fa5dac99b6329260a8e300b7f943ea80",
+      "crates/deadlib-lua/tests/native-boundary/boundary.c": "3f69351fd6b41720d2ba09aa1b0c72d2ee34b48e1edec2a2a06c95bfcb416290",
+      "crates/deadlib-lua/tests/native-boundary/cases.lua": "452fa678cf2a40b8e032c51fd67fa9b49972123c29e2e17245ac0f66bcac0252",
+      "crates/deadlib-lua/tests/native-boundary/module.c": "c0173f13d2ca29515fdf9ce39d4cc73d385829808f4a8312946053fdd65e09bf",
+      "crates/deadlib-lua/tests/native-boundary/native-resume.lua": "6d0ccf6bb057bbf5744bec5205bf22f01b53389a498ff06405f6c2db7c34ad87",
+      "crates/deadlib-lua/tests/native-boundary/reader-roots.lua": "6e396f4a3dca43c0fd6a2a919fe870c27e98aed9a1ae99326db00dd05a8c5ee5",
+      "crates/deadlib-lua/tests/native-boundary/thread-stacks.lua": "d98d7aaa13c8557659bab296ccdba7d1127ccb40b5cb4cde53a468d996e438a7",
+      "crates/deadlib-lua/Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+      "crates/deadlib-lua/tests/upvalue-names.lua": "961cf40ed532a85ac312686dffb5fda7776dbc2c1a5ef6c106eb4864d9a07bb3",
+      "scripts/build_lua_cli_reference.py": "500285532b2ded90fc7c27b0bd9b7e26387ae27de665f06b2af0e16a7d0263be",
+      "scripts/check_rust_lua_native_boundary.py": "667277d94b544700cc1bd1606806edffa9d4d7322e3f7b1619e617d1ff463358",
+      "scripts/check_rust_lua_upvalue_names.py": "9d6ab9541750dc9b31c708c401d4b9f4f311c165bd4babd83183970cd7566130",
+      "scripts/check_rust_lua_full_suite.py": "29e14049861198cc7c1d07a254e38808fa784df0c2d8bee18ebb645939a2627f",
+      "scripts/check_rust_lua_suite.py": "c9220d2262d80b3588be4cb74f2d49dad772c963259431dd01aef3e4e47d0ec1"
+    }
+  },
+  "source_hashes": {
+    "crates/deadlib-lua/build.rs": "70cb94f79cfa22187fedec21f4f01e809a2bcb13a775f3058f32f91be0977921",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/examples/native_boundary.rs": "4087330f613ba9f23e1c4b5da7e56b363f12b1ff76537a0154eb3c8620e9e5d7",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "455cd7c3c926e458d726098f39d203e83f04dcb3eaa4c1c8536886cb19a9e03d",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51.rs": "dd7e3149ce0d9d0c8a8d7ed0ae254844ad01448f885e64705971fc35cd022119",
+    "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "7475c5e7ec5e7341b654bf31a26e4365953f5f69834fe341d870134b236a5bca",
+    "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser.rs": "453f1bd0715b1c73da6d6af612f1012201ec154c78af6f8d07517a211cb4ca7a",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "74977623a283c0775e021194c28d1f09aacf1f249467edd77e95766056ca7dda",
+    "crates/deadlib-lua/src/value.rs": "94f8c20c159bb196d65da871d06f14faccf58fc0f8307f273ccee5472e57ea08",
+    "crates/deadlib-lua/src/vm.rs": "a2e58b4e8923f25baf5fed4895b1cacd9483ff26e881741f4a6fe26584a14bf0",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "0831ee7dc45a9612e8a528d889576c14a35c5c211457da86deb0ffad2764f96d",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "6c13af6eb1b688c5e727cf3c90a092e5a8d9222ae6414b86234d4498b7177fa3",
+    "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+    "crates/deadlib-lua/tests/hooks.rs": "a6acd5066289f71ed0a6428cc34ca7568185169db660b58fed0e1fd4f9ed30f7",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+    "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+    "crates/deadlib-lua/tests/loading.rs": "2e3d1898bed58d1f22623079f55132a349ac9b4d9cf6e8309a2a839aa61bcebc",
+    "crates/deadlib-lua/tests/lua51.rs": "deda152310c325a1a31c9148fcb82844df24eeb0defd77b9d53fd88b3515cb2f",
+    "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+    "crates/deadlib-lua/tests/native_dump.rs": "eb389c0a57a6c19d45aad6b7d144285d136360fddea7bf5dd96c1b547da030d0",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/native_file.rs": "4b54ff853a9d60e15b95458cc92857d69e8d64ef4b2490624e0146f30872210c",
+    "crates/deadlib-lua/tests/native_gc.rs": "e39148913effd10d6c8bb043bc8d5dc12c1d98856ad4068bf1a103aa37018693",
+    "crates/deadlib-lua/tests/native_load.rs": "3b0f13ca0be1b10ae5c47a17efe4b0961302dadf800f2a2be018ba35b4f11687",
+    "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+    "crates/deadlib-lua/tests/native_pointers.rs": "a0e2607ce38313fa17d39519567192a6e7ea2b5b35a9cad4201af8e87e2812dc",
+    "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+    "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+    "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+    "crates/deadlib-lua/tests/native_threads.rs": "5c36b9164bbb047873b7f7a7ab42289c0cbb2d1732a4653df6d9695d7a0a6d39",
+    "crates/deadlib-lua/tests/native_thread_stacks.rs": "36fafbb3dd505dada2069c7eac951e46a02646353136ab90b06886e4a1fc3f4d",
+    "crates/deadlib-lua/tests/native_upvalues.rs": "7f1738de213929b97fefb27a8d47deef77123d6e65126d8d8cf3f1d4131c2471",
+    "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+    "crates/deadlib-lua/tests/os.rs": "eef37368f3867ef546053e2635187cd21f31e30a24c0e19fa2505df84099655a",
+    "crates/deadlib-lua/tests/package.rs": "a82a5c577f4f2af8ccde28f160a0948706e4997d3b92212bb77a86acbef8a219",
+    "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "923cfd4d761dfc70ce3f20aeb38d5456dcd0fc10038c3cd51c01c09830d1c3ed",
+    "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+    "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+    "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+    "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "41bcd264f09f950a68ef9ea4148a42d1a5ddbefc3ce70a98b579fd61be64d391",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "b04092bb62be23f1311eeb3d16eafefec8d590ffada9abbab814937eaad344f9",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "fb6a0342e9d2952fef77b83e6b2a3727a91de60612262bb7f359dfca7bbed568",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+    "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "750acb3001bc0745102e474d340561f8d9ae404a499d58d3cff140420375fb25",
+    "crates/deadlib-lua/src/parser/resume.rs": "338b8c0c2e0823983ead3ddca5593a2e08cd2eb93f07f975d97d6a0edc4e3e53",
+    "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+    "crates/deadlib-lua/src/vm/debug.rs": "24fd0d8bff4b3ef0312aa649284476d603554c669c8c3e2dd8b432812d8d673e",
+    "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+    "crates/deadlib-lua/src/vm/gc.rs": "7d523c5f2b1cfda3bfe633500c04bbaf582379790f94f805f1498260cd67c540",
+    "crates/deadlib-lua/src/vm/hooks.rs": "9ebb9b64b98a77b758bb36a7767112c4b8d43902172389579664ac04e694a92f",
+    "crates/deadlib-lua/src/vm/host.rs": "e361d95c1a6afe890d4b2fa4bd759af5bc3fdd53c948509b0e92b1ab2105ee91",
+    "crates/deadlib-lua/src/vm/identity.rs": "c9359466570bec0b2d24a753cc96fa220b2896ca85d2979074728e01f8245d1e",
+    "crates/deadlib-lua/src/vm/io.rs": "e1deca1b0ef89afb21fecbbcec4141dc9fa029182b16891fdb0ef78ad4073808",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "af767b4d5a5902166e27fe21b13eb56c170e72bd6ce491b80edcbe57081f273f",
+    "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+    "crates/deadlib-lua/src/vm/meta.rs": "9d6b6c4f6c9d59eaa83f6fd654f90ebfca94e22e8b13c9338cd955cffea0cfaa",
+    "crates/deadlib-lua/src/vm/native.rs": "d80778350b8adc4da51515cf9442010e51c5e3db506d9b7cbc5acf1e7682e594",
+    "crates/deadlib-lua/src/vm/os.rs": "09ad1346652180310dbef385095c2baf9e4c2bbc27b487aab9fb16e561e2015f",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "68ea7b13d2f5c45b300dcd1e0c70dd29fcd34ebfcf408824811a2c0fcecd4795",
+    "crates/deadlib-lua/src/vm/strings.rs": "dbf817f6580f0e916bf6e1e410d258673fdae8b25ab06f879d2e10de2e6a2027",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "5b6ed5bb1e71260068f528e0817a65f1f16ac8079dd9eebb4ffc717e42e2b8df",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "2edb9b2d19e70302dcee40a7ed4cd9424b871eb6a7978a35fd2c8a4413516d4c",
+    "crates/deadlib-lua/src/vm/host/stack.rs": "d10508eab66b18d195582d35708dd8a54a6132e2d0152526ead6387788bf0bf6",
+    "crates/deadlib-lua/src/vm/host/thread.rs": "c3698184771333f983807c5cfc320c0ffc383198dd1427ff26520f31ad577ef2",
+    "crates/deadlib-lua/src/vm/io/number.rs": "d2c3459749a329e9a277d584008e05c4b1e017c1f217c195d8dd23d174d61419",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "e39a786a6f6412ec609f64ba225d8b27588b0d54cf51283bd66e73b05cdad972",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/host/stack/coroutine.rs": "2e0a122ae06c94c377683918eb1065750c8f5d96ad58a6f5e2f08a11c3c791d0",
+    "crates/deadlib-lua/src/vm/host/stack/dump.rs": "5a01c2d892b99d10b57c49f7e8ca7847e1ca51bc1d938f917f912361c46637d0",
+    "crates/deadlib-lua/src/vm/host/stack/file.rs": "ed9833335594ed8aed4e1715a0cafe83bb73540f7aef1df7f80dd62e3fdf47de",
+    "crates/deadlib-lua/src/vm/host/stack/loader.rs": "8c8b34afe363d3ea3e6c62f4ce171a0936b9dc7caff19103fd436042d0dde0d9",
+    "crates/deadlib-lua/src/vm/host/stack/objects.rs": "33d050b17c933a1b2548833f3d39eb39562d55305ab893ff99c5591deffb10cf",
+    "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": "0acaac943ec562d34f2cce94161ba4b3ee8afe7420cc09e6aee6975d7624bdfa",
+    "crates/deadlib-lua/src/vm/host/stack/protected.rs": "4ecf6e26487225ae838f03c52436f67d1a76e6db0a78ceed4ae115ba2229cc01",
+    "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "d008e6be20cdac81befb215f866245e7ed61e903862fb1ab717ce034d9fca9d0",
+    "crates/deadlib-lua/src/vm/host/stack/tables.rs": "e806fbc72c8399ca21ab8b1a740ade9334d6241a26d74154f4dd73eb75320d1d",
+    "crates/deadlib-lua/src/vm/host/stack/thread.rs": "7e8f4f03b29e48fde6f1717464e2dceef44a4e7f418a6591abc77d319a8fb69d",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack.rs": "fbb3db14b8a5631f4bcf4aeaded26e6a17ff789f20e22d5fd87008091abde273",
+    "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": "bce0065c223445cfd50537f7a35a1950f6058770713831e8d29aee872ab657fc",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/tests/native-boundary/api.h": "0a46eb8dfc121dfca37030265d8866e6fa5dac99b6329260a8e300b7f943ea80",
+    "crates/deadlib-lua/tests/native-boundary/boundary.c": "3f69351fd6b41720d2ba09aa1b0c72d2ee34b48e1edec2a2a06c95bfcb416290",
+    "crates/deadlib-lua/tests/native-boundary/cases.lua": "452fa678cf2a40b8e032c51fd67fa9b49972123c29e2e17245ac0f66bcac0252",
+    "crates/deadlib-lua/tests/native-boundary/module.c": "c0173f13d2ca29515fdf9ce39d4cc73d385829808f4a8312946053fdd65e09bf",
+    "crates/deadlib-lua/tests/native-boundary/native-resume.lua": "6d0ccf6bb057bbf5744bec5205bf22f01b53389a498ff06405f6c2db7c34ad87",
+    "crates/deadlib-lua/tests/native-boundary/reader-roots.lua": "6e396f4a3dca43c0fd6a2a919fe870c27e98aed9a1ae99326db00dd05a8c5ee5",
+    "crates/deadlib-lua/tests/native-boundary/thread-stacks.lua": "d98d7aaa13c8557659bab296ccdba7d1127ccb40b5cb4cde53a468d996e438a7",
+    "crates/deadlib-lua/Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+    "crates/deadlib-lua/tests/upvalue-names.lua": "961cf40ed532a85ac312686dffb5fda7776dbc2c1a5ef6c106eb4864d9a07bb3",
+    "scripts/build_lua_cli_reference.py": "500285532b2ded90fc7c27b0bd9b7e26387ae27de665f06b2af0e16a7d0263be",
+    "scripts/check_rust_lua_native_boundary.py": "667277d94b544700cc1bd1606806edffa9d4d7322e3f7b1619e617d1ff463358",
+    "scripts/check_rust_lua_upvalue_names.py": "9d6ab9541750dc9b31c708c401d4b9f4f311c165bd4babd83183970cd7566130",
+    "scripts/check_rust_lua_full_suite.py": "29e14049861198cc7c1d07a254e38808fa784df0c2d8bee18ebb645939a2627f",
+    "scripts/check_rust_lua_suite.py": "c9220d2262d80b3588be4cb74f2d49dad772c963259431dd01aef3e4e47d0ec1"
+  },
+  "workspace_inputs": {
+    "Cargo.toml": "4a8734993f1a41a7ca2772094936bb9c6c0a1ccc8039786e9adbefcac6d19497",
+    "Cargo.lock": "58444d69842ea3a13e15be9f4ee0639a903a044774a61e82d3f728047cc33ffa",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "crates/deadlib-lua/Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+    "crates/deadlib-lua-legacy/Cargo.toml": "b9881941c8d79b979e4243546785ab3583ef470fdc007cc546c8b883afc71aa1",
+    "crates/deadlib-lua-legacy/mlua-sys/Cargo.toml": "377670017065f0c95767bdf99f24f71717564ad62126f8934b8361b7e34c7098",
+    "vendor/lua-src/Cargo.toml": "39ae3649654b248f4a6e473f9d7151ad6cc97cd629140ad5e57628a6765c656b"
+  },
+  "committed_workspace_manifest_sha256": "29e4c6e67ddeb28287e0cc9a66342c4d899a3716c90b9e382e1e60c9e19c68cc",
+  "committed_workspace_lock_sha256": "bb735d83eb182681670ef2002667780f8eae815d71a052d2b0a06c210eb8aa67",
+  "uncommitted_dependency_updates_excluded": true,
+  "workspace_input_audit": {
+    "audit_workspace": "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100",
+    "revision": "f99fe8f81cef33b830fa983727071fcc055ae49e",
+    "committed_input_blobs": {
+      "Cargo.toml": "62aaafb16fd13bca889b80f07e1444aaa7bce0a6",
+      "Cargo.lock": "ba4acec3bfd117587716642ec346fba3844bea2b",
+      ".cargo/config.toml": "ffbe2cde8d64b040e9b29a950625066c93b4fa06",
+      "crates/deadlib-lua/Cargo.toml": "46a624c6e0d2a01bfaa053e41b6f36e6431822ec",
+      "crates/deadlib-lua-legacy/Cargo.toml": "d562401dce39bd57d0de68dac8d6d62f07bd9feb",
+      "crates/deadlib-lua-legacy/mlua-sys/Cargo.toml": "ed5d8903be2d98f4b81187c90d7c2f02112c8cd2",
+      "vendor/lua-src/Cargo.toml": "f8b986f281f8e2dcb22828bc874e3096a06584ea"
+    },
+    "manifest_delta": {
+      "workspace_version": [
+        "0.5.2474",
+        "0.5.2475"
+      ]
+    },
+    "audit_script_sha256": "fdae7fc88a62008f5cd946f0e7a6309a1b5b6d9ae4cd3d3f00d6bec83082aa01",
+    "manifest_hashes": {
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\Cargo.toml": "29e4c6e67ddeb28287e0cc9a66342c4d899a3716c90b9e382e1e60c9e19c68cc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-assets\\Cargo.toml": "bb422354153ca8882155f970c2043ebb46fd600e7d4667466e2408f73b7a5ffc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-alsa\\Cargo.toml": "d92891c4568a5181b471402b8984fcd8c3137fdcf75a922b3b7d15bae70ee973",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-coreaudio\\Cargo.toml": "c957fdac7a257058b6250ea8ed06f67fde5ebb258e80400b1082051084646ad3",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-freebsd-pcm\\Cargo.toml": "1f89e99a87b0fcf06ec02dc72efc4e1768291cae4985139b126b592e7caab5cc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-jack\\Cargo.toml": "4c22a28df44fb5680f1bf037f99182aff7bfbdd54ade3db69bb98ef259000290",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-pipewire\\Cargo.toml": "61416258f1d7a43f832da9410d7bb9e4862cb0ae1211b654ae54f00c8591b8ba",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-pulse\\Cargo.toml": "253ff62467d57bdded4bc0cde5fec9db58a8edab959a2c4e23780d8b58e2b61a",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-backend-wasapi\\Cargo.toml": "d0a0659a502b12f2c9048bfba0a230d88715dc0083eb3be781b7dde9f40e91f6",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-core\\Cargo.toml": "e505767b048347bca5911f63ceab52c6ee21aa13ddcd6d1eba6de0de51745390",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio-decode\\Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\Cargo.toml": "5a79ec4bb1a3949f4029b0e6e9f4547796f2ec8c355f023548c7954a300ee387",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\decode\\flac\\Cargo.toml": "3a980f8fd63211991464859d0b989f704277c6d85ed1a3975fb96634dc168414",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\decode\\flac\\fuzz\\Cargo.toml": "8f564aa469849c16521f0e78644ba6f4f1ec466dc78968789c909546c81643a4",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml": "240c0b594e7d1cb19ca6fed051c4e0be5c4e7f63f0e374b181cb0e6f67b30134",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\decode\\ogg\\Cargo.toml": "ea1eb82ec53d73cf2171a341a04903e99861914d5aeafd00d6742c6b98cb09f8",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-audio\\decode\\vorbis\\Cargo.toml": "53572001194b38591a06710aa5ff483dd5bc2f871820262e2f0a1884658b4d6b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-bincode\\Cargo.toml": "d4a31da433dd06d3faecd017e1125ea4bf608294cc668906109598eb76158de1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-bincode\\derive\\Cargo.toml": "4ddac3c99594bc5b7157d1d35d570fb3a12fae23a2c9773ba770b841bc7961d1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-image\\Cargo.toml": "421266359babe9b5838e192e9259b5fff31f9c57289de25b0f0a31a9740447fb",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-image\\gif\\Cargo.toml": "f8d0f755a0c86d1833ac98f7769616489a532f267c5969d737790772d8411fa2",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-image\\gif\\fuzz\\Cargo.toml": "85fe8acb5211b2836961fa5a4516507c94302067b884d20975129372cc18adc9",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-image\\png\\Cargo.toml": "44c3432b8186316c8f8dec88032fe7eb2e66eae4c5e6e2d2a9e4cab1f243f85c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-image\\png\\fuzz\\Cargo.toml": "9d5983c1f44a68e1888c1e25f94202e5c47cc3b26d39ac6af4c552c5d654c22c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-input-native\\Cargo.toml": "60cd0506c096ce1c515b05d4502683d9e54aa738fdecd232bef11bd0ab802afa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\Cargo.toml": "b9881941c8d79b979e4243546785ab3583ef470fdc007cc546c8b883afc71aa1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\examples\\module\\Cargo.toml": "58058cbe60109afef0f94c864a6f41de1c54aea2125a0ab75907075f22613018",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\mlua-sys\\Cargo.toml": "377670017065f0c95767bdf99f24f71717564ad62126f8934b8361b7e34c7098",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\mlua_derive\\Cargo.toml": "276257a4ebbe50aa50553f2d87a834329af1e4cc1d7f5947042e1dcc2e293661",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\tests\\module\\Cargo.toml": "194935d68c47b32570f8506780e81b66c00c5ca416d3710068e972ccb9c37a6c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua-legacy\\tests\\module\\loader\\Cargo.toml": "c5edd4ee996806664df30ab829306a6f9ed84266acbe13d95416ff33b2890c88",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-lua\\Cargo.toml": "39bf6b7504f74c28eac4383d53eae0e38e8eb044960e73e5e47d4661f4c973e9",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-platform\\Cargo.toml": "7e5990d90e0f9936e7c388b52cdf38c5394f896a35cdee7c90069a7e2549a794",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-present\\Cargo.toml": "19114d26833a598dc7dea4098be8def0caf72c14e89b5a52dc4c3cd235f5f841",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-backend-gl\\Cargo.toml": "3df6430484a7b68885202bb04271720142d78c6d05c6d888aab6b3069a076c2d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-backend-metal\\Cargo.toml": "97d724a783ce5bbc1dd4fa66a8174615d4e8672ae784de5b90c178e0be2b1cf1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-backend-software\\Cargo.toml": "36a89c6adc0804878769e89a7e0b01a88b4da2a2f7d1fd2435b899605a94d3bc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-backend-vulkan\\Cargo.toml": "6bad75616f8487c48739560ae7c39ff8e35b106e7dac00dfd5f2d62b3186d50d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-backend-wgpu\\Cargo.toml": "1d278642c87da68fc2ace5b855471b2e3178bdb50bdc1c835259c8d4debff28e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render-core\\Cargo.toml": "9508039e1281b9686944fc2702e6dcb895d7e73aa9a5f43c14e092754837b132",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-render\\Cargo.toml": "0cd1d0a8afd1277c3f29ba0edd122f104b9ca1981349898e66e40d692bbb869a",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadlib-video\\Cargo.toml": "027e6ccd61cc48ee83664f576a8f5e607ddbb3fc3c60b1d4d0de3100934d028c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-assets\\Cargo.toml": "90ebb84190640c2df6724999f794a2cb609fa3023f03083965ea1c0b802f1dcf",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-audio-analysis\\Cargo.toml": "b7774b9a37b20dd989032f3faf2b177a45ec732297e2e7f9ca678050f8df1b91",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-audio-replaygain\\Cargo.toml": "81bea26b8ecb1a707ac37767281b804a799a34bc3f86c621d7d7f2acae1ef58b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-audio-stream\\Cargo.toml": "bed801b16b23bafb88fd0873d4c16696d5217b3b5eb2ad751ad352032a5b8e9e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-chart\\Cargo.toml": "5d467c303633f3d3096c183aafc80a66a71bb21960d7aaecbd964768964fc337",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-config\\Cargo.toml": "7e9fdf4874e78742aa7684214a051c512a678a5ae46d49ef2fdc96576a20edaa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-core\\Cargo.toml": "3ce1fac805000ebe345ecd8f6e94e0ce6d55e5322b959965a4430527b53088ba",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-gameplay\\Cargo.toml": "4865163ab15114b6e567341dbb5ead2b645865021736cdd4e4482112e4b72091",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-heart-rate\\Cargo.toml": "8ba1e78d7681956cec6afe7c44bdc09ec308ffc6043d8e85f8d018e6ea651187",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-import\\Cargo.toml": "23f84d72bae1d61d9d991f0cefb3105fc259f08dbf77f7da852763710c826591",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-input-fsr\\Cargo.toml": "c869db7280998a92df294b88979fb7c734787f3ca4d108d0d30ac5c267720d66",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-input\\Cargo.toml": "169721341d4f9dd5e01047a1dc4aa656df83be25ec4b082605f5845cd80ee766",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-lights\\Cargo.toml": "e675a56a4ced98a5275269b96a64439086ffbaa1dc864c248ed7056cf59a636b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-net\\Cargo.toml": "135abef815529a9ccb5ea4a2c5511e7358bdb1bf71ae2df3762f5681989bf92e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-notefield\\Cargo.toml": "76af6606f080daac500c105986778e3fda504b56ac27d419219c8abf88f661e7",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-noteskin\\Cargo.toml": "548f6d5bb5797146c24cda1d2de9cababc729e523e7b291e14ca14c7da4d6016",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-online\\Cargo.toml": "50e39abf209d2a507ccb679cbd91e80fde20a35cb3a7142745dbf695ff908958",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-profile-gameplay\\Cargo.toml": "e2aa22c001c8f070f1a360dd9bb5a9baa93423698f36852b91ae233d82a5f894",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-profile\\Cargo.toml": "37103ea115c4ab8538a904720573e7143c53287045d28eb86620cb7d928497e2",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-rules\\Cargo.toml": "3c7938e045658309b0ae28533bac3201ad012f7b39bee680e06b7651fe12d23e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-score\\Cargo.toml": "901321bf22eeccb22e462ae70813accca94bc55cbe28dd3f1514138881eb5def",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-shell\\Cargo.toml": "73e898159806865e87225451b1a6992fa0ad7e2ed7f962cab359e64063c10092",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-simfile\\Cargo.toml": "d9c343b8fd35908cbc696440c4e5dc59db6a8b99527c09f75ebeab837997e41e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-smx\\Cargo.toml": "0647bee11cd6c7cc3521375ed6b42189c77eb464b97920e99602f03f34709936",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-song-lua\\Cargo.toml": "5041def91288c7e6a571e32fe377f08e76f9d4bbf77ef8847f681c68defe74aa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-theme-simply-love\\Cargo.toml": "7f66b2d7d9449b79275d1ae3fb87bd1e0f846bf26bb9fb5816cda7b0b19667fd",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-theme\\Cargo.toml": "9fbf697321264c731f461752b699062f0b858046b08e80f4d564a5cfd38e4656",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-updater\\Cargo.toml": "cbf2f15e093e2b33d723d92871bf5ac97cc4587fe75ccd3141ebcf5233d97b2d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\crates\\deadsync-version\\Cargo.toml": "2fdeed1c60f0af75d5af04c127ee90310767f8845f8f5e282807ceb4e2c65a89",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\block\\Cargo.toml": "002a7853d0986d54fae30f352deff7fe4f6d51aa9c68e3ec9ddbb9c6dd38a48c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\cfg-aliases\\Cargo.toml": "887c5ecca3bc722b44009644aad6b4fb48ca5c7459735e7f7257f94c1eea2c17",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\dirs-sys-win7\\Cargo.toml": "6feb512273ced2e63c7fdc687ba6cee3da20af93447eee5dcc50df4ada3f4613",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\hidapi-win7\\Cargo.toml": "52b0cf07b7994afba6341ffdefa1521816af3207240e1d7b3e92d75998f45b9b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\lua-src\\Cargo.toml": "167eea0c266f4d2e68060079dde952bfc1c2492c64d6955ff845101a7a657f5e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\opusic-sys\\Cargo.toml": "04b2421fc857585acd6ef2dd670f73af3c6828553ec5bfaed5a2864f0c333567",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-inputs-1793112774637094100\\vendor\\rfd-win7\\Cargo.toml": "e899984523fbee4f13babbb03b24e3fa28f476669e019367fb669e0dd781b9a5",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\Cargo.toml": "4a8734993f1a41a7ca2772094936bb9c6c0a1ccc8039786e9adbefcac6d19497",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-assets\\Cargo.toml": "bb422354153ca8882155f970c2043ebb46fd600e7d4667466e2408f73b7a5ffc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-alsa\\Cargo.toml": "d92891c4568a5181b471402b8984fcd8c3137fdcf75a922b3b7d15bae70ee973",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-coreaudio\\Cargo.toml": "c957fdac7a257058b6250ea8ed06f67fde5ebb258e80400b1082051084646ad3",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-freebsd-pcm\\Cargo.toml": "1f89e99a87b0fcf06ec02dc72efc4e1768291cae4985139b126b592e7caab5cc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-jack\\Cargo.toml": "4c22a28df44fb5680f1bf037f99182aff7bfbdd54ade3db69bb98ef259000290",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-pipewire\\Cargo.toml": "61416258f1d7a43f832da9410d7bb9e4862cb0ae1211b654ae54f00c8591b8ba",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-pulse\\Cargo.toml": "253ff62467d57bdded4bc0cde5fec9db58a8edab959a2c4e23780d8b58e2b61a",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-backend-wasapi\\Cargo.toml": "d0a0659a502b12f2c9048bfba0a230d88715dc0083eb3be781b7dde9f40e91f6",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-core\\Cargo.toml": "e505767b048347bca5911f63ceab52c6ee21aa13ddcd6d1eba6de0de51745390",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio-decode\\Cargo.toml": "8c4050320826969b118de02e15ca3036eb14558a9c1231bf0f503fd25e317591",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\Cargo.toml": "5a79ec4bb1a3949f4029b0e6e9f4547796f2ec8c355f023548c7954a300ee387",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\decode\\flac\\Cargo.toml": "3a980f8fd63211991464859d0b989f704277c6d85ed1a3975fb96634dc168414",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\decode\\flac\\fuzz\\Cargo.toml": "8f564aa469849c16521f0e78644ba6f4f1ec466dc78968789c909546c81643a4",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml": "240c0b594e7d1cb19ca6fed051c4e0be5c4e7f63f0e374b181cb0e6f67b30134",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\decode\\ogg\\Cargo.toml": "ea1eb82ec53d73cf2171a341a04903e99861914d5aeafd00d6742c6b98cb09f8",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-audio\\decode\\vorbis\\Cargo.toml": "53572001194b38591a06710aa5ff483dd5bc2f871820262e2f0a1884658b4d6b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-bincode\\Cargo.toml": "d4a31da433dd06d3faecd017e1125ea4bf608294cc668906109598eb76158de1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-bincode\\derive\\Cargo.toml": "4ddac3c99594bc5b7157d1d35d570fb3a12fae23a2c9773ba770b841bc7961d1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-image\\Cargo.toml": "421266359babe9b5838e192e9259b5fff31f9c57289de25b0f0a31a9740447fb",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-image\\gif\\Cargo.toml": "f8d0f755a0c86d1833ac98f7769616489a532f267c5969d737790772d8411fa2",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-image\\gif\\fuzz\\Cargo.toml": "85fe8acb5211b2836961fa5a4516507c94302067b884d20975129372cc18adc9",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-image\\png\\Cargo.toml": "44c3432b8186316c8f8dec88032fe7eb2e66eae4c5e6e2d2a9e4cab1f243f85c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-image\\png\\fuzz\\Cargo.toml": "9d5983c1f44a68e1888c1e25f94202e5c47cc3b26d39ac6af4c552c5d654c22c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-input-native\\Cargo.toml": "60cd0506c096ce1c515b05d4502683d9e54aa738fdecd232bef11bd0ab802afa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\Cargo.toml": "b9881941c8d79b979e4243546785ab3583ef470fdc007cc546c8b883afc71aa1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\examples\\module\\Cargo.toml": "58058cbe60109afef0f94c864a6f41de1c54aea2125a0ab75907075f22613018",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\mlua-sys\\Cargo.toml": "377670017065f0c95767bdf99f24f71717564ad62126f8934b8361b7e34c7098",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\mlua_derive\\Cargo.toml": "276257a4ebbe50aa50553f2d87a834329af1e4cc1d7f5947042e1dcc2e293661",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\tests\\module\\Cargo.toml": "194935d68c47b32570f8506780e81b66c00c5ca416d3710068e972ccb9c37a6c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua-legacy\\tests\\module\\loader\\Cargo.toml": "c5edd4ee996806664df30ab829306a6f9ed84266acbe13d95416ff33b2890c88",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-lua\\Cargo.toml": "f3bc75789436ed3861072d8bfc662556285180605cd04bc56edc72591dc70b0d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-platform\\Cargo.toml": "7e5990d90e0f9936e7c388b52cdf38c5394f896a35cdee7c90069a7e2549a794",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-present\\Cargo.toml": "19114d26833a598dc7dea4098be8def0caf72c14e89b5a52dc4c3cd235f5f841",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-backend-gl\\Cargo.toml": "3df6430484a7b68885202bb04271720142d78c6d05c6d888aab6b3069a076c2d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-backend-metal\\Cargo.toml": "97d724a783ce5bbc1dd4fa66a8174615d4e8672ae784de5b90c178e0be2b1cf1",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-backend-software\\Cargo.toml": "36a89c6adc0804878769e89a7e0b01a88b4da2a2f7d1fd2435b899605a94d3bc",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-backend-vulkan\\Cargo.toml": "6bad75616f8487c48739560ae7c39ff8e35b106e7dac00dfd5f2d62b3186d50d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-backend-wgpu\\Cargo.toml": "1d278642c87da68fc2ace5b855471b2e3178bdb50bdc1c835259c8d4debff28e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render-core\\Cargo.toml": "9508039e1281b9686944fc2702e6dcb895d7e73aa9a5f43c14e092754837b132",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-render\\Cargo.toml": "0cd1d0a8afd1277c3f29ba0edd122f104b9ca1981349898e66e40d692bbb869a",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadlib-video\\Cargo.toml": "027e6ccd61cc48ee83664f576a8f5e607ddbb3fc3c60b1d4d0de3100934d028c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-assets\\Cargo.toml": "90ebb84190640c2df6724999f794a2cb609fa3023f03083965ea1c0b802f1dcf",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-audio-analysis\\Cargo.toml": "b7774b9a37b20dd989032f3faf2b177a45ec732297e2e7f9ca678050f8df1b91",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-audio-replaygain\\Cargo.toml": "81bea26b8ecb1a707ac37767281b804a799a34bc3f86c621d7d7f2acae1ef58b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-audio-stream\\Cargo.toml": "bed801b16b23bafb88fd0873d4c16696d5217b3b5eb2ad751ad352032a5b8e9e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-chart\\Cargo.toml": "5d467c303633f3d3096c183aafc80a66a71bb21960d7aaecbd964768964fc337",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-config\\Cargo.toml": "7e9fdf4874e78742aa7684214a051c512a678a5ae46d49ef2fdc96576a20edaa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-core\\Cargo.toml": "3ce1fac805000ebe345ecd8f6e94e0ce6d55e5322b959965a4430527b53088ba",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-gameplay\\Cargo.toml": "4865163ab15114b6e567341dbb5ead2b645865021736cdd4e4482112e4b72091",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-heart-rate\\Cargo.toml": "8ba1e78d7681956cec6afe7c44bdc09ec308ffc6043d8e85f8d018e6ea651187",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-import\\Cargo.toml": "23f84d72bae1d61d9d991f0cefb3105fc259f08dbf77f7da852763710c826591",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-input-fsr\\Cargo.toml": "c869db7280998a92df294b88979fb7c734787f3ca4d108d0d30ac5c267720d66",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-input\\Cargo.toml": "169721341d4f9dd5e01047a1dc4aa656df83be25ec4b082605f5845cd80ee766",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-lights\\Cargo.toml": "e675a56a4ced98a5275269b96a64439086ffbaa1dc864c248ed7056cf59a636b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-net\\Cargo.toml": "135abef815529a9ccb5ea4a2c5511e7358bdb1bf71ae2df3762f5681989bf92e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-notefield\\Cargo.toml": "76af6606f080daac500c105986778e3fda504b56ac27d419219c8abf88f661e7",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-noteskin\\Cargo.toml": "548f6d5bb5797146c24cda1d2de9cababc729e523e7b291e14ca14c7da4d6016",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-online\\Cargo.toml": "50e39abf209d2a507ccb679cbd91e80fde20a35cb3a7142745dbf695ff908958",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-profile-gameplay\\Cargo.toml": "e2aa22c001c8f070f1a360dd9bb5a9baa93423698f36852b91ae233d82a5f894",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-profile\\Cargo.toml": "37103ea115c4ab8538a904720573e7143c53287045d28eb86620cb7d928497e2",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-rules\\Cargo.toml": "3c7938e045658309b0ae28533bac3201ad012f7b39bee680e06b7651fe12d23e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-score\\Cargo.toml": "901321bf22eeccb22e462ae70813accca94bc55cbe28dd3f1514138881eb5def",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-shell\\Cargo.toml": "73e898159806865e87225451b1a6992fa0ad7e2ed7f962cab359e64063c10092",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-simfile\\Cargo.toml": "d9c343b8fd35908cbc696440c4e5dc59db6a8b99527c09f75ebeab837997e41e",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-smx\\Cargo.toml": "0647bee11cd6c7cc3521375ed6b42189c77eb464b97920e99602f03f34709936",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-song-lua\\Cargo.toml": "5041def91288c7e6a571e32fe377f08e76f9d4bbf77ef8847f681c68defe74aa",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-theme-simply-love\\Cargo.toml": "7f66b2d7d9449b79275d1ae3fb87bd1e0f846bf26bb9fb5816cda7b0b19667fd",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-theme\\Cargo.toml": "9fbf697321264c731f461752b699062f0b858046b08e80f4d564a5cfd38e4656",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-updater\\Cargo.toml": "cbf2f15e093e2b33d723d92871bf5ac97cc4587fe75ccd3141ebcf5233d97b2d",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\crates\\deadsync-version\\Cargo.toml": "2fdeed1c60f0af75d5af04c127ee90310767f8845f8f5e282807ceb4e2c65a89",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\block\\Cargo.toml": "002a7853d0986d54fae30f352deff7fe4f6d51aa9c68e3ec9ddbb9c6dd38a48c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\cfg-aliases\\Cargo.toml": "887c5ecca3bc722b44009644aad6b4fb48ca5c7459735e7f7257f94c1eea2c17",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\dirs-sys-win7\\Cargo.toml": "6feb512273ced2e63c7fdc687ba6cee3da20af93447eee5dcc50df4ada3f4613",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\hidapi-win7\\Cargo.toml": "52b0cf07b7994afba6341ffdefa1521816af3207240e1d7b3e92d75998f45b9b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\lua-src\\Cargo.toml": "39ae3649654b248f4a6e473f9d7151ad6cc97cd629140ad5e57628a6765c656b",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\opusic-sys\\Cargo.toml": "04b2421fc857585acd6ef2dd670f73af3c6828553ec5bfaed5a2864f0c333567",
+      "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\vendor\\rfd-win7\\Cargo.toml": "e899984523fbee4f13babbb03b24e3fa28f476669e019367fb669e0dd781b9a5"
+    },
+    "snapshot_lock_sha256": "58444d69842ea3a13e15be9f4ee0639a903a044774a61e82d3f728047cc33ffa",
+    "current_lock_sha256": "bb735d83eb182681670ef2002667780f8eae815d71a052d2b0a06c210eb8aa67",
+    "changed_packages": [
+      {
+        "name": "deadsync-version",
+        "version": "0.5.2474",
+        "before": {
+          "name": "deadsync-version",
+          "version": "0.5.2474",
+          "dependencies": [
+            "log",
+            "semver"
+          ]
+        },
+        "after": null
+      },
+      {
+        "name": "deadsync-theme-simply-love",
+        "version": "0.5.2475",
+        "before": null,
+        "after": {
+          "name": "deadsync-theme-simply-love",
+          "version": "0.5.2475",
+          "dependencies": [
+            "askama",
+            "bitflags 2.13.2",
+            "chrono",
+            "deadlib-assets",
+            "deadlib-input-native",
+            "deadlib-lua-legacy",
+            "deadlib-platform",
+            "deadlib-present",
+            "deadlib-render",
+            "deadlib-render-core",
+            "deadsync-assets",
+            "deadsync-chart",
+            "deadsync-config",
+            "deadsync-core",
+            "deadsync-gameplay",
+            "deadsync-input",
+            "deadsync-lights",
+            "deadsync-notefield",
+            "deadsync-noteskin",
+            "deadsync-online",
+            "deadsync-profile",
+            "deadsync-profile-gameplay",
+            "deadsync-rules",
+            "deadsync-score",
+            "deadsync-simfile",
+            "deadsync-smx",
+            "deadsync-song-lua",
+            "deadsync-theme",
+            "deadsync-version",
+            "glam",
+            "image",
+            "log",
+            "memchr",
+            "null-or-die",
+            "qrcodegen",
+            "rand 0.10.3",
+            "rustc-hash 2.1.3",
+            "serde_json",
+            "smallvec",
+            "strsim",
+            "tempfile",
+            "twox-hash",
+            "unicode-normalization",
+            "winit"
+          ]
+        }
+      },
+      {
+        "name": "deadsync",
+        "version": "0.5.2475",
+        "before": null,
+        "after": {
+          "name": "deadsync",
+          "version": "0.5.2475",
+          "dependencies": [
+            "deadlib-assets",
+            "deadlib-audio",
+            "deadlib-platform",
+            "deadlib-present",
+            "deadsync-assets",
+            "deadsync-audio-analysis",
+            "deadsync-audio-replaygain",
+            "deadsync-audio-stream",
+            "deadsync-chart",
+            "deadsync-config",
+            "deadsync-core",
+            "deadsync-gameplay",
+            "deadsync-input",
+            "deadsync-noteskin",
+            "deadsync-profile",
+            "deadsync-profile-gameplay",
+            "deadsync-rules",
+            "deadsync-score",
+            "deadsync-shell",
+            "deadsync-simfile",
+            "deadsync-song-lua",
+            "deadsync-theme-simply-love",
+            "deadsync-updater",
+            "deadsync-version",
+            "fs_extra",
+            "image",
+            "log",
+            "serde",
+            "serde_json",
+            "sha2",
+            "tar",
+            "tempfile",
+            "winres",
+            "zstd 0.14.3"
+          ]
+        }
+      },
+      {
+        "name": "deadsync",
+        "version": "0.5.2474",
+        "before": {
+          "name": "deadsync",
+          "version": "0.5.2474",
+          "dependencies": [
+            "deadlib-assets",
+            "deadlib-audio",
+            "deadlib-platform",
+            "deadlib-present",
+            "deadsync-assets",
+            "deadsync-audio-analysis",
+            "deadsync-audio-replaygain",
+            "deadsync-audio-stream",
+            "deadsync-chart",
+            "deadsync-config",
+            "deadsync-core",
+            "deadsync-gameplay",
+            "deadsync-input",
+            "deadsync-noteskin",
+            "deadsync-profile",
+            "deadsync-profile-gameplay",
+            "deadsync-rules",
+            "deadsync-score",
+            "deadsync-shell",
+            "deadsync-simfile",
+            "deadsync-song-lua",
+            "deadsync-theme-simply-love",
+            "deadsync-updater",
+            "deadsync-version",
+            "fs_extra",
+            "image",
+            "log",
+            "serde",
+            "serde_json",
+            "sha2",
+            "tar",
+            "tempfile",
+            "winres",
+            "zstd 0.14.3"
+          ]
+        },
+        "after": null
+      },
+      {
+        "name": "deadsync-theme-simply-love",
+        "version": "0.5.2474",
+        "before": {
+          "name": "deadsync-theme-simply-love",
+          "version": "0.5.2474",
+          "dependencies": [
+            "askama",
+            "bitflags 2.13.2",
+            "chrono",
+            "deadlib-assets",
+            "deadlib-input-native",
+            "deadlib-lua-legacy",
+            "deadlib-platform",
+            "deadlib-present",
+            "deadlib-render",
+            "deadlib-render-core",
+            "deadsync-assets",
+            "deadsync-chart",
+            "deadsync-config",
+            "deadsync-core",
+            "deadsync-gameplay",
+            "deadsync-input",
+            "deadsync-lights",
+            "deadsync-notefield",
+            "deadsync-noteskin",
+            "deadsync-online",
+            "deadsync-profile",
+            "deadsync-profile-gameplay",
+            "deadsync-rules",
+            "deadsync-score",
+            "deadsync-simfile",
+            "deadsync-smx",
+            "deadsync-song-lua",
+            "deadsync-theme",
+            "deadsync-version",
+            "glam",
+            "image",
+            "log",
+            "memchr",
+            "null-or-die",
+            "qrcodegen",
+            "rand 0.10.3",
+            "rustc-hash 2.1.3",
+            "serde_json",
+            "smallvec",
+            "strsim",
+            "tempfile",
+            "twox-hash",
+            "unicode-normalization",
+            "winit"
+          ]
+        },
+        "after": null
+      },
+      {
+        "name": "deadsync-version",
+        "version": "0.5.2475",
+        "before": null,
+        "after": {
+          "name": "deadsync-version",
+          "version": "0.5.2475",
+          "dependencies": [
+            "log",
+            "semver"
+          ]
+        }
+      }
+    ],
+    "lua_dependency_records": [
+      {
+        "name": "aho-corasick",
+        "version": "1.1.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+        "dependencies": [
+          "memchr"
+        ]
+      },
+      {
+        "name": "alloca",
+        "version": "0.4.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e5a7d05ea6aea7e9e64d25b9156ba2fee3fdd659e34e41063cd2fc7cd020d7f4",
+        "dependencies": [
+          "cc"
+        ]
+      },
+      {
+        "name": "allocator-api2",
+        "version": "0.2.21",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+      },
+      {
+        "name": "anes",
+        "version": "0.1.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
+      },
+      {
+        "name": "anstream",
+        "version": "1.0.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d",
+        "dependencies": [
+          "anstyle",
+          "anstyle-parse",
+          "anstyle-query",
+          "anstyle-wincon",
+          "colorchoice",
+          "is_terminal_polyfill",
+          "utf8parse"
+        ]
+      },
+      {
+        "name": "anstyle",
+        "version": "1.0.14",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
+      },
+      {
+        "name": "anstyle-parse",
+        "version": "1.0.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e",
+        "dependencies": [
+          "utf8parse"
+        ]
+      },
+      {
+        "name": "anstyle-query",
+        "version": "1.1.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc",
+        "dependencies": [
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "anstyle-wincon",
+        "version": "3.0.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d",
+        "dependencies": [
+          "anstyle",
+          "once_cell_polyfill",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "anyhow",
+        "version": "1.0.104",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+      },
+      {
+        "name": "atomic-waker",
+        "version": "1.1.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+      },
+      {
+        "name": "autocfg",
+        "version": "1.5.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+      },
+      {
+        "name": "aws-lc-rs",
+        "version": "1.18.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "faac5829c2b74c28f830747e7818ccfb684261b5f48a1118b1e2a13d36dfab13",
+        "dependencies": [
+          "aws-lc-sys",
+          "zeroize"
+        ]
+      },
+      {
+        "name": "aws-lc-sys",
+        "version": "0.46.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f1622d8446a2d4b2ce0c7eefc73dd43a99779028d5ee5c2dd8073a658ba8a2bc",
+        "dependencies": [
+          "cc",
+          "cmake",
+          "dunce",
+          "fs_extra",
+          "pkg-config"
+        ]
+      },
+      {
+        "name": "base64",
+        "version": "0.23.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+      },
+      {
+        "name": "bitflags",
+        "version": "2.13.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+      },
+      {
+        "name": "bstr",
+        "version": "1.13.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f",
+        "dependencies": [
+          "memchr",
+          "serde_core"
+        ]
+      },
+      {
+        "name": "bumpalo",
+        "version": "3.20.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+      },
+      {
+        "name": "bytes",
+        "version": "1.12.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+      },
+      {
+        "name": "cast",
+        "version": "0.3.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
+      },
+      {
+        "name": "cc",
+        "version": "1.10.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0",
+        "dependencies": [
+          "find-msvc-tools",
+          "jobserver",
+          "libc",
+          "shlex"
+        ]
+      },
+      {
+        "name": "cfg-if",
+        "version": "1.0.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
+      },
+      {
+        "name": "cfg_aliases",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+      },
+      {
+        "name": "chacha20",
+        "version": "0.10.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06",
+        "dependencies": [
+          "cfg-if",
+          "cpufeatures",
+          "rand_core 0.10.1"
+        ]
+      },
+      {
+        "name": "ciborium",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e",
+        "dependencies": [
+          "ciborium-io",
+          "ciborium-ll",
+          "serde"
+        ]
+      },
+      {
+        "name": "ciborium-io",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+      },
+      {
+        "name": "ciborium-ll",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9",
+        "dependencies": [
+          "ciborium-io",
+          "half"
+        ]
+      },
+      {
+        "name": "clap",
+        "version": "4.6.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "aa8876b300ab35ba921adea3dfd70157a46249b33f95c9084ae5709785478946",
+        "dependencies": [
+          "clap_builder",
+          "clap_derive"
+        ]
+      },
+      {
+        "name": "clap_builder",
+        "version": "4.6.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d",
+        "dependencies": [
+          "anstream",
+          "anstyle",
+          "clap_lex",
+          "strsim"
+        ]
+      },
+      {
+        "name": "clap_derive",
+        "version": "4.6.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f9c751b79415d4e559e3d1fcf128e09e720eb673a06d26cf6f392d37d75b66e0",
+        "dependencies": [
+          "heck",
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "clap_lex",
+        "version": "1.1.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
+      },
+      {
+        "name": "clipboard-win",
+        "version": "5.4.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "052af7878466feccda12ba7a6a67d019d712f296809559b47c12c8cc196d3a9a",
+        "dependencies": [
+          "error-code"
+        ]
+      },
+      {
+        "name": "cmake",
+        "version": "0.1.58",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678",
+        "dependencies": [
+          "cc"
+        ]
+      },
+      {
+        "name": "colorchoice",
+        "version": "1.0.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
+      },
+      {
+        "name": "combine",
+        "version": "4.6.9",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4356eba6976435498d05a311ee9fc486da3bc81c200d3f0d7dd9703b41913f92",
+        "dependencies": [
+          "bytes",
+          "memchr"
+        ]
+      },
+      {
+        "name": "core-foundation",
+        "version": "0.10.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6",
+        "dependencies": [
+          "core-foundation-sys",
+          "libc"
+        ]
+      },
+      {
+        "name": "core-foundation",
+        "version": "0.9.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "91e195e091a93c46f7102ec7818a2aa394e1e1771c3ab4825963fa03e45afb8f",
+        "dependencies": [
+          "core-foundation-sys",
+          "libc"
+        ]
+      },
+      {
+        "name": "core-foundation-sys",
+        "version": "0.8.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+      },
+      {
+        "name": "cpufeatures",
+        "version": "0.3.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566",
+        "dependencies": [
+          "libc"
+        ]
+      },
+      {
+        "name": "criterion",
+        "version": "0.8.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "950046b2aa2492f9a536f5f4f9a3de7b9e2476e575e05bd6c333371add4d98f3",
+        "dependencies": [
+          "alloca",
+          "anes",
+          "cast",
+          "ciborium",
+          "clap",
+          "criterion-plot",
+          "itertools 0.13.0",
+          "num-traits",
+          "oorandom",
+          "page_size",
+          "plotters",
+          "rayon",
+          "regex",
+          "serde",
+          "serde_json",
+          "tinytemplate",
+          "tokio",
+          "walkdir"
+        ]
+      },
+      {
+        "name": "criterion-plot",
+        "version": "0.8.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d8d80a2f4f5b554395e47b5d8305bc3d27813bacb73493eb1001e8f76dae29ea",
+        "dependencies": [
+          "cast",
+          "itertools 0.13.0"
+        ]
+      },
+      {
+        "name": "crossbeam-deque",
+        "version": "0.8.8",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a",
+        "dependencies": [
+          "crossbeam-epoch",
+          "crossbeam-utils"
+        ]
+      },
+      {
+        "name": "crossbeam-epoch",
+        "version": "0.9.21",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d",
+        "dependencies": [
+          "crossbeam-utils"
+        ]
+      },
+      {
+        "name": "crossbeam-utils",
+        "version": "0.8.23",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+      },
+      {
+        "name": "crunchy",
+        "version": "0.2.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+      },
+      {
+        "name": "deadlib-lua",
+        "version": "0.1.0",
+        "dependencies": [
+          "deadlib-lua-legacy"
+        ]
+      },
+      {
+        "name": "deadlib-lua-legacy",
+        "version": "0.12.2",
+        "dependencies": [
+          "anyhow",
+          "bstr",
+          "criterion",
+          "deadlib-lua-legacy-derive",
+          "deadlib-lua-legacy-sys",
+          "either",
+          "erased-serde",
+          "futures-util",
+          "http-body-util",
+          "hyper",
+          "hyper-util",
+          "inventory",
+          "libc",
+          "maplit",
+          "num-traits",
+          "parking_lot",
+          "reqwest",
+          "rustc-hash 2.1.3",
+          "rustyline",
+          "serde",
+          "serde-value",
+          "serde_json",
+          "static_assertions",
+          "tempfile",
+          "tokio",
+          "trybuild"
+        ]
+      },
+      {
+        "name": "deadlib-lua-legacy-derive",
+        "version": "0.12.2",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 2.0.119"
+        ]
+      },
+      {
+        "name": "deadlib-lua-legacy-sys",
+        "version": "0.13.0",
+        "dependencies": [
+          "cc",
+          "cfg-if",
+          "libc",
+          "lua-src",
+          "luajit-src",
+          "luau0-src",
+          "pkg-config"
+        ]
+      },
+      {
+        "name": "displaydoc",
+        "version": "0.2.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "dunce",
+        "version": "1.0.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+      },
+      {
+        "name": "either",
+        "version": "1.19.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
+      },
+      {
+        "name": "encoding_rs",
+        "version": "0.8.35",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3",
+        "dependencies": [
+          "cfg-if"
+        ]
+      },
+      {
+        "name": "endian-type",
+        "version": "0.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "869b0adbda23651a9c5c0c3d270aac9fcb52e8622a8f2b17e57802d7791962f2"
+      },
+      {
+        "name": "equivalent",
+        "version": "1.0.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
+      },
+      {
+        "name": "erased-serde",
+        "version": "0.4.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1e59b668157f32d3459d4bd634861a06ffa2503a461ca5f0916b9f0252605e66",
+        "dependencies": [
+          "serde",
+          "serde_core",
+          "typeid"
+        ]
+      },
+      {
+        "name": "errno",
+        "version": "0.3.14",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+        "dependencies": [
+          "libc",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "error-code",
+        "version": "3.4.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0b5343afd4a8365a643ac588dab4cf234a190c7f6c88c9f6dd6ffe00837661b7"
+      },
+      {
+        "name": "fastrand",
+        "version": "2.5.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+      },
+      {
+        "name": "find-msvc-tools",
+        "version": "0.1.15",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+      },
+      {
+        "name": "fnv",
+        "version": "1.0.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+      },
+      {
+        "name": "foldhash",
+        "version": "0.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+      },
+      {
+        "name": "form_urlencoded",
+        "version": "1.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf",
+        "dependencies": [
+          "percent-encoding"
+        ]
+      },
+      {
+        "name": "fs_extra",
+        "version": "1.3.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+      },
+      {
+        "name": "futures-channel",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4",
+        "dependencies": [
+          "futures-core",
+          "futures-sink"
+        ]
+      },
+      {
+        "name": "futures-core",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+      },
+      {
+        "name": "futures-io",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed"
+      },
+      {
+        "name": "futures-macro",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "futures-sink",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d"
+      },
+      {
+        "name": "futures-task",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd"
+      },
+      {
+        "name": "futures-util",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc",
+        "dependencies": [
+          "futures-channel",
+          "futures-core",
+          "futures-io",
+          "futures-macro",
+          "futures-sink",
+          "futures-task",
+          "memchr",
+          "pin-project-lite",
+          "slab"
+        ]
+      },
+      {
+        "name": "getrandom",
+        "version": "0.2.17",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
+        "dependencies": [
+          "cfg-if",
+          "js-sys",
+          "libc",
+          "wasi",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "getrandom",
+        "version": "0.4.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099",
+        "dependencies": [
+          "cfg-if",
+          "js-sys",
+          "libc",
+          "r-efi 6.0.0",
+          "rand_core 0.10.1",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "glob",
+        "version": "0.3.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+      },
+      {
+        "name": "h2",
+        "version": "0.4.20",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7d29020232d6aa3fb1daca64c1127cf662cf97f254ae16c18c05b8ab635fc118",
+        "dependencies": [
+          "atomic-waker",
+          "bytes",
+          "fnv",
+          "futures-core",
+          "futures-sink",
+          "http",
+          "indexmap",
+          "slab",
+          "tokio",
+          "tokio-util",
+          "tracing"
+        ]
+      },
+      {
+        "name": "half",
+        "version": "2.7.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b",
+        "dependencies": [
+          "cfg-if",
+          "crunchy",
+          "num-traits",
+          "zerocopy"
+        ]
+      },
+      {
+        "name": "hashbrown",
+        "version": "0.17.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+        "dependencies": [
+          "allocator-api2",
+          "equivalent",
+          "foldhash",
+          "serde",
+          "serde_core"
+        ]
+      },
+      {
+        "name": "heck",
+        "version": "0.5.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+      },
+      {
+        "name": "home",
+        "version": "0.5.12",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d",
+        "dependencies": [
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "http",
+        "version": "1.5.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "918d3568bebf352712bc2ef3d46a8bcf1a75b373be6539de198e9105cbbf9ce0",
+        "dependencies": [
+          "bytes",
+          "itoa"
+        ]
+      },
+      {
+        "name": "http-body",
+        "version": "1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ca2a8f2913ee65f60facd6a5905613afaa448497a0230cc41ce022d93290bc2c",
+        "dependencies": [
+          "bytes",
+          "http"
+        ]
+      },
+      {
+        "name": "http-body-util",
+        "version": "0.1.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "23169fe34a5fbcdd3f3862e78fb9b6fccd5f02a6dc6f732547005d45631ce71c",
+        "dependencies": [
+          "bytes",
+          "futures-core",
+          "http",
+          "http-body",
+          "pin-project-lite"
+        ]
+      },
+      {
+        "name": "httparse",
+        "version": "1.10.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+      },
+      {
+        "name": "httpdate",
+        "version": "1.0.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+      },
+      {
+        "name": "hyper",
+        "version": "1.12.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c",
+        "dependencies": [
+          "atomic-waker",
+          "bytes",
+          "futures-channel",
+          "futures-core",
+          "h2",
+          "http",
+          "http-body",
+          "httparse",
+          "httpdate",
+          "itoa",
+          "pin-project-lite",
+          "smallvec",
+          "tokio",
+          "want"
+        ]
+      },
+      {
+        "name": "hyper-rustls",
+        "version": "0.27.10",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53",
+        "dependencies": [
+          "http",
+          "hyper",
+          "hyper-util",
+          "rustls",
+          "tokio",
+          "tokio-rustls",
+          "tower-service"
+        ]
+      },
+      {
+        "name": "hyper-util",
+        "version": "0.1.21",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ddc03d96684f9226b8a787cdb71488417b53ab5ea8fdb1dac946cb9431cc8bff",
+        "dependencies": [
+          "base64",
+          "bytes",
+          "futures-channel",
+          "futures-util",
+          "http",
+          "http-body",
+          "httparse",
+          "hyper",
+          "ipnet",
+          "libc",
+          "percent-encoding",
+          "pin-project-lite",
+          "socket2",
+          "system-configuration",
+          "tokio",
+          "tower-layer",
+          "tower-service",
+          "tracing",
+          "windows-registry"
+        ]
+      },
+      {
+        "name": "icu_collections",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2984d1cd16c883d7935b9e07e44071dca8d917fd52ecc02c04d5fa0b5a3f191c",
+        "dependencies": [
+          "displaydoc",
+          "potential_utf",
+          "utf8_iter",
+          "yoke",
+          "zerofrom",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "icu_locale_core",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "92219b62b3e2b4d88ac5119f8904c10f8f61bf7e95b640d25ba3075e6cac2c29",
+        "dependencies": [
+          "displaydoc",
+          "litemap",
+          "tinystr",
+          "writeable",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "icu_normalizer",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c56e5ee99d6e3d33bd91c5d85458b6005a22140021cc324cea84dd0e72cff3b4",
+        "dependencies": [
+          "icu_collections",
+          "icu_normalizer_data",
+          "icu_properties",
+          "icu_provider",
+          "smallvec",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "icu_normalizer_data",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "da3be0ae77ea334f4da67c12f149704f19f81d1adf7c51cf482943e84a2bad38"
+      },
+      {
+        "name": "icu_properties",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "bee3b67d0ea5c2cca5003417989af8996f8604e34fb9ddf96208a033901e70de",
+        "dependencies": [
+          "icu_collections",
+          "icu_locale_core",
+          "icu_properties_data",
+          "icu_provider",
+          "zerotrie",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "icu_properties_data",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8e2bbb201e0c04f7b4b3e14382af113e17ba4f63e2c9d2ee626b720cbce54a14"
+      },
+      {
+        "name": "icu_provider",
+        "version": "2.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "139c4cf31c8b5f33d7e199446eff9c1e02decfc2f0eec2c8d71f65befa45b421",
+        "dependencies": [
+          "displaydoc",
+          "icu_locale_core",
+          "writeable",
+          "yoke",
+          "zerofrom",
+          "zerotrie",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "idna",
+        "version": "1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de",
+        "dependencies": [
+          "idna_adapter",
+          "smallvec",
+          "utf8_iter"
+        ]
+      },
+      {
+        "name": "idna_adapter",
+        "version": "1.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714",
+        "dependencies": [
+          "icu_normalizer",
+          "icu_properties"
+        ]
+      },
+      {
+        "name": "indexmap",
+        "version": "2.14.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855",
+        "dependencies": [
+          "equivalent",
+          "hashbrown 0.17.1"
+        ]
+      },
+      {
+        "name": "inventory",
+        "version": "0.3.25",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6928282826c822ad91bf1c9a1cb90a30ba1c26770749929b4656cd6be829cd7c",
+        "dependencies": [
+          "rustversion"
+        ]
+      },
+      {
+        "name": "ipnet",
+        "version": "2.12.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
+      },
+      {
+        "name": "is_terminal_polyfill",
+        "version": "1.70.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+      },
+      {
+        "name": "itertools",
+        "version": "0.13.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186",
+        "dependencies": [
+          "either"
+        ]
+      },
+      {
+        "name": "itoa",
+        "version": "1.0.18",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+      },
+      {
+        "name": "jni",
+        "version": "0.22.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "5efd9a482cf3a427f00d6b35f14332adc7902ce91efb778580e180ff90fa3498",
+        "dependencies": [
+          "cfg-if",
+          "combine",
+          "jni-macros",
+          "jni-sys 0.4.1",
+          "log",
+          "simd_cesu8",
+          "thiserror 2.0.21",
+          "walkdir",
+          "windows-link"
+        ]
+      },
+      {
+        "name": "jni-macros",
+        "version": "0.22.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a00109accc170f0bdb141fed3e393c565b6f5e072365c3bd58f5b062591560a3",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "rustc_version",
+          "simd_cesu8",
+          "syn 2.0.119"
+        ]
+      },
+      {
+        "name": "jni-sys",
+        "version": "0.4.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c6377a88cb3910bee9b0fa88d4f42e1d2da8e79915598f65fb0c7ee14c878af2",
+        "dependencies": [
+          "jni-sys-macros"
+        ]
+      },
+      {
+        "name": "jni-sys-macros",
+        "version": "0.4.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "38c0b942f458fe50cdac086d2f946512305e5631e720728f2a61aabcd47a6264",
+        "dependencies": [
+          "quote",
+          "syn 2.0.119"
+        ]
+      },
+      {
+        "name": "jobserver",
+        "version": "0.1.35",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3",
+        "dependencies": [
+          "getrandom 0.4.3",
+          "libc"
+        ]
+      },
+      {
+        "name": "js-sys",
+        "version": "0.3.106",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5",
+        "dependencies": [
+          "cfg-if",
+          "futures-util",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "libc",
+        "version": "0.2.191",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+      },
+      {
+        "name": "libm",
+        "version": "0.2.16",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+      },
+      {
+        "name": "linux-raw-sys",
+        "version": "0.12.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+      },
+      {
+        "name": "litemap",
+        "version": "0.8.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+      },
+      {
+        "name": "lock_api",
+        "version": "0.4.14",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965",
+        "dependencies": [
+          "scopeguard"
+        ]
+      },
+      {
+        "name": "log",
+        "version": "0.4.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+      },
+      {
+        "name": "lru-slab",
+        "version": "0.1.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
+      },
+      {
+        "name": "lua-src",
+        "version": "551.0.2",
+        "dependencies": [
+          "cc"
+        ]
+      },
+      {
+        "name": "luajit-src",
+        "version": "210.7.4+c6ffc14",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1db548b001f0b7da416daf0ffae963912bae6cad1799fa9f4eaba09da6dba837",
+        "dependencies": [
+          "cc",
+          "which"
+        ]
+      },
+      {
+        "name": "luau0-src",
+        "version": "0.22.0+luau740",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4ea012e8a8aaff2f7b6c788fad41a60630003b6a0932bcf045f7d14952c9bd31",
+        "dependencies": [
+          "cc"
+        ]
+      },
+      {
+        "name": "maplit",
+        "version": "1.0.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+      },
+      {
+        "name": "memchr",
+        "version": "2.8.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+      },
+      {
+        "name": "mime",
+        "version": "0.3.17",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+      },
+      {
+        "name": "mio",
+        "version": "1.2.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee",
+        "dependencies": [
+          "libc",
+          "wasi",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "nibble_vec",
+        "version": "0.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43",
+        "dependencies": [
+          "smallvec"
+        ]
+      },
+      {
+        "name": "nix",
+        "version": "0.31.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "cfg-if",
+          "cfg_aliases",
+          "libc"
+        ]
+      },
+      {
+        "name": "num-traits",
+        "version": "0.2.19",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+        "dependencies": [
+          "autocfg",
+          "libm"
+        ]
+      },
+      {
+        "name": "once_cell",
+        "version": "1.21.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+      },
+      {
+        "name": "once_cell_polyfill",
+        "version": "1.70.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+      },
+      {
+        "name": "oorandom",
+        "version": "11.1.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+      },
+      {
+        "name": "openssl-probe",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
+      },
+      {
+        "name": "ordered-float",
+        "version": "2.10.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c",
+        "dependencies": [
+          "num-traits"
+        ]
+      },
+      {
+        "name": "page_size",
+        "version": "0.6.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da",
+        "dependencies": [
+          "libc",
+          "winapi"
+        ]
+      },
+      {
+        "name": "parking_lot",
+        "version": "0.12.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a",
+        "dependencies": [
+          "lock_api",
+          "parking_lot_core"
+        ]
+      },
+      {
+        "name": "parking_lot_core",
+        "version": "0.9.12",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1",
+        "dependencies": [
+          "cfg-if",
+          "libc",
+          "redox_syscall 0.5.18",
+          "smallvec",
+          "windows-link"
+        ]
+      },
+      {
+        "name": "percent-encoding",
+        "version": "2.3.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+      },
+      {
+        "name": "pin-project-lite",
+        "version": "0.2.17",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+      },
+      {
+        "name": "pkg-config",
+        "version": "0.3.34",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+      },
+      {
+        "name": "plotters",
+        "version": "0.3.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747",
+        "dependencies": [
+          "num-traits",
+          "plotters-backend",
+          "plotters-svg",
+          "wasm-bindgen",
+          "web-sys"
+        ]
+      },
+      {
+        "name": "plotters-backend",
+        "version": "0.3.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
+      },
+      {
+        "name": "plotters-svg",
+        "version": "0.3.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670",
+        "dependencies": [
+          "plotters-backend"
+        ]
+      },
+      {
+        "name": "potential_utf",
+        "version": "0.1.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d83eb9bc6d8e5cf568e7a1101d60ee05e81ed50ea106026f3d18deeb046d7661",
+        "dependencies": [
+          "zerovec"
+        ]
+      },
+      {
+        "name": "proc-macro2",
+        "version": "1.0.107",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+        "dependencies": [
+          "unicode-ident"
+        ]
+      },
+      {
+        "name": "quinn",
+        "version": "0.11.12",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4051e23e9185c255a7e33ef59cdbca87a22d359052eecd22fc6b901fb37d9d11",
+        "dependencies": [
+          "bytes",
+          "cfg_aliases",
+          "pin-project-lite",
+          "quinn-proto",
+          "quinn-udp",
+          "rustc-hash 2.1.3",
+          "rustls",
+          "socket2",
+          "thiserror 2.0.21",
+          "tokio",
+          "tracing",
+          "web-time"
+        ]
+      },
+      {
+        "name": "quinn-proto",
+        "version": "0.11.19",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe",
+        "dependencies": [
+          "aws-lc-rs",
+          "bytes",
+          "getrandom 0.4.3",
+          "lru-slab",
+          "rand 0.10.3",
+          "rand_pcg",
+          "ring",
+          "rustc-hash 2.1.3",
+          "rustls",
+          "rustls-pki-types",
+          "slab",
+          "thiserror 2.0.21",
+          "tinyvec",
+          "tracing",
+          "web-time"
+        ]
+      },
+      {
+        "name": "quinn-udp",
+        "version": "0.5.16",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "af66907df18639dcf4db56ca65490cabc4b27a97dbadd96f2926cca73298f016",
+        "dependencies": [
+          "cfg_aliases",
+          "libc",
+          "once_cell",
+          "socket2",
+          "tracing",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "quote",
+        "version": "1.0.47",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+        "dependencies": [
+          "proc-macro2"
+        ]
+      },
+      {
+        "name": "r-efi",
+        "version": "6.0.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+      },
+      {
+        "name": "radix_trie",
+        "version": "0.3.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3b4431027dcd37fc2a73ef740b5f233aa805897935b8bce0195e41bbf9a3289a",
+        "dependencies": [
+          "endian-type",
+          "nibble_vec"
+        ]
+      },
+      {
+        "name": "rand",
+        "version": "0.10.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af",
+        "dependencies": [
+          "chacha20",
+          "getrandom 0.4.3",
+          "rand_core 0.10.1"
+        ]
+      },
+      {
+        "name": "rand_core",
+        "version": "0.10.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+      },
+      {
+        "name": "rand_pcg",
+        "version": "0.10.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a",
+        "dependencies": [
+          "rand_core 0.10.1"
+        ]
+      },
+      {
+        "name": "rayon",
+        "version": "1.12.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d",
+        "dependencies": [
+          "either",
+          "rayon-core"
+        ]
+      },
+      {
+        "name": "rayon-core",
+        "version": "1.13.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91",
+        "dependencies": [
+          "crossbeam-deque",
+          "crossbeam-utils"
+        ]
+      },
+      {
+        "name": "redox_syscall",
+        "version": "0.5.18",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d",
+        "dependencies": [
+          "bitflags 2.13.2"
+        ]
+      },
+      {
+        "name": "regex",
+        "version": "1.13.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d",
+        "dependencies": [
+          "aho-corasick",
+          "memchr",
+          "regex-automata",
+          "regex-syntax"
+        ]
+      },
+      {
+        "name": "regex-automata",
+        "version": "0.4.18",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2",
+        "dependencies": [
+          "aho-corasick",
+          "memchr",
+          "regex-syntax"
+        ]
+      },
+      {
+        "name": "regex-syntax",
+        "version": "0.8.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+      },
+      {
+        "name": "reqwest",
+        "version": "0.13.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029",
+        "dependencies": [
+          "base64",
+          "bytes",
+          "encoding_rs",
+          "futures-core",
+          "h2",
+          "http",
+          "http-body",
+          "http-body-util",
+          "hyper",
+          "hyper-rustls",
+          "hyper-util",
+          "js-sys",
+          "log",
+          "mime",
+          "percent-encoding",
+          "pin-project-lite",
+          "quinn",
+          "rustls",
+          "rustls-pki-types",
+          "rustls-platform-verifier",
+          "serde",
+          "serde_json",
+          "sync_wrapper",
+          "tokio",
+          "tokio-rustls",
+          "tower",
+          "tower-http",
+          "tower-service",
+          "url",
+          "wasm-bindgen",
+          "wasm-bindgen-futures",
+          "web-sys"
+        ]
+      },
+      {
+        "name": "ring",
+        "version": "0.17.14",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7",
+        "dependencies": [
+          "cc",
+          "cfg-if",
+          "getrandom 0.2.17",
+          "libc",
+          "untrusted",
+          "windows-sys 0.52.0"
+        ]
+      },
+      {
+        "name": "rustc-hash",
+        "version": "2.1.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
+      },
+      {
+        "name": "rustc_version",
+        "version": "0.4.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92",
+        "dependencies": [
+          "semver"
+        ]
+      },
+      {
+        "name": "rustix",
+        "version": "1.1.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "errno",
+          "libc",
+          "linux-raw-sys 0.12.1",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "rustls",
+        "version": "0.23.46",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
+        "dependencies": [
+          "aws-lc-rs",
+          "log",
+          "once_cell",
+          "ring",
+          "rustls-pki-types",
+          "rustls-webpki",
+          "subtle",
+          "zeroize"
+        ]
+      },
+      {
+        "name": "rustls-native-certs",
+        "version": "0.8.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4a073f5dc7469f984c52ad2752b63b0807745133b6de880b7b64c1ac4c48aec4",
+        "dependencies": [
+          "openssl-probe",
+          "rustls-pki-types",
+          "schannel",
+          "security-framework"
+        ]
+      },
+      {
+        "name": "rustls-pki-types",
+        "version": "1.15.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96",
+        "dependencies": [
+          "web-time",
+          "zeroize"
+        ]
+      },
+      {
+        "name": "rustls-platform-verifier",
+        "version": "0.7.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "1167586491e2b18b8bfbb293e8180ec17c201c4f076d7cb3070ca964e7598f98",
+        "dependencies": [
+          "core-foundation 0.10.1",
+          "core-foundation-sys",
+          "jni",
+          "log",
+          "once_cell",
+          "rustls",
+          "rustls-native-certs",
+          "rustls-platform-verifier-android",
+          "rustls-webpki",
+          "security-framework",
+          "security-framework-sys",
+          "webpki-root-certs",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "rustls-platform-verifier-android",
+        "version": "0.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "eec689c0bc40ff2458a5977b6619cb718087084a18e02a131c599b62d05e1a5f"
+      },
+      {
+        "name": "rustls-webpki",
+        "version": "0.103.16",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281",
+        "dependencies": [
+          "aws-lc-rs",
+          "ring",
+          "rustls-pki-types",
+          "untrusted"
+        ]
+      },
+      {
+        "name": "rustversion",
+        "version": "1.0.23",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+      },
+      {
+        "name": "rustyline",
+        "version": "18.0.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "53f6a737db68eb1a8ccff86b584b2fc13eca6a7bb6f78ebc7c529547e3ab9684",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "cfg-if",
+          "clipboard-win",
+          "home",
+          "libc",
+          "log",
+          "memchr",
+          "nix",
+          "radix_trie",
+          "unicode-segmentation",
+          "unicode-width",
+          "utf8parse",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "same-file",
+        "version": "1.0.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502",
+        "dependencies": [
+          "winapi-util"
+        ]
+      },
+      {
+        "name": "schannel",
+        "version": "0.1.30",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9cb23c424d8ee841bb4d813677ca237e2a610067d594fec130f87d6093495ab5",
+        "dependencies": [
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "scopeguard",
+        "version": "1.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+      },
+      {
+        "name": "security-framework",
+        "version": "3.7.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b7f4bc775c73d9a02cde8bf7b2ec4c9d12743edf609006c7facc23998404cd1d",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "core-foundation 0.10.1",
+          "core-foundation-sys",
+          "libc",
+          "security-framework-sys"
+        ]
+      },
+      {
+        "name": "security-framework-sys",
+        "version": "2.17.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3",
+        "dependencies": [
+          "core-foundation-sys",
+          "libc"
+        ]
+      },
+      {
+        "name": "semver",
+        "version": "1.0.28",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+      },
+      {
+        "name": "serde",
+        "version": "1.0.229",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+        "dependencies": [
+          "serde_core",
+          "serde_derive"
+        ]
+      },
+      {
+        "name": "serde-value",
+        "version": "0.7.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c",
+        "dependencies": [
+          "ordered-float 2.10.1",
+          "serde"
+        ]
+      },
+      {
+        "name": "serde_core",
+        "version": "1.0.229",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+        "dependencies": [
+          "serde_derive"
+        ]
+      },
+      {
+        "name": "serde_derive",
+        "version": "1.0.229",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "serde_json",
+        "version": "1.0.154",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6",
+        "dependencies": [
+          "foldhash",
+          "indexmap",
+          "itoa",
+          "memchr",
+          "serde",
+          "serde_core",
+          "zmij"
+        ]
+      },
+      {
+        "name": "serde_spanned",
+        "version": "1.1.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c",
+        "dependencies": [
+          "serde_core"
+        ]
+      },
+      {
+        "name": "shlex",
+        "version": "2.0.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+      },
+      {
+        "name": "signal-hook-registry",
+        "version": "1.4.8",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b",
+        "dependencies": [
+          "errno",
+          "libc"
+        ]
+      },
+      {
+        "name": "simd_cesu8",
+        "version": "1.2.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "11031e251abf8611c80f460e19dbdeb54a66db918e49c65a7065b46ac7aec520",
+        "dependencies": [
+          "rustc_version",
+          "simdutf8"
+        ]
+      },
+      {
+        "name": "simdutf8",
+        "version": "0.1.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+      },
+      {
+        "name": "slab",
+        "version": "0.4.12",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+      },
+      {
+        "name": "smallvec",
+        "version": "1.16.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+      },
+      {
+        "name": "socket2",
+        "version": "0.6.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4",
+        "dependencies": [
+          "libc",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "stable_deref_trait",
+        "version": "1.2.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+      },
+      {
+        "name": "static_assertions",
+        "version": "1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+      },
+      {
+        "name": "strsim",
+        "version": "0.11.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+      },
+      {
+        "name": "subtle",
+        "version": "2.6.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+      },
+      {
+        "name": "syn",
+        "version": "2.0.119",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "unicode-ident"
+        ]
+      },
+      {
+        "name": "syn",
+        "version": "3.0.9",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "unicode-ident"
+        ]
+      },
+      {
+        "name": "sync_wrapper",
+        "version": "1.0.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263",
+        "dependencies": [
+          "futures-core"
+        ]
+      },
+      {
+        "name": "synstructure",
+        "version": "0.14.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "system-configuration",
+        "version": "0.7.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a13f3d0daba03132c0aa9767f98351b3488edc2c100cda2d2ec2b04f3d8d3c8b",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "core-foundation 0.9.4",
+          "system-configuration-sys"
+        ]
+      },
+      {
+        "name": "system-configuration-sys",
+        "version": "0.6.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4",
+        "dependencies": [
+          "core-foundation-sys",
+          "libc"
+        ]
+      },
+      {
+        "name": "target-triple",
+        "version": "1.0.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c3a6bfce3d99adfa72d24750a61f782f3036a81e7f86d8841ee1326deaebd171"
+      },
+      {
+        "name": "tempfile",
+        "version": "3.27.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd",
+        "dependencies": [
+          "fastrand",
+          "getrandom 0.4.3",
+          "once_cell",
+          "rustix 1.1.6",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "termcolor",
+        "version": "1.4.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755",
+        "dependencies": [
+          "winapi-util"
+        ]
+      },
+      {
+        "name": "thiserror",
+        "version": "2.0.21",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+        "dependencies": [
+          "thiserror-impl 2.0.21"
+        ]
+      },
+      {
+        "name": "thiserror-impl",
+        "version": "2.0.21",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "tinystr",
+        "version": "0.8.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "abc840c238154d58f9e86b2792261edfde565a17696e1cda1a449de27979801a",
+        "dependencies": [
+          "displaydoc",
+          "zerovec"
+        ]
+      },
+      {
+        "name": "tinytemplate",
+        "version": "1.2.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc",
+        "dependencies": [
+          "serde",
+          "serde_json"
+        ]
+      },
+      {
+        "name": "tinyvec",
+        "version": "1.13.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+      },
+      {
+        "name": "tokio",
+        "version": "1.54.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3",
+        "dependencies": [
+          "bytes",
+          "libc",
+          "mio",
+          "parking_lot",
+          "pin-project-lite",
+          "signal-hook-registry",
+          "socket2",
+          "tokio-macros",
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "tokio-macros",
+        "version": "2.7.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "tokio-rustls",
+        "version": "0.26.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c9cc2678c2cdd569ef8215e2afd7954ada2ae20b4fdd2c5fe6139a3b02d105db",
+        "dependencies": [
+          "rustls",
+          "tokio"
+        ]
+      },
+      {
+        "name": "tokio-util",
+        "version": "0.7.20",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e464cf451ba96ebfc6f9b6542f17ee8b8956e33f1e40d9690624e59d7a7f8a4b",
+        "dependencies": [
+          "bytes",
+          "futures-core",
+          "futures-sink",
+          "libc",
+          "pin-project-lite",
+          "tokio"
+        ]
+      },
+      {
+        "name": "toml",
+        "version": "1.1.8+spec-1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "20489e00e4d8741d6be680764cc12e270655e375a20d1011e844a9c3379e678d",
+        "dependencies": [
+          "indexmap",
+          "serde_core",
+          "serde_spanned",
+          "toml_datetime",
+          "toml_parser",
+          "toml_writer",
+          "winnow 1.0.4"
+        ]
+      },
+      {
+        "name": "toml_datetime",
+        "version": "1.1.2+spec-1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2b86d767906c6c42421dcba507eb9d203e779497710a47782a224bb871653053",
+        "dependencies": [
+          "serde_core"
+        ]
+      },
+      {
+        "name": "toml_parser",
+        "version": "1.1.5+spec-1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c",
+        "dependencies": [
+          "winnow 1.0.4"
+        ]
+      },
+      {
+        "name": "toml_writer",
+        "version": "1.1.3+spec-1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770"
+      },
+      {
+        "name": "tower",
+        "version": "0.5.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4",
+        "dependencies": [
+          "futures-core",
+          "futures-util",
+          "pin-project-lite",
+          "sync_wrapper",
+          "tokio",
+          "tower-layer",
+          "tower-service"
+        ]
+      },
+      {
+        "name": "tower-http",
+        "version": "0.6.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840",
+        "dependencies": [
+          "bitflags 2.13.2",
+          "bytes",
+          "futures-util",
+          "http",
+          "http-body",
+          "pin-project-lite",
+          "tower",
+          "tower-layer",
+          "tower-service",
+          "url"
+        ]
+      },
+      {
+        "name": "tower-layer",
+        "version": "0.3.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
+      },
+      {
+        "name": "tower-service",
+        "version": "0.3.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+      },
+      {
+        "name": "tracing",
+        "version": "0.1.44",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100",
+        "dependencies": [
+          "pin-project-lite",
+          "tracing-core"
+        ]
+      },
+      {
+        "name": "tracing-core",
+        "version": "0.1.36",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a",
+        "dependencies": [
+          "once_cell"
+        ]
+      },
+      {
+        "name": "try-lock",
+        "version": "0.2.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+      },
+      {
+        "name": "trybuild",
+        "version": "1.0.119",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4c5c9f7b7b1a048dd2bebdb7260b0cc71ec5587b19352fa5c3cd9e1c067103f0",
+        "dependencies": [
+          "glob",
+          "serde",
+          "serde_derive",
+          "serde_json",
+          "target-triple",
+          "termcolor",
+          "toml 1.1.8+spec-1.1.0"
+        ]
+      },
+      {
+        "name": "typeid",
+        "version": "1.0.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
+      },
+      {
+        "name": "unicode-ident",
+        "version": "1.0.27",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+      },
+      {
+        "name": "unicode-segmentation",
+        "version": "1.13.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
+      },
+      {
+        "name": "unicode-width",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
+      },
+      {
+        "name": "untrusted",
+        "version": "0.9.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+      },
+      {
+        "name": "url",
+        "version": "2.5.8",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed",
+        "dependencies": [
+          "form_urlencoded",
+          "idna",
+          "percent-encoding",
+          "serde"
+        ]
+      },
+      {
+        "name": "utf8_iter",
+        "version": "1.0.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+      },
+      {
+        "name": "utf8parse",
+        "version": "0.2.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+      },
+      {
+        "name": "walkdir",
+        "version": "2.5.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b",
+        "dependencies": [
+          "same-file",
+          "winapi-util"
+        ]
+      },
+      {
+        "name": "want",
+        "version": "0.3.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ec4cdd0dd910afe868b7ef477227d8d538b46b3075031afee8a9f2acb0a2ed0b",
+        "dependencies": [
+          "try-lock"
+        ]
+      },
+      {
+        "name": "wasi",
+        "version": "0.11.1+wasi-snapshot-preview1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
+      },
+      {
+        "name": "wasm-bindgen",
+        "version": "0.2.129",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409",
+        "dependencies": [
+          "cfg-if",
+          "once_cell",
+          "rustversion",
+          "wasm-bindgen-macro",
+          "wasm-bindgen-shared"
+        ]
+      },
+      {
+        "name": "wasm-bindgen-futures",
+        "version": "0.4.79",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3cbab34de2d982e9b48e18d216d04c4a6f641066ff19ffb699980f591ee3610e",
+        "dependencies": [
+          "js-sys",
+          "tokio",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "wasm-bindgen-macro",
+        "version": "0.2.129",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535",
+        "dependencies": [
+          "quote",
+          "wasm-bindgen-macro-support"
+        ]
+      },
+      {
+        "name": "wasm-bindgen-macro-support",
+        "version": "0.2.129",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7",
+        "dependencies": [
+          "bumpalo",
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9",
+          "wasm-bindgen-shared"
+        ]
+      },
+      {
+        "name": "wasm-bindgen-shared",
+        "version": "0.2.129",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6",
+        "dependencies": [
+          "unicode-ident"
+        ]
+      },
+      {
+        "name": "web-sys",
+        "version": "0.3.106",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "88261b9deccee56594c11a3460c462c41f58d148598fe70ad77070126a68aba4",
+        "dependencies": [
+          "js-sys",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "web-time",
+        "version": "1.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb",
+        "dependencies": [
+          "js-sys",
+          "serde",
+          "wasm-bindgen"
+        ]
+      },
+      {
+        "name": "webpki-root-certs",
+        "version": "1.0.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a",
+        "dependencies": [
+          "rustls-pki-types"
+        ]
+      },
+      {
+        "name": "which",
+        "version": "8.0.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f",
+        "dependencies": [
+          "libc"
+        ]
+      },
+      {
+        "name": "winapi",
+        "version": "0.3.9",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419",
+        "dependencies": [
+          "winapi-i686-pc-windows-gnu",
+          "winapi-x86_64-pc-windows-gnu"
+        ]
+      },
+      {
+        "name": "winapi-i686-pc-windows-gnu",
+        "version": "0.4.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
+      },
+      {
+        "name": "winapi-util",
+        "version": "0.1.11",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22",
+        "dependencies": [
+          "windows-sys 0.61.2"
+        ]
+      },
+      {
+        "name": "winapi-x86_64-pc-windows-gnu",
+        "version": "0.4.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+      },
+      {
+        "name": "windows-link",
+        "version": "0.2.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+      },
+      {
+        "name": "windows-registry",
+        "version": "0.6.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720",
+        "dependencies": [
+          "windows-link",
+          "windows-result",
+          "windows-strings"
+        ]
+      },
+      {
+        "name": "windows-result",
+        "version": "0.4.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5",
+        "dependencies": [
+          "windows-link"
+        ]
+      },
+      {
+        "name": "windows-strings",
+        "version": "0.5.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091",
+        "dependencies": [
+          "windows-link"
+        ]
+      },
+      {
+        "name": "windows-sys",
+        "version": "0.52.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d",
+        "dependencies": [
+          "windows-targets"
+        ]
+      },
+      {
+        "name": "windows-sys",
+        "version": "0.61.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+        "dependencies": [
+          "windows-link"
+        ]
+      },
+      {
+        "name": "windows-targets",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+        "dependencies": [
+          "windows_aarch64_gnullvm",
+          "windows_aarch64_msvc",
+          "windows_i686_gnu",
+          "windows_i686_gnullvm",
+          "windows_i686_msvc",
+          "windows_x86_64_gnu",
+          "windows_x86_64_gnullvm",
+          "windows_x86_64_msvc"
+        ]
+      },
+      {
+        "name": "windows_aarch64_gnullvm",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+      },
+      {
+        "name": "windows_aarch64_msvc",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+      },
+      {
+        "name": "windows_i686_gnu",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+      },
+      {
+        "name": "windows_i686_gnullvm",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+      },
+      {
+        "name": "windows_i686_msvc",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+      },
+      {
+        "name": "windows_x86_64_gnu",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+      },
+      {
+        "name": "windows_x86_64_gnullvm",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+      },
+      {
+        "name": "windows_x86_64_msvc",
+        "version": "0.52.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+      },
+      {
+        "name": "winnow",
+        "version": "1.0.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81",
+        "dependencies": [
+          "memchr"
+        ]
+      },
+      {
+        "name": "writeable",
+        "version": "0.6.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
+      },
+      {
+        "name": "yoke",
+        "version": "0.8.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "417ef3fcf6c300b7dbd25c85531a746931c02ad536f3cf4786ed1e88223340b3",
+        "dependencies": [
+          "stable_deref_trait",
+          "yoke-derive",
+          "zerofrom"
+        ]
+      },
+      {
+        "name": "yoke-derive",
+        "version": "0.8.4",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9",
+          "synstructure"
+        ]
+      },
+      {
+        "name": "zerocopy",
+        "version": "0.8.63",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8",
+        "dependencies": [
+          "zerocopy-derive"
+        ]
+      },
+      {
+        "name": "zerocopy-derive",
+        "version": "0.8.63",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 2.0.119"
+        ]
+      },
+      {
+        "name": "zerofrom",
+        "version": "0.1.8",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272",
+        "dependencies": [
+          "zerofrom-derive"
+        ]
+      },
+      {
+        "name": "zerofrom-derive",
+        "version": "0.1.8",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9",
+          "synstructure"
+        ]
+      },
+      {
+        "name": "zeroize",
+        "version": "1.9.1",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
+      },
+      {
+        "name": "zerotrie",
+        "version": "0.2.5",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "4ea269c3bd32f0a32c321907a2ae912ba6f4649bb0fc764a15627e99a7095a3f",
+        "dependencies": [
+          "displaydoc",
+          "yoke",
+          "zerofrom"
+        ]
+      },
+      {
+        "name": "zerovec",
+        "version": "0.11.9",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "f58a2799cfe9a1670c7ea8edbd52ef8edb93cb37a7f83bf31ba9e35d9dae6a40",
+        "dependencies": [
+          "yoke",
+          "zerofrom",
+          "zerovec-derive"
+        ]
+      },
+      {
+        "name": "zerovec-derive",
+        "version": "0.11.7",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c3743ddbf47738d929cd1ae2e199d40d0162979dfe31aef8ae646d2bf00bf97a",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn 3.0.9"
+        ]
+      },
+      {
+        "name": "zmij",
+        "version": "1.0.23",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+      }
+    ],
+    "lua_dependency_closure_unchanged": true,
+    "selected_package_feature_trees_equal": true,
+    "checks": {
+      "windows": {
+        "normalized_tree_sha256": "de1c849b33f2cf79773a738ea62d8d9c8a44d08cf3460cb78cfe32b47aba333d",
+        "command": [
+          "cargo",
+          "tree",
+          "--locked",
+          "--offline",
+          "-p",
+          "deadlib-lua",
+          "-e",
+          "all",
+          "--no-dedupe",
+          "--prefix",
+          "none",
+          "--format",
+          "{p} {f}"
+        ],
+        "root_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-windows-root.txt",
+        "snapshot_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-windows-snapshot.txt"
+      },
+      "linux": {
+        "normalized_tree_sha256": "1e43098d9aed0f6dc20547d018a66d54e9abfb69119cbd06ffe112cc492c237d",
+        "command": [
+          "wsl.exe",
+          "-d",
+          "Debian",
+          "--cd",
+          "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+          "--",
+          "sh",
+          "-lc",
+          "exec cargo tree --locked --offline -p deadlib-lua -e all --no-dedupe --prefix none --format '{p} {f}' --target x86_64-unknown-linux-gnu"
+        ],
+        "root_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-linux-root.txt",
+        "snapshot_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-linux-snapshot.txt"
+      },
+      "i686": {
+        "normalized_tree_sha256": "1e43098d9aed0f6dc20547d018a66d54e9abfb69119cbd06ffe112cc492c237d",
+        "command": [
+          "wsl.exe",
+          "-d",
+          "Debian",
+          "--cd",
+          "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+          "--",
+          "sh",
+          "-lc",
+          "exec cargo tree --locked --offline -p deadlib-lua -e all --no-dedupe --prefix none --format '{p} {f}' --target i686-unknown-linux-gnu"
+        ],
+        "root_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-i686-root.txt",
+        "snapshot_log": "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-i686-snapshot.txt"
+      }
+    }
+  },
+  "dependency_tree_log_hashes": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-windows-root.txt": "3ff25cf97ff436953158c6c023e394dce009e04266ffb6bf238bb8ccc2aa124c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-windows-snapshot.txt": "3ff25cf97ff436953158c6c023e394dce009e04266ffb6bf238bb8ccc2aa124c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-linux-root.txt": "6a0973563dd48e35328f7bd9a57c3867cdb1e462d13a6c65d34830658e585890",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-linux-snapshot.txt": "6a0973563dd48e35328f7bd9a57c3867cdb1e462d13a6c65d34830658e585890",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-i686-root.txt": "6a0973563dd48e35328f7bd9a57c3867cdb1e462d13a6c65d34830658e585890",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-lock-i686-snapshot.txt": "6a0973563dd48e35328f7bd9a57c3867cdb1e462d13a6c65d34830658e585890"
+  },
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\lua.exe": "79c665877b0a56beba212d383a84920db0c64bfe2fcced8d5e93b5160c44e2d9",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\cargo-final-1793111672017388000\\release\\examples\\native_boundary.exe": "68cdde177b74ac46b39cb95e6a47841242c8165ef371be378a7fae647156ef5f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\lua51.dll": "6aed83ce2a1e0c076ab07fd901e98e4a672176406feee61da5da5ed62cb08c82",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\reference_module.dll": "6dbed6d766c15bb64315216c56db72b596d6a17f362ffa737d47d4e549ed34c3",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\rust\\boundary.dll": "5398105ae7198fb72858ed75891ed08a95a3c5a798850ed930681e52e0d6fa0c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\rust\\rust_module.dll": "abf737d6198231daa9830aeeacab2b0bff1da9891027892fe54351bc4c02aef7",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-cli-reference\\lua.exe": "cadb773479738c878d5f103d2a3a231de66b2451f9c579ab12da6145d3fe8a7c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\cargo-final-1793111672017388000\\release\\deadlua.exe": "760c97f1a3b46c94b65fdea554659dd0ff2b7e1de02c22cd43a36142b5315456",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\cargo-final-1793111672017388000\\release\\examples\\os_process.exe": "55b9fb09ad1c571a978f7f2ef93db61dd5dab8fd18028881af6e70c012737ecf",
+    "/mnt/c/GitHub/deadsync/target/lua-native-resume-1793111672017388000/target/lua-cli-reference/lua": "e5a174d86ecf9cf0e673823c1c2475d518c0f8446eba16285451d6face21cbe8",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native/release/deadlua": "15e766ab13d4a7867a81e65c08cdd1a65dcd880254ace54be9aac851f523ca8b",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native/release/examples/os_process": "59dc963703d42019b9b79dd48547885307bc91395db1e27405317535ed1f23b4",
+    "/mnt/c/GitHub/deadsync/target/lua-native-resume-1793111672017388000/target/lua-cli-reference-i686-unknown-linux-gnu-sse2/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686/i686-unknown-linux-gnu/release/deadlua": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686/i686-unknown-linux-gnu/release/examples/os_process": "2f7ad32aa165c4823ad76032a3dbf96d9a4b94547a24fed572302f532dfebe9f",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/reference/main/bin/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/reference/all/bin/lua": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/rust/main/bin/lua": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d",
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/rust/all/bin/lua": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d"
+  },
+  "elf_headers": {
+    "/mnt/c/GitHub/deadsync/target/lua-native-resume-1793111672017388000/target/lua-cli-reference/lua": {
+      "sha256": "e5a174d86ecf9cf0e673823c1c2475d518c0f8446eba16285451d6face21cbe8",
+      "magic": "7f454c46",
+      "elf_class": 64,
+      "machine": 62
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native/release/deadlua": {
+      "sha256": "15e766ab13d4a7867a81e65c08cdd1a65dcd880254ace54be9aac851f523ca8b",
+      "magic": "7f454c46",
+      "elf_class": 64,
+      "machine": 62
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native/release/examples/os_process": {
+      "sha256": "59dc963703d42019b9b79dd48547885307bc91395db1e27405317535ed1f23b4",
+      "magic": "7f454c46",
+      "elf_class": 64,
+      "machine": 62
+    },
+    "/mnt/c/GitHub/deadsync/target/lua-native-resume-1793111672017388000/target/lua-cli-reference-i686-unknown-linux-gnu-sse2/lua": {
+      "sha256": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686/i686-unknown-linux-gnu/release/deadlua": {
+      "sha256": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686/i686-unknown-linux-gnu/release/examples/os_process": {
+      "sha256": "2f7ad32aa165c4823ad76032a3dbf96d9a4b94547a24fed572302f532dfebe9f",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/reference/main/bin/lua": {
+      "sha256": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/reference/all/bin/lua": {
+      "sha256": "0938fa7ec6774f873c1005d69ba2eb9a5c67a8df397a91abec10986fe30aed82",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/rust/main/bin/lua": {
+      "sha256": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    },
+    "/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs/1793112390083155432-555161/rust/all/bin/lua": {
+      "sha256": "c5571a4162aeb17029ebc9650e269cbca8c5510c0d26065a312c982f6fa83c2d",
+      "magic": "7f454c46",
+      "elf_class": 32,
+      "machine": 3
+    }
+  },
+  "toolchain": {
+    "windows_rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "linux_rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1"
+  },
+  "checks": {
+    "fmt": {
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-lua",
+        "--check"
+      ],
+      "returncode": 0
+    },
+    "clippy": {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-lua",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "returncode": 0
+    },
+    "tests": {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-lua"
+      ],
+      "returncode": 0
+    },
+    "tree": {
+      "command": [
+        "cargo",
+        "tree",
+        "-p",
+        "deadlib-lua",
+        "-e",
+        "normal,build"
+      ],
+      "returncode": 0
+    },
+    "boundary": {
+      "command": [
+        "python",
+        "scripts/check_rust_lua_native_boundary.py",
+        "--output",
+        "docs/testing/2026-10-27-rust-lua-native-resume-boundary.json"
+      ],
+      "returncode": 0
+    },
+    "windows": {
+      "command": [
+        "python",
+        "scripts/check_rust_lua_upvalue_names.py",
+        "--output",
+        "docs/testing/2026-10-27-rust-lua-native-resume-windows.json"
+      ],
+      "returncode": 0
+    },
+    "linux-clippy": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native cargo clippy -p deadlib-lua --all-targets --no-deps -- -D warnings 2>&1"
+      ],
+      "returncode": 0
+    },
+    "linux-tests": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native cargo test -p deadlib-lua --no-fail-fast 2>&1"
+      ],
+      "returncode": 0
+    },
+    "linux": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/native python3 scripts/check_rust_lua_upvalue_names.py --run-root /home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs --output docs/testing/2026-10-27-rust-lua-native-resume-linux.json 2>&1"
+      ],
+      "returncode": 0
+    },
+    "i686-clippy": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' cargo clippy -p deadlib-lua --target i686-unknown-linux-gnu --all-targets --no-deps -- -D warnings 2>&1"
+      ],
+      "returncode": 0
+    },
+    "i686-tests": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' cargo test -p deadlib-lua --target i686-unknown-linux-gnu --no-fail-fast 2>&1"
+      ],
+      "returncode": 0
+    },
+    "i686": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' python3 scripts/check_rust_lua_upvalue_names.py --target i686-unknown-linux-gnu --reference-fp-model sse2 --run-root /home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs --output docs/testing/2026-10-27-rust-lua-native-resume-i686.json 2>&1"
+      ],
+      "returncode": 0
+    },
+    "suite": {
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' python3 scripts/check_rust_lua_full_suite.py --target i686-unknown-linux-gnu --reference-fp-model sse2 --run-root /home/perfecttaste/.cache/deadlua-native-resume/1793111672017388000/runs --output docs/testing/2026-10-27-rust-lua-native-resume-suite.json 2>&1"
+      ],
+      "returncode": 0
+    }
+  },
+  "log_hashes": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-clippy.log": "95770a17e480940738f77fd7bfa258d3e61b92d0dd72f3b013b6508795ac28cf",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-tests.log": "0c5b552d1fd233ac7a8bb432a38797bc10a1472a0a0aaf2c288fb8bfd90ca6ea",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-tree.log": "538dace76b393e4f7175b599aae7f02ed32999eb760e5ec5646730b1bca68488",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-boundary.log": "ffdc4c5916681cba04890015b36d2b7f871773acfd63271bcd9db594ceefdbb5",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-windows.log": "18c6f136661fae3f38910bc64989dde824a3951ddb80f09a6496e21e38b597b5",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-linux-clippy.log": "c367b3c72db40f6aa66e8202f5c6dc7844738380d585a83b53e180944f4ccc82",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-linux-tests.log": "4c3b1b2fbea106b57357d6444fa26fcd73ee1fcf6cbd2369ded4f5f21110f47a",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-linux.log": "3a92ff9461b8f0c435db3f8853bba48dee6af737a312d04033d1514db731d483",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-i686-clippy.log": "4ecdeaf491a8c73f7b186efcb3600d8ff6d976d320f58d876c7b58b73225cdcf",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-i686-tests.log": "989d92ee6526b71952b530c391daffe0356763c079b11047271d3bc74d6b52ef",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-i686.log": "b9e8dfc406469a8ef8581af0fbeb6c74570916e80dc30ad2983fc27380572fbc",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-suite.log": "0a928cfb2907db3aa98af6a83d0a50332388895816fc3c21fcfbf8862743578d"
+  },
+  "native_log_hashes": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\lua51.log": "94d931b81cb4ea767cd3815c95bc4aa1822e047a9bf47e5738447d8204634493",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\lua.log": "c49908558f814205b4845d6ecacf272fc830dc69a4a72dff5c3168e9c1235348",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\reference\\reference_module.log": "7389f3c736cfb6f317332eecf244c838a54258eafecb30ffbc01c3c6d614d1f6",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\rust\\boundary.log": "906c555230821122adb74669c44b96dd076005a65e4722350c564dd8b0ad6182",
+    "C:\\GitHub\\deadsync\\target\\lua-native-resume-1793111672017388000\\target\\lua-native-boundary-fixtures-1793111886679884100\\rust\\rust_module.log": "8d9c7aad94db6e6c676f96678a33e725d2c1b49f2686bbb9644873b0a2c95a09"
+  },
+  "tests_per_platform": {
+    "windows": {
+      "unit": 78,
+      "integration": 615,
+      "documentation": 4,
+      "total": 697
+    },
+    "linux": {
+      "unit": 78,
+      "integration": 616,
+      "documentation": 4,
+      "total": 698
+    },
+    "i686": {
+      "unit": 78,
+      "integration": 616,
+      "documentation": 4,
+      "total": 698
+    }
+  },
+  "platforms": [
+    "Windows/MSVC x64",
+    "Linux/glibc x64",
+    "Linux/glibc i686 SSE2"
+  ],
+  "native_boundary_stdout_bytes": 61019,
+  "operations": 141654,
+  "drops": 141654,
+  "states": {
+    "created": 183,
+    "collected": 182,
+    "destroyed": 183
+  },
+  "native_thread_transfer_cases": 1000,
+  "native_thread_transfer_stdout_bytes": 904,
+  "native_thread_transfer_guards": 70609,
+  "native_thread_transfer_states": {
+    "created": 2023,
+    "collected": 2022,
+    "destroyed": 2023
+  },
+  "complete_inactive_api_proven": false,
+  "native_resume_cycles": 1000,
+  "native_resume_stdout_bytes": 1518,
+  "native_resume_guards": 42829,
+  "native_resume_states": {
+    "created": 1023,
+    "collected": 1022,
+    "destroyed": 1023
+  },
+  "complete_coroutine_api_proven": false,
+  "native_reader_root_cases": 1745,
+  "native_reader_observations": 7772,
+  "native_reader_stdout_bytes": 470384,
+  "pointer_identity_cases": 1000,
+  "pointer_default_string_agreement": true,
+  "lazy_thread_identity_cases": 100,
+  "readonly_inactive_thread_status": true,
+  "native_dump_fixtures": 11,
+  "native_writer_failure_boundaries": 98,
+  "native_file_cases": 16,
+  "shared_stdin_lookahead_proven": true,
+  "native_loader_split_cases": 710,
+  "native_loader_scratch_slots_equal": true,
+  "full_native_loader_parity_proven": false,
+  "native_upvalue_name_fixtures": 9,
+  "imported_name_chunks_per_platform": 18,
+  "stock_suite_entries": [
+    "main.lua",
+    "all.lua"
+  ],
+  "internal_test_module": false,
+  "full_lua_51_parity_proven": false
+}

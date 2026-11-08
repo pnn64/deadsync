@@ -1,0 +1,30 @@
+{
+  "reports": {
+    "boundary-current": {
+      "path": "docs/testing/2026-10-27-rust-lua-native-context-boundary-current.json",
+      "sha256": "9582f6e697d1dbcb548113cb3e2493856eb694fe2900a02dda3f4d114b0ee7b9",
+      "source_hashes_match": true
+    },
+    "validation-current": {
+      "path": "docs/testing/2026-10-27-rust-lua-native-context-validation-current.json",
+      "sha256": "57c5b423a1cabbc45b7ed73d7d46a4e030600f0651d4064bd65e702bafb6cf2f",
+      "source_hashes_match": true
+    },
+    "linux-validation": {
+      "path": "docs/testing/2026-10-27-rust-lua-native-context-linux-validation.json",
+      "sha256": "79ec425f4f227f9346baa670ecda3b60cd67c2330ad747a41c8c2a744fd07479",
+      "source_hashes_match": true
+    },
+    "windows-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-native-context-windows-suite.json",
+      "sha256": "2df6758dfd810ca9316590122c4a11e68c9a5cf1b3d89ef5190bd800eaa69f39",
+      "source_hashes_match": true
+    },
+    "i686-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-native-context-i686-suite.json",
+      "sha256": "20e6a30150b7eff68bcb9c70fdc00e9c4b43a73dd786e5c6eb73eaf8ad28289a",
+      "source_hashes_match": true
+    }
+  },
+  "full_lua_51_parity_proven": false
+}

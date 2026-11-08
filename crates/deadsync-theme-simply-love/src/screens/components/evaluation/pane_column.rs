@@ -521,7 +521,7 @@ fn push_column_judgments_pane_from_inputs(
                     } else {
                         (labels_right_x - label_width - 4.0).max(labels_frame_x - 190.0)
                     };
-                    actors.push(act!(text: font("miso"): settext("Early"):
+                    actors.push(act!(text: font("miso"): settext(crate::i18n::tr("Gameplay", "EarlyLabel")):
                         align(1.0, 0.5):
                         xy(early_x, y + early_y_offset):
                         zoom(small_zoom):
@@ -531,7 +531,7 @@ fn push_column_judgments_pane_from_inputs(
                     ));
 
                     if matches!(row.kind, RowKind::Dec | RowKind::Wo) {
-                        actors.push(act!(text: font("miso"): settext("(All)"):
+                        actors.push(act!(text: font("miso"): settext(crate::i18n::tr("Evaluation", "AllLabel")):
                             align(1.0, 0.5):
                             xy(labels_right_x, y + all_y_offset):
                             zoom(small_zoom):
@@ -549,7 +549,7 @@ fn push_column_judgments_pane_from_inputs(
             let held_label_x = labels_right_x - miss_label_width - 4.0;
             let held_y = base_y + 144.0;
             let miss_color = palette.color(Role::Miss);
-            actors.push(act!(text: font("miso"): settext("HELD"):
+            actors.push(act!(text: font("miso"): settext(crate::i18n::tr("Evaluation", "HeldLabel")):
                 align(1.0, 0.5):
                 xy(held_label_x, held_y):
                 zoom(held_label_zoom):

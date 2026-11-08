@@ -1,0 +1,21 @@
+{
+  "command": [
+    "target\\deadlib-audio-fuzz\\x86_64-pc-windows-msvc\\release\\vorbis_stream.exe",
+    "target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\artifacts\\vorbis_stream\\timeout-96a983b404038758b05f56633423b0752a664653",
+    "-runs=1",
+    "-timeout=120",
+    "-rss_limit_mb=2048",
+    "-print_final_stats=1"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 47.31963230005931,
+  "artifact_sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+  "artifact_bytes": 52302,
+  "initial_seed_matches": [
+    "corpus/vorbis_stream/external-2-255",
+    "corpus/ogg_container/external-2-255"
+  ],
+  "binary_sha256": "49609a98a8a27ff717d7288a90964d76668f5a75fa001d8df1fbd60969a5d42d",
+  "timeout_seconds": 120,
+  "source_unchanged": true
+}

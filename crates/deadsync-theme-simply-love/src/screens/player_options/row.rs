@@ -27,6 +27,7 @@ pub enum RowId {
     TapExplosionOptions,
     JudgmentFont,
     JudgmentColors,
+    JudgmentAnimation,
     JudgmentOffsetX,
     JudgmentOffsetY,
     ComboFont,
@@ -66,6 +67,8 @@ pub enum RowId {
     MiniIndicatorColor,
     MiniIndicatorPosition,
     GameplayExtras,
+    GolfDisplay,
+    GolfStrokeFeedback,
     ColumnFlashJudgments,
     ColumnFlashBrightness,
     ColumnFlashSize,
@@ -85,6 +88,7 @@ pub enum RowId {
     OffsetIndicator,
     ErrorBar,
     TextErrorBarMode,
+    TextErrorBarPosition,
     TextErrorBarThreshold,
     ShortAverageErrorBar,
     CenterTick,
@@ -607,7 +611,7 @@ pub(crate) use index_binding;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// const INSERT: BitmaskBinding = simple_bitmask_binding!(
 ///     mask = InsertMask,
 ///     bits = u8,
@@ -672,7 +676,7 @@ pub(crate) use simple_bitmask_binding;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// const HIDE: BitmaskBinding = fanout_bitmask_binding!(
 ///     mask = HideMask,
 ///     bits = u8,
@@ -1035,7 +1039,7 @@ impl Row {
         self
     }
 
-    pub(super) fn replace_choices(&mut self, choices: Vec<String>) {
+    pub(super) fn replace_choices(&mut self, choices: impl IntoIterator<Item = impl AsRef<str>>) {
         self.choices = actor_texts(choices);
         self.choice_widths = Box::new([]);
         self.choice_offsets = Box::new([]);
@@ -1075,11 +1079,12 @@ impl Row {
     }
 }
 
-pub(super) fn actor_texts(texts: Vec<String>) -> Box<[TextContent]> {
+pub(super) fn actor_texts(texts: impl IntoIterator<Item = impl AsRef<str>>) -> Box<[TextContent]> {
     texts
         .into_iter()
         .map(|text| {
-            TextContent::inline_str(&text)
+            let text = text.as_ref();
+            TextContent::inline_str(text)
                 .unwrap_or_else(|| TextContent::Shared(Arc::<str>::from(text)))
         })
         .collect::<Vec<_>>()
@@ -1127,6 +1132,8 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::ComboColorMode
         || id == RowId::CarryCombo
         || id == RowId::GameplayExtras
+        || id == RowId::GolfDisplay
+        || id == RowId::GolfStrokeFeedback
         || id == RowId::ColumnFlashJudgments
         || id == RowId::ColumnFlashBrightness
         || id == RowId::ColumnFlashSize
@@ -1165,3 +1172,10 @@ pub(super) const fn row_toggles_with_start(row: &Row) -> bool {
 pub(super) fn row_selects_on_focus_move(id: RowId) -> bool {
     id == RowId::Stepchart
 }
+
+#[cfg(test)]
+#[path = "row_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "row_buffers_perf.rs"]
+mod buffers_perf;

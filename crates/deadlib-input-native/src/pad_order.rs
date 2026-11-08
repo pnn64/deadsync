@@ -3,12 +3,12 @@
 use std::sync::{LazyLock, Mutex};
 
 use arrayvec::ArrayVec;
-use deadlib_platform::input::PAD_ID_COUNT_CAP;
+use deadlib_platform::input::NATIVE_PAD_ID_COUNT_CAP;
 
 use crate::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
 
 /// Maximum stable device slots per backend before the shared overflow slot.
-pub const PAD_ORDER_CAP: usize = PAD_ID_COUNT_CAP - 1;
+pub const PAD_ORDER_CAP: usize = NATIVE_PAD_ID_COUNT_CAP - 1;
 const PAD_ORDER_BACKEND_COUNT: usize = PAD_ORDER_BACKENDS.len();
 
 /// Bounded UUID order; snapshots copy at most 64 identifiers without allocating.

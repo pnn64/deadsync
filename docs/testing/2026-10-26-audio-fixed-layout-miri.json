@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+nightly",
+    "miri",
+    "test",
+    "--manifest-path",
+    "target/audio-sola/miri/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "fixed_layout_unpacking_handles_block_boundaries_and_reused_buffers",
+    "--",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\miri-target",
+    "MIRIFLAGS": "-Zmiri-tree-borrows"
+  },
+  "exit_code": 0,
+  "stdout": "\nrunning 1 test\ntest stretch::perf_tests::fixed_layout_unpacking_handles_block_boundaries_and_reused_buffers ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 15.99s\n\n",
+  "stderr": "    Blocking waiting for file lock on package cache\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s\n     Running unittests harness.rs (target\\audio-sola\\miri-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-safety/2f208f412bb806eb\\out\\sola_safety-2f208f412bb806eb)\n",
+  "elapsed_seconds": 150.11493309994694,
+  "source_sha256": {
+    "crates/deadlib-audio/src/stream/stretch.rs": "31c25442cf5af7252f043b4d0573dc802106bb1b98a83633efdd3db8bd80319d",
+    "crates/deadlib-audio/src/stream/stretch/perf_tests.rs": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+  }
+}

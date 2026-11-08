@@ -1,0 +1,83 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling crc32fast v1.5.3
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling bitflags v2.13.2
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.83s
+     Running tests\deflate_stream.rs (target\png-directrows-20261028\build\debug\deps\deflate_stream-a55f63789189db61.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.74s
+
+     Running tests\encoder_boundaries.rs (target\png-directrows-20261028\build\debug\deps\encoder_boundaries-1186da46f0a3817f.exe)
+
+running 3 tests
+Encoder image/frame validation: 687 malformed native inputs, both writers reject before output
+test native_image_animation_and_frame_storage_errors_reject_before_output ... ok
+Encoder APNG rectangle audit: 450 valid / 2430 invalid inputs, both default roles and all native formats; both writers, plain/Adam7, independent CRC/control/zlib answers
+test frame_rectangles_and_integer_edges_have_literal_controls_and_exact_frame_streams ... ok
+Encoder writer audit: 2616 exact prefix/failure offsets with short and Interrupted writes; invalid byte counts rejected
+test every_output_byte_failure_short_writes_and_invalid_writer_counts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+     Running tests\encoder_fields.rs (target\png-directrows-20261028\build\debug\deps\encoder_fields-98455592603e27a9.exe)
+
+running 3 tests
+Encoder native boundary audit: 308033 invalid inputs rejected by both writers before any output
+test native_palette_transparency_and_option_boundaries_reject_before_writing ... ok
+Encoder ordering audit: 49419 independently modeled pairs, both writers, exact literal output or rejection before output
+test metadata_placement_multiplicity_and_pairs_follow_table_seven_when_writing ... ok
+Encoder scalar audit: 109376 exact literal files, 82396 rejected inputs, 15576 malformed wire lengths unrepresentable by the native API; each checked through both encoders
+test scalar_input_fields_and_exact_wire_values_for_both_encoders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 43.39s
+
+     Running tests\encoder_filter_bytes.rs (target\png-directrows-20261028\build\debug\deps\encoder_filter_bytes-67ff9f79d06d11ec.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.15s
+
+     Running tests\encoder_reference.rs (target\png-directrows-20261028\build\debug\deps\encoder_reference-fb8329fb261a7156.exe)
+
+running 2 tests
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ENCODER
+Cross-encoder APNG audit: 8640 native files, 2160 Rust png animations and 180 static reference encodings; exact native samples, palettes, transparency and controls
+test rust_encoder_and_both_native_writers_preserve_static_and_apng_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 27.92s
+
+     Running tests\png_stream.rs (target\png-directrows-20261028\build\debug\deps\png_stream-dd9b5eda8d24da6f.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests\static_png.rs (target\png-directrows-20261028\build\debug\deps\static_png-f860a6acf3292a71.exe)
+
+running 3 tests
+test decode_reference_encodings ... ok
+test one_byte_idat_and_truncations ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.25s
+

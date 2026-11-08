@@ -1,0 +1,272 @@
+{
+  "date": "2026-10-27",
+  "baseline_commit": "14f1cafad",
+  "production_change": "APNG static recovery policy/event and continued PNG/resource checks; strict default preserved",
+  "commands": [
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "png_stream",
+        "/tmp/deadlib-image-apng-recovery-corpus-20261027-a/png_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/apng-recovery-png_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 34.766
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "decode",
+        "/tmp/deadlib-image-apng-recovery-corpus-20261027-a/decode",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/apng-recovery-decode-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 6.215
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "encode_stream",
+        "/tmp/deadlib-image-apng-recovery-corpus-20261027-a/encode_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=782347",
+        "-max_len=256",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/apng-recovery-encode_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 92.384
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "png_stream",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 9351,
+        "bytes": 2316164,
+        "maximum_file_bytes": 63435,
+        "sha256": "abea53dda1c2d198079f71e2de7e39cb25e3651dd628465921eb89c15d8bdc0b",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes (case-sensitive), each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/png_stream",
+      "binary_sha256": "66bcd2105f77acf200c15a1b0ca65c4e150f1e287ca92d245311c5b1bd665c3b",
+      "asan_init_defined": true,
+      "peak_rss_mib": 461,
+      "fuzz_seconds": 21
+    },
+    {
+      "target": "decode",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 9351,
+        "bytes": 2316164,
+        "maximum_file_bytes": 63435,
+        "sha256": "abea53dda1c2d198079f71e2de7e39cb25e3651dd628465921eb89c15d8bdc0b",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes (case-sensitive), each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/decode",
+      "binary_sha256": "9a37216c609f84872583c9086261a1c95d1c3d5fcc79d8224db5240a8da86975",
+      "asan_init_defined": true,
+      "peak_rss_mib": 388,
+      "fuzz_seconds": 3
+    },
+    {
+      "target": "encode_stream",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 1080,
+        "bytes": 12960,
+        "maximum_file_bytes": 12,
+        "sha256": "078f65778848a69fdc207c731be6be52cae89de7b05c05f98c0b26d5bd846a82",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes (case-sensitive), each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/encode_stream",
+      "binary_sha256": "2b734657a98c6062b05f05afcadca8ca2010a31e9bebab98d3b2a598d9cb724f",
+      "asan_init_defined": true,
+      "peak_rss_mib": 414,
+      "fuzz_seconds": 89
+    }
+  ],
+  "source_sha256": [
+    {
+      "path": "png/examples/seed_fuzz.rs",
+      "sha256": "c01cf2567544cf3c18c3a73b6fe9a8e91c8017b0cdddea000c57aeb98a50576e"
+    },
+    {
+      "path": "png/fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "png/fuzz/Cargo.toml",
+      "sha256": "8086f7cfbec9a7327d219372396122b5078d70e5ac0f684eb71ee1a252852454"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/decode.rs",
+      "sha256": "d69c8beb34bb9fa0baceb99c91e2c3222b4c76d26aea6d39f345dce1c2acb86d"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/encode_stream.rs",
+      "sha256": "9de7cddbe4bc47c8d50dff62c1cd0a4c008cdf8e0449fcd3cae6a73ab90b6b2a"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "07fd59e9332af020cf72f0e51a4ccea6b23932a3877e2d724b98e92e7cc4e493"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/text_body.rs",
+      "sha256": "65fb88fb2ba33e8151c27ff4696693209c5d5be8033ad0e0a4639604882be497"
+    },
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "b5a01d3a00991e78df823911551ec2cd91386c552bf721cace3e1aa54c3d2594"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "a22f2e776caaf8ee303ca7ae3c9cce451b13ee7fd31e5e29aada5d7355a62420"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "67e57fcb942e9813593df8c3f36b98f23f215cc1ff99a31e87ad39a5cfa4d8ab"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "02f09191af54b0703c09a5d1a849d1f920201ab54ff9a660c1e4a916bbc9bc61"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "6392decf44c844cfa1594c2c8febc73becdb3e041f418e94bb5f708fe1418979"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "png/tests/apng_recovery.rs",
+      "sha256": "fc0ce5025283457dae8444c8b3a79f4917303a06c6fc655065db7192ed12ca20"
+    },
+    {
+      "path": "png/tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "png/tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "png/tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "png/tests/text_body.rs",
+      "sha256": "835470b8333598aad7a31435f5ee425b74692cd1c832841f68f43d8c969f4266"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "scope": "60,000 fresh APNG recovery/native PNG/encoder ASan smoke executions, not a completeness claim; native-only fuzz coverage remains open.",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "clang": "Debian clang version 19.1.7 (3+b1)",
+  "environment": {
+    "CC": "/usr/bin/clang",
+    "CFLAGS": "-fsanitize=address",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

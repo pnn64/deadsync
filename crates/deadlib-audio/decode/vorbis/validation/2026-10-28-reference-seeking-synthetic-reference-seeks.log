@@ -1,0 +1,36 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:181
++ ... .exe).Path; cargo test -p deadlib-audio-decode-vorbis --release --all ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 23.22s
+     Running tests\reference_seeking.rs (target/vorbis-completion\release\deps\reference_seeking-a36bb0853bb372a1.exe)
+
+running 1 test
+test reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll ... FAILED
+
+failures:
+
+---- reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll stdout ----
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/0 target 1008: 2016 samples, peak error 2.324581146e-6, RMS 4.931197403e-7, signal peak 17.799383
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/1 target 1008: 2 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/2 target 0: 4032 samples, peak error 2.324581146e-6, RMS 4.849248380e-7, signal peak 17.799383
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/3 target 0: 2 samples, peak error 5.364418030e-7, RMS 3.816559456e-7, signal peak 0.700142
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/4 target 2016: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/5 target 2016: 0 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/6 target 1: 4030 samples, peak error 2.324581146e-6, RMS 4.849706288e-7, signal peak 17.799383
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/7 target 1: 2 samples, peak error 9.536743164e-7, RMS 6.773065434e-7, signal peak 0.584274
+
+thread 'reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll' (14904) panicked at crates\deadlib-audio\decode\vorbis\tests\support\mod.rs:132:9:
+synthetic/Config { modes: 1, first_long: false, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }/7 target 1: PCM RMS tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test reference_seeking`

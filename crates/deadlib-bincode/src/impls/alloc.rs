@@ -7,6 +7,10 @@ use crate::{
 };
 use std::{boxed::Box, string::String, vec::Vec};
 
+#[cfg(test)]
+#[path = "../bulk_kernels.rs"]
+mod bulk_kernels;
+
 /// Return the number of bytes required to encode a value.
 pub fn encoded_size<E: Encode, C: Config>(val: E, config: C) -> Result<usize, EncodeError> {
     let mut encoder = enc::EncoderImpl::<_, C>::new(SizeWriter::default(), config);
@@ -66,6 +70,7 @@ pub fn encode_into_vec<E: Encode, C: Config>(
     val.encode(&mut encoder)
 }
 
+#[inline(always)]
 fn decode_raw_vec<T, D: Decoder>(
     decoder: &mut D,
     len: usize,
@@ -73,12 +78,28 @@ fn decode_raw_vec<T, D: Decoder>(
     if !crate::utils::can_memcpy::<T, D::C>() {
         return None;
     }
+    // Preserve the byte reader's empty read without entering the copy path.
+    if crate::unty::type_equal::<T, u8>() && len == 0 {
+        return Some(decoder.reader().read(&mut []).map(|()| Vec::new()));
+    }
 
     let byte_len = match len.checked_mul(std::mem::size_of::<T>()) {
         Some(len) => len,
         None => return Some(Err(DecodeError::LimitExceeded)),
     };
-    let source = decoder.reader().peek_read(byte_len)?;
+    let source = match decoder.reader().peek_read(byte_len) {
+        Some(source) => source,
+        None if crate::unty::type_equal::<T, u8>() => {
+            // Reader::read requires initialized bytes when no direct view is available.
+            let mut bytes = vec![0u8; len];
+            if let Err(error) = decoder.reader().read(&mut bytes) {
+                return Some(Err(error));
+            }
+            // SAFETY: type_equal established that T and u8 are identical types.
+            return Some(Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) }));
+        }
+        None => return None,
+    };
     if source.len() < byte_len {
         return Some(Err(DecodeError::UnexpectedEnd {
             additional: byte_len - source.len(),
@@ -96,24 +117,6 @@ fn decode_raw_vec<T, D: Decoder>(
     }
     decoder.reader().consume(byte_len);
     Some(Ok(values))
-}
-
-#[inline]
-fn decode_u8_vec<T, D: Decoder>(
-    decoder: &mut D,
-    len: usize,
-) -> Option<Result<Vec<T>, DecodeError>> {
-    if !crate::unty::type_equal::<T, u8>() {
-        return None;
-    }
-
-    let mut bytes = vec![0u8; len];
-    if let Err(error) = decoder.reader().read(&mut bytes) {
-        return Some(Err(error));
-    }
-
-    // SAFETY: `type_equal` established that T and u8 are identical types.
-    Some(Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) }))
 }
 
 fn copy_into_vec<T, D: Decoder>(
@@ -159,10 +162,7 @@ fn decode_bool_vec_into<T, D: Decoder>(
         return None;
     }
     let source = &source[..len];
-    let invalid = source
-        .iter()
-        .position(|byte| *byte > 1)
-        .map(|index| (index, source[index]));
+    let invalid = crate::utils::invalid_bool(source).map(|index| (index, source[index]));
     let valid_len = invalid.map_or(len, |(index, _)| index);
 
     values.reserve(valid_len);
@@ -183,7 +183,6 @@ fn decode_bool_vec_into<T, D: Decoder>(
     }
 }
 
-#[inline(never)]
 fn decode_endian_vec_into<T, D: Decoder>(
     decoder: &mut D,
     len: usize,
@@ -590,9 +589,6 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
 
-        if let Some(values) = decode_u8_vec(decoder, len) {
-            return values;
-        }
         if let Some(values) = decode_raw_vec(decoder, len) {
             return values;
         }
@@ -633,9 +629,6 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
 
-        if let Some(values) = decode_u8_vec(decoder, len) {
-            return values;
-        }
         if let Some(values) = decode_raw_vec(decoder, len) {
             return values;
         }

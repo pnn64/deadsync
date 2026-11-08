@@ -6,6 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 arrayvec = "0.7.8"
+smallvec = "1.16.4"
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.34"
 rustc-hash = "2.1.3"

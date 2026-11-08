@@ -1,0 +1,3 @@
+   Compiling deadlib-audio-decode-flac v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\flac)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 28.58s
+  Executable benches\decoding.rs (target\release\deps\decoding-98b5191da770233b.exe)

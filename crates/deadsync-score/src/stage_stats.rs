@@ -69,6 +69,8 @@ pub struct PlayerStageSummary {
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
     pub dim_post_fail_scatter: bool,
+    pub golf_score: Option<deadsync_rules::golf::GolfScore>,
+    pub golf_par: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -427,6 +429,25 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             show_hard_ex_score: show_hard_ex,
             track_early_judgments,
             dim_post_fail_scatter: first_player.dim_post_fail_scatter,
+            golf_score: input
+                .stage_summaries
+                .iter()
+                .filter_map(|stage| stage.players[idx].as_ref())
+                .map(|p| p.golf_score)
+                .try_fold(
+                    deadsync_rules::golf::GolfScore::default(),
+                    |mut total, stage| {
+                        let stage = stage?;
+                        total.raw_strokes = total.raw_strokes.saturating_add(stage.raw_strokes);
+                        total.judged_rows = total.judged_rows.saturating_add(stage.judged_rows);
+                        Some(total)
+                    },
+                ),
+            golf_par: input
+                .stage_summaries
+                .iter()
+                .filter_map(|stage| stage.players[idx].as_ref())
+                .try_fold(0.0, |total, p| Some(total + p.golf_par?)),
         });
     }
 
@@ -441,6 +462,84 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         duration_seconds,
         players,
     })
+}
+
+/// StageStats::FillInRoutineHighScore for a course summary: the master
+/// (`first`) participant's summary carrying the stats both Routine
+/// participants earned over the course. `totals` are the course totals
+/// [`build_course_summary_stage`] used, so Endless courses fall back to the
+/// played songs the same way.
+#[must_use]
+pub fn routine_shared_course_player(
+    first: &PlayerStageSummary,
+    second: &PlayerStageSummary,
+    totals: [CourseSummaryTotals; MAX_PLAYERS],
+) -> PlayerStageSummary {
+    let mut shared = first.clone();
+    shared.judgment_counts = std::array::from_fn(|ix| {
+        first.judgment_counts[ix].saturating_add(second.judgment_counts[ix])
+    });
+    shared.score_valid &= second.score_valid;
+    shared.disqualified |= second.disqualified;
+    shared.earned_grade_points = first
+        .earned_grade_points
+        .saturating_add(second.earned_grade_points);
+    shared.possible_grade_points = first
+        .possible_grade_points
+        .saturating_add(second.possible_grade_points);
+    shared.score_percent = judgment::calculate_itg_score_percent_from_points(
+        shared.earned_grade_points,
+        shared.possible_grade_points,
+    );
+    shared.window_counts = merge_window_counts(first.window_counts, second.window_counts);
+    shared.window_counts_10ms =
+        merge_window_counts(first.window_counts_10ms, second.window_counts_10ms);
+    shared.hands_achieved = first.hands_achieved.saturating_add(second.hands_achieved);
+    shared.hands_total = first.hands_total.saturating_add(second.hands_total);
+    shared.holds_held = first.holds_held.saturating_add(second.holds_held);
+    shared.holds_held_for_score = first
+        .holds_held_for_score
+        .saturating_add(second.holds_held_for_score);
+    shared.holds_total = first.holds_total.saturating_add(second.holds_total);
+    shared.rolls_held = first.rolls_held.saturating_add(second.rolls_held);
+    shared.rolls_held_for_score = first
+        .rolls_held_for_score
+        .saturating_add(second.rolls_held_for_score);
+    shared.rolls_total = first.rolls_total.saturating_add(second.rolls_total);
+    shared.mines_hit_for_score = first
+        .mines_hit_for_score
+        .saturating_add(second.mines_hit_for_score);
+    shared.mines_avoided = first.mines_avoided.saturating_add(second.mines_avoided);
+    shared.mines_total = first.mines_total.saturating_add(second.mines_total);
+    shared.notes_hit = first.notes_hit.saturating_add(second.notes_hit);
+    let total_steps = totals[0]
+        .total_steps
+        .saturating_add(totals[1].total_steps)
+        .max(window_counts_total(shared.window_counts));
+    let ex_data = judgment::ExScoreData {
+        counts: shared.window_counts,
+        counts_10ms: shared.window_counts_10ms,
+        holds_held: shared.holds_held_for_score,
+        holds_resolved: shared.holds_held_for_score,
+        rolls_held: shared.rolls_held_for_score,
+        rolls_resolved: shared.rolls_held_for_score,
+        mines_hit: shared.mines_hit_for_score,
+        total_steps,
+        holds_total: shared.holds_total,
+        rolls_total: shared.rolls_total,
+        mines_total: shared.mines_total,
+    };
+    shared.ex_score_percent = judgment::ex_score_percent(&ex_data);
+    shared.hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
+    shared.grade = if first.grade == Grade::Failed || second.grade == Grade::Failed {
+        Grade::Failed
+    } else {
+        promote_quint_grade(
+            score_to_grade(shared.score_percent * 10000.0),
+            shared.ex_score_percent,
+        )
+    };
+    shared
 }
 
 #[must_use]
@@ -513,6 +612,7 @@ mod tests {
             chart_name: "Stage Chart Name".to_string(),
             meter: 9,
             step_artist: "Stage Artist".to_string(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats {
@@ -575,10 +675,12 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: seconds,
             first_second: 0.0,
             total_length_seconds: seconds.round() as i32,
             precise_last_second_seconds: seconds,
+            precise_note_last_second_seconds: Some(seconds),
             last_second_hint: 0.0,
             charts: Vec::new(),
         })
@@ -661,6 +763,8 @@ mod tests {
             show_fa_plus_pane: true,
             track_early_judgments: true,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
         }
     }
 
@@ -747,6 +851,77 @@ mod tests {
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn routine_shared_course_player_scores_both_participants_over_the_course() {
+        let song = test_song("Songs/Test/a.ssc", "a", 60.0);
+        let stage = |p1: (Grade, i32), p2: (Grade, i32)| StageSummary {
+            song: song.clone(),
+            music_rate: 1.0,
+            duration_seconds: 60.0,
+            players: [
+                Some(test_player_summary(test_chart("a"), p1.0, p1.1, 100)),
+                Some(test_player_summary(test_chart("a"), p2.0, p2.1, 50)),
+            ],
+        };
+        let stages = vec![
+            stage((Grade::Tier01, 100), (Grade::Tier01, 20)),
+            stage((Grade::Tier01, 70), (Grade::Tier01, 50)),
+        ];
+        let summary = |totals| {
+            build_course_summary_stage(CourseSummaryInput {
+                path: Path::new("Courses/Test.crs"),
+                name: "Test Course",
+                banner_path: None,
+                score_hash: "course-hash",
+                difficulty_name: "Hard",
+                meter: None,
+                song_stub: song.as_ref(),
+                course_total_seconds: 120.0,
+                totals,
+                stage_summaries: stages.as_slice(),
+            })
+            .expect("course summary")
+        };
+        let shared = |summary: &StageSummary, totals| {
+            routine_shared_course_player(
+                summary.players[0].as_ref().unwrap(),
+                summary.players[1].as_ref().unwrap(),
+                totals,
+            )
+        };
+
+        // Endless courses have no totals and score the played songs.
+        let endless = [CourseSummaryTotals::default(); MAX_PLAYERS];
+        let result = shared(&summary(endless), endless);
+        assert_eq!(result.earned_grade_points, 240);
+        assert_eq!(result.possible_grade_points, 300);
+        assert!((result.score_percent - 0.8).abs() < 1e-12);
+        assert_ne!(result.grade, Grade::Failed);
+        assert_eq!(result.profile_name, "P1");
+
+        // A failed nonstop course still scores over the whole course.
+        let nonstop = [
+            CourseSummaryTotals {
+                possible_grade_points: 400,
+                total_steps: 40,
+                ..CourseSummaryTotals::default()
+            },
+            CourseSummaryTotals {
+                possible_grade_points: 200,
+                total_steps: 20,
+                ..CourseSummaryTotals::default()
+            },
+        ];
+        let mut failed = summary(nonstop);
+        failed.players[1].as_mut().unwrap().grade = Grade::Failed;
+        failed.players[1].as_mut().unwrap().score_valid = false;
+        let result = shared(&failed, nonstop);
+        assert_eq!(result.possible_grade_points, 600);
+        assert!((result.score_percent - 0.4).abs() < 1e-12);
+        assert_eq!(result.grade, Grade::Failed);
+        assert!(!result.score_valid);
     }
 
     #[test]

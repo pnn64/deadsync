@@ -1,9 +1,11 @@
 use crate::song::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
+use crc32fast::hash as crc32;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_rules::timing::{
     TimeSignatureSegment, TimingData, TimingSegments, default_time_signature,
 };
 use rustc_hash::FxHashSet;
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 const RANDOM_BG_CHANGE_MEASURES: i32 = 4;
@@ -269,11 +271,20 @@ fn push_random_change(
     out.push(change);
 }
 
-fn normalized_time_signatures(timing_segments: &TimingSegments) -> Vec<TimeSignatureSegment> {
-    let mut sigs = timing_segments.time_signatures.clone();
+fn normalized_time_signatures(timing_segments: &TimingSegments) -> Cow<'_, [TimeSignatureSegment]> {
+    let sigs = &timing_segments.time_signatures;
     if sigs.is_empty() {
-        sigs.push(default_time_signature());
+        const DEFAULT: &[TimeSignatureSegment] = &[default_time_signature()];
+        return Cow::Borrowed(DEFAULT);
     }
+    if beat_to_note_row(sigs[0].beat) <= 0
+        && sigs
+            .windows(2)
+            .all(|pair| pair[0].beat.total_cmp(&pair[1].beat).is_le())
+    {
+        return Cow::Borrowed(sigs);
+    }
+    let mut sigs = timing_segments.time_signatures.clone();
     sigs.sort_by(|a, b| a.beat.total_cmp(&b.beat));
     if sigs
         .first()
@@ -281,7 +292,7 @@ fn normalized_time_signatures(timing_segments: &TimingSegments) -> Vec<TimeSigna
     {
         sigs.insert(0, default_time_signature());
     }
-    sigs
+    Cow::Owned(sigs)
 }
 
 fn row_starts_measure(row: i32, sigs: &[TimeSignatureSegment]) -> bool {
@@ -344,20 +355,9 @@ impl XorShift64 {
     }
 }
 
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFFu32;
-    for &byte in bytes {
-        crc ^= u32::from(byte);
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
-}
+#[cfg(test)]
+#[path = "background_perf.rs"]
+mod perf;
 
 #[cfg(test)]
 mod tests {

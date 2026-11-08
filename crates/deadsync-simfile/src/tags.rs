@@ -1,4 +1,5 @@
 use rssp::parse::{decode_bytes, unescape_tag};
+use std::borrow::Cow;
 
 #[must_use]
 pub fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
@@ -41,7 +42,13 @@ pub fn latest_simfile_tag_values<const N: usize>(
 
     std::array::from_fn(|index| {
         latest[index]
-            .map(|raw| unescape_tag(decode_bytes(raw).as_ref()).into_owned())
+            .map(|raw| match decode_bytes(raw) {
+                Cow::Borrowed(decoded) => unescape_tag(decoded).into_owned(),
+                Cow::Owned(decoded) => match unescape_tag(&decoded) {
+                    Cow::Borrowed(_) => decoded,
+                    Cow::Owned(unescaped) => unescaped,
+                },
+            })
             .unwrap_or_default()
     })
 }
@@ -115,14 +122,11 @@ fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
 #[inline(always)]
 fn find_unescaped_semi_no_hash(slice: &[u8]) -> Option<usize> {
     let mut off = 0usize;
-    let mut has_hash = false;
     while off < slice.len() {
         let rel = find_either_byte(&slice[off..], b';', b'#')?;
         let idx = off + rel;
         if slice[idx] == b'#' {
-            has_hash = true;
-            off = idx + 1;
-            continue;
+            return None;
         }
         let mut bs = 0usize;
         let mut i = idx;
@@ -131,7 +135,7 @@ fn find_unescaped_semi_no_hash(slice: &[u8]) -> Option<usize> {
             i -= 1;
         }
         if bs & 1 == 0 {
-            return (!has_hash).then_some(idx);
+            return Some(idx);
         }
         off = idx + 1;
     }
@@ -204,6 +208,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hashes_preserve_escaped_values_and_implicit_tag_boundaries() {
+        let data = b"#TITLE:One\\;#inside\r\n \t#ARTIST:DJ;#TITLE:Last#suffix;";
+        let values = extract_named_tag_values(data, &[b"#TITLE:"]);
+        assert_eq!(
+            values,
+            [b"One\\;#inside".as_slice(), b"Last#suffix".as_slice()]
+        );
+        let [title, artist] =
+            latest_simfile_tag_values(data, [b"#TITLE:".as_slice(), b"#ARTIST:".as_slice()]);
+        assert_eq!(title, "Last#suffix");
+        assert_eq!(artist, "DJ");
+        for (raw, expected) in [
+            (
+                b"hash\\#value\\;tail;".as_slice(),
+                Some(b"hash\\#value\\;tail".as_slice()),
+            ),
+            (
+                b"hash#value\\\\;later".as_slice(),
+                Some(b"hash#value\\\\".as_slice()),
+            ),
+            (b"hash#unterminated".as_slice(), None),
+            (b"early\n#NEXT:later;".as_slice(), Some(b"early".as_slice())),
+        ] {
+            assert_eq!(
+                scan_tag_end(raw, true).map(|(end, _)| &raw[..end]),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn extracts_case_insensitive_duplicate_tags() {
         let data = b"ignored#TITLE:One;#artist:DJ;#title:Two;";
         let values = extract_named_tag_values(data, &[b"#TITLE:"]);
@@ -246,4 +281,9 @@ mod tests {
             Some(b"first".as_slice())
         );
     }
+}
+
+#[cfg(test)]
+mod parse_perf {
+    include!("tags_parse_perf.rs");
 }

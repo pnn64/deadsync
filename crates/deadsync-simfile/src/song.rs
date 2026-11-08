@@ -1,8 +1,9 @@
-use crate::artwork::resolve_song_artwork_like_itg;
+use crate::artwork::{ResolvedSongArtwork, resolve_song_artwork_like_itg};
 use crate::cache::{
     CachedChartPayloadIndex, CachedParsedNote, CachedTimingSegments, SerializableChartData,
-    SerializableSongBackgroundChange, SerializableSongData, build_song_meta,
-    parse_chart_display_bpm, update_precise_song_bounds,
+    SerializableSongBackgroundChange, SerializableSongBackgroundLuaChange, SerializableSongData,
+    SerializableSongForegroundChange, SerializableSongForegroundLuaChange, build_song_meta,
+    cache_background_changes, parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
     extract_background_lua_change_set, extract_foreground_change_sets,
@@ -17,6 +18,7 @@ use rssp::{
     AnalysisOptions, AnalysisScratch, ChartNoteType, ParsedChartNote, PreparedAnalysis,
     SimfileSummary, analyze_prepared_in_with_notes,
 };
+use std::borrow::Cow;
 use std::cmp::Ordering;
 #[cfg(test)]
 use std::fs;
@@ -112,6 +114,7 @@ fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
         ChartNoteType::Fake => NoteType::Fake,
     };
     CachedParsedNote {
+        player: 0,
         row_index: note.row_index as u32,
         column: note.column as u8,
         note_type: note_type.into(),
@@ -121,12 +124,25 @@ fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
 
 struct SongBuildInput<'a> {
     path: &'a Path,
-    simfile_dir: &'a Path,
+    /// The folder media tags are resolved against, or `None` for a simfile
+    /// that has no folder on this machine -- see `parse_song_bytes`.
+    media_dir: Option<&'a Path>,
     simfile_data: &'a [u8],
     song_music_path: Option<PathBuf>,
     music_length_seconds: f32,
     options: &'a ParseSongOptions,
     parsed_notes: &'a mut Vec<Vec<CachedParsedNote>>,
+}
+
+/// One simfile's bytes and where they claim to live.
+struct SimfileSource<'a> {
+    data: &'a [u8],
+    /// `sm` or `ssc`, which picks the dialect RSSP reads.
+    extension: &'a str,
+    /// Recorded as the song's `simfile_path`.
+    path: &'a Path,
+    /// Whether `path` names a real file whose folder holds the song's media.
+    on_disk: bool,
 }
 
 pub fn parse_song_file(
@@ -160,31 +176,413 @@ pub fn parse_song_file_in(
     file.read_to_end(input)
         .map_err(|e| format!("Could not read file: {e}"))?;
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let summary = analyze_prepared_in_with_notes(
-        input,
-        extension,
+    parse_song_source(
+        SimfileSource {
+            data: input,
+            extension,
+            path,
+            on_disk: true,
+        },
+        options,
+        analyzer,
+        analysis,
+        parsed_notes,
+        music_len,
+    )
+}
+
+/// Parses a simfile held in memory: one read out of a pack archive that was
+/// never unpacked, say.
+///
+/// Everything a simfile *says* comes back exactly as `parse_song_file` would
+/// give it -- title, sample window, every chart's notes and timing. What a
+/// song *finds in its folder* does not: music, artwork, background and
+/// foreground changes and Lua all come back empty, and `music_len` is asked
+/// about no file at all.
+///
+/// That is not only because there is no folder. Media tags are paths, and a
+/// path the simfile chose can leave any folder it is joined to: `Path::join`
+/// with an absolute tag, or a `\\host\share` one, *replaces* the base. Looked
+/// up, a downloaded simfile could make this machine stat its files or open an
+/// SMB connection to a stranger -- just by being previewed. So in-memory
+/// parsing never looks anything up, and `virtual_path` is a label recorded as
+/// the song's `simfile_path`, never a place.
+///
+/// `extension` is `sm` or `ssc`, ignoring case, and picks the dialect.
+pub fn parse_song_bytes(
+    data: &[u8],
+    extension: &str,
+    virtual_path: &Path,
+    options: &ParseSongOptions,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let analyzer = SongAnalyzer::new(options);
+    let mut analysis = AnalysisScratch::default();
+    let mut parsed_notes = Vec::new();
+    parse_song_source(
+        SimfileSource {
+            data,
+            extension,
+            path: virtual_path,
+            on_disk: false,
+        },
+        options,
+        &analyzer,
+        &mut analysis,
+        &mut parsed_notes,
+        music_len,
+    )
+}
+
+/// Project native note-column syntax into RSSP's unannotated note input.
+fn note_analysis_bytes<'a>(
+    data: &'a [u8],
+    entries: &[rssp::parse::ParsedChartEntry<'a>],
+) -> Cow<'a, [u8]> {
+    // extract_sections yields disjoint note blocks in source order. Copy the
+    // retained bytes as annotations are found, without collecting/sorting gaps.
+    let mut notes = Vec::new();
+    let mut copied = 0;
+    for entry in entries {
+        let Some(lanes) = rssp::supported_stepstype_lanes_bytes(entry.fields[0]) else { continue };
+        let mut search = 0;
+        while let Some(bracket) = memchr::memchr(b'[', &entry.note_data[search..]) {
+            let bracket = search + bracket;
+            let line_start = memchr::memrchr2(b'\n', b',', &entry.note_data[..bracket])
+                .map_or(0, |index| index + 1);
+            let line_end = memchr::memchr2(b'\n', b',', &entry.note_data[bracket..])
+                .map_or(entry.note_data.len(), |index| bracket + index);
+            let line = &entry.note_data[line_start..line_end];
+            search = (line_end + 1).min(entry.note_data.len());
+            let mut end = line.len();
+            if let Some(comment) = line[..end].windows(2).position(|bytes| bytes == b"//") {
+                end = comment;
+            }
+            while end > 0 && matches!(line[end - 1], b'\r' | b'\t' | b' ') { end -= 1; }
+            let mut cursor = 0;
+            while cursor < end && matches!(line[cursor], b'\r' | b'\t' | b' ') { cursor += 1; }
+            // NoteDataUtil::LoadFromSMNoteDataStringWithPlayer consumes one
+            // column, then skips its optional [keysound index] through ']'
+            // or the row end. Its digits must never enter RSSP as notes.
+            for _ in 0..lanes {
+                if cursor >= end { break; }
+                cursor += 1;
+                if cursor < end && line[cursor] == b'[' {
+                    let start = cursor;
+                    cursor += 1;
+                    while cursor < end && line[cursor] != b']' { cursor += 1; }
+                    if cursor < end { cursor += 1; }
+                    // Nonempty note blocks borrow directly from the source.
+                    let offset = entry.note_data.as_ptr() as usize - data.as_ptr() as usize;
+                    if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
+                    notes.extend_from_slice(&data[copied..offset + line_start + start]);
+                    copied = offset + line_start + cursor;
+                }
+            }
+        }
+    }
+    if copied == 0 { return Cow::Borrowed(data); }
+    notes.extend_from_slice(&data[copied..]);
+    Cow::Owned(notes)
+}
+
+/// The parse both entry points share once the bytes are in hand.
+fn parse_song_source(
+    source: SimfileSource<'_>,
+    options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    analysis: &mut AnalysisScratch,
+    parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let parsed = rssp::parse::extract_sections(source.data, source.extension)
+        .map_err(|error| error.to_string())?;
+    let projection = crate::partner_charts::project(source.data, &parsed.notes_list);
+    let projected = rssp::parse::extract_sections(&projection.bytes, source.extension)
+        .map_err(|error| error.to_string())?;
+    let analysis_bytes = note_analysis_bytes(&projection.bytes, &projected.notes_list);
+    let mut summary = analyze_prepared_in_with_notes(
+        &analysis_bytes,
+        source.extension,
         &analyzer.prepared,
         analysis,
         parsed_notes,
         cached_note_from_rssp,
     )?;
-    let simfile_dir = path
-        .parent()
-        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
-    let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
+    for (chart_index, (chart, entry)) in summary
+        .charts
+        .iter_mut()
+        .zip(parsed.notes_list.iter().filter(|entry| {
+            entry.field_count >= 5 && crate::partner_charts::playable(entry.fields[0])
+        }))
+        .enumerate()
+    {
+        chart.step_type_str = rssp::parse::decode_unescape(entry.fields[0])
+            .trim()
+            .to_ascii_lowercase();
+        if crate::partner_charts::lanes(entry.fields[0]).is_some() {
+            // Couple has separate scores, so it must not alias an identical
+            // Double chart. Routine additionally hashes both ownership blocks.
+            let mut hash_notes = chart.step_type_str.as_bytes().to_vec();
+            hash_notes.push(b'\n');
+            hash_notes.extend_from_slice(
+                projection
+                    .hash_notes
+                    .get(&chart_index)
+                    .map_or(chart.minimized_note_data.as_slice(), Vec::as_slice),
+            );
+            let bpms = chart
+                .chart_bpms_norm
+                .as_deref()
+                .unwrap_or(&summary.normalized_bpms);
+            (chart.short_hash, chart.bpm_neutral_hash) =
+                rssp::hash::compute_chart_hash_pair(&hash_notes, bpms);
+        }
+        if chart.step_type_str.ends_with("-routine") {
+            for note in &mut parsed_notes[chart_index] {
+                let beat = chart
+                    .row_to_beat
+                    .get(note.row_index as usize)
+                    .ok_or("Routine note has no matching beat")?;
+                let row = (*beat as f64 * 48.0).round() as usize;
+                note.player = *projection
+                    .owners
+                    .get(&(chart_index, row, note.column as usize))
+                    .ok_or("Routine note lost its participant during analysis")?;
+            }
+        }
+    }
+    // RSSP rounds its report offset to milliseconds. Runtime song timing
+    // uses the authored float, as NotesLoaderSM::SMSetOffset does.
+    summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
+    if source.extension.eq_ignore_ascii_case("sm") {
+        // RSSP trims Unicode whitespace for analysis. SMLoader::LoadFromTokens
+        // trims only RageUtil's CR, LF, tab and space, then uses the same
+        // authored text for the description, credit and chart name.
+        let entries = parsed.notes_list.iter().filter(|entry| {
+            entry.field_count >= 5
+                && crate::partner_charts::playable(entry.fields[0])
+        });
+        for (chart, entry) in summary.charts.iter_mut().zip(entries) {
+            let description = rssp::parse::decode_unescape(entry.fields[1]);
+            let description = description.trim_matches(['\r', '\n', '\t', ' ']);
+            chart.description_str = description.to_owned();
+            chart.step_artist_str = description.to_owned();
+            chart.chart_name_str = description.to_owned();
+        }
+    } else if source.extension.eq_ignore_ascii_case("ssc") {
+        let version = rssp::parse::parse_version(parsed.version, rssp::timing::TimingFormat::Ssc);
+        // SSC SetDescription uses the same ASCII-only Trim. Before 0.74 the
+        // tag names the chart instead, so leave that existing normalization.
+        if !(version < rssp::parse::SSC_VERSION_CHART_NAME_TAG) {
+            let entries = parsed.notes_list.iter().filter(|entry| {
+                entry.field_count >= 5
+                    && crate::partner_charts::playable(entry.fields[0])
+            });
+            for (chart, entry) in summary.charts.iter_mut().zip(entries) {
+                chart.description_str = rssp::parse::decode_unescape(entry.fields[1])
+                    .trim_matches(['\r', '\n', '\t', ' ']).to_owned();
+            }
+        }
+    }
+    let media_dir = if source.on_disk {
+        Some(
+            source
+                .path
+                .parent()
+                .ok_or_else(|| "Could not determine simfile directory".to_string())?,
+        )
+    } else {
+        None
+    };
+    let song_music_path = media_dir.and_then(|dir| resolve_music_path(dir, &summary.music_path));
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
-    Ok(build_song_data(
+    let additional_bounds = unplayed_chart_note_bounds(&parsed, &source.extension);
+    let mut song = build_song_data(
         summary,
         SongBuildInput {
-            path,
-            simfile_dir,
-            simfile_data: input,
+            path: source.path,
+            media_dir,
+            simfile_data: source.data,
             song_music_path,
             music_length_seconds,
             options,
             parsed_notes,
         },
-    ))
+    );
+    update_precise_song_bounds(&mut song, 0.0);
+    if let Some([first, last]) = additional_bounds {
+        song.first_second = if song.precise_note_last_second_seconds.is_some() {
+            song.first_second.min(first)
+        } else { first };
+        let last = song.precise_note_last_second_seconds.map_or(last, |value| value.max(last));
+        song.precise_note_last_second_seconds = Some(last);
+        song.precise_last_second_seconds = song.precise_last_second_seconds.max(last);
+        song.total_length_seconds = song.total_length_seconds.max(last as i32);
+    }
+    Ok(song)
+}
+
+/// Authored Steps retain their Song::GetAllSteps order even when their style
+/// cannot be selected for gameplay in DeadSync.
+pub struct NativeStepMetadata {
+    pub chart_type: String,
+    pub difficulty: String,
+    pub description: String,
+    pub chart_name: String,
+    pub credit: String,
+    pub meter: u32,
+    pub music_file: String,
+    pub playable_index: Option<usize>,
+}
+
+pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<NativeStepMetadata>, String> {
+    let data = std::fs::read(&song.simfile_path).map_err(|error| error.to_string())?;
+    let extension = song.simfile_path.extension().and_then(|value| value.to_str()).unwrap_or("sm");
+    let parsed = rssp::parse::extract_sections(&data, extension).map_err(|error| error.to_string())?;
+    let ssc = extension.eq_ignore_ascii_case("ssc");
+    let format = if ssc { rssp::timing::TimingFormat::Ssc } else { rssp::timing::TimingFormat::Sm };
+    let version = rssp::parse::parse_version(parsed.version, format);
+    let text = |bytes: &[u8]| rssp::parse::decode_unescape(bytes)
+        .trim_matches(['\r', '\n', '\t', ' ']).to_owned();
+    let mut playable = 0;
+    let mut steps = Vec::new();
+    for entry in &parsed.notes_list {
+        if entry.field_count < 5 { continue; }
+        let kind = text(entry.fields[0]).to_ascii_lowercase();
+        if crate::partner_charts::playable(entry.fields[0]) {
+            let chart = song.charts.get(playable).ok_or("native Steps catalog exceeds playable charts")?;
+            steps.push(NativeStepMetadata {
+                chart_type: chart.chart_type.clone(), difficulty: chart.difficulty.clone(),
+                description: chart.description.clone(), chart_name: chart.chart_name.clone(),
+                credit: chart.step_artist.clone(), meter: chart.meter,
+                music_file: chart.music_file.clone(), playable_index: Some(playable),
+            });
+            playable += 1;
+        } else if native_unplayed_step_lanes(&kind).is_some() || kind == "lights-cabinet" {
+            let legacy_name = ssc && version < rssp::parse::SSC_VERSION_CHART_NAME_TAG;
+            let description = text(entry.fields[1]);
+            steps.push(NativeStepMetadata {
+                chart_type: kind, difficulty: text(entry.fields[2]),
+                chart_name: if !ssc || legacy_name { description.clone() }
+                    else { text(entry.chart_name.unwrap_or_default()) },
+                credit: if ssc { text(entry.fields[4]) } else { description.clone() },
+                description: if legacy_name { String::new() } else { description },
+                meter: text(entry.fields[3]).parse().unwrap_or(1),
+                music_file: entry.chart_music.as_deref().map(&text).unwrap_or_default(),
+                playable_index: None,
+            });
+        }
+    }
+    if playable != song.charts.len() { return Err("native Steps catalog is missing playable charts".into()); }
+    Ok(steps)
+}
+
+fn native_unplayed_step_lanes(kind: &str) -> Option<usize> {
+    Some(match kind {
+        "dance-threepanel" => 3,
+        "dance-solo" | "pump-halfdouble" | "bm-single5" | "bm-versus5" | "kickbox-insect" => 6,
+        "dance-couple" | "dance-routine" | "ds3ddx-single" | "techno-single8" | "techno-double4" | "bm-single7" | "bm-versus7" => 8,
+        "pump-couple" | "pump-routine" | "ez2-double" | "techno-double5" => 10,
+        "kb7-single" | "ez2-real" => 7,
+        "ez2-single" | "para-single" | "pnm-five" | "techno-single5" => 5,
+        "maniax-single" | "techno-single4" | "kickbox-quadarm" | "kickbox-human" => 4,
+        "bm-double5" => 12,
+        "bm-double7" | "techno-double8" => 16,
+        "maniax-double" | "kickbox-arachnid" => 8,
+        "pnm-nine" => 9,
+        _ => return None,
+    })
+}
+
+/// Song.cpp includes native charts that the gameplay analyzer does not load.
+/// Their notes still determine when ScreenGameplay transitions out.
+fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, extension: &str) -> Option<[f32; 2]> {
+    use rssp::timing::{compute_timing_segments, steps_timing_allowed, TimingFormat};
+    let format = if extension.eq_ignore_ascii_case("ssc") { TimingFormat::Ssc } else { TimingFormat::Sm };
+    let version = rssp::parse::parse_version(parsed.version, format);
+    let own_timing_allowed = steps_timing_allowed(version, format);
+    let mut bounds: Option<[f32; 2]> = None;
+    for entry in &parsed.notes_list {
+        if crate::partner_charts::playable(entry.fields[0]) { continue; }
+        let Ok(kind) = std::str::from_utf8(entry.fields[0]) else { continue; };
+        let kind = kind.trim().to_ascii_lowercase();
+        // GameManager.cpp's native StepsTypeInfo table. Lights never contribute.
+        let Some(lanes) = native_unplayed_step_lanes(&kind) else { continue; };
+        if parsed.notes_list.len() > 1 && entry.fields[2].eq_ignore_ascii_case(b"Edit") { continue; }
+        let Some([first, last]) = native_note_row_bounds(entry.note_data, lanes) else { continue; };
+        if last == 0 { continue; }
+        let own = own_timing_allowed && [entry.chart_bpms.as_deref(), entry.chart_stops.as_deref(),
+            entry.chart_delays.as_deref(), entry.chart_warps.as_deref(), entry.chart_speeds.as_deref(),
+            entry.chart_scrolls.as_deref(), entry.chart_fakes.as_deref(), entry.chart_offset.as_deref(),
+            entry.chart_time_signatures.as_deref(), entry.chart_labels.as_deref(),
+            entry.chart_tickcounts.as_deref(), entry.chart_combos.as_deref()].iter().any(Option::is_some);
+        let tags = [(entry.chart_bpms.as_deref(), parsed.bpms), (entry.chart_stops.as_deref(), parsed.stops),
+            (entry.chart_delays.as_deref(), parsed.delays), (entry.chart_warps.as_deref(), parsed.warps)];
+        let tags = tags.map(|(chart, global)| (
+            (if own_timing_allowed { chart } else { None }).map(String::from_utf8_lossy),
+            String::from_utf8_lossy(if own { b"" } else { global.unwrap_or_default() }),
+        ));
+        let segments = compute_timing_segments(tags[0].0.as_deref(), &tags[0].1,
+            tags[1].0.as_deref(), &tags[1].1, tags[2].0.as_deref(), &tags[2].1,
+            tags[3].0.as_deref(), &tags[3].1, None, "", None, "", None, "", format, false);
+        let offset = rssp::parse::parse_offset_seconds(if own_timing_allowed {
+            entry.chart_offset.as_deref().or(parsed.offset)
+        } else { parsed.offset }) as f32;
+        let timing = deadsync_rules::timing::TimingData::from_segments(-offset, 0.0,
+            &crate::timing::timing_segments_from_rssp(&segments), &[]);
+        let first = timing.get_time_for_beat(first as f32 / 48.0);
+        let last = timing.get_time_for_beat(last as f32 / 48.0);
+        if first.is_finite() && last.is_finite() {
+            bounds = Some(bounds.map_or([first, last], |old| [old[0].min(first), old[1].max(last)]));
+        }
+    }
+    bounds
+}
+
+fn native_note_row_bounds(data: &[u8], lanes: usize) -> Option<[i32; 2]> {
+    // NoteDataUtil::LoadFromSMNoteDataStringWithPlayer keeps keysounds and fake
+    // notes, resolves hold tails, and discards unterminated holds. Routine
+    // player blocks share one native note grid.
+    let mut tracks = vec![std::collections::BTreeMap::<i32, Option<i32>>::new(); lanes];
+    for player in data.split(|byte| *byte == b'&') {
+        for (measure, data) in player.split(|byte| *byte == b',').enumerate() {
+            let rows: Vec<_> = data.split(|byte| *byte == b'\n').filter_map(|line| {
+                let end = line.windows(2).position(|value| value == b"//").unwrap_or(line.len());
+                let line = line[..end].trim_ascii();
+                (!line.is_empty()).then_some(line)
+            }).collect();
+            for (index, line) in rows.iter().enumerate() {
+                let beat = (measure as f32 + index as f32 / rows.len() as f32) * 4.0;
+                let row = (beat * 48.0).round() as i32;
+                let mut cursor = 0;
+                for track in &mut tracks {
+                    let Some(&cell) = line.get(cursor) else { break; };
+                    cursor += 1;
+                    if line.get(cursor) == Some(&b'[') {
+                        cursor += 1;
+                        while cursor < line.len() && line[cursor] != b']' { cursor += 1; }
+                        cursor += usize::from(cursor < line.len());
+                    }
+                    match cell {
+                        b'2' | b'4' => { track.insert(row, None); }
+                        b'3' => {
+                            if let Some((_, tail)) = track.range_mut(..row).rev().find(|(_, tail)| tail.is_none()) {
+                                *tail = Some(row);
+                            }
+                        }
+                        b'1' | b'M' | b'L' | b'F' | b'K' => { track.insert(row, Some(row)); }
+                        _ => {},
+                    }
+                }
+            }
+        }
+    }
+    let mut rows = tracks.iter().flat_map(|track| track.iter()
+        .filter_map(|(&head, tail)| tail.map(|tail| [head, tail])));
+    let mut result = rows.next()?;
+    for [first, last] in rows { result = [result[0].min(first), result[1].max(last)]; }
+    Some(result)
 }
 
 pub fn parse_song_meta_file(
@@ -200,12 +598,10 @@ pub fn parse_song_meta_file(
 pub fn parse_song_data_file(
     path: &Path,
     options: &ParseSongOptions,
-    global_offset_seconds: f32,
+    _global_offset_seconds: f32,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    let mut song = parse_song_file(path, options, music_len)?;
-    update_precise_song_bounds(&mut song, global_offset_seconds);
-    Ok(song)
+    parse_song_file(path, options, music_len)
 }
 
 pub fn parse_song_data_file_in(
@@ -213,18 +609,76 @@ pub fn parse_song_data_file_in(
     options: &ParseSongOptions,
     analyzer: &SongAnalyzer,
     scratch: &mut SongParseScratch,
-    global_offset_seconds: f32,
+    _global_offset_seconds: f32,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    let mut song = parse_song_file_in(path, options, analyzer, scratch, music_len)?;
-    update_precise_song_bounds(&mut song, global_offset_seconds);
-    Ok(song)
+    parse_song_file_in(path, options, analyzer, scratch, music_len)
+}
+
+/// What a song finds in its folder rather than in its simfile.
+///
+/// Kept together because it is all-or-nothing: a simfile parsed from disk
+/// resolves every piece of it, and one parsed from memory resolves none.
+#[derive(Default)]
+struct SongFolderMedia {
+    artwork: ResolvedSongArtwork,
+    background_changes: Vec<SerializableSongBackgroundChange>,
+    background_layer2_changes: Vec<SerializableSongBackgroundChange>,
+    foreground_changes: Vec<SerializableSongForegroundChange>,
+    background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
+    foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
+    has_lua: bool,
+}
+
+impl SongFolderMedia {
+    fn resolve(
+        simfile_dir: &Path,
+        simfile_data: &[u8],
+        summary: &SimfileSummary,
+        options: &ParseSongOptions,
+    ) -> Self {
+        let artwork = resolve_song_artwork_like_itg(
+            simfile_dir,
+            simfile_data,
+            &summary.banner_path,
+            &summary.background_path,
+            &summary.cdtitle_path,
+            &summary.jacket_path,
+        );
+        let background_lua_changes =
+            extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
+        let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
+        let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
+        let background_changes = cache_background_changes(resolve_background_changes_from_roots(
+            simfile_dir,
+            simfile_data,
+            &options.song_movie_roots,
+            &options.random_movie_roots,
+        ));
+        let background_layer2_changes =
+            cache_background_changes(resolve_background_layer2_changes_from_roots(
+                simfile_dir,
+                simfile_data,
+                &options.song_movie_roots,
+                &options.random_movie_roots,
+                &options.bg_animation_roots,
+            ));
+        Self {
+            artwork,
+            background_changes,
+            background_layer2_changes,
+            foreground_changes: foreground_changes.media,
+            background_lua_changes: background_lua_changes.changes,
+            foreground_lua_changes: foreground_changes.lua,
+            has_lua,
+        }
+    }
 }
 
 fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> SerializableSongData {
     let SongBuildInput {
         path,
-        simfile_dir,
+        media_dir,
         simfile_data,
         song_music_path,
         music_length_seconds,
@@ -233,41 +687,21 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
     } = input;
     let charts = build_charts(
         &mut summary,
-        simfile_dir,
+        media_dir,
         song_music_path.as_deref(),
         parsed_notes,
     );
-    let artwork = resolve_song_artwork_like_itg(
-        simfile_dir,
-        simfile_data,
-        &summary.banner_path,
-        &summary.background_path,
-        &summary.cdtitle_path,
-        &summary.jacket_path,
-    );
-    let background_lua_changes =
-        extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
-    let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
-    let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
-    let background_changes = resolve_background_changes_from_roots(
-        simfile_dir,
-        simfile_data,
-        &options.song_movie_roots,
-        &options.random_movie_roots,
-    )
-    .iter()
-    .map(SerializableSongBackgroundChange::from)
-    .collect();
-    let background_layer2_changes = resolve_background_layer2_changes_from_roots(
-        simfile_dir,
-        simfile_data,
-        &options.song_movie_roots,
-        &options.random_movie_roots,
-        &options.bg_animation_roots,
-    )
-    .iter()
-    .map(SerializableSongBackgroundChange::from)
-    .collect();
+    let SongFolderMedia {
+        artwork,
+        background_changes,
+        background_layer2_changes,
+        foreground_changes,
+        background_lua_changes,
+        foreground_lua_changes,
+        has_lua,
+    } = media_dir.map_or_else(SongFolderMedia::default, |dir| {
+        SongFolderMedia::resolve(dir, simfile_data, &summary, options)
+    });
 
     let last_second_hint = summary
         .last_second_hint
@@ -291,9 +725,9 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
             .map(|p| p.to_string_lossy().into_owned()),
         background_changes,
         background_layer2_changes,
-        foreground_changes: foreground_changes.media,
-        background_lua_changes: background_lua_changes.changes,
-        foreground_lua_changes: foreground_changes.lua,
+        foreground_changes,
+        background_lua_changes,
+        foreground_lua_changes,
         has_lua,
         cdtitle_path: artwork
             .cdtitle_path
@@ -305,11 +739,20 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         min_bpm: summary.min_bpm,
         max_bpm: summary.max_bpm,
         normalized_bpms: summary.normalized_bpms,
+        song_timing: has_lua.then(|| {
+            CachedTimingSegments::from_rssp_owned(
+                summary.global_timing_segments,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            )
+        }),
         music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
         music_length_seconds,
         first_second: 0.0,
         total_length_seconds: summary.total_length.max(last_second_hint as i32),
         precise_last_second_seconds: (summary.total_length.max(0) as f32).max(last_second_hint),
+        precise_note_last_second_seconds: Some(summary.total_length.max(0) as f32),
         last_second_hint,
         charts,
     }
@@ -317,7 +760,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
 
 fn build_charts(
     summary: &mut SimfileSummary,
-    simfile_dir: &Path,
+    media_dir: Option<&Path>,
     song_music_path: Option<&Path>,
     parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
 ) -> Vec<SerializableChartData> {
@@ -374,9 +817,9 @@ fn build_charts(
             };
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
-            let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
-            let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
-            let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
+            let music_path =
+                media_dir.and_then(|dir| chart_music_path(dir, song_music_path, &chart.music_path));
+            let (min_bpm, max_bpm) = chart_bpm_bounds(&chart.timing_segments.bpms);
             let timing_segments = CachedTimingSegments::from_rssp_owned(
                 chart.timing_segments,
                 parse_cached_time_signatures(time_signature_tag),
@@ -394,6 +837,7 @@ fn build_charts(
                 chart_name: chart.chart_name_str,
                 meter,
                 step_artist: chart.step_artist_str,
+                music_file: chart.music_path,
                 music_path,
                 offset: chart.chart_offset_seconds as f32,
                 notes: chart.minimized_note_data,
@@ -576,25 +1020,104 @@ fn final_music_len(summary: &SimfileSummary, decoded_len: f32) -> f32 {
     }
 }
 
-fn min_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
-    bpms.iter()
+fn chart_bpm_bounds(bpms: &[(f32, f32)]) -> (f64, f64) {
+    let (lo, hi) = bpms
+        .iter()
         .map(|&(_, bpm)| f64::from(bpm))
         .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .fold(f64::INFINITY, f64::min)
-        .min(f64::MAX)
-}
-
-fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
-    bpms.iter()
-        .map(|&(_, bpm)| f64::from(bpm))
-        .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .fold(0.0_f64, f64::max)
+        .fold((f64::INFINITY, 0.0_f64), |(lo, hi), bpm| {
+            (lo.min(bpm), hi.max(bpm))
+        });
+    (lo.min(f64::MAX), hi)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn keysound_indices_preserve_note_columns_and_real_holds() {
+        let root = test_dir("keysound-index-columns");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let notes = "1[24]000\n02[13]00\n0300\n004[23]0\n0030\n0001[4]\n0000\n0000\n";
+        for (extension, chart) in [
+            ("sm", format!("#NOTES2:dance-single:[12] Author:Challenge:1:0,0,0,0,0:\n{notes};")),
+            ("ssc", format!("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:[12] Author;\n\
+                #DIFFICULTY:Challenge;\n#METER:1;\n#NOTES2:\n{notes};")),
+        ] {
+            let source = format!("#VERSION:0.83;\n#TITLE:[24] Keysounds;\n#BPMS:0=120;\n{chart}");
+            let path = root.join(format!("song.{extension}"));
+            fs::write(&path, &source).unwrap();
+            for song in [parse_song_file(&path, &options, |_| 4.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), extension, &path, &options, |_| 4.0).unwrap()] {
+                assert_eq!(song.title, "[24] Keysounds");
+                let chart = &song.charts[0];
+                assert_eq!(chart.description, "[12] Author");
+                assert_eq!((chart.stats.total_steps, chart.stats.holds, chart.stats.rolls), (4, 1, 1),
+                    "keysound index digits are metadata, not additional hold or roll notes");
+                assert_eq!(chart.parsed_notes.len(), 4,
+                    "keysound index digits must not create additional parsed note cells");
+                assert_eq!(chart.parsed_notes.iter().map(|note| note.column).collect::<Vec<_>>(), [0, 1, 2, 3]);
+                assert_eq!(chart.parsed_notes.iter().map(|note| NoteType::from(note.note_type)).collect::<Vec<_>>(),
+                    [NoteType::Tap, NoteType::Hold, NoteType::Roll, NoteType::Tap]);
+                for note in &chart.parsed_notes[1..3] {
+                    assert!(note.tail_row_index.is_some_and(|tail| tail > note.row_index));
+                }
+            }
+            assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
+        }
+    }
+
+    #[test]
+    fn ssc_chart_description_preserves_non_ascii_whitespace() {
+        let root = test_dir("ssc-description-whitespace");
+        let simfile = root.join("metadata.ssc");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (version, expected) in [("0.83", "\u{a0}Author: description\u{a0}"), ("0.60", "")] {
+            let source = format!("#VERSION:{version};\n#TITLE:Metadata;\n#BPMS:0=120;\n\
+                #NOTEDATA:;\n#STEPSTYPE:unknown-style;\n#DESCRIPTION:Skipped;\n#DIFFICULTY:Hard;\n#METER:1;\n#NOTES:1000;\n\
+                #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#CHARTNAME:Independent name;\n#CREDIT:Independent credit;\n\
+                #DESCRIPTION:\t \u{a0}Author\\: description\u{a0} \t ;\n#DIFFICULTY:Hard;\n#METER:1;\n#NOTES:1000;");
+            fs::write(&simfile, &source).unwrap();
+            for song in [parse_song_file(&simfile, &options, |_| 0.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "SSC", &simfile, &options, |_| 0.0).unwrap()] {
+                assert_eq!(song.charts.len(), 1);
+                assert_eq!(song.charts[0].description, expected);
+                assert_eq!(song.charts[0].step_artist, "Independent credit");
+                if version == "0.83" { assert_eq!(song.charts[0].chart_name, "Independent name"); }
+                assert_eq!(song.charts[0].parsed_notes.len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn sm_chart_metadata_preserves_non_ascii_whitespace() {
+        let root = test_dir("sm-metadata-whitespace");
+        let simfile = root.join("metadata.sm");
+        let source = "#TITLE:Metadata;\n#BPMS:0=120;\n\
+            #NOTES:unknown-style:Skipped:Hard:1:0,0,0,0,0:1000;\n\
+            #NOTES:dance-single:\r\n\t \u{a0}Author\\: credit\u{a0} \t\r\n:Hard:1:0,0,0,0,0:1000;\n\
+            #NOTES:dance-double: \tSecond\t :Challenge:2:0,0,0,0,0:10000000;";
+        fs::write(&simfile, source).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let from_file = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let from_bytes =
+            parse_song_bytes(source.as_bytes(), "SM", &simfile, &options, |_| 0.0).unwrap();
+        for song in [from_file, from_bytes] {
+            assert_eq!(song.charts.len(), 2);
+            for (chart, expected) in song
+                .charts
+                .iter()
+                .zip(["\u{a0}Author: credit\u{a0}", "Second"])
+            {
+                assert_eq!(chart.description, expected);
+                assert_eq!(chart.step_artist, expected);
+                assert_eq!(chart.chart_name, expected);
+                assert_eq!(chart.parsed_notes.len(), 1);
+            }
+        }
+    }
 
     #[test]
     fn reused_analysis_matches_fresh_parsing_across_files() {
@@ -882,6 +1405,64 @@ mod tests {
     }
 
     #[test]
+    fn simple_lua_song_keeps_native_clock() {
+        let root = test_dir("simple-lua-native-clock");
+        let simfile = root.join("song.sm");
+        fs::write(root.join("default.lua"), "return Def.Actor{}").expect("Lua layer");
+        fs::write(
+            &simfile,
+            b"#TITLE:Native clock;\n#OFFSET:-2.296;\n#BPMS:0=140;\n\
+            #FGCHANGES:0=default.lua;\n#NOTES:dance-single::Challenge:1:0,0,0,0,0:\n\
+            1000\n0100\n0010\n0001\n;",
+        )
+        .expect("simple simfile");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = parse_song_file(&simfile, &options, |_| 2.0).expect("song data");
+        let song = build_song_meta(data, 0.0);
+        let timing = song
+            .song_timing
+            .expect("all Lua songs retain native timing");
+        let origin = timing.get_time_for_beat_exact(0.0);
+        // Native float cancellation leaves frame 6435 below beat 250.25.
+        assert_eq!(
+            timing.get_song_position(origin + 6435.0 / 60.0).beat,
+            250.249_98
+        );
+        assert!(timing.get_song_position(origin + 6436.0 / 60.0).beat > 250.25);
+    }
+
+    #[test]
+    fn song_clock_keeps_authored_offset_with_split_timing() {
+        let root = test_dir("authored-song-offset");
+        let simfile = root.join("song.ssc");
+        fs::write(root.join("default.lua"), "return Def.Actor{}").expect("Lua layer");
+        fs::write(
+            &simfile,
+            b"#VERSION:0.83;\n#TITLE:Authored offset;\n\
+            #OFFSET:0.065760;\n#BPMS:0=144;\n#STOPS:4=0.5;\n\
+            #FGCHANGES:0=default.lua;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n\
+            #DIFFICULTY:Challenge;\n#METER:1;\n#OFFSET:0.25;\n#BPMS:0=144;\n\
+            #NOTES:\n1000\n0100\n0010\n0001\n;",
+        )
+        .expect("split timing simfile");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = parse_song_file(&simfile, &options, |_| 2.0).expect("song data");
+        assert_eq!(data.charts[0].offset, 0.25);
+        let song = build_song_meta(data, 0.0);
+        assert_eq!(song.offset, 0.065760);
+        let timing = song.song_timing.expect("global Lua clock");
+        let origin = timing.get_time_for_beat_exact(0.0);
+        assert_eq!(origin, -0.065760);
+        // Native float arithmetic crosses beat one on frame 25, rather
+        // than waiting for frame 26 after report rounding to 0.066.
+        assert_eq!(
+            timing.get_song_position(origin + 25.0 / 60.0).beat,
+            1.0_f32.next_up()
+        );
+        fs::remove_dir_all(root).expect("remove offset fixture");
+    }
+
+    #[test]
     fn parsed_song_meta_records_first_and_last_step_seconds() {
         let root = test_dir("first-second");
         let song_dir = root.join("Song");
@@ -912,6 +1493,34 @@ mod tests {
 
         assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
         assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn unplayed_native_charts_extend_song_bounds_without_becoming_playable() {
+        let root = test_dir("unplayed-note-bounds");
+        fs::create_dir_all(&root).unwrap();
+        let simfile = root.join("bounds.ssc");
+        fs::write(&simfile, "#VERSION:0.83;#TITLE:Unplayed bounds;#BPMS:0=60;\n\
+#NOTEDATA:;#STEPSTYPE:dance-single;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n1000\n,\n1000\n;\n\
+#NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Medium;#METER:1;#BPMS:0=60;#STOPS:4=0.25;#NOTES:\n000000\n001000\n000000\n000000\n,\n000000\n,\nM00000\n;\n\
+#NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Edit;#METER:1;#NOTES:\n000000\n,\n000000\n,\n000000\n,\n100000\n;\n\
+#NOTEDATA:;#STEPSTYPE:lights-cabinet;#DIFFICULTY:Hard;#METER:1;#NOTES:\n00000000\n,\n00000000\n,\n00000000\n,\n10000000\n;").unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for song in [parse_song_data_file(&simfile, &options, 0.125, |_| 20.0).unwrap(),
+            parse_song_bytes(&fs::read(&simfile).unwrap(), "ssc", &simfile, &options, |_| 20.0).unwrap()] {
+            assert_eq!(song.charts.len(), 1, "unplayed charts do not enter gameplay selection");
+            assert_eq!(song.first_second, 0.0);
+            assert_eq!(song.precise_note_last_second_seconds, Some(8.25));
+            assert_eq!(song.precise_last_second_seconds, 8.25);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn native_note_bounds_resolve_holds_keysounds_and_routine_players() {
+        assert_eq!(native_note_row_bounds(b"000000\n200000\n000000\n300000\n,\n00000K[12]\n", 6), Some([48, 192]));
+        assert_eq!(native_note_row_bounds(b"200000\n,\n000000\n", 6), None);
+        assert_eq!(native_note_row_bounds(b"10000000\n,\n00000000\n&\n00000000\n,\n0000000F\n", 8), Some([0, 192]));
     }
 
     #[test]
@@ -968,6 +1577,106 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn in_memory_parse_matches_the_file_parse() {
+        // A folder with nothing in it but the simfile, so the file parse finds
+        // no media either and the two must agree to the byte.
+        let root = test_dir("bytes-match");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (name, data) in [
+            (
+                "song.ssc",
+                b"#VERSION:0.83;\n#TITLE:Bytes;\n#ARTIST:Memory;\n#OFFSET:-0.250;\n\
+                  #SAMPLESTART:12.5;\n#SAMPLELENGTH:15;\n#BPMS:0.000=120.000,8.000=180.000;\n\
+                  #STOPS:4.000=0.500;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n\
+                  #DIFFICULTY:Challenge;\n#METER:12;\n#NOTES:\n\
+                  2000\n0100\n0010\n3000\n,\n1001\n0M10\n1000\n000L\n;\n\
+                  #NOTEDATA:;\n#STEPSTYPE:dance-double;\n#DIFFICULTY:Hard;\n#METER:9;\n\
+                  #WARPS:2.000=1.000;\n#NOTES:\n10000001\n01000010\n00100100\n00011000\n;"
+                    .as_slice(),
+            ),
+            (
+                "song.sm",
+                b"#TITLE:Bytes SM;\n#BPMS:0.000=90.000;\n#OFFSET:0.100;\n#NOTES:\n\
+                  dance-single:\n:\nHard:\n5:\n0,0,0,0,0:\n1000\n0100\n0010\n0001\n;"
+                    .as_slice(),
+            ),
+        ] {
+            let path = root.join(name);
+            fs::write(&path, data).unwrap();
+            let extension = name.rsplit('.').next().unwrap();
+            let from_file = parse_song_file(&path, &options, |_| 7.5).unwrap();
+            let from_bytes = parse_song_bytes(data, extension, &path, &options, |music| {
+                assert_eq!(music, None, "an in-memory parse names no music file");
+                7.5
+            })
+            .unwrap();
+            let from_file = bincode::encode_to_vec(from_file, bincode::config::standard()).unwrap();
+            let from_bytes =
+                bincode::encode_to_vec(from_bytes, bincode::config::standard()).unwrap();
+            assert_eq!(from_bytes, from_file, "{name}");
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn in_memory_parse_never_looks_on_disk() {
+        // The label points at a real folder that holds every file the simfile
+        // names, by relative and by absolute path. The file parse finds them;
+        // the in-memory parse must not even look.
+        let root = test_dir("bytes-no-disk");
+        let music = root.join("music.ogg");
+        let banner = root.join("banner.png");
+        let background = root.join("elsewhere.png");
+        fs::write(&music, b"stub").unwrap();
+        fs::write(&banner, b"stub").unwrap();
+        fs::write(&background, b"stub").unwrap();
+        let data = format!(
+            "#TITLE:Stay Put;\n#MUSIC:music.ogg;\n#BANNER:banner.png;\n#BACKGROUND:{};\n\
+             #BGCHANGES:0.000=banner.png=1.000=0=0=1;\n#FGCHANGES:0.000=banner.png=1.000=0=0=1;\n\
+             #BPMS:0.000=120.000;\n#NOTES:\ndance-single:\n:\nHard:\n5:\n0,0,0,0,0:\n1000\n;",
+            // A backslash is an escape in a simfile, so name it the portable way.
+            background.to_string_lossy().replace('\\', "/")
+        );
+        let simfile = root.join("song.sm");
+        fs::write(&simfile, &data).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let from_file = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        assert_eq!(from_file.music_path.map(PathBuf::from), Some(music));
+        assert_eq!(from_file.banner_path.map(PathBuf::from), Some(banner));
+
+        let from_bytes = parse_song_bytes(data.as_bytes(), "SM", &simfile, &options, |music| {
+            assert_eq!(music, None);
+            0.0
+        })
+        .unwrap();
+        assert_eq!(from_bytes.simfile_path, simfile.to_string_lossy());
+        assert_eq!(from_bytes.title, "Stay Put");
+        assert_eq!(from_bytes.music_path, None);
+        assert_eq!(from_bytes.banner_path, None);
+        assert_eq!(from_bytes.background_path, None);
+        assert_eq!(from_bytes.cdtitle_path, None);
+        assert!(from_bytes.background_changes.is_empty());
+        assert!(from_bytes.background_layer2_changes.is_empty());
+        assert!(from_bytes.foreground_changes.is_empty());
+        assert!(!from_bytes.has_lua);
+        assert_eq!(from_bytes.charts.len(), 1);
+        assert_eq!(from_bytes.charts[0].music_path, None);
+        assert_eq!(from_bytes.charts[0].parsed_notes.len(), 1);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn in_memory_parse_reports_an_unknown_dialect() {
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let error = parse_song_bytes(b"#TITLE:x;", "dwi", Path::new(""), &options, |_| 0.0)
+            .err()
+            .unwrap();
+        assert!(error.contains(".sm or .ssc"), "{error}");
+    }
+
     fn test_dir(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -980,5 +1689,13 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    mod library_perf {
+        include!("song_library_perf.rs");
+    }
+
+    mod projection_perf {
+        include!("song_projection_perf.rs");
     }
 }

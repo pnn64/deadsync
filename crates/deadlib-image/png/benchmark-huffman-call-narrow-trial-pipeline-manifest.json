@@ -1,0 +1,137 @@
+{
+    "target":  "pipeline",
+    "stage":  "pipeline",
+    "iterations":  10,
+    "runs":  3,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "013711c184c664210bf2490f90f1a4aa03774e50",
+    "source_sha256":  [
+                          {
+                              "path":  "src/apng.rs",
+                              "sha256":  "A7776F11D43D8DD4A9802E4D354689978D819CDF56308369020D07A8EB6DA412"
+                          },
+                          {
+                              "path":  "src/checksum.rs",
+                              "sha256":  "548EC2169B7C2C6D8ABE4715F284F65FE9BD70189C670F320D6E2F244FCB2919"
+                          },
+                          {
+                              "path":  "src/codec.rs",
+                              "sha256":  "5FAD4314C55583E8A743215081FDB98809F73AA48D7D0FCDA233D564130B2E0E"
+                          },
+                          {
+                              "path":  "src/composite.rs",
+                              "sha256":  "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+                          },
+                          {
+                              "path":  "src/lib.rs",
+                              "sha256":  "67E57FCB942E9813593DF8C3F36B98F23F215CC1FF99A31E87AD39A5CFA4D8AB"
+                          },
+                          {
+                              "path":  "src/metadata.rs",
+                              "sha256":  "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+                          },
+                          {
+                              "path":  "src/metadata/language.rs",
+                              "sha256":  "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+                          },
+                          {
+                              "path":  "src/metadata/language/registry.rs",
+                              "sha256":  "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+                          },
+                          {
+                              "path":  "src/metadata/profile.rs",
+                              "sha256":  "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+                          },
+                          {
+                              "path":  "src/scanline.rs",
+                              "sha256":  "70A7980389A5F9FD7FDD6AEDB9C574E7DA32B67E1CA5602BB901C0F3FB855ED3"
+                          },
+                          {
+                              "path":  "src/stream/decode.rs",
+                              "sha256":  "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+                          },
+                          {
+                              "path":  "src/stream/encode_rows.rs",
+                              "sha256":  "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+                          },
+                          {
+                              "path":  "src/stream/mod.rs",
+                              "sha256":  "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+                          },
+                          {
+                              "path":  "src/stream/read.rs",
+                              "sha256":  "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+                          },
+                          {
+                              "path":  "src/stream/rows.rs",
+                              "sha256":  "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+                          },
+                          {
+                              "path":  "src/stream/write.rs",
+                              "sha256":  "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+                          },
+                          {
+                              "path":  "src/zlib.rs",
+                              "sha256":  "79EE1223F948CA824809E3341563BCADAF66C89558767FAF03A1D19C3A1BB1E1"
+                          },
+                          {
+                              "path":  "src/zlib/deflate.rs",
+                              "sha256":  "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+                          },
+                          {
+                              "path":  "src/zlib/inflate.rs",
+                              "sha256":  "E5B06545A44CC2867E637E4D50F082932FFF803ECE6480A2FA800FAB6C1A6D8C"
+                          },
+                          {
+                              "path":  "src/zlib/matcher.rs",
+                              "sha256":  "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+                          }
+                      ],
+    "benchmark_source":  "benches/pipeline.rs",
+    "benchmark_source_sha256":  "9370EAA7AAED2D65666803418860E5BACD7193C6ADF983997E92FABF0C161719",
+    "corpus_sha256":  [
+
+                      ],
+    "executable":  "C:\\GitHub\\deadsync\\target\\release\\deps\\pipeline-8d3d1b02b33a6175.exe",
+    "executable_sha256":  "36C565BA237B4DA97D3EE760DE35DC551A463F196033A0293307095113188FFB",
+    "processor":  {
+                      "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                      "NumberOfCores":  22,
+                      "NumberOfLogicalProcessors":  44
+                  },
+    "eligible_affinity":  17592186044415,
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T04:52:33.6892551Z",
+                             "end_utc":  "2026-10-27T04:52:41.4768542Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-huffman-call-narrow-trial-pipeline-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T04:52:41.4778619Z",
+                             "end_utc":  "2026-10-27T04:52:48.9938384Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-huffman-call-narrow-trial-pipeline-run2.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  3,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T04:52:48.9947976Z",
+                             "end_utc":  "2026-10-27T04:52:56.4810237Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-huffman-call-narrow-trial-pipeline-run3.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "limits":  "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec\u0027s allocations. Deflate stage uses identical filtered bytes per source."
+}

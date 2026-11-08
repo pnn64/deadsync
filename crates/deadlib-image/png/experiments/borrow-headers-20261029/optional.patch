@@ -1,0 +1,162 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 75a3b1edd..eb2fe440d 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -212,26 +212,23 @@ impl Huffman {
+     }
+ }
+ 
+-fn fixed() -> (Huffman, Huffman) {
+-    const TABLES: (Huffman, Huffman) = {
+-        let mut lengths = [8; 288];
+-        let mut n = 144;
+-        while n < 280 {
+-            lengths[n] = if n < 256 { 9 } else { 7 };
+-            n += 1;
+-        }
+-        let literals = match Huffman::build(&lengths, false, false) {
+-            Ok(tree) => tree,
+-            Err(_) => panic!("invalid fixed literal tree"),
+-        };
+-        let distances = match Huffman::build(&[5; 32], false, false) {
+-            Ok(tree) => tree,
+-            Err(_) => panic!("invalid fixed distance tree"),
+-        };
+-        (literals, distances)
++const FIXED: (Huffman, Huffman) = {
++    let mut lengths = [8; 288];
++    let mut n = 144;
++    while n < 280 {
++        lengths[n] = if n < 256 { 9 } else { 7 };
++        n += 1;
++    }
++    let literals = match Huffman::build(&lengths, false, false) {
++        Ok(tree) => tree,
++        Err(_) => panic!("invalid fixed literal tree"),
+     };
+-    TABLES
+-}
++    let distances = match Huffman::build(&[5; 32], false, false) {
++        Ok(tree) => tree,
++        Err(_) => panic!("invalid fixed distance tree"),
++    };
++    (literals, distances)
++};
+ 
+ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+     let nl = bits.read(5)? as usize + 257;
+@@ -304,7 +301,13 @@ fn inflate_codes(
+     window: usize,
+     limit: usize,
+ ) -> Result<(), Error> {
+-    let (lit, dist) = if fixed_codes { fixed() } else { dynamic(bits)? };
++    let dynamic_tables;
++    let (lit, dist) = if fixed_codes {
++        (&FIXED.0, &FIXED.1)
++    } else {
++        dynamic_tables = dynamic(bits)?;
++        (&dynamic_tables.0, &dynamic_tables.1)
++    };
+     loop {
+         match lit.decode(bits)? {
+             literal @ 0..=255 => {
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 030e14387..4b79e76e9 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -1,4 +1,4 @@
+-use super::{Bits, DIST_BASE, DIST_EXTRA, Huffman, LENGTH_BASE, LENGTH_EXTRA, fixed};
++use super::{Bits, DIST_BASE, DIST_EXTRA, FIXED, Huffman, LENGTH_BASE, LENGTH_EXTRA};
+ use crate::{Error, checksum::Adler32, reserve};
+ 
+ /// Why a streaming codec stopped. Only `Done` proves checksum-verified completion.
+@@ -55,8 +55,9 @@ pub struct Inflater {
+     window: usize,
+     history: Vec<u8>,
+     history_pos: usize,
+-    literals: Huffman,
+-    distances: Huffman,
++    // None borrows fixed tables; Some owns a dynamic table.
++    literals: Option<Huffman>,
++    distances: Option<Huffman>,
+     code_lengths: [u8; 19],
+     lengths: [u8; 318],
+     nl: usize,
+@@ -86,8 +87,8 @@ impl Inflater {
+             window: 32768,
+             history,
+             history_pos: 0,
+-            literals: Huffman::new(&[], false, true)?,
+-            distances: Huffman::new(&[], false, true)?,
++            literals: None,
++            distances: None,
+             code_lengths: [0; 19],
+             lengths: [0; 318],
+             nl: 0,
+@@ -262,7 +263,8 @@ impl Inflater {
+                         self.state = State::StoredLength;
+                     }
+                     1 => {
+-                        (self.literals, self.distances) = fixed();
++                        self.literals = None;
++                        self.distances = None;
+                         self.state = State::Codes;
+                     }
+                     2 => self.state = State::DynamicCounts,
+@@ -330,7 +332,7 @@ impl Inflater {
+                         self.code_lengths[ORDER[self.index]] = read!(3) as u8;
+                         self.index += 1;
+                     }
+-                    self.literals = Huffman::new(&self.code_lengths, true, false)?;
++                    self.literals = Some(Huffman::new(&self.code_lengths, true, false)?);
+                     self.index = 0;
+                     self.state = State::DynamicLengths;
+                 }
+@@ -339,13 +341,16 @@ impl Inflater {
+                         if self.lengths[256] == 0 {
+                             return Err(Error::Invalid("missing end of block code"));
+                         }
+-                        self.literals = Huffman::new(&self.lengths[..self.nl], false, false)?;
+-                        self.distances =
+-                            Huffman::new(&self.lengths[self.nl..self.nl + self.nd], false, true)?;
++                        self.literals = Some(Huffman::new(&self.lengths[..self.nl], false, false)?);
++                        self.distances = Some(Huffman::new(
++                            &self.lengths[self.nl..self.nl + self.nd],
++                            false,
++                            true,
++                        )?);
+                         self.state = State::Codes;
+                         continue;
+                     }
+-                    match symbol!(&self.literals) {
++                    match symbol!(self.literals.as_ref().unwrap()) {
+                         value @ 0..=15 => {
+                             self.lengths[self.index] = value as u8;
+                             self.index += 1;
+@@ -384,7 +389,7 @@ impl Inflater {
+                     self.state = State::DynamicLengths;
+                 }
+                 State::Codes => loop {
+-                    match symbol!(&self.literals) {
++                    match symbol!(self.literals.as_ref().unwrap_or(&FIXED.0)) {
+                         value @ 0..=255 => {
+                             if self.total_out == self.limit {
+                                 return Err(Error::LimitExceeded);
+@@ -413,7 +418,7 @@ impl Inflater {
+                             self.state = State::LengthExtra(index);
+                             let length = LENGTH_BASE[index] + read!(LENGTH_EXTRA[index]) as usize;
+                             self.state = State::DistanceCode(length);
+-                            let symbol = symbol!(&self.distances);
++                            let symbol = symbol!(self.distances.as_ref().unwrap_or(&FIXED.1));
+                             if symbol >= 30 {
+                                 return Err(Error::Invalid("reserved distance symbol"));
+                             }
+@@ -448,7 +453,7 @@ impl Inflater {
+                     )
+                 }
+                 State::DistanceCode(length) => {
+-                    let symbol = symbol!(&self.distances);
++                    let symbol = symbol!(self.distances.as_ref().unwrap_or(&FIXED.1));
+                     if symbol >= 30 {
+                         return Err(Error::Invalid("reserved distance symbol"));
+                     }

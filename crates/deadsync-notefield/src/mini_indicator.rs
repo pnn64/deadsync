@@ -112,6 +112,57 @@ pub struct ZmodMiniIndicatorOutput {
     pub color: [f32; 4],
 }
 
+/// Arrow Cloud's ghost comparison uses the saved run's actual progress.
+pub fn ghost_mini_indicator_output(difference: f64) -> ZmodMiniIndicatorOutput {
+    ZmodMiniIndicatorOutput {
+        text: if difference == 0.0 {
+            ZmodMiniIndicatorText::Percent(0.0)
+        } else {
+            ZmodMiniIndicatorText::SignedPercent {
+                value: difference.abs(),
+                negative: difference < 0.0,
+            }
+        },
+        color: if difference > 0.0 {
+            [0.0, 1.0, 0.0, 1.0]
+        } else if difference < 0.0 {
+            [1.0, 0.0, 0.0, 1.0]
+        } else {
+            [1.0; 4]
+        },
+    }
+}
+
+#[cfg(test)]
+mod ghost_tests {
+    use super::*;
+
+    #[test]
+    fn ghost_indicator_shows_ahead_behind_and_tied() {
+        let ahead = ghost_mini_indicator_output(0.12);
+        assert_eq!(
+            ahead.text,
+            ZmodMiniIndicatorText::SignedPercent {
+                value: 0.12,
+                negative: false
+            }
+        );
+        assert_eq!(ahead.color, [0.0, 1.0, 0.0, 1.0]);
+        let behind = ghost_mini_indicator_output(-0.34);
+        assert_eq!(
+            behind.text,
+            ZmodMiniIndicatorText::SignedPercent {
+                value: 0.34,
+                negative: true
+            }
+        );
+        assert_eq!(behind.color, [1.0, 0.0, 0.0, 1.0]);
+        let tied = ghost_mini_indicator_output(0.0);
+        assert_eq!(tied.text, ZmodMiniIndicatorText::Percent(0.0));
+        assert_eq!(tied.color, [1.0; 4]);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZmodComboColorStyle {
     None,
@@ -533,32 +584,23 @@ pub(crate) fn zmod_subtractive_points(
             .current_possible_dp
             .saturating_sub(progress.actual_dp)
             .max(0) as u32,
-        MiniIndicatorScoreType::Ex => progress
-            .white_count
-            .saturating_add(progress.w2.saturating_mul(3))
-            .saturating_add(progress.w3.saturating_mul(5))
-            .saturating_add(
-                progress
-                    .w4
-                    .saturating_add(progress.w5)
-                    .saturating_add(progress.miss)
-                    .saturating_mul(7),
-            )
-            .saturating_add(progress.let_go.saturating_mul(2))
-            .saturating_add(progress.mines_hit.saturating_mul(2)),
-        MiniIndicatorScoreType::HardEx => progress
-            .white_10ms_count
-            .saturating_add(progress.w2.saturating_mul(5))
-            .saturating_add(
-                progress
-                    .w3
-                    .saturating_add(progress.w4)
-                    .saturating_add(progress.w5)
-                    .saturating_add(progress.miss)
-                    .saturating_mul(7),
-            )
-            .saturating_add(progress.let_go.saturating_mul(2))
-            .saturating_add(progress.mines_hit.saturating_mul(2)),
+        // All weights are positive, so one final saturation preserves every
+        // intermediate saturation. Even 38 * u32::MAX fits comfortably in u64.
+        MiniIndicatorScoreType::Ex => (u64::from(progress.white_count)
+            + u64::from(progress.w2) * 3
+            + u64::from(progress.w3) * 5
+            + (u64::from(progress.w4) + u64::from(progress.w5) + u64::from(progress.miss)) * 7
+            + (u64::from(progress.let_go) + u64::from(progress.mines_hit)) * 2)
+            .min(u64::from(u32::MAX)) as u32,
+        MiniIndicatorScoreType::HardEx => (u64::from(progress.white_10ms_count)
+            + u64::from(progress.w2) * 5
+            + (u64::from(progress.w3)
+                + u64::from(progress.w4)
+                + u64::from(progress.w5)
+                + u64::from(progress.miss))
+                * 7
+            + (u64::from(progress.let_go) + u64::from(progress.mines_hit)) * 2)
+            .min(u64::from(u32::MAX)) as u32,
     }
 }
 
@@ -814,7 +856,8 @@ pub(crate) fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -
     let i = h6.floor() as i32;
     let f = h6 - i as f32;
     let q = 1.0 - f;
-    match i.rem_euclid(6) {
+    // A finite fractional hue puts i in -6..=5; a NaN casts to zero.
+    match if i < 0 { i + 6 } else { i } {
         0 => [1.0, f, 0.0, 1.0],
         1 => [q, 1.0, 0.0, 1.0],
         2 => [0.0, 1.0, f, 1.0],
@@ -862,6 +905,15 @@ pub fn zmod_resolved_combo_color(params: ZmodComboColorParams) -> [f32; 4] {
         }
         ZmodComboColorStyle::Glow => {
             let grade = zmod_combo_grade(params).unwrap_or(JudgeGrade::Miss);
+            // A white pair stays white for every finite phase. Keep the original
+            // calculation when division overflows or elapsed time is nonfinite.
+            if !matches!(
+                grade,
+                JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+            ) && (params.elapsed_s / 0.8).is_finite()
+            {
+                return [1.0; 4];
+            }
             let (a, b) = zmod_combo_glow_pair(grade, params.quint_active);
             zmod_combo_glow_color(a, b, params.elapsed_s)
         }
@@ -953,3 +1005,7 @@ mod lookup_tests {
         assert_eq!(std::mem::size_of::<BrokenRunSpan>(), 8);
     }
 }
+
+#[cfg(test)]
+#[path = "mini_indicator_performance.rs"]
+mod mini_indicator_performance;

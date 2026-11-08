@@ -1,0 +1,555 @@
+{
+  "baseline_png_commit": "e4f432fb647aa8d5ecd6228bb56bdfa9b7626354",
+  "change": "Buffered literal batches over prefetched complete primary codes; existing independent field and suspension fixtures unchanged",
+  "commands": [
+    {
+      "label": "Strict main lint",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.206
+    },
+    {
+      "label": "Strict fuzz lint",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "crates/deadlib-image/png/fuzz/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.798
+    },
+    {
+      "label": "Scoped formatting",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\src\\zlib.rs"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.152
+    },
+    {
+      "label": "Normal release suite",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 218.996
+    },
+    {
+      "label": "C zlib Huffman batch",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "huffman",
+        "c_zlib_huffman_oracle",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.701
+    },
+    {
+      "label": "Independent offline Huffman audit",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1",
+        "-LogPath",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\literal-block-independent.log",
+        "-Test",
+        "huffman"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 33.919
+    }
+  ],
+  "production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "bd65e7db914d8be75d46040763988ddb57cd3edb22b33d23582542a1d4fc8906"
+    }
+  ],
+  "test_source_sha256": [
+    {
+      "path": "tests/ancillary_order.rs",
+      "sha256": "7995599d053d887606f80691d3dd93618057584fc5d9519ce758d9862255c7c4"
+    },
+    {
+      "path": "tests/animation_fields.rs",
+      "sha256": "dcce2f8db2ed49319e25c917c11e7341aeb0c286e785e4deb4b4c3e07f3a7fe1"
+    },
+    {
+      "path": "tests/apng.rs",
+      "sha256": "71334f42986e02aee9a7b186801b98eb34b78be52c92ae39f53926760492b9c9"
+    },
+    {
+      "path": "tests/apng_recovery.rs",
+      "sha256": "7ff2684839663f5eabe97c01b06f1238bdd9425f601e868adbca7fd7f561554e"
+    },
+    {
+      "path": "tests/apng_rendered.rs",
+      "sha256": "3739de3c13a88f4356b7de2ccd24deeb3b54ee73a450e2488110d97e2d545463"
+    },
+    {
+      "path": "tests/chunks.rs",
+      "sha256": "fcc32b5dd03500c701772ed0aac0675a3965bd3a77e2387ee95b24cb242e6a74"
+    },
+    {
+      "path": "tests/cicp.rs",
+      "sha256": "97e555a5a49c4f078a3eb8a2934719933ce77e11886b07d278abd792d576fb78"
+    },
+    {
+      "path": "tests/compositing.rs",
+      "sha256": "c40e51769cf0693c0a8def9eac6015908fc43d93db61c8b75a20d9986e603bef"
+    },
+    {
+      "path": "tests/compositor_precision.rs",
+      "sha256": "901839f23c96cdcbab742c1e64e6391a200a644be70bc20795e18d3382d55e1a"
+    },
+    {
+      "path": "tests/compression.rs",
+      "sha256": "ee200fe43fd6699602ac9c45dcb3c3094a8019d947105946eac31cfc8efa8836"
+    },
+    {
+      "path": "tests/decoder_boundaries.rs",
+      "sha256": "baac8b9f45860f6515e2b865e786567c269a51e0033108d9cbab31a8a492d375"
+    },
+    {
+      "path": "tests/deflate_prefix.rs",
+      "sha256": "ed97bb48d91f774bb3c9a562a214cc32e81203b0c8541043506c29f972b5afbb"
+    },
+    {
+      "path": "tests/deflate_stream.rs",
+      "sha256": "8858b445b48996e7f90a51ea90da10deb2b7370c40b2290aada623b6004fe121"
+    },
+    {
+      "path": "tests/hdr.rs",
+      "sha256": "b917cc0630e15c655908c5e3f571f49a800f2700cb750d956582deb1bc80eab0"
+    },
+    {
+      "path": "tests/huffman.rs",
+      "sha256": "b0231b1d2044dbfc845fc8d2debf3df098dd69b899b262e18a767a03b7f5bfbd"
+    },
+    {
+      "path": "tests/inflate_stream.rs",
+      "sha256": "a44545c1528c6c4064311e7d96820f2ea0b9eba904edc95a74001e4bb7a57178"
+    },
+    {
+      "path": "tests/keywords.rs",
+      "sha256": "6c079a602d64d442ab3a0d7039cfde050b0173ca9b3b48e4e76114a391413a12"
+    },
+    {
+      "path": "tests/language_extensions.rs",
+      "sha256": "8ac9fc108cc671cdbee0ad0177e118dda37aa98f697ea7853d9dd91efdf237a4"
+    },
+    {
+      "path": "tests/language_registry.rs",
+      "sha256": "7dfaf5764f9c489bb369610219a595b4b1127cbf40055f136f086f14fb46ce28"
+    },
+    {
+      "path": "tests/libpng.rs",
+      "sha256": "1b0cd193901555eb033eefd3de20fc793936813175570babbfaab5b3b67bb8d9"
+    },
+    {
+      "path": "tests/malformed.rs",
+      "sha256": "22fbcd61a1d3bcc58a41e2f7ef37a6ca946fb1187c8ccf44afe730f18686d79c"
+    },
+    {
+      "path": "tests/metadata.rs",
+      "sha256": "00d534872c76207c058f2d540af730e5ce28c8f28075bb0e0d202023ed9106f3"
+    },
+    {
+      "path": "tests/metadata_fields.rs",
+      "sha256": "77156d0da0d780fefc763429f3a6821fca8e4376b2c2e7ef0fc5e4bcc5b1f685"
+    },
+    {
+      "path": "tests/palette.rs",
+      "sha256": "3792c08735a7ecb2c9552cfd5a94a469da3d24645b9a82dcd02b0e609645b141"
+    },
+    {
+      "path": "tests/png_stream.rs",
+      "sha256": "dee94e79a175c77bf9f9f0f72b1499e34b1a4f205c16ec4f66e28f28bd4f417f"
+    },
+    {
+      "path": "tests/png_write.rs",
+      "sha256": "599d318ee504d03eec8da648ae1366cff8f7142ec855b6e6f0f5b13f22391e40"
+    },
+    {
+      "path": "tests/pngsuite.rs",
+      "sha256": "7b7868f8f7d1b1bc220029360c2608e5413d18491d43ae66215713a8512d6038"
+    },
+    {
+      "path": "tests/primary_pairs.rs",
+      "sha256": "ec9a1a0deb7e1a4865dd6abb74e9b4fe09ecdb4b3c6d8bfffbd6f67cc1cbbb09"
+    },
+    {
+      "path": "tests/profiles.rs",
+      "sha256": "894358c70ea125563ed5ff00dddf593a395f0d6caa8dd20d61b95e8222d97747"
+    },
+    {
+      "path": "tests/reference_samples.rs",
+      "sha256": "9a901d97c8158841c5083b9a5ac977be2af72c72d0fd39a96dbdffa14e53e36a"
+    },
+    {
+      "path": "tests/scalar_fields.rs",
+      "sha256": "a2bfb6a428d4eb5d29c36aada71858cc9fa5d216308a0c09ea8f007f7983ee09"
+    },
+    {
+      "path": "tests/static_png.rs",
+      "sha256": "5a6c261e7b9c8ed04bbf5cf720e6a1305204f7e535928903b496f70cf07f01ba"
+    },
+    {
+      "path": "tests/stream_literals.rs",
+      "sha256": "343c529786bbc359801a5d150a5a424e8ff424e63fa0d7d24999af136600f22d"
+    },
+    {
+      "path": "tests/support/ancillary_order.rs",
+      "sha256": "fc4147849cef800586ab11aed5f856340fad0096d668208c46e5d74430551ba4"
+    },
+    {
+      "path": "tests/support/animation_fields.rs",
+      "sha256": "5de0c79402e5fc0131d962ff4a39d44be3da8c7515d18b5b4d82bda6fb5f687b"
+    },
+    {
+      "path": "tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "tests/support/budgets.rs",
+      "sha256": "0d54c20ecead7dbc072de1c39b9fb8699554a493a5d580b41a5a668b0c5c3776"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "e6800bf3d51a7d3e83bf421a65c391b818b99fb0f7c3bb9119b0e435ec8206e0"
+    },
+    {
+      "path": "tests/support/compositor.rs",
+      "sha256": "5bb6367253208e9ff62c6885dd9a38c33531ff6eb7590b3d0fbd544e1f858d0d"
+    },
+    {
+      "path": "tests/support/hdr.rs",
+      "sha256": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720"
+    },
+    {
+      "path": "tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "tests/support/language_extensions.rs",
+      "sha256": "39b37ccad5a351a8ab208b0849c24c64012c603fca2a494f04b8effbda81ffd6"
+    },
+    {
+      "path": "tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "tests/support/prefix.rs",
+      "sha256": "f82165432598200efc28beb20fc398b94f6ad360c3ef48d5b95291166373ca78"
+    },
+    {
+      "path": "tests/support/primary_pairs.rs",
+      "sha256": "8daaa28f2e4405c936aff6442613d7c665dfe9710cea3783d60fb4c19a34bd6f"
+    },
+    {
+      "path": "tests/support/resource.rs",
+      "sha256": "001ea7a8d0dc4a60498ccc0e23af0d9d922b7be05ce9cef8cc543cc073608d95"
+    },
+    {
+      "path": "tests/support/scalar_fields.rs",
+      "sha256": "c5194f70ab4117fa35aa8635b6040a2dea2b7c9aac254a592a2d05dae07c47fa"
+    },
+    {
+      "path": "tests/support/stream_literals.rs",
+      "sha256": "d89c0f91afe690d9342282defe0de37b94c7adf6f76c206b8725d3603a836e70"
+    },
+    {
+      "path": "tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "tests/text.rs",
+      "sha256": "cbee7a82cdfe9f3421fb7fdc8e22241ff8f885bd37ef1a1f162da9b6ecbc5521"
+    },
+    {
+      "path": "tests/text_body.rs",
+      "sha256": "835470b8333598aad7a31435f5ee425b74692cd1c832841f68f43d8c969f4266"
+    },
+    {
+      "path": "tests/zlib_headers.rs",
+      "sha256": "5082c3855a5dc1816cb2ec62bda5939d13cee2ed871af2aabb546b5f6a30b8e4"
+    },
+    {
+      "path": "examples/compositor_fixtures.rs",
+      "sha256": "30f321d0bcf1f9a4ab7d34d7c7e07186b423bec192008f07d52a3ec869f0dbe6"
+    },
+    {
+      "path": "examples/corpus_bench.rs",
+      "sha256": "94b82dffff7c5ffcb499a6d3bb2d2c7750e7a5ac2bac991c346721efda5b2afd"
+    },
+    {
+      "path": "examples/decode_bench.rs",
+      "sha256": "c30baae289a56086d5bb51b6da5ca04d303977a229c75b6118b712b1ba8ebc06"
+    },
+    {
+      "path": "examples/decode_profile.rs",
+      "sha256": "bc0766b89c2fc30cb40b84092b4c9444306d89eaa434be396b8441d1f1405f71"
+    },
+    {
+      "path": "examples/filter_bench.rs",
+      "sha256": "5c4c937b5dd482e64bc6e33b5dadaaaa7e2bdbf6f86077b4a8ba8ff69643a7a2"
+    },
+    {
+      "path": "examples/inflate_bench.rs",
+      "sha256": "86cd7222916bb6d6e0a2b4cefdff92391de69e25d063c73d3533623a48602dbb"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "5aec5c05990dcf30e890547c22d8d87077fb2fd02f885b638da07baf46aea7ae"
+    },
+    {
+      "path": "fuzz/fuzz_targets/compositor.rs",
+      "sha256": "e5e6573589a60ad182e02a713886171c8a0a7ab83f5598e17838b4b1e7de95bf"
+    },
+    {
+      "path": "fuzz/fuzz_targets/decode.rs",
+      "sha256": "4c372f567fca2803a70f44c2c38cf6f0436757fd8f3107623251d23e7d43c44b"
+    },
+    {
+      "path": "fuzz/fuzz_targets/decoder_limits.rs",
+      "sha256": "70bb7f207ddf9ab20dc0fb3c92ba16f57e6fbb8d6cc1e04be43359b3d6a1a257"
+    },
+    {
+      "path": "fuzz/fuzz_targets/deflate_stream.rs",
+      "sha256": "aa137e57e530c0c998a174395a08f3657331a7a302efbeb7c86376cd35824783"
+    },
+    {
+      "path": "fuzz/fuzz_targets/encode_stream.rs",
+      "sha256": "9de7cddbe4bc47c8d50dff62c1cd0a4c008cdf8e0449fcd3cae6a73ab90b6b2a"
+    },
+    {
+      "path": "fuzz/fuzz_targets/huffman.rs",
+      "sha256": "d625611b80e644192c27dd9f7b8065cfb78515cc55236203985ae4fd9d5c29ca"
+    },
+    {
+      "path": "fuzz/fuzz_targets/inflate_stream.rs",
+      "sha256": "bf92067863d81677b73d7ed6e9bc9d9985660c28e8a64bf8e8e9812578e7058a"
+    },
+    {
+      "path": "fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "706390b3fbcb82f602da089f73e19ce583f97810aa92902e1e752cc1e1f31281"
+    },
+    {
+      "path": "fuzz/fuzz_targets/profiles.rs",
+      "sha256": "b26e92197b2ef55edd18cd15c0a68974c41d322767728ab2f2e4620351201d9a"
+    },
+    {
+      "path": "fuzz/fuzz_targets/reference_samples.rs",
+      "sha256": "4441466a9dae550a51d4512bcfe49d143d1095b09e3bedcbc0d174fa67bd85f0"
+    },
+    {
+      "path": "fuzz/fuzz_targets/text_body.rs",
+      "sha256": "65fb88fb2ba33e8151c27ff4696693209c5d5be8033ad0e0a4639604882be497"
+    },
+    {
+      "path": "fuzz/fuzz_targets/zlib.rs",
+      "sha256": "a9edde7a34881d950afad6d086fda767f2602359f8eedb410b987a8deb00ec5c"
+    },
+    {
+      "path": "tests/oracle/oracle.c",
+      "sha256": "2cc24303f0a60a1d1df6316f5e5b7b5b3689df53135c29a37a2b905766469973"
+    },
+    {
+      "path": "tests/oracle/CMakeLists.txt",
+      "sha256": "95dde2e123bd4bdb9a76805ff8dad033e7f91fc7f43314a1b14834174adec94a"
+    },
+    {
+      "path": "fuzz/scripts/archive_native_seeds.py",
+      "sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610"
+    },
+    {
+      "path": "scripts/verify_independent.ps1",
+      "sha256": "ab91a7c3fc59c7a92f4b4a15a2957a32c13c1819d201a19f61c07f6db807cc6c"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "b64850a190b1ba643e123d73effc7895f7f091467b80fbcdb1816c93b27f58bb"
+    },
+    {
+      "path": "fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    }
+  ],
+  "shared_source_sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3",
+  "runner_sha256": "3d2f76d927b4f85d2cdd7d75002ac361a9b43f97ab510b4653f9c41686f6773f",
+  "oracle_binary": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-scalar-fields-build\\Release\\deadlib_png_oracle.exe",
+  "oracle_sha256": "0d513eccf7790d73aba151e5284481c5754c8e60d35487f2751764b2afca3479",
+  "libpng_commit": "2b978915d82377df13fcbb1fb56660195ded868a",
+  "standalone_scope": "Fresh complete source/fixture/example copy; run the comprehensive huffman target offline and print the production dependency tree. Full current package tests run in release mode.",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "fixture_baseline": {
+    "path": "stream-copy-validation.json",
+    "sha256": "a5dd09719b411f1b0103f613b32523b8e2fe6c94ca8c6f0d136267726dd10ce0",
+    "all_test_helper_tool_inputs_unchanged": true
+  },
+  "independent_workspace": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f",
+  "final_source_hashes_verified": true,
+  "repository_finalization": {
+    "normal_release_tests": {
+      "passed": 134,
+      "failed": 0,
+      "ignored": 19
+    },
+    "standalone_offline_huffman_target": {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 1
+    },
+    "copied_files_verified": 885,
+    "all_copied_files_match": true,
+    "production_png_files_changed": [
+      "src/zlib.rs"
+    ],
+    "production_png_files_unchanged": 20,
+    "all_test_helper_tool_inputs_unchanged": true,
+    "c_zlib_batch": {
+      "cases": 19645,
+      "successful_outputs": 3091,
+      "error_records": 16554,
+      "published_range_policy_rejections": 68
+    },
+    "new_successful_sanitizer_executions": 70000,
+    "historical_successful_sanitizer_executions": 1760852,
+    "logs": [
+      {
+        "path": "literal-block-validation.log",
+        "as_run_sha256": "5e2bcbcc525e536bdd0a143fffcd9b8e2f127d8e79d186bdcd90d8992ad2d918",
+        "repository_sha256": "ea8a008145c3d3b1a2d25260471e86895d11b00d6e0b1972842dd0dda831cecf",
+        "normalization": "CRLF to LF and terminal empty separator removal only"
+      },
+      {
+        "path": "literal-block-independent.log",
+        "as_run_sha256": "7882e042a3d51e9721cc92ded2fef6986f9daf7b097c25801d0abd7b81aba9f8",
+        "repository_sha256": "7882e042a3d51e9721cc92ded2fef6986f9daf7b097c25801d0abd7b81aba9f8",
+        "normalization": "CRLF to LF and terminal empty separator removal only"
+      }
+    ],
+    "finalizer_sha256": "6cc1e8a35039e167b49d3901ef722ccc314cfa9825000440cbd90de6eb22dd47"
+  }
+}

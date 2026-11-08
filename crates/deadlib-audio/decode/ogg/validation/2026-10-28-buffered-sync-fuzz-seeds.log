@@ -1,0 +1,6 @@
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\fuzz)
+    Finished `release` profile [optimized] target(s) in 6.18s
+     Running `crates\deadlib-audio\decode\fuzz\target\release\seed.exe C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-buffered-sync-final-20261028\corpus`
+Fuzz seeds retained at C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-buffered-sync-final-20261028\corpus

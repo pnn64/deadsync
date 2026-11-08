@@ -1,0 +1,1494 @@
+{
+  "ffmpeg": "ffmpeg version 7.1-full_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+  "dr_wav": {
+    "commit": "a466dbe88fe2576d46c43877d602f3d66b8561a7",
+    "header_sha256": "34109aa9605f657d35c02f853f283d1f231883d9397e6a24b6504cc05cc1cafd",
+    "binary_sha256": "77dc811109be6e0928fcd3361121ca13c0f22c78dd688bdffa1c5178c06507fb",
+    "driver_sha256": "fa8a0416113204868733a1d889a116c8e3b1a6a8efb5a55459c36769aa8d9cb4"
+  },
+  "libsndfile": "1.2.2",
+  "soundfile": "0.13.1",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "binary_sha256": "c5d48abfa973bb428d5d3146e4b7226284b8e0aa8cdf97284ceaec5ab1fe5563",
+  "sources": {
+    "src/adpcm.rs": "f629aac3db69766ca754373cd613f5a1dcae3c8fa9a3a557a559a25f51f811df",
+    "src/container.rs": "cfb08cf9d64828ff5e78c5b1ee1493338bd2800bfa6b65bf6d7816f1edcbdf1c",
+    "src/encode.rs": "5e7dd8516a648ec6be5d8268f32530d4d3d879cb73d93e6ca53a23888a3b5b9b",
+    "src/format.rs": "2dfeac755edae4aee38301b77dd5b1cdbc99d385b0a1429d9a9564577f6c2b1c",
+    "src/lib.rs": "bdc013ca6a810bfef12969d05811864e94370aba4e2feb20536e167abcd97d97",
+    "src/pcm.rs": "ffc311515aed2bb62471b20036f3743958d049b9ba7e76fa9dbd71e452d20111",
+    "src/reader.rs": "b3fa25fbff4b6510a4ad26f6848929e5246bc035f3b6a9e79db88e3430800dd9",
+    "src/stream.rs": "52f0895d47c3362e8d3de2c1a67f0f2af0d69d976b8b2c537ad1ce0fde803ce9"
+  },
+  "validation_sources": {
+    "Cargo.toml": "f208b0591329bf3f3b3c40d5aae0632d902c8a6476d03ec3707d80a02a863acd",
+    "examples/adpcm.rs": "d475ef56c35f6e9cf542d83b6116f0ab2fddc78ba47f03637006717257efb80f",
+    "tests/reference_adpcm.py": "c38afe56fba972716aba30a2b8d434457168aa96bccf7877a304d099d2aa6115",
+    "tests/reference_support.py": "4ad95fb1be267803f0e6d655bffe664d0e143a18fccde5edd89de4d23ad92df4",
+    "tests/oracle/dr_wav.c": "fa8a0416113204868733a1d889a116c8e3b1a6a8efb5a55459c36769aa8d9cb4"
+  },
+  "cases": [
+    {
+      "name": "ima-synthetic-1",
+      "fixture_sha256": "26b79980a4c0b8d12fb82d6fa695b881215a83abe48c138af6c003104d4599ca",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "ba253a7836ea196d211d797a62ab84904f55ce975f99b90934fe73b88ba9aeac",
+      "actual_samples": 38448,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "6888f3b9a839f0d182a58f8e31e745b1b7f0744b57aa9aec95a40db4e507fd67",
+          "full_samples": 38448,
+          "fact_trimmed_sha256": "6888f3b9a839f0d182a58f8e31e745b1b7f0744b57aa9aec95a40db4e507fd67",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 10,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "ba253a7836ea196d211d797a62ab84904f55ce975f99b90934fe73b88ba9aeac",
+          "full_samples": 38448,
+          "fact_trimmed_sha256": "ba253a7836ea196d211d797a62ab84904f55ce975f99b90934fe73b88ba9aeac",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "ba253a7836ea196d211d797a62ab84904f55ce975f99b90934fe73b88ba9aeac",
+          "full_samples": 38448,
+          "fact_trimmed_sha256": "ba253a7836ea196d211d797a62ab84904f55ce975f99b90934fe73b88ba9aeac",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "ms-synthetic-1",
+      "fixture_sha256": "d6f2896042ff6c4b14b9742ede862210c4f340c8f72274ce1ffa7887756ec3a9",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "74e91877c7f9d7c06e56856c159d3e8151378b7e862832064361de94f6adba0a",
+      "actual_samples": 60928,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "74e91877c7f9d7c06e56856c159d3e8151378b7e862832064361de94f6adba0a",
+          "full_samples": 60928,
+          "fact_trimmed_sha256": "74e91877c7f9d7c06e56856c159d3e8151378b7e862832064361de94f6adba0a",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "dr_wav": {
+          "full_sha256": "798618543cce2055a4c68b3661b81dd730673590fa6f72ff0e980e0a634d4b80",
+          "full_samples": 60928,
+          "fact_trimmed_sha256": "798618543cce2055a4c68b3661b81dd730673590fa6f72ff0e980e0a634d4b80",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 26117,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "4d69c050c8a4038e94fc1c3d157ba92f07f240f209cea20f775e3168bdf587e6",
+          "full_samples": 60928,
+          "fact_trimmed_sha256": "4d69c050c8a4038e94fc1c3d157ba92f07f240f209cea20f775e3168bdf587e6",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 66,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "ima-synthetic-2",
+      "fixture_sha256": "2c11566b614dcdd964276305903db82f1085288cb8978483bbb058137b9eec3b",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "8adadd06417fe98b043210dff47b45e60e55f67025916a10482ff0e8afc1945d",
+      "actual_samples": 76896,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "340c5bbd1addb85ddc4cc3c4c209bee49499f2acfccdad7967337efea35e1767",
+          "full_samples": 76896,
+          "fact_trimmed_sha256": "340c5bbd1addb85ddc4cc3c4c209bee49499f2acfccdad7967337efea35e1767",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 20,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "8adadd06417fe98b043210dff47b45e60e55f67025916a10482ff0e8afc1945d",
+          "full_samples": 76896,
+          "fact_trimmed_sha256": "8adadd06417fe98b043210dff47b45e60e55f67025916a10482ff0e8afc1945d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "8adadd06417fe98b043210dff47b45e60e55f67025916a10482ff0e8afc1945d",
+          "full_samples": 76896,
+          "fact_trimmed_sha256": "8adadd06417fe98b043210dff47b45e60e55f67025916a10482ff0e8afc1945d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "ms-synthetic-2",
+      "fixture_sha256": "7391c7f8102b8eb193f272b6f46de901e9122d8cb0d5d38e0caefcccecf21f59",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "39a9abe411982c841d6a06bcf5aa08a1a7bd9899286706008da75b2d5465ae12",
+      "actual_samples": 121856,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "39a9abe411982c841d6a06bcf5aa08a1a7bd9899286706008da75b2d5465ae12",
+          "full_samples": 121856,
+          "fact_trimmed_sha256": "39a9abe411982c841d6a06bcf5aa08a1a7bd9899286706008da75b2d5465ae12",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "dr_wav": {
+          "full_sha256": "10c5c602af94d4f9c3cb7a33172aff360f131675feee5df49ea0b7df69439d3c",
+          "full_samples": 121856,
+          "fact_trimmed_sha256": "10c5c602af94d4f9c3cb7a33172aff360f131675feee5df49ea0b7df69439d3c",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 52234,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "b24ba2e3af2e212bf04c94d1708738ade175578e69ee9452a484934e97920942",
+          "full_samples": 121856,
+          "fact_trimmed_sha256": "b24ba2e3af2e212bf04c94d1708738ade175578e69ee9452a484934e97920942",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 134,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-17-sine",
+      "fixture_sha256": "6bbe8c0a64aaec7f7ec847a67ccaf612a35261cc95930dd1fa0d56ec9375b194",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "8ebda3c565e54952bb3d6fc64275cf3213752fae32706c7423b86ed53377b531",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "4f52007f3dbbc0f8b5193a08583ac6d9bfdb6863855bc1101aba151832594783",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "8ebda3c565e54952bb3d6fc64275cf3213752fae32706c7423b86ed53377b531",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "8ebda3c565e54952bb3d6fc64275cf3213752fae32706c7423b86ed53377b531",
+          "full_samples": 17,
+          "fact_trimmed_sha256": "8ebda3c565e54952bb3d6fc64275cf3213752fae32706c7423b86ed53377b531",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "4f52007f3dbbc0f8b5193a08583ac6d9bfdb6863855bc1101aba151832594783",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "8ebda3c565e54952bb3d6fc64275cf3213752fae32706c7423b86ed53377b531",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-17-noise",
+      "fixture_sha256": "56987e2034f2d6ef2f8a5d792aef54e0b46e6a56385e71bb9e149ef602fba624",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "0cd8198af9e479810c6c6e4cf7b14dcf41770ec0b610cce52b0a5bc70b3a4003",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "e0de4b6bfc1e2e5a996428108346905f7c8d8494c3a9a8d035854f08b0acc44b",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "0cd8198af9e479810c6c6e4cf7b14dcf41770ec0b610cce52b0a5bc70b3a4003",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "0cd8198af9e479810c6c6e4cf7b14dcf41770ec0b610cce52b0a5bc70b3a4003",
+          "full_samples": 17,
+          "fact_trimmed_sha256": "0cd8198af9e479810c6c6e4cf7b14dcf41770ec0b610cce52b0a5bc70b3a4003",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "e0de4b6bfc1e2e5a996428108346905f7c8d8494c3a9a8d035854f08b0acc44b",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "0cd8198af9e479810c6c6e4cf7b14dcf41770ec0b610cce52b0a5bc70b3a4003",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-17-impulses",
+      "fixture_sha256": "ea1b6e133ff9f9732f2ac495a1459fd2dc9761101ac3e10e6340be8ba2b749c7",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "1b07af475412b20454d05f830ef93e8899083fdfbfc0d27c3495da7a611681ca",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "842b8f7072947949c0f244764ab8d2bbc232250e44874ec0f6922d1d096e9743",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "1b07af475412b20454d05f830ef93e8899083fdfbfc0d27c3495da7a611681ca",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "1b07af475412b20454d05f830ef93e8899083fdfbfc0d27c3495da7a611681ca",
+          "full_samples": 17,
+          "fact_trimmed_sha256": "1b07af475412b20454d05f830ef93e8899083fdfbfc0d27c3495da7a611681ca",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "842b8f7072947949c0f244764ab8d2bbc232250e44874ec0f6922d1d096e9743",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "1b07af475412b20454d05f830ef93e8899083fdfbfc0d27c3495da7a611681ca",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-1025-sine",
+      "fixture_sha256": "34c90c2f95dc0c9d6fe6407ce094d1d3b0fe2c965208a2300d434c8929aded71",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "7d1b0e6d4b857506c4060e6b58d2d31baf6d4d0777c97a0156f677f9e536f509",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "071a30c2b4a452fd38ee7fb439a44525b2c0d8bddaaf9587165d0435c1d21acb",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "7d1b0e6d4b857506c4060e6b58d2d31baf6d4d0777c97a0156f677f9e536f509",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "7d1b0e6d4b857506c4060e6b58d2d31baf6d4d0777c97a0156f677f9e536f509",
+          "full_samples": 1025,
+          "fact_trimmed_sha256": "7d1b0e6d4b857506c4060e6b58d2d31baf6d4d0777c97a0156f677f9e536f509",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "071a30c2b4a452fd38ee7fb439a44525b2c0d8bddaaf9587165d0435c1d21acb",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "7d1b0e6d4b857506c4060e6b58d2d31baf6d4d0777c97a0156f677f9e536f509",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-1025-noise",
+      "fixture_sha256": "9923dc9709aa4c806041545564ee49f2ad9ad2ba7d1e6d0225fd7dd6d830408e",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "c7da3611dd1a53f94f9d7ee736d4ae8b725e1627cfdb2d9c0cba63b26d5e9c21",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "b53253ac9c42be582f2edd6ced4cb0ff97d82f0f54ce6bec1bb6e619caa51623",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "c7da3611dd1a53f94f9d7ee736d4ae8b725e1627cfdb2d9c0cba63b26d5e9c21",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "c7da3611dd1a53f94f9d7ee736d4ae8b725e1627cfdb2d9c0cba63b26d5e9c21",
+          "full_samples": 1025,
+          "fact_trimmed_sha256": "c7da3611dd1a53f94f9d7ee736d4ae8b725e1627cfdb2d9c0cba63b26d5e9c21",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "b53253ac9c42be582f2edd6ced4cb0ff97d82f0f54ce6bec1bb6e619caa51623",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "c7da3611dd1a53f94f9d7ee736d4ae8b725e1627cfdb2d9c0cba63b26d5e9c21",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-1025-impulses",
+      "fixture_sha256": "389662251ff1be398606fe6c33555b1cedccbcc0b821b6878680476670d393c7",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "0d3dd310332f8bcd0ae5958128d072be120e5ab33239cd7d3fa796a235e25c40",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "d92668f84fac9c1c4cb86ea9f7f5dc016bd58a529cfd5c554234b38fa30ad873",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "0d3dd310332f8bcd0ae5958128d072be120e5ab33239cd7d3fa796a235e25c40",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "0d3dd310332f8bcd0ae5958128d072be120e5ab33239cd7d3fa796a235e25c40",
+          "full_samples": 1025,
+          "fact_trimmed_sha256": "0d3dd310332f8bcd0ae5958128d072be120e5ab33239cd7d3fa796a235e25c40",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "d92668f84fac9c1c4cb86ea9f7f5dc016bd58a529cfd5c554234b38fa30ad873",
+          "full_samples": 2036,
+          "fact_trimmed_sha256": "0d3dd310332f8bcd0ae5958128d072be120e5ab33239cd7d3fa796a235e25c40",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-4097-sine",
+      "fixture_sha256": "cab14acb148368d388b084f70d8c96edf22e6eb78971558835d2f012d193b05d",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "603149b3d4eecc83676c13e32bbd4d7701aff31461d11cd4116b2575557043fd",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "451693e300706cdd275d13f1c231eb141d628e29ef4525c8a772f14ed91baf69",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "603149b3d4eecc83676c13e32bbd4d7701aff31461d11cd4116b2575557043fd",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "603149b3d4eecc83676c13e32bbd4d7701aff31461d11cd4116b2575557043fd",
+          "full_samples": 4097,
+          "fact_trimmed_sha256": "603149b3d4eecc83676c13e32bbd4d7701aff31461d11cd4116b2575557043fd",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "451693e300706cdd275d13f1c231eb141d628e29ef4525c8a772f14ed91baf69",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "603149b3d4eecc83676c13e32bbd4d7701aff31461d11cd4116b2575557043fd",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-4097-noise",
+      "fixture_sha256": "8cd0b1dd91703c743b6129531b90391e2182a979da48d74b10b8de34511d43e7",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "01219d385c11d14a89acf19cc1fe2bda64f14262458443de4a77f9efccd2ebc4",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "0281b8bb613b1aa670e9401c7d726e6e49ed229a757e20f6e0230c1017e4f3fb",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "01219d385c11d14a89acf19cc1fe2bda64f14262458443de4a77f9efccd2ebc4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "01219d385c11d14a89acf19cc1fe2bda64f14262458443de4a77f9efccd2ebc4",
+          "full_samples": 4097,
+          "fact_trimmed_sha256": "01219d385c11d14a89acf19cc1fe2bda64f14262458443de4a77f9efccd2ebc4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "0281b8bb613b1aa670e9401c7d726e6e49ed229a757e20f6e0230c1017e4f3fb",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "01219d385c11d14a89acf19cc1fe2bda64f14262458443de4a77f9efccd2ebc4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-1-4097-impulses",
+      "fixture_sha256": "09b8440197a42a445ff856b03cccda831884c70504aa1d6f07b15349826cb4b1",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "d758092835793d0c69513de6b486a2e1e0741663890960d65dffe1a4bd722537",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "8f5a5e465750cac2684a3165cba53e2700883ff472a44ff170b92a2af62fcdca",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "d758092835793d0c69513de6b486a2e1e0741663890960d65dffe1a4bd722537",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "d758092835793d0c69513de6b486a2e1e0741663890960d65dffe1a4bd722537",
+          "full_samples": 4097,
+          "fact_trimmed_sha256": "d758092835793d0c69513de6b486a2e1e0741663890960d65dffe1a4bd722537",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "8f5a5e465750cac2684a3165cba53e2700883ff472a44ff170b92a2af62fcdca",
+          "full_samples": 6108,
+          "fact_trimmed_sha256": "d758092835793d0c69513de6b486a2e1e0741663890960d65dffe1a4bd722537",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-17-sine",
+      "fixture_sha256": "306ec0ef0749168f48aad5c36df07e973edebc70ef3b2ea60c252255b322041f",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "87515ea57911e793d6fe8755aefac1a67dd8b7bd7026fb60df3d02000983cef7",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "2bbfb1dc3588cbb8cab102ef321ec86fd7373076fc8b44750889d89ae5aa9403",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "87515ea57911e793d6fe8755aefac1a67dd8b7bd7026fb60df3d02000983cef7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "87515ea57911e793d6fe8755aefac1a67dd8b7bd7026fb60df3d02000983cef7",
+          "full_samples": 34,
+          "fact_trimmed_sha256": "87515ea57911e793d6fe8755aefac1a67dd8b7bd7026fb60df3d02000983cef7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "2bbfb1dc3588cbb8cab102ef321ec86fd7373076fc8b44750889d89ae5aa9403",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "87515ea57911e793d6fe8755aefac1a67dd8b7bd7026fb60df3d02000983cef7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-17-noise",
+      "fixture_sha256": "4a697335e56abacfee6c182406f05f94e2b7ac80e83294f38a8c269c2a4554fe",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "2631e90929869789495ef1367a4a0cf586bc670494815286da07960a7858652f",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "068bd8cf8e6a48ed95228a5aafd21a2746f48b9c2a8b62b10526ca3fc39023df",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "2631e90929869789495ef1367a4a0cf586bc670494815286da07960a7858652f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "2631e90929869789495ef1367a4a0cf586bc670494815286da07960a7858652f",
+          "full_samples": 34,
+          "fact_trimmed_sha256": "2631e90929869789495ef1367a4a0cf586bc670494815286da07960a7858652f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "068bd8cf8e6a48ed95228a5aafd21a2746f48b9c2a8b62b10526ca3fc39023df",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "2631e90929869789495ef1367a4a0cf586bc670494815286da07960a7858652f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-17-impulses",
+      "fixture_sha256": "413bdfe7259b851ec1ae9b2712f6dc9146ba3fca076c72c84615a2f8cdc72dbd",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "c48dd280b88543b95bfe5eb06ff296d30f60b428c040d973c953015b00541cbf",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "4a3b20fe14db9d13a8bec9e928e54ed0c5ccddadf9aab57b36a0e36e90c6772c",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "c48dd280b88543b95bfe5eb06ff296d30f60b428c040d973c953015b00541cbf",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "c48dd280b88543b95bfe5eb06ff296d30f60b428c040d973c953015b00541cbf",
+          "full_samples": 34,
+          "fact_trimmed_sha256": "c48dd280b88543b95bfe5eb06ff296d30f60b428c040d973c953015b00541cbf",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "4a3b20fe14db9d13a8bec9e928e54ed0c5ccddadf9aab57b36a0e36e90c6772c",
+          "full_samples": 2024,
+          "fact_trimmed_sha256": "c48dd280b88543b95bfe5eb06ff296d30f60b428c040d973c953015b00541cbf",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-1025-sine",
+      "fixture_sha256": "0601a5075e6b4889ef28a4c9f1c53a220b446bc83269e171fd33d827348c16c4",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "a88bb09f29fcc846917582974b06a78e8c393eda03b01139159a9147508508d6",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "78fa80207e62b99a4c088f0b7d546968e86e2d2f6320fc24d6ada880596e927d",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "a88bb09f29fcc846917582974b06a78e8c393eda03b01139159a9147508508d6",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "a88bb09f29fcc846917582974b06a78e8c393eda03b01139159a9147508508d6",
+          "full_samples": 2050,
+          "fact_trimmed_sha256": "a88bb09f29fcc846917582974b06a78e8c393eda03b01139159a9147508508d6",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "78fa80207e62b99a4c088f0b7d546968e86e2d2f6320fc24d6ada880596e927d",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "a88bb09f29fcc846917582974b06a78e8c393eda03b01139159a9147508508d6",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-1025-noise",
+      "fixture_sha256": "7781eb0cc9c29893cb966c82f2ea2bafd2f6940b9ea772a425c8cb3fb073a496",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "2eb2b7e12eb1b7078a84519b490d37cb772e6614bd967c1bb5695710edd23fe8",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "2c7cf201c23adda9cbce525c0d70c275238292662d17b14e3ecfffd5dc0a5184",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "2eb2b7e12eb1b7078a84519b490d37cb772e6614bd967c1bb5695710edd23fe8",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "2eb2b7e12eb1b7078a84519b490d37cb772e6614bd967c1bb5695710edd23fe8",
+          "full_samples": 2050,
+          "fact_trimmed_sha256": "2eb2b7e12eb1b7078a84519b490d37cb772e6614bd967c1bb5695710edd23fe8",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "2c7cf201c23adda9cbce525c0d70c275238292662d17b14e3ecfffd5dc0a5184",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "2eb2b7e12eb1b7078a84519b490d37cb772e6614bd967c1bb5695710edd23fe8",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-1025-impulses",
+      "fixture_sha256": "22794bd545613fa3c8c6a7f9bb4db5a6df9249f8cb4408bd13f807e6fa1aee0c",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "4e8f7b61936c39cc772f9ee625e8087e213838072085f4351d5c3eb4c28df2e7",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "a66de990787de813fa91ced3e14936bbf515e55b2d2e7bf2b52e7360b124eb7f",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "4e8f7b61936c39cc772f9ee625e8087e213838072085f4351d5c3eb4c28df2e7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "4e8f7b61936c39cc772f9ee625e8087e213838072085f4351d5c3eb4c28df2e7",
+          "full_samples": 2050,
+          "fact_trimmed_sha256": "4e8f7b61936c39cc772f9ee625e8087e213838072085f4351d5c3eb4c28df2e7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "a66de990787de813fa91ced3e14936bbf515e55b2d2e7bf2b52e7360b124eb7f",
+          "full_samples": 4048,
+          "fact_trimmed_sha256": "4e8f7b61936c39cc772f9ee625e8087e213838072085f4351d5c3eb4c28df2e7",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-4097-sine",
+      "fixture_sha256": "be21c095b58294e3e4be7d93115b333b32f73c5060e2c2f10272cd24e77d0946",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "fc8ceb5e1dbb4ac60d8c4d60be07ba2b6fd55513bf0dd5f2e0ccb481175a1bf5",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "3af6909a815f665ab14eaa63e8c81536f6fb0e6d432de82c7dc634a7d64632a2",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "fc8ceb5e1dbb4ac60d8c4d60be07ba2b6fd55513bf0dd5f2e0ccb481175a1bf5",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "fc8ceb5e1dbb4ac60d8c4d60be07ba2b6fd55513bf0dd5f2e0ccb481175a1bf5",
+          "full_samples": 8194,
+          "fact_trimmed_sha256": "fc8ceb5e1dbb4ac60d8c4d60be07ba2b6fd55513bf0dd5f2e0ccb481175a1bf5",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "3af6909a815f665ab14eaa63e8c81536f6fb0e6d432de82c7dc634a7d64632a2",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "fc8ceb5e1dbb4ac60d8c4d60be07ba2b6fd55513bf0dd5f2e0ccb481175a1bf5",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-4097-noise",
+      "fixture_sha256": "1ac517e50883ac68b215454720350e6d43199ced725b6c751244a1c78bae6c9a",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "8296145bf6e0de4ddcbc30fcac710fed9cb9cb179d9f4673c988bee02fb5a5e1",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "54ba7b76d3be6a1101c8b48eb75489b742054ca279b2e6def334ef083fda8c73",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "8296145bf6e0de4ddcbc30fcac710fed9cb9cb179d9f4673c988bee02fb5a5e1",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "8296145bf6e0de4ddcbc30fcac710fed9cb9cb179d9f4673c988bee02fb5a5e1",
+          "full_samples": 8194,
+          "fact_trimmed_sha256": "8296145bf6e0de4ddcbc30fcac710fed9cb9cb179d9f4673c988bee02fb5a5e1",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "54ba7b76d3be6a1101c8b48eb75489b742054ca279b2e6def334ef083fda8c73",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "8296145bf6e0de4ddcbc30fcac710fed9cb9cb179d9f4673c988bee02fb5a5e1",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ms-2-4097-impulses",
+      "fixture_sha256": "6edca2e1c5cf9b25d5cda77aed26a364ffdea715d2d945476a373319db1f4009",
+      "spec_arithmetic_gate": [
+        "ffmpeg"
+      ],
+      "actual_sha256": "e61a73811aa55d95ddcc8f8d36239625940363f03b1990ed16eceb850afcb7b4",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "b34efa346bcfba4a12a1cd37b03c5de61a3bc68924d212288bf25d98f24481fd",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "e61a73811aa55d95ddcc8f8d36239625940363f03b1990ed16eceb850afcb7b4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "e61a73811aa55d95ddcc8f8d36239625940363f03b1990ed16eceb850afcb7b4",
+          "full_samples": 8194,
+          "fact_trimmed_sha256": "e61a73811aa55d95ddcc8f8d36239625940363f03b1990ed16eceb850afcb7b4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": true
+        },
+        "libsndfile": {
+          "full_sha256": "b34efa346bcfba4a12a1cd37b03c5de61a3bc68924d212288bf25d98f24481fd",
+          "full_samples": 10120,
+          "fact_trimmed_sha256": "e61a73811aa55d95ddcc8f8d36239625940363f03b1990ed16eceb850afcb7b4",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-17-sine",
+      "fixture_sha256": "7464c45bb36f7f9cb324720b35f94632e28ff7a583d7ba20613b1423246a2af8",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "f2776ad42cfd9fd23c640db2960c79747bd310c85ff00dfb3dc0affc05502a68",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "a76fdd3d613d53d65654e34a1d53288328c2cbe476fce98b14969f9c2f20916e",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "6cd59aa441266a0e54f788c7f0e07cb8a08ff879be3c67461e413fcc9cf25cf8",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "25525c095d2585d00c22d38f767d1523caaaf576694345890e64af015de830a4",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "f2776ad42cfd9fd23c640db2960c79747bd310c85ff00dfb3dc0affc05502a68",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "25525c095d2585d00c22d38f767d1523caaaf576694345890e64af015de830a4",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "f2776ad42cfd9fd23c640db2960c79747bd310c85ff00dfb3dc0affc05502a68",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-17-noise",
+      "fixture_sha256": "13169e7bb5cc960424cc4790ce9178580d8cfbcc9f1ee74c8357c58dba5cd385",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "bccfe91cc8e4a8dab49c3024d3a48b8aa46c0eb46b62f9b7a44b84bada7ae008",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "f390f954b9a8a4bb8665283157d6aa24b701c0e63ca2c4c42eafa43560b81d79",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "c0f52511b300b59bf2e00708377e2bcdd2dc2ec0b599dad5f9b25f0c9daf7a7e",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "198960b97cf3baf5f6e5916504d5712cf0b1d8b4ef6890f1daf6103ec74ef9cb",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "bccfe91cc8e4a8dab49c3024d3a48b8aa46c0eb46b62f9b7a44b84bada7ae008",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "198960b97cf3baf5f6e5916504d5712cf0b1d8b4ef6890f1daf6103ec74ef9cb",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "bccfe91cc8e4a8dab49c3024d3a48b8aa46c0eb46b62f9b7a44b84bada7ae008",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-17-impulses",
+      "fixture_sha256": "4dd63ffc610a77bd039c0dba8b73a940380b4c5c5f0c3e9c6393b712a7889dc9",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "9191440b2a8a43300f021e55b3b0da9b50f9a5439328d09f25fa504c526f773d",
+      "actual_samples": 17,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "1dc05790fe7d30b0144a44cc93b39b31bcd474e630ac0899d4dd2139488b1535",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "d4f8042e961abeea619bc51eb12450802f1ca9f741ca1357901c1ca0200702f8",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "f88b02b4e090d20735190334dc58a6bc0a8f504366a7b7bfc52603f3d43cabf0",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "9191440b2a8a43300f021e55b3b0da9b50f9a5439328d09f25fa504c526f773d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "f88b02b4e090d20735190334dc58a6bc0a8f504366a7b7bfc52603f3d43cabf0",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "9191440b2a8a43300f021e55b3b0da9b50f9a5439328d09f25fa504c526f773d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-1025-sine",
+      "fixture_sha256": "48644b83a3d8e92b6ba9c838bb7dc6389a3b7bbb2d9025aa88f7c0bdf0675699",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "1cff5fecded280c27b1daa108ec5264f39ad455ab46df41bcb999e5a89087a1d",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "9eda69fbbdffad742f86f4c6a1842345fb2ace75bd0f7a2ac708b61d2933275f",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "3b694310b55c22e6def9d791991d4fa81cc505336923b2d570bafc848d0182fa",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "da41c36ada2fd651496626988db534a51f14e033da247ad335f317d0323c2e85",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "1cff5fecded280c27b1daa108ec5264f39ad455ab46df41bcb999e5a89087a1d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "da41c36ada2fd651496626988db534a51f14e033da247ad335f317d0323c2e85",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "1cff5fecded280c27b1daa108ec5264f39ad455ab46df41bcb999e5a89087a1d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-1025-noise",
+      "fixture_sha256": "22e3c645111e06dbef30d27e88c124f39e78c91a60c006f67bd74f31a375ce7f",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "0302b5e51723f4c6bdee3dbc3a0d465a266d1829e3232f579830638c89f6aa3f",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "6c0a33d80840e55f19e552baffa7e624cc64203e06c6f673f71503962e41373b",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "c1618fac16f9d2193b4e21e8cf7c6317fd93ea67970f3f93367075234f0b99c5",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "556b6d3ed32245359649e55239f4a12399fa336ef0be312653b0b89977a8d012",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "0302b5e51723f4c6bdee3dbc3a0d465a266d1829e3232f579830638c89f6aa3f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "556b6d3ed32245359649e55239f4a12399fa336ef0be312653b0b89977a8d012",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "0302b5e51723f4c6bdee3dbc3a0d465a266d1829e3232f579830638c89f6aa3f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-1025-impulses",
+      "fixture_sha256": "2d16bf7fcae8157fd5f8176b43740b3d34072fcb05c68e7a7d02624c2f8c649c",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "cb80c821b45d56bfec65853f069d28cb3b9b8344848bb5154178349e5e1e8a18",
+      "actual_samples": 1025,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "7cdb11abc373aca16ead84e8fd1eea498f6ef06bfd04d44af2a6b79e8d6f7fff",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "9aa52f53dacda45ba05746c0670b49dbc265b886f6fd9d6a0931b1b67b59446b",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "dfa453f58d96be7c3d926312846885a576db19a74c8313a25d5fa28f3dfe70d8",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "cb80c821b45d56bfec65853f069d28cb3b9b8344848bb5154178349e5e1e8a18",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "dfa453f58d96be7c3d926312846885a576db19a74c8313a25d5fa28f3dfe70d8",
+          "full_samples": 2041,
+          "fact_trimmed_sha256": "cb80c821b45d56bfec65853f069d28cb3b9b8344848bb5154178349e5e1e8a18",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-4097-sine",
+      "fixture_sha256": "c5cc5ede64f196c0d69690acd0ca860f13c09f76efd3cbae36e5ec5048225daa",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "7581cabff45cc8e7df51e3889c12d14a70ee08fd0806bf103274aadbe90ade0d",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "62d2dc2cc58eb66cc88ccbc177233d2a93adffeebae575934580e896955793a8",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "2e5e49f4fc70838e4c00891b93197714d71c98f4db33bdd1ea749f9bfb7d031c",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "47de3f35e8381bcb55e19219ef1228baf54445850e38a4a1aa9ebee69bafc627",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "7581cabff45cc8e7df51e3889c12d14a70ee08fd0806bf103274aadbe90ade0d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "47de3f35e8381bcb55e19219ef1228baf54445850e38a4a1aa9ebee69bafc627",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "7581cabff45cc8e7df51e3889c12d14a70ee08fd0806bf103274aadbe90ade0d",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-4097-noise",
+      "fixture_sha256": "e3873f42d9f91c77b8ec80d8aa6e84c27291e55d6a7ae8f87b6e767e79b81f02",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "1aa3d11306be6269a4fe8244fb5c9a8a5aae1dca9b7c09d840f73289fc1c8bf0",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "1ae6bb1df0358f6451c0aa712b3201e5a60667a41f286716919029260c52a632",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "4d706fe76a507773e5d83f50be8c8ddf7e956aed7ab077a33c2817aaa59c9ac0",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "cb7ac1b92d68b8e28b24b52df4a611f37a790e81b30ea4bae7ce8d2bfe9f7e11",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "1aa3d11306be6269a4fe8244fb5c9a8a5aae1dca9b7c09d840f73289fc1c8bf0",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "cb7ac1b92d68b8e28b24b52df4a611f37a790e81b30ea4bae7ce8d2bfe9f7e11",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "1aa3d11306be6269a4fe8244fb5c9a8a5aae1dca9b7c09d840f73289fc1c8bf0",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-1-4097-impulses",
+      "fixture_sha256": "58c0171c08ab9ca67a46b84a658d9d5aebda5971ecf43a58489aa1b96c978f9e",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "565651c40380faa15efe6764fc88eae9f3774b44c35dc41f1deb0d3893f2569f",
+      "actual_samples": 4097,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "e83df9085ff16bc2a1773244b9b193379e2de236ec92afb7dbefa93ce2704dc7",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "0fa6aa519248f67643867395662075d6bcaeeba47e3e517ff590261dd41d8f0d",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 1,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "be83113e2629cc7f2d8217dc704ce12f93c81037da7cbe4f64d01b0183320452",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "565651c40380faa15efe6764fc88eae9f3774b44c35dc41f1deb0d3893f2569f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "be83113e2629cc7f2d8217dc704ce12f93c81037da7cbe4f64d01b0183320452",
+          "full_samples": 6123,
+          "fact_trimmed_sha256": "565651c40380faa15efe6764fc88eae9f3774b44c35dc41f1deb0d3893f2569f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-17-sine",
+      "fixture_sha256": "b40ed789e5ca6adb8cec615cf4b0075600a5af2ef7bdfa1802a85c4c88081ffd",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "4416784ea89817ff001364cb03d3ed9fa054f9bf453b1367c77adfd489ffce21",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "fee5919dcec3d559a2342dac961ae3da4a876908fadd0bc7d6a4a6c20db0db20",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "b9635f2d05bd6083fdba3a8503e1d97b924bb1a8c706f53691c879c22292be34",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "88240929f91ea4ef3c41674b86138d95a33f5b8dd7b7341e0d47a8fb53d72305",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "4416784ea89817ff001364cb03d3ed9fa054f9bf453b1367c77adfd489ffce21",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "88240929f91ea4ef3c41674b86138d95a33f5b8dd7b7341e0d47a8fb53d72305",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "4416784ea89817ff001364cb03d3ed9fa054f9bf453b1367c77adfd489ffce21",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-17-noise",
+      "fixture_sha256": "d27bb3cffa99a56a17fdc3acd3d73d9a1d685d228ed36ef75ccdb5eef45efad5",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "741915f51778898215645630d781b204210d5eb646fe9cd4a5278f00e55440c5",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "6f1bcc0cf12681cf1945608965583bbfb495bdb800bd7770ce7fc7e2fbe75cbf",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "84cd62303cbdceb00d3500a3a0ccd2798e3df519dde513995dcd870ef6c624cb",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "2e6958a79bb2fc7e4d56c30d2d7b5b81f3e40a38a943a45f991f0d60872e38cf",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "741915f51778898215645630d781b204210d5eb646fe9cd4a5278f00e55440c5",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "2e6958a79bb2fc7e4d56c30d2d7b5b81f3e40a38a943a45f991f0d60872e38cf",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "741915f51778898215645630d781b204210d5eb646fe9cd4a5278f00e55440c5",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-17-impulses",
+      "fixture_sha256": "703278454e9dc8cacad6c6e24fad86a731edfd7ee0f51d40d7b76162803a1df3",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "b9251d0fa95ba0f12c1bead78b3756bf249dfe0fa4a3dd88b3eb136e881c6a1a",
+      "actual_samples": 34,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "053010833a40780063c77cf61a04574c1d60c1b7de0aaa1a3755cc834bf8ac4f",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "61cefb378da529bebca03589ecc6f544036bace947cf4427086e838594cd34b6",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "f0d24508c627689dbf7a617b8b9887513e9a526ce4cee19f29e4f5cca79c74a0",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "b9251d0fa95ba0f12c1bead78b3756bf249dfe0fa4a3dd88b3eb136e881c6a1a",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "f0d24508c627689dbf7a617b8b9887513e9a526ce4cee19f29e4f5cca79c74a0",
+          "full_samples": 2034,
+          "fact_trimmed_sha256": "b9251d0fa95ba0f12c1bead78b3756bf249dfe0fa4a3dd88b3eb136e881c6a1a",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-1025-sine",
+      "fixture_sha256": "bbd56731fa844a5e3dfcd44c7055402348bc00a52a2541021499f06490f95a93",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "f8f3587182ff02c7ff9a91ba06f553907ee01daca40c26f4d496d1903d579d6e",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "10524ee5d2d2ff1755df1195bcd4413c251dd786ddc96831e246684231d6e015",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "0b1302172721f926a7508371c0762c7268d640170dda21d686e46734056d86e1",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "92d038aaa1137ccfd20b4e54ae5724db42613d7689085def3623dde1343fce39",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "f8f3587182ff02c7ff9a91ba06f553907ee01daca40c26f4d496d1903d579d6e",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "92d038aaa1137ccfd20b4e54ae5724db42613d7689085def3623dde1343fce39",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "f8f3587182ff02c7ff9a91ba06f553907ee01daca40c26f4d496d1903d579d6e",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-1025-noise",
+      "fixture_sha256": "9f76779b3a98b4cf9017998bd5a35b28c30f916ba586b58c0925c1fe62a34251",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "550f6e2828c0698cfae8a460dbefd3e8875bd960c5632cf49dea9ff7fdac022f",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "01de24896680c5e4e8eb6d95b0f8d5d5f1489630e6184aede2cc80923670e760",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "cd3c95390127526001e1f829c5f4ecd2e2e8aaa09a6772f6a840d1b86bf99456",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "5ae81ba54d2ab2b7503e421feb5067e156c6cf0e88fb44d0a89d1ef03263f12a",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "550f6e2828c0698cfae8a460dbefd3e8875bd960c5632cf49dea9ff7fdac022f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "5ae81ba54d2ab2b7503e421feb5067e156c6cf0e88fb44d0a89d1ef03263f12a",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "550f6e2828c0698cfae8a460dbefd3e8875bd960c5632cf49dea9ff7fdac022f",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-1025-impulses",
+      "fixture_sha256": "f0289dbf7fcea19ed48e81bb6e34da0f42e15f54f0edd32752985849a2bd153e",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "58c208268071c208eb8d8adc0b82e39320083885056cb17b0b5ae881abf38e1c",
+      "actual_samples": 2050,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "5c65c98360fdb3ca713d72e8679c95869a45b4113a10262ebe32a81fc3323f72",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "31ed52731cb5074171402be76e607c558e1ab4490e7a0057358ea28873e9af07",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "ad7f8d29fcda5df577257e65b80381d65254c85ff985e53d70ac121b8de82d4d",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "58c208268071c208eb8d8adc0b82e39320083885056cb17b0b5ae881abf38e1c",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "ad7f8d29fcda5df577257e65b80381d65254c85ff985e53d70ac121b8de82d4d",
+          "full_samples": 4068,
+          "fact_trimmed_sha256": "58c208268071c208eb8d8adc0b82e39320083885056cb17b0b5ae881abf38e1c",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-4097-sine",
+      "fixture_sha256": "b170387e8d2ba500d0a0903dd93859b9370a35c564338bad98321f4eecdf98c0",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "637201ba8def0d2b6cfc6251031b92dd27fe126d381b0c5f3573108c3d11ca5b",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "ce90a1668757b40e3d2da2cb6cd0d167a2700689608cba66eae748372ad10b8c",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "335f50a175cc5583646901907d8faa7bb6cb7abcfee8b01a995a4b277811d69a",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "8ff35d7169e2bf663437d0201d1e7ef1be612e09d2c0d306f0cc5ece8d80db68",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "637201ba8def0d2b6cfc6251031b92dd27fe126d381b0c5f3573108c3d11ca5b",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "8ff35d7169e2bf663437d0201d1e7ef1be612e09d2c0d306f0cc5ece8d80db68",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "637201ba8def0d2b6cfc6251031b92dd27fe126d381b0c5f3573108c3d11ca5b",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-4097-noise",
+      "fixture_sha256": "8cacf93d02f49c4b1e31fa12345ab8fcb390868af229f69e883536ac22e85eb7",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "84b384141ad707cd026606e4ed2dafb582f74796599effe63306c8d7b7a1a59e",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "a29715b5f7a226238248b8ad440d46bd685358fc123c93857434d88c23010d0e",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "8976835ef48c7aa576b607302c8becd3f764a19334c06a40e96b8a874d208f54",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "ab9f6ef27f7862cb06de44d25f69babe405b22a8a74f71db13a37032b1da6467",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "84b384141ad707cd026606e4ed2dafb582f74796599effe63306c8d7b7a1a59e",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "ab9f6ef27f7862cb06de44d25f69babe405b22a8a74f71db13a37032b1da6467",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "84b384141ad707cd026606e4ed2dafb582f74796599effe63306c8d7b7a1a59e",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "adpcm_ima_wav-2-4097-impulses",
+      "fixture_sha256": "6b2f5fa5279f9846b9fb8b590ce2c4f5a0db35a0b1ff4dee9de3420fad3307a6",
+      "spec_arithmetic_gate": [
+        "dr_wav",
+        "libsndfile"
+      ],
+      "actual_sha256": "25a5012d7bbfc7aadcdfa356e980c5ed3e031879b31d4ece90be50a8383c8761",
+      "actual_samples": 8194,
+      "references": {
+        "ffmpeg": {
+          "full_sha256": "49a44d32d0d2e8d8b23030f9c9b8d7c457968598a5b20a6f1d6cfd9677d91f1f",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "b1a6c5b9625425af494bec1d5b84f16b0ebb47d1af2994d2e9a69acbb39d72d6",
+          "fact_trimmed_exact": false,
+          "first_mismatch": 2,
+          "exact_including_length": false
+        },
+        "dr_wav": {
+          "full_sha256": "331dafa55bc943f8d17885be91c58c3dc72f0462a319165d31086993e6b93dc0",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "25a5012d7bbfc7aadcdfa356e980c5ed3e031879b31d4ece90be50a8383c8761",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        },
+        "libsndfile": {
+          "full_sha256": "331dafa55bc943f8d17885be91c58c3dc72f0462a319165d31086993e6b93dc0",
+          "full_samples": 10170,
+          "fact_trimmed_sha256": "25a5012d7bbfc7aadcdfa356e980c5ed3e031879b31d4ece90be50a8383c8761",
+          "fact_trimmed_exact": true,
+          "first_mismatch": null,
+          "exact_including_length": false
+        }
+      },
+      "passed": true
+    }
+  ],
+  "passed": 40,
+  "total": 40
+}

@@ -1,0 +1,2294 @@
+_RNvCs6S5kJXzagsx_12wavl_profile6render:
+.Lfunc_begin7:
+.seh_proc _RNvCs6S5kJXzagsx_12wavl_profile6render
+	.seh_handler __CxxFrameHandler3, @unwind, @except
+	pushq	%rbp
+	.seh_pushreg %rbp
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	movl	$8536, %eax
+	callq	__chkstk
+	subq	%rax, %rsp
+	.seh_stackalloc 8536
+	leaq	128(%rsp), %rbp
+	.seh_setframe %rbp, 128
+	movdqa	%xmm6, 8384(%rbp)
+	.seh_savexmm %xmm6, 8512
+	.seh_endprologue
+	movq	$-2, 8376(%rbp)
+	movq	%rcx, %r12
+.Ltmp930:
+	movb	$1, 8172(%rbp)
+	movl	$1048578, 8168(%rbp)
+	movq	$48000, 8160(%rbp)
+.Ltmp931:
+	movq	32(%r8), %rcx
+.Ltmp932:
+	testq	%rcx, %rcx
+	je	.LBB7_245
+.Ltmp933:
+	movq	%rdx, %rsi
+	movq	16(%r8), %rax
+	movq	%rax, 8272(%rbp)
+	movq	24(%r8), %r11
+.Ltmp934:
+	movq	%r11, %rax
+	orq	%rcx, %rax
+	shrq	$32, %rax
+	movq	%rcx, 8152(%rbp)
+	je	.LBB7_3
+	movq	%r11, %rax
+	xorl	%edx, %edx
+	divq	%rcx
+	movq	%rax, %r13
+	jmp	.LBB7_4
+.LBB7_3:
+	movl	%r11d, %eax
+	xorl	%edx, %edx
+	divl	%ecx
+	movl	%eax, %r13d
+.LBB7_4:
+.Ltmp935:
+	cmpq	$1, %rdx
+	sbbq	$-1, %r13
+.Ltmp936:
+	movq	40(%r8), %r10
+	testq	%r10, %r10
+	je	.LBB7_6
+.Ltmp937:
+	movabsq	$-9223372034707292159, %rcx
+	movq	%r10, %rax
+	mulq	%rcx
+	shrq	$31, %rdx
+.Ltmp938:
+	movq	%r10, %rax
+	shlq	$32, %rax
+	addq	%r10, %rax
+	negq	%rax
+	movabsq	$4294967297, %rcx
+	xorl	%r9d, %r9d
+	cmpq	%rcx, %rax
+	seta	%r9b
+	addq	%rdx, %r9
+.Ltmp939:
+	shlq	$2, %r9
+	leaq	(%r9,%r9,2), %rbx
+	jmp	.LBB7_7
+.LBB7_6:
+	xorl	%ebx, %ebx
+.LBB7_7:
+	movq	%r11, 8328(%rbp)
+	movq	%r10, 8296(%rbp)
+.Ltmp940:
+	movzbl	51(%r8), %eax
+	movb	%al, 8375(%rbp)
+	testb	%al, %al
+	je	.LBB7_31
+	movzwl	48(%r8), %r9d
+	movzbl	50(%r8), %edi
+	shll	$16, %edi
+	orl	%r9d, %edi
+	movq	(%r8), %r15
+	movq	8(%r8), %rax
+	movq	%rax, 8352(%rbp)
+	movl	%edi, 8320(%rbp)
+.Ltmp941:
+	andl	$16711680, %edi
+	cmpl	$65536, %edi
+	sete	%r8b
+.Ltmp942:
+	shrl	$8, %r9d
+	andl	$1, %r9d
+	leaq	-40(%rbp), %rcx
+	leaq	8160(%rbp), %rdx
+	callq	_RNvMNtCs177o9dRCi5A_24deadlib_audio_decode_wav6encodeNtB2_4Spec6header
+.Ltmp943:
+	movq	-32(%rbp), %rax
+	movq	-24(%rbp), %r9
+	movq	-16(%rbp), %rcx
+	cmpl	$1, -40(%rbp)
+	je	.LBB7_210
+.Ltmp944:
+	movq	%r9, %r14
+	shrq	$32, %r14
+	movl	%r14d, %r8d
+	rolw	$8, %r8w
+.Ltmp945:
+	cmpl	$65536, %edi
+.Ltmp946:
+	movdqu	-8(%rbp), %xmm0
+	movdqa	%xmm0, 8224(%rbp)
+	movq	8(%rbp), %rdx
+.Ltmp947:
+	movq	%rax, -40(%rbp)
+	movq	%r9, -32(%rbp)
+	movq	%rcx, -24(%rbp)
+	movdqu	%xmm0, -16(%rbp)
+.Ltmp948:
+	cmovel	%r8d, %r14d
+.Ltmp949:
+	movq	%r12, 8248(%rbp)
+	movq	%rsi, 8256(%rbp)
+	movq	$0, 8264(%rbp)
+	cmpq	$41, %rdx
+.Ltmp950:
+	jae	.LBB7_214
+.Ltmp951:
+	movq	8328(%rbp), %r9
+	movq	%r9, %r8
+	shrq	%r8
+	addq	8296(%rbp), %r8
+	movl	8320(%rbp), %eax
+	shrl	$16, %eax
+	movl	%eax, %r12d
+.Ltmp952:
+	cmpl	$3, %eax
+	sete	%cl
+	movq	%r8, 8280(%rbp)
+.Ltmp953:
+	movq	%r8, %rax
+	shrq	$32, %rax
+	setne	%r8b
+	movl	$3, %eax
+	testb	%cl, %r8b
+	jne	.LBB7_246
+.Ltmp954:
+	leaq	4(,%r9,2), %rcx
+	leaq	(%rcx,%r13,8), %rcx
+	addq	%rbx, %rcx
+	movq	%rcx, 8312(%rbp)
+	cmpq	$4, %rcx
+	jb	.LBB7_247
+.Ltmp955:
+	movl	%r12d, %ebx
+	andb	$-2, %bl
+.Ltmp956:
+	movl	%edx, %ecx
+	andl	$1, %ecx
+	leaq	(%rcx,%rdx), %r10
+.Ltmp957:
+	cmpb	$2, %bl
+.Ltmp958:
+	leaq	68(%rcx,%rdx), %r8
+	leaq	20(%rcx,%rdx), %rsi
+	cmoveq	%r8, %rsi
+.Ltmp959:
+	leaq	8(%rsi), %rcx
+	movq	%rcx, 8216(%rbp)
+.Ltmp960:
+	addq	$12, %rsi
+	movq	8352(%rbp), %rcx
+.Ltmp961:
+	leaq	(,%rcx,8), %rcx
+	leaq	(%rcx,%rcx,2), %r13
+	xorl	%r8d, %r8d
+	movl	$4294967294, %r9d
+	jmp	.LBB7_16
+	.p2align	4
+.LBB7_13:
+.Ltmp962:
+	movq	8(%r15,%r8), %r11
+.LBB7_14:
+.Ltmp963:
+	cmpq	%r9, %r11
+	ja	.LBB7_232
+.Ltmp964:
+.LBB7_15:
+	movl	%r11d, %ecx
+	andl	$1, %ecx
+	addq	%rsi, %r11
+.Ltmp965:
+	addq	%r11, %rcx
+	addq	$8, %rcx
+.Ltmp966:
+	addq	$24, %r8
+.Ltmp967:
+	cmpq	%rsi, %rcx
+	movq	%rcx, %rsi
+.Ltmp968:
+	jb	.LBB7_209
+.Ltmp969:
+.LBB7_16:
+	cmpq	%r8, %r13
+.Ltmp970:
+	je	.LBB7_35
+.Ltmp971:
+	movl	16(%r15,%r8), %r11d
+	movl	$26, %ecx
+.Ltmp972:
+	cmpl	$1414744395, %r11d
+	jle	.LBB7_22
+	cmpl	$1481001297, %r11d
+	jg	.LBB7_26
+	cmpl	$1414744396, %r11d
+	jne	.LBB7_13
+.Ltmp973:
+	movq	8(%r15,%r8), %r11
+.Ltmp974:
+	cmpq	$4, %r11
+	jb	.LBB7_15
+.Ltmp975:
+	movq	(%r15,%r8), %rdi
+.Ltmp976:
+	cmpl	$1819697527, (%rdi)
+	jne	.LBB7_14
+	jmp	.LBB7_62
+.Ltmp977:
+	.p2align	4
+.LBB7_22:
+	cmpl	$875976513, %r11d
+	jle	.LBB7_29
+	cmpl	$875976514, %r11d
+	je	.LBB7_62
+	cmpl	$875983716, %r11d
+	je	.LBB7_62
+	cmpl	$1179011410, %r11d
+	jne	.LBB7_13
+	jmp	.LBB7_62
+.LBB7_26:
+	cmpl	$1481001298, %r11d
+	je	.LBB7_62
+	cmpl	$1635017060, %r11d
+	je	.LBB7_62
+	cmpl	$1952670054, %r11d
+	jne	.LBB7_13
+	jmp	.LBB7_62
+.LBB7_29:
+	cmpl	$544501094, %r11d
+	je	.LBB7_62
+	cmpl	$875972178, %r11d
+	jne	.LBB7_13
+	jmp	.LBB7_62
+.Ltmp978:
+.LBB7_31:
+	movzwl	48(%r8), %r9d
+	movzbl	50(%r8), %ebx
+	shll	$16, %ebx
+	orl	%r9d, %ebx
+	movq	(%r8), %r15
+	movq	8(%r8), %r13
+	movl	%ebx, 8320(%rbp)
+.Ltmp979:
+	andl	$16711680, %ebx
+	cmpl	$65536, %ebx
+	sete	%r8b
+.Ltmp980:
+	shrl	$8, %r9d
+	andl	$1, %r9d
+	leaq	-40(%rbp), %rcx
+	leaq	8160(%rbp), %rdx
+	callq	_RNvMNtCs177o9dRCi5A_24deadlib_audio_decode_wav6encodeNtB2_4Spec6header
+.Ltmp981:
+	movq	-32(%rbp), %rax
+	movq	-24(%rbp), %rcx
+	movq	-16(%rbp), %r9
+	cmpl	$1, -40(%rbp)
+	je	.LBB7_212
+.Ltmp982:
+	movq	%rcx, %r14
+	shrq	$32, %r14
+	movl	%r14d, %r8d
+	rolw	$8, %r8w
+.Ltmp983:
+	cmpl	$65536, %ebx
+.Ltmp984:
+	movdqu	-8(%rbp), %xmm0
+	movdqa	%xmm0, 8224(%rbp)
+	movq	8(%rbp), %rdx
+.Ltmp985:
+	movq	%rax, -40(%rbp)
+	movq	%rcx, -32(%rbp)
+	movq	%r9, -24(%rbp)
+	movdqu	%xmm0, -16(%rbp)
+.Ltmp986:
+	cmovel	%r8d, %r14d
+.Ltmp987:
+	movq	%r12, 8248(%rbp)
+	movq	%rsi, 8256(%rbp)
+	movq	$0, 8264(%rbp)
+	cmpq	$41, %rdx
+.Ltmp988:
+	jae	.LBB7_215
+.Ltmp989:
+	movl	8320(%rbp), %ecx
+	movl	%ecx, %r8d
+	shrl	$16, %r8d
+.Ltmp990:
+	movl	%r8d, %eax
+	andb	$-2, %al
+	cmpb	$2, %al
+	movl	%r8d, 8368(%rbp)
+	jne	.LBB7_63
+	movl	$68, %eax
+	movb	$1, %r8b
+	jmp	.LBB7_64
+.Ltmp991:
+.LBB7_35:
+	cmpb	$2, %bl
+	sete	%r8b
+.Ltmp992:
+	movq	%rsi, %r11
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.22(%rip), %r9
+	movl	$23, %ecx
+	addq	8312(%rbp), %r11
+.Ltmp993:
+	jb	.LBB7_210
+.Ltmp994:
+	cmpb	$2, %bl
+.Ltmp995:
+	je	.LBB7_91
+.Ltmp996:
+	movl	$4294967294, %edi
+	cmpq	%rdi, 8280(%rbp)
+	ja	.LBB7_40
+	cmpq	%rdi, 8312(%rbp)
+	ja	.LBB7_40
+	cmpq	%rdi, %r11
+	jbe	.LBB7_92
+.Ltmp997:
+.LBB7_40:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.24(%rip), %r8
+.Ltmp998:
+	testl	%r12d, %r12d
+.Ltmp999:
+	jne	.LBB7_255
+	testb	$1, 8320(%rbp)
+	je	.LBB7_255
+.Ltmp1000:
+	leaq	76(%r10), %r8
+	movq	%r8, 8216(%rbp)
+.Ltmp1001:
+	addq	$80, %r10
+	xorl	%r8d, %r8d
+	movl	$4294967294, %ebx
+	movq	%r10, %rsi
+	jmp	.LBB7_46
+	.p2align	4
+.LBB7_43:
+.Ltmp1002:
+	movq	8(%r15,%r8), %r10
+.LBB7_44:
+.Ltmp1003:
+	cmpq	%rbx, %r10
+	ja	.LBB7_232
+.Ltmp1004:
+.LBB7_45:
+	movl	%r10d, %r11d
+	andl	$1, %r11d
+	addq	%rsi, %r10
+.Ltmp1005:
+	addq	%r11, %r10
+	addq	$8, %r10
+.Ltmp1006:
+	addq	$24, %r8
+.Ltmp1007:
+	cmpq	%rsi, %r10
+	movq	%r10, %rsi
+.Ltmp1008:
+	jb	.LBB7_209
+.Ltmp1009:
+.LBB7_46:
+	cmpq	%r8, %r13
+.Ltmp1010:
+	je	.LBB7_89
+.Ltmp1011:
+	movl	16(%r15,%r8), %r10d
+.Ltmp1012:
+	cmpl	$1414744395, %r10d
+	jle	.LBB7_52
+	cmpl	$1481001297, %r10d
+	jg	.LBB7_56
+	cmpl	$1414744396, %r10d
+	jne	.LBB7_43
+.Ltmp1013:
+	movq	8(%r15,%r8), %r10
+.Ltmp1014:
+	cmpq	$4, %r10
+	jb	.LBB7_45
+.Ltmp1015:
+	movq	(%r15,%r8), %r11
+.Ltmp1016:
+	cmpl	$1819697527, (%r11)
+	jne	.LBB7_44
+	jmp	.LBB7_61
+.Ltmp1017:
+	.p2align	4
+.LBB7_52:
+	cmpl	$875976513, %r10d
+	jle	.LBB7_59
+	cmpl	$875976514, %r10d
+	je	.LBB7_61
+	cmpl	$875983716, %r10d
+	je	.LBB7_61
+	cmpl	$1179011410, %r10d
+	jne	.LBB7_43
+	jmp	.LBB7_61
+.LBB7_56:
+	cmpl	$1481001298, %r10d
+	je	.LBB7_61
+	cmpl	$1635017060, %r10d
+	je	.LBB7_61
+	cmpl	$1952670054, %r10d
+	jne	.LBB7_43
+	jmp	.LBB7_61
+.LBB7_59:
+	cmpl	$544501094, %r10d
+	je	.LBB7_61
+	cmpl	$875972178, %r10d
+	jne	.LBB7_43
+.Ltmp1018:
+.LBB7_61:
+	movl	$26, %ecx
+.LBB7_62:
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.13(%rip), %r9
+	movl	$1, %eax
+.Ltmp1019:
+	jmp	.LBB7_210
+.Ltmp1020:
+.LBB7_63:
+	testl	%r8d, %r8d
+	sete	%r8b
+.Ltmp1021:
+	andb	%cl, %r8b
+.Ltmp1022:
+	movl	$68, %ecx
+	movl	$20, %eax
+	cmovneq	%rcx, %rax
+.LBB7_64:
+	movl	%edx, %ecx
+	andl	$1, %ecx
+	addq	%rdx, %rcx
+.Ltmp1023:
+	leaq	(%rax,%rcx), %r9
+	addq	$8, %r9
+	movq	%r9, 8216(%rbp)
+.Ltmp1024:
+	leaq	(%rax,%rcx), %rsi
+	addq	$12, %rsi
+.Ltmp1025:
+	leaq	(,%r13,8), %rax
+	leaq	(%rax,%rax,2), %r11
+	xorl	%ebx, %ebx
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.12(%rip), %rcx
+	movl	$4294967294, %r10d
+	movl	$26, %r9d
+	jmp	.LBB7_68
+	.p2align	4
+.LBB7_65:
+.Ltmp1026:
+	movq	8(%r15,%rbx), %r12
+.LBB7_66:
+.Ltmp1027:
+	cmpq	%r10, %r12
+	ja	.LBB7_233
+.Ltmp1028:
+.LBB7_67:
+	movl	%r12d, %eax
+	andl	$1, %eax
+	addq	%rsi, %r12
+.Ltmp1029:
+	addq	%r12, %rax
+	addq	$8, %rax
+.Ltmp1030:
+	addq	$24, %rbx
+.Ltmp1031:
+	cmpq	%rsi, %rax
+	movq	%rax, %rsi
+.Ltmp1032:
+	jb	.LBB7_211
+.Ltmp1033:
+.LBB7_68:
+	cmpq	%rbx, %r11
+.Ltmp1034:
+	je	.LBB7_84
+.Ltmp1035:
+	movl	16(%r15,%rbx), %r12d
+	movl	$1, %eax
+.Ltmp1036:
+	cmpl	$1414744395, %r12d
+	jle	.LBB7_74
+	cmpl	$1481001297, %r12d
+	jg	.LBB7_78
+	cmpl	$1414744396, %r12d
+	jne	.LBB7_65
+.Ltmp1037:
+	movq	8(%r15,%rbx), %r12
+.Ltmp1038:
+	cmpq	$4, %r12
+	jb	.LBB7_67
+.Ltmp1039:
+	movq	(%r15,%rbx), %rdi
+.Ltmp1040:
+	cmpl	$1819697527, (%rdi)
+.Ltmp1041:
+	jne	.LBB7_66
+	jmp	.LBB7_235
+	.p2align	4
+.LBB7_74:
+.Ltmp1042:
+	cmpl	$875976513, %r12d
+	jle	.LBB7_81
+	cmpl	$875976514, %r12d
+	je	.LBB7_235
+	cmpl	$875983716, %r12d
+	je	.LBB7_235
+	cmpl	$1179011410, %r12d
+	jne	.LBB7_65
+	jmp	.LBB7_235
+.LBB7_78:
+	cmpl	$1481001298, %r12d
+	je	.LBB7_235
+	cmpl	$1635017060, %r12d
+	je	.LBB7_235
+	cmpl	$1952670054, %r12d
+	jne	.LBB7_65
+	jmp	.LBB7_235
+.LBB7_81:
+	cmpl	$544501094, %r12d
+	je	.LBB7_235
+	cmpl	$875972178, %r12d
+	jne	.LBB7_65
+.Ltmp1043:
+.LBB7_235:
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.13(%rip), %rcx
+	jmp	.LBB7_212
+.Ltmp1044:
+.LBB7_84:
+	movl	$3, %eax
+	movl	$25, %r9d
+.Ltmp1045:
+	cmpq	$-5, %rsi
+.Ltmp1046:
+	ja	.LBB7_220
+.Ltmp1047:
+	leaq	4(%rsi), %rcx
+	cmpq	$-9, %rcx
+.Ltmp1048:
+	ja	.LBB7_216
+.Ltmp1049:
+	movl	$4294967294, %r9d
+	cmpq	%r9, %rcx
+	seta	%cl
+	movl	%r8d, %r9d
+	notb	%r9b
+	testb	%cl, %r9b
+	jne	.LBB7_248
+	movq	$0, 8224(%rbp)
+	leaq	8224(%rbp), %rax
+	movq	%rax, 72(%rsp)
+	movq	%r13, 64(%rsp)
+	movq	%r15, 56(%rsp)
+	movl	8368(%rbp), %r15d
+	movb	%r15b, 48(%rsp)
+	movq	%rdx, 40(%rsp)
+	leaq	-40(%rbp), %rax
+	movq	%rax, 32(%rsp)
+	leaq	8176(%rbp), %rcx
+	leaq	8248(%rbp), %r9
+	movq	%rsi, %rdx
+	callq	_RINvMs0_NtCs177o9dRCi5A_24deadlib_audio_decode_wav8wavl_muxNtB6_6Header5writeINtNtNtCs7uUmbfRqPp3_4core2io6cursor6CursorQShEECs6S5kJXzagsx_12wavl_profile
+.Ltmp1050:
+	movq	8176(%rbp), %rax
+	cmpq	$-1, %rax
+	jne	.LBB7_249
+.Ltmp1051:
+	movq	8248(%rbp), %r9
+	movq	8256(%rbp), %r11
+	movq	8264(%rbp), %r13
+	jmp	.LBB7_94
+.Ltmp1052:
+.LBB7_89:
+	movq	%rsi, %r11
+	addq	8312(%rbp), %r11
+.Ltmp1053:
+	jb	.LBB7_210
+.Ltmp1054:
+	movb	$2, %r12b
+	movb	$1, %r8b
+.LBB7_91:
+.Ltmp1055:
+	cmpq	$-9, %r11
+.Ltmp1056:
+	ja	.LBB7_210
+.Ltmp1057:
+.LBB7_92:
+	movq	$1, 8224(%rbp)
+	movq	8312(%rbp), %rax
+	movq	%rax, 8232(%rbp)
+	movq	8280(%rbp), %rax
+	movq	%rax, 8240(%rbp)
+	leaq	8224(%rbp), %rax
+	movq	%rax, 72(%rsp)
+	movq	8352(%rbp), %rax
+	movq	%rax, 64(%rsp)
+	movq	%r15, 56(%rsp)
+	movl	%r12d, %r15d
+	movb	%r15b, 48(%rsp)
+	movq	%rdx, 40(%rsp)
+	leaq	-40(%rbp), %rax
+	movq	%rax, 32(%rsp)
+	leaq	8176(%rbp), %rcx
+	leaq	8248(%rbp), %r9
+	movq	%rsi, %rdx
+	callq	_RINvMs0_NtCs177o9dRCi5A_24deadlib_audio_decode_wav8wavl_muxNtB6_6Header5writeINtNtNtCs7uUmbfRqPp3_4core2io6cursor6CursorQShEECs6S5kJXzagsx_12wavl_profile
+.Ltmp1058:
+	movq	8176(%rbp), %rax
+	cmpq	$-1, %rax
+	jne	.LBB7_250
+.Ltmp1059:
+	movq	8248(%rbp), %r9
+	movq	8256(%rbp), %r11
+	movq	8264(%rbp), %r13
+.Ltmp1060:
+.LBB7_94:
+	movq	8296(%rbp), %r10
+	movq	8328(%rbp), %rbx
+.Ltmp1061:
+	testq	%rbx, %rbx
+	movq	%r11, 8304(%rbp)
+	movq	%r9, 8352(%rbp)
+.Ltmp1062:
+	je	.LBB7_148
+	testb	%r15b, %r15b
+	setne	%al
+	orb	8320(%rbp), %al
+	movb	%al, 8351(%rbp)
+	movzwl	%r14w, %eax
+	movq	%rax, 8208(%rbp)
+	movl	$4, %ecx
+	pxor	%xmm6, %xmm6
+	xorl	%edi, %edi
+	movl	%r15d, 8368(%rbp)
+.LBB7_96:
+	movq	8152(%rbp), %rax
+.Ltmp1063:
+	cmpq	%rbx, %rax
+	movq	%rbx, %rdx
+	cmovbq	%rax, %rdx
+	movq	%rdx, %rax
+	movl	$1, %r14d
+.Ltmp1064:
+	testb	$1, %al
+	jne	.LBB7_243
+.Ltmp1065:
+	leaq	(%rax,%rax), %r12
+.Ltmp1066:
+	movq	%rax, %rdx
+	shrq	%rdx
+	cmpb	$1, %r15b
+	movq	%rax, 8200(%rbp)
+	jne	.LBB7_128
+	cmpq	$2147483647, %rax
+	movq	8208(%rbp), %rax
+.Ltmp1067:
+	ja	.LBB7_244
+.Ltmp1068:
+	movq	%rdx, %r8
+	imulq	%rax, %r8
+	movl	$32, %eax
+	cmpq	%r12, %r8
+	movl	$4294967294, %r10d
+.Ltmp1069:
+	jne	.LBB7_187
+.Ltmp1070:
+	leaq	8(%r12), %r8
+.Ltmp1071:
+	addq	%rcx, %r8
+	movq	%r8, 8360(%rbp)
+.Ltmp1072:
+	jb	.LBB7_217
+.Ltmp1073:
+	addq	%rdx, %rdi
+.Ltmp1074:
+	jb	.LBB7_218
+.Ltmp1075:
+	cmpb	$0, 8375(%rbp)
+	je	.LBB7_105
+.Ltmp1076:
+	cmpq	8280(%rbp), %rdi
+	ja	.LBB7_252
+	movq	8360(%rbp), %rcx
+	cmpq	8312(%rbp), %rcx
+	ja	.LBB7_252
+.Ltmp1077:
+.LBB7_105:
+	movq	%rsi, %rcx
+	addq	8360(%rbp), %rcx
+.Ltmp1078:
+	jb	.LBB7_219
+.Ltmp1079:
+	cmpq	$-9, %rcx
+.Ltmp1080:
+	ja	.LBB7_213
+.Ltmp1081:
+	cmpq	%r10, %rdi
+	ja	.LBB7_251
+	cmpq	%r10, 8360(%rbp)
+	ja	.LBB7_251
+	movq	%r12, 8288(%rbp)
+	movq	%rdi, 8336(%rbp)
+	movl	$4294967295, %edx
+	cmpq	%rdx, %rcx
+	jae	.LBB7_251
+.Ltmp1082:
+	cmpq	%r13, %r11
+	movq	%r13, %rcx
+	cmovbq	%r11, %rcx
+.Ltmp1083:
+	movq	%r11, %rdi
+	subq	%rcx, %rdi
+.Ltmp1084:
+	cmpq	$4, %rdi
+	movl	$4, %r14d
+	cmovbq	%rdi, %r14
+.Ltmp1085:
+	addq	%r9, %rcx
+.Ltmp1086:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.33(%rip), %rdx
+	movq	%r14, %r8
+	movq	%r11, %r12
+	callq	memcpy
+.Ltmp1087:
+	cmpq	$4, %rdi
+.Ltmp1088:
+	jb	.LBB7_234
+.Ltmp1089:
+	movq	%rbx, 8328(%rbp)
+.Ltmp1090:
+	addq	%r13, %r14
+	movq	8288(%rbp), %rax
+.Ltmp1091:
+	bswapl	%eax
+.Ltmp1092:
+	cmpq	%r14, %r12
+	movq	%r14, %rcx
+	cmovbq	%r12, %rcx
+.Ltmp1093:
+	movl	%eax, -40(%rbp)
+.Ltmp1094:
+	movq	%r12, %rdi
+	subq	%rcx, %rdi
+.Ltmp1095:
+	cmpq	$4, %rdi
+	movl	$4, %r13d
+	cmovbq	%rdi, %r13
+.Ltmp1096:
+	addq	8352(%rbp), %rcx
+	leaq	-40(%rbp), %rbx
+.Ltmp1097:
+	movq	%rbx, %rdx
+	movq	%r13, %r8
+	callq	memcpy
+.Ltmp1098:
+	cmpq	$3, %rdi
+.Ltmp1099:
+	jbe	.LBB7_234
+.Ltmp1100:
+	addq	%r14, %r13
+.Ltmp1101:
+	movl	$8192, %r8d
+	movq	%rbx, %rcx
+	xorl	%edx, %edx
+	callq	memset
+	movq	8200(%rbp), %r15
+	movq	8272(%rbp), %rdi
+	movq	%rsi, 8288(%rbp)
+	jmp	.LBB7_114
+	.p2align	4
+.LBB7_113:
+.Ltmp1102:
+	subq	%rbx, %r15
+.Ltmp1103:
+	cmpq	%r13, %rsi
+	movq	%r13, %rcx
+	cmovbq	%rsi, %rcx
+.Ltmp1104:
+	subq	%rcx, %rsi
+.Ltmp1105:
+	cmpq	%r12, %rsi
+	movq	%r12, %r14
+	cmovbq	%rsi, %r14
+.Ltmp1106:
+	addq	%r9, %rcx
+.Ltmp1107:
+	leaq	-40(%rbp), %rdx
+	movq	%r14, %r8
+	callq	memcpy
+.Ltmp1108:
+	addq	%r14, %r13
+.Ltmp1109:
+	leaq	(%rdi,%rbx,2), %rdi
+.Ltmp1110:
+	cmpq	%r12, %rsi
+	movq	8288(%rbp), %rsi
+.Ltmp1111:
+	jb	.LBB7_234
+.Ltmp1112:
+.LBB7_114:
+	testq	%r15, %r15
+.Ltmp1113:
+	je	.LBB7_147
+.Ltmp1114:
+	cmpq	$4096, %r15
+	movl	$4096, %ebx
+	cmovbq	%r15, %rbx
+.Ltmp1115:
+	leal	(%rbx,%rbx), %r12d
+.Ltmp1116:
+	leaq	-2(%r12), %rax
+	cmpq	$6, %rax
+	jae	.LBB7_117
+	xorl	%ecx, %ecx
+	movq	%rdi, %rax
+	movq	8304(%rbp), %rsi
+	movq	8352(%rbp), %r9
+	jmp	.LBB7_126
+	.p2align	4
+.LBB7_117:
+	movq	%rax, %rdx
+	shrq	%rdx
+	incq	%rdx
+	cmpq	$30, %rax
+	movq	8304(%rbp), %rsi
+	movq	8352(%rbp), %r9
+	jae	.LBB7_119
+	xorl	%ecx, %ecx
+	jmp	.LBB7_123
+	.p2align	4
+.LBB7_119:
+	movq	%rdx, %rcx
+	movabsq	$9223372036854775792, %rax
+	andq	%rax, %rcx
+	leaq	(%rdi,%rcx,2), %rax
+	xorl	%r8d, %r8d
+	.p2align	4
+.LBB7_120:
+.Ltmp1117:
+	movdqu	(%rdi,%r8,2), %xmm0
+	movdqu	16(%rdi,%r8,2), %xmm1
+	movdqa	%xmm0, %xmm2
+	punpckhbw	%xmm6, %xmm2
+	pshuflw	$177, %xmm2, %xmm2
+	pshufhw	$177, %xmm2, %xmm2
+	punpcklbw	%xmm6, %xmm0
+	pshuflw	$177, %xmm0, %xmm0
+	pshufhw	$177, %xmm0, %xmm0
+	packuswb	%xmm2, %xmm0
+	movdqa	%xmm1, %xmm2
+	punpckhbw	%xmm6, %xmm2
+	pshuflw	$177, %xmm2, %xmm2
+	pshufhw	$177, %xmm2, %xmm2
+	punpcklbw	%xmm6, %xmm1
+	pshuflw	$177, %xmm1, %xmm1
+	pshufhw	$177, %xmm1, %xmm1
+	packuswb	%xmm2, %xmm1
+.Ltmp1118:
+	movdqu	%xmm0, -40(%rbp,%r8,2)
+	movdqu	%xmm1, -24(%rbp,%r8,2)
+.Ltmp1119:
+	addq	$16, %r8
+.Ltmp1120:
+	cmpq	%r8, %rcx
+	jne	.LBB7_120
+	cmpq	%rcx, %rdx
+	je	.LBB7_113
+.Ltmp1121:
+	testb	$12, %dl
+	je	.LBB7_126
+.LBB7_123:
+	movq	%rcx, %r8
+	movq	%rdx, %rcx
+	movabsq	$9223372036854775804, %rax
+	andq	%rax, %rcx
+	leaq	(%rdi,%rcx,2), %rax
+	.p2align	4
+.LBB7_124:
+.Ltmp1122:
+	movq	(%rdi,%r8,2), %xmm0
+.Ltmp1123:
+	punpcklbw	%xmm6, %xmm0
+	pshuflw	$177, %xmm0, %xmm0
+	pshufhw	$177, %xmm0, %xmm0
+	packuswb	%xmm0, %xmm0
+.Ltmp1124:
+	movq	%xmm0, -40(%rbp,%r8,2)
+.Ltmp1125:
+	addq	$4, %r8
+.Ltmp1126:
+	cmpq	%r8, %rcx
+	jne	.LBB7_124
+	cmpq	%rcx, %rdx
+	je	.LBB7_113
+.Ltmp1127:
+.LBB7_126:
+	leaq	(%rdi,%r12), %rdx
+.Ltmp1128:
+	leaq	-40(,%rcx,2), %rcx
+	addq	%rbp, %rcx
+.Ltmp1129:
+	.p2align	4
+.LBB7_127:
+	movzwl	(%rax), %r8d
+.Ltmp1130:
+	rolw	$8, %r8w
+.Ltmp1131:
+	addq	$2, %rax
+.Ltmp1132:
+	movw	%r8w, (%rcx)
+.Ltmp1133:
+	addq	$2, %rcx
+	cmpq	%rdx, %rax
+.Ltmp1134:
+	jne	.LBB7_127
+	jmp	.LBB7_113
+.Ltmp1135:
+	.p2align	4
+.LBB7_128:
+	cmpq	$2147483647, %rax
+	movq	8208(%rbp), %rax
+.Ltmp1136:
+	ja	.LBB7_244
+.Ltmp1137:
+	movq	%rdx, %r8
+	imulq	%rax, %r8
+	movl	$32, %eax
+	cmpq	%r12, %r8
+	movl	$4294967294, %r10d
+.Ltmp1138:
+	jne	.LBB7_187
+.Ltmp1139:
+	leaq	8(%r12), %r8
+.Ltmp1140:
+	addq	%rcx, %r8
+	movq	%r8, 8360(%rbp)
+.Ltmp1141:
+	jb	.LBB7_217
+.Ltmp1142:
+	addq	%rdx, %rdi
+.Ltmp1143:
+	jb	.LBB7_218
+.Ltmp1144:
+	cmpb	$3, %r15b
+.Ltmp1145:
+	jne	.LBB7_134
+	movq	%rdi, %rcx
+	shrq	$32, %rcx
+	jne	.LBB7_253
+.Ltmp1146:
+.LBB7_134:
+	cmpb	$0, 8375(%rbp)
+	je	.LBB7_137
+.Ltmp1147:
+	cmpq	8280(%rbp), %rdi
+	ja	.LBB7_252
+	movq	8360(%rbp), %rcx
+	cmpq	8312(%rbp), %rcx
+	ja	.LBB7_252
+.Ltmp1148:
+.LBB7_137:
+	movq	%rsi, %rcx
+	addq	8360(%rbp), %rcx
+.Ltmp1149:
+	jb	.LBB7_219
+.Ltmp1150:
+	cmpq	$-9, %rcx
+.Ltmp1151:
+	ja	.LBB7_213
+.Ltmp1152:
+	testb	$1, 8351(%rbp)
+	jne	.LBB7_143
+.Ltmp1153:
+	cmpq	%r10, %rdi
+	ja	.LBB7_251
+	cmpq	%r10, 8360(%rbp)
+	ja	.LBB7_251
+	cmpq	%r10, %rcx
+	ja	.LBB7_251
+.Ltmp1154:
+.LBB7_143:
+	movq	%rdi, 8336(%rbp)
+	movq	%rbx, 8328(%rbp)
+.Ltmp1155:
+	cmpq	%r13, %r11
+	movq	%r13, %rcx
+	cmovbq	%r11, %rcx
+.Ltmp1156:
+	movq	%r11, %rdi
+	subq	%rcx, %rdi
+.Ltmp1157:
+	cmpq	$4, %rdi
+	movl	$4, %r14d
+	cmovbq	%rdi, %r14
+.Ltmp1158:
+	addq	%r9, %rcx
+.Ltmp1159:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.33(%rip), %rdx
+	movq	%r14, %r8
+	movq	%r11, %rbx
+	callq	memcpy
+.Ltmp1160:
+	cmpq	$4, %rdi
+.Ltmp1161:
+	jb	.LBB7_234
+.Ltmp1162:
+	addq	%r13, %r14
+.Ltmp1163:
+	cmpq	%r14, %rbx
+	movq	%r14, %rcx
+	cmovbq	%rbx, %rcx
+.Ltmp1164:
+	movl	%r12d, -40(%rbp)
+.Ltmp1165:
+	movq	%rbx, %rdi
+	subq	%rcx, %rdi
+.Ltmp1166:
+	cmpq	$4, %rdi
+	movl	$4, %r15d
+	cmovbq	%rdi, %r15
+.Ltmp1167:
+	addq	8352(%rbp), %rcx
+.Ltmp1168:
+	leaq	-40(%rbp), %rdx
+	movq	%r15, %r8
+	callq	memcpy
+.Ltmp1169:
+	cmpq	$3, %rdi
+.Ltmp1170:
+	jbe	.LBB7_234
+.Ltmp1171:
+	addq	%r14, %r15
+.Ltmp1172:
+	cmpq	%r15, %rbx
+	movq	%r15, %rcx
+	cmovbq	%rbx, %rcx
+.Ltmp1173:
+	movq	%rbx, %rdi
+	subq	%rcx, %rdi
+.Ltmp1174:
+	cmpq	%r12, %rdi
+	movq	%r12, %r13
+	cmovbq	%rdi, %r13
+.Ltmp1175:
+	addq	8352(%rbp), %rcx
+	movq	8272(%rbp), %rdx
+.Ltmp1176:
+	movq	%r13, %r8
+	callq	memcpy
+.Ltmp1177:
+	cmpq	%r12, %rdi
+.Ltmp1178:
+	jb	.LBB7_234
+.Ltmp1179:
+	addq	%r15, %r13
+.Ltmp1180:
+.LBB7_147:
+	movq	8336(%rbp), %rdi
+	movq	8272(%rbp), %rax
+	movq	8200(%rbp), %rdx
+	leaq	(%rax,%rdx,2), %rax
+	movq	%rax, 8272(%rbp)
+	movq	8360(%rbp), %rax
+	movq	%rax, %rcx
+	movq	8328(%rbp), %rbx
+	subq	%rdx, %rbx
+	movq	8296(%rbp), %r10
+	movl	8368(%rbp), %r15d
+	movq	8304(%rbp), %r11
+	movq	8352(%rbp), %r9
+	jne	.LBB7_96
+	jmp	.LBB7_149
+.LBB7_187:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.28(%rip), %rcx
+.LBB7_188:
+.Ltmp1181:
+	movq	%r14, -40(%rbp)
+	movq	%rcx, -32(%rbp)
+	movq	%rax, -24(%rbp)
+.Ltmp920:
+.Ltmp1182:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.70(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp921:
+	jmp	.LBB7_230
+.Ltmp1183:
+.LBB7_148:
+	movl	$4, %eax
+	xorl	%edi, %edi
+.LBB7_149:
+	testq	%r10, %r10
+.Ltmp1184:
+	je	.LBB7_182
+	movq	%rdi, 8336(%rbp)
+.Ltmp1185:
+	movabsq	$-9223372034707292159, %rcx
+	movq	%rax, 8360(%rbp)
+	movq	%r10, %rax
+	mulq	%rcx
+	movq	%rdx, %rdi
+	shrq	$31, %rdi
+.Ltmp1186:
+	movq	%r10, %rax
+	shlq	$32, %rax
+	addq	%r10, %rax
+	negq	%rax
+	movabsq	$4294967297, %rcx
+	xorl	%edx, %edx
+	cmpq	%rcx, %rax
+	seta	%dl
+	leaq	(%rdi,%rdx), %rax
+.Ltmp1187:
+	cmpq	$1, %rax
+	adcq	%rdx, %rdi
+.Ltmp1188:
+	leaq	(,%rdi,4), %rax
+	leaq	(%rax,%rax,2), %rax
+.Ltmp1189:
+	addq	%rax, 8360(%rbp)
+.Ltmp1190:
+	jb	.LBB7_222
+.Ltmp1191:
+	addq	%r10, 8336(%rbp)
+.Ltmp1192:
+	jb	.LBB7_223
+.Ltmp1193:
+	cmpb	$3, %r15b
+.Ltmp1194:
+	jne	.LBB7_154
+	movq	8336(%rbp), %rax
+	shrq	$32, %rax
+	jne	.LBB7_254
+.Ltmp1195:
+.LBB7_154:
+	cmpb	$0, 8375(%rbp)
+	je	.LBB7_157
+	movl	$1, %edx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.25(%rip), %rax
+	movl	$29, %ecx
+	movq	8336(%rbp), %r8
+.Ltmp1196:
+	cmpq	8280(%rbp), %r8
+	ja	.LBB7_227
+	movq	8360(%rbp), %r8
+	cmpq	8312(%rbp), %r8
+	ja	.LBB7_227
+.Ltmp1197:
+.LBB7_157:
+	movq	%rsi, %r8
+	addq	8360(%rbp), %r8
+.Ltmp1198:
+	jb	.LBB7_225
+.Ltmp1199:
+	cmpq	$-9, %r8
+.Ltmp1200:
+	ja	.LBB7_221
+.Ltmp1201:
+	testb	%r15b, %r15b
+	sete	%al
+.Ltmp1202:
+	cmpb	$1, %r15b
+	ja	.LBB7_164
+	andb	8320(%rbp), %al
+	jne	.LBB7_164
+.Ltmp1203:
+	movl	$4294967294, %edx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.24(%rip), %rax
+	movl	$32, %ecx
+	cmpq	%rdx, 8336(%rbp)
+	ja	.LBB7_226
+	cmpq	%rdx, 8360(%rbp)
+	ja	.LBB7_226
+	movl	$4294967294, %r9d
+	movl	$3, %edx
+	cmpq	%r9, %r8
+	movq	8352(%rbp), %r9
+	ja	.LBB7_227
+.Ltmp1204:
+.LBB7_164:
+	cmpb	$1, %r15b
+	movl	$67108864, %eax
+	movl	$4, %ecx
+	cmovel	%eax, %ecx
+	movl	%ecx, 8288(%rbp)
+	movl	%r15d, 8368(%rbp)
+.Ltmp1205:
+	.p2align	4
+.LBB7_165:
+	movl	$4294967295, %eax
+	cmpq	%rax, %r10
+	movl	$4294967295, %r12d
+	movq	%r10, %rbx
+	cmovbq	%r10, %r12
+.Ltmp1206:
+	cmpb	$1, %r15b
+.Ltmp1207:
+	movl	%r12d, %eax
+	bswapl	%eax
+	cmovnel	%r12d, %eax
+.Ltmp1208:
+	movl	%eax, 8224(%rbp)
+	movq	%r11, %rcx
+.Ltmp1209:
+	cmpq	%r13, %r11
+	jb	.LBB7_167
+.Ltmp1210:
+	movq	%r13, %rcx
+.LBB7_167:
+.Ltmp1211:
+	movq	%r11, %r14
+	subq	%rcx, %r14
+	movq	%r14, %r15
+.Ltmp1212:
+	cmpq	$4, %r14
+	jb	.LBB7_169
+.Ltmp1213:
+	movl	$4, %r15d
+.LBB7_169:
+.Ltmp1214:
+	addq	%r9, %rcx
+.Ltmp1215:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.34(%rip), %rdx
+	movq	%r15, %r8
+	callq	memcpy
+.Ltmp1216:
+	cmpq	$4, %r14
+.Ltmp1217:
+	jb	.LBB7_231
+.Ltmp1218:
+	addq	%r13, %r15
+	movl	8288(%rbp), %eax
+.Ltmp1219:
+	movl	%eax, -40(%rbp)
+	movq	8304(%rbp), %r13
+	movq	%r13, %rcx
+.Ltmp1220:
+	cmpq	%r15, %r13
+	jb	.LBB7_172
+.Ltmp1221:
+	movq	%r15, %rcx
+.LBB7_172:
+.Ltmp1222:
+	subq	%rcx, %r13
+	movq	%r13, %r14
+.Ltmp1223:
+	cmpq	$4, %r13
+	movq	8352(%rbp), %rax
+	jb	.LBB7_174
+.Ltmp1224:
+	movl	$4, %r14d
+.LBB7_174:
+.Ltmp1225:
+	addq	%rax, %rcx
+.Ltmp1226:
+	leaq	-40(%rbp), %rdx
+	movq	%r14, %r8
+	callq	memcpy
+.Ltmp1227:
+	cmpq	$4, %r13
+.Ltmp1228:
+	jb	.LBB7_231
+.Ltmp1229:
+	addq	%r15, %r14
+	movq	8304(%rbp), %r15
+	movq	%r15, %rcx
+.Ltmp1230:
+	cmpq	%r14, %r15
+	jb	.LBB7_177
+.Ltmp1231:
+	movq	%r14, %rcx
+.LBB7_177:
+.Ltmp1232:
+	subq	%rcx, %r15
+	movq	%r15, %r13
+.Ltmp1233:
+	cmpq	$4, %r15
+	movq	8352(%rbp), %rax
+	jb	.LBB7_179
+.Ltmp1234:
+	movl	$4, %r13d
+.LBB7_179:
+.Ltmp1235:
+	addq	%rax, %rcx
+.Ltmp1236:
+	leaq	8224(%rbp), %rdx
+	movq	%r13, %r8
+	callq	memcpy
+.Ltmp1237:
+	cmpq	$4, %r15
+.Ltmp1238:
+	jb	.LBB7_231
+.Ltmp1239:
+	addq	%r14, %r13
+	movq	%rbx, %r10
+.Ltmp1240:
+	subq	%r12, %r10
+.Ltmp1241:
+	decq	%rdi
+	movl	8368(%rbp), %r15d
+	movq	8304(%rbp), %r11
+	movq	8352(%rbp), %r9
+.Ltmp1242:
+	jne	.LBB7_165
+.Ltmp1243:
+	movq	8336(%rbp), %rdi
+	movq	8360(%rbp), %rax
+.LBB7_182:
+	cmpb	$0, 8375(%rbp)
+	je	.LBB7_189
+	cmpq	%rax, 8312(%rbp)
+.Ltmp1244:
+	jne	.LBB7_185
+	cmpq	%rdi, 8280(%rbp)
+	je	.LBB7_204
+.Ltmp1245:
+.LBB7_185:
+	movq	$1, -40(%rbp)
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.78(%rip), %rax
+	movq	%rax, -32(%rbp)
+	movq	$31, -24(%rbp)
+.Ltmp926:
+.Ltmp1246:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.69(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp927:
+	jmp	.LBB7_230
+.Ltmp1247:
+.LBB7_189:
+	movq	%rax, %rcx
+.Ltmp1248:
+	addq	%rsi, %rax
+	addq	$8, %rax
+	cmpq	%r13, %rax
+	jne	.LBB7_228
+	movq	%rcx, 8360(%rbp)
+	leaq	(%rsi,%rcx), %rax
+	movq	%rax, 8328(%rbp)
+	movb	$1, %r14b
+.Ltmp1249:
+	cmpb	$1, %r15b
+	ja	.LBB7_192
+.Ltmp1250:
+	movl	$4294967294, %eax
+	cmpq	%rax, 8328(%rbp)
+	seta	%cl
+	cmpq	%rax, 8360(%rbp)
+	seta	%dl
+	orb	%cl, %dl
+	cmpq	%rax, %rdi
+	seta	%r14b
+	orb	%dl, %r14b
+.Ltmp1251:
+.LBB7_192:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.7(%rip), %rdx
+	cmpb	$3, %r15b
+	movq	%rdi, 8336(%rbp)
+.Ltmp1252:
+	je	.LBB7_205
+	testb	%r14b, %r14b
+	je	.LBB7_205
+.LBB7_194:
+	movl	$0, 8368(%rbp)
+	movq	%rdi, %r12
+.LBB7_195:
+	movq	%rsi, 8288(%rbp)
+.Ltmp1253:
+	cmpq	$4, %r11
+	movl	$4, %edi
+	movl	$4, %ebx
+	cmovbq	%r11, %rbx
+.Ltmp1254:
+	movq	%r9, %rcx
+	movq	%rbx, %r8
+	movq	%r9, %r15
+	callq	memcpy
+	movq	8304(%rbp), %rsi
+	movl	$5, %eax
+	movq	%rax, 8296(%rbp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.304(%rip), %rax
+	movq	%rax, 8320(%rbp)
+.Ltmp1255:
+	cmpq	$4, %rsi
+.Ltmp1256:
+	jb	.LBB7_229
+.Ltmp1257:
+	testb	%r14b, %r14b
+	movl	$-1, %eax
+	cmovel	8328(%rbp), %eax
+.Ltmp1258:
+	movl	%eax, %ecx
+	bswapl	%ecx
+	cmpb	$0, 8368(%rbp)
+	cmovel	%eax, %ecx
+.Ltmp1259:
+	movl	%ecx, -40(%rbp)
+.Ltmp1260:
+	subq	%rbx, %rsi
+.Ltmp1261:
+	cmpq	$4, %rsi
+	cmovbq	%rsi, %rdi
+.Ltmp1262:
+	addq	%r15, %rbx
+	leaq	-40(%rbp), %rdx
+.Ltmp1263:
+	movq	%rbx, %rcx
+	movq	%rdi, %r8
+	callq	memcpy
+.Ltmp1264:
+	cmpq	$4, %rsi
+.Ltmp1265:
+	jb	.LBB7_229
+.Ltmp1266:
+	testb	%r14b, %r14b
+	movq	8304(%rbp), %r9
+	je	.LBB7_202
+	movq	8328(%rbp), %rax
+.Ltmp1267:
+	movq	%rax, -40(%rbp)
+	movq	$0, -32(%rbp)
+	movq	%r12, -24(%rbp)
+	movabsq	$6076280913019273217, %rax
+	movq	%rax, -16(%rbp)
+	movq	8360(%rbp), %rax
+	movq	%rax, -8(%rbp)
+.Ltmp1268:
+	cmpq	$12, %r9
+	movl	$12, %ecx
+	cmovbq	%r9, %rcx
+.Ltmp1269:
+	movq	%r9, %rsi
+	subq	%rcx, %rsi
+.Ltmp1270:
+	cmpq	$4, %rsi
+	movl	$4, %edi
+	movl	$4, %ebx
+	cmovbq	%rsi, %rbx
+	movq	8352(%rbp), %r15
+.Ltmp1271:
+	addq	%r15, %rcx
+.Ltmp1272:
+	leaq	anon.2383d0784cad652f6df82c647783d727.7(%rip), %rdx
+	movq	%rbx, %r8
+	movq	%r9, %r12
+	callq	memcpy
+.Ltmp1273:
+	cmpq	$4, %rsi
+.Ltmp1274:
+	jb	.LBB7_229
+.Ltmp1275:
+	addq	$12, %rbx
+.Ltmp1276:
+	cmpb	$0, 8368(%rbp)
+	movl	$671088640, %eax
+	movl	$40, %ecx
+	cmovnel	%eax, %ecx
+.Ltmp1277:
+	movl	%ecx, 8224(%rbp)
+.Ltmp1278:
+	cmpq	%rbx, %r12
+	movq	%rbx, %rcx
+	cmovbq	%r12, %rcx
+.Ltmp1279:
+	movq	%r12, %rsi
+	subq	%rcx, %rsi
+.Ltmp1280:
+	cmpq	$4, %rsi
+	cmovbq	%rsi, %rdi
+.Ltmp1281:
+	addq	%r15, %rcx
+	leaq	8224(%rbp), %rdx
+.Ltmp1282:
+	movq	%rdi, %r8
+	callq	memcpy
+.Ltmp1283:
+	cmpq	$4, %rsi
+.Ltmp1284:
+	jb	.LBB7_229
+.Ltmp1285:
+	addq	%rbx, %rdi
+.Ltmp1286:
+	cmpq	%rdi, %r12
+	cmovbq	%r12, %rdi
+.Ltmp1287:
+	movq	%r12, %rsi
+	subq	%rdi, %rsi
+.Ltmp1288:
+	cmpq	$40, %rsi
+	movl	$40, %r8d
+	cmovbq	%rsi, %r8
+.Ltmp1289:
+	addq	%r15, %rdi
+	leaq	-40(%rbp), %rdx
+.Ltmp1290:
+	movq	%rdi, %rcx
+	callq	memcpy
+.Ltmp1291:
+	cmpq	$40, %rsi
+.Ltmp1292:
+	jb	.LBB7_229
+.Ltmp1293:
+	movq	%r12, %r9
+.LBB7_202:
+.Ltmp1294:
+	movl	$4294967295, %eax
+	movq	8336(%rbp), %rcx
+	cmpq	%rax, %rcx
+	cmovbq	%rcx, %rax
+.Ltmp1295:
+	movl	%eax, %ecx
+	bswapl	%ecx
+	movl	8368(%rbp), %r15d
+	testb	%r15b, %r15b
+	cmovel	%eax, %ecx
+.Ltmp1296:
+	movl	%ecx, -40(%rbp)
+	movq	8216(%rbp), %rcx
+.Ltmp1297:
+	cmpq	%rcx, %r9
+	cmovbq	%r9, %rcx
+.Ltmp1298:
+	movq	%r9, %rsi
+	subq	%rcx, %rsi
+.Ltmp1299:
+	cmpq	$4, %rsi
+	movl	$4, %edi
+	movl	$4, %r8d
+	cmovbq	%rsi, %r8
+	movq	8352(%rbp), %r12
+.Ltmp1300:
+	addq	%r12, %rcx
+	leaq	-40(%rbp), %rdx
+	movq	%r9, %rbx
+.Ltmp1301:
+	callq	memcpy
+.Ltmp1302:
+	cmpq	$3, %rsi
+.Ltmp1303:
+	jbe	.LBB7_229
+.Ltmp1304:
+	movq	8288(%rbp), %rdx
+	addq	$4, %rdx
+	testb	%r14b, %r14b
+	movl	$-1, %eax
+	cmovel	8360(%rbp), %eax
+.Ltmp1305:
+	movl	%eax, %ecx
+	bswapl	%ecx
+	testb	%r15b, %r15b
+	cmovel	%eax, %ecx
+.Ltmp1306:
+	movl	%ecx, -40(%rbp)
+.Ltmp1307:
+	cmpq	%rdx, %rbx
+	cmovbq	%rbx, %rdx
+.Ltmp1308:
+	subq	%rdx, %rbx
+.Ltmp1309:
+	cmpq	$4, %rbx
+	cmovbq	%rbx, %rdi
+.Ltmp1310:
+	addq	%rdx, %r12
+	leaq	-40(%rbp), %rdx
+.Ltmp1311:
+	movq	%r12, %rcx
+	movq	%rdi, %r8
+	callq	memcpy
+.Ltmp1312:
+	cmpq	$3, %rbx
+.Ltmp1313:
+	jbe	.LBB7_229
+.Ltmp1314:
+.LBB7_204:
+	movq	%r13, %rax
+	movaps	8384(%rbp), %xmm6
+	.seh_startepilogue
+	addq	$8536, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.LBB7_205:
+.Ltmp1315:
+	cmpb	$1, %r15b
+	movl	%r15d, %eax
+	sete	%r8b
+.Ltmp1316:
+	movzbl	%al, %r12d
+	leaq	.LJTI7_0(%rip), %rax
+	movslq	(%rax,%r12,4), %rcx
+	addq	%rax, %rcx
+.Ltmp1317:
+	jmpq	*%rcx
+.LBB7_206:
+	movl	%r8d, 8368(%rbp)
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.5(%rip), %rdx
+	jmp	.LBB7_195
+.LBB7_207:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.6(%rip), %rdx
+	movb	$1, %al
+	movl	%eax, 8368(%rbp)
+	xorl	%r12d, %r12d
+	jmp	.LBB7_195
+.Ltmp1318:
+.LBB7_208:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.8(%rip), %rdx
+	xorl	%r12d, %r12d
+	movl	$0, 8368(%rbp)
+	jmp	.LBB7_195
+.LBB7_209:
+	movl	$22, %ecx
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.24(%rip), %r9
+.LBB7_210:
+.Ltmp1319:
+	movq	%rax, -40(%rbp)
+	movq	%r9, -32(%rbp)
+	movq	%rcx, -24(%rbp)
+.Ltmp928:
+.Ltmp1320:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.66(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp929:
+	jmp	.LBB7_230
+.Ltmp1321:
+.LBB7_211:
+	movl	$3, %eax
+	movl	$22, %r9d
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.24(%rip), %rcx
+.LBB7_212:
+.Ltmp1322:
+	movq	%rax, -40(%rbp)
+	movq	%rcx, -32(%rbp)
+	movq	%r9, -24(%rbp)
+.Ltmp918:
+.Ltmp1323:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.65(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp919:
+	jmp	.LBB7_230
+.Ltmp1324:
+.LBB7_213:
+	movl	$25, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.23(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_214:
+.Ltmp1325:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.77(%rip), %r9
+.Ltmp1326:
+	movl	$40, %r8d
+	xorl	%ecx, %ecx
+	callq	_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail
+	ud2
+.LBB7_215:
+.Ltmp1327:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.71(%rip), %r9
+.Ltmp1328:
+	movl	$40, %r8d
+	xorl	%ecx, %ecx
+	callq	_RNvNtNtCs7uUmbfRqPp3_4core5slice5index16slice_index_fail
+	ud2
+.LBB7_216:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.23(%rip), %rcx
+.Ltmp1329:
+	jmp	.LBB7_212
+.LBB7_217:
+	movl	$24, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.20(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_218:
+	movl	$25, %eax
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.8(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_219:
+	movl	$23, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.22(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_220:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.72(%rip), %rcx
+	jmp	.LBB7_212
+.Ltmp1330:
+.LBB7_221:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.23(%rip), %rax
+	jmp	.LBB7_224
+.LBB7_222:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.20(%rip), %rax
+	movl	$24, %ecx
+	jmp	.LBB7_226
+.LBB7_223:
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.8(%rip), %rax
+.LBB7_224:
+	movl	$25, %ecx
+	jmp	.LBB7_226
+.LBB7_225:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.22(%rip), %rax
+	movl	$23, %ecx
+.LBB7_226:
+	movl	$3, %edx
+.LBB7_227:
+.Ltmp1331:
+	movq	%rdx, -40(%rbp)
+	movq	%rax, -32(%rbp)
+	movq	%rcx, -24(%rbp)
+.Ltmp922:
+.Ltmp1332:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.67(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp923:
+	jmp	.LBB7_230
+.Ltmp1333:
+.LBB7_228:
+	movl	$1, %eax
+	movq	%rax, 8296(%rbp)
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.74(%rip), %rax
+	movq	%rax, 8320(%rbp)
+.LBB7_229:
+	movq	8296(%rbp), %rax
+.Ltmp1334:
+	movq	%rax, -40(%rbp)
+	movq	8320(%rbp), %rax
+	movq	%rax, -32(%rbp)
+	movq	$18, -24(%rbp)
+.Ltmp924:
+.Ltmp1335:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.68(%rip), %rax
+	movq	%rax, 32(%rsp)
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.139(%rip), %rcx
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.75(%rip), %r9
+	leaq	-40(%rbp), %r8
+	movl	$43, %edx
+	callq	_RNvNtCs7uUmbfRqPp3_4core6result13unwrap_failed
+	nop
+.Ltmp1336:
+.Ltmp925:
+.LBB7_230:
+	ud2
+.LBB7_231:
+	movl	$5, %edx
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.304(%rip), %rax
+	jmp	.LBB7_227
+.LBB7_232:
+	movl	$29, %ecx
+	leaq	anon.e0b506695b64a106018c101f557ddd1a.12(%rip), %r9
+	jmp	.LBB7_210
+.LBB7_233:
+	movl	$3, %eax
+	movl	$29, %r9d
+.Ltmp1337:
+	jmp	.LBB7_212
+.Ltmp1338:
+.LBB7_234:
+	leaq	anon.9fd0cb6f799daade78cca4ae9f41143d.304(%rip), %rcx
+	movl	$5, %r14d
+	jmp	.LBB7_188
+.LBB7_243:
+	movl	$17, %eax
+	leaq	anon.258535f62fc33b881ae2c659abaf99b1.14(%rip), %rcx
+	jmp	.LBB7_188
+.LBB7_244:
+	movl	$20, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.29(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_245:
+.Ltmp1339:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.64(%rip), %rcx
+	callq	_RNvNtNtCs7uUmbfRqPp3_4core9panicking11panic_const23panic_const_div_by_zero
+	ud2
+.Ltmp1340:
+.LBB7_246:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.26(%rip), %r9
+	movl	$31, %ecx
+.Ltmp1341:
+	jmp	.LBB7_210
+.Ltmp1342:
+.LBB7_247:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.80(%rip), %r9
+	movl	$25, %ecx
+	movl	$1, %eax
+.Ltmp1343:
+	jmp	.LBB7_210
+.Ltmp1344:
+.LBB7_248:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.73(%rip), %rcx
+	movl	$16, %r9d
+.Ltmp1345:
+	jmp	.LBB7_212
+.LBB7_249:
+.Ltmp1346:
+	movq	8184(%rbp), %rcx
+	movq	8192(%rbp), %r9
+	jmp	.LBB7_212
+.Ltmp1347:
+.LBB7_250:
+	movq	8184(%rbp), %r9
+	movq	8192(%rbp), %rcx
+	jmp	.LBB7_210
+.Ltmp1348:
+.LBB7_251:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.24(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_252:
+	movl	$29, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.25(%rip), %rcx
+	jmp	.LBB7_188
+.LBB7_253:
+	movl	$31, %eax
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.26(%rip), %rcx
+	movl	$3, %r14d
+	jmp	.LBB7_188
+.LBB7_254:
+	leaq	anon.52e397aad986347ac2c57cb8b55f2edb.26(%rip), %rax
+	movl	$31, %ecx
+	jmp	.LBB7_226
+.LBB7_255:
+	movl	$32, %ecx
+	movq	%r8, %r9
+	jmp	.LBB7_210
+.Ltmp1349:
+	.seh_handlerdata
+	.long	$cppxdata$_RNvCs6S5kJXzagsx_12wavl_profile6render@IMGREL
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$258@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$258@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$258@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_258:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1350:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_262
+	movq	-32(%rbp), %rax
+.Ltmp1351:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_262
+	testq	%rcx, %rcx
+	je	.LBB7_262
+.Ltmp1352:
+	leaq	-1(%rax), %rcx
+.Ltmp1353:
+	callq	*23(%rax)
+.Ltmp1354:
+.LBB7_262:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1355:
+	.seh_handlerdata
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$263@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$263@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$263@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_263:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1356:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_267
+	movq	-32(%rbp), %rax
+.Ltmp1357:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_267
+	testq	%rcx, %rcx
+	je	.LBB7_267
+.Ltmp1358:
+	leaq	-1(%rax), %rcx
+.Ltmp1359:
+	callq	*23(%rax)
+.Ltmp1360:
+.LBB7_267:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1361:
+	.seh_handlerdata
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$268@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$268@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$268@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_268:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1362:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_272
+	movq	-32(%rbp), %rax
+.Ltmp1363:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_272
+	testq	%rcx, %rcx
+	je	.LBB7_272
+.Ltmp1364:
+	leaq	-1(%rax), %rcx
+.Ltmp1365:
+	callq	*23(%rax)
+.Ltmp1366:
+.LBB7_272:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1367:
+	.seh_handlerdata
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$273@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$273@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$273@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_273:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1368:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_277
+	movq	-32(%rbp), %rax
+.Ltmp1369:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_277
+	testq	%rcx, %rcx
+	je	.LBB7_277
+.Ltmp1370:
+	leaq	-1(%rax), %rcx
+.Ltmp1371:
+	callq	*23(%rax)
+.Ltmp1372:
+.LBB7_277:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1373:
+	.seh_handlerdata
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$278@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$278@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$278@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_278:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1374:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_282
+	movq	-32(%rbp), %rax
+.Ltmp1375:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_282
+	testq	%rcx, %rcx
+	je	.LBB7_282
+.Ltmp1376:
+	leaq	-1(%rax), %rcx
+.Ltmp1377:
+	callq	*23(%rax)
+.Ltmp1378:
+.LBB7_282:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1379:
+	.seh_handlerdata
+	.section	.text,"xr",one_only,_RNvCs6S5kJXzagsx_12wavl_profile6render,unique,7
+	.seh_endproc
+	.def	"?dtor$283@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA";
+	.scl	3;
+	.type	32;
+	.endef
+	.p2align	4
+"?dtor$283@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA":
+.seh_proc "?dtor$283@?0?_RNvCs6S5kJXzagsx_12wavl_profile6render@4HA"
+.LBB7_283:
+	movq	%rdx, 16(%rsp)
+	pushq	%rbp
+	.seh_pushreg %rbp
+.Ltmp1380:
+	pushq	%r15
+	.seh_pushreg %r15
+	pushq	%r14
+	.seh_pushreg %r14
+	pushq	%r13
+	.seh_pushreg %r13
+	pushq	%r12
+	.seh_pushreg %r12
+	pushq	%rsi
+	.seh_pushreg %rsi
+	pushq	%rdi
+	.seh_pushreg %rdi
+	pushq	%rbx
+	.seh_pushreg %rbx
+	subq	$104, %rsp
+	.seh_stackalloc 104
+	leaq	128(%rdx), %rbp
+	movdqa	%xmm6, 80(%rsp)
+	.seh_savexmm %xmm6, 80
+	.seh_endprologue
+	cmpl	$5, -40(%rbp)
+	jb	.LBB7_287
+	movq	-32(%rbp), %rax
+.Ltmp1381:
+	movl	%eax, %ecx
+	andl	$3, %ecx
+	leal	-2(%rcx), %edx
+	cmpl	$2, %edx
+	jb	.LBB7_287
+	testq	%rcx, %rcx
+	je	.LBB7_287
+.Ltmp1382:
+	leaq	-1(%rax), %rcx
+.Ltmp1383:
+	callq	*23(%rax)
+.Ltmp1384:
+.LBB7_287:
+	movaps	80(%rsp), %xmm6
+	.seh_startepilogue
+	addq	$104, %rsp
+	popq	%rbx
+	popq	%rdi
+	popq	%rsi
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	%rbp
+	.seh_endepilogue
+	retq
+.Ltmp1385:

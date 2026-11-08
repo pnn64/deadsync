@@ -1,0 +1,5 @@
+path	zero_span	extended_end_trim	declared_frames	reference_emitted_frames	native_frames	end_padding_frames	samples	peak_abs_error	rms_error
+floor0/vorbis_floor_type_0.ogg	true	false	6262786	6262786	6262786	62	12525572	2.521276473999e-5	1.509311686798e-6
+legacy/Lumme-Badloop.ogg	false	false	17862912	17862912	17862912	320	35725824	3.725290298462e-7	2.988794441312e-8
+itgmania/goin-under.ogg	false	false	5443200	5443200	5443200	832	10886400	7.152557373047e-7	7.273434138482e-8
+itgmania/mecha-tribe-assault.ogg	false	true	4630500	4762304	4630500	132828	9261000	7.152557373047e-7	8.176303353248e-8
