@@ -27,7 +27,38 @@ const MENUS: &[(&str, &str)] = &[
     ("player-options", "Player Options"),
     ("content-browser", "Content Browser"),
 ];
+const PLAYER_VARIANT_MENUS: &[&str] = &[
+    "profile-select",
+    "style-select",
+    "mode-select",
+    "song-select",
+    "course-select",
+];
+const PLAYER_VARIANTS: &[PlayerVariant] = &[
+    PlayerVariant {
+        suffix: "-1p",
+        label: "1P",
+        joined: [true, false],
+    },
+    PlayerVariant {
+        suffix: "-2p",
+        label: "2P",
+        joined: [false, true],
+    },
+    PlayerVariant {
+        suffix: "-1p-2p",
+        label: "1P + 2P",
+        joined: [true, true],
+    },
+];
 const CAPTURE_TIME: f32 = 2.0;
+
+#[derive(Clone, Copy)]
+struct PlayerVariant {
+    suffix: &'static str,
+    label: &'static str,
+    joined: [bool; 2],
+}
 
 const HELP: &str = "\
 Export Simply Love menu PNGs (requires a desktop and Vulkan-capable GPU).
@@ -195,7 +226,8 @@ fn export(
     backend.cleanup();
     println!(
         "Exported {} PNGs. Gallery: {}",
-        options.sizes.len() * MENUS.len(),
+        options.sizes.len()
+            * (MENUS.len() - 1 + PLAYER_VARIANT_MENUS.len() * PLAYER_VARIANTS.len()),
         output.join("index.html").display()
     );
     Ok(())
@@ -210,6 +242,10 @@ fn export_resolution(
     preview: &MenuPreviewContent,
 ) -> Result<()> {
     let mut timer = ScreenshotTimer::new();
+    let default_song_select = output.join(size.name()).join("song-select.png");
+    if default_song_select.is_file() {
+        std::fs::remove_file(default_song_select)?;
+    }
     let metrics = Metrics::centered(480.0 * size.aspect.0 as f32 / size.aspect.1 as f32, 480.0);
     space::set_current_metrics(metrics);
     space::set_current_window_px(size.width, size.height);
@@ -219,18 +255,38 @@ fn export_resolution(
     backend.set_default_projection(metrics.projection());
     let mut captures = export_support::CaptureBatch::default();
     for &(name, _) in MENUS {
-        export_menu(
-            name,
-            backend,
-            assets,
-            size,
-            output,
-            song.clone(),
-            preview,
-            metrics,
-            &mut captures,
-            &mut timer,
-        )?;
+        if name != "song-select" {
+            export_menu(
+                name,
+                None,
+                backend,
+                assets,
+                size,
+                output,
+                song.clone(),
+                preview,
+                metrics,
+                &mut captures,
+                &mut timer,
+            )?;
+        }
+        if PLAYER_VARIANT_MENUS.contains(&name) {
+            for variant in PLAYER_VARIANTS {
+                export_menu(
+                    name,
+                    Some(*variant),
+                    backend,
+                    assets,
+                    size,
+                    output,
+                    song.clone(),
+                    preview,
+                    metrics,
+                    &mut captures,
+                    &mut timer,
+                )?;
+            }
+        }
     }
     timer.record_captures(captures.finish(backend, size)?);
     timer.report("menu", size, None);
@@ -239,6 +295,7 @@ fn export_resolution(
 
 fn export_menu(
     name: &str,
+    player_variant: Option<PlayerVariant>,
     backend: &mut Backend,
     assets: &mut AssetManager,
     size: &Size,
@@ -251,12 +308,16 @@ fn export_menu(
 ) -> Result<()> {
     let folder = output.join(size.name());
     std::fs::create_dir_all(&folder)?;
-    let path = folder.join(format!("{name}.png"));
+    let path = folder.join(format!(
+        "{}{suffix}.png",
+        name,
+        suffix = player_variant.map_or("", |variant| variant.suffix)
+    ));
     if name == "content-browser" && size.aspect != (16, 9) {
         return save_disabled_content_browser(size, &path, timer);
     }
     let prepare_started = Instant::now();
-    let mut actors = menu_actors(name, assets, song, preview)?;
+    let mut actors = menu_actors(name, player_variant, assets, song, preview)?;
     let frame = prepare_frame(&actors, backend, assets, metrics)?;
     captures.draw(backend, &frame, assets.textures(), path)?;
     actors.clear();
@@ -309,17 +370,26 @@ fn save_disabled_content_browser(
 
 fn menu_actors(
     name: &str,
+    player_variant: Option<PlayerVariant>,
     assets: &AssetManager,
     song: Arc<deadsync_chart::SongData>,
     preview: &MenuPreviewContent,
 ) -> Result<Vec<Actor>> {
     match name {
         "title" => Ok(title_actors()),
-        "profile-select" => Ok(profile_select_actors(assets)),
-        "style-select" => Ok(style_select_actors()),
-        "mode-select" => Ok(mode_select_actors(assets)),
-        "song-select" => Ok(preview.song_select_actors(assets, CAPTURE_TIME)),
-        "course-select" => Ok(preview.course_select_actors(assets, CAPTURE_TIME)),
+        "profile-select" => Ok(profile_select_actors(assets, player_variant)),
+        "style-select" => Ok(style_select_actors(player_variant)),
+        "mode-select" => Ok(mode_select_actors(assets, player_variant)),
+        "song-select" => Ok(preview.song_select_actors(
+            assets,
+            CAPTURE_TIME,
+            player_variant.map(|variant| variant.joined),
+        )),
+        "course-select" => Ok(preview.course_select_actors(
+            assets,
+            CAPTURE_TIME,
+            player_variant.map(|variant| variant.joined),
+        )),
         "key-bindings" => Ok(key_bindings_actors(assets)),
         "options" => Ok(options_actors(assets)),
         "player-options" => Ok(player_options_actors(song, assets)),
@@ -332,20 +402,41 @@ fn title_actors() -> Vec<Actor> {
     screens::menu::get_actors(&screens::menu::init(), None, 1.0)
 }
 
-fn profile_select_actors(assets: &AssetManager) -> Vec<Actor> {
-    let state = screens::select_profile::init(views::ProfilePickerView::default());
+fn profile_select_actors(
+    assets: &AssetManager,
+    player_variant: Option<PlayerVariant>,
+) -> Vec<Actor> {
+    let mut state = screens::select_profile::init(views::ProfilePickerView::default());
+    if let Some(variant) = player_variant {
+        screens::select_profile::set_joined(&mut state, variant.joined[0], variant.joined[1]);
+    }
     screens::select_profile::get_actors(&state, assets, 1.0)
 }
 
-fn style_select_actors() -> Vec<Actor> {
-    screens::select_style::get_actors(&screens::select_style::init(
-        views::SelectFlowRuntimeView::default(),
-    ))
+fn style_select_actors(player_variant: Option<PlayerVariant>) -> Vec<Actor> {
+    let mut runtime = views::SelectFlowRuntimeView::default();
+    if let Some(variant) = player_variant {
+        runtime.players = preview_players(variant.joined);
+    }
+    screens::select_style::get_actors(&screens::select_style::init(runtime))
 }
 
-fn mode_select_actors(assets: &AssetManager) -> Vec<Actor> {
-    let state = screens::select_mode::init(views::SelectFlowRuntimeView::default());
+fn mode_select_actors(assets: &AssetManager, player_variant: Option<PlayerVariant>) -> Vec<Actor> {
+    let mut runtime = views::SelectFlowRuntimeView::default();
+    if let Some(variant) = player_variant {
+        runtime.players = preview_players(variant.joined);
+    }
+    let state = screens::select_mode::init(runtime);
     screens::select_mode::get_actors(&state, assets)
+}
+
+fn preview_players(joined: [bool; 2]) -> [views::SelectFlowPlayerView; 2] {
+    std::array::from_fn(|index| views::SelectFlowPlayerView {
+        joined: joined[index],
+        guest: true,
+        display_name: format!("Menu Preview P{}", index + 1),
+        ..Default::default()
+    })
 }
 
 fn key_bindings_actors(assets: &AssetManager) -> Vec<Actor> {

@@ -10,7 +10,7 @@ use crate::screens::Screen;
 use crate::screens::components::{
     select_course::{
         course_summary,
-        layout::{self, CourseSelectLayout, CourseStatsLayout},
+        layout::{self, CourseSelectLayout},
         rating_list,
     },
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
@@ -2190,108 +2190,6 @@ pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
     }
 }
 
-fn push_compact_course_stats(
-    actors: &mut Vec<Actor>,
-    pane: select_pane::PaneLayout,
-    scale: f32,
-    machine_font: deadsync_config::theme::MachineFont,
-    accent_color: [f32; 4],
-    values: select_pane::StatsValues,
-    meter: Arc<str>,
-    score_text: &CourseScoreText,
-) {
-    let zoom = 0.8 * scale;
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(pane.center_x, pane.center_y):
-        setsize(pane.width, pane.height):
-        z(120):
-        diffuse(accent_color[0], accent_color[1], accent_color[2], 1.0)
-    ));
-
-    let stats = [
-        (tr("Gameplay", "StatsSteps"), values.steps),
-        (tr("Gameplay", "StatsMines"), values.mines),
-        (tr("Gameplay", "StatsJumps"), values.jumps),
-        (tr("Gameplay", "StatsHands"), values.hands),
-        (tr("Gameplay", "StatsHolds"), values.holds),
-        (tr("Gameplay", "StatsRolls"), values.rolls),
-    ];
-    let columns = [
-        pane.left() + 6.0 * scale,
-        pane.left() + pane.width / 3.0 + 2.0 * scale,
-        pane.left() + pane.width * (2.0 / 3.0) + 2.0 * scale,
-    ];
-    let rows = [13.0, 31.0, 49.0].map(|offset| pane.top() + offset * scale);
-    for (idx, (label, value)) in stats.into_iter().enumerate() {
-        let column = idx % 2;
-        let row = idx / 2;
-        let value_x = columns[column] + 25.0 * scale;
-        actors.push(act!(text:
-            font("miso"):
-            settext(value):
-            align(1.0, 0.5):
-            horizalign(right):
-            xy(value_x, rows[row]):
-            zoom(zoom):
-            maxwidth(30.0 * scale):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        actors.push(act!(text:
-            font("miso"):
-            settext(label):
-            align(0.0, 0.5):
-            xy(columns[column] + 28.0 * scale, rows[row]):
-            zoom(zoom):
-            maxwidth(44.0 * scale):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-    }
-
-    for (row, (name, score)) in [
-        (&score_text.machine_name, &score_text.machine_score),
-        (&score_text.player_name, &score_text.player_score),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        actors.push(act!(text:
-            font("miso"):
-            settext(Arc::clone(name)):
-            align(0.0, 0.5):
-            xy(columns[2], rows[row]):
-            zoom(zoom):
-            maxwidth(24.0 * scale):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        actors.push(act!(text:
-            font("miso"):
-            settext(Arc::clone(score)):
-            align(0.0, 0.5):
-            xy(columns[2] + 26.0 * scale, rows[row]):
-            zoom(zoom):
-            maxwidth(58.0 * scale):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-    }
-
-    actors.push(act!(text:
-        font(machine_font_key(machine_font, FontRole::Header)):
-        settext(meter):
-        align(1.0, 0.5):
-        horizalign(right):
-        xy(pane.right() - 6.0 * scale, rows[2]):
-        zoom(0.48 * scale):
-        maxwidth(66.0 * scale):
-        z(121):
-        diffuse(0.0, 0.0, 0.0, 1.0)
-    ));
-}
-
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -2388,44 +2286,31 @@ pub fn push_actors(
         holds: stats_text.holds,
         rolls: stats_text.rolls,
     };
-    match course_layout.stats_layout {
-        CourseStatsLayout::Compact => push_compact_course_stats(
-            actors,
-            select_pane::layout(pane_cx),
-            course_layout.scale,
-            visual_policy.machine_font,
-            pane_sel_col,
-            stats_values,
-            meter_text,
-            &state.score_text,
+    select_pane::push_base(
+        actors,
+        select_pane::StatsPaneParams {
+            machine_font: visual_policy.machine_font,
+            pane_cx,
+            accent_color: pane_sel_col,
+            values: stats_values,
+            meter: Some(meter_text),
+        },
+    );
+    let pane_layout = select_pane::layout(pane_cx);
+    for (row, (name, score)) in [
+        (
+            Arc::clone(&state.score_text.machine_name),
+            Arc::clone(&state.score_text.machine_score),
         ),
-        CourseStatsLayout::Standard => {
-            select_pane::push_base(
-                actors,
-                select_pane::StatsPaneParams {
-                    machine_font: visual_policy.machine_font,
-                    pane_cx,
-                    accent_color: pane_sel_col,
-                    values: stats_values,
-                    meter: Some(meter_text),
-                },
-            );
-            let pane_layout = select_pane::layout(pane_cx);
-            let lines = [
-                (
-                    Arc::clone(&state.score_text.machine_name),
-                    Arc::clone(&state.score_text.machine_score),
-                ),
-                (
-                    Arc::clone(&state.score_text.player_name),
-                    Arc::clone(&state.score_text.player_score),
-                ),
-            ];
-            for (i, (name, pct)) in lines.into_iter().enumerate() {
-                actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.top() + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.top() + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            }
-        }
+        (
+            Arc::clone(&state.score_text.player_name),
+            Arc::clone(&state.score_text.player_score),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        select_pane::push_score_line(actors, pane_layout, row, name, score);
     }
 
     course_summary::push(
@@ -2506,6 +2391,7 @@ pub fn push_actors(
             expanded_line_count: 0,
             accent_color: step_artist_col,
             z_base: 122,
+            background_width: 175.0,
             label_text: step_idx_text.into(),
             label_max_width: 22.0 * scale,
             artist_text: step_artist_text.into(),

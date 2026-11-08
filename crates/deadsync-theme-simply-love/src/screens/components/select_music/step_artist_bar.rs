@@ -15,6 +15,7 @@ pub struct StepArtistBarParams {
     pub expanded_line_count: usize,
     pub accent_color: [f32; 4],
     pub z_base: i16,
+    pub background_width: f32,
     pub label_text: TextContent,
     pub label_max_width: f32,
     pub artist_text: TextContent,
@@ -30,8 +31,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
             let comp_h = screen_height() / 28.0;
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.left_x + 87.5, p.center_y):
-                setsize(175.0, comp_h):
+                xy(p.left_x + p.background_width * 0.5, p.center_y):
+                setsize(p.background_width, comp_h):
                 z(p.z_base):
                 diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
             ));
@@ -70,8 +71,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
             };
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.left_x + 95.0, p.center_y + 18.0):
-                setsize(190.0, comp_h):
+                xy(p.left_x + p.background_width * 0.5, p.center_y + 18.0):
+                setsize(p.background_width, comp_h):
                 fadebottom(fade_bottom):
                 z(p.z_base):
                 diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
@@ -90,8 +91,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.artist_text):
                 align(0.0, 0.0):
-                xy(p.left_x + 45.0, p.center_y - 6.0):
-                maxwidth(175.0):
+                xy(p.left_x + p.artist_x_offset, p.center_y - 6.0):
+                maxwidth(p.artist_max_width):
                 zoom(0.8):
                 z(z_text):
                 diffuse(0.0, 0.0, 0.0, 1.0)
@@ -113,11 +114,18 @@ mod tests {
             expanded_line_count: 3,
             accent_color: [1.0, 0.0, 0.0, 1.0],
             z_base: 10,
+            background_width: match layout {
+                StepArtistBarLayout::Legacy => 175.0,
+                StepArtistBarLayout::Expanded => 190.0,
+            },
             label_text: TextContent::Static("STEPS"),
             label_max_width: 40.0,
             artist_text: TextContent::Static("a very long chart description"),
             artist_x_offset: 49.5,
-            artist_max_width: 124.0,
+            artist_max_width: match layout {
+                StepArtistBarLayout::Legacy => 124.0,
+                StepArtistBarLayout::Expanded => 175.0,
+            },
             artist_color: [0.0, 0.0, 0.0, 1.0],
         }
     }
@@ -181,5 +189,29 @@ mod tests {
             assert_eq!(offset[0], 32.0 + expected_center_offset);
             assert_eq!(offset[0] - width * 0.5, 32.0);
         }
+    }
+
+    #[test]
+    fn legacy_bar_uses_the_width_allocated_beside_peak_info() {
+        let mut p = params(StepArtistBarLayout::Legacy);
+        p.background_width = 220.0;
+        p.artist_x_offset = 52.0;
+        p.artist_max_width = 150.0;
+        let mut actors = Vec::new();
+
+        push(&mut actors, p);
+
+        let Actor::Sprite { offset, size, .. } = &actors[0] else {
+            panic!("step header background should be a sprite");
+        };
+        let deadlib_present::actors::SizeSpec::Px(width) = size[0] else {
+            panic!("step header background should have a fixed width");
+        };
+        assert_eq!(width, 220.0);
+        assert_eq!(offset[0], 32.0 + 110.0);
+        assert_eq!(
+            text_width_flags(&actors),
+            vec![(Some(40.0), true), (Some(150.0), true)]
+        );
     }
 }

@@ -53,7 +53,7 @@
           <a href="{{ image.src }}"><img loading="lazy" src="{{ image.src }}" alt="{{ menu.label }} at {{ image.resolution }}"></a>
           {% if image.disabled %}<span class="disabled">DISABLED · 16:9 ONLY</span>{% endif %}
         </div>
-        <figcaption>{{ image.resolution }}</figcaption>
+        <figcaption>{{ image.caption }}</figcaption>
       </figure>
       {% endfor %}
       </div>

@@ -105,7 +105,68 @@ pub(crate) struct SongSelectLayout {
     pub chart_panel: WidgetLayout,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ArtistPeakLineLayout {
+    pub step_header_y: f32,
+    pub artist_background_width: f32,
+    pub artist_x_offset: f32,
+    pub artist_max_width: f32,
+    pub peak_bounds: WidgetBounds,
+    pub peak_text_zoom: f32,
+    pub peak_text_max_width: f32,
+}
+
 impl SongSelectLayout {
+    pub fn current() -> Self {
+        Self::new(
+            deadlib_present::space::screen_width(),
+            deadlib_present::space::screen_height(),
+            crate::ui_layout::UILayoutType::current(),
+        )
+    }
+
+    pub fn artist_peak_line(
+        self,
+        screen_height: f32,
+        is_p2_layout: bool,
+        expanded: bool,
+        peak_text_logical_width: f32,
+    ) -> ArtistPeakLineLayout {
+        let panel = self.chart_panel.bounds;
+        let p2_offset = if is_p2_layout { 88.0 } else { 0.0 };
+        let center_y = screen_height * 0.5;
+        let step_header_y = if expanded {
+            center_y - 18.0 + p2_offset
+        } else {
+            center_y - screen_height / 56.0 - 9.0 + p2_offset
+        };
+        let graph_center_y = center_y + if expanded { 62.0 } else { 23.0 } + p2_offset;
+        let graph_top = graph_center_y - panel.height * 0.5;
+        let peak_text_zoom = 0.8 * self.zoom;
+        let peak_width = (peak_text_logical_width * peak_text_zoom).clamp(0.0, panel.width);
+        let peak_bounds = WidgetBounds::new(
+            panel.width - peak_width,
+            step_header_y - graph_top,
+            peak_width,
+            0.0,
+        );
+        let gap = 8.0 * self.zoom;
+        let artist_background_width = (panel.width - peak_width - gap).max(0.0);
+        let artist_x_offset = if expanded { 45.0 } else { 49.5 };
+        let artist_max_width =
+            (artist_background_width - artist_x_offset - gap).max(0.0) * self.zoom;
+
+        ArtistPeakLineLayout {
+            step_header_y,
+            artist_background_width,
+            artist_x_offset,
+            artist_max_width,
+            peak_bounds,
+            peak_text_zoom,
+            peak_text_max_width: peak_width / peak_text_zoom,
+        }
+    }
+
     pub fn new(screen_width: f32, screen_height: f32, layout_type: UILayoutType) -> Self {
         let is_ultra_wide = layout_type == UILayoutType::UltraWide;
         let use_full_left_pane = !is_ultra_wide;
@@ -157,7 +218,12 @@ impl SongSelectLayout {
             (286.0, transform_x(center_x - 187.0))
         };
         let chart_panel = WidgetLayout {
-            bounds: WidgetBounds::new(chart_center_x - chart_width * 0.5, 0.0, chart_width, 64.0),
+            bounds: WidgetBounds::new(
+                chart_center_x - chart_width * 0.5,
+                0.0,
+                chart_width,
+                64.0 * zoom,
+            ),
             zoom,
         };
 
@@ -240,6 +306,51 @@ mod tests {
             assert_eq!(layout.song_details.widget.bounds.width, expected_width);
             assert_eq!(layout.chart_panel.bounds.x, 0.0);
             assert_eq!(layout.chart_panel.bounds.width, expected_width - 32.0);
+            assert_eq!(layout.chart_panel.bounds.height, 64.0 * layout.zoom);
+        }
+    }
+
+    #[test]
+    fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
+        for (screen_width, screen_height, layout_type) in [
+            (480.0, 480.0, UILayoutType::Squareish),
+            (853.0, 480.0, UILayoutType::Wide),
+            (1147.0, 480.0, UILayoutType::UltraWide),
+        ] {
+            let layout = SongSelectLayout::new(screen_width, screen_height, layout_type);
+            let panel = layout.chart_panel.bounds;
+            for p2_offset in [0.0, 88.0] {
+                for expanded in [false, true] {
+                    let line =
+                        layout.artist_peak_line(screen_height, p2_offset > 0.0, expanded, 99.9);
+                    let gap = 8.0 * layout.zoom;
+                    let expected_header_y = screen_height * 0.5
+                        + if expanded {
+                            -18.0
+                        } else {
+                            -screen_height / 56.0 - 9.0
+                        }
+                        + p2_offset;
+                    let graph_offset = if expanded { 62.0 } else { 23.0 };
+                    let graph_top =
+                        screen_height * 0.5 + graph_offset + p2_offset - panel.height * 0.5;
+
+                    assert!((line.step_header_y - expected_header_y).abs() < f32::EPSILON);
+                    assert!(line.peak_bounds.x >= 0.0);
+                    assert!((line.peak_bounds.right() - panel.width).abs() < f32::EPSILON);
+                    assert!(
+                        (graph_top + line.peak_bounds.y - line.step_header_y).abs() < f32::EPSILON
+                    );
+                    assert!(
+                        (line.artist_background_width + line.peak_bounds.width + gap - panel.width)
+                            .abs()
+                            < f32::EPSILON
+                    );
+                    assert!(line.artist_max_width > 0.0);
+                    assert!(line.peak_text_zoom > 0.0);
+                    assert!(line.peak_text_max_width > 0.0);
+                }
+            }
         }
     }
 

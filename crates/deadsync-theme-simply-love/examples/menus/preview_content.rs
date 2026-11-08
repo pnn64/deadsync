@@ -221,6 +221,8 @@ const PREVIEW_COURSES: [PreviewCourse; 16] = [
 const SONG_COUNT: usize = PREVIEW_SONGS.len();
 const COURSE_STAGE_COUNT: usize = 6;
 const SELECTED_COURSE_INDEX: usize = 0;
+const PREVIEW_P1_DIFFICULTY_INDEX: usize = 4;
+const PREVIEW_P2_DIFFICULTY_INDEX: usize = 1;
 
 pub struct MenuPreviewContent {
     song_pack: deadsync_chart::SongPack,
@@ -246,20 +248,100 @@ impl MenuPreviewContent {
         self.song_pack.songs[0].clone()
     }
 
-    pub fn song_select_actors(&self, assets: &AssetManager, selection_time: f32) -> Vec<Actor> {
+    pub fn song_select_actors(
+        &self,
+        assets: &AssetManager,
+        selection_time: f32,
+        player_variant: Option<[bool; 2]>,
+    ) -> Vec<Actor> {
         let mut init = views::SelectMusicInitView::default();
         init.song_packs.push(self.song_pack.clone());
         init.policy.wheel.show_grades = true;
         init.policy.wheel.show_lamps = true;
+        if let Some(joined) = player_variant {
+            init.session.joined = joined;
+            if joined == [true, true] {
+                init.session.play_style = deadsync_profile::PlayStyle::Versus;
+            }
+            if joined == [false, true] {
+                init.session.player_side = deadsync_profile::PlayerSide::P2;
+            }
+        }
         let play_style = init.session.play_style;
         let mut state = screens::select_music::init(init);
-        let runtime = song_select_runtime(&state, play_style);
+        let joined = player_variant.unwrap_or([true, false]);
+        state.preferred_difficulty_index = if joined == [false, true] {
+            PREVIEW_P2_DIFFICULTY_INDEX
+        } else {
+            PREVIEW_P1_DIFFICULTY_INDEX
+        };
+        state.p2_preferred_difficulty_index = PREVIEW_P2_DIFFICULTY_INDEX;
+        screens::select_music::select_preferred_steps(&mut state);
+        let runtime = song_select_runtime(&state, play_style, joined);
         screens::select_music::sync_runtime_view(&mut state, runtime);
+        screens::select_music::prime_displayed_chart_data(&mut state);
+        let song = &self.song_pack.songs[0];
+        let p1_chart = song
+            .chart_for_steps_index(play_style.chart_type(), state.selected_steps_index)
+            .expect("P1 preview difficulty exists");
+        let p2_chart = play_style.is_versus().then(|| {
+            song.chart_for_steps_index(play_style.chart_type(), state.p2_selected_steps_index)
+                .expect("P2 preview difficulty exists")
+        });
+        const DENSITY_SHAPE: [f64; 32] = [
+            0.0, 0.2, 0.35, 0.25, 0.6, 0.45, 0.3, 0.75, 0.5, 0.4, 0.9, 0.55, 0.3, 0.65, 0.45, 0.8,
+            0.35, 0.5, 0.95, 0.6, 0.4, 0.7, 0.3, 0.55, 0.85, 0.45, 0.35, 0.75, 0.5, 0.9, 0.6, 0.2,
+        ];
+        let [graph_width, graph_height] = state.density_graph_dimensions();
+        let build_density_graph = |chart: &deadsync_chart::ChartData| {
+            let first_second = chart.first_second;
+            let last_second = song.precise_last_second().max(first_second + 1.0);
+            let measure_nps = DENSITY_SHAPE.map(|density| chart.max_nps * density);
+            let measure_seconds: Vec<_> = (0..DENSITY_SHAPE.len())
+                .map(|index| {
+                    first_second
+                        + (last_second - first_second) * index as f32
+                            / (DENSITY_SHAPE.len() - 1) as f32
+                })
+                .collect();
+            screens::components::shared::density::build_density_histogram_mesh(
+                &measure_nps,
+                chart.max_nps,
+                &measure_seconds,
+                first_second,
+                last_second,
+                graph_width,
+                graph_height,
+                0.0,
+                graph_width,
+                None,
+                1.0,
+            )
+        };
+        let p1_graph = build_density_graph(p1_chart);
+        assert!(
+            !p1_graph.is_empty(),
+            "P1 preview density graph must contain steps"
+        );
+        state.current_graph_mesh = Some(Arc::from(p1_graph));
+        state.current_graph_mesh_p2 = p2_chart.map(|chart| {
+            let graph = build_density_graph(chart);
+            assert!(
+                !graph.is_empty(),
+                "P2 preview density graph must contain steps"
+            );
+            Arc::from(graph)
+        });
         state.selection_animation_timer = selection_time;
         screens::select_music::get_actors(&state, assets, 1)
     }
 
-    pub fn course_select_actors(&self, assets: &AssetManager, selection_time: f32) -> Vec<Actor> {
+    pub fn course_select_actors(
+        &self,
+        assets: &AssetManager,
+        selection_time: f32,
+        player_variant: Option<[bool; 2]>,
+    ) -> Vec<Actor> {
         let init = views::SelectCourseInitView {
             song_packs: vec![self.song_pack.clone()],
             courses: self.courses.clone(),
@@ -275,12 +357,8 @@ impl MenuPreviewContent {
             &mut state,
             views::SelectCourseRuntimeView {
                 players: Some([
-                    views::SelectFlowPlayerView {
-                        joined: true,
-                        display_name: "Menu Preview".to_owned(),
-                        ..Default::default()
-                    },
-                    views::SelectFlowPlayerView::default(),
+                    preview_flow_player(player_variant.unwrap_or([true, false]), 0),
+                    preview_flow_player(player_variant.unwrap_or([true, false]), 1),
                 ]),
                 score: Some(views::SelectCourseScoreView {
                     player_initials: "JIN".to_owned(),
@@ -433,23 +511,48 @@ fn write_simfile(
         "#TITLE:{};#SUBTITLE:{};#ARTIST:{};#GENRE:{};#BPMS:{};#OFFSET:0;#BANNER:banner.png;\n",
         preview.title, preview.subtitle, preview.artist, preview.genre, preview.bpms
     );
-    append_chart(&mut simfile, index, preview.meter, false);
+    append_chart(
+        &mut simfile,
+        index,
+        preview.meter,
+        "Step-Artist",
+        "Challenge",
+        false,
+    );
+    if index == 0 {
+        append_chart(
+            &mut simfile,
+            index,
+            preview.meter.saturating_sub(6),
+            "Step-Artist P2",
+            "Basic",
+            false,
+        );
+    }
     if matches!(index, 3 | 7) {
-        append_chart(&mut simfile, index, preview.meter.saturating_sub(2), true);
+        append_chart(
+            &mut simfile,
+            index,
+            preview.meter.saturating_sub(2),
+            "Alternate",
+            "Edit",
+            true,
+        );
     }
     std::fs::write(path, simfile)?;
     Ok(())
 }
 
-fn append_chart(simfile: &mut String, index: usize, meter: u32, edit: bool) {
-    let (description, difficulty) = if edit {
-        ("Alternate", "Edit")
-    } else {
-        ("Single", "Challenge")
-    };
+fn append_chart(
+    simfile: &mut String,
+    index: usize,
+    meter: u32,
+    description: &str,
+    difficulty: &str,
+    edit: bool,
+) {
     simfile.push_str(&format!(
-        "#NOTES:dance-single:{description} {:02}:{difficulty}:{meter}:0,0,0,0,0:\n",
-        index + 1
+        "#NOTES:dance-single:{description}:{difficulty}:{meter}:0,0,0,0,0:\n"
     ));
     append_note_rows(simfile, index, meter, edit);
 }
@@ -467,14 +570,18 @@ fn append_note_rows(simfile: &mut String, index: usize, meter: u32, edit: bool) 
     for row in 0..rows {
         let mut notes = ['0'; 4];
         let phrase_index = row % PHRASE.len();
-        let phrase = match (phrase_index, meter) {
-            (28, 0..=12) => "1000",
-            (32, 0..=13) => "0010",
-            (36, 0..=15) => "1100",
-            (52, 0..=14) => "0001",
-            (56, 0..=14) => "0000",
-            (60 | 62, 0..=11) => "0000",
-            _ => PHRASE[phrase_index],
+        let phrase = if meter <= 6 && (row / 8) % 2 == 1 {
+            "0000"
+        } else {
+            match (phrase_index, meter) {
+                (28, 0..=12) => "1000",
+                (32, 0..=13) => "0010",
+                (36, 0..=15) => "1100",
+                (52, 0..=14) => "0001",
+                (56, 0..=14) => "0000",
+                (60 | 62, 0..=11) => "0000",
+                _ => PHRASE[phrase_index],
+            }
         }
         .as_bytes();
         for column in 0..notes.len() {
@@ -493,13 +600,14 @@ fn append_note_rows(simfile: &mut String, index: usize, meter: u32, edit: bool) 
 fn song_select_runtime(
     state: &screens::select_music::State,
     play_style: deadsync_profile::PlayStyle,
+    joined: [bool; 2],
 ) -> views::SelectMusicRuntimeView {
     let slots = screens::select_music::music_wheel_runtime_request(state)
         .slots
-        .map(song_slot_runtime);
+        .map(|request| song_slot_runtime(request, joined));
     views::SelectMusicRuntimeView {
         music_wheel: Some(views::MusicWheelRuntimeView {
-            joined: [true, false],
+            joined,
             play_style,
             slots,
             ..Default::default()
@@ -510,6 +618,7 @@ fn song_select_runtime(
 
 fn song_slot_runtime(
     request: views::MusicWheelSlotRuntimeRequest<'_>,
+    joined: [bool; 2],
 ) -> views::MusicWheelSlotRuntimeView {
     let mut slot = views::MusicWheelSlotRuntimeView::default();
     let views::MusicWheelSlotRuntimeRequest::Song { song, has_edit, .. } = request else {
@@ -517,13 +626,26 @@ fn song_slot_runtime(
     };
     slot.has_edit = has_edit;
     if let Some(score) = sample_score(&song.title) {
-        slot.sides[0].score = Some(score);
-        slot.sides[0].lamp = score.lamp_index.map(|index| deadsync_score::CachedLamp {
-            index,
-            judge_count: score.lamp_judge_count,
-        });
+        for (index, is_joined) in joined.into_iter().enumerate() {
+            if is_joined {
+                slot.sides[index].score = Some(score);
+                slot.sides[index].lamp = score.lamp_index.map(|index| deadsync_score::CachedLamp {
+                    index,
+                    judge_count: score.lamp_judge_count,
+                });
+            }
+        }
     }
     slot
+}
+
+fn preview_flow_player(joined: [bool; 2], index: usize) -> views::SelectFlowPlayerView {
+    views::SelectFlowPlayerView {
+        joined: joined[index],
+        guest: true,
+        display_name: format!("Menu Preview P{}", index + 1),
+        ..Default::default()
+    }
 }
 
 fn sample_score(title: &str) -> Option<deadsync_score::CachedScore> {

@@ -1,7 +1,7 @@
 use askama::Template;
 use std::{collections::BTreeSet, path::Path};
 
-use super::{MENUS, Result, Size};
+use super::{MENUS, PLAYER_VARIANT_MENUS, PLAYER_VARIANTS, Result, Size};
 
 #[derive(Template)]
 #[template(path = "../examples/menus/export_menus_viewer.html")]
@@ -18,6 +18,7 @@ struct GalleryMenu {
 
 struct GalleryImage {
     resolution: String,
+    caption: String,
     src: String,
     disabled: bool,
 }
@@ -36,13 +37,30 @@ pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
             label,
             images: sizes
                 .iter()
-                .map(|size| {
+                .flat_map(|size| {
                     let disabled = menu == "content-browser" && size.aspect != (16, 9);
-                    GalleryImage {
-                        resolution: size.name(),
-                        src: format!("{}/{menu}.png", size.name()),
-                        disabled,
+                    let mut images = Vec::new();
+                    if menu != "song-select" {
+                        images.push(GalleryImage {
+                            resolution: size.name(),
+                            caption: size.name(),
+                            src: format!("{}/{menu}.png", size.name()),
+                            disabled,
+                        });
                     }
+                    if PLAYER_VARIANT_MENUS.contains(&menu) {
+                        images.extend(PLAYER_VARIANTS.iter().map(|variant| GalleryImage {
+                            resolution: size.name(),
+                            caption: format!("{} · {}", size.name(), variant.label),
+                            src: format!(
+                                "{}/{menu}{suffix}.png",
+                                size.name(),
+                                suffix = variant.suffix
+                            ),
+                            disabled: false,
+                        }));
+                    }
+                    images
                 })
                 .collect(),
         })

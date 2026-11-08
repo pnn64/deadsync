@@ -12,12 +12,16 @@ const PANE_WIDTH_INSET: f32 = 10.0;
 const PANE_BOTTOM_INSET: f32 = 32.0;
 const PANE_HEIGHT: f32 = 60.0;
 const STATS_LABEL_GAP: f32 = 3.0;
-const METER_RIGHT_INSET: f32 = 8.0;
-
 #[derive(Clone, Copy)]
 struct PaneLayoutConstants {
     text_zoom: f32,
+    scale_base: f32,
+    scale_per_width: f32,
+    meter_zoom: f32,
     stats_columns: [[f32; 2]; 2],
+    score_columns: [[f32; 2]; 2],
+    score_alignments: [f32; 2],
+    score_max_widths: [Option<f32>; 2],
     cols: [f32; 4],
     rows: [f32; 3],
     value_max_width: Option<f32>,
@@ -27,17 +31,29 @@ struct PaneLayoutConstants {
 
 const SQUAREISH_LAYOUT: PaneLayoutConstants = PaneLayoutConstants {
     text_zoom: 0.8,
-    stats_columns: [[0.0, 34.0], [0.45, 0.0]],
+    scale_base: 0.0,
+    scale_per_width: 1.0 / 310.0,
+    meter_zoom: 0.48,
+    stats_columns: [[0.0, 31.0], [1.0 / 3.0, 27.0]],
+    score_columns: [[2.0 / 3.0, 2.0], [2.0 / 3.0, 28.0]],
+    score_alignments: [0.0, 0.0],
+    score_max_widths: [Some(24.0), Some(58.0)],
     cols: [-104.0, -36.0, 54.0, 150.0],
     rows: [13.0, 31.0, 49.0],
-    value_max_width: Some(40.0),
-    label_max_width: Some(42.0),
+    value_max_width: Some(30.0),
+    label_max_width: Some(44.0),
     meter_max_width: Some(66.0),
 };
 
 const WIDE_LAYOUT: PaneLayoutConstants = PaneLayoutConstants {
     text_zoom: 0.9,
+    scale_base: 1.0,
+    scale_per_width: 0.0,
+    meter_zoom: 1.0,
     stats_columns: [[0.5, -133.0], [0.5, -38.0]],
+    score_columns: [[0.5, 31.0], [0.5, 98.5]],
+    score_alignments: [0.5, 1.0],
+    score_max_widths: [Some(30.0), None],
     cols: [-133.0, -38.0, 76.0, 190.0],
     rows: [13.0, 31.0, 49.0],
     value_max_width: None,
@@ -63,29 +79,44 @@ pub struct PaneLayout {
     pub height: f32,
     pub text_zoom: f32,
     pub stats_cols: [f32; 2],
+    score_columns: [f32; 2],
+    score_alignments: [f32; 2],
+    score_max_widths: [Option<f32>; 2],
     pub cols: [f32; 4],
     pub rows: [f32; 3],
     value_max_width: Option<f32>,
     label_max_width: Option<f32>,
     meter_max_width: Option<f32>,
+    scale: f32,
+    meter_zoom: f32,
 }
 
 impl PaneLayout {
     pub fn from_center(center: [f32; 2], size: [f32; 2]) -> Self {
         let [width, height] = size;
         let constants = layout_constants(UILayoutType::current());
+        let scale = scale_for_width(width, constants);
         Self {
             center_x: center[0],
             center_y: center[1],
             width,
             height,
-            text_zoom: constants.text_zoom,
-            stats_cols: stats_value_columns(width),
+            text_zoom: constants.text_zoom * scale,
+            stats_cols: stats_value_columns_for(width, constants),
+            score_columns: constants
+                .score_columns
+                .map(|[width_scale, offset]| width_scale.mul_add(width, offset * scale)),
+            score_alignments: constants.score_alignments,
+            score_max_widths: constants
+                .score_max_widths
+                .map(|max_width| max_width.map(|value| value * scale)),
             cols: constants.cols,
-            rows: constants.rows,
-            value_max_width: constants.value_max_width,
-            label_max_width: constants.label_max_width,
-            meter_max_width: constants.meter_max_width,
+            rows: constants.rows.map(|value| value * scale),
+            value_max_width: constants.value_max_width.map(|value| value * scale),
+            label_max_width: constants.label_max_width.map(|value| value * scale),
+            meter_max_width: constants.meter_max_width.map(|value| value * scale),
+            scale,
+            meter_zoom: constants.meter_zoom * scale,
         }
     }
 
@@ -136,13 +167,15 @@ pub struct StatsPaneParams {
     pub meter: Option<Arc<str>>,
 }
 
-fn stats_value_columns(pane_width: f32) -> [f32; 2] {
-    stats_value_columns_for(pane_width, UILayoutType::current())
+fn scale_for_width(pane_width: f32, constants: &PaneLayoutConstants) -> f32 {
+    (constants.scale_base + constants.scale_per_width * pane_width).clamp(0.0, 1.0)
 }
 
-fn stats_value_columns_for(pane_width: f32, layout_type: UILayoutType) -> [f32; 2] {
-    let columns = layout_constants(layout_type).stats_columns;
-    columns.map(|[width_scale, offset]| width_scale.mul_add(pane_width, offset))
+fn stats_value_columns_for(pane_width: f32, constants: &PaneLayoutConstants) -> [f32; 2] {
+    let scale = scale_for_width(pane_width, constants);
+    constants
+        .stats_columns
+        .map(|[width_scale, offset]| width_scale.mul_add(pane_width, offset * scale))
 }
 
 fn constrain_text_width(actor: &mut Actor, max_width: Option<f32>) {
@@ -196,7 +229,7 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
     for (i, (label, value)) in stats.into_iter().enumerate() {
         let (c, r) = (i % 2, i / 2);
         let value_x = l.left() + l.stats_cols[c];
-        let label_x = value_x + STATS_LABEL_GAP;
+        let label_x = value_x + STATS_LABEL_GAP * l.scale;
         let mut value_actor = act!(text:
             font("miso"):
             settext(value):
@@ -228,7 +261,8 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
             settext(meter):
             align(1.0, 0.5):
             horizalign(right):
-            xy(l.right() - METER_RIGHT_INSET, l.top() + l.rows[1]):
+            xy(l.right() - 6.0 * l.scale, l.top() + l.rows[1]):
+            zoom(l.meter_zoom):
             z(121):
             diffuse(0.0, 0.0, 0.0, 1.0)
         );
@@ -244,9 +278,41 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
     }
 }
 
+pub fn push_score_line(
+    out: &mut Vec<Actor>,
+    pane: PaneLayout,
+    row: usize,
+    name: Arc<str>,
+    score: Arc<str>,
+) {
+    let y = pane.top() + pane.rows[row];
+    let mut name_actor = act!(text:
+        font("miso"):
+        settext(name):
+        align(pane.score_alignments[0], 0.5):
+        xy(pane.left() + pane.score_columns[0], y):
+        zoom(pane.text_zoom):
+        z(121):
+        diffuse(0.0, 0.0, 0.0, 1.0)
+    );
+    let mut score_actor = act!(text:
+        font("miso"):
+        settext(score):
+        align(pane.score_alignments[1], 0.5):
+        xy(pane.left() + pane.score_columns[1], y):
+        zoom(pane.text_zoom):
+        z(121):
+        diffuse(0.0, 0.0, 0.0, 1.0)
+    );
+    constrain_text_width(&mut name_actor, pane.score_max_widths[0]);
+    constrain_text_width(&mut score_actor, pane.score_max_widths[1]);
+    out.push(name_actor);
+    out.push(score_actor);
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PaneLayout, stats_value_columns_for};
+    use super::{PaneLayout, layout_constants, stats_value_columns_for};
     use crate::ui_layout::UILayoutType;
 
     #[test]
@@ -266,18 +332,20 @@ mod tests {
 
     #[test]
     fn narrow_stats_columns_fit_four_digit_values_and_labels() {
-        let text_zoom = 0.8;
-        let value_max_width = 40.0;
-        let label_max_width = 42.0;
         for pane_width in [230.0, 310.0] {
-            let [left, right] = stats_value_columns_for(pane_width, UILayoutType::Squareish);
+            let scale = (pane_width / 310.0_f32).clamp(0.0, 1.0);
+            let text_zoom = 0.8 * scale;
+            let value_max_width = 30.0 * scale;
+            let label_max_width = 44.0 * scale;
+            let [left, right] =
+                stats_value_columns_for(pane_width, layout_constants(UILayoutType::Squareish));
             let left_value_right = left;
             let right_value_right = right;
             let left_value_left = left_value_right - value_max_width * text_zoom;
-            let left_label_right = left_value_right + 3.0 + label_max_width * text_zoom;
+            let left_label_right = left_value_right + 3.0 * scale + label_max_width * text_zoom;
             let right_value_left = right_value_right - value_max_width * text_zoom;
-            let right_label_right = right_value_right + 3.0 + label_max_width * text_zoom;
-            let meter_left = pane_width - 74.0;
+            let right_label_right = right_value_right + 3.0 * scale + label_max_width * text_zoom;
+            let meter_left = pane_width - 6.0 * scale - 66.0 * scale * 0.48 * scale;
 
             assert!(left_value_left >= 0.0);
             assert!(left_label_right < right_value_left);
@@ -295,15 +363,15 @@ mod tests {
     #[test]
     fn stats_columns_are_selected_by_layout_family() {
         assert_eq!(
-            stats_value_columns_for(310.0, UILayoutType::Squareish),
-            [34.0, 139.5]
+            stats_value_columns_for(310.0, layout_constants(UILayoutType::Squareish)),
+            [31.0, 310.0 / 3.0 + 27.0]
         );
         assert_eq!(
-            stats_value_columns_for(630.0, UILayoutType::Wide),
+            stats_value_columns_for(630.0, layout_constants(UILayoutType::Wide)),
             [182.0, 277.0]
         );
         assert_eq!(
-            stats_value_columns_for(850.0, UILayoutType::UltraWide),
+            stats_value_columns_for(850.0, layout_constants(UILayoutType::UltraWide)),
             [292.0, 387.0]
         );
     }

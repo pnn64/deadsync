@@ -15,7 +15,7 @@ use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        layout::{SongDetailsLayout, SongSelectLayout},
+        layout::{ArtistPeakLineLayout, SongDetailsLayout, SongSelectLayout},
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
@@ -25,7 +25,6 @@ use crate::screens::components::{
 };
 use crate::screens::pad_config;
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, input as screen_input};
-use crate::ui_layout::UILayoutType;
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ProfilePickerView,
@@ -716,14 +715,24 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         {
             *phase = phase.advanced(
                 previous.chart_hash.is_some() && previous.chart_hash == current.chart_hash,
-                previous.leaderboards.as_ref().map(|snapshot| snapshot.loading),
-                current.leaderboards.as_ref().map(|snapshot| snapshot.loading),
+                previous
+                    .leaderboards
+                    .as_ref()
+                    .map(|snapshot| snapshot.loading),
+                current
+                    .leaderboards
+                    .as_ref()
+                    .map(|snapshot| snapshot.loading),
                 now,
             );
         }
         state.scorebox_presentation = prepare_scorebox_presentation(&scoreboxes);
         state.scoreboxes = scoreboxes;
-        for (clock, runtime) in state.scorebox_cycle_clocks.iter_mut().zip(&state.scoreboxes) {
+        for (clock, runtime) in state
+            .scorebox_cycle_clocks
+            .iter_mut()
+            .zip(&state.scoreboxes)
+        {
             clock.sync(runtime, now);
         }
     }
@@ -1682,6 +1691,7 @@ fn build_info_box_children(key: &InfoBoxActorKey, layout: SongDetailsLayout) -> 
 /// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
 /// (that would rewrite the pad's just-captured live values).
 pub struct State {
+    layout: SongSelectLayout,
     /// Reused visible-wheel buffer owned by Select Music's main-thread state.
     /// It lives for the screen, is pre-sized to the largest built-in cached sort
     /// during initialization, and is then cleared/refilled without allocation.
@@ -1926,6 +1936,13 @@ pub struct State {
     pack_total_seconds_by_index: Vec<f64>,
     pack_color_indices: Vec<usize>,
     new_pack_names: FxHashSet<String>,
+}
+
+impl State {
+    pub fn density_graph_dimensions(&self) -> [f32; 2] {
+        let bounds = self.layout.chart_panel.bounds;
+        [bounds.width, bounds.height]
+    }
 }
 
 #[inline(always)]
@@ -3638,6 +3655,7 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
 #[must_use]
 pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
+    let layout = SongSelectLayout::current();
     debug!("Preparing SelectMusic state...");
     let song_cache = &init_view.song_packs;
 
@@ -3885,6 +3903,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let folder_stats = FolderStatsCache::new(&group_entries);
 
     let mut state = State {
+        layout,
         all_entries: Arc::clone(&group_entries),
         series_entries,
         group_entries,
@@ -4143,6 +4162,7 @@ pub fn init_placeholder() -> State {
     };
 
     State {
+        layout: SongSelectLayout::current(),
         all_entries: Arc::from([]),
         series_entries: Arc::from([]),
         group_entries: Arc::from([]),
@@ -5223,7 +5243,11 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         for c in &state.pad_profiles[*slot] {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if c.is_default { format!(" ({})", tr("Common", "Default")) } else { String::new() };
+            let default = if c.is_default {
+                format!(" ({})", tr("Common", "Default"))
+            } else {
+                String::new()
+            };
             items.push(select_music_menu::pad_profile_item(
                 format!("{star}{prefix}{}", tr("SelectMusicMenu", "PadProfile")),
                 format!("{}{default}", c.name),
@@ -12114,9 +12138,8 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                 } else {
                     state.session.player_side
                 };
-                let online_active = state.scoreboxes
-                    [profile_data::player_side_index(primary_side)]
-                .online_active;
+                let online_active =
+                    state.scoreboxes[profile_data::player_side_index(primary_side)].online_active;
                 if let Some(effect) = maybe_refresh_select_music_leaderboard(
                     &mut state.last_refreshed_leaderboard_hash,
                     primary_side,
@@ -13047,8 +13070,7 @@ pub fn push_actors(
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    let song_select_layout =
-        SongSelectLayout::new(screen_width(), screen_height(), UILayoutType::current());
+    let song_select_layout = state.layout;
     let left_panel_scale = song_select_layout.zoom;
     actors.reserve(256);
     state.labels.borrow_mut().sync();
@@ -13322,30 +13344,51 @@ pub fn push_actors(
     let panel_w = chart_panel.width;
     let graph_h = chart_panel.height;
     let graph_left = chart_panel.x;
+    let peak_text_sample = cached_chart_info_text(true, false, false, 0, 99.9, 0.0);
+    let peak_text_logical_width = asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |miso_font| {
+                font::measure_line_width_logical(miso_font, peak_text_sample.as_ref(), all_fonts)
+                    as f32
+            })
+        })
+        .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
+    let artist_peak_line_p1 = song_select_layout.artist_peak_line(
+        screen_height(),
+        false,
+        step_artist_expanded,
+        peak_text_logical_width,
+    );
+    let artist_peak_line_p2 = song_select_layout.artist_peak_line(
+        screen_height(),
+        true,
+        step_artist_expanded,
+        peak_text_logical_width,
+    );
 
     // Step Artist & Steps
-    let base_y = 0.5f32.mul_add(-(screen_height() / 28.0), screen_center_y() - 9.0);
     let mut push_step_artist =
-        |y_cen: f32,
+        |line_layout: ArtistPeakLineLayout,
          left_x: f32,
          sel_col: [f32; 4],
          step_artist: Arc<str>,
          line_count: usize,
-         layout: step_artist_bar::StepArtistBarLayout| {
+         bar_layout: step_artist_bar::StepArtistBarLayout| {
             step_artist_bar::push(
                 actors,
                 step_artist_bar::StepArtistBarParams {
                     left_x,
-                    center_y: y_cen,
-                    layout,
+                    center_y: line_layout.step_header_y,
+                    layout: bar_layout,
                     expanded_line_count: line_count,
                     accent_color: sel_col,
                     z_base: 120,
+                    background_width: line_layout.artist_background_width,
                     label_text: labels.steps.clone().into(),
                     label_max_width: 40.0 * left_panel_scale,
                     artist_text: step_artist.into(),
-                    artist_x_offset: 49.5,
-                    artist_max_width: 124.0 * left_panel_scale,
+                    artist_x_offset: line_layout.artist_x_offset,
+                    artist_max_width: line_layout.artist_max_width,
                     artist_color: [0.0, 0.0, 0.0, 1.0],
                 },
             );
@@ -13353,7 +13396,7 @@ pub fn push_actors(
 
     if is_versus {
         push_step_artist(
-            base_y,
+            artist_peak_line_p1,
             graph_left,
             sel_col_p1,
             step_artist,
@@ -13361,7 +13404,7 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
         push_step_artist(
-            base_y + 88.0,
+            artist_peak_line_p2,
             graph_left,
             sel_col_p2,
             step_artist_p2,
@@ -13369,13 +13412,13 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
-        let y_cen = if step_artist_expanded {
-            screen_center_y() - 18.0 + if is_p2_single { 88.0 } else { 0.0 }
+        let line_layout = if is_p2_single {
+            artist_peak_line_p2
         } else {
-            base_y + if is_p2_single { 88.0 } else { 0.0 }
+            artist_peak_line_p1
         };
         push_step_artist(
-            y_cen,
+            line_layout,
             graph_left,
             sel_col_p1,
             step_artist,
@@ -13385,7 +13428,7 @@ pub fn push_actors(
     }
 
     // Density Graph
-    let graph_body_h = 47.0_f32;
+    let graph_body_h = 47.0 * song_select_layout.zoom;
     let chart_info_cx = chart_panel.center_x();
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
@@ -13402,7 +13445,7 @@ pub fn push_actors(
                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                 preview_marker: Option<PreviewMarker>,
                                 displayed: Option<&DisplayedChart>| {
-        let graph_top = graph_cy - 32.0;
+        let graph_top = graph_cy - graph_h * 0.5;
         let mut push_child =
             |actor: Actor| push_flat_breakdown_child(out, actor, graph_left, graph_top, 51);
         push_child(
@@ -13470,7 +13513,12 @@ pub fn push_actors(
                     BreakdownStyle::Sn => cached_str_ref(&c.sn_simple_breakdown),
                 });
 
-            let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
+            let line_layout = song_select_layout.artist_peak_line(
+                screen_height(),
+                is_p2_layout,
+                step_artist_expanded,
+                peak_text_logical_width,
+            );
             if let Some(mesh) = graph_mesh
                 && !mesh.is_empty()
             {
@@ -13496,15 +13544,14 @@ pub fn push_actors(
                     z(1)
                 ));
             }
-            let peak_y = if step_artist_expanded { -50.0 } else { -9.0 };
             push_child(
-                act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, peak_y): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)),
+                act!(text: font("miso"): settext(peak): align(1.0, 0.5): xy(line_layout.peak_bounds.right(), line_layout.peak_bounds.y): zoom(line_layout.peak_text_zoom): maxwidth(line_layout.peak_text_max_width): diffuse(1.0, 1.0, 1.0, 1.0): z(71)),
             );
             push_child(
                 act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)),
             );
             push_child(
-                act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)),
+                act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, graph_h - 8.5 * song_select_layout.zoom): zoom(0.8 * song_select_layout.zoom): maxwidth(panel_w / (0.8 * song_select_layout.zoom)): z(2)),
             );
         }
     };
@@ -13600,6 +13647,7 @@ pub fn push_actors(
                 meter: (!show_rivals).then_some(meter),
             },
         );
+        let score_pane = select_pane::layout(pane_cx);
 
         if show_rivals {
             // Simply Love PaneDisplay order: Machine/World first, then Player.
@@ -13614,8 +13662,7 @@ pub fn push_actors(
                 ),
             ];
             for (i, (name, pct)) in lines.into_iter().enumerate() {
-                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-tz, pane_cx + cols[2]), pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                select_pane::push_score_line(out, score_pane, i, name, pct);
             }
             out.push(act!(text: font("miso"): settext(Arc::clone(&gs_view.mode_label)): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
@@ -13636,8 +13683,7 @@ pub fn push_actors(
                 ),
             ];
             for (i, (name, score)) in lines.into_iter().enumerate() {
-                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-tz, pane_cx + cols[2]), pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(25.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                select_pane::push_score_line(out, score_pane, i, name, score);
             }
             let score_label = if show_ex_score {
                 &labels.ex_score
@@ -13678,11 +13724,7 @@ pub fn push_actors(
             immediate_chart_p2,
         );
     } else {
-        let pane_cx = if is_p2_solo {
-            screen_width().mul_add(0.75, 5.0)
-        } else {
-            screen_width().mul_add(0.25, -5.0)
-        };
+        let pane_cx = screen_width().mul_add(0.25, -5.0);
         push_pane(
             actors,
             pane_cx,
@@ -15512,10 +15554,7 @@ mod tests {
         assert_eq!(actors.len(), 27);
 
         actors.clear();
-        super::selection_flash::push(
-            &mut actors,
-            super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001,
-        );
+        super::selection_flash::push(&mut actors, super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001);
         super::push_sl_select_music_wheel_cascade_mask(
             &mut actors,
             super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001,
@@ -15531,10 +15570,7 @@ mod tests {
         assert_eq!(actors.len(), 1);
 
         actors.clear();
-        super::selection_flash::push(
-            &mut actors,
-            super::selection_flash::TOTAL_SECONDS + 0.001,
-        );
+        super::selection_flash::push(&mut actors, super::selection_flash::TOTAL_SECONDS + 0.001);
         super::push_sl_select_music_wheel_cascade_mask(
             &mut actors,
             super::selection_flash::TOTAL_SECONDS + 0.001,
