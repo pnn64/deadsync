@@ -9421,7 +9421,20 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
     }
 }
 
+// Keep the portable edge loop compact; the FMA path inlines its body.
+#[inline(never)]
 fn clip_poly_edge_into(
+    poly: &[ClipVertex],
+    axis: usize,
+    bound: f32,
+    keep_greater: bool,
+    out: &mut ClipPolygon,
+) {
+    clip_poly_edge_into_inner(poly, axis, bound, keep_greater, out);
+}
+
+#[inline(always)]
+fn clip_poly_edge_into_inner(
     poly: &[ClipVertex],
     axis: usize,
     bound: f32,
@@ -9471,6 +9484,17 @@ fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> ClipPolyg
 }
 
 #[inline(always)]
+fn clip_polygon_to_world_rect_inline(poly: &[ClipVertex], clip: WorldRect) -> ClipPolygon {
+    let mut a = ClipPolygon::new();
+    let mut b = ClipPolygon::new();
+    clip_poly_edge_into_inner(poly, 0, clip.left, true, &mut a);
+    clip_poly_edge_into_inner(&a, 0, clip.right, false, &mut b);
+    clip_poly_edge_into_inner(&b, 1, clip.bottom, true, &mut a);
+    clip_poly_edge_into_inner(&a, 1, clip.top, false, &mut b);
+    b
+}
+
+#[inline(always)]
 fn baked_tmesh_uv(
     vertex: &renderer::TexturedMeshVertex,
     uv_scale: [f32; 2],
@@ -9505,6 +9529,10 @@ fn clipped_text_mesh_out<'a>(
     })
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn clip_textured_mesh_to_world_rect(
     tint: [f32; 4],
     vertices: &[renderer::TexturedMeshVertex],
@@ -9516,8 +9544,84 @@ fn clip_textured_mesh_to_world_rect(
     texture_mask: bool,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
+    if vertices.len() < 3 {
+        return None;
+    }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection guards this feature-specific entry point.
+        return unsafe {
+            clip_textured_mesh_to_world_rect_fma(
+                tint,
+                vertices,
+                transform,
+                uv_scale,
+                uv_offset,
+                uv_tex_shift,
+                clip,
+                texture_mask,
+                recycled_vertices,
+            )
+        };
+    }
+    clip_textured_mesh_to_world_rect_inner::<false>(
+        tint,
+        vertices,
+        transform,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clip_textured_mesh_to_world_rect_fma(
+    tint: [f32; 4],
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    // Packed interpolation can select different NaN payloads/signs; all
+    // non-NaN vertex values retain the existing arithmetic.
+    clip_textured_mesh_to_world_rect_inner::<true>(
+        tint,
+        vertices,
+        transform,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn clip_textured_mesh_to_world_rect_inner<const FMA: bool>(
+    tint: [f32; 4],
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
     if is_affine_world_transform(&transform) {
-        clip_textured_mesh_to_world_rect_with(
+        clip_textured_mesh_to_world_rect_with::<FMA>(
             tint,
             vertices,
             uv_scale,
@@ -9529,7 +9633,7 @@ fn clip_textured_mesh_to_world_rect(
             |pos| affine_world_xy_3d(&transform, pos),
         )
     } else {
-        clip_textured_mesh_to_world_rect_with(
+        clip_textured_mesh_to_world_rect_with::<FMA>(
             tint,
             vertices,
             uv_scale,
@@ -9545,7 +9649,7 @@ fn clip_textured_mesh_to_world_rect(
 
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
-fn clip_textured_mesh_to_world_rect_with(
+fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
     tint: [f32; 4],
     vertices: &[renderer::TexturedMeshVertex],
     uv_scale: [f32; 2],
@@ -9612,7 +9716,11 @@ fn clip_textured_mesh_to_world_rect_with(
                 color: tri[2].color,
             },
         ];
-        let clipped = clip_polygon_to_world_rect(&poly, clip);
+        let clipped = if FMA {
+            clip_polygon_to_world_rect_inline(&poly, clip)
+        } else {
+            clip_polygon_to_world_rect(&poly, clip)
+        };
         if clipped.len() < 3 {
             continue;
         }
@@ -15773,3 +15881,7 @@ mod performance;
 #[cfg(test)]
 #[path = "compose_bounds_performance.rs"]
 mod bounds_performance;
+
+#[cfg(test)]
+#[path = "compose_clip_performance.rs"]
+mod clip_performance;
