@@ -27,13 +27,7 @@ const MENUS: &[(&str, &str)] = &[
     ("player-options", "Player Options"),
     ("content-browser", "Content Browser"),
 ];
-const PLAYER_VARIANT_MENUS: &[&str] = &[
-    "profile-select",
-    "style-select",
-    "mode-select",
-    "song-select",
-    "course-select",
-];
+const PLAYER_VARIANT_MENUS: &[&str] = &["song-select"];
 const PLAYER_VARIANTS: &[PlayerVariant] = &[
     PlayerVariant {
         suffix: "-1p",
