@@ -9345,15 +9345,36 @@ fn affine_world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
     ]
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn textured_mesh_world_bounds(
     vertices: &[renderer::TexturedMeshVertex],
     transform: Matrix4,
 ) -> Option<WorldRect> {
     if is_affine_world_transform(&transform) {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if vertices.len() >= 4 && std::arch::is_x86_feature_detected!("fma") {
+            // SAFETY: runtime detection checks CPU and OS support for FMA.
+            return unsafe { textured_mesh_world_bounds_fma(vertices, &transform) };
+        }
         textured_mesh_world_bounds_with(vertices, |pos| affine_world_xy_3d(&transform, pos))
     } else {
         textured_mesh_world_bounds_with(vertices, |pos| world_xy_3d(&transform, pos))
     }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn textured_mesh_world_bounds_fma(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: &Matrix4,
+) -> Option<WorldRect> {
+    // Bounds only drive comparisons; vector reduction may choose different
+    // zero signs or NaN payloads without changing clipping decisions.
+    textured_mesh_world_bounds_with(vertices, |pos| affine_world_xy_3d(transform, pos))
 }
 
 #[inline(always)]
@@ -15748,3 +15769,7 @@ mod tests {
 #[cfg(test)]
 #[path = "compose_perf.rs"]
 mod performance;
+
+#[cfg(test)]
+#[path = "compose_bounds_performance.rs"]
+mod bounds_performance;
