@@ -14027,14 +14027,16 @@ pub fn push_actors(
                 + (if step_artist_expanded { 40.0 } else { 39.0 }) * left_panel_scale;
             let p_l_x = pat_cx - panel_w * 0.5
                 + (if step_artist_expanded { 50.0 } else { 48.0 }) * left_panel_scale;
-            let p_base_y = pat_cy - 18.0;
+            let p_base_y = pat_cy - 18.0 * left_panel_scale;
+            let tech_value_zoom =
+                (if step_artist_expanded { 0.7 } else { 0.78 }) * left_panel_scale;
+            let tech_label_zoom =
+                (if step_artist_expanded { 0.8 } else { 0.78 }) * left_panel_scale;
             let tech_col_spacing =
                 (if step_artist_expanded { 150.0 } else { 148.0 }) * left_panel_scale;
-            let tech_row_step = if step_artist_expanded { 17.0 } else { 19.0 };
-            let tech_value_zoom = if step_artist_expanded { 0.7 } else { 0.78 };
-            let tech_label_zoom = if step_artist_expanded { 0.8 } else { 0.78 };
+            let tech_row_step = (if step_artist_expanded { 17.0 } else { 19.0 }) * left_panel_scale;
             let tech_stream_max_width =
-                ((tech_col_spacing - 56.0) / tech_value_zoom).clamp(58.0, 100.0);
+                ((tech_col_spacing - 56.0 * left_panel_scale) / tech_value_zoom).clamp(58.0, 100.0);
             let items: [(Arc<str>, &Arc<str>, u8, u8, Option<f32>); 6] = [
                 (cross, &labels.crossovers, 0_u8, 0_u8, None),
                 (foot, &labels.footswitches, 1_u8, 0_u8, None),
