@@ -1992,6 +1992,9 @@ pub(crate) fn appearance_note_alpha_glow_cached(
     y_offset: f32,
     cache: &NoteAppearanceCache,
 ) -> (f32, f32) {
+    if cache.identity {
+        return (1.0, 0.0);
+    }
     let percent_visible = appearance_note_alpha_cached(y, y_offset, cache);
     (
         appearance_note_actor_alpha_from_alpha(percent_visible),
@@ -2788,3 +2791,7 @@ mod tests {
 #[cfg(test)]
 #[path = "numeric_performance.rs"]
 pub(crate) mod numeric_performance;
+
+#[cfg(test)]
+#[path = "appearance_performance.rs"]
+mod appearance_performance;
