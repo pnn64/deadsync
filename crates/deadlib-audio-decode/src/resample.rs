@@ -471,15 +471,13 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 
 #[inline(always)]
 fn sample_to_i16(sample: f32) -> i16 {
-    let scaled = sample * 32767.0;
-    // Truncation leaves an exact fraction in (-1, 1) for in-range values.
-    // Correct half ties away from zero without calling round per sample.
-    // Saturated values can only move outward; NaN casts to zero and neither
-    // comparison succeeds. The final clamp therefore preserves both cases.
-    let whole = scaled as i16;
-    let fraction = scaled - f32::from(whole);
-    (i32::from(whole) + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5))
-        .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+    let scaled = (sample * 32767.0).clamp(-32768.0, 32767.0);
+    let bounded = if scaled.is_nan() { 0.0 } else { scaled };
+    // SAFETY: bounded is finite and lies within the i16 range.
+    let whole = unsafe { bounded.to_int_unchecked::<i32>() };
+    let fraction = bounded - whole as f32;
+    // Clamp before rounding so correcting half ties cannot leave the i16 range.
+    (whole + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5)) as i16
 }
 
 #[cfg(test)]
@@ -653,3 +651,7 @@ mod tests {
 #[cfg(test)]
 #[path = "resample_perf_tests.rs"]
 mod perf_tests;
+
+#[cfg(test)]
+#[path = "resample_conversion_tests.rs"]
+mod conversion_tests;
