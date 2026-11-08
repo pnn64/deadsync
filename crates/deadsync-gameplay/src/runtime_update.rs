@@ -427,6 +427,77 @@ where
         }
     }
 
+
+    pub fn schedule_beat_tick_row(
+        &mut self,
+        beat_row: usize,
+        assist_tick_sfx_path: &'static str,
+    ) {
+        let Some(music_seconds) =
+            beat_tick_music_seconds_for_row(
+                &self.timing_runtime.timing,
+                beat_row,
+            )
+        else {
+            return;
+        };
+
+        self.push_audio_command(
+            GameplayAudioCommand::PlayAssistTickAtMusicTime {
+                path: assist_tick_sfx_path,
+                music_seconds,
+            },
+        );
+    }
+
+    pub fn run_beat_tick(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        slope: f32,
+        assist_sfx_generation: u64,
+        assist_tick_sfx_path: &'static str,
+    ) {
+        let global_offset =
+            self.clock.offsets.global_offset_seconds() * self.music_rate();
+
+        let song_row =
+            self.timing_runtime.time_to_beat_caches.beat_tick_row_no_offset(
+                &self.timing_runtime.timing,
+                global_offset,
+                music_time_ns,
+            );
+
+        let future_row =
+            self.timing_runtime.time_to_beat_caches.beat_tick_future_row(
+                &self.timing_runtime.timing,
+                global_offset,
+                self.clock.audio_clock.output_delay_seconds(),
+                music_time_ns,
+                slope,
+                song_row,
+            );
+
+        let timeline_reset = self
+            .control
+            .beat_tick
+            .begin_enabled_update(assist_sfx_generation);
+
+        let update = self.control.beat_tick.schedule_update(
+            song_row,
+            future_row,
+            true,
+            timeline_reset,
+        );
+
+        for ix in update.schedule_start..update.schedule_end {
+            let beat_row = self.control.beat_tick.rows[ix];
+            self.schedule_beat_tick_row(
+                beat_row,
+                assist_tick_sfx_path,
+            );
+        }
+    }
+
     #[inline(always)]
     pub const fn set_last_judgment(&mut self, player_idx: usize, judgment: Judgment) {
         self.mark_autoplay_judged(player_idx);
@@ -2107,6 +2178,8 @@ where
 
         let song_row = self.assist_row_no_offset(judge_start_music_time);
         self.control.assist_clap.reset_for_row(song_row);
+        let beat_row = self.beat_tick_row_no_offset_ns(judge_start_ns);
+        self.control.beat_tick.reset_for_row(beat_row);
         self.boundary.total_elapsed_in_screen = 0.0;
     }
 
@@ -2166,6 +2239,20 @@ where
     #[inline(always)]
     pub fn assist_row_no_offset(&mut self, music_time: f32) -> i32 {
         self.assist_row_no_offset_ns(song_time_ns_from_seconds(music_time))
+    }
+
+    pub fn beat_tick_row_no_offset_ns(
+        &mut self,
+        music_time_ns: SongTimeNs,
+    ) -> i32 {
+        self.timing_runtime
+            .time_to_beat_caches
+            .beat_tick_row_no_offset(
+                &self.timing_runtime.timing,
+                self.clock.offsets.global_offset_seconds()
+                    * self.music_rate(),
+                music_time_ns,
+            )
     }
 
     #[inline(always)]
@@ -2831,7 +2918,10 @@ where
 
         let song_row = self.assist_row_no_offset(now_music_time);
         self.reset_assist_clap_for_row(song_row);
-
+        let beat_row = self.beat_tick_row_no_offset_ns(
+            song_time_ns_from_seconds(now_music_time),
+        );
+        self.control.beat_tick.reset_for_row(beat_row);
         log::debug!(
             "Timing ticks set to {} (F7).",
             timing_tick_mode_debug_label(mode)

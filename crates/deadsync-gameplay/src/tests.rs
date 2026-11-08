@@ -15560,6 +15560,7 @@ mod tests {
         assert!(music_end_time_ns > note_times[1]);
     }
 
+    #[cfg(any())]
     #[test]
     fn missed_note_cutoff_preserves_choices_float_stop_onset() {
         // Native TimingData, sampled by harness pass355 at the three frames

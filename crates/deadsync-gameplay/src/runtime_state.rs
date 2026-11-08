@@ -1041,6 +1041,7 @@ pub struct GameplayControlRuntimeState {
     pub autosync: GameplayAutosyncRuntimeState,
     pub tick_mode: GameplayTimingTickMode,
     pub assist_clap: GameplayAssistClapState,
+    pub beat_tick: GameplayAssistClapState,
     pub update_trace: GameplayUpdateTraceState,
 }
 
