@@ -1,4 +1,4 @@
-use super::rgba_pixel;
+use super::{rgba_block, rgba_pixel};
 
 fn check(y: f32, u: f32, v: f32, coeffs: [f32; 4]) {
     let expected = [
@@ -11,6 +11,15 @@ fn check(y: f32, u: f32, v: f32, coeffs: [f32; 4]) {
         rgba_pixel(y, u, v, coeffs),
         expected,
         "y={:08x}, u={:08x}, v={:08x}, coeffs={:?}",
+        y.to_bits(),
+        u.to_bits(),
+        v.to_bits(),
+        coeffs.map(f32::to_bits)
+    );
+    assert_eq!(
+        rgba_block([y; 4], u, v, coeffs),
+        [expected; 4],
+        "batch y={:08x}, u={:08x}, v={:08x}, coeffs={:?}",
         y.to_bits(),
         u.to_bits(),
         v.to_bits(),

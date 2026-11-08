@@ -56,6 +56,40 @@ fn rgba_pixel(y: f32, u: f32, v: f32, coeffs: [f32; 4]) -> [u8; 4] {
 }
 
 fn write_yuv420(upload: Yuv420Upload<'_>, rgba: &mut [u8]) {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: the runtime CPU check guards the specialized entry point.
+        unsafe { write_yuv420_fma(upload, rgba) };
+        return;
+    }
+    write_yuv420_inner::<false>(upload, rgba);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn write_yuv420_fma(upload: Yuv420Upload<'_>, rgba: &mut [u8]) {
+    write_yuv420_inner::<true>(upload, rgba);
+}
+
+#[inline(always)]
+fn rgba_block(ys: [f32; 4], u: f32, v: f32, coeffs: [f32; 4]) -> [[u8; 4]; 4] {
+    #[inline(always)]
+    fn quantize(color: f32) -> u8 {
+        // Preserve the rounded f32 product before the widened half bias.
+        let scaled = (f64::from(color * 255.0) + 0.5).clamp(0.0, 255.0);
+        let bounded = if scaled.is_nan() { 0.0 } else { scaled };
+        // SAFETY: explicit saturation and NaN handling leave finite values
+        // in [0, 255], so truncation is representable as u8.
+        unsafe { bounded.to_int_unchecked::<u8>() }
+    }
+    let red = ys.map(|y| quantize(coeffs[0].mul_add(v, y)));
+    let green = ys.map(|y| quantize(coeffs[2].mul_add(v, coeffs[1].mul_add(u, y))));
+    let blue = ys.map(|y| quantize(coeffs[3].mul_add(u, y)));
+    std::array::from_fn(|i| [red[i], green[i], blue[i], 255])
+}
+
+#[inline(always)]
+fn write_yuv420_inner<const BATCH: bool>(upload: Yuv420Upload<'_>, rgba: &mut [u8]) {
     let width = upload.width as usize;
     // Preparing 512 values pays off for video frames, but not tiny textures.
     // These per-upload stack tables retain the exact division/FMA order.
@@ -86,6 +120,25 @@ fn write_yuv420(upload: Yuv420Upload<'_>, rgba: &mut [u8]) {
             let u = uv_value(upload.u[index]);
             let v = uv_value(upload.v[index]);
             let col = col_pair * 2;
+            if BATCH {
+                let pixels = rgba_block(
+                    [
+                        y_value(upload.y[y_start + col]),
+                        y_value(upload.y[y_start + col + 1]),
+                        y_value(upload.y[y_start + width + col]),
+                        y_value(upload.y[y_start + width + col + 1]),
+                    ],
+                    u,
+                    v,
+                    upload.coeffs,
+                );
+                let pixel = col * 4;
+                top[pixel..pixel + 4].copy_from_slice(&pixels[0]);
+                top[pixel + 4..pixel + 8].copy_from_slice(&pixels[1]);
+                bottom[pixel..pixel + 4].copy_from_slice(&pixels[2]);
+                bottom[pixel + 4..pixel + 8].copy_from_slice(&pixels[3]);
+                continue;
+            }
             for (y_row, out) in [(y_start, &mut *top), (y_start + width, &mut *bottom)] {
                 let pixel = col * 4;
                 out[pixel..pixel + 4].copy_from_slice(&rgba_pixel(
@@ -135,3 +188,7 @@ mod opacity_kernel;
 #[cfg(test)]
 #[path = "yuv_quantization.rs"]
 mod yuv_quantization;
+
+#[cfg(test)]
+#[path = "yuv_fma_tests.rs"]
+mod yuv_fma_tests;

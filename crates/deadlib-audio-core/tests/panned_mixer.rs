@@ -31,7 +31,21 @@ mod mixer {
                 .flat_map(|sample| [sample.wrapping_neg(), sample])
                 .collect();
             for pan in [SfxPan::Center, SfxPan::Left, SfxPan::Right] {
-                for gain in [0.0, -0.0, 0.375, 1.0, 1.5, f32::INFINITY, f32::NAN] {
+                for gain in [
+                    0.0,
+                    -0.0,
+                    0.375,
+                    1.0,
+                    1.5,
+                    0.7,
+                    0.9,
+                    1.3,
+                    f32::MIN_POSITIVE,
+                    f32::from_bits(1),
+                    f32::MAX,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
                     for initial in [
                         0.0,
                         -0.0,
@@ -81,6 +95,46 @@ mod mixer {
                             .zip(expected)
                             .all(|(a, b)| a.to_bits() == b.to_bits())
                     );
+                }
+            }
+        }
+
+        #[test]
+        fn general_gain_preserves_channels_tails_and_guard_samples() {
+            let src: Vec<_> = (0..68usize).map(|i| i.wrapping_mul(7919) as i16).collect();
+            let bits = [
+                0_u32, 0x80000000, 0x3e99999a, 0xbf333333, 1, 0x80000001, 0x7f800000, 0xff800000,
+                0x7fc01234, 0xff801234,
+            ];
+            for pan in [SfxPan::Left, SfxPan::Right] {
+                for start in [0, 1] {
+                    for src_len in 0..=65 {
+                        for dst_len in 0..=65 {
+                            for gain in [0.7, 0.9, 1.3] {
+                                let source = &src[start..start + src_len];
+                                let mut expected: Vec<_> = (0..dst_len + 2)
+                                    .map(|i| f32::from_bits(bits[i % bits.len()]))
+                                    .collect();
+                                let mut actual = expected.clone();
+                                reference(source, &mut expected[1..dst_len + 1], gain, pan);
+                                crate::alloc::assert_no_churn(|| {
+                                    mix_sfx_panned_stereo(
+                                        source,
+                                        &mut actual[1..dst_len + 1],
+                                        gain,
+                                        pan,
+                                    )
+                                });
+                                assert!(
+                                    actual
+                                        .iter()
+                                        .zip(&expected)
+                                        .all(|(a, b)| a.to_bits() == b.to_bits()),
+                                    "pan={pan:?}, src={src_len}, dst={dst_len}, start={start}, gain={gain}"
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }
