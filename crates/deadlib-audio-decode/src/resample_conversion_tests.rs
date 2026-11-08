@@ -1,8 +1,7 @@
 use super::{sample_to_i16, write_resampler_output};
 use std::{hint::black_box, time::Instant};
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
+use super::kernel_bench as bench;
 
 // The scalar conversion before the bounded, packed-conversion change.
 #[inline(always)]
