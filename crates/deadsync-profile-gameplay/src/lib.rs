@@ -154,6 +154,7 @@ pub const fn gameplay_tick_mode_from_profile(
             deadsync_gameplay::GameplayTimingTickMode::Assist
         }
         deadsync_profile::TimingTickMode::Hit => deadsync_gameplay::GameplayTimingTickMode::Hit,
+        deadsync_profile::TimingTickMode::Beat => deadsync_gameplay::GameplayTimingTickMode::Beat,
     }
 }
 
@@ -167,6 +168,7 @@ pub const fn profile_tick_mode_from_gameplay(
             deadsync_profile::TimingTickMode::Assist
         }
         deadsync_gameplay::GameplayTimingTickMode::Hit => deadsync_profile::TimingTickMode::Hit,
+        deadsync_gameplay::GameplayTimingTickMode::Beat => deadsync_profile::TimingTickMode::Beat,
     }
 }
 
