@@ -1,4 +1,5 @@
-#![forbid(unsafe_code)]
+// Runtime CPU specialization is confined to mixer::fma.
+#![deny(unsafe_code)]
 
 pub mod mixer;
 pub mod output;

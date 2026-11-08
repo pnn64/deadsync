@@ -307,8 +307,34 @@ fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
         }
         return;
     }
+    // Exact-product gains above avoid the feature check and extra call.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if fma::try_mix_samples(src, dst, gain) {
+        return;
+    }
     for (dst, &src) in dst.iter_mut().zip(src) {
         *dst = i16_to_f32(src).mul_add(gain, *dst);
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(unsafe_code, reason = "CPU feature check guards the specialized entry point")]
+mod fma {
+    #[inline]
+    pub(super) fn try_mix_samples(src: &[i16], dst: &mut [f32], gain: f32) -> bool {
+        if !std::is_x86_feature_detected!("fma") {
+            return false;
+        }
+        // SAFETY: Rust's detector checks CPU and OS support for FMA/AVX.
+        unsafe { mix_samples(src, dst, gain) };
+        true
+    }
+
+    #[target_feature(enable = "fma")]
+    unsafe fn mix_samples(src: &[i16], dst: &mut [f32], gain: f32) {
+        for (dst, &src) in dst.iter_mut().zip(src) {
+            *dst = super::i16_to_f32(src).mul_add(gain, *dst);
+        }
     }
 }
 
