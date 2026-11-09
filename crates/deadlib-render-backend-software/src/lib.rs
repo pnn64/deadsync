@@ -3519,11 +3519,81 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
 
     depth: &mut DepthRows<'_>,
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
-        setup.stripe_bounds(stripe_y_start, stripe_y_end)
-    else {
+    let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
         return;
     };
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Bound interpolated inputs to avoid overflow and NaN-sensitive FMA.
+    // Half textures and exceptional shading keep the portable pixel loop.
+    if image.half.is_empty()
+        && std::arch::is_x86_feature_detected!("fma")
+        && [v0, v1, v2].into_iter().all(|v| {
+            v.color
+                .into_iter()
+                .chain([v.u, v.v, v.z])
+                .all(|value| value.abs() <= f32::MAX / 4.0)
+        })
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_tex_color_fma::<LINEAR, MASK, OPAQUE>(
+                v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+            );
+        }
+        return;
+    }
+    rasterize_triangle_tex_color_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+    );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_tex_color_fma<
+    const LINEAR: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
+) {
+    rasterize_triangle_tex_color_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_tex_color_pixels_impl<
+    const LINEAR: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
+) {
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
     let inv_denom = setup.inv_denom;
     let tex_w = image.width.max(1);
     let tex_h = image.height.max(1);
@@ -6226,3 +6296,6 @@ mod byte_writer_performance;
 
 #[cfg(test)]
 mod texture_raster_performance;
+
+#[cfg(test)]
+mod tmesh_raster_performance;
