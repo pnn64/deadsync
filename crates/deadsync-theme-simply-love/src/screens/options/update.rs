@@ -300,7 +300,8 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         return None;
     }
     if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
-        return None;
+        return shared_pack_sync::update(&mut state.pack_sync_overlay, dt)
+            .then(|| crate::effects::sfx("assets/sounds/change.ogg"));
     }
 
     sync_i18n_cache(state);

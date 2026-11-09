@@ -196,8 +196,8 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 // ScreenSelectMusic inherits Screen's default menu repeat timing via InputFilter:
 // 0.375s before repeating, then 8 repeats/sec.
-const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
-const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
+const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = screen_input::OVERLAY_NAV_INITIAL_HOLD_DELAY;
+const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = screen_input::OVERLAY_NAV_REPEAT_INTERVAL;
 const SRPG_TAB_SCROLL_DIVISOR: u32 = 4;
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // Simply Love [ScreenSelectMusic] CodeTogglePatternInfo="Select,Select".
@@ -11651,6 +11651,9 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     lobby_overlay::update_overlay(&mut state.lobby_overlay, dt, &state.lobby_view.snapshot);
     queue_lobby_sounds(state);
     if pack_sync::poll(state) {
+        if crate::screens::pack_sync::update(&mut state.pack_sync_overlay, dt) {
+            queue_sfx(state, "assets/sounds/change.ogg");
+        }
         return ThemeEffect::None;
     }
     if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
