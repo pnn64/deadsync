@@ -2908,18 +2908,37 @@ fn rasterize_triangle_color_prepared(
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
 ) {
-    let [v0, v1, v2] = vertices;
-    rasterize_triangle_color_impl(
-        v0,
-        v1,
-        v2,
-        setup,
-        width,
-        stripe_y_start,
-        stripe_y_end,
-        blend,
-        buffer,
-    );
+    let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
+        return;
+    };
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Float16 attachments preserve NaN signs. Keep nonfinite color arithmetic
+    // on the portable path so selecting FMA cannot change those stored bits.
+    if std::arch::is_x86_feature_detected!("fma")
+        && vertices
+            .iter()
+            .all(|vertex| vertex.color.into_iter().all(f32::is_finite))
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_color_fma(vertices, setup.inv_denom, bounds, blend, buffer, width)
+        };
+        return;
+    }
+    rasterize_triangle_color_impl(vertices, setup.inv_denom, bounds, width, blend, buffer);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_color_fma(
+    vertices: &[ScreenVertexColor; 3],
+    inv_denom: f32,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    width: usize,
+) {
+    rasterize_triangle_color_impl(vertices, inv_denom, bounds, width, blend, buffer);
 }
 
 #[inline(always)]
@@ -3515,22 +3534,15 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
 
 #[inline(always)]
 fn rasterize_triangle_color_impl(
-    v0: &ScreenVertexColor,
-    v1: &ScreenVertexColor,
-    v2: &ScreenVertexColor,
-    setup: RasterSetup,
+    vertices: &[ScreenVertexColor; 3],
+    inv_denom: f32,
+    bounds: (i32, i32, i32, i32, i32),
     width: usize,
-    stripe_y_start: usize,
-    stripe_y_end: usize,
     blend: BlendMode,
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
-        setup.stripe_bounds(stripe_y_start, stripe_y_end)
-    else {
-        return;
-    };
-    let inv_denom = setup.inv_denom;
+    let [v0, v1, v2] = vertices;
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
 
     let edges = [
         owns_edge(v1.x, v1.y, v2.x, v2.y, inv_denom),
@@ -6143,3 +6155,6 @@ mod offscreen_perf_tests;
 #[cfg(test)]
 #[path = "environment_performance.rs"]
 mod environment_performance;
+
+#[cfg(test)]
+mod color_raster_performance;
