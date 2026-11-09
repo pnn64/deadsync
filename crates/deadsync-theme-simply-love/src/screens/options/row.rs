@@ -137,6 +137,7 @@ pub enum SubRowId {
     BgBrightness,
     CenteredP1Notefield,
     NoteScrollClock,
+    SongLuaMode,
     AnimatedBanners,
     ZmodRatingBox,
     BpmDecimal,

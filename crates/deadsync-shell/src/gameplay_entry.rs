@@ -343,8 +343,8 @@ pub fn song_lua_context(
     Ok(context)
 }
 
-/// Prepare compiled song playback on the load worker, retaining authored Lua
-/// when input callbacks require runtime execution.
+/// Prepare baked or runtime song playback on the load worker, retaining authored
+/// Lua when input callbacks require runtime execution even in baked mode.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -360,13 +360,15 @@ pub fn prepare_song_lua(
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
     random_seed: u32,
+    mode: deadsync_config::options::SongLuaMode,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
+    let live = mode == deadsync_config::options::SongLuaMode::Runtime;
     let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
-        config, video_renderer, random_seed, false) {
+        config, video_renderer, random_seed, live) {
         Ok(context) => context,
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
@@ -462,6 +464,94 @@ mod tests {
             last_second_hint: 0.0,
             charts: vec![chart("Hard", "hard"), chart("Challenge", "challenge")],
         })
+    }
+
+    #[test]
+    fn song_lua_mode_selects_baked_or_runtime_and_preserves_input_fallback() {
+        use deadsync_config::options::SongLuaMode;
+
+        crate::tests::init_paths();
+        let dir = tempfile::tempdir().unwrap();
+        let simfile = dir.path().join("mode.ssc");
+        let source = dir.path().join("main.lua");
+        std::fs::write(
+            &simfile,
+            "#TITLE:Lua mode;\n#BPMS:0=120;\n\
+            #FGCHANGES:0=main.lua=1=0=0=0=StretchNoLoop====;\n\
+            #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Easy;\n\
+            #METER:1;\n#NOTES:\n1000\n0000\n0010\n0000\n;\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &source,
+            "return Def.Quad { OnCommand = function(self) self:linear(1):x(100) end }",
+        )
+        .unwrap();
+        let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
+        let chart = Arc::new(song.charts[0].clone());
+        let charts = [chart.clone(), chart];
+        let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap();
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let session = deadsync_gameplay::GameplaySession::default();
+        let config = deadsync_gameplay::GameplayConfig {
+            global_offset_seconds: 0.0,
+            ..Default::default()
+        };
+        let prepare = |song: &SongData, mode| {
+            prepare_song_lua(
+                song,
+                &charts,
+                [&loaded[0].timing; MAX_PLAYERS],
+                &profiles,
+                &scroll,
+                1.0,
+                deadsync_gameplay::GameplayViewport::design(),
+                (1280, 720),
+                16.0 / 9.0,
+                0.0,
+                &session,
+                &config,
+                "Software",
+                1,
+                mode,
+            )
+        };
+        for (mode, live) in [(SongLuaMode::Baked, false), (SongLuaMode::Runtime, true)] {
+            let mut prepared = prepare(&song, mode);
+            assert!(prepared.compile_succeeded(), "{mode:?} compilation");
+            assert!(
+                prepared
+                    .compiled_layers()
+                    .any(|layer| !layer.overlays.is_empty()),
+                "{mode:?} actors"
+            );
+            assert_eq!(
+                prepared.take_live_scene().unwrap().is_some(),
+                live,
+                "{mode:?}"
+            );
+        }
+
+        std::fs::write(&source, "SCREENMAN:GetTopScreen():AddInputCallback(function(event) return false end)\nreturn Def.Actor {}").unwrap();
+        let mut interactive = prepare(&song, SongLuaMode::Baked);
+        assert!(interactive.compile_succeeded());
+        assert!(
+            interactive.take_live_scene().unwrap().is_some(),
+            "input callbacks need runtime in baked mode"
+        );
+
+        let mut ordinary = song;
+        ordinary.foreground_lua_changes.clear();
+        ordinary.has_lua = false;
+        for mode in [SongLuaMode::Baked, SongLuaMode::Runtime] {
+            let mut prepared = prepare(&ordinary, mode);
+            assert!(prepared.compiled_layers().next().is_none());
+            assert!(
+                prepared.take_live_scene().unwrap().is_none(),
+                "ordinary song in {mode:?} mode"
+            );
+        }
     }
 
     #[test]

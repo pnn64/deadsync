@@ -3,6 +3,7 @@ use crate::app_update as config_update;
 use crate::audio::NoteScrollClock;
 use crate::coin::CoinMode;
 use crate::null_or_die::GraphOrigin;
+use crate::options::SongLuaMode;
 use crate::runtime::{RUNTIME_CONFIG, get, save_without_keymaps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
@@ -101,6 +102,7 @@ update_config_fn!(pub fn update_hide_mouse_cursor(enabled: bool) => set_hide_mou
 update_config_fn!(pub fn update_global_offset(offset: f32) => set_global_offset_seconds);
 update_config_fn!(pub fn update_visual_delay_seconds(delay: f32) => set_visual_delay_seconds);
 update_config_fn!(pub fn update_note_scroll_clock(clock: NoteScrollClock) => set_note_scroll_clock);
+update_config_fn!(pub fn update_song_lua_mode(mode: SongLuaMode) => set_song_lua_mode);
 update_config_fn!(pub fn update_vsync(enabled: bool) => set_vsync);
 update_config_fn!(pub fn update_max_fps(max_fps: u16) => set_max_fps);
 update_config_fn!(pub fn update_present_mode_policy(mode: PresentModePolicy) => set_present_mode_policy);

@@ -673,6 +673,7 @@ struct GameplayPreload {
     requested_chart_ixs: Vec<usize>,
     gameplay_song: Vec<GameplayChartData>,
     song_lua: crate::gameplay_entry::PreparedGameplaySongLua,
+    song_lua_mode: config::options::SongLuaMode,
     payload_ms: f64,
     elapsed_ms: f64,
 }
@@ -2824,6 +2825,7 @@ impl App {
         let music_rate = options.music_rate;
         let video_renderer = cfg.video_renderer;
         let global_offset_seconds = cfg.global_offset_seconds;
+        let song_lua_mode = cfg.song_lua_mode;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let spawn = std::thread::Builder::new()
             .name("select-music-gameplay-preload".to_string())
@@ -2853,12 +2855,14 @@ impl App {
                         &gameplay_config,
                         &video_renderer.to_string(),
                         song_lua_seed(),
+                        song_lua_mode,
                     );
                     GameplayPreload {
                         song_path,
                         requested_chart_ixs,
                         gameplay_song,
                         song_lua,
+                        song_lua_mode,
                         payload_ms,
                         elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
                     }
@@ -9745,6 +9749,7 @@ impl App {
                     &gameplay_config_from_config(&cfg),
                     &cfg.video_renderer.to_string(),
                     song_lua_seed(),
+                    cfg.song_lua_mode,
                 );
                 match crate::gameplay_entry::apply_song_lua_reload(
                     &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
@@ -10075,7 +10080,8 @@ impl App {
                     });
                     let gameplay_song = if let Some(preload) = preload.flatten() {
                         preloaded_payload_ms = Some(preload.payload_ms);
-                        prepared_song_lua = Some(preload.song_lua);
+                        prepared_song_lua = (preload.song_lua_mode == cfg.song_lua_mode)
+                            .then_some(preload.song_lua);
                         preload.gameplay_song
                     } else {
                         match song_loading::load_gameplay_charts(
@@ -10256,6 +10262,7 @@ impl App {
                 let metrics = self.state.shell.metrics;
                 let (pixel_width, pixel_height) = space::current_window_px();
                 let display_aspect_ratio = finish.config.display_aspect_ratio;
+                let song_lua_mode = finish.config.song_lua_mode;
                 let init = move || {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
@@ -10280,6 +10287,7 @@ impl App {
                             &gameplay_config,
                             &video_renderer.to_string(),
                             song_lua_seed(),
+                            song_lua_mode,
                         )
                         })
                     };

@@ -65,6 +65,7 @@ fn main() {
         &deadsync_gameplay::GameplayConfig::default(),
         "OpenGL",
         1,
+        deadsync_config::options::SongLuaMode::Baked,
     );
     assert!(
         prepared.take_live_scene().unwrap().is_none(),

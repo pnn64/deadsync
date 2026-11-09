@@ -4416,6 +4416,7 @@ fn replay_mode(
             &config,
             &context.video_renderers,
             context.random_seed,
+            deadsync_config::options::SongLuaMode::Baked,
         )
     } else {
         deadsync_song_lua::playback::prepare_song_lua(

@@ -180,6 +180,7 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
             config::runtime_update::update_center_1player_notefield(enabled);
         }
         Request::NoteScrollClock(clock) => config::runtime_update::update_note_scroll_clock(clock),
+        Request::SongLuaMode(mode) => config::runtime_update::update_song_lua_mode(mode),
         Request::BannerMode(mode) => config::runtime_update::update_gameplay_banner_mode(mode),
         Request::ZmodRatingBoxText(enabled) => {
             config::runtime_update::update_zmod_rating_box_text(enabled)

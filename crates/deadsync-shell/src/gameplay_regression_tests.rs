@@ -768,7 +768,7 @@ pub(crate) mod tests {
             hud,
             ..Default::default()
         };
-        let prepared = if until_beat.is_none() && !live_diagnostic {
+        let prepared = if until_beat.is_none() {
             crate::gameplay_entry::prepare_song_lua(
                 &song,
                 &charts,
@@ -784,6 +784,11 @@ pub(crate) mod tests {
                 &config,
                 renderer,
                 1,
+                if live_diagnostic {
+                    deadsync_config::options::SongLuaMode::Runtime
+                } else {
+                    deadsync_config::options::SongLuaMode::Baked
+                },
             )
         } else {
             let mut context = crate::gameplay_entry::song_lua_context(
@@ -1461,7 +1466,7 @@ return Def.ActorFrame { Name = 'Foreground',
             let mut state = build_test_state_with_lua_mode(&simfile, GameplayViewport::new(640.0, 480.0),
                 GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
                 "Software", None, true);
-            assert!(state.song_lua.is_some(), "explicit diagnostic scene retains its VM");
+            assert!(state.song_lua.is_some(), "runtime mode retains its VM");
             let startup = state.take_song_lua_output();
             assert!(startup.errors.is_empty(), "{:?}", startup.errors);
             // Foreground::HandleMessage suppresses loading-time On. Its first
