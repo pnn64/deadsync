@@ -3370,7 +3370,7 @@ fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: b
     blend: BlendMode,
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) = raster_bounds(
+    let Some(bounds) = raster_bounds(
         v0.x.min(v1.x).min(v2.x),
         v0.x.max(v1.x).max(v2.x),
         v0.y.min(v1.y).min(v2.y),
@@ -3383,6 +3383,66 @@ fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: b
         return;
     };
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Keep potentially nonfinite filtering on the portable path to preserve
+    // float16 NaN encodings. This UV bound also prevents interpolation overflow.
+    if image.half.is_empty()
+        && std::arch::is_x86_feature_detected!("fma")
+        && tint.into_iter().all(f32::is_finite)
+        && [v0, v1, v2]
+            .into_iter()
+            .all(|v| v.u.abs() <= f32::MAX / 4.0 && v.v.abs() <= f32::MAX / 4.0)
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_fma::<LINEAR, MASK, OPAQUE>(
+                v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+            );
+        }
+        return;
+    }
+    rasterize_triangle_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+    );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_fma<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertex,
+    v1: &ScreenVertex,
+    v2: &ScreenVertex,
+    inv_denom: f32,
+    tint: [f32; 4],
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+) {
+    rasterize_triangle_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_pixels_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertex,
+    v1: &ScreenVertex,
+    v2: &ScreenVertex,
+    inv_denom: f32,
+    tint: [f32; 4],
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+) {
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
     let tex_w = image.width.max(1);
     let tex_h = image.height.max(1);
     let tex_data = image;
@@ -6163,3 +6223,6 @@ mod color_raster_performance;
 
 #[cfg(test)]
 mod byte_writer_performance;
+
+#[cfg(test)]
+mod texture_raster_performance;
