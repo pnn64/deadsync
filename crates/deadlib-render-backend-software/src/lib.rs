@@ -1827,6 +1827,84 @@ fn prepare_sprite_vertices(
     if width == 0 || height == 0 {
         return None;
     }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe {
+            prepare_sprite_vertices_fma(
+                proj,
+                center,
+                size,
+                rot_sin_cos,
+                uv_scale,
+                uv_offset,
+                local_offset,
+                local_offset_rot_sin_cos,
+                width,
+                height,
+            )
+        };
+    }
+    prepare_sprite_vertices_impl(
+        proj,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        width,
+        height,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn prepare_sprite_vertices_fma(
+    proj: &Matrix4,
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    width: usize,
+    height: usize,
+) -> Option<[ScreenVertex; 4]> {
+    prepare_sprite_vertices_impl(
+        proj,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        width,
+        height,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn prepare_sprite_vertices_impl(
+    proj: &Matrix4,
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    width: usize,
+    height: usize,
+) -> Option<[ScreenVertex; 4]> {
+    if width == 0 || height == 0 {
+        return None;
+    }
 
     let mut adjusted_center = center;
     if local_offset[0] != 0.0 || local_offset[1] != 0.0 {
@@ -6401,3 +6479,6 @@ mod tmesh_raster_performance;
 
 #[cfg(test)]
 mod environment_raster_performance;
+
+#[cfg(test)]
+mod sprite_prepare_performance;
