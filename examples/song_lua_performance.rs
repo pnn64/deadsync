@@ -5,7 +5,7 @@ mod paths;
 mod metrics;
 
 use sha2::{Digest, Sha256};
-use std::{fmt::Write as _, path::Path, sync::Arc};
+use std::{fmt::Write as _, path::Path, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
 struct Fingerprint(Sha256);
 impl std::fmt::Write for Fingerprint {
@@ -47,32 +47,48 @@ fn main() {
     let config = deadsync_gameplay::GameplayConfig::default();
     let mut samples = Vec::with_capacity(iterations);
     let mut fingerprints = Vec::with_capacity(iterations);
+    let mut scenes = Vec::with_capacity(iterations);
     for _ in 0..iterations {
+        let scope_start_ns = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
         let measurement = metrics::Measurement::start();
         let prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
             &song, &charts, [&payload.timing; 2], &profiles, &scroll, 1.0,
             deadsync_gameplay::GameplayViewport::new(640.0, 480.0), (640, 480),
             4.0 / 3.0, 1.0, &session, &config, renderer, 0,
             deadsync_config::options::SongLuaMode::Baked, None);
-        samples.push(measurement.finish());
+        let mut sample = measurement.finish();
+        let scope_end_ns = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
+        sample["scope_start_unix_ns"] = scope_start_ns.into();
+        sample["scope_end_unix_ns"] = scope_end_ns.into();
+        samples.push(sample);
+        assert!(prepared.compile_succeeded(), "benchmark requires a successful full preparation");
         let mut fingerprint = Fingerprint(Sha256::new());
         let mut count = 0;
         let mut live_scenes = 0;
+        let mut actors = 0;
+        let mut actor_frame_textures = 0;
         for compiled in prepared.compiled_layers() {
             live_scenes += usize::from(compiled.live_scene.is_some());
+            actors += compiled.overlays.len();
+            actor_frame_textures += compiled.overlays.iter().filter(|actor| matches!(
+                actor.kind, deadsync_song_lua::SongLuaOverlayKind::ActorFrameTexture { .. }
+            )).count();
             write!(&mut fingerprint, "{compiled:?}").unwrap();
             count += 1;
         }
         assert!(count > 0, "benchmark requires prepared Lua layers");
-        assert_eq!(live_scenes, 1, "production preparation owns one shared Lua VM");
+        assert_eq!(live_scenes, 0, "baked preparation must release its Lua VM");
+        scenes.push(serde_json::json!({"layers":count,"actors":actors,"actor_frame_textures":actor_frame_textures}));
         let mut hash = String::with_capacity(64);
         for byte in fingerprint.0.finalize() { write!(&mut hash, "{byte:02x}").unwrap(); }
         fingerprints.push(hash);
     }
     assert!(fingerprints.windows(2).all(|p| p[0] == p[1]), "compiler output changed between iterations");
+    assert!(scenes.windows(2).all(|p| p[0] == p[1]), "prepared scene changed between iterations");
     let report = serde_json::json!({"simfile":simfile,"iterations":iterations,
         "renderer":renderer,"chart_index":chart_index,
         "samples":samples,"compiled_sha256":fingerprints[0],
+        "scene":scenes[0],
         "measurement":"production prepare_song_lua, including context/timing; parsing initial song/notes and hashing compiled output excluded"});
     std::fs::write(&args[3], serde_json::to_vec_pretty(&report).unwrap()).expect("write compiler metrics");
     println!("{report}");
