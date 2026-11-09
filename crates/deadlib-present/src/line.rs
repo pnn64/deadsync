@@ -388,7 +388,15 @@ pub fn update_line_mesh_reusable(
 }
 
 /// Build connected segment quads with a four-sided radius cap at every sample.
+///
+/// # Panics
+///
+/// Panics if the vertex count or allocation size overflows.
 #[must_use]
+#[allow(
+    unsafe_code,
+    reason = "every graph vertex is written before the Arc is assumed initialized"
+)]
 pub fn build_graph_line_mesh(
     points: &[[f32; 2]],
     thickness: f32,
@@ -455,15 +463,50 @@ pub fn build_graph_line_mesh(
         return Arc::from([]);
     }
 
-    // Flattened fixed arrays retain an exact trusted length, so Arc collection
-    // allocates the immutable vertex payload exactly once.
-    points
-        .windows(2)
-        .map(segment)
-        .flatten()
-        .chain(points.iter().copied().map(cap).flatten())
-        .collect()
+    // Fill one exact allocation directly, avoiding iterator state and temporary
+    // vertex copies. Geometry formulas stay unchanged, but LLVM may select
+    // different NaN payload/sign bits when simplifying cap arithmetic.
+    let segment_len = (points.len() - 1)
+        .checked_mul(6)
+        .expect("graph line segment count overflow");
+    let vertex_count = points
+        .len()
+        .checked_mul(CAP_SIDES * 3)
+        .and_then(|cap_len| segment_len.checked_add(cap_len))
+        .expect("graph line vertex count overflow");
+    let mut mesh = Arc::<[MeshVertex]>::new_uninit_slice(vertex_count);
+    let vertices = Arc::get_mut(&mut mesh).expect("new graph mesh is uniquely owned");
+    let (segments, caps) = vertices.split_at_mut(segment_len);
+    for (output, pair) in segments
+        .as_chunks_mut::<6>()
+        .0
+        .iter_mut()
+        .zip(points.windows(2))
+    {
+        for (dst, vertex) in output.iter_mut().zip(segment(pair)) {
+            dst.write(vertex);
+        }
+    }
+    for (output, point) in caps
+        .as_chunks_mut::<{ CAP_SIDES * 3 }>()
+        .0
+        .iter_mut()
+        .zip(points)
+    {
+        for (dst, vertex) in output.iter_mut().zip(cap(*point)) {
+            dst.write(vertex);
+        }
+    }
+    // SAFETY: points has at least two elements. The checked sizes partition the
+    // entire allocation into (n - 1) six-vertex segments and n twelve-vertex caps.
+    // Each zip has equally many inputs and output slots, so every slot is written
+    // exactly once before this conversion. No uninitialized element is read.
+    unsafe { mesh.assume_init() }
 }
+
+#[cfg(test)]
+#[path = "line_graph_performance.rs"]
+mod graph_performance;
 
 #[cfg(test)]
 mod tests {
