@@ -9770,6 +9770,11 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
     })
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
+#[allow(clippy::too_many_arguments)]
 fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     center: [f32; 4],
@@ -9782,6 +9787,86 @@ fn clip_rotated_sprite_to_world_rect(
     texture_mask: bool,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection guards this feature-specific entry point.
+        return unsafe {
+            clip_rotated_sprite_to_world_rect_fma(
+                tint,
+                center,
+                size,
+                rot_sin_cos,
+                uv_scale,
+                uv_offset,
+                offset_world,
+                clip,
+                texture_mask,
+                recycled_vertices,
+            )
+        };
+    }
+    clip_rotated_sprite_to_world_rect_inner::<false>(
+        tint,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        offset_world,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clip_rotated_sprite_to_world_rect_fma(
+    tint: [f32; 4],
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    offset_world: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    clip_rotated_sprite_to_world_rect_inner::<true>(
+        tint,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        offset_world,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
+    tint: [f32; 4],
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    offset_world: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    // Keep corner transforms and all four edges in the FMA-enabled body so
+    // LLVM can pack position, UV and color interpolation. The portable path
+    // retains compact edge calls. Fused arithmetic stays unchanged; unspecified
+    // NaN payload/sign bits may differ between the compiled paths.
     let poly = [
         ClipVertex {
             pos: sprite_world_xy(
@@ -9810,7 +9895,11 @@ fn clip_rotated_sprite_to_world_rect(
             color: [1.0; 4],
         },
     ];
-    let clipped = clip_polygon_to_world_rect(&poly, clip);
+    let clipped = if FMA {
+        clip_polygon_to_world_rect_inline(&poly, clip)
+    } else {
+        clip_polygon_to_world_rect(&poly, clip)
+    };
     if clipped.len() < 3 {
         return None;
     }
@@ -15885,3 +15974,7 @@ mod bounds_performance;
 #[cfg(test)]
 #[path = "compose_clip_performance.rs"]
 mod clip_performance;
+
+#[cfg(test)]
+#[path = "compose_sprite_clip_performance.rs"]
+mod sprite_clip_performance;
