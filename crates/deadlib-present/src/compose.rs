@@ -8863,6 +8863,10 @@ struct ClippedSpriteObject {
     sprite: Option<renderer::SpriteInstanceRaw>,
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn object_world_area(
     object_type: &EditablePayload,
     sprite_instances: &[renderer::SpriteInstanceRaw],
@@ -8875,25 +8879,47 @@ fn object_world_area(
         EditablePayload::TexturedMesh {
             instance, vertices, ..
         } => {
+            let vertices = vertices.as_ref();
             if vertices.len() < 3 {
                 return 0.0;
             }
             let transform = instance.transform();
-            let mut area = 0.0_f32;
-            let mut i = 0usize;
-            while i + 2 < vertices.len() {
-                let p0 = world_xy_3d(&transform, vertices[i].pos);
-                let p1 = world_xy_3d(&transform, vertices[i + 1].pos);
-                let p2 = world_xy_3d(&transform, vertices[i + 2].pos);
-                let a =
-                    (p1[1] - p0[1]).mul_add(-(p2[0] - p0[0]), (p1[0] - p0[0]) * (p2[1] - p0[1]));
-                area = 0.5f32.mul_add(a.abs(), area);
-                i += 3;
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            if std::arch::is_x86_feature_detected!("fma") {
+                // SAFETY: runtime detection checks CPU and OS support for FMA.
+                return unsafe { textured_mesh_world_area_fma(vertices, &transform) };
             }
-            area
+            textured_mesh_world_area_portable(vertices, &transform)
         }
         EditablePayload::Mesh { .. } => 0.0,
     }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn textured_mesh_world_area_fma(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: &Matrix4,
+) -> f32 {
+    textured_mesh_world_area_portable(vertices, transform)
+}
+
+#[inline(always)]
+fn textured_mesh_world_area_portable(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: &Matrix4,
+) -> f32 {
+    let mut area = 0.0_f32;
+    // Resolve storage once and keep the original triangle/reduction order.
+    for triangle in vertices.as_chunks::<3>().0 {
+        let p0 = world_xy_3d(transform, triangle[0].pos);
+        let p1 = world_xy_3d(transform, triangle[1].pos);
+        let p2 = world_xy_3d(transform, triangle[2].pos);
+        let a = (p1[1] - p0[1]).mul_add(-(p2[0] - p0[0]), (p1[0] - p0[0]) * (p2[1] - p0[1]));
+        area = 0.5f32.mul_add(a.abs(), area);
+    }
+    area
 }
 
 fn clip_object_to_world_masks(
@@ -16055,3 +16081,7 @@ mod sprite_clip_performance;
 #[cfg(test)]
 #[path = "compose_effect_performance.rs"]
 mod effect_performance;
+
+#[cfg(test)]
+#[path = "compose_area_performance.rs"]
+mod area_performance;
