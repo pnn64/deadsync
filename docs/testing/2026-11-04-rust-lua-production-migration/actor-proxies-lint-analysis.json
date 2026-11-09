@@ -1,0 +1,10 @@
+{
+  "log_sha256": "4adde10e15d3bbabdee89ec0508ea8d0a050e070ad39cd0d249176e09618826d",
+  "library_warnings": 164,
+  "adapter_diagnostics": [],
+  "denied_lint": "while_immutable_condition",
+  "denied_file": "crates/deadsync-song-lua/src/cmd.rs",
+  "denied_line": 349,
+  "denied_source_identical_to_baseline": true,
+  "integration_test_lint_completed": false
+}

@@ -1,0 +1,12 @@
+{
+    "goal_complete":  false,
+    "source_count":  1212,
+    "current_source_count":  1212,
+    "changed_after_review":  [
+                                 "crates/deadsync-theme-simply-love/src/screens/pad_config.rs"
+                             ],
+    "membership_changes":  [
+
+                           ],
+    "matches_review":  false
+}

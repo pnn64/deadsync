@@ -1,0 +1,21 @@
+
+running 16 tests
+test cancelling_and_finishing_tweens_preserve_sampled_values_and_stop_indices ... ok
+test frame_tracks_outlive_gc_and_scene_teardown_and_foreign_screens_are_rejected ... ok
+test grouped_spring_and_elastic_tweens_keep_full_renderer_property_output ... ok
+test handoff_batch_roots_and_shared_color_alias_survive_authored_assignment_gc ... ok
+test handoff_empty_touched_rows_keep_metadata_errors_and_batch_retry_semantics ... ok
+test handoff_fallbacks_are_not_published_as_native_poses_and_scene_guards_hold ... ok
+test handoff_native_tween_publications_keep_progress_and_queue_ownership_across_frames ... ok
+test handoff_partial_write_errors_keep_reentrant_getters_and_nested_setter_effects ... ok
+test handoff_player_destination_suppression_and_typed_raw_metadata_keep_error_order ... ok
+test handoff_scalar_boolean_vector_and_ignored_targets_match_native_fields ... ok
+test handoff_schedule_sampler_updates_real_getters_before_following_callbacks ... ok
+test immediate_frame_tracks_keep_target_order_compound_writes_and_idle_gaps ... ok
+test legacy_unclocked_schedule_merging_preserves_ordered_endpoint_tracks ... ok
+test message_state_changes_synchronize_existing_tracks_without_new_publications ... ok
+test metadata_errors_retain_the_whole_ordered_batch_and_allow_recovery ... ok
+test scheduled_frames_preserve_clocks_interpolation_pending_values_and_completion ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.18s
+

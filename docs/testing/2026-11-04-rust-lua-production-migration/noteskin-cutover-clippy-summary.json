@@ -1,0 +1,766 @@
+[
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/draw.rs",
+        "line": 389
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/draw.rs",
+        "line": 634
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (12/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/explosion.rs",
+        "line": 1179
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::type_complexity",
+      "explanation": null
+    },
+    "message": "very complex type used. Consider factoring parts into `type` definitions",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 404
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (9/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 807
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1398
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (12/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1443
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1488
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1615
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (25/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1650
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (9/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1896
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1953
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1978
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (15/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2021
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2098
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::obfuscated_if_else",
+      "explanation": null
+    },
+    "message": "this method chain can be written more clearly with `if .. else ..`",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2182
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (11/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2360
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2390
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2673
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (14/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2716
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 320
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 409
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 546
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::cloned_ref_to_slice_refs",
+      "explanation": null
+    },
+    "message": "unnecessary use of `clone` to create a slice from a reference",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/tests/packs.rs",
+        "line": 242
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::cloned_ref_to_slice_refs",
+      "explanation": null
+    },
+    "message": "unnecessary use of `clone` to create a slice from a reference",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/tests/packs.rs",
+        "line": 245
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::redundant_field_names",
+      "explanation": null
+    },
+    "message": "redundant field names in struct initialization",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/compiled.rs",
+        "line": 488
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "unused_imports",
+      "explanation": null
+    },
+    "message": "unused import: `std::hint::black_box`",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/compiler/../compiler_callbacks_perf.rs",
+        "line": 3
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::duplicate_mod",
+      "explanation": null
+    },
+    "message": "file is loaded as a module multiple times: `crates/deadsync-noteskin/src/../../../tests/support/paired_bench.rs`",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/explosion_perf_tests.rs",
+        "line": 3
+      },
+      {
+        "file": "crates/deadsync-noteskin/src/perf_tests.rs",
+        "line": 10
+      },
+      {
+        "file": "crates/deadsync-noteskin/src/sprite_perf_tests.rs",
+        "line": 5
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/draw.rs",
+        "line": 389
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/draw.rs",
+        "line": 634
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (12/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/explosion.rs",
+        "line": 1179
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::cloned_ref_to_slice_refs",
+      "explanation": null
+    },
+    "message": "unnecessary use of `clone` to create a slice from a reference",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/itg.rs",
+        "line": 1439
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::cloned_ref_to_slice_refs",
+      "explanation": null
+    },
+    "message": "unnecessary use of `clone` to create a slice from a reference",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/itg.rs",
+        "line": 1464
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::type_complexity",
+      "explanation": null
+    },
+    "message": "very complex type used. Consider factoring parts into `type` definitions",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 404
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (9/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 807
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1398
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (12/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1443
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1488
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1615
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (25/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1650
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (9/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1896
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1953
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 1978
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (15/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2021
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2098
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::obfuscated_if_else",
+      "explanation": null
+    },
+    "message": "this method chain can be written more clearly with `if .. else ..`",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2182
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (11/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2360
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2390
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (13/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2673
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (14/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/runtime.rs",
+        "line": 2716
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 320
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (10/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 409
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::too_many_arguments",
+      "explanation": null
+    },
+    "message": "this function has too many arguments (8/7)",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite.rs",
+        "line": 546
+      }
+    ]
+  },
+  {
+    "level": "warning",
+    "code": {
+      "code": "clippy::collapsible_if",
+      "explanation": null
+    },
+    "message": "this `if` statement can be collapsed",
+    "locations": [
+      {
+        "file": "crates/deadsync-noteskin/src/sprite_perf_tests.rs",
+        "line": 140
+      }
+    ]
+  }
+]

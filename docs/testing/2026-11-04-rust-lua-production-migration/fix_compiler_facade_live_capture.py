@@ -1,0 +1,4 @@
+from pathlib import Path
+import base64,json,hashlib
+r=Path('/mnt/c/GitHub/deadsync');d=r/'docs/testing/2026-11-04-rust-lua-production-migration';name='crates/deadsync-song-lua/src/rust_engine/actors/song_activation.rs';p=r/name;raw=p.read_bytes();assert not (d/'song-compiler-facade-before-live-fix.json').exists();(d/'song-compiler-facade-before-live-fix.json').write_text(json.dumps({name:{'sha256':hashlib.sha256(raw).hexdigest(),'base64':base64.b64encode(raw).decode()}},indent=2)+'\n')
+nl=b'\r\n' if b'\r\n' in raw else b'\n';old=b'                    capture.events.clear();';new=nl.join([b'                    if !data.context.live {',b'                        capture.events.clear();',b'                    }']);assert raw.count(old)==1;p.write_bytes(raw.replace(old,new));print('Retained live Init broadcast history; offline capture still resets')

@@ -1,0 +1,28 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find type `Function` in this scope
+   --> crates/deadsync-song-lua/src/compile.rs:250:16
+    |
+250 | ...::<Function>("...
+    |       ^^^^^^^^ not found in this scope
+    |
+help: there is an enum variant `crate::SongLuaEaseTarget::Function`; try using the variant's enum
+    |
+250 -     math.get::<Function>("randomseed")?
+250 +     math.get::<crate::SongLuaEaseTarget>("randomseed")?
+    |
+help: you might be missing a type parameter
+    |
+239 | pub(crate) fn migration_gameplay_screen<Function>(
+    |                                        ++++++++++
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error

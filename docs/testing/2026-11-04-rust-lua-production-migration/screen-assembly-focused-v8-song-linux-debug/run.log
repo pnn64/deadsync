@@ -1,0 +1,110 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 44s
+     Running tests/rust_generated_players.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_generated_players-1ab8a2372df80921)
+
+running 7 tests
+test constructors_own_attack_display_and_preserve_actor_methods ... ok
+test errors_keep_native_partial_writes_and_clear_recursion_guard ... ok
+test execution_limit_unwinds_life_notification_and_allows_later_updates ... ok
+test life_queries_capture_meter_and_distinguish_live_value_from_local_flags ... ok
+test meter_getters_can_reenter_collect_and_replace_their_receiver_fields ... ok
+test released_player_scene_unsubscribes_and_releases_generated_owners ... ok
+test set_life_updates_shared_stats_and_notifies_before_side_effect ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.14s
+
+     Running tests/rust_player_parts.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_player_parts-c0583068b7adcf31)
+
+running 7 tests
+test failed_hold_construction_releases_partial_scene_and_allows_later_construction ... ok
+test generated_child_lookup_keeps_aliases_and_group_forwarding_after_renames ... ok
+test hidden_or_empty_font_combo_is_the_existing_invisible_leaf ... ok
+test hold_texture_method_reenters_gc_once_per_player_and_uses_raw_modifiers ... ok
+test player_init_owns_ordered_children_and_shared_named_aliases ... ok
+test player_update_traversal_visits_each_part_once_and_columns_last ... ok
+test scene_release_collects_the_entire_generated_tree_and_keeps_other_player_alive ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.98s
+
+     Running tests/rust_screen_assembly.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_assembly-bef917e9ca0a29cf)
+
+running 8 tests
+test failed_screen_construction_releases_partial_actors_and_allows_recovery ... ok
+test first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records ... ok
+test named_underlay_children_restore_names_and_copy_enabled_tags_without_metamethod_writes ... ok
+test required_theme_helpers_keep_argument_rules_fresh_colors_and_mutable_style_lookup ... ok
+test screen_scene_retirement_releases_owned_players_underlay_and_transitions ... ok
+test screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order ... ok
+test underlay_geometry_text_filters_and_variant_selection_match_production ... ok
+test underlay_update_closures_keep_bpm_rate_and_life_owners_across_collection ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.65s
+
+     Running tests/rust_screen_parts.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_parts-5327aa286726df0e)
+
+running 7 tests
+test background_preserves_border_geometry_brightness_groups_and_owned_lookups ... ok
+test generated_named_score_children_advance_and_all_release_with_the_scene ... ok
+test inherited_lyric_helper_uses_current_vars_and_animates_both_layers ... ok
+test internal_texture_queries_keep_their_owner_and_public_class_overrides ... ok
+test lyrics_follow_current_reverse_selection_and_keep_real_layer_commands ... ok
+test percentage_score_owns_named_only_children_and_text_aliases ... ok
+test timer_and_engine_labels_keep_types_visibility_and_bound_methods ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.98s
+
+     Running tests/rust_top_screen.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_top_screen-19fe7c44d8a4f9f5)
+
+running 10 tests
+test default_screen_fixture_constructs_complete_players_with_real_font_helper ... ok
+test music_wheel_retains_shared_backing_and_counts_only_existing_side_effects ... ok
+test option_rows_preserve_names_generated_groups_defaults_and_fresh_identity ... ok
+test player_and_life_lookups_capture_enabled_owners_without_creating_missing_children ... ok
+test preparation_row_capture_and_ownership_survive_screen_retirement ... ok
+test retired_screen_is_collectible_while_saved_independent_controls_remain_usable ... ok
+test screen_controls_preserve_bound_receivers_defaults_and_argument_rules ... ok
+test screen_getters_and_setters_allow_reentry_and_keep_partial_writes_on_errors ... ok
+test screen_lead_in_uses_typed_receiver_range_and_no_side_effect ... ok
+test transitions_keep_off_order_out_activation_and_request_commit_boundaries ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.64s
+
+     Running tests/rust_transitions.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_transitions-c0a1092556700396)
+
+running 22 tests
+test cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update ... ok
+test capture_cancellation_uses_the_spin_queue_created_at_first_spin_selection ... ok
+test capture_finish_merges_blocks_and_discards_pending_callbacks_without_advancing_getters ... ok
+test capture_finish_retains_detached_immediate_cache_until_its_scope_changes ... ok
+test capture_hurry_scales_history_and_clock_but_retains_queued_dispatch_starts ... ok
+test capture_parent_finish_and_hurry_visit_children_while_stop_only_changes_self ... ok
+test capture_queue_overflow_finishes_history_before_the_next_tween_or_command ... ok
+test capture_stop_cancels_pending_commands_and_keeps_direct_and_immediate_blocks ... ok
+test capture_zero_duration_getters_and_cancellation_keep_explicit_writes ... ok
+test existing_iterator_and_enum_helpers_keep_indexing_conversion_and_alias_identity ... ok
+test incoming_hide_queue_and_off_survive_collection_and_scene_release ... ok
+test incoming_init_and_on_handlers_use_native_color_helpers_and_current_class_methods ... ok
+test incoming_style_spooky_reload_and_stage_variants_match ... ok
+test live_constructors_keep_real_children_commands_geometry_and_textures ... ok
+test outgoing_off_preserves_white_score_and_routine_updates ... ok
+test preparation_constructors_keep_captured_queue_effects_and_shared_state ... ok
+test preparation_exports_constructor_blocks_with_timing_easing_and_explicit_writes ... ok
+test preparation_queues_preserve_order_shared_state_and_handoff_without_duplicate_callbacks ... ok
+test screen_geometry_uses_current_globals_typed_dimensions_and_owner_binding ... ok
+test transition_owner_hibernation_and_rate_control_child_delta_and_last_callback ... ok
+test transition_start_owns_plain_callback_children_snapshot_through_gc ... ok
+test transition_time_uses_retained_child_and_raw_state_not_owner_queue ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.36s
+

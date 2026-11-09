@@ -1,0 +1,105 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 54s
+     Running tests/rust_banners.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_banners-2b946be6f93bdd61)
+
+running 6 tests
+test banner_construction_inheritance_and_scrolling_match_production ... ok
+test banner_live_texture_events_animation_and_retained_handles ... ok
+test banner_path_queries_and_fallbacks_preserve_load_distinctions ... ok
+test banner_song_loader_uses_real_blank_bitmap_and_lossy_song_paths ... ok
+test current_background_helper_keeps_dynamic_calls_and_theme_provenance ... ok
+test group_sort_and_reentrant_path_getters_match_error_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/rust_catalog.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_catalog-0f42b98a1ba4209b)
+
+running 12 tests
+test chart_selectors_keep_native_identity_and_numeric_enum_rules ... ok
+test column_cues_root_timing_callbacks_across_collection_and_reentry ... ok
+test density_radar_and_column_cues_match_and_keep_fresh_mutable_results ... ok
+test frozen_song_steps_metadata_matches_selected_and_catalog_objects ... ok
+test frozen_split_timing_uses_each_loaded_chart_owner ... ok
+test malformed_chart_rows_fail_initialization_on_both_backends ... ok
+test manager_shared_arrays_lookup_errors_and_side_effects_match ... ok
+test retained_selectors_survive_gc_and_runtimes_are_isolated ... ok
+test saved_chart_callbacks_retain_only_their_data_after_catalog_release ... ok
+test song_steps_course_and_trail_metadata_match_production ... ok
+test song_util_uses_live_getters_and_preserves_arguments_and_reentry ... ok
+test timing_uses_owned_rate_and_float_traversal_with_fresh_arrays ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.30s
+
+     Running tests/rust_clock.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_clock-01f108064b1570e5)
+
+running 8 tests
+test bpm_segments_deltas_and_backward_seeks_match_legacy ... ok
+test generated_bpm_tables_and_invalid_numeric_fields_follow_legacy_behavior ... ok
+test getters_preserve_metamethod_coercion_and_callback_captures_under_gc ... ok
+test live_players_keep_separate_positions_and_reset_without_losing_identity ... ok
+test lua_error_identity_matches_puc_while_the_legacy_host_wraps_it ... ok
+test native_timing_stops_delays_warps_and_seeks_match_legacy ... ok
+test replay_music_time_preserves_native_float_rounding_rate_and_origin ... ok
+test temporary_player_tables_remain_rooted_during_reentrant_reset_setters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.07s
+
+     Running tests/rust_courses.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_courses-27a9ffed75489c97)
+
+running 11 tests
+test existing_display_actor_and_duplicate_array_declaration_keep_native_names ... ok
+test leaf_display_receives_both_set_song_passes_and_missing_steps_defaults ... ok
+test malformed_display_cleanup_leaves_the_runtime_usable ... ok
+test positioning_preserves_transform_priority_and_collecting_callbacks ... ok
+test raw_children_are_selected_at_init_and_conditions_keep_constructor_side_effects ... ok
+test raw_display_identity_child_first_init_and_startup ... ok
+test raw_load_name_and_draw_order_survive_child_callbacks ... ok
+test scroller_defaults_coercion_clamps_and_private_methods ... ok
+test set_song_params_are_per_player_shared_with_leaves_and_reentrant_safe ... ok
+test shared_display_keeps_identity_and_initializes_once ... ok
+test shared_scene_release_keeps_actor_and_later_wrappers_until_last_owner ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.38s
+
+     Running tests/rust_sl.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_sl-c7c397de2a3505dc)
+
+running 10 tests
+test chart_callbacks_reenter_collect_replace_globals_and_keep_partial_mutations ... ok
+test chart_info_preserves_stream_identity_defaults_and_player_argument_rules ... ok
+test column_cues_follow_current_state_and_mutate_the_returned_columns ... ok
+test complete_sl_state_preserves_context_values_and_independent_player_tables ... ok
+test custom_preference_definitions_are_fresh_and_init_all_preserves_stored_values ... ok
+test init_all_handles_reentrant_defaults_typed_pairs_and_partial_errors ... ok
+test mode_tables_match_the_frozen_simply_love_fixture_and_theme_queries ... ok
+test preference_defaults_storage_case_and_return_counts_match_production ... ok
+test retained_queries_release_discarded_managers_and_states_without_crossing_runtimes ... ok
+test sl_initialization_preserves_getter_order_collection_and_failure_atomicity ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.21s
+
+     Running tests/rust_song_meters.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_meters-f65ae092088a2183)
+
+running 9 tests
+test absent_streams_width_coercion_and_render_thresholds ... ok
+test bundled_song_info_meter_declaration_preserves_its_quad_stream ... ok
+test construction_private_binding_and_stream_aliases ... ok
+test duplicate_stream_name_uses_native_group_lifecycle_and_payload ... ok
+test getters_reenter_collect_and_failed_reads_do_not_publish_stale_payloads ... ok
+test malformed_stream_declarations_fail_without_retaining_partial_scenes ... ok
+test stream_replacement_obeys_cached_update_plan_and_invalidation ... ok
+test stream_startup_frame_updates_and_finish_keep_distinct_traversals ... ok
+test stream_subscription_begins_after_parent_init_and_keeps_native_loading_name ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.97s
+

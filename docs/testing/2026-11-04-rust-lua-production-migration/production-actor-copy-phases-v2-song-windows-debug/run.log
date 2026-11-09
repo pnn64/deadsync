@@ -1,0 +1,278 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+warning: use of deprecated type alias `mlua::String`: use `mlua::LuaString` instead
+   --> crates\deadsync-song-lua\tests\rust_baked_program.rs:727:44
+    |
+727 |                 let value = f.call::<mlua::String>(input).unwrap();
+    |                                            ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `deadsync-song-lua` (test "rust_baked_program") generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 4m 24s
+     Running tests\rust_actor_copy.rs (target\rust-adapters\debug\deps\rust_actor_copy-bf59059660aace85.exe)
+
+running 9 tests
+test copied_actor_fields_match_before_live_promotion ... ok
+test copied_pose_materializes_as_an_independent_actor_declaration ... ok
+test explicit_default_base_fields_and_alignment_aliases_keep_their_presence ... ok
+test immediate_flags_keep_their_raw_presence_before_playback ... 
+thread 'immediate_flags_keep_their_raw_presence_before_playback' (22564) panicked at crates\deadsync-song-lua\tests\rust_actor_copy.rs:51:33:
+native: root:SetDrawByZPosition(false)
+runtime error: crates\deadsync-song-lua\tests\rust_actor_copy.rs:49:1: attempt to call method 'SetDrawByZPosition' (a nil value)
+stack traceback:
+	[C]: in method 'SetDrawByZPosition'
+	crates\deadsync-song-lua\tests\rust_actor_copy.rs:49:1: in main chunk
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test live_copy_keeps_tween_destination_current_pose_and_independent_colors ... ok
+test nested_copy_and_retained_function_keep_actor_pose_after_gc ... ok
+test preparation_copy_keeps_authored_pose_and_explicit_default_base_fields ... ok
+test promoted_copy_exports_exact_pose_flags_and_absent_base_fields ... ok
+test sampled_base_getters_keep_copy_presence_and_values ... ok
+
+failures:
+
+failures:
+    immediate_flags_keep_their_raw_presence_before_playback
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.45s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_actor_copy`
+     Running tests\rust_baked_program.rs (target\rust-adapters\debug\deps\rust_baked_program-8871c6cf04753ff6.exe)
+
+running 27 tests
+test batch_compilation_keeps_binding_bits_identity_errors_and_independent_state ... ok
+test borrowed_byte_values_reuse_storage_without_merging_cells_or_changing_equality ... ok
+test borrowed_instruction_decoding_preserves_endianness_and_outlives_the_dump ... ok
+test byte_cells_reject_transient_inputs_type_changes_and_incompatible_initial_contents ... ok
+test equal_scalar_values_do_not_merge_distinct_captured_cells ... ok
+test group_code_sharing_preserves_independent_cells_constants_and_object_ids ... ok
+test grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction ... ok
+test groups_check_cell_layout_bits_and_clear_scratch_between_programs ... ok
+test identical_group_code_shares_storage_without_merging_execution_or_machine_state ... ok
+test implicit_entry_nils_are_restored_only_where_control_flow_can_read_them ... ok
+test input_contract_errors_and_static_schema_errors_are_checked ... ok
+test malformed_or_mutated_dumps_never_need_a_lua_vm_to_validate_or_execute ... ok
+test method_chains_tail_calls_and_receiver_identity_are_verified ... ok
+test noncanonical_boolean_constants_are_rejected ... ok
+test numeric_operations_and_branches_match_authored_lua ... ok
+test prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage ... ok
+test primitive_truthiness_short_circuit_and_byte_strings_match_lua ... ok
+test real_branching_inputs_actions_and_aliased_state_survive_vm_destruction ... ok
+test repeated_function_dumps_keep_bytes_native_errors_and_detached_results ... ok
+test reusable_dumps_keep_byte_state_rebinding_independent_of_the_loading_vm ... ok
+test reused_registers_do_not_leak_previous_inputs_after_branches_or_failed_reads ... ok
+test scalar_cells_preserve_number_bits_and_are_independent_per_machine ... ok
+test shared_byte_cells_keep_pool_meaning_copy_semantics_and_binary_bytes_after_vm_destruction ... ok
+test shared_group_code_keeps_mutable_byte_arena_indices_after_vm_destruction ... ok
+test shared_signatures_check_each_field_receiver_and_preserve_distinct_return_objects ... ok
+test truthiness_execution_matches_lua_after_vm_destruction_and_keeps_input_errors ... ok
+test unsupported_behavior_is_rejected_without_running_a_prefix ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\rust_baked_program_tables.rs (target\rust-adapters\debug\deps\rust_baked_program_tables-f587e8e3a2ca25a9.exe)
+
+running 4 tests
+test bounded_array_choices_preserve_table_aliases_and_independent_machine_state ... ok
+test byte_keyed_state_keeps_nil_false_aliases_actions_and_vm_independence ... ok
+test released_key_cache_preserves_nil_and_stays_bounded_under_distinct_inputs ... ok
+test table_schemas_and_unsupported_keys_values_are_rejected_without_execution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\rust_compat_globals.rs (target\rust-adapters\debug\deps\rust_compat_globals-458a35c1613b4288.exe)
+
+running 16 tests
+test enum_lists_reverse_identity_and_capability_values_match_existing_host ... ok
+test existing_color_helpers_match_palettes_tones_and_reentrant_difficulty_methods ... ok
+test fixed_metadata_helpers_ignore_arguments_and_return_fresh_tables ... ok
+test formatting_and_numeric_helpers_match_existing_argument_conversion ... 
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'formatting_and_numeric_helpers_match_existing_argument_conversion' (28772) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+ok
+test frozen_host_globals_keep_their_public_types ... ok
+test installed_native_global_types_remain_available ... ok
+test json_and_binary_helpers_keep_existing_depth_sparse_and_invalid_input_rules ... ok
+test lua_services_keep_file_read_virtual_write_and_error_argument_contracts ... ok
+test native_formatter_debug_overflow_is_protected_at_the_song_host_boundary ... 
+thread 'native_formatter_debug_overflow_is_protected_at_the_song_host_boundary' (44336) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'native_formatter_debug_overflow_is_protected_at_the_song_host_boundary' (44336) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'native_formatter_debug_overflow_is_protected_at_the_song_host_boundary' (44336) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+
+thread 'native_formatter_debug_overflow_is_protected_at_the_song_host_boundary' (44336) panicked at crates\deadsync-song-lua\src\tables.rs:243:31:
+attempt to multiply with overflow
+ok
+test offline_services_keep_fixed_results_identity_effects_and_gc ... ok
+test profile_effect_helpers_survive_gc_and_reenter_counter_accessors ... ok
+test recursive_copy_preserves_existing_alias_metatable_and_binary_key_rules ... ok
+test restored_debug_walks_keep_existing_recursion_and_trace_dispatch ... ok
+test sequence_helpers_preserve_holes_callbacks_and_distinct_identity ... ok
+test strings_colors_authors_judgments_and_file_listing_match_existing_helpers ... ok
+test version_helpers_keep_string_first_numeric_prefix_and_ignored_argument_rules ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.92s
+
+     Running tests\rust_definitions.rs (target\rust-adapters\debug\deps\rust_definitions-a1c42f7fc088abed.exe)
+
+running 12 tests
+test concatenation_keeps_inputs_shallow_shares_upvalues_and_composes_all_results ... ok
+test constructors_preserve_declarations_identity_source_metadata_and_sparse_fields ... ok
+test exact_wildcard_and_redirect_paths_match_existing_resolver_for_lua_files ... ok
+test existing_song_fixtures_load_as_declaration_trees_without_running_commands ... ok
+test load_actor_resolves_the_callers_source_and_preserves_varargs_and_nested_templates ... ok
+test native_filename_marker_difference_from_legacy_is_recorded_explicitly ... ok
+test native_media_model_and_directory_templates_are_declarations_without_execution ... ok
+test optional_paths_redirect_failures_and_native_file_types_are_explicit ... ok
+test process_relative_prefix_resolution_uses_the_current_directory ... ok
+test registered_inventory_and_invalid_constructors_follow_the_pinned_source ... ok
+test source_levels_and_collecting_metatables_match_original_lua_code ... ok
+test tail_called_relative_loader_retains_the_native_missing_source_rejection ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.45s
+
+     Running tests\rust_draw.rs (target\rust-adapters\debug\deps\rust_draw-6ceea2c199fda334.exe)
+
+running 12 tests
+test callbacks_keep_partial_draws_report_once_and_defer_queued_commands ... ok
+test draw_function_binding_validation_and_mesh_payloads_match ... ok
+test draw_samples_tween_and_spin_state_at_each_update_boundary ... ok
+test frame_traversal_wrappers_visibility_and_proxy_leaves_match ... ok
+test immediate_draws_preserve_call_time_pose_and_live_frames_replace_only_ordinary_frames ... ok
+test nested_targets_restore_caller_stacks_and_freeze_each_submission ... ok
+test preparation_operation_limit_and_live_high_draw_count_match ... ok
+test preparation_preserves_all_owners_and_quiet_tails ... ok
+test traced_callbacks_and_textures_survive_reentry_then_collect ... ok
+test transition_coercion_and_binary_sprite_predicates_preserve_native_reads ... ok
+test unbalanced_and_mismatched_targets_keep_errors_and_recover_next_live_frame ... ok
+test unmapped_sources_fail_conversion_then_allow_new_capture ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.18s
+
+     Running tests\rust_live_layers.rs (target\rust-adapters\debug\deps\rust_live_layers-80679ff354e34371.exe)
+
+running 16 tests
+test absent_layers_keep_only_the_option_phase_preference_read ... ok
+test background_reset_preserves_resources_masks_wrappers_and_authored_fields ... ok
+test backgrounds_activate_repeat_reset_and_fade_in_native_order ... ok
+test foreground_crossing_start_runs_on_after_players_then_uses_music_delta ... ok
+test foreground_reads_music_rate_again_after_on_and_keeps_selected_options_rooted ... ok
+test foreground_visible_override_restarts_on_without_repeating_child_startup ... ok
+test layer_owner_rejects_foreign_and_retired_screens_without_consuming_release ... ok
+test model_reset_restores_native_depth_and_wrap_defaults_with_dimensions_intact ... ok
+test original_preference_rejection_occurs_in_options_even_without_layers ... ok
+test prepared_frame_does_not_repeat_background_focus_or_player_options ... ok
+test rate_preference_changes_background_and_foreground_tween_deltas ... ok
+test reset_typed_failure_preserves_raw_partial_state_and_recovers_on_retry ... ok
+test retained_layer_method_owners_survive_lookup_replacement_and_gc ... ok
+test sprite_reset_preserves_loaded_size_and_restarts_state_and_animation ... ok
+test two_background_layers_ties_and_rate_wrappers_preserve_callback_order ... ok
+test unsupported_transition_keeps_partial_focus_state_and_recovers ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.39s
+
+     Running tests\rust_preparation.rs (target\rust-adapters\debug\deps\rust_preparation-343a17202243c306.exe)
+
+running 21 tests
+test authored_init_exports_explicit_blocks_steps_and_pending_commands ... ok
+test construction_retains_initial_state_and_defers_init_links_and_subscriptions ... ok
+test delayed_commands_and_zero_time_messages_wait_for_chronological_replay ... ok
+test discovery_errors_restore_command_guards_and_discovery_scope ... ok
+test foreground_parent_is_visible_during_init_before_child_list_attachment ... ok
+test init_failure_keeps_partial_state_and_retry_skips_finished_children ... ok
+test init_on_and_zero_update_finish_before_startup_queue_discovery ... ok
+test offline_clone_preserves_tween_capture_and_copies_mutable_state ... ok
+test offline_concat_shares_children_and_composes_commands_before_init ... ok
+test offline_constructor_identity_child_ownership_and_values_match_production ... ok
+test offline_constructor_rebinds_methods_and_defers_child_conditions ... ok
+test offline_resource_clones_keep_stream_aliases_and_scroller_state ... ok
+test offline_reused_root_clones_children_and_releases_independent_scene_owners ... ok
+test preparation_loader_files_preserve_args_first_result_context_and_media_defaults ... ok
+test preparation_loader_font_templates_null_actor_and_gc_ownership_match_production ... ok
+test preparation_loader_host_entry_roots_arguments_and_preserves_scope_after_limits ... ok
+test preparation_loader_saved_callbacks_resolve_their_source_and_restore_failed_scopes ... ok
+test preparation_loader_virtual_media_and_invalid_arguments_match_production ... ok
+test scene_release_removes_startup_owners_before_collection ... ok
+test stop_and_finish_clear_the_deferred_discovery_marker ... ok
+test uninitialized_scenes_release_callbacks_and_validate_parent_ownership ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.31s
+
+     Running tests\rust_render.rs (target\rust-adapters\debug\deps\rust_render-0427397f58333b09.exe)
+
+running 9 tests
+test color_crop_and_quaternion_tweens_match_production ... ok
+test colors_gradients_and_getter_ownership_match_production ... ok
+test declared_camera_fov_and_command_override_match_production ... ok
+test existing_set_fov_frame_alias_matches_command_and_class_calls ... ok
+test geometry_dimensions_alignment_and_flip_order_match_production ... ok
+test immediate_base_alignment_shadow_and_frame_properties_match_production ... ok
+test render_callbacks_reenter_force_gc_and_clone_template_state ... ok
+test render_flags_propagate_in_call_order_and_keep_strict_arguments ... ok
+test render_numeric_edge_cases_match_production ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.53s
+
+     Running tests\rust_scene_retirement.rs (target\rust-adapters\debug\deps\rust_scene_retirement-a25e60c687692d1e.exe)
+
+running 11 tests
+test detached_fields_metatables_and_collecting_callbacks_keep_native_state ... ok
+test failed_end_still_allows_retained_state_and_eventual_cleanup ... ok
+test late_wrapper_subscriptions_remain_rooted_until_the_next_registry_replacement ... ok
+test retained_sound_handle_keeps_its_actor_and_native_parameters ... ok
+test retirement_unsubscribes_old_messages_but_keeps_direct_commands_callable ... ok
+test saved_actor_state_and_late_wrappers_match_native_after_retirement ... ok
+test scene_handles_from_another_vm_cannot_retire_or_release_local_actors ... ok
+test screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them ... ok
+test shared_actors_transfer_after_the_last_active_owner_retires_or_releases ... ok
+test unused_retired_scenes_release_rust_metadata_in_repeated_cycles ... ok
+test weak_authored_command_fields_still_follow_native_collection_rules ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.57s
+
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_actor_copy`

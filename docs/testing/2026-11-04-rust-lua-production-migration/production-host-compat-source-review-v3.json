@@ -1,0 +1,42 @@
+{
+  "files": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/host_compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/basic.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/colors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/enums.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/files.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/json.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/misc.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/native_print.lua",
+    "crates/deadsync-song-lua/src/rust_engine/managers/gameplay_helpers.rs",
+    "crates/deadsync-song-lua/tests/rust_compat_globals.rs"
+  ],
+  "core_sources_unchanged": true,
+  "format_command": [
+    "rustfmt",
+    "--edition",
+    "2024",
+    "--check",
+    "--config",
+    "skip_children=true",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/host_compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/basic.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/colors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/enums.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/files.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/json.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/compat/misc.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/gameplay_helpers.rs",
+    "crates/deadsync-song-lua/tests/rust_compat_globals.rs"
+  ],
+  "format_exit_code": 0,
+  "format_stdout": "",
+  "format_stderr": "",
+  "source_guard": "v5 sources.json; run remains in progress"
+}

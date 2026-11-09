@@ -1,0 +1,4 @@
+Source enumeration stopped before Cargo: WSL Git rejected the Windows-owned
+checkout as dubious ownership. The runner now supplies safe.directory for this
+specific checkout in this read-only command; no global Git settings changed.
+No test result was produced by this attempt.

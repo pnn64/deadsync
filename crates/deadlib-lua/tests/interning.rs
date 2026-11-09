@@ -121,16 +121,12 @@ fn string_keys_survive_growth_sweeping_and_slot_reuse() {
 #[test]
 fn lua_binary_string_keys_and_generated_middle_changes_match_the_reference() {
     let source=br#"local t={};for i=0,255 do local s=string.rep('x',64)..string.char(i)..string.rep('\0',96);t[s]=i end;collectgarbage();local out={};local n=0;for i=0,255 do local s=string.rep('x',64)..string.char(i)..string.rep('\0',96);n=n+t[s];out[#out+1]=string.char(t[s])end;return n,table.concat(out)"#;
-    let lua = lua_reference::Lua::new();
-    let (expected, bytes): (f64, lua_reference::LuaString) =
-        lua.load(source.as_slice()).eval().unwrap();
     let mut vm = Vm::new();
     let values = vm.execute(&compile(source).unwrap()).unwrap().to_vec();
     let [Value::Number(n), Value::String(id)] = values.as_slice() else {
         panic!("scalar observations")
     };
-    assert_eq!(*n, expected);
-    assert_eq!(vm.string_bytes(*id).unwrap(), bytes.as_bytes().as_ref());
+    assert_eq!(*n, f64::from((0..=255).sum::<u32>()));
     assert_eq!(
         vm.string_bytes(*id).unwrap(),
         (0..=255).collect::<Vec<u8>>()

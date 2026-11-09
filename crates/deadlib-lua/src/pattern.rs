@@ -1,5 +1,11 @@
 //! Lua 5.1 byte patterns with compact instructions and explicit backtracking.
-use crate::{Error, ErrorKind, locale::class};
+use crate::memory::{Buffer, Memory};
+use crate::{Error, locale::class};
+
+mod cache;
+pub(crate) use cache::Cache;
+#[cfg(test)]
+mod allocation_tests;
 
 const UNFINISHED: usize = usize::MAX;
 const POSITION: usize = usize::MAX - 1;
@@ -86,14 +92,15 @@ struct Instruction {
 }
 #[derive(Debug)]
 pub(crate) struct Pattern {
-    code: Box<[Instruction]>,
-    sets: Box<[[u64; 4]]>,
+    code: Buffer<Instruction>,
+    sets: Buffer<[u64; 4]>,
     pub anchored: bool,
 }
 
 impl Pattern {
     pub fn heap_bytes(&self) -> usize {
-        std::mem::size_of_val(self.code.as_ref()) + std::mem::size_of_val(self.sets.as_ref())
+        self.code.capacity() * std::mem::size_of::<Instruction>()
+            + self.sets.capacity() * std::mem::size_of::<[u64; 4]>()
     }
 }
 
@@ -114,7 +121,7 @@ struct Choice {
 
 #[derive(Debug)]
 pub(crate) struct Work {
-    choices: Vec<Choice>,
+    choices: Buffer<Choice>,
     captures: [Capture; 32],
     undo: [(u8, Capture); 64],
     undo_len: usize,
@@ -122,8 +129,13 @@ pub(crate) struct Work {
 }
 impl Default for Work {
     fn default() -> Self {
+        Self::new_in(Memory::default())
+    }
+}
+impl Work {
+    pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
-            choices: Vec::new(),
+            choices: Buffer::new_in(memory),
             captures: [EMPTY; 32],
             undo: [(0, EMPTY); 64],
             undo_len: 0,
@@ -135,9 +147,14 @@ impl Work {
     pub fn heap_bytes(&self) -> usize {
         self.choices.capacity() * std::mem::size_of::<Choice>()
     }
+    fn push_choice(&mut self, choice: Choice) -> Result<(), Error> {
+        self.choices.try_reserve(1).map_err(|_| Error::memory())?;
+        self.choices.push(choice);
+        Ok(())
+    }
 }
-fn error(message: &str) -> Error {
-    Error::new(ErrorKind::Runtime, 0, message)
+fn error(message: &'static str) -> Error {
+    Error::runtime_static(message)
 }
 
 fn set_has(set: &[u64; 4], byte: u8) -> bool {
@@ -186,7 +203,7 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
 }
 
 impl Pattern {
-    pub fn compile(pattern: &[u8], anchor: bool) -> Self {
+    pub fn compile(pattern: &[u8], anchor: bool, memory: Memory) -> Result<Self, Error> {
         // Lua 5.1's pattern interpreter treats a zero byte as the pattern terminator.
         let pattern = &pattern[..pattern
             .iter()
@@ -194,9 +211,12 @@ impl Pattern {
             .unwrap_or(pattern.len())];
         let anchored = anchor && pattern.first() == Some(&b'^');
         let mut p = usize::from(anchored);
-        let mut code = Vec::with_capacity(pattern.len());
-        let mut sets = Vec::new();
-        let mut open = Vec::new();
+        let mut code = Buffer::new_in(memory.clone());
+        code.try_reserve_exact(pattern.len())
+            .map_err(|_| Error::memory())?;
+        let mut sets = Buffer::new_in(memory);
+        let mut open = [0u32; 32];
+        let mut open_count = 0;
         let mut captures = 0u32;
         while p < pattern.len() {
             let mut kind = Kind::Byte;
@@ -215,14 +235,16 @@ impl Pattern {
                             p += 1;
                         } else {
                             kind = Kind::Open;
-                            open.push(arg);
+                            open[open_count] = arg;
+                            open_count += 1;
                         }
                     }
                 }
                 b')' => {
-                    if let Some(slot) = open.pop() {
+                    if open_count != 0 {
+                        open_count -= 1;
                         kind = Kind::Close;
-                        arg = slot;
+                        arg = open[open_count];
                     } else {
                         kind = Kind::Error;
                         arg = 5;
@@ -237,6 +259,7 @@ impl Pattern {
                     if let Some((end, set)) = bracket(pattern, p) {
                         kind = Kind::Set;
                         arg = sets.len() as u32;
+                        sets.try_reserve(1).map_err(|_| Error::memory())?;
                         sets.push(set);
                         p = end - 1;
                         quantifiable = true;
@@ -269,6 +292,7 @@ impl Pattern {
                                 if let Some((end, set)) = bracket(pattern, p + 1) {
                                     kind = Kind::Frontier;
                                     arg = sets.len() as u32;
+                                    sets.try_reserve(1).map_err(|_| Error::memory())?;
                                     sets.push(set);
                                     p = end - 1;
                                 } else {
@@ -293,6 +317,7 @@ impl Pattern {
                                     set[usize::from(b) / 64] |= 1u64 << (b % 64);
                                 }
                             }
+                            sets.try_reserve(1).map_err(|_| Error::memory())?;
                             sets.push(set);
                             quantifiable = true;
                         }
@@ -325,11 +350,11 @@ impl Pattern {
                 break;
             }
         }
-        Self {
-            code: code.into_boxed_slice(),
-            sets: sets.into_boxed_slice(),
+        Ok(Self {
+            code,
+            sets,
             anchored,
-        }
+        })
     }
     fn atom(&self, pc: usize, byte: u8) -> bool {
         let i = self.code[pc];
@@ -392,24 +417,24 @@ impl Pattern {
                         }
                         Repeat::Minimal => {
                             if one {
-                                work.choices.push(Choice {
+                                work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos: pos + 1,
                                     undo: work.undo_len,
                                     count: work.count,
                                     alternative: Alternative::Longer(pc),
-                                });
+                                })?;
                             }
                         }
                         Repeat::Optional => {
                             if one {
-                                work.choices.push(Choice {
+                                work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos,
                                     undo: work.undo_len,
                                     count: work.count,
                                     alternative: Alternative::Once,
-                                });
+                                })?;
                                 pos += 1;
                             }
                         }
@@ -422,13 +447,13 @@ impl Pattern {
                                     pos += 1;
                                 }
                                 if pos > min {
-                                    work.choices.push(Choice {
+                                    work.push_choice(Choice {
                                         pc: pc + 1,
                                         pos: pos - 1,
                                         undo: work.undo_len,
                                         count: work.count,
                                         alternative: Alternative::Shorter(min),
-                                    });
+                                    })?;
                                 }
                             }
                         }

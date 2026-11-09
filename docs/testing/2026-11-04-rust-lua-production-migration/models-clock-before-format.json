@@ -1,0 +1,13 @@
+{
+  "command": [
+    "rustfmt",
+    "--check",
+    "--edition",
+    "2024",
+    "--config",
+    "skip_children=true",
+    "crates/deadsync-song-lua/src/model_texture.rs"
+  ],
+  "exit_code": 1,
+  "output": "Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/model_texture.rs:60:\n             }\n             (cycle, starts.into_boxed_slice())\n         } else {\n\u001b[31m-            (frames.iter().fold(0.0_f32, |total, frame| total + frame.delay), Box::default())\n\u001b(B\u001b[m\u001b[32m+            (\n\u001b(B\u001b[m\u001b[32m+                frames\n\u001b(B\u001b[m\u001b[32m+                    .iter()\n\u001b(B\u001b[m\u001b[32m+                    .fold(0.0_f32, |total, frame| total + frame.delay),\n\u001b(B\u001b[m\u001b[32m+                Box::default(),\n\u001b(B\u001b[m\u001b[32m+            )\n\u001b(B\u001b[m         };\n         Self {\n             velocity,\nDiff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/model_texture.rs:75:\n     #[inline]\n     fn state_only(frames: Arc<[SongLuaModelTextureFrame]>) -> Self {\n         Self {\n\u001b[31m-            cycle: frames.iter().fold(0.0_f32, |total, frame| total + frame.delay),\n\u001b(B\u001b[m\u001b[32m+            cycle: frames\n\u001b(B\u001b[m\u001b[32m+                .iter()\n\u001b(B\u001b[m\u001b[32m+                .fold(0.0_f32, |total, frame| total + frame.delay),\n\u001b(B\u001b[m             frames,\n             velocity: [0.0; 2],\n             frame_starts: Box::default(),\nDiff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/model_texture.rs:169:\n \n     pub(crate) fn update(&mut self, delta: f32) {\n         self.diffuse.update(delta);\n\u001b[31m-        if let Some(additive) = &mut self.additive { additive.update(delta); }\n\u001b(B\u001b[m\u001b[32m+        if let Some(additive) = &mut self.additive {\n\u001b(B\u001b[m\u001b[32m+            additive.update(delta);\n\u001b(B\u001b[m\u001b[32m+        }\n\u001b(B\u001b[m     }\n \n     fn set_state(&mut self, state: i32) {\nDiff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/model_texture.rs:176:\n         self.diffuse.set_state(state);\n\u001b[31m-        if let Some(additive) = &mut self.additive { additive.set_state(state); }\n\u001b(B\u001b[m\u001b[32m+        if let Some(additive) = &mut self.additive {\n\u001b(B\u001b[m\u001b[32m+            additive.set_state(state);\n\u001b(B\u001b[m\u001b[32m+        }\n\u001b(B\u001b[m     }\n \n     fn sample(&mut self, second: f32) {\n"
+}

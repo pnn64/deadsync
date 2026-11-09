@@ -111,7 +111,9 @@ fn execute(vm: &mut Vm, source: &[u8], name: &[u8]) -> Result<(), Option<Vec<u8>
             },
         )
     })?;
-    let function = vm.load_program(&program);
+    let function = vm
+        .try_load_program(&program)
+        .map_err(|e| error_bytes(vm, &e))?;
     drop(program);
     vm.call(Value::Function(function), &[])
         .map(|_| ())

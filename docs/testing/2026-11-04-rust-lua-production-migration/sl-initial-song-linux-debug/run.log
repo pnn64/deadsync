@@ -1,0 +1,38 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0277]: the trait bound `u8: Field` is not satisfied
+   --> crates/deadsync-song-lua/src/rust_engine/managers/sl.rs:246:53
+    |
+246 | ...=> set(table, "BackgroundFilter", value, c...
+    |       ---                            ^^^^^ unsatisfied trait bound
+    |       |
+    |       required by a bound introduced by this call
+    |
+    = help: the trait `fields::Field` is not implemented for `u8`
+    = help: the following other types implement trait `Field`:
+              f32
+              f64
+              i32
+              i64
+              usize
+note: required by a bound in `fields::set`
+   --> crates/deadsync-song-lua/src/rust_engine/managers/fields.rs:42:17
+    |
+ 39 | ...fn set(
+    |       --- required by a bound in this function
+...
+ 42 | ...impl Field,
+    |         ^^^^^ required by this bound in `set`
+    = note: the full name for the type has been written to '/var/tmp/deadsync-rust-adapters-target/debug/deps/deadsync_song_lua-6df91d7cecd21378.long-type-1950727495729972151.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error

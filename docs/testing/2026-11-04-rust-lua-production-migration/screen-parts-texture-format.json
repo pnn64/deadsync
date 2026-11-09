@@ -1,0 +1,24 @@
+{
+  "command": [
+    "rustfmt",
+    "--edition",
+    "2024",
+    "--config",
+    "skip_children=true",
+    "--check",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_screen_parts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/textures.rs"
+  ],
+  "exit_code": 0,
+  "files": {
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs": "ee7eba006c6e5418a712e33a742cd27d8eeeb1528ab2fee571117955febda977",
+    "crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs": "b1fc35ad876b5031a2b3427aaf8001cabe8675d5a703bb9841c086adc186fff1",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs": "5a025dbf80125a2d80faf9aaa400a9cca19aef149da3ca76e043450b12c83b76",
+    "crates/deadsync-song-lua/tests/rust_screen_parts.rs": "4f8247a01e203c28acd877f925a5c55224dfb049173a6db32e8f4f91d8d28412",
+    "crates/deadsync-song-lua/src/rust_engine/actors/textures.rs": "510cfc32315de8590715618489a543a9c0a97ef17f37a2d179d5d5d08aaf83a8"
+  },
+  "output": ""
+}

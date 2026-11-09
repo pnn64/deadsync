@@ -1,0 +1,13 @@
+{
+  "exit_code": 0,
+  "seconds": 18.18238199991174,
+  "binary_sha256": "9dd85b59d817606fae277c98e1c05d470e90bb71f00420b15eb86fa28778d696",
+  "result_exists": true,
+  "screenshots": [
+    "data\\save\\screenshots\\2026\\11-November\\2026-11-08_132522__315__DREAMING_ING__.png"
+  ],
+  "warnings_or_errors": [],
+  "log_sha256": "b73faa941ed8e0cd51b8109c6550d872c44f21bfbea35fb375e35c707ed271ec",
+  "sources_unchanged": true,
+  "validation_passed": true
+}

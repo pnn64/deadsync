@@ -1,0 +1,24 @@
+{
+  "baseline": "graphs-final-adapters-song-linux-debug",
+  "explicit_edit_baseline": "song-meters-edit-baseline.json",
+  "untouched_source_entries": 1035,
+  "untouched_sources_match": true,
+  "core_evidence": "actor-meshes-final-core-core-linux-debug",
+  "core_tests_passed": 949,
+  "core_entries_unchanged": 240,
+  "new_files": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/native_children.lua",
+    "crates/deadsync-song-lua/src/rust_engine/actors/native_children.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_meters.rs",
+    "crates/deadsync-song-lua/tests/rust_song_meters.rs"
+  ],
+  "removed_files": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/graphs.lua"
+  ],
+  "named_child_lua_transfer_preserves_all_helpers": true,
+  "legacy_production_sources_unchanged": true,
+  "bundled_asset": "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua",
+  "bundled_asset_sha256": "a6974b5520feb5a0655ac152fec9224598ac695d87378cdf51c62359051b11ee",
+  "bundled_declaration_scope": "Exact SongMeterDisplay declaration, deterministic color callback and both existing layout widths; full SongInfoBar and screen integration remain pending.",
+  "migration_complete": false
+}

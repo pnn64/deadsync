@@ -1,0 +1,18 @@
+   Compiling deadlib-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua)
+    Finished `test` profile [unoptimized] target(s) in 13.74s
+     Running tests/memory_limits.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/memory_limits-8c12edfd274264ce)
+
+running 10 tests
+test bounded_rust_binding_storage_keeps_its_native_alignment ... ok
+test compilation_workspace_and_lua_loadstring_share_the_vm_ceiling ... ok
+test dump_workspace_cannot_bypass_the_remaining_vm_budget ... ok
+test host_userdata_obeys_the_budget_and_releases_storage_after_collection ... ok
+test initialization_must_fit_the_budget ... ok
+test loaded_bytecode_is_charged_once_and_released_with_its_binding ... ok
+test loadfile_source_storage_is_bounded_and_failure_closes_the_job ... ok
+test oversized_string_is_rejected_before_growth_and_the_vm_recovers ... ok
+test streaming_load_budget_survives_reader_reentry_and_is_released_on_failure ... ok
+test table_budget_failure_does_not_affect_another_state ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+

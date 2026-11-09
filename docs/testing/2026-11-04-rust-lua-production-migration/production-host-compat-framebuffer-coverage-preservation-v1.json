@@ -1,0 +1,5 @@
+{
+  "previous_source_sha256": "cc629d7320b501ab5e7861ba1dd6044c95c65bfdbdb25f28ce0829836d47c73c",
+  "all_original_test_functions_and_probes_preserved": true,
+  "comparison": "Original and current source are identical after removing only the added public lua error-service test and applying rustfmt to both."
+}

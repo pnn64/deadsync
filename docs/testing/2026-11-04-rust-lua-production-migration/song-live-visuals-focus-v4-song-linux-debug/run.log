@@ -1,0 +1,83 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 34.55s
+     Running tests/rust_bitmap_text.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_bitmap_text-e9522f03d6e4fbd0)
+
+running 8 tests
+test attributes_dedup_aliases_raw_reads_and_immutable_publication ... ok
+test collecting_getters_reentry_and_failed_reads_leave_no_stale_payload ... ok
+test font_resolution_and_builtin_fallback_match_production ... ok
+test load_font_templates_concat_composition_and_independent_attributes ... ok
+test native_fixture_inheritance_and_theme_helpers ... ok
+test retained_text_updates_during_live_tweens_and_draw_callbacks ... ok
+test text_conversion_stroke_errors_and_fresh_color_tables ... ok
+test text_layout_strict_flags_fit_bounds_and_zoom_ordering ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.19s
+
+     Running tests/rust_live_visuals.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_visuals-8c5ea65d717e29ff)
+
+running 10 tests
+test collecting_getters_are_read_once_in_native_order_without_font_or_stroke_fallback_reads ... ok
+test immutable_visual_snapshots_survive_gc_and_session_teardown ... ok
+test invalid_global_bindings_leave_previous_bindings_and_missing_slots_stop_after_prior_writes ... ok
+test live_poses_content_and_tracked_visibility_reach_prepared_slots ... ok
+test mesh_vertices_publish_before_texture_errors_and_empty_meshes_still_read_the_texture ... ok
+test proxy_actor_identity_resolves_within_each_layer_and_duplicate_bindings_use_the_last_target ... ok
+test single_use_publication_callbacks_reject_recursive_and_saved_lua_calls ... ok
+test sprite_paths_commit_before_frame_errors_and_unresolved_paths_keep_the_previous_texture ... ok
+test text_and_attribute_publication_preserve_the_native_error_commit_boundaries ... ok
+test unchanged_payload_arcs_are_retained_and_in_place_edits_replace_only_changed_values ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.56s
+
+     Running tests/rust_meshes.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_meshes-7ab266c78d446562)
+
+running 8 tests
+test draw_state_getters_reenter_collect_and_keep_partial_writes ... ok
+test host_buffer_provenance_is_weak ... ok
+test mesh_modes_ranges_and_line_joins_match_the_production_reader ... ok
+test mesh_reader_rejects_invalid_buffers_and_recovers_without_stale_output ... ok
+test mesh_updates_and_texture_loads_remain_immediate_during_tweens ... ok
+test mesh_upload_conversion_and_count_rules_keep_existing_fallbacks ... ok
+test uploaded_buffer_collection_after_successful_and_failed_queries ... ok
+test vertex_uploads_copy_scalars_and_survive_collection ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.19s
+
+     Running tests/rust_proxies.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_proxies-1038077af6f017f1)
+
+running 8 tests
+test collecting_reentrant_getters_keep_target_identity_and_write_order ... ok
+test frozen_native_proxy_inventory_identity_and_inheritance ... ok
+test invalid_targets_preserve_old_values_and_partial_classification_writes ... ok
+test malformed_renderer_fields_fail_and_recover_without_stale_output ... ok
+test proxy_template_instances_rebind_methods_and_release_independently ... ok
+test retained_bound_methods_and_targets_are_traced_and_released ... ok
+test target_changes_remain_immediate_and_queued_callbacks_retain_owners ... ok
+test target_classification_priorities_and_visibility_match_production ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.79s
+
+     Running tests/rust_sprites.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_sprites-94d79bd29ffb8110)
+
+running 8 tests
+test load_and_settexture_preserve_their_distinct_state_and_return_rules ... ok
+test retained_texture_metadata_survives_owner_retirement_and_releases_cycles ... ok
+test sprite_animation_and_uv_properties_remain_immediate_across_tweens ... ok
+test sprite_geometry_uses_image_frames_and_retained_handle_dimensions ... ok
+test sprite_loading_and_retained_texture_metadata_match_production ... ok
+test texture_capture_errors_keep_prior_mutations_and_recover ... ok
+test texture_capture_preserves_epochs_frame_sheets_states_and_startup_suppression ... ok
+test texture_lookups_survive_reentry_gc_and_recover_after_errors ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+

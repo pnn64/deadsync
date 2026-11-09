@@ -1,0 +1,14 @@
+
+running 9 tests
+test absent_streams_width_coercion_and_render_thresholds ... ok
+test bundled_song_info_meter_declaration_preserves_its_quad_stream ... ok
+test construction_private_binding_and_stream_aliases ... ok
+test duplicate_stream_name_uses_native_group_lifecycle_and_payload ... ok
+test getters_reenter_collect_and_failed_reads_do_not_publish_stale_payloads ... ok
+test malformed_stream_declarations_fail_without_retaining_partial_scenes ... ok
+test stream_replacement_obeys_cached_update_plan_and_invalidation ... ok
+test stream_startup_frame_updates_and_finish_keep_distinct_traversals ... ok
+test stream_subscription_begins_after_parent_init_and_keeps_native_loading_name ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+

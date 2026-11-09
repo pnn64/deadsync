@@ -1,5 +1,6 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
+use crate::memory::{Buffer, Memory};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
 };
@@ -101,12 +102,14 @@ struct Entry {
 
 #[derive(Debug, Default)]
 pub(crate) struct Table {
-    array: Vec<Value>,
-    entries: Vec<Entry>,
-    slots: Vec<u32>,
+    array: Buffer<Value>,
+    entries: Buffer<Entry>,
+    slots: Buffer<u32>,
     // Arena identities have a nonzero generation; zero denotes no metatable.
-    // This leaves room for the scan state without growing the table header.
+    // The private attachment below uses the same optional-identity encoding.
     metatable: u64,
+    // Private embedding state, traced independently of Lua weak-table modes.
+    host_state: u64,
     pub trace: TableTrace,
 }
 
@@ -119,9 +122,23 @@ pub(crate) enum TableTrace {
 }
 
 impl Table {
+    pub(crate) fn new_in(memory: Memory) -> Self {
+        Self {
+            array: Buffer::new_in(memory.clone()),
+            entries: Buffer::new_in(memory.clone()),
+            slots: Buffer::new_in(memory),
+            metatable: 0,
+            host_state: 0,
+            trace: TableTrace::Idle,
+        }
+    }
+    #[cfg(test)]
     pub fn with_capacity(array: usize, records: usize) -> Result<Self, Error> {
+        Self::with_capacity_in(array, records, Memory::default())
+    }
+    pub fn with_capacity_in(array: usize, records: usize, memory: Memory) -> Result<Self, Error> {
         let failed = Error::memory;
-        let mut table = Self::default();
+        let mut table = Self::new_in(memory);
         table.array.try_reserve_exact(array).map_err(|_| failed())?;
         table.array.resize(array, Value::Nil);
         if records > (1 << 26) {
@@ -149,25 +166,18 @@ impl Table {
     pub fn set_metatable(&mut self, table: Option<TableId>) {
         self.metatable = table.map_or(0, |id| id.0);
     }
-    pub fn with_record_capacity(capacity: usize) -> Self {
-        if capacity == 0 {
-            return Self::default();
-        }
-        // Keep the final insert below the strict 3/4 rebuild threshold.
-        let slots = (capacity.checked_mul(4).expect("table capacity overflow") / 3 + 1)
-            .max(8)
-            .next_power_of_two();
-        Self {
-            entries: Vec::with_capacity(capacity),
-            slots: vec![0; slots],
-            ..Self::default()
-        }
+    pub fn host_state(&self) -> Option<TableId> {
+        (self.host_state != 0).then_some(TableId(self.host_state))
+    }
+    pub fn set_host_state(&mut self, table: Option<TableId>) {
+        self.host_state = table.map_or(0, |id| id.0);
     }
     pub fn heap_bytes(&self) -> usize {
         self.array.capacity() * std::mem::size_of::<Value>()
             + self.entries.capacity() * std::mem::size_of::<Entry>()
             + self.slots.capacity() * 4
     }
+    #[cfg(test)]
     pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
         self.array
             .iter()
@@ -373,6 +383,25 @@ impl Table {
         self.entries.push(Entry { key: k, value });
         Ok(())
     }
+    pub fn grow_list_array(&mut self, end: usize) -> Result<(), Error> {
+        let first = self.array.len();
+        if end <= first {
+            return Ok(());
+        }
+        // SETLIST includes nil fields in its array extent. Reserve before
+        // changing traversal positions or moving any existing hash values.
+        self.array
+            .try_reserve(end - first)
+            .map_err(|_| Error::memory())?;
+        self.invalidate_trace();
+        self.array.resize(end, Value::Nil);
+        for index in first..end {
+            if let Some(value) = self.take_hash(Key::Number(((index + 1) as f64).to_bits())) {
+                self.array[index] = value;
+            }
+        }
+        Ok(())
+    }
     pub fn len(&self) -> usize {
         let mut hi = self.array.len();
         if hi > 0 && self.array[hi - 1] == Value::Nil {
@@ -458,6 +487,33 @@ mod allocation_tests {
                 assert_eq!(table.get(hash_key(6)), Value::Number(42.));
             }
             eprintln!("TABLE_MUTATION_FAILURE_POINTS {points}");
+        }
+    }
+    #[test]
+    fn a_failed_list_array_growth_keeps_nil_holes_and_existing_hash_values() {
+        let mut table = Table::with_capacity(1, 3).unwrap();
+        for index in [1, 3, 5, 9] {
+            table
+                .set(Value::Number(index as f64), Value::Number(index as f64))
+                .unwrap();
+        }
+        table.trace = TableTrace::Pending(false, false);
+        let before = table.pairs().collect::<Vec<_>>();
+        let (result, stats) = probe(1, || table.grow_list_array(6));
+        assert_eq!(stats.rejected, 1);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+        assert_eq!(table.array.len(), 1);
+        assert_eq!(table.pairs().collect::<Vec<_>>(), before);
+        assert_eq!(table.trace, TableTrace::Pending(false, false));
+        table.grow_list_array(6).unwrap();
+        for index in [1, 3, 5, 9] {
+            assert_eq!(
+                table.get(Value::Number(index as f64)),
+                Value::Number(index as f64)
+            );
+        }
+        for index in [2, 4, 6] {
+            assert_eq!(table.get(Value::Number(index as f64)), Value::Nil);
         }
     }
     #[test]

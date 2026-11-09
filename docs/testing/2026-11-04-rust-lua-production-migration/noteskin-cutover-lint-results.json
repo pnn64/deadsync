@@ -1,0 +1,33 @@
+{
+  "core": {
+    "exit_code": 0,
+    "command": "cargo clippy --locked -p deadlib-lua --no-deps --all-targets -- -D warnings",
+    "log": "bounded-loading-clippy-fixed-linux.log"
+  },
+  "noteskin_strict": {
+    "exit_code": 1,
+    "command": "cargo clippy --locked -p deadsync-noteskin --no-deps --all-targets -- -D warnings",
+    "log": "noteskin-cutover-clippy-linux.log",
+    "result": "pre-existing warnings; baseline file/format comparisons in noteskin-oracle-source-audit.json"
+  },
+  "noteskin_default": {
+    "exit_code": 0,
+    "command": "cargo clippy --locked -p deadsync-noteskin --no-deps --all-targets --message-format=json",
+    "diagnostics": "noteskin-cutover-clippy-summary.json",
+    "result": "54 emitted diagnostics including repeated dependency/test warnings; none in new Rust adapter or migration tests",
+    "source_scope": "before adding the final byte-for-byte callback fixture test"
+  },
+  "format": {
+    "command": [
+      "cargo",
+      "fmt",
+      "-p",
+      "deadsync-noteskin",
+      "-p",
+      "deadlib-lua",
+      "--check"
+    ],
+    "exit_code": 0,
+    "seconds": 3.401882299920544
+  }
+}

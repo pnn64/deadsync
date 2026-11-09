@@ -1,0 +1,23 @@
+{
+  "crates/deadsync-notefield/src/atlas_kernel_perf.rs": "5befccb66a1bbcb7e57900cf1e1c1de9007f646cb0c189c30994e6b7ec855cbf",
+  "crates/deadsync-notefield/src/atlas_original.rs": "89164a24c4131fde8b1c190d32e1131be11083d24792c1bae95c9771587f879c",
+  "crates/deadsync-notefield/src/combo_kernel_perf.rs": "3b7a71c42edd8fcd5cfc7566870e703b29a5932d5270ad092c494fe27206d8e0",
+  "crates/deadsync-notefield/src/combo_original.rs": "1765a70b5e492bee512072c2749b23fc19bf383eeaa013683e569af4f1023505",
+  "crates/deadsync-notefield/src/edit_bars_original.rs": "3bcba9b95d6950ab50cdfee87d438c451f9dffb4bf4e67398e39f8f4c169c1f1",
+  "crates/deadsync-notefield/src/edit_bars_performance.rs": "73829c9357c90c44280b37b32952f91e121c515e10aa58682f4e1e056e78c3bd",
+  "crates/deadsync-notefield/src/feedback_kernel_perf.rs": "d5085abfa27c266e0c630343dc99161a5015dfbf7a527e5bd697a70259c65dd6",
+  "crates/deadsync-notefield/src/feedback_original.rs": "7bba241d944367cb6520755275fab2580c3c30b1eb13ebcf557a7d75365d94ed",
+  "crates/deadsync-notefield/src/hold_guard_original.rs": "471e7644858b6b53c4ffb15c7948cd67e75d05f5c345b837f2c92bf0217f1b78",
+  "crates/deadsync-notefield/src/hold_guard_perf.rs": "ff111c70143db4cf81ef94136aa9e6197e7adaaf54d99b957b356b5ff7787f7b",
+  "crates/deadsync-notefield/src/hud_original.rs": "f00d3e362ac3bedc6367d34d257a63a1343581ef9d830fe5ea269f27cb6b0492",
+  "crates/deadsync-notefield/src/hud_performance.rs": "b15996de23d53fe2027e492ea01e3b338f156256c4c8a921051804c6f7b4b509",
+  "crates/deadsync-notefield/src/mini_indicator_original.rs": "bc6b2696cbc869bf2c6764a7143bd26aa87c57bb1bd31f75aa60726da5fedfcc",
+  "crates/deadsync-notefield/src/mini_indicator_performance.rs": "d84938f39f7d1c405a54be29f589eb9d1db1de2d6d3511ce8a4e5bb994b1a66b",
+  "crates/deadsync-notefield/src/number_adapter.rs": "26d8f9d8f78064cac6b85120fc38106c20793779185d49c401386be216316c26",
+  "crates/deadsync-notefield/src/number_original.rs": "ce23b1dee76f7369939105901a29b2c353819ada206efe096a47df9dfc4693eb",
+  "crates/deadsync-notefield/src/number_performance.rs": "9cd46a23435aecfa1c5a7af4bc505a75efd22a24c1ac051ffc66b4cc79589ee0",
+  "crates/deadsync-notefield/src/numeric_original.rs": "4692144a79e34475cbf66f840347db4fd6a93c20af550a2ffe864b5ac0ef2310",
+  "crates/deadsync-notefield/src/numeric_performance.rs": "801e58b518636429acfe0618c88aad89fa69b2ed23ce1d946ee8a4f121d89a7e",
+  "crates/deadsync-notefield/src/text_original.rs": "19594ecccd775e7569b8d20847a920c3c7e25863b2f9133981da36d51288580e",
+  "crates/deadsync-notefield/src/text_performance.rs": "b3d612ced8bb446510037d3f8cf83cac70e9cb894fac4700d3e1832e6bad523f"
+}

@@ -1,0 +1,47 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0433]: cannot find `SongLuaLivePlayerWrite` in the crate root
+   --> crates/deadsync-song-lua/src/rust_engine/live_frames.rs:122:26
+    |
+122 | ...e::SongL...Write::R...
+    |       ^^^^^...^^^^^ could not find `SongLuaLivePlayerWrite` in the crate root
+    |
+help: a struct with a similar name exists
+    |
+122 -             .push(crate::SongLuaLivePlayerWrite::RecordLife { player, life });
+122 +             .push(crate::SongLuaLivePlayer::RecordLife { player, life });
+    |
+help: consider importing this enum through its public re-export
+    |
+  2 + use crate::rust_engine::SongLuaLivePlayerWrite;
+    |
+help: if you import `SongLuaLivePlayerWrite`, refer to it directly
+    |
+122 -             .push(crate::SongLuaLivePlayerWrite::RecordLife { player, life });
+122 +             .push(SongLuaLivePlayerWrite::RecordLife { player, life });
+    |
+
+error[E0282]: type annotations needed for `(_, _)`
+  --> crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs:59:9
+   |
+59 | ...let (elig...rams) = ...
+   |        ^^^^^...^^^^^
+60 | ...if !eligible {
+   |       --------- type must be known at this point
+   |
+help: consider giving this pattern a type, where the placeholders `_` are specified
+   |
+59 |     let (eligible, params): (_, _) = output.lock().unwrap().take().unwrap();
+   |                           ++++++++
+
+Some errors have detailed explanations: E0282, E0433.
+For more information about an error, try `rustc --explain E0282`.
+error: could not compile `deadsync-song-lua` (lib) due to 2 previous errors

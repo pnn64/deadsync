@@ -1,0 +1,17 @@
+
+running 12 tests
+test clock_lookup_reentry_preserves_request_order_and_roots_old_runtime ... ok
+test effect_only_methods_keep_return_arity_and_typed_counter_conversion ... ok
+test hooks_observe_authored_calls_without_internal_numeric_conversion_calls ... ok
+test invalid_names_only_count_effects_and_disabled_capture_does_not_read_clock ... ok
+test loading_and_top_queries_are_raw_while_add_screen_uses_ordinary_lookup ... ok
+test pending_transition_survives_higher_priority_new_screen_and_runtimes_are_isolated ... ok
+test publication_preserves_manager_identity_and_saved_player_getters ... ok
+test publication_roots_all_arguments_across_global_setters_and_partial_errors ... ok
+test replacement_recreates_invalid_managers_and_preserves_authored_tables ... ok
+test request_and_name_writes_keep_partial_effects_on_failure ... ok
+test requests_preserve_duplicates_precision_and_drain_without_changing_top ... ok
+test saved_getters_keep_only_their_player_pair_and_old_screens_are_collectible ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+

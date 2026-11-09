@@ -62,8 +62,8 @@ fn ldexp(n: f64, exponent: i32) -> f64 {
 }
 
 impl Vm {
-    pub(super) fn open_math(&mut self) {
-        let table = self.new_table();
+    pub(super) fn open_math(&mut self) -> Result<(), Error> {
+        let table = self.try_new_table()?;
         for (i, name) in [
             b"abs".as_slice(),
             b"floor",
@@ -97,23 +97,19 @@ impl Vm {
         .iter()
         .enumerate()
         {
-            let key = self.intern(name);
-            self.tables[slot_index(table.0)]
-                .set(key, Value::Native(MATH_FIRST + i as u64))
-                .expect("math names are valid");
+            let key = self.try_intern(name)?;
+            self.tables[slot_index(table.0)].set(key, Value::Native(MATH_FIRST + i as u64))?;
         }
         for (name, value) in [
             (b"mod".as_slice(), Value::Native(45)),
             (b"pi", Value::Number(std::f64::consts::PI)),
             (b"huge", Value::Number(f64::INFINITY)),
         ] {
-            let key = self.intern(name);
-            self.tables[slot_index(table.0)]
-                .set(key, value)
-                .expect("math names are valid");
+            let key = self.try_intern(name)?;
+            self.tables[slot_index(table.0)].set(key, value)?;
         }
-        self.set_global(b"math", Value::Table(table))
-            .expect("math name is valid");
+        self.set_global(b"math", Value::Table(table))?;
+        Ok(())
     }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))

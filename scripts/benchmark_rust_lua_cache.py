@@ -23,10 +23,9 @@ def main() -> None:
     sources=list((root/'crates/deadlib-lua').rglob('*.rs'))
     sources += [root/p for p in ('Cargo.toml','Cargo.lock','.cargo/config.toml','crates/deadlib-lua/Cargo.toml')]
     sources.append(Path(__file__).resolve())
-    reference=[p for p in (root/'vendor/lua-src/lua-5.1.5').iterdir() if p.suffix in ('.c','.h')]
     def hashes(paths):
         return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
-    before=hashes(sources);oracle=hashes(reference);started=time.time()
+    before=hashes(sources);started=time.time()
     command=['cargo','bench','-p','deadlib-lua','--bench','cache','--no-run','--message-format=json']
     if args.target_dir:command += ['--target-dir',str(args.target_dir.resolve())]
     build=subprocess.run(command,cwd=root,capture_output=True,text=True)
@@ -73,7 +72,7 @@ def main() -> None:
                 cpu_samples.append(dict(metric=metric,sample=sample,loads=300,fixture='closures_512',
                     wall_ns=wall,kernel_100ns=ticks(kernel),user_100ns=ticks(user),
                     cpu_ns=(ticks(kernel)+ticks(user))*100,cpu_cycles=cycles.value))
-    if before!=hashes(sources) or oracle!=hashes(reference):
+    if before!=hashes(sources):
         raise SystemExit('sources changed during benchmark')
     samples=[];layouts={};heaps={};metadata={}
     for line in run.stdout.splitlines():
@@ -102,7 +101,7 @@ def main() -> None:
         assert heaps[name]['compile']==heaps[name]['hit']
     assert len(samples)==135 and len(layouts)==len(heaps)==5
     result=dict(command=command,binary=str(binary),binary_sha256=binary_hash,
-        source_hashes=before,reference_source_hashes=oracle,
+        source_hashes=before,
         utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),build_and_run_seconds=time.time()-started,
         platform=platform.platform(),processor=os.environ.get('PROCESSOR_IDENTIFIER',platform.processor()),
         rustc=subprocess.check_output(['rustc','-vV'],text=True),

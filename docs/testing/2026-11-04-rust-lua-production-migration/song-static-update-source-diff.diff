@@ -1,0 +1,1018 @@
+--- before/crates/deadsync-song-lua/Cargo.toml
++++ crates/deadsync-song-lua/Cargo.toml
+@@ -279,3 +279,7 @@
+ [[test]]
+ name = "rust_song_column_output"
+ required-features = ["rust-engine", "test-support"]
++
++[[test]]
++name = "rust_song_update_output"
++required-features = ["rust-engine", "test-support"]
+--- before/crates/deadsync-song-lua/src/perframe.rs
++++ crates/deadsync-song-lua/src/perframe.rs
+@@ -275,7 +275,7 @@
+ 
+ pub type SongLuaUpdateModState = BTreeMap<String, f32>;
+ 
+-trait ModState {
++pub(crate) trait ModState {
+     fn entries(&self) -> impl Iterator<Item = (&str, &f32)>;
+     fn get(&self, key: &str) -> Option<&f32>;
+     fn is_empty(&self) -> bool;
+@@ -298,7 +298,7 @@
+ // Immutable frame snapshots share names for the lifetime of one compilation.
+ // Sorted, compact storage preserves BTreeMap traversal and lookup semantics.
+ #[derive(Clone, Default)]
+-struct ModSnapshot(Box<[(Rc<str>, f32)]>);
++pub(crate) struct ModSnapshot(Box<[(Rc<str>, f32)]>);
+ 
+ impl ModState for ModSnapshot {
+     fn entries(&self) -> impl Iterator<Item = (&str, &f32)> {
+@@ -318,7 +318,7 @@
+ }
+ 
+ #[derive(Default)]
+-struct ModSnapshotScratch {
++pub(crate) struct ModSnapshotScratch {
+     names: FxHashSet<Rc<str>>,
+     lua_names: FxHashMap<usize, (mlua::LuaString, Rc<str>)>,
+     entries: Vec<(Rc<str>, f32)>,
+@@ -484,14 +484,14 @@
+         Ok(self.finish())
+     }
+ 
+-    fn states(
++    pub(crate) fn states(
+         &mut self,
+         tables: &[Table; LUA_PLAYERS],
+     ) -> Result<[ModSnapshot; LUA_PLAYERS], String> {
+         Ok([self.sample(&tables[0])?, self.sample(&tables[1])?])
+     }
+ 
+-    fn player_speeds(
++    pub(crate) fn player_speeds(
+         &mut self,
+         lua: &Lua,
+         tables: &[Table; LUA_PLAYERS],
+@@ -1296,7 +1296,7 @@
+     );
+ }
+ 
+-fn push_update_mod_targets_with_key<S: ModState>(
++pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
+     out: &mut Vec<SongLuaEaseWindow>,
+     start: f32,
+     end: f32,
+--- before/crates/deadsync-song-lua/src/rust_engine.rs
++++ crates/deadsync-song-lua/src/rust_engine.rs
+@@ -30,6 +30,8 @@
+ mod song_compiler_roots;
+ mod song_mod_tables;
+ mod song_perframes;
++mod song_update_output;
++pub use song_update_output::SongStaticUpdateOutput;
+ mod song_prepare_globals;
+ mod song_static_schedule;
+ mod song_xero;
+--- before/crates/deadsync-song-lua/src/rust_engine/actors.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -11,6 +11,7 @@
+ mod song_immediate;
+ mod song_layers;
+ mod song_messages;
++pub(super) mod update_options;
+ #[cfg(feature = "test-support")]
+ pub(super) use song_immediate::TARGETS as IMMEDIATE_CAPTURE_TARGETS;
+ #[cfg(feature = "test-support")]
+--- before/crates/deadsync-song-lua/src/rust_engine/test_support.rs
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -2094,3 +2094,95 @@
+ ) -> Result<Vec<crate::SongLuaNoteHideWindow>, String> {
+     crate::lua_util::read_note_column_zoom_hides(lua)
+ }
++
++/// Exercise the real static branch of compile_update_functions, including its
++/// initial spline capture. Nil selects the production no-update-tree branch.
++pub fn legacy_static_update_output(
++    lua: &mlua::Lua,
++    context: &crate::SongLuaCompileContext,
++) -> Result<super::SongStaticUpdateOutput, String> {
++    let mut splines = Vec::new();
++    let (eases, overlay_eases, tracks, column_transforms, messages, broadcasts) =
++        crate::compile_update_functions::<(), (), ()>(
++            lua,
++            &mlua::Value::Nil,
++            context,
++            &mut Vec::new(),
++            &mut [],
++            &[],
++            &Default::default(),
++            &mut Vec::new(),
++            &mut Vec::new(),
++            &mut Vec::new(),
++            &mut splines,
++        )?;
++    assert!(
++        overlay_eases.is_empty()
++            && tracks.is_empty()
++            && messages.is_empty()
++            && broadcasts.is_empty()
++    );
++    Ok(super::SongStaticUpdateOutput {
++        eases,
++        column_transforms,
++        column_splines: splines,
++    })
++}
++
++pub struct LegacyUpdateOptionsProbe {
++    tables: [mlua::Table; crate::LUA_PLAYERS],
++    scratch: crate::perframe::ModSnapshotScratch,
++}
++impl LegacyUpdateOptionsProbe {
++    pub fn new(lua: &mlua::Lua) -> Result<Self, String> {
++        Ok(Self {
++            tables: crate::update_player_option_tables(lua)?,
++            scratch: Default::default(),
++        })
++    }
++    pub fn sample(
++        &mut self,
++        lua: &mlua::Lua,
++        speeds: bool,
++    ) -> Result<[crate::SongLuaUpdateModState; crate::LUA_PLAYERS], String> {
++        use crate::perframe::ModState;
++        let values = if speeds {
++            self.scratch.player_speeds(lua, &self.tables)?
++        } else {
++            self.scratch.states(&self.tables)?
++        };
++        Ok(values.map(|snapshot| {
++            snapshot
++                .entries()
++                .map(|(name, &value)| (name.to_owned(), value))
++                .collect()
++        }))
++    }
++}
++pub struct RustUpdateOptionsProbe(super::actors::update_options::Options);
++impl RustUpdateOptionsProbe {
++    pub fn new(runtime: &mut super::RustSongRuntime) -> Result<Self, deadlib_lua::Error> {
++        runtime.actors.update_options(&mut runtime.vm).map(Self)
++    }
++    pub fn sample(
++        &mut self,
++        runtime: &mut super::RustSongRuntime,
++        speeds: bool,
++    ) -> Result<[crate::SongLuaUpdateModState; crate::LUA_PLAYERS], deadlib_lua::Error> {
++        use crate::perframe::ModState;
++        self.0.sample(&mut runtime.vm, speeds).map(|values| {
++            values.map(|snapshot| {
++                snapshot
++                    .entries()
++                    .map(|(name, &value)| (name.to_owned(), value))
++                    .collect()
++            })
++        })
++    }
++    pub fn release(
++        &mut self,
++        runtime: &mut super::RustSongRuntime,
++    ) -> Result<(), deadlib_lua::Error> {
++        self.0.release(&mut runtime.vm)
++    }
++}
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/actors/update_options.rs
+@@ -0,0 +1,293 @@
++//! Rooted PlayerOptions observations for static and chronological compilation.
++use super::*;
++use crate::perframe::ModState;
++use rustc_hash::FxHashSet;
++
++#[derive(Clone, Default)]
++pub(in crate::rust_engine) struct Snapshot(Box<[(Arc<str>, f32)]>);
++impl ModState for Snapshot {
++    fn entries(&self) -> impl Iterator<Item = (&str, &f32)> {
++        self.0.iter().map(|(name, value)| (name.as_ref(), value))
++    }
++    fn get(&self, key: &str) -> Option<&f32> {
++        self.0
++            .binary_search_by(|(name, _)| name.as_ref().cmp(key))
++            .ok()
++            .map(|index| &self.0[index].1)
++    }
++    fn is_empty(&self) -> bool {
++        self.0.is_empty()
++    }
++}
++#[derive(Default)]
++struct Entries {
++    names: FxHashSet<Arc<str>>,
++    entries: Vec<(Arc<str>, f32)>,
++}
++impl Entries {
++    fn name(&mut self, text: &str) -> Arc<str> {
++        if let Some(name) = self.names.get(text) {
++            return name.clone();
++        }
++        let name: Arc<str> = text.into();
++        self.names.insert(name.clone());
++        name
++    }
++    fn finish(&mut self) -> Snapshot {
++        self.entries.sort_by(|a, b| a.0.cmp(&b.0));
++        self.entries.dedup_by(|next, previous| {
++            if next.0 == previous.0 {
++                std::mem::swap(next, previous);
++                true
++            } else {
++                false
++            }
++        });
++        Snapshot(self.entries.as_slice().into())
++    }
++    fn override_value(&mut self, key: &str, value: f32) {
++        if let Some((_, previous)) = self
++            .entries
++            .iter_mut()
++            .rev()
++            .find(|(name, _)| &**name == key)
++        {
++            *previous = value;
++        } else {
++            let name = self.name(key);
++            self.entries.push((name, value));
++        }
++    }
++}
++type SharedEntries = Arc<Mutex<Option<Entries>>>;
++struct Scratch {
++    entries: SharedEntries,
++    output: Option<[Snapshot; crate::LUA_PLAYERS]>,
++}
++type SharedScratch = Arc<Mutex<Option<Scratch>>>;
++
++/// Both original option tables are retained even if authored getters replace
++/// their globals. Only the enclosing compiler owns this load-lifetime root.
++pub(in crate::rust_engine) struct Options {
++    owner: Option<Root>,
++    scratch: SharedScratch,
++}
++impl Actors {
++    pub(in crate::rust_engine) fn update_options(&self, vm: &mut Vm) -> Result<Options, Error> {
++        let owner = vm.try_new_table()?;
++        let root = vm.pin(Value::Table(owner))?;
++        let entries = Arc::new(Mutex::new(Some(Entries::default())));
++        let scratch = Arc::new(Mutex::new(Some(Scratch {
++            entries: entries.clone(),
++            output: None,
++        })));
++        let result = (|| {
++            let read = vm.new_host_function(
++                |call| {
++                    let owner = table(call, call.captures()[2])?;
++                    let globals = helper(call, 5)?;
++                    for (index, key) in crate::SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
++                        let value = super::super::field(call, globals, key)?;
++                        table(call, value)?;
++                        call.raw_table_set(owner, Value::Number((index + 1) as f64), value)?;
++                    }
++                    Ok(())
++                },
++                &[
++                    Value::Table(self.registry),
++                    Value::Table(self.helpers),
++                    Value::Table(owner),
++                ],
++            )?;
++            vm.call(read, &[])?;
++            for speeds in [false, true] {
++                let callback =
++                    vm.new_host_function_with_data(pairs, &[], (entries.clone(), speeds))?;
++                vm.raw_table_set(owner, Value::Number(if speeds { 6. } else { 5. }), callback)?;
++                let callback = vm.new_host_function_with_data(
++                    sample,
++                    &[
++                        Value::Table(self.registry),
++                        Value::Table(self.helpers),
++                        Value::Table(owner),
++                    ],
++                    (scratch.clone(), speeds),
++                )?;
++                vm.raw_table_set(owner, Value::Number(if speeds { 4. } else { 3. }), callback)?;
++            }
++            Ok(())
++        })();
++        if let Err(error) = result {
++            vm.unpin(root)?;
++            return Err(error);
++        }
++        Ok(Options {
++            owner: Some(root),
++            scratch,
++        })
++    }
++}
++impl Options {
++    pub fn sample(
++        &mut self,
++        vm: &mut Vm,
++        speeds: bool,
++    ) -> Result<[Snapshot; crate::LUA_PLAYERS], Error> {
++        let Value::Table(owner) = vm.rooted(self.owner.expect("active option capture"))? else {
++            unreachable!()
++        };
++        let callback = vm.raw_table_get(owner, Value::Number(if speeds { 4. } else { 3. }))?;
++        vm.call(callback, &[])?;
++        Ok(self
++            .scratch
++            .lock()
++            .unwrap()
++            .as_mut()
++            .unwrap()
++            .output
++            .take()
++            .unwrap())
++    }
++    pub fn release(&mut self, vm: &mut Vm) -> Result<(), Error> {
++        if let Some(owner) = self.owner {
++            vm.unpin(owner)?;
++            self.owner = None;
++        }
++        Ok(())
++    }
++}
++fn sample(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let (shared, speeds) = call
++        .function_data::<(SharedScratch, bool)>()
++        .unwrap()
++        .clone();
++    let scratch = shared.lock().unwrap().take();
++    let mut scratch =
++        scratch.ok_or_else(|| call.error(b"PlayerOptions capture is already active"))?;
++    scratch.output = None;
++    let result = (|| {
++        let owner = table(call, call.captures()[2])?;
++        let pairs = call.raw_table_get(owner, Value::Number(if speeds { 6. } else { 5. }))?;
++        let mut output = [Snapshot::default(), Snapshot::default()];
++        for (index, output) in output.iter_mut().enumerate() {
++            let value = call.raw_table_get(owner, Value::Number((index + 1) as f64))?;
++            *output = read(call, table(call, value)?, speeds, &mut scratch, pairs)?;
++        }
++        scratch.output = Some(output);
++        Ok(())
++    })();
++    *shared.lock().unwrap() = Some(scratch);
++    result
++}
++fn raw(call: &mut HostCall<'_>, table: TableId, key: &str) -> Result<Value, Error> {
++    let key = call.try_intern(key.as_bytes())?;
++    call.raw_table_get(table, key)
++}
++fn read(
++    call: &mut HostCall<'_>,
++    owner: TableId,
++    speeds: bool,
++    scratch: &mut Scratch,
++    pairs: Value,
++) -> Result<Snapshot, Error> {
++    scratch
++        .entries
++        .lock()
++        .unwrap()
++        .as_mut()
++        .unwrap()
++        .entries
++        .clear();
++    let state = raw(
++        call,
++        owner,
++        if speeds {
++            "__songlua_player_option_speeds"
++        } else {
++            "__songlua_player_option_state"
++        },
++    )?;
++    if state != Value::Nil {
++        let state = table(call, state)?;
++        // Each traversal gets its own host invocation and stack lease. The
++        // parent also performs ordinary getters and can call Lua between reads.
++        call.call(pairs, &[Value::Table(state)])?;
++    }
++    if !speeds {
++        let active = raw(call, owner, "__songlua_speedmod_active")?;
++        let active = initial_state::value_text(call, active)?;
++        for (key, field) in [
++            ("xmod", "__songlua_speedmod_xmod"),
++            ("cmod", "__songlua_speedmod_cmod"),
++            ("mmod", "__songlua_speedmod_mmod"),
++        ] {
++            if active.as_deref().is_some_and(|active| active != key) {
++                continue;
++            }
++            let value = sprites::field(call, owner, field)?;
++            if value != Value::Nil {
++                let value =
++                    song_columns::numeric(call, value, song_columns::Numeric::Float)? as f32;
++                scratch
++                    .entries
++                    .lock()
++                    .unwrap()
++                    .as_mut()
++                    .unwrap()
++                    .override_value(key, value);
++            }
++        }
++    }
++    Ok(scratch.entries.lock().unwrap().as_mut().unwrap().finish())
++}
++fn pairs(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let (shared, speeds) = call
++        .function_data::<(SharedEntries, bool)>()
++        .unwrap()
++        .clone();
++    let entries = shared.lock().unwrap().take();
++    let mut entries =
++        entries.ok_or_else(|| call.error(b"PlayerOptions traversal is already active"))?;
++    let result = read_pairs(call, speeds, &mut entries);
++    *shared.lock().unwrap() = Some(entries);
++    result
++}
++fn read_pairs(call: &mut HostCall<'_>, speeds: bool, scratch: &mut Entries) -> Result<(), Error> {
++    let mut stack = call.native_stack()?;
++    let index = 1;
++    stack.push(Value::Nil)?;
++    while stack.next_table(index)? {
++        // Convert a copy: numeric key coercion must not replace the traversal key.
++        stack.push(stack.value(-2).unwrap())?;
++        let name = match stack.to_bytes(-1)? {
++            Some(bytes) => match std::str::from_utf8(bytes) {
++                Ok(text) => scratch.name(text),
++                Err(error) => return Err(stack.error(error.to_string().as_bytes())),
++            },
++            None => return Err(stack.error(b"PlayerOptions name: string expected")),
++        };
++        stack.set_top(stack.top() - 1)?;
++        let value = if speeds {
++            Some(
++                stack
++                    .to_number(-1)
++                    .ok_or_else(|| stack.error(b"PlayerOptions speed: number expected"))?
++                    as f32,
++            )
++        } else {
++            match stack.value(-1).unwrap() {
++                Value::Boolean(value) => Some(f32::from(value)),
++                Value::Number(value) => (value as f32).is_finite().then_some(value as f32),
++                Value::String(_) => std::str::from_utf8(stack.to_bytes(-1)?.unwrap())
++                    .ok()
++                    .and_then(|s| s.trim().parse::<f32>().ok()),
++                _ => None,
++            }
++        };
++        if let Some(value) = value {
++            scratch.entries.push((name, value));
++        }
++        stack.set_top(stack.top() - 1)?;
++    }
++    stack.finish(0)
++}
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/song_update_output.rs
+@@ -0,0 +1,80 @@
++//! Owned output for the existing update compiler's static-tree branch.
++use super::*;
++use crate::{SongLuaColumnOffsetBuildParams, SongLuaSpanMode, SongLuaTimeUnit};
++use std::collections::BTreeMap;
++
++#[derive(Default)]
++pub struct SongStaticUpdateOutput {
++    pub eases: Vec<crate::SongLuaEaseWindow>,
++    pub column_transforms: Vec<crate::SongLuaColumnOffsetWindow>,
++    pub column_splines: Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
++}
++impl RustSongRuntime {
++    /// Finish the static branch after the caller has captured splines at zero
++    /// and selected the existing no-update/no-model (or empty duration) path.
++    /// Keeping that initial capture separate preserves its order before the
++    /// tree eligibility getters. Dynamic trees require chronological replay.
++    pub fn compile_song_static_update_output(
++        &mut self,
++        context: &SongLuaCompileContext,
++        spline_capture: SongColumnSplineCapture,
++    ) -> Result<SongStaticUpdateOutput, String> {
++        let mut options = self
++            .actors
++            .update_options(&mut self.vm)
++            .map_err(|e| e.to_string())?;
++        let result = (|| {
++            let states = options
++                .sample(&mut self.vm, false)
++                .map_err(|e| e.to_string())?;
++            let speeds = options
++                .sample(&mut self.vm, true)
++                .map_err(|e| e.to_string())?;
++            let origin = context
++                .song_timing
++                .as_ref()
++                .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
++            let end = crate::update_function_end_beat(context);
++            let limit = origin + song_elapsed_seconds_at(end, context) * song_music_rate(context);
++            let unit = if context.song_timing.is_some() {
++                SongLuaTimeUnit::Second
++            } else {
++                SongLuaTimeUnit::BeatClock
++            };
++            let mut output = SongStaticUpdateOutput::default();
++            crate::perframe::push_update_mod_targets_with_key(
++                &mut output.eases,
++                origin,
++                limit.max(origin.next_up()),
++                &states,
++                &states,
++                &states,
++                &speeds,
++                None,
++                &mut BTreeMap::new(),
++                &mut (0, String::new()),
++                unit,
++            );
++            let columns = self.read_song_note_column_transform_samples()?;
++            crate::append_column_transform_windows_from_samples(
++                &mut output.column_transforms,
++                &columns,
++                &columns,
++                SongLuaColumnOffsetBuildParams {
++                    unit,
++                    start: origin,
++                    limit: limit.max(origin).next_up() - origin,
++                    span_mode: SongLuaSpanMode::Len,
++                    easing: None,
++                    sustain: None,
++                    opt1: None,
++                    opt2: None,
++                },
++            );
++            output.column_splines = spline_capture.finish()?;
++            Ok(output)
++        })();
++        options.release(&mut self.vm).map_err(|e| e.to_string())?;
++        result
++    }
++}
+--- /dev/null
++++ crates/deadsync-song-lua/tests/rust_song_update_output.rs
+@@ -0,0 +1,452 @@
++use deadlib_lua::{Value, compile_named};
++use deadsync_rules::timing::{TimingData, TimingSegments};
++use deadsync_song_lua::{
++    SongLuaCompileContext, SongLuaEaseTarget, SongLuaTimeUnit, SongLuaUpdateModState,
++    rust_engine::{
++        RustSongRuntime, SongColumnSplineCapture, SongLayerPlan, SongStaticUpdateOutput,
++        test_support::{self, LegacyUpdateOptionsProbe, RustUpdateOptionsProbe},
++    },
++};
++
++struct Fixture {
++    _dir: tempfile::TempDir,
++    context: SongLuaCompileContext,
++    native: mlua::Lua,
++    rust: RustSongRuntime,
++}
++impl Fixture {
++    fn new() -> Self {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("default.lua");
++        std::fs::write(&path, "return Def.ActorFrame{}").unwrap();
++        let mut context = SongLuaCompileContext::new(dir.path(), "static update compiler");
++        context.music_length_seconds = 12.345;
++        let native = test_support::legacy_song_compilation_vm();
++        test_support::legacy_activate_song_layers(&native, &[&path], 0, &context).unwrap();
++        let mut rust = RustSongRuntime::new(&context).unwrap();
++        rust.begin_song_compilation().unwrap();
++        let (scene, selected) = rust.construct_gameplay_screen(&context).unwrap();
++        rust.load_gameplay_theme(scene, &selected).unwrap();
++        let plan = SongLayerPlan::new(&[&path], 0, &context).unwrap();
++        rust.initialize_song_layers(scene, &plan).unwrap().unwrap();
++        rust.activate_song_layers(scene, &context).unwrap().unwrap();
++        let mut result = Self {
++            _dir: dir,
++            context,
++            native,
++            rust,
++        };
++        result.script(
++            r#"
++            events={}
++            function mark(s)events[#events+1]=s end
++            first=__songlua_player_options_1
++            second=__songlua_player_options_2
++        "#,
++        );
++        result
++    }
++    fn script(&mut self, source: &str) {
++        self.native.load(source).exec().unwrap();
++        self.rust
++            .vm_mut()
++            .execute(&compile_named(source.as_bytes(), b"=static update fixture").unwrap())
++            .unwrap();
++        self.events();
++    }
++    fn events(&mut self) -> String {
++        let native: String = self
++            .native
++            .load("return table.concat(events,'|')")
++            .eval()
++            .unwrap();
++        let Value::String(id) = self
++            .rust
++            .vm_mut()
++            .execute(&compile_named(b"return table.concat(events,'|')", b"=events").unwrap())
++            .unwrap()[0]
++        else {
++            panic!()
++        };
++        assert_eq!(
++            native.as_bytes(),
++            self.rust.vm_mut().string_bytes(id).unwrap()
++        );
++        native
++    }
++    fn output(&mut self, error: bool) -> Option<SongStaticUpdateOutput> {
++        let native = test_support::legacy_static_update_output(&self.native, &self.context);
++        let rust = (|| {
++            let mut splines = SongColumnSplineCapture::default();
++            self.rust.capture_song_column_splines(&mut splines, 0.)?;
++            self.rust
++                .compile_song_static_update_output(&self.context, splines)
++        })();
++        assert_eq!(
++            native.is_err(),
++            error,
++            "native: {:?}",
++            native.as_ref().err()
++        );
++        assert_eq!(rust.is_err(), error, "Rust: {:?}", rust.as_ref().err());
++        self.events();
++        match (native, rust) {
++            (Ok(native), Ok(rust)) => {
++                compare_output(&native, &rust);
++                Some(rust)
++            }
++            _ => None,
++        }
++    }
++}
++fn compare_output(a: &SongStaticUpdateOutput, b: &SongStaticUpdateOutput) {
++    assert_eq!(a.eases, b.eases);
++    for (a, b) in a.eases.iter().zip(&b.eases) {
++        assert_eq!(
++            [
++                a.start.to_bits(),
++                a.limit.to_bits(),
++                a.from.to_bits(),
++                a.to.to_bits()
++            ],
++            [
++                b.start.to_bits(),
++                b.limit.to_bits(),
++                b.from.to_bits(),
++                b.to.to_bits()
++            ]
++        );
++        assert_eq!(
++            a.approach_speed.map(f32::to_bits),
++            b.approach_speed.map(f32::to_bits)
++        );
++    }
++    assert_eq!(a.column_transforms, b.column_transforms);
++    for (a, b) in a.column_transforms.iter().zip(&b.column_transforms) {
++        assert_eq!(
++            [
++                a.start.to_bits(),
++                a.limit.to_bits(),
++                a.from_y.to_bits(),
++                a.to_y.to_bits()
++            ],
++            [
++                b.start.to_bits(),
++                b.limit.to_bits(),
++                b.from_y.to_bits(),
++                b.to_y.to_bits()
++            ]
++        );
++    }
++    assert_eq!(a.column_splines.len(), b.column_splines.len());
++    for (a, b) in a.column_splines.iter().zip(&b.column_splines) {
++        assert_eq!(
++            (a.player, a.column, a.time_offset.to_bits()),
++            (b.player, b.column, b.time_offset.to_bits())
++        );
++        assert_eq!(a.frames.len(), b.frames.len());
++        for (a, b) in a.frames.iter().zip(b.frames.iter()) {
++            assert_eq!(a.second.to_bits(), b.second.to_bits());
++            for (a, b) in [(&a.position, &b.position), (&a.zoom, &b.zoom)] {
++                assert_eq!(a.is_some(), b.is_some());
++                if let (Some(a), Some(b)) = (a, b) {
++                    assert_eq!(a.constant, b.constant);
++                    assert_eq!(
++                        (
++                            a.beats_per_t.to_bits(),
++                            a.receptor_t.to_bits(),
++                            a.looping,
++                            a.subtract_song_beat
++                        ),
++                        (
++                            b.beats_per_t.to_bits(),
++                            b.receptor_t.to_bits(),
++                            b.looping,
++                            b.subtract_song_beat
++                        )
++                    );
++                    assert_eq!(a.coefficients.len(), b.coefficients.len());
++                    for (a, b) in a
++                        .coefficients
++                        .iter()
++                        .flatten()
++                        .flatten()
++                        .zip(b.coefficients.iter().flatten().flatten())
++                    {
++                        assert_eq!(a.to_bits(), b.to_bits());
++                    }
++                }
++            }
++        }
++    }
++}
++fn compare_states(a: &[SongLuaUpdateModState; 2], b: &[SongLuaUpdateModState; 2]) {
++    for (a, b) in a.iter().zip(b) {
++        assert_eq!(a.keys().collect::<Vec<_>>(), b.keys().collect::<Vec<_>>());
++        for (name, a) in a {
++            assert_eq!(a.to_bits(), b[name].to_bits(), "{name}");
++        }
++    }
++}
++
++#[test]
++fn static_update_output_keeps_public_option_targets_and_approach_speeds() {
++    let mut f = Fixture::new();
++    f.script(
++        r#"
++        first:Mini(.37,2.5);first:XMod(2.75,1.25);first:Reverse(.8,4)
++        first:FromString('75% drunk, 20% tornado, *3 40% tipsy')
++        second:CMod(321,5);second:Mini(.125,0)
++    "#,
++    );
++    let out = f.output(false).unwrap();
++    assert!(
++        out.eases
++            .iter()
++            .any(|w| w.target == SongLuaEaseTarget::Mod("xmod".into())
++                && w.to == 2.75
++                && w.approach_speed == Some(1.25))
++    );
++    assert!(
++        out.eases
++            .iter()
++            .any(|w| w.target == SongLuaEaseTarget::Mod("cmod".into())
++                && w.to == 321.
++                && w.approach_speed == Some(5.))
++    );
++    assert!(
++        out.eases
++            .iter()
++            .all(|w| w.unit == SongLuaTimeUnit::BeatClock)
++    );
++}
++
++#[test]
++fn compact_option_snapshots_preserve_raw_state_and_numeric_conversion_rules() {
++    let mut f = Fixture::new();
++    f.script(
++        r#"
++        first.__songlua_player_option_state={
++            mini=' .25 ',reverse=true,drunk=false,tipsy='-inf',tornado='NaN',
++            bumpy=1/0,unknown={},[5]='.2',['5']='.2',['signed\0name']=-1/math.huge,
++            nohex='0x10',bad=string.char(255),nan_number=0/0}
++        first.__songlua_player_option_speeds={mini='0x1.8p1',reverse=-0.0,drunk=1/0}
++        first.__songlua_speedmod_active=nil
++        first.__songlua_speedmod_xmod='0x1.4p1'
++        first.__songlua_speedmod_cmod=' 345 '
++        first.__songlua_speedmod_mmod=-0.0
++        second.__songlua_player_option_state=nil
++        second.__songlua_player_option_speeds=nil
++    "#,
++    );
++    let mut a = LegacyUpdateOptionsProbe::new(&f.native).unwrap();
++    let mut b = RustUpdateOptionsProbe::new(&mut f.rust).unwrap();
++    for speeds in [false, true] {
++        let left = a.sample(&f.native, speeds).unwrap();
++        let right = b.sample(&mut f.rust, speeds).unwrap();
++        compare_states(&left, &right);
++        if !speeds {
++            assert_eq!(right[0]["xmod"], 2.5);
++            assert!(!right[0].contains_key("nohex") && !right[0].contains_key("bumpy"));
++            assert_eq!(right[0]["signed\0name"].to_bits(), (-0.0f32).to_bits());
++        }
++    }
++    b.release(&mut f.rust).unwrap();
++}
++
++#[test]
++fn option_capture_retains_original_tables_across_gc_and_replaced_globals() {
++    let mut f = Fixture::new();
++    f.script(
++        r#"
++        weak=setmetatable({},{__mode='v'})
++        first=nil;second=nil
++        __songlua_player_options_1=nil;__songlua_player_options_2=nil
++        setmetatable(_G,{__index=function(_,key)
++            if key=='__songlua_player_options_1' then
++                mark('global1')
++                local v=setmetatable({__songlua_player_option_state={mini=.1}},
++                    {__index=function(_,key)
++                        mark('first:'..key)
++                        __songlua_player_options_1={}
++                        __songlua_player_options_2={}
++                        collectgarbage('collect');assert(weak[1] and weak[2])
++                        if key=='__songlua_speedmod_xmod' then return 2 end
++                    end})
++                weak[1]=v;return v
++            elseif key=='__songlua_player_options_2' then
++                mark('global2');collectgarbage('collect');assert(weak[1])
++                local v={__songlua_player_option_state={reverse=.2}}
++                weak[2]=v;return v
++            end
++        end})
++    "#,
++    );
++    let mut a = LegacyUpdateOptionsProbe::new(&f.native).unwrap();
++    let mut b = RustUpdateOptionsProbe::new(&mut f.rust).unwrap();
++    f.events();
++    for _ in 0..3 {
++        compare_states(
++            &a.sample(&f.native, false).unwrap(),
++            &b.sample(&mut f.rust, false).unwrap(),
++        );
++        compare_states(
++            &a.sample(&f.native, true).unwrap(),
++            &b.sample(&mut f.rust, true).unwrap(),
++        );
++        f.script("collectgarbage('collect');assert(weak[1] and weak[2])");
++    }
++    drop(a);
++    b.release(&mut f.rust).unwrap();
++    f.script(
++        "collectgarbage('collect');collectgarbage('collect');assert(not weak[1] and not weak[2])",
++    );
++}
++
++#[test]
++fn option_snapshots_recover_from_typed_errors_without_losing_roots_or_state() {
++    let mut f = Fixture::new();
++    let mut a = LegacyUpdateOptionsProbe::new(&f.native).unwrap();
++    let mut b = RustUpdateOptionsProbe::new(&mut f.rust).unwrap();
++    for (setup, speeds) in [
++        ("first.__songlua_player_option_state=false", false),
++        ("first.__songlua_player_option_state={[true]=1}", false),
++        (
++            "first.__songlua_player_option_state={[string.char(255)]=1}",
++            false,
++        ),
++        (
++            "first.__songlua_player_option_state={};first.__songlua_speedmod_active=false",
++            false,
++        ),
++        (
++            "first.__songlua_speedmod_active=nil;first.__songlua_speedmod_xmod=false",
++            false,
++        ),
++        ("first.__songlua_player_option_speeds=false", true),
++        ("first.__songlua_player_option_speeds={mini=false}", true),
++        ("first.__songlua_player_option_speeds={[{}]=1}", true),
++    ] {
++        f.script(setup);
++        assert!(a.sample(&f.native, speeds).is_err(), "native {setup}");
++        assert!(b.sample(&mut f.rust, speeds).is_err(), "Rust {setup}");
++        f.script("first.__songlua_player_option_state={mini=.3};first.__songlua_player_option_speeds={mini=2};first.__songlua_speedmod_active='xmod';first.__songlua_speedmod_xmod=2;collectgarbage('collect')");
++        for speeds in [false, true] {
++            compare_states(
++                &a.sample(&f.native, speeds).unwrap(),
++                &b.sample(&mut f.rust, speeds).unwrap(),
++            );
++        }
++    }
++    let mut other = RustSongRuntime::new(&f.context).unwrap();
++    assert!(b.sample(&mut other, false).is_err());
++    assert!(b.release(&mut other).is_err());
++    compare_states(
++        &a.sample(&f.native, false).unwrap(),
++        &b.sample(&mut f.rust, false).unwrap(),
++    );
++    b.release(&mut f.rust).unwrap();
++    b.release(&mut f.rust).unwrap();
++}
++
++#[test]
++fn static_output_uses_song_clock_origin_rate_and_exact_tail_limits() {
++    let mut f = Fixture::new();
++    f.script("first:Mini(.4,2);first:MMod(450,3);second:Reverse(.5,1)");
++    for (origin, rate, length) in [
++        (0., 1., 12.345),
++        (1.25, 1.7, 4.2),
++        (-2., 0.5, 1.),
++        (0.5, 2., 0.),
++        (-0.25, 1., -3.),
++    ] {
++        f.context.song_music_rate = rate;
++        f.context.music_length_seconds = length;
++        f.context.song_timing = Some(TimingData::from_segments(
++            origin,
++            0.,
++            &TimingSegments {
++                bpms: vec![(0., 120.), (4., 90.)],
++                ..Default::default()
++            },
++            &[],
++        ));
++        let out = f.output(false).unwrap();
++        assert!(!out.eases.is_empty());
++        assert!(
++            out.eases
++                .iter()
++                .all(|w| w.unit == SongLuaTimeUnit::Second && w.limit > 0.)
++        );
++    }
++}
++
++#[test]
++fn static_output_keeps_column_transforms_and_owned_spline_coefficients() {
++    let mut f = Fixture::new();
++    f.script(
++        r#"
++        local player=SCREENMAN:GetTopScreen():GetChild('PlayerP1')
++        local columns=player:GetChild('NoteField'):GetColumnActors()
++        columns[1]:GetRotHandler():SetSplineMode('NoteColumnSplineMode_Offset')
++        local rot=columns[1]:GetRotHandler():GetSpline()
++        rot:SetSize(1);rot:SetPoint(1,{0,0,37})
++        columns[2]:GetPosHandler():SetSplineMode('NoteColumnSplineMode_Position')
++        local pos=columns[2]:GetPosHandler():GetSpline()
++        pos:SetSize(3);pos:SetPoint(1,{1,2,3});pos:SetPoint(2,{4,5,6});pos:SetPoint(3,{7,8,9})
++        first:Mini(.25,1)
++    "#,
++    );
++    let out = f.output(false).unwrap();
++    assert!(!out.column_transforms.is_empty() && !out.column_splines.is_empty());
++    drop(f);
++    assert!(
++        out.column_splines
++            .iter()
++            .flat_map(|track| track.frames.iter())
++            .any(|frame| frame
++                .position
++                .as_ref()
++                .is_some_and(|s| !s.coefficients.is_empty()))
++    );
++}
++
++#[test]
++fn static_output_preserves_phase_order_and_releases_option_roots_on_failure() {
++    let mut f = Fixture::new();
++    f.script(r#"
++        first={__songlua_player_option_state={mini=.2},__songlua_player_option_speeds={mini=2}}
++        second={__songlua_player_option_state={reverse=.3},__songlua_player_option_speeds={reverse=false}}
++        weak=setmetatable({first,second},{__mode='v'})
++        __songlua_player_options_1=nil;__songlua_player_options_2=nil
++        setmetatable(_G,{__index=function(_,key)
++            if key=='__songlua_player_options_1' then mark('table1');return first end
++            if key=='__songlua_player_options_2' then mark('table2');return second end
++        end})
++        setmetatable(first,{__index=function(_,key)mark('p1:'..key)end})
++        setmetatable(second,{__index=function(_,key)mark('p2:'..key)end})
++    "#);
++    f.output(true);
++    assert_eq!(
++        f.events(),
++        "table1|table2|p1:__songlua_speedmod_xmod|p1:__songlua_speedmod_cmod|p1:__songlua_speedmod_mmod|p2:__songlua_speedmod_xmod|p2:__songlua_speedmod_cmod|p2:__songlua_speedmod_mmod"
++    );
++    f.script("first=nil;second=nil;collectgarbage('collect');collectgarbage('collect');assert(not weak[1] and not weak[2])");
++    f.script("setmetatable(_G,nil);__songlua_player_options_1={};__songlua_player_options_2={};events={}");
++    f.output(false);
++}
++
++#[test]
++fn option_capture_construction_validates_both_globals_and_keeps_lookup_order() {
++    let mut f = Fixture::new();
++    for body in [
++        "__songlua_player_options_1=false",
++        "__songlua_player_options_1={};__songlua_player_options_2=false",
++        "__songlua_player_options_1={};__songlua_player_options_2=nil",
++    ] {
++        f.script(body);
++        f.output(true);
++    }
++    f.script("__songlua_player_options_1={};__songlua_player_options_2={}");
++    f.output(false);
++}

@@ -1,0 +1,40 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 53s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 9 tests
+test deferred_live_update_still_activates_and_retains_transition_request ... ok
+test failed_on_preserves_partial_state_and_releases_new_constructor_owners ... ok
+test malformed_initialized_globals_stop_at_the_same_request_boundary ... ok
+test on_and_zero_update_follow_mutated_raw_children_and_preserve_partial_errors ... ok
+test reference_clock_is_applied_after_begin_and_before_message_on_and_update ... ok
+test scheduled_layers_defer_on_and_updates_but_foreground_receives_begin ... ok
+test startup_order_retained_init_globals_options_and_requests_match_compiler ... ok
+test startup_queue_collection_preserves_enqueue_order_and_includes_zero_update ... 
+thread 'startup_queue_collection_preserves_enqueue_order_and_includes_zero_update' (2696874) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:329:5:
+assertion `left == right` failed
+  left: ["", "", "", "", "parent", "child", "update"]
+ right: ["", "", "", "", "", "", "", "", "parent", "child", "update"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test zero_update_visits_wrappers_and_honors_sleep_and_pending_callback_fields ... ok
+
+failures:
+
+failures:
+    startup_queue_collection_preserves_enqueue_order_and_includes_zero_update
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.88s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

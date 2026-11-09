@@ -1,0 +1,42 @@
+﻿{
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "final_application_validation":  false,
+    "independent_verifier":  "PowerShell Get-FileHash and Git source membership enumeration",
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "objective_unchanged":  true,
+    "source_count":  1261,
+    "full_watched_snapshot_matches":  true,
+    "native_algorithms_byte_unchanged":  true,
+    "existing_tests_byte_unchanged":  true,
+    "engine_unchanged":  true,
+    "tests_passed":  290,
+    "test_targets":  9,
+    "new_complete_driver_cases":  10,
+    "zero_ignored_or_filtered_tests":  true,
+    "formatting_passed":  true,
+    "clippy_diagnostics_match_prior_baseline":  true,
+    "test_dependency_graph_unchanged":  true,
+    "log_hashes":  {
+                       "song-update-driver-focus-v1-song-linux-debug":  "6c75977925a01dd8a771e56861cb40cf5cff0417b9cce41a7ef66e626a611d46",
+                       "song-update-driver-focus-v2-song-linux-debug":  "a7f319e3c3d3ba4e2575633f46c543f3e7a910fd9a7409805022a29c376b82a3",
+                       "song-update-driver-focus-v3-song-linux-debug":  "dbf6cf1a0a366d86f6eab4d6aa94c53a35ba1309bb9c1f3dd1996bad07cdb493",
+                       "song-update-driver-focus-v4-song-linux-debug":  "2817870c4cd478a2daad071c7c03a49fad822cfa6548bd3c9033c7b70b962fa1",
+                       "song-update-driver-focus-v5-song-linux-debug":  "540145fd90d84a0f49af9de317904deafff81984206a3ba508fa0b09d8b39a7b",
+                       "song-update-driver-focus-v6-song-linux-debug":  "099a3f344d743c785e59ea4cc6df8189731ee3e7075070751898d0d8d89a9225",
+                       "song-update-driver-lint-v1-song-linux-debug":  "552e0f10e0e113b3d5ce3619c90a9e43c04ad785ce782a475711bf49c7e9b2ff",
+                       "song-update-driver-lint-v2-song-linux-debug":  "3ab65b75c295e4626b33a61c34eec5701f361164ed049cd34dead38521cc8b7d",
+                       "song-update-driver-lint-v3-song-linux-debug":  "2cbad2779a1c2f830b7da3575a49bcfd4df6679692194002f99509f9bc16e9c1",
+                       "song-update-driver-regressions-v1-song-linux-debug":  "37212dd2f0d157aaabd1f6bce6d051be92f0999e716cf558b085a48cb2ebef8d",
+                       "song-update-driver-regressions-v2-song-linux-debug":  "50d0b9388f8d41d6b4a485a552224e5ba9329cd8933ee1e000799f98376b2015",
+                       "song-update-driver-typecheck-v1-song-linux-debug":  "2c3792534fceec77c618ed2e852666d5d75372524e436ec1c4385f25874a29b2"
+                   },
+    "document_and_runner_hashes":  {
+                                       "docs/lua-architecture.md":  "28d684344a0600cf96aa4ed989f188f688395e29ead74fc920429e03606aeb2c",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "7f3147d6c367db46ecfe6406d14dc2bf58dc3a7ecc52ed5abd10ab01a426e585",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/review_update_driver.py":  "6dd0bc4c5f9fb7d1bb0d3df5f2c36f8ffa99a244d95afec49a279b69e04e536b",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/prepare_update_samples.py":  "0fad84cf8ea41c333fc34f3684b7132c6b22847872f8874944d4b3d05374e8b1",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/audit_update_driver.ps1":  "24ed6768daad2efbd538fda2d40646b2b5a1d6a3c42bf6b246bb27afe6fd03ab",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/checks.py":  "05439883fa88dd9c8f4c4440eed91f484d0aea1648559de28348d92720deb59d"
+                                   }
+}

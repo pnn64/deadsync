@@ -1,0 +1,86 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+error[E0308]: mismatched types
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:253:21
+    |
+253 | ...   Advance(0),
+    |       ------- ^ expected `f64`, found integer
+    |       |
+    |       arguments to this enum variant are incorrect
+    |
+note: tuple variant defined here
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:98:5
+    |
+ 98 |     Advance(f64),
+    |     ^^^^^^^
+help: use a float literal
+    |
+253 |             Advance(0.0),
+    |                      ++
+
+error[E0308]: mismatched types
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:278:21
+    |
+278 | ...   Advance(0),
+    |       ------- ^ expected `f64`, found integer
+    |       |
+    |       arguments to this enum variant are incorrect
+    |
+note: tuple variant defined here
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:98:5
+    |
+ 98 |     Advance(f64),
+    |     ^^^^^^^
+help: use a float literal
+    |
+278 |             Advance(0.0),
+    |                      ++
+
+error[E0308]: mismatched types
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:292:21
+    |
+292 | ...   Advance(0),
+    |       ------- ^ expected `f64`, found integer
+    |       |
+    |       arguments to this enum variant are incorrect
+    |
+note: tuple variant defined here
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:98:5
+    |
+ 98 |     Advance(f64),
+    |     ^^^^^^^
+help: use a float literal
+    |
+292 |             Advance(0.0),
+    |                      ++
+
+error[E0308]: mismatched types
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:316:21
+    |
+316 | ...   Advance(0),
+    |       ------- ^ expected `f64`, found integer
+    |       |
+    |       arguments to this enum variant are incorrect
+    |
+note: tuple variant defined here
+   --> crates/deadsync-song-lua/tests/rust_actors.rs:98:5
+    |
+ 98 |     Advance(f64),
+    |     ^^^^^^^
+help: use a float literal
+    |
+316 |             Advance(0.0),
+    |                      ++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `deadsync-song-lua` (test "rust_actors") due to 4 previous errors

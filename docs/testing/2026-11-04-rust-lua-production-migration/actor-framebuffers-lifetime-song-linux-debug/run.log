@@ -1,0 +1,37 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 36.07s
+     Running tests/rust_framebuffers.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_framebuffers-03543a48761aec33)
+
+running 6 tests
+test collecting_allocation_getters_preserve_partial_publication_and_retry ... ok
+test creation_errors_dispatch_script_error_and_allow_retry ... ok
+test creation_freezes_settings_and_retained_texture_metadata ... ok
+test dimensions_and_strict_buffer_arguments_match_production ... ok
+test malformed_allocation_reads_recover_without_stale_output ... ok
+test texture_handle_equality_and_collection_keep_captured_metadata ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/rust_sprites.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_sprites-53f971e361a68f17)
+
+running 8 tests
+test load_and_settexture_preserve_their_distinct_state_and_return_rules ... ok
+test retained_texture_metadata_survives_owner_retirement_and_releases_cycles ... ok
+test sprite_animation_and_uv_properties_remain_immediate_across_tweens ... ok
+test sprite_geometry_uses_image_frames_and_retained_handle_dimensions ... ok
+test sprite_loading_and_retained_texture_metadata_match_production ... ok
+test texture_capture_errors_keep_prior_mutations_and_recover ... ok
+test texture_capture_preserves_epochs_frame_sheets_states_and_startup_suppression ... ok
+test texture_lookups_survive_reentry_gc_and_recover_after_errors ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+

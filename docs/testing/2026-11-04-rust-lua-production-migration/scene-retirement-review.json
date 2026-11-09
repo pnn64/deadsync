@@ -1,0 +1,56 @@
+{
+  "goal_complete": false,
+  "core_tests_passed": 954,
+  "song_tests_passed": 556,
+  "noteskin_tests_passed": 312,
+  "gif_tests_passed": 15,
+  "song_targets": 54,
+  "new_retirement_cases": 11,
+  "source_count": 1187,
+  "final_sources_match_song_tests_and_lint": true,
+  "unchanged_component_inputs_reused": [
+    "core",
+    "core_lint",
+    "noteskin",
+    "gifs"
+  ],
+  "reuse_evidence": "Only five optional song-adapter/test files changed; source gate and GIF Cargo feature tree exclude them from reused checks",
+  "changed": [
+    "crates/deadlib-lua/src/table.rs",
+    "crates/deadlib-lua/src/vm.rs",
+    "crates/deadlib-lua/src/vm/gc.rs",
+    "crates/deadlib-lua/src/vm/gc/storage.rs",
+    "crates/deadlib-lua/src/vm/host.rs",
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/courses.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/notefields.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/offline.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/screen_assembly.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sound.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/top_screen.rs",
+    "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+  ],
+  "added": [
+    "crates/deadlib-lua/tests/host_table_state.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/retirement.rs",
+    "crates/deadsync-song-lua/tests/rust_scene_retirement.rs"
+  ],
+  "prior_tests_and_native_controls_unchanged": true,
+  "formatting_passed": true,
+  "core_clippy_passed": true,
+  "song_lint_messages_files_unchanged": true,
+  "log_sha256": {
+    "scene-retirement-core-v1-core-linux-debug": "ae9c328c2804df66c8882410d4da8adb4e8b8a383a3873c3cb7de669201d667b",
+    "scene-retirement-adapters-v2-song-linux-debug": "bb9bd34ee306f51274db58f966ad46286c074369134b16f8c6e092d5000b5023",
+    "scene-retirement-core-lint-v1-core-linux-debug": "888268e7e026525b0f84f2fdc9d12701277e58270c9ae34e3f555d57aa0b676c",
+    "scene-retirement-lint-v2-song-linux-debug": "67c55176011a63e6e9afeaaf416533121c32a725b1a0fadbf555443c5e041b56",
+    "scene-retirement-noteskin-v1-noteskin-linux-debug": "4a9fc7d194d19db2473a347911db2c3e06c88c04fc31f883b9071ca73b8e395c",
+    "scene-retirement-gifs-v1-gifs-linux-debug": "f37c66e3ba6780f1f0a496bb98e4efbe2b7d096a1cdca898ed1cc7709a6da784"
+  },
+  "remaining": "Compiler/session integration and automatic retirement; compiled/live output, fallback/cache, unconditional production cutover, final fixture/application/render/dependency/performance validation"
+}

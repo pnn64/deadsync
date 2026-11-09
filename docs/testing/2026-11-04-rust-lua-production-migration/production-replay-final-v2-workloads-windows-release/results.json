@@ -1,0 +1,38 @@
+[
+  {
+    "name": "song_lua_execution",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "deadsync-shell",
+      "--bin",
+      "song_lua_execution",
+      "--release"
+    ],
+    "exit_code": 0,
+    "seconds": 567.3359310000669,
+    "log_sha256": "972664fb9d2fe0b48a32ace4dd98c0b0bada9d9bbcfa7b958c7c5e897486a1f0",
+    "artifact": "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-replay-final-v2\\artifacts\\windows\\release\\song_lua_execution.exe",
+    "artifact_sha256": "710c413f25e9d0e77d97b0a62779133bba6214f32c11c809165a3eff00518cf0"
+  },
+  {
+    "name": "song_lua_performance",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "deadsync",
+      "--example",
+      "song_lua_performance",
+      "--release"
+    ],
+    "exit_code": 0,
+    "seconds": 461.20764919999056,
+    "log_sha256": "6495804ab40af7611e42aba28c030f638b370769a59e9be9ed88601139dca2c0",
+    "artifact": "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-replay-final-v2\\artifacts\\windows\\release\\song_lua_performance.exe",
+    "artifact_sha256": "0bcc13aba4f910c37512a125e1fac8964ea1083002601fe115470a5e757b8078"
+  }
+]

@@ -1,0 +1,80 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 3m 53s
+     Running tests/rust_song_compiler.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_compiler-3e35322a6753bf57)
+
+running 12 tests
+test chronological_background_and_screen_output_match_complete_compiler ... ok
+test empty_preparation_returns_before_entry_validation ... ok
+test framebuffer_and_deferred_sprite_kinds_match_complete_compiler ... ok
+test queued_sounds_and_message_sounds_use_real_dispatch_frames ... ok
+test reload_media_boundary_preserves_only_final_on_and_zero_update_sounds ... ok
+test resources_proxy_targets_custom_draw_and_sound_output_match ... ok
+test scalar_entries_preserve_global_schedule_without_actor_output ... ok
+test separate_layers_own_messages_wrappers_and_parent_indices ... ok
+test startup_capture_excludes_reload_construction_init_and_end_broadcasts ... ok
+test startup_reload_retains_globals_rng_and_outgoing_end ... ok
+test static_commands_startup_tweens_and_messages_match_complete_compiler ... ok
+test unsupported_startup_screen_request_is_rejected ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.78s
+
+     Running tests/rust_song_diagnostics.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_diagnostics-f845b6bfdb4e6d0d)
+
+running 11 tests
+test authored_flag_reset_reenables_callback_reporting ... ok
+test callback_and_queue_failures_use_independent_report_once_flags ... ok
+test draw_errors_keep_partial_output_and_report_the_compiler_root_once ... ok
+test framebuffer_script_notices_do_not_become_callback_failures ... ok
+test initial_update_errors_keep_partial_state_and_report_once ... ok
+test ordinary_report_flags_and_labels_can_reenter_and_collect ... ok
+test positive_update_errors_keep_each_actor_and_later_frames ... ok
+test queued_and_recurring_failures_preserve_dispatch_frames_and_command_labels ... ok
+test startup_recurring_commands_without_errors_keep_chronological_output ... ok
+test startup_tween_queue_failure_still_rejects_preparation ... ok
+test truthy_report_flags_suppress_errors_without_stopping_callback_writes ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.53s
+
+     Running tests/rust_song_observations.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_observations-d67acf2a86f913c3)
+
+running 14 tests
+test accepted_rejected_and_parsed_noteskin_writes_match ... ok
+test chronological_direct_queued_update_and_message_writes_match ... 
+thread 'chronological_direct_queued_update_and_message_writes_match' (3035606) panicked at crates/deadsync-song-lua/tests/rust_song_observations.rs:72:26:
+called `Result::unwrap()` on an `Err` value: "failed to execute '/tmp/.tmpGOGk4F/layer0.lua': syntax error: [string \"/tmp/.tmpGOGk4F/layer0.lua\"]:17: unexpected symbol near '}'"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test chronological_option_setters_and_gc_match ... ok
+test current_steps_observation_uses_authored_metadata_after_notifications ... ok
+test multilayer_screen_and_player_write_indices_match ... ok
+test nested_manager_calls_and_reload_history_match ... ok
+test option_observation_follows_republished_global_owner_identity ... ok
+test original_init_screen_request_remains_discarded ... ok
+test original_nil_message_probe_preserves_error_cause_and_observations ... ok
+test original_non_frame_update_fixtures_remain_rejected ... ok
+test original_stage_queue_is_not_the_published_song_option_owner ... ok
+test queued_update_command_keeps_last_same_frame_immediate_setter ... ok
+test startup_option_setters_and_partial_speed_failures_match ... ok
+test startup_queue_capture_excludes_noteskin_discovery_writes ... ok
+
+failures:
+
+failures:
+    chronological_direct_queued_update_and_message_writes_match
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.78s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_observations`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_song_observations`

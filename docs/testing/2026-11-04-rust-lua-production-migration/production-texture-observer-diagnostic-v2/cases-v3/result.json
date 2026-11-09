@@ -1,0 +1,8 @@
+{
+  "binary_sha256": "7e64defe56b8899d8250c72ddb5e53b22d402c1b0b683270d8866f110a17cbef",
+  "script_sha256": "6291435c8e916369536ff4bfc664080c1cd4323ebb3a8dd928722c7b3ca11ca9",
+  "exit_code": 0,
+  "seconds": 0.8354969001375139,
+  "log_sha256": "210c54a2121795fc04f99bd0df23416e5fa74e96bc136aaca1880dedaa37b429",
+  "note": "Existing v2 binary and new diagnostic script; no recompilation or production source changes."
+}

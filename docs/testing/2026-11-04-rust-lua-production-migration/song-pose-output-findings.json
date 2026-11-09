@@ -1,0 +1,54 @@
+{
+  "goal_complete": false,
+  "scope": "The separately authorized production migration. Interpreter and C API removal milestones remain closed.",
+  "implementation": [
+    "Full-timeline fallback actors publish all 25 TweenPose targets through the existing timing, ordered message and per-frame buffers. Startup native tween queues keep their separate SongTweenReplay path.",
+    "The full overlay drain supports 66 targets: 25 pose, 31 immediate and 10 scheduled renderer properties. Existing narrower drains remain consuming projections of the same buffer.",
+    "Sampled XYZ/aux update current getters; other supported pose samples update destination getters and operands used by later relative setters. Player-root transform exclusions follow the native setter.",
+    "Later-actor reads use previous-frame XYZ. Direct XYZ writes update that prior-position entry when present.",
+    "Stop discards position destinations and preserves the frozen current position. Finish merges pending and newer frame destinations, applies native getter rules and emits owned final output.",
+    "Successful queued and recurring callbacks reconcile fallback current XYZ at the existing native boundaries without holding metadata locks over host operations."
+  ],
+  "corrected_failures": [
+    {
+      "check": "song-pose-output-focused-v1-song-linux-debug",
+      "cause": "An invalid 1.e-7 literal was parsed as a field expression. Corrected to 1.0e-7 before tests could run."
+    },
+    {
+      "check": "song-pose-output-focused-v3-song-linux-debug",
+      "cause": "The added native assertion wrongly expected Stop to retain destination X=32. Native make_actor_stop_tweening_method resets it to the frozen current X=16. The strict assertion now requires X=16, destination X=16 and the following addx(1) destination X=17. Rust destination state was aligned accordingly; coverage retained."
+    },
+    {
+      "check": "song-pose-output-lint-v1-song-linux-debug",
+      "cause": "Three new lazy-evaluation/question-mark suggestions were corrected. Final diagnostics match the existing 166 warnings and cmd.rs:349 error."
+    }
+  ],
+  "coverage": {
+    "earlier_activation_cases": 56,
+    "earlier_cases_preserved": true,
+    "new_cases": 3,
+    "final_tests_passed": 162,
+    "final_tests_failed": 0,
+    "targets": 9,
+    "comparisons": "Actual native output, ordered stateful message history, per-frame values, final values, scheduled delays/durations/progress/initial values, current/destination reads, pending finish/stop, partial errors, GC, foreign owners, retirement and owned output after VM drop."
+  },
+  "source_audit": {
+    "review": "song-pose-output-review.json",
+    "whole_snapshot_result": "Both final checks retain sources_unchanged=false. Their wrapper snapshot assertions failed; Cargo test itself passed. This has not been relabeled as a clean whole-worktree run.",
+    "qualification": "The separately captured Cargo test dependency graph excludes deadsync-shell and deadsync-theme-simply-love. All watched source inputs within that graph match both final checks; session_results.rs changed outside it.",
+    "external_changes_preserved": 93,
+    "external_additions_preserved": [
+      "crates/deadsync-assets/tests/hold_explosion_blend.rs",
+      "crates/deadsync-noteskin/tests/model_pieces.rs"
+    ],
+    "current_watched_sources": "song-pose-output-reviewed-sources.json"
+  },
+  "remaining": [
+    "Remaining existing text, sprite, animation, texture and mask output channels (23 setters); computed EffectTime and cached StretchRect output handling remain part of compiler extraction.",
+    "Complete overlay, track and wrapper extraction and the production preparation compiler.",
+    "Full retained live/session/navigation orchestration, automatic teardown, fallback and song cache integration.",
+    "Unconditional production song cutover, removal of normal/build legacy dependencies and duplicate production backends.",
+    "Original final-source interpreter/adapter/downstream regressions, recorded content comparisons, normal application build and rendered smoke, dependency/link proof and matched preparation/live/memory measurements."
+  ],
+  "production_status": "Normal song execution still uses legacy Lua. This focused adapter result is not a production cutover or migration completion claim."
+}

@@ -6,9 +6,8 @@
 //! grows, reads files or evicts samples. The song releases them on transition.
 //! Native controls and full-song diagnostics check the recorded UV parameters.
 
-use crate::{SongLuaOverlayKind, SongLuaOverlayModelLayer};
-use mlua::{Lua, Table};
-use rustc_hash::FxHashMap;
+use crate::SongLuaOverlayModelLayer;
+
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,7 +59,12 @@ impl MaterialClock {
             }
             (cycle, starts.into_boxed_slice())
         } else {
-            (frames.iter().fold(0.0_f32, |total, frame| total + frame.delay), Box::default())
+            (
+                frames
+                    .iter()
+                    .fold(0.0_f32, |total, frame| total + frame.delay),
+                Box::default(),
+            )
         };
         Self {
             velocity,
@@ -75,7 +79,9 @@ impl MaterialClock {
     #[inline]
     fn state_only(frames: Arc<[SongLuaModelTextureFrame]>) -> Self {
         Self {
-            cycle: frames.iter().fold(0.0_f32, |total, frame| total + frame.delay),
+            cycle: frames
+                .iter()
+                .fold(0.0_f32, |total, frame| total + frame.delay),
             frames,
             velocity: [0.0; 2],
             frame_starts: Box::default(),
@@ -126,7 +132,7 @@ impl MaterialClock {
 pub(crate) struct Clock {
     diffuse: MaterialClock,
     additive: Option<MaterialClock>,
-    delta: Option<f32>,
+
     samples: Vec<SongLuaTextureSample>,
 }
 
@@ -160,24 +166,40 @@ impl Clock {
             diffuse: MaterialClock::new(frames, layer.uv_velocity),
             additive: (!layer.additive_frames.is_empty())
                 .then(|| MaterialClock::state_only(Arc::clone(&layer.additive_frames))),
-            delta: None,
             samples: Vec::new(),
         };
         clock.sample(0.0);
         Some(clock)
     }
 
+    pub(crate) fn with_initial_state<V>(
+        layer: &SongLuaOverlayModelLayer<V>,
+        state: Option<u32>,
+    ) -> Option<Self> {
+        let mut clock = Self::new(layer)?;
+        if let Some(state) = state {
+            clock.set_state(state as i32);
+            clock.samples.clear();
+            clock.sample(0.0);
+        }
+        Some(clock)
+    }
+
     pub(crate) fn update(&mut self, delta: f32) {
         self.diffuse.update(delta);
-        if let Some(additive) = &mut self.additive { additive.update(delta); }
+        if let Some(additive) = &mut self.additive {
+            additive.update(delta);
+        }
     }
 
-    fn set_state(&mut self, state: i32) {
+    pub(crate) fn set_state(&mut self, state: i32) {
         self.diffuse.set_state(state);
-        if let Some(additive) = &mut self.additive { additive.set_state(state); }
+        if let Some(additive) = &mut self.additive {
+            additive.set_state(state);
+        }
     }
 
-    fn sample(&mut self, second: f32) {
+    pub(crate) fn sample(&mut self, second: f32) {
         let (diffuse, glow) = self.diffuse.uv();
         let additive = self.additive.as_ref().map(|clock| {
             let mut uv = clock.frames[clock.frame].glow;
@@ -209,125 +231,6 @@ impl Clock {
 #[cfg(test)]
 mod perf {
     include!("../tests/perf/material_clock.rs");
-}
-
-struct Capture(FxHashMap<usize, Vec<Option<Clock>>>);
-
-pub(crate) fn install<S, V, A>(
-    lua: &Lua,
-    overlays: &[crate::SongLuaOverlayCompileActor<SongLuaOverlayKind<S, V, A>>],
-    read_layer: fn(&S) -> Option<SongLuaOverlayModelLayer<V>>,
-) {
-    let actors = overlays
-        .iter()
-        .filter_map(|overlay| {
-            let clocks = match &overlay.actor.kind {
-                SongLuaOverlayKind::Model { layers } => {
-                    layers.iter().map(Clock::new).collect::<Vec<_>>()
-                }
-                SongLuaOverlayKind::NoteskinActor { slots, .. } => slots
-                    .iter()
-                    .map(|slot| read_layer(slot).as_ref().and_then(Clock::new))
-                    .collect(),
-                _ => return None,
-            };
-            let mut clocks = clocks;
-            if let Some(state) = overlay.actor.initial_state.sprite_state_index {
-                for clock in clocks.iter_mut().flatten() {
-                    clock.set_state(state as i32);
-                    clock.samples.clear();
-                    clock.sample(0.0);
-                }
-            }
-            clocks
-                .iter()
-                .any(Option::is_some)
-                .then_some((overlay.table.to_pointer() as usize, clocks))
-        })
-        .collect();
-    lua.set_app_data(Capture(actors));
-    crate::lua_util::invalidate_compile_update_plan(lua);
-}
-
-pub(crate) fn active(lua: &Lua) -> bool {
-    lua.app_data_ref::<Capture>()
-        .is_some_and(|capture| !capture.0.is_empty())
-}
-
-pub(crate) fn contains(lua: &Lua, actor: &Table) -> bool {
-    lua.app_data_ref::<Capture>()
-        .is_some_and(|capture| capture.0.contains_key(&(actor.to_pointer() as usize)))
-}
-
-pub(crate) fn begin(lua: &Lua, actor: &Table, delta: Option<f64>) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            clock.delta = delta.map(|delta| delta as f32);
-        }
-    }
-}
-
-pub(crate) fn update(lua: &Lua, actor: &Table) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            if let Some(delta) = clock.delta.take() {
-                clock.update(delta);
-            }
-        }
-    }
-}
-
-pub(crate) fn set_state(lua: &Lua, actor: &Table, state: i32) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            clock.set_state(state);
-        }
-    }
-}
-
-pub(crate) fn sample(lua: &Lua, second: f32) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>() {
-        for clocks in capture.0.values_mut() {
-            for clock in clocks.iter_mut().flatten() {
-                clock.sample(second);
-            }
-        }
-    }
-}
-
-pub(crate) fn take<S, V, A>(
-    lua: &Lua,
-    overlays: &mut [crate::SongLuaOverlayCompileActor<SongLuaOverlayKind<S, V, A>>],
-) {
-    let Some(mut capture) = lua.remove_app_data::<Capture>() else {
-        return;
-    };
-    for overlay in overlays {
-        let Some(clocks) = capture.0.remove(&(overlay.table.to_pointer() as usize)) else {
-            continue;
-        };
-        let samples = clocks
-            .into_iter()
-            .map(|clock| clock.map_or_else(|| Arc::from([]), Clock::finish))
-            .collect::<Vec<_>>();
-        match &mut overlay.actor.kind {
-            SongLuaOverlayKind::Model { layers } => {
-                for (layer, samples) in Arc::make_mut(layers).iter_mut().zip(samples) {
-                    layer.texture_samples = samples;
-                }
-            }
-            SongLuaOverlayKind::NoteskinActor {
-                texture_samples, ..
-            } => *texture_samples = samples.into(),
-            _ => {}
-        }
-    }
 }
 
 pub fn model_texture_at(

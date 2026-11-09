@@ -1,4 +1,4 @@
-//! Initial correctness-checked, allocation-instrumented reference measurements.
+//! Correctness-checked, allocation-instrumented Rust measurements.
 use deadlib_lua::{Value, Vm, compile};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -83,6 +83,19 @@ fn measure(
     );
 }
 
+fn dump_fixture(source: &[u8], name: &[u8]) -> Vec<u8> {
+    let program = deadlib_lua::compile_named(source, name).unwrap();
+    let mut vm = Vm::new();
+    let function = vm.load_program(&program);
+    vm.set_global(b"fixture", Value::Function(function))
+        .unwrap();
+    let dump = compile(b"return string.dump(fixture)").unwrap();
+    let Value::String(bytes) = vm.execute(&dump).unwrap()[0] else {
+        panic!("string.dump must return a string");
+    };
+    vm.string_bytes(bytes).unwrap().to_vec()
+}
+
 fn main() {
     println!(
         "metric\tengine\tworkload\tsample\trepeats\tns_per_iteration\trust_allocations_total\trust_reallocations_total\trust_bytes_total"
@@ -94,16 +107,6 @@ fn main() {
         1000,
         "startup_drop",
         "rust",
-        "state",
-        0,
-    );
-    measure(
-        || {
-            black_box(lua_reference::Lua::new());
-        },
-        1000,
-        "startup_drop",
-        "lua51",
         "state",
         0,
     );
@@ -587,13 +590,7 @@ fn main() {
     ] {
         let native;
         let source = if name.starts_with("native_chunk_") {
-            let lua = lua_reference::Lua::new();
-            native = lua
-                .load(source)
-                .set_name("=(native bench)")
-                .into_function()
-                .unwrap()
-                .dump(false);
+            native = dump_fixture(source.as_bytes(), b"=(native bench)");
             native.as_slice()
         } else {
             source.as_bytes()
@@ -634,7 +631,7 @@ fn main() {
             )
             .unwrap();
         }
-        let rename_files = (name == "os_rename").then(|| {
+        let _rename_files = (name == "os_rename").then(|| {
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../target/lua-bench-fixtures");
             std::fs::create_dir_all(&directory).unwrap();
@@ -655,7 +652,7 @@ fn main() {
             }
             [from, to]
         });
-        let source_file = (name == "loadfile_text").then(|| {
+        let _source_file = (name == "loadfile_text").then(|| {
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../target/lua-bench-fixtures");
             std::fs::create_dir_all(&directory).unwrap();
@@ -678,56 +675,6 @@ fn main() {
             vm.execute_with_args(&program, arguments).unwrap(),
             &[Value::Number(expected)]
         );
-        let reference = if name.starts_with("debug_") {
-            // SAFETY: only these fixed developer workloads need the debug library.
-            unsafe {
-                lua_reference::Lua::unsafe_new_with(
-                    lua_reference::StdLib::ALL_SAFE | lua_reference::StdLib::DEBUG,
-                    lua_reference::LuaOptions::default(),
-                )
-            }
-        } else {
-            lua_reference::Lua::new()
-        };
-        if let Some(setup) = &long_setup {
-            reference
-                .load(setup.as_bytes())
-                .set_name("=(long-dump-bench)")
-                .exec()
-                .unwrap();
-        }
-        if let Some(file) = &source_file {
-            reference
-                .globals()
-                .set("loadfile_path", file.0.to_str().unwrap())
-                .unwrap();
-        }
-        if let Some([from, to]) = &rename_files {
-            reference
-                .globals()
-                .set("rename_from", from.0.to_str().unwrap())
-                .unwrap();
-            reference
-                .globals()
-                .set("rename_to", to.0.to_str().unwrap())
-                .unwrap();
-        }
-        let chunk = reference.load(source);
-        let function = if let Some(name) = chunk_name {
-            chunk.set_name(name)
-        } else {
-            chunk
-        }
-        .into_function()
-        .unwrap();
-        let call_reference = || {
-            if matches!(name, "entry_args" | "standalone_entry") {
-                function.call::<f64>((1., 2., 3.))
-            } else {
-                function.call::<f64>(())
-            }
-        };
-        assert_eq!(call_reference().unwrap(), expected);
         measure(
             || {
                 black_box(
@@ -746,80 +693,21 @@ fn main() {
             name,
             0,
         );
-        measure(
-            || {
-                let chunk = reference.load(black_box(source));
-                black_box(
-                    if let Some(name) = chunk_name {
-                        chunk.set_name(name)
-                    } else {
-                        chunk
-                    }
-                    .into_function()
-                    .unwrap(),
-                );
-            },
-            1000,
-            "compile_drop",
-            "lua51",
-            name,
-            0,
-        );
         for sample in 0..5 {
-            if sample % 2 == 0 {
-                measure(
-                    || {
-                        black_box(
-                            vm.execute_with_args(black_box(&program), arguments)
-                                .unwrap(),
-                        );
-                    },
-                    repeats,
-                    "execute",
-                    "rust",
-                    name,
-                    sample,
-                );
-                measure(
-                    || {
-                        black_box(call_reference().unwrap());
-                    },
-                    repeats,
-                    "execute",
-                    "lua51",
-                    name,
-                    sample,
-                );
-            } else {
-                measure(
-                    || {
-                        black_box(call_reference().unwrap());
-                    },
-                    repeats,
-                    "execute",
-                    "lua51",
-                    name,
-                    sample,
-                );
-                measure(
-                    || {
-                        black_box(
-                            vm.execute_with_args(black_box(&program), arguments)
-                                .unwrap(),
-                        );
-                    },
-                    repeats,
-                    "execute",
-                    "rust",
-                    name,
-                    sample,
-                );
-            }
+            measure(
+                || {
+                    black_box(
+                        vm.execute_with_args(black_box(&program), arguments)
+                            .unwrap(),
+                    );
+                },
+                repeats,
+                "execute",
+                "rust",
+                name,
+                sample,
+            );
         }
-        println!(
-            "reference_live_heap_bytes\t{name}\t{}",
-            reference.used_memory()
-        );
         for (phase, stats) in [
             ("before_collect", vm.heap_stats()),
             ("after_collect", vm.collect_garbage().unwrap()),
@@ -834,15 +722,9 @@ fn main() {
                 stats.userdata
             );
         }
-        reference.gc_collect().unwrap();
-        println!(
-            "reference_after_collect_heap_bytes\t{name}\t{}",
-            reference.used_memory()
-        );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("vm_size_bytes\t{}", std::mem::size_of::<Vm>());
-    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
     let mut frontends = Vec::with_capacity(22);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
@@ -964,61 +846,25 @@ fn main() {
         );
         let mut vm = Vm::new();
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
-        let reference = lua_reference::Lua::new();
-        let function = reference
-            .load(source.as_bytes())
-            .set_name("=(frontend)")
-            .into_function()
-            .unwrap();
-        assert_eq!(function.call::<f64>(()).unwrap(), expected);
         for sample in 0..5 {
-            for engine in if sample % 2 == 0 {
-                ["rust", "lua51"]
-            } else {
-                ["lua51", "rust"]
-            } {
-                if engine == "rust" {
-                    measure(
-                        || {
-                            black_box(
-                                deadlib_lua::compile_named(
-                                    black_box(source.as_bytes()),
-                                    b"=(frontend)",
-                                )
-                                .unwrap(),
-                            );
-                        },
-                        repeats,
-                        "compile_drop",
-                        engine,
-                        &name,
-                        sample,
+            measure(
+                || {
+                    black_box(
+                        deadlib_lua::compile_named(black_box(source.as_bytes()), b"=(frontend)")
+                            .unwrap(),
                     );
-                } else {
-                    measure(
-                        || {
-                            black_box(
-                                reference
-                                    .load(black_box(source.as_bytes()))
-                                    .set_name("=(frontend)")
-                                    .into_function()
-                                    .unwrap(),
-                            );
-                        },
-                        repeats,
-                        "compile_drop",
-                        engine,
-                        &name,
-                        sample,
-                    );
-                }
-            }
+                },
+                repeats,
+                "compile_drop",
+                "rust",
+                &name,
+                sample,
+            );
         }
     }
+
+    println!("allocation_scope\tRust GlobalAlloc; totals cover all iterations in each row");
     println!(
-        "allocation_scope\tRust GlobalAlloc only; native C malloc excluded; totals cover all iterations in each row"
-    );
-    println!(
-        "limitations\tIncremental mark frontier and slot sweeping; individual object scans, final root/weak work, cache rebuilding and callback batches remain atomic; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
+        "limitations\tIncremental mark frontier and slot sweeping; individual object scans, final root/weak work, cache rebuilding and callback batches remain atomic; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
     );
 }

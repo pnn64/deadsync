@@ -1,5 +1,7 @@
 //! Register allocation and Lua 5.1 bytecode emission.
 
+use crate::memory::fallible::Map as HashMap;
+use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::{
     Error, ErrorKind,
     bytecode::{
@@ -9,7 +11,6 @@ use crate::{
     lexer::Kind,
     parser::{Ast, Expr, ExprId, Stmt, StmtId},
 };
-use std::collections::HashMap;
 
 mod boolean;
 mod constants;
@@ -98,8 +99,8 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         },
         parents: Vec::new(),
         prototypes: Vec::new(),
-        folded: crate::optimizer::literals(&ast),
-        tasks: vec![Task::Block(&ast.body)],
+        folded: crate::optimizer::literals(&ast)?,
+        tasks: fallible::vec([Task::Block(&ast.body)])?,
         result: 0,
         boolean: boolean::Boolean::default(),
         line: 1,
@@ -107,21 +108,21 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
     c.run()?;
     c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
-    let entry = c.finish();
-    let p = Program::new(c.prototypes, entry, name);
+    let entry = c.finish()?;
+    let p = Program::try_new(c.prototypes, entry, name)?;
     p.verify()?;
     Ok(p)
 }
 
 impl<'a> Compiler<'a> {
-    fn finish(&mut self) -> u32 {
+    fn finish(&mut self) -> Result<u32, Error> {
         let mut f = std::mem::take(&mut self.function);
         for i in &mut f.code {
             if i.op == Op::Load {
                 i.b &= 1;
             }
         }
-        boolean::thread_jumps(&mut f.code);
+        boolean::thread_jumps(&mut f.code)?;
         for &pc in &f.logical_tests {
             let i = f.code[pc];
             if i.c as usize > pc
@@ -168,34 +169,38 @@ impl<'a> Compiler<'a> {
                 local.end = f.code.len() as u32;
             }
         }
-        let (names, upvalues): (Vec<_>, Vec<_>) =
-            f.upvalues.into_iter().map(|(n, u)| (n.into(), u)).unzip();
+        let mut names = fallible::with_capacity(f.upvalues.len())?;
+        let mut upvalues = fallible::with_capacity(f.upvalues.len())?;
+        for (name, value) in f.upvalues {
+            names.push(name.try_boxed()?);
+            upvalues.push(value);
+        }
         let id = self.prototypes.len() as u32;
-        self.prototypes.push(Prototype {
-            code: f.code.into_boxed_slice(),
-            lines: f.lines.into_boxed_slice(),
-            gc_live: f.gc_live.into_boxed_slice(),
-            gc_maps: f.gc_maps.into_boxed_slice(),
-            constants: f.constants.finish(),
+        self.prototypes.try_push(Prototype {
+            code: f.code.try_into_boxed_slice()?,
+            lines: f.lines.try_into_boxed_slice()?,
+            gc_live: f.gc_live.try_into_boxed_slice()?,
+            gc_maps: f.gc_maps.try_into_boxed_slice()?,
+            constants: f.constants.finish()?,
             registers: f.max.max(f.debug_stack).max(2),
             params: f.params,
             vararg: f.vararg,
             compat_arg: f.compat_arg,
-            upvalues: upvalues.into_boxed_slice(),
+            upvalues: upvalues.try_into_boxed_slice()?,
             bindings: Box::default(),
             debug: DebugInfo {
                 stack: f.debug_stack,
                 native: None,
                 defined: f.defined,
-                upvalues: names.into_boxed_slice(),
-                locals: f.debug_locals.into_boxed_slice(),
-                calls: f.debug_calls.into_boxed_slice(),
-                active_lines: f.debug_lines.into_boxed_slice(),
-                hook_lines: f.hook_lines.into_boxed_slice(),
-                temporaries: f.debug_temporaries.into_boxed_slice(),
+                upvalues: names.try_into_boxed_slice()?,
+                locals: f.debug_locals.try_into_boxed_slice()?,
+                calls: f.debug_calls.try_into_boxed_slice()?,
+                active_lines: f.debug_lines.try_into_boxed_slice()?,
+                hook_lines: f.hook_lines.try_into_boxed_slice()?,
+                temporaries: f.debug_temporaries.try_into_boxed_slice()?,
             },
-        });
-        id
+        })?;
+        Ok(id)
     }
     fn upvalue(&mut self, name: &'a [u8]) -> Result<Option<u16>, Error> {
         if let Some(index) = self.function.upvalues.iter().position(|(n, _)| *n == name) {
@@ -222,14 +227,14 @@ impl<'a> Compiler<'a> {
             }
             let parent = &mut self.parents[index];
             let slot = parent.upvalues.len() as u16;
-            parent.upvalues.push((name, up));
+            parent.upvalues.try_push((name, up))?;
             up = Upvalue::Outer(slot);
         }
         if self.function.upvalues.len() >= 60 {
             return Err(self.error(ErrorKind::Limit, "too many upvalues"));
         }
         let index = self.function.upvalues.len() as u16;
-        self.function.upvalues.push((name, up));
+        self.function.upvalues.try_push((name, up))?;
         Ok(Some(index))
     }
     fn close(&mut self, base: u16) -> Result<(), Error> {
@@ -238,8 +243,8 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
-    fn error(&self, kind: ErrorKind, message: &str) -> Error {
-        Error::new(kind, self.line, message)
+    fn error(&self, kind: ErrorKind, message: &'static str) -> Error {
+        Error::new_static(kind, self.line, message)
     }
     fn alloc(&mut self, count: u16) -> Result<u8, Error> {
         let start = self.function.next;
@@ -277,7 +282,11 @@ impl<'a> Compiler<'a> {
         }
         let index = u16::try_from(self.function.gc_maps.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many GC register maps"))?;
-        self.function.gc_maps.push(mask);
+        self.function.gc_maps.try_push(mask)?;
+        self.function
+            .gc_index
+            .try_reserve(1)
+            .map_err(|_| Error::memory())?;
         self.function.gc_index.insert(mask, index);
         Ok(index)
     }
@@ -351,18 +360,18 @@ impl<'a> Compiler<'a> {
             _ => {}
         }
         let after = self.live_map()?;
-        self.function.code.push(Instruction { op, a, b, c });
+        self.function.code.try_push(Instruction { op, a, b, c })?;
         self.function.hook_visible += usize::from(op != Op::Close && self.line != 0);
-        self.function.lines.push(self.line);
+        self.function.lines.try_push(self.line)?;
         self.function
             .hook_lines
-            .push(if op == Op::Close { 0 } else { self.line });
+            .try_push(if op == Op::Close { 0 } else { self.line })?;
         self.function
             .debug_lines
-            .push(if op == Op::Close { 0 } else { self.line });
+            .try_push(if op == Op::Close { 0 } else { self.line })?;
         self.function
             .gc_live
-            .push(u32::from(before) | (u32::from(after) << 16));
+            .try_push(u32::from(before) | (u32::from(after) << 16))?;
         if op == Op::Move
             && (c == OPEN
                 || u16::from(a) == b
@@ -400,13 +409,13 @@ impl<'a> Compiler<'a> {
         }
         self.function
             .constants
-            .intern(k)
+            .intern(k)?
             .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
     }
     fn string_constant(&mut self, bytes: &[u8]) -> Result<u32, Error> {
         self.function
             .constants
-            .string(bytes)
+            .string(bytes)?
             .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
     }
     fn load_string(&mut self, dst: u8, bytes: &[u8]) -> Result<(), Error> {
@@ -438,26 +447,26 @@ impl<'a> Compiler<'a> {
         if self.function.locals.len() >= 200 {
             return Err(self.error(ErrorKind::Limit, "too many local variables"));
         }
-        let debug = self.debug_local(name, reg);
-        self.function.locals.push(Local {
+        let debug = self.debug_local(name, reg)?;
+        self.function.locals.try_push(Local {
             name,
             reg,
             debug,
             captured: false,
-        });
+        })?;
         self.live_register(u16::from(reg));
         Ok(())
     }
-    fn debug_local(&mut self, name: &[u8], reg: u8) -> usize {
+    fn debug_local(&mut self, name: &[u8], reg: u8) -> Result<usize, Error> {
         self.function.debug_named[usize::from(reg) / 64] |= 1u64 << (reg % 64);
         let index = self.function.debug_locals.len();
-        self.function.debug_locals.push(DebugLocal {
-            name: name.into(),
+        self.function.debug_locals.try_push(DebugLocal {
+            name: name.try_boxed()?,
             start: self.function.code.len() as u32,
             end: u32::MAX,
             register: u16::from(reg),
-        });
-        index
+        })?;
+        Ok(index)
     }
     fn end_locals(&mut self, retained: usize) {
         let end = self.function.code.len() as u32;
@@ -541,17 +550,17 @@ impl<'a> Compiler<'a> {
                 & (1u64 << (r % 64))
                 != 0
             {
-                self.function.debug_temporaries.push(r);
+                self.function.debug_temporaries.try_push(r)?;
             }
         }
         let end = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
-        self.function.debug_calls.push(DebugCall {
+        self.function.debug_calls.try_push(DebugCall {
             pc: self.function.code.len() as u32,
-            name: name.into(),
+            name: name.try_boxed()?,
             kind,
             temporaries: start..end,
-        });
+        })?;
         Ok(())
     }
 

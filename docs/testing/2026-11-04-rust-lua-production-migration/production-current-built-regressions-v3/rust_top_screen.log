@@ -1,0 +1,15 @@
+
+running 10 tests
+test default_screen_fixture_constructs_complete_players_with_real_font_helper ... ok
+test music_wheel_retains_shared_backing_and_counts_only_existing_side_effects ... ok
+test option_rows_preserve_names_generated_groups_defaults_and_fresh_identity ... ok
+test player_and_life_lookups_capture_enabled_owners_without_creating_missing_children ... ok
+test preparation_row_capture_and_ownership_survive_screen_retirement ... ok
+test retired_screen_is_collectible_while_saved_independent_controls_remain_usable ... ok
+test screen_controls_preserve_bound_receivers_defaults_and_argument_rules ... ok
+test screen_getters_and_setters_allow_reentry_and_keep_partial_writes_on_errors ... ok
+test screen_lead_in_uses_typed_receiver_range_and_no_side_effect ... ok
+test transitions_keep_off_order_out_activation_and_request_commit_boundaries ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.03s
+

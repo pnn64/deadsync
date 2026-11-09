@@ -1,0 +1,8 @@
+{
+  "baseline": "player-state-lint-song-linux-debug",
+  "current": "gamestate-lint-song-linux-debug",
+  "library_diagnostics_identical": true,
+  "library_diagnostics_sha256": "ba20a38c16feb42a8e9a155f8e25206fa33438f3616914adab0bf9f7516a2e3b",
+  "adapter_diagnostic_paths": [],
+  "diff": []
+}

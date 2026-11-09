@@ -1,0 +1,39 @@
+{
+  "goal_complete": false,
+  "constructor_regression": "Resolved by a song-host constructor capture phase; original unignored comparison passes.",
+  "scope": "Generated screen constructor commands before Init/startup replay; not the full production compiler.",
+  "evidence": [
+    "preparation-capture-focused-v5-song-linux-debug/result.json",
+    "crates/deadsync-song-lua/tests/rust_transitions.rs"
+  ],
+  "capture_output": "All typed blocks for every In/Out/Cancel constructor actor compare exactly: start, duration, easing, queued flag and sparse deltas. Empty timed states still advance the cursor. Same-value explicit writes are retained.",
+  "ordering": "Nested queued commands dispatch after the active body, keep ancestor guards through draining, and restore their queued capture scope. Callback tests collect garbage and compare shared globals and event order.",
+  "handoff": "Promotion clears preparation queues without re-running their Lua callbacks. Non-live current position/aux getters remain captured until synchronization while replay owns the destination.",
+  "test_development": [
+    {
+      "run": "focused and focused-v2",
+      "finding": "New test helper needed owned copied VM results; compile failures retained."
+    },
+    {
+      "run": "focused-v3 and queue-probe",
+      "finding": "The differential fixture queued after the legacy actor control entered its Init barrier; moved construction actions into the existing setup closure before Init, preserving all behavioral assertions."
+    },
+    {
+      "run": "focused-v4",
+      "finding": "Real handoff getter mismatch: Rust exposed x=60 immediately while native non-live current getter retained x=427. Added separate preparation getter state."
+    }
+  ],
+  "still_required": [
+    "Compiler Init/startup barrier and capture frame clocks",
+    "Complete capture channels, stop/finish/hurry and recurring callback scheduling",
+    "Full screen factory, remaining transition roles and loaded theme trees",
+    "Compiler/baking/live and fallback orchestration, cache versioning and unconditional cutover",
+    "Final application/rendering, dependency/link, fixtures and performance checks"
+  ],
+  "final_evidence": [
+    "preparation-capture-review.json",
+    "preparation-capture-adapters-song-linux-debug/result.json",
+    "preparation-capture-focused-v6-song-linux-debug/result.json",
+    "preparation-capture-lint-v2-song-linux-debug/result.json"
+  ]
+}

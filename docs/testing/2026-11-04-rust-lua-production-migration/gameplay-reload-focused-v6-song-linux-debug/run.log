@@ -1,0 +1,25 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.46s
+     Running tests/rust_gameplay_reload.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_gameplay_reload-ed5b3e6b789c401a)
+
+running 8 tests
+test context_uses_retained_chart_identity_metadata_and_missing_selection_fallbacks ... ok
+test failed_theme_load_keeps_published_partial_screen_owned_until_explicit_release ... ok
+test initial_screen_seeds_nonhuman_chart_and_loads_all_original_phases ... ok
+test rebuild_preserves_process_state_and_rng_but_resets_options_statistics_clock_and_subscriptions ... ok
+test repeated_reconstruction_releases_outgoing_scene_roots_after_collection ... ok
+test replacement_resets_screen_input_map_and_keeps_saved_methods_bound_to_new_map ... ok
+test selected_context_uses_chart_timing_and_keeps_supplied_fallback_when_timing_is_missing ... ok
+test style_projection_keeps_native_fallback_reentry_and_read_order ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.30s
+

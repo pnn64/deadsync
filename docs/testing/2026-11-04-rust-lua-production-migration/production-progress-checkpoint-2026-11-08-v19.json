@@ -1,0 +1,35 @@
+{
+  "previous": "production-progress-checkpoint-2026-11-08-v18.json",
+  "goal_status": "active",
+  "runtime_source": "Window11 remains final; no further Lua engine/adapter/test/manifest edits",
+  "new_source_guard_event": {
+    "report": "production-current-release-v2-application-windows-release/result.json",
+    "build_exit": 0,
+    "driver_exit": 1,
+    "source_guard": false,
+    "artifact_sha256": "22480342ac1502cfaee8e2eccb0a119eef20d5ed3234728b987d665b06117317",
+    "map_sha256": "0a961bbda8646c28aadb5d11b2f1f3f3e07a7dc46213dcdbcfd00f5b35a56ae5",
+    "link": "Rust engine symbols present; no forbidden legacy symbols",
+    "changed_paths_only": ["crates/deadsync-notefield/src/transforms.rs", "crates/deadsync-notefield/src/appearance_performance.rs"],
+    "origin": "Concurrent independent performance work; preserved without edits. All Lua sources unchanged.",
+    "proof": "production-concurrent-notefield-source-review-v1/review.json plus before/after source: remove only new cfg(test) module suffix and3-line identity fast path reconstructs exact pre-build7bb797ed6a8fb7f41de078f622900b939e744b8b7e890d6e9986f796362e283c. Pure identity result already(1,0); false branch unchanged. Added benchmark cfg(test) is not compiled as dependency.",
+    "acceptance": "Do not claim v2 final-source application acceptance; rebuilding current source. Keep raw guard failure. Pending component reports may be qualified by exact semantic equivalence only if changed source set stays exactly these paths; never alter tests/results to hide it."
+  },
+  "new_tooling": "build_current_application.py uses stable target/release/production-current-application.map linker argument and copies map into immutable stage, retaining sources-after and changed_sources. Avoids gratuitous full rebuild on later unchanged-source retries.",
+  "dependency_review": "production-current-song-dependency-tree-v1.txt:871-line current normal/build/dev tree confirms notefield is a song dependency. Do not claim changed file is outside dependencies; use precise pure-function equivalence and fresh application evidence.",
+  "terminal_consumed_sessions": [78503,59818,51374,78250],
+  "live_sessions": [
+    {"id":53888,"stage":"production-current-full-song-v2-song-windows-debug","state":"Compiling remaining test binaries; global guard likely catches the two independent notefield changes"},
+    {"id":45785,"stage":"production-current-final-v3-workloads-windows-release","state":"Building release tools after v2 application; its before snapshot predates independent edits, so expect global guard qualification/retry needed despite latest artifact success"},
+    {"id":83923,"stage":"production-current-song-clippy-v4-song-windows-debug","state":"Queued; previous known frozen cmd.rs349 denied lint"},
+    {"id":89954,"stage":"production-current-release-v3-application-windows-release","state":"Fresh normal release/map build with current notefield source; queued behind release tools"}
+  ],
+  "source_freeze": "Do not edit watched Rust/Lua/manifests/tests while these four runners live; preserve independent notefield edits and other processes",
+  "next": [
+    "Consume all sessions; review actual full-song failures and any global guard changes with exact source proof; no blanket pass claims",
+    "On clean current release-v3 result, run fresh strict600-frame smoke using run_production_lua_smoke_v2.py --build production-current-release-v3-application-windows-release; inspect screenshot",
+    "If metric v3 tools succeed but guard fails only independent edits, preserve report; obtain clean current cached build stage(v4) with same build_workloads command after active builds settle; then matched_workloads.py and measure_noteskins.py with explicit --build-stage",
+    "Report representative preparation/live/memory and noteskin metrics with actual environmental limitations; do not turn external-machine idleness into new goal",
+    "Final accurate completion audit/docs and stop at original attachment criteria; interpreter/C API closed; no additional baking/JIT/ASM/parity/OOM work"
+  ]
+}

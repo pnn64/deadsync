@@ -1,0 +1,1226 @@
+--- crates/deadsync-song-lua/src/rust_engine/actors.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -49,6 +49,7 @@
+ mod recurring;
+ mod render;
+ mod retirement;
++mod song_pose;
+ mod song_properties;
+ mod sound;
+ mod sprites;
+@@ -2865,6 +2866,7 @@
+         sprites::refresh_size(call, store, actor)?;
+     }
+     let store = store.lock().unwrap();
++    let prior = song_pose::prior_position(&store, actor);
+     let actor = &store.actors[&actor];
+     let s = &actor.state;
+     let current = &actor.current;
+@@ -2874,9 +2876,9 @@
+             .unwrap_or([current.x, current.y, current.z, current.aux]);
+     let dest = actor.getter_destination();
+     let value = match name {
+-        "GetX" => getters[0],
+-        "GetY" => getters[1],
+-        "GetZ" => getters[2],
++        "GetX" => prior.map_or(getters[0], |p| p[0]),
++        "GetY" => prior.map_or(getters[1], |p| p[1]),
++        "GetZ" => prior.map_or(getters[2], |p| p[2]),
+         "GetDestX" => dest.x,
+         "GetDestY" => dest.y,
+         "GetDestZ" => dest.z,
+--- crates/deadsync-song-lua/src/rust_engine/actors/capture.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
+@@ -250,15 +250,18 @@
+ ) {
+     let mut guard = store.lock().unwrap();
+     let scope = guard.capture_scope;
++    let fallback = song_pose::mode(&guard, id);
+     if let Some(actor) = guard.actors.get_mut(&id) {
+-        record(actor, &delta, immediate, scope);
++        record(actor, &delta, immediate, scope, fallback);
+     }
+     drop(guard);
+-    song_messages::record(call, store, id, &delta);
++    if !song_pose::record(call, store, id, &delta) {
++        song_messages::record(call, store, id, &delta);
++    }
+     song_immediate::delta(call, store, id, &delta, immediate);
+ }
+ 
+-fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>) {
++fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
+     if let Some(replay) = &mut actor.replay {
+         for target in crate::tween_pose::TARGETS {
+             if delta.has_update_target(target) {
+@@ -276,7 +279,7 @@
+         crate::apply_overlay_delta(&mut state, delta);
+         *pose = state.into();
+     }
+-    if actor.replay.is_some() {
++    if actor.replay.is_some() && !fallback {
+         let current = actor.current;
+         if let Some(getters) = &mut actor.preparation_getters {
+             for ((getter, changed), value) in getters
+@@ -308,7 +311,7 @@
+     }
+     // Zero-duration construction steps do not defer current-position getters.
+     // These fields are independent of the retained destination/spin queue.
+-    if !capture.scheduled() {
++    if !capture.scheduled() && !fallback {
+         let values = [delta.x, delta.y, delta.z, delta.aux];
+         if values.iter().any(Option::is_some) {
+             let current = actor.current;
+@@ -370,6 +373,7 @@
+ /// Comparing snapshots would lose those writes and change later composition.
+ pub(super) fn property(call: &mut HostCall<'_>, store: &Shared, id: TableId, name: &str) {
+     let mut guard = store.lock().unwrap();
++    let fallback = song_pose::mode(&guard, id);
+     let scope = guard.capture_scope;
+     let immediate_visibility = scope.is_some()
+         || guard.startup_queues.is_some()
+@@ -492,9 +496,11 @@
+         }
+         _ => return,
+     }
+-    record(actor, &delta, immediate, scope);
++    record(actor, &delta, immediate, scope, fallback);
+     drop(guard);
+-    song_messages::record(call, store, id, &delta);
++    if !song_pose::record(call, store, id, &delta) {
++        song_messages::record(call, store, id, &delta);
++    }
+     song_immediate::delta(call, store, id, &delta, immediate);
+ }
+ 
+@@ -808,6 +814,7 @@
+             }
+         }
+         result?;
++        song_pose::advance_position(call, store, actor)?;
+         let recurring = store
+             .lock()
+             .unwrap()
+--- crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
+@@ -90,7 +90,7 @@
+             actor.sync_rotation_getters();
+         }
+     }
+-    song_immediate::cancel(call, store, id, true);
++    song_immediate::cancel(call, store, id, true)?;
+     song_messages::reset_timing(call, store, id)?;
+     song_replay::sync_getters(call, store, id)?;
+     // Finish also visits native named children. Hurry, TimeLeft and ordinary
+@@ -397,16 +397,39 @@
+         Lifecycle::Stop => {
+             {
+                 let mut store = store.lock().unwrap();
++                let fallback = song_pose::mode(&store, actor);
++                let prior = song_pose::prior_position(&store, actor);
+                 if let Some(clock) = &mut store.replay_clock {
+                     clock.reset(actor);
+                 }
+                 let actor = store.actors.get_mut(&actor).unwrap();
++                if fallback && let Some(prior) = prior {
++                    let current = actor.current;
++                    actor.preparation_getters.get_or_insert([
++                        current.x,
++                        current.y,
++                        current.z,
++                        current.aux,
++                    ])[..3]
++                        .copy_from_slice(&prior);
++                }
+                 if !capture::cancel(actor, false) {
+                     actor.queue.clear();
+                     actor.sync_rotation_getters();
+                 }
+-            }
+-            song_immediate::cancel(call, store, actor, false);
++                // Fallback Stop drops the destination position. Other sampled
++                // destination fields remain independent of its physical queue.
++                if fallback
++                    && let Some(getters) = actor
++                        .replay
++                        .as_mut()
++                        .and_then(|replay| replay.getters.as_mut())
++                {
++                    [getters.x, getters.y, getters.z] =
++                        [actor.current.x, actor.current.y, actor.current.z];
++                }
++            }
++            song_immediate::cancel(call, store, actor, false)?;
+             song_messages::reset_timing(call, store, actor)?;
+             song_replay::sync_getters(call, store, actor)?;
+         }
+@@ -531,6 +554,9 @@
+     // production does not advance that queue without native registration.
+     if !store.lock().unwrap().actors[&actor].registered {
+         return Ok(());
++    }
++    if song_pose::mode(&store.lock().unwrap(), actor) {
++        return song_pose::advance_position(call, store, actor);
+     }
+     let mut dispatched = 0;
+     // Commands can replace the queue. Release metadata before entering Lua and
+--- crates/deadsync-song-lua/src/rust_engine/actors/recurring.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/recurring.rs
+@@ -54,7 +54,8 @@
+         song_replay::raw_set(call, actor, "__songlua_capture_opt2", Value::Nil)?;
+         // This scheduler invokes the actor's own named command. ActorFrame's
+         // recursive PlayCommand dispatch is a separate queue path.
+-        run_named(call, store, actor, command, None)
++        run_named(call, store, actor, command, None)?;
++        song_pose::advance_position(call, store, actor)
+     })();
+     let mut guard = store.lock().unwrap();
+     guard.replay_dispatch = prior;
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_clock.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_clock.rs
+@@ -98,6 +98,9 @@
+     }
+     fn order(&self, id: TableId) -> usize {
+         self.orders.get(&id).copied().unwrap_or(0)
++    }
++    pub fn later(&self, id: TableId) -> bool {
++        self.phase.is_some_and(|phase| self.order(id) > phase.order)
+     }
+     pub fn enter(&mut self, order: usize, delta: f32) {
+         self.phase = Some(Phase {
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs
+@@ -22,9 +22,17 @@
+     target: Target,
+     value: Update,
+ ) {
+-    if song_immediate::context(&store.lock().unwrap(), id).is_none() {
+-        return;
+-    }
++    let _ = record_inner(call, store, id, target, value);
++}
++
++pub(super) fn record_inner(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    target: Target,
++    value: Update,
++) -> Option<bool> {
++    song_immediate::context(&store.lock().unwrap(), id)?;
+     let beat = effects::values(call, false).map_or(0., |values| values[0]);
+     let duration = get(call, id, b"__songlua_capture_duration")
+         .ok()
+@@ -38,9 +46,7 @@
+         .ok()
+         .and_then(|v| float_scalar(call, v, true));
+     let mut guard = store.lock().unwrap();
+-    let Some((owner, index)) = song_immediate::context(&guard, id) else {
+-        return;
+-    };
++    let (owner, index) = song_immediate::context(&guard, id)?;
+     let actor = &guard.actors[&id];
+     let mut delay = actor.capture.as_ref().map_or_else(
+         || lifecycle::message_delay(actor, duration),
+@@ -98,5 +104,7 @@
+                 value: value.clone(),
+             }
+         });
++    let timed = scheduled.is_some();
+     capture.immediate.record(index, target, value, scheduled);
++    Some(timed)
+ }
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
+@@ -48,8 +48,9 @@
+ #[derive(Default)]
+ pub(super) struct Capture {
+     touched: Vec<usize>,
+-    frames: HashMap<usize, SongReplayImmediateUpdates>,
++    pub(super) frames: HashMap<usize, SongReplayImmediateUpdates>,
+     pending: HashMap<usize, Vec<(Target, UpdateValue)>>,
++    pub(super) prior_positions: HashMap<usize, [f32; 3]>,
+ }
+ 
+ fn replace(values: &mut Vec<(Target, UpdateValue)>, target: Target, value: UpdateValue) {
+@@ -125,10 +126,27 @@
+ }
+ 
+ impl Actors {
++    pub(in crate::rust_engine) fn set_song_pending_overlay_updates(
++        &self,
++        screen: ActorScene,
++        values: &[(usize, Target, UpdateValue)],
++    ) -> bool {
++        self.set_pending_updates(screen, values, false)
++    }
++
+     pub(in crate::rust_engine) fn set_song_pending_render_updates(
+         &self,
+         screen: ActorScene,
+         values: &[(usize, Target, UpdateValue)],
++    ) -> bool {
++        self.set_pending_updates(screen, values, true)
++    }
++
++    fn set_pending_updates(
++        &self,
++        screen: ActorScene,
++        values: &[(usize, Target, UpdateValue)],
++        render_only: bool,
+     ) -> bool {
+         let mut store = self.store.lock().unwrap();
+         if store.replay_frame.map(|f| f.0) != Some(screen.id) {
+@@ -144,7 +162,11 @@
+         };
+         if values.iter().any(|(index, target, _)| {
+             !capture.indices.values().any(|i| i == index)
+-                || !song_properties::TARGETS.contains(target)
++                || if render_only {
++                    !song_properties::TARGETS.contains(target)
++                } else {
++                    !song_pose::supported(*target)
++                }
+         }) {
+             return false;
+         }
+@@ -183,6 +205,31 @@
+     }
+ 
+     pub(in crate::rust_engine) fn drain_song_property_updates(
++        &self,
++        screen: ActorScene,
++    ) -> Option<Vec<SongReplayImmediateUpdates>> {
++        let mut frames = self.drain_song_overlay_updates(screen)?;
++        for frame in &mut frames {
++            frame
++                .values
++                .retain(|(target, _)| !crate::tween_pose::TARGETS.contains(target));
++            frame
++                .final_values
++                .retain(|(target, _)| !crate::tween_pose::TARGETS.contains(target));
++            frame
++                .scheduled
++                .retain(|u| !crate::tween_pose::TARGETS.contains(&u.target));
++        }
++        frames.retain(|f| {
++            f.tween_reset
++                || !f.values.is_empty()
++                || !f.final_values.is_empty()
++                || !f.scheduled.is_empty()
++        });
++        Some(frames)
++    }
++
++    pub(in crate::rust_engine) fn drain_song_overlay_updates(
+         &self,
+         screen: ActorScene,
+     ) -> Option<Vec<SongReplayImmediateUpdates>> {
+@@ -310,75 +357,107 @@
+     }
+ }
+ 
+-pub(super) fn cancel(call: &mut HostCall<'_>, store: &Shared, id: TableId, finish: bool) {
++pub(super) fn cancel(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    finish: bool,
++) -> Result<(), Error> {
+     if context(&store.lock().unwrap(), id).is_none() {
+-        return;
++        return Ok(());
+     }
+     let beat = effects::values(call, false).map_or(0., |values| values[0]);
+-    let mut guard = store.lock().unwrap();
+-    let Some((owner, index)) = context(&guard, id) else {
+-        return;
+-    };
+-    let message = guard.active_message.clone();
+-    let capture = guard
+-        .scenes
+-        .get_mut(&owner)
+-        .unwrap()
+-        .song_session
+-        .as_mut()
+-        .unwrap()
+-        .messages
+-        .as_mut()
+-        .unwrap();
+-    let pending = capture.immediate.pending.remove(&index).unwrap_or_default();
+-    let frame = capture.immediate.touch(index);
+-    frame.tween_reset = true;
+-    // Stop cannot discard an immediate setter merely because it was published
+-    // by a queued command. Finish promotes those pending publications now.
+-    if finish {
++    let (owner, index, message, values) = {
++        let mut guard = store.lock().unwrap();
++        let Some((owner, index)) = context(&guard, id) else {
++            return Ok(());
++        };
++        let actor = &guard.actors[&id];
++        let cur = actor.current;
++        let position = actor
++            .preparation_getters
++            .unwrap_or([cur.x, cur.y, cur.z, cur.aux]);
++        let message = guard.active_message.clone();
++        let capture = guard
++            .scenes
++            .get_mut(&owner)
++            .unwrap()
++            .song_session
++            .as_mut()
++            .unwrap()
++            .messages
++            .as_mut()
++            .unwrap();
++        let pending = capture.immediate.pending.remove(&index).unwrap_or_default();
++        let frame = capture.immediate.touch(index);
++        frame.tween_reset = true;
++        if !finish {
++            let targets = frame
++                .scheduled
++                .iter()
++                .filter(|u| crate::tween_pose::TARGETS.contains(&u.target))
++                .fold(0u128, |mask, u| mask | (1u128 << u.target as usize));
++            frame
++                .final_values
++                .retain(|(target, _)| targets & (1u128 << *target as usize) == 0);
++            frame
++                .scheduled
++                .retain(|u| !crate::tween_pose::TARGETS.contains(&u.target));
++            for (target, value) in [Target::X, Target::Y, Target::Z].into_iter().zip(position) {
++                replace(&mut frame.values, target, UpdateValue::F32(value));
++                replace(&mut frame.final_values, target, UpdateValue::F32(value));
++            }
++            return Ok(());
++        }
+         let mut values = pending;
+         for update in std::mem::take(&mut frame.scheduled) {
+             replace(&mut values, update.target, update.value);
+         }
+-        let render_getters: Vec<_> = values
+-            .iter()
+-            .filter(|(target, _)| song_properties::TARGETS.contains(target))
+-            .cloned()
+-            .collect();
+-        for (target, value) in &values {
+-            replace(&mut frame.values, *target, value.clone());
+-            replace(&mut frame.final_values, *target, value.clone());
+-        }
+-        if let Some(message) = message {
+-            for (target, value) in values {
+-                capture.write(
+-                    message.clone(),
+-                    crate::SongLuaStatefulMessageWrite {
+-                        overlay_index: index,
+-                        beat,
+-                        target,
+-                        value,
+-                        delay_seconds: 0.,
+-                        duration_seconds: 0.,
+-                        easing: None,
+-                        opt1: None,
+-                    },
+-                );
+-            }
+-        }
+-        let actor = guard.actors.get_mut(&id).unwrap();
+-        for (target, value) in render_getters {
++        (owner, index, message, values)
++    };
++    for (target, value) in values {
++        if crate::tween_pose::TARGETS.contains(&target) {
++            song_pose::set_getter(call, store, id, target, &value)?;
++        }
++        let mut guard = store.lock().unwrap();
++        if song_properties::TARGETS.contains(&target) {
++            let actor = guard.actors.get_mut(&id).unwrap();
+             crate::perframe::set_overlay_state_update_value(
+                 &mut actor.state.render,
+                 target,
+                 &value,
+             );
+-            if let (Target::DrawOrder, UpdateValue::I32(order)) = (target, value) {
+-                actor.state.draw_order = order;
++            if let (Target::DrawOrder, UpdateValue::I32(order)) = (target, &value) {
++                actor.state.draw_order = *order;
+             }
+             if target == Target::Fov {
+                 actor.state.render.fov = actor.state.render.fov.filter(|fov| *fov != -1.);
+             }
+         }
+-    }
+-}
++        let Some(capture) = guard
++            .scenes
++            .get_mut(&owner)
++            .and_then(|s| s.song_session.as_mut())
++            .and_then(|s| s.messages.as_mut())
++        else {
++            return Ok(());
++        };
++        capture.immediate.record(index, target, value.clone(), None);
++        if let Some(message) = &message {
++            capture.write(
++                message.clone(),
++                crate::SongLuaStatefulMessageWrite {
++                    overlay_index: index,
++                    beat,
++                    target,
++                    value,
++                    delay_seconds: 0.,
++                    duration_seconds: 0.,
++                    easing: None,
++                    opt1: None,
++                },
++            );
++        }
++    }
++    Ok(())
++}
+--- crates/deadsync-song-lua/src/rust_engine/song_discovery.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/song_discovery.rs
+@@ -70,6 +70,59 @@
+ }
+ 
+ impl RustSongRuntime {
++    /// Supply the compiler's previous-frame positions for cross-actor reads.
++    /// Actors whose update has not run yet retain these prior positions.
++    pub fn set_song_replay_prior_positions(
++        &self,
++        screen: ActorScene,
++        states: &[crate::SongLuaOverlayState],
++    ) -> bool {
++        self.actor_scene_root(screen).is_some()
++            && self.actors.set_song_replay_prior_positions(screen, states)
++    }
++
++    /// Apply sampled pose getters with the existing compiler setter rules.
++    /// Invalid actor indices or non-pose targets leave the input unapplied.
++    pub fn set_song_replay_pose_getters(
++        &mut self,
++        screen: ActorScene,
++        values: &[(
++            usize,
++            crate::SongLuaOverlayUpdateTarget,
++            crate::SongLuaOverlayUpdateValue,
++        )],
++    ) -> Result<bool, Error> {
++        if self.actor_scene_root(screen).is_none() {
++            return Ok(false);
++        }
++        self.actors
++            .set_song_replay_pose_getters(&mut self.vm, screen, values)
++    }
++
++    /// Replace pending destinations for all captured overlay property families.
++    pub fn set_song_pending_overlay_updates(
++        &self,
++        screen: ActorScene,
++        values: &[(
++            usize,
++            crate::SongLuaOverlayUpdateTarget,
++            crate::SongLuaOverlayUpdateValue,
++        )],
++    ) -> bool {
++        self.actor_scene_root(screen).is_some()
++            && self.actors.set_song_pending_overlay_updates(screen, values)
++    }
++
++    /// Drain immediate, scheduled renderer and fallback pose publications.
++    /// This shares a buffer with the narrower drains; choose one per sample.
++    pub fn drain_song_overlay_updates(
++        &mut self,
++        screen: ActorScene,
++    ) -> Option<Vec<SongReplayPropertyUpdates>> {
++        self.actor_scene_root(screen)?;
++        self.actors.drain_song_overlay_updates(screen)
++    }
++
+     /// Install the complete preparation frame timeline after begin_song_replay,
+     /// before chronological callbacks. Rows are [beat, delta seconds]. Optional
+     /// actor frames are [native actor delta, active global-frame span].
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1439,6 +1439,45 @@
+     )?;
+     Ok(output)
+ }
++
++pub fn legacy_drain_song_overlay_updates(
++    lua: &mlua::Lua,
++) -> Result<Vec<super::SongReplayPropertyUpdates>, String> {
++    let targets: Vec<_> = super::actors::IMMEDIATE_CAPTURE_TARGETS
++        .iter()
++        .chain(super::actors::SCHEDULED_RENDER_TARGETS)
++        .chain(crate::tween_pose::TARGETS.iter())
++        .copied()
++        .collect();
++    legacy_drain_song_property_subset(lua, &targets)
++}
++
++pub fn legacy_set_song_replay_prior_positions(
++    lua: &mlua::Lua,
++    states: &[crate::SongLuaOverlayState],
++) {
++    crate::lua_util::set_prior_positions(lua, states);
++}
++
++pub fn legacy_set_song_replay_pose_getters(
++    lua: &mlua::Lua,
++    actors: &[mlua::Table],
++    values: &[(
++        usize,
++        crate::SongLuaOverlayUpdateTarget,
++        crate::SongLuaOverlayUpdateValue,
++    )],
++) -> Result<(), String> {
++    for (index, target, value) in values {
++        crate::lua_util::set_actor_overlay_update_getter_value(
++            lua,
++            &actors[*index],
++            *target,
++            value,
++        )?;
++    }
++    Ok(())
++}
+ pub fn legacy_song_replay_messages(lua: &mlua::Lua) -> Vec<crate::SongLuaStatefulMessageCapture> {
+     crate::lua_util::stateful_message_captures(lua)
+ }
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs (before pose output)
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -3267,3 +3267,232 @@
+     assert_eq!(parent.dispatch_seconds, Some(0.25));
+     assert_eq!(parent.frame_advance, 0.125);
+ }
++
++fn compare_pose_output(
++    pair: &mut Pair,
++) -> Vec<deadsync_song_lua::rust_engine::SongReplayPropertyUpdates> {
++    let expected = test_support::legacy_drain_song_overlay_updates(&pair.native).unwrap();
++    let actual = pair.rust.drain_song_overlay_updates(pair.scene).unwrap();
++    assert_eq!(actual, expected);
++    assert_eq!(
++        pair.rust.song_replay_messages(pair.scene).unwrap(),
++        test_support::legacy_song_replay_messages(&pair.native)
++    );
++    assert!(
++        pair.rust
++            .drain_song_overlay_updates(pair.scene)
++            .unwrap()
++            .is_empty()
++    );
++    actual
++}
++
++#[test]
++fn pose_output_captures_all_fallback_targets_timing_and_ordered_messages() {
++    use deadsync_song_lua::SongLuaOverlayUpdateTarget as Target;
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{InitCommand=function(self)saved.actor=self end,
++            ChangeMessageCommand=function(self,p)p.apply();collectgarbage()end}
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "fallback pose output",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["actor"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
++    let setters = "x(1):y(2):z(3):aux(4):zoom(2):rotationx(5):rotationy(6):rotationz(7):skewx(0.1):skewy(0.2):cropleft(0.1):cropright(0.2):croptop(0.3):cropbottom(0.4):fadeleft(0.1):faderight(0.2):fadetop(0.3):fadebottom(0.4):diffuse(0.2,0.3,0.4,0.5):diffuseupperleft(1,0,0,1):glow(0.5,0.4,0.3,0.2):heading(15)";
++    pair.script(&format!(
++        "MESSAGEMAN:Broadcast('Change',{{apply=function()saved.actor:{setters}end}})"
++    ));
++    let direct = compare_pose_output(&mut pair);
++    assert_eq!(direct[0].values.len(), 25);
++    assert!(direct[0].scheduled.is_empty());
++    pair.script(&format!("MESSAGEMAN:Broadcast('Change',{{apply=function()saved.actor:sleep(0.125):accelerate(0.25):{setters}:x(8):x(9)end}})"));
++    let timed = compare_pose_output(&mut pair);
++    assert_eq!(timed[0].scheduled.len(), 25);
++    assert!(
++        timed[0]
++            .scheduled
++            .iter()
++            .all(|u| u.delay_seconds == 0.125 && u.duration_seconds == 0.25)
++    );
++    assert_eq!(
++        timed[0]
++            .scheduled
++            .iter()
++            .filter(|u| u.target == Target::X)
++            .count(),
++        1
++    );
++}
++
++#[test]
++fn pose_output_reconciles_current_destinations_prior_reads_and_sampled_getters() {
++    use deadsync_song_lua::{
++        SongLuaOverlayState as State, SongLuaOverlayUpdateTarget as Target,
++        SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            Def.ActorFrame{InitCommand=function(self)saved.early=self end},
++            Def.ActorFrame{InitCommand=function(self)saved.driver=self end,
++                OnCommand=function(self)self:SetUpdateFunction(function(self)
++                    if not saved.armed or saved.started then return end
++                    saved.started=true;saved.early:linear(0.25):x(8);saved.late:x(9);log('direct late',saved.late:GetX());saved.late:linear(0.25):x(16);self:linear(0.25):x(32)
++                    log('driver',self:GetX(),self:GetDestX(),saved.late:GetX(),saved.late:GetDestX());collectgarbage()
++                end)end},
++            Def.ActorFrame{InitCommand=function(self)saved.late=self end,
++                OnCommand=function(self)self:SetUpdateFunction(function(self)
++                    if saved.armed then log('late',self:GetX(),self:GetDestX())end
++                end)end},
++        }
++    "#,
++    );
++    let context = SongLuaCompileContext::new(dir.path(), "pose getter handoff");
++    let mut pair = Pair::new(context.clone());
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["early", "driver", "late"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
++    let actors: Vec<_> = ["early", "driver", "late"]
++        .iter()
++        .map(|key| saved_pair(&mut pair, key).0)
++        .collect();
++    let sampled = vec![
++        (0, Target::X, Update::F32(1.)),
++        (1, Target::X, Update::F32(2.)),
++        (2, Target::X, Update::F32(3.)),
++    ];
++    test_support::legacy_set_song_replay_pose_getters(&pair.native, &actors, &sampled).unwrap();
++    assert!(
++        pair.rust
++            .set_song_replay_pose_getters(pair.scene, &sampled)
++            .unwrap()
++    );
++    pair.script("assert(saved.early:GetX()==1 and saved.early:GetDestX()==0);saved.late:x(7)");
++    let prior: Vec<_> = [1., 2., 3.]
++        .into_iter()
++        .map(|x| State {
++            x,
++            ..State::default()
++        })
++        .collect();
++    test_support::legacy_set_song_replay_prior_positions(&pair.native, &prior);
++    assert!(
++        pair.rust
++            .set_song_replay_prior_positions(pair.scene, &prior)
++    );
++    pair.script("saved.armed=true");
++    pair.rust.set_values(1., 0.125).unwrap();
++    deadsync_song_lua::set_compile_song_runtime_values(&pair.native, 1., 0.125).unwrap();
++    test_support::legacy_advance_song_replay_at_frame(&pair.native, &native, 1, 0.125).unwrap();
++    pair.rust
++        .advance_song_replay_at_frame(pair.scene, 1, 0.125)
++        .unwrap();
++    pair.compare();
++    let frames = compare_pose_output(&mut pair);
++    assert!(
++        frames
++            .iter()
++            .flat_map(|f| &f.scheduled)
++            .all(|u| u.progress.is_some())
++    );
++    // A compiler sample replaces raw destination fields outside XYZ/aux.
++    // Relative setters must use those fields even with a pending fallback queue.
++    let destinations = [
++        (1, Target::RotationX, Update::F32(15.)),
++        (1, Target::Diffuse, Update::Vec4([0.9, 0.8, 0.7, 0.6])),
++        (
++            1,
++            Target::Quaternion,
++            Update::Quaternion([0., 0.5, 0., 0.8660254]),
++        ),
++    ];
++    test_support::legacy_set_song_replay_pose_getters(&pair.native, &actors, &destinations)
++        .unwrap();
++    assert!(
++        pair.rust
++            .set_song_replay_pose_getters(pair.scene, &destinations)
++            .unwrap()
++    );
++    pair.script("saved.driver:addrotationx(5):diffusealpha(0.25):heading(15);assert(saved.driver:GetRotationX()==20)");
++    compare_pose_output(&mut pair);
++    assert!(
++        !pair
++            .rust
++            .set_song_replay_pose_getters(pair.scene, &[(99, Target::X, Update::F32(1.))])
++            .unwrap()
++    );
++    let mut foreign = RustSongRuntime::new(&context).unwrap();
++    assert!(
++        !foreign
++            .set_song_replay_pose_getters(pair.scene, &sampled)
++            .unwrap()
++    );
++}
++
++#[test]
++fn pose_output_preserves_pending_finish_stop_partial_errors_and_owned_values() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{InitCommand=function(self)saved.actor=self end,
++            ChangeMessageCommand=function(self,p)p.apply()end}
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "pose cancellation"));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["actor"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125], None);
++    pair.script("MESSAGEMAN:Broadcast('Change',{apply=function()saved.actor:linear(0.5):x(8):y(4):rotationz(90):diffuse(0.2,0.3,0.4,0.5):glow(1,0,0,1)end})");
++    let first = compare_pose_output(&mut pair);
++    let pending: Vec<_> = first
++        .iter()
++        .flat_map(|f| {
++            f.scheduled
++                .iter()
++                .map(|u| (f.overlay_index, u.target, u.value.clone()))
++        })
++        .collect();
++    test_support::legacy_set_song_pending_render_updates(&pair.native, &pending);
++    assert!(
++        pair.rust
++            .set_song_pending_overlay_updates(pair.scene, &pending)
++    );
++    pair.script("MESSAGEMAN:Broadcast('Change',{apply=function()saved.actor:sleep(0.125):linear(0.25):x(16):finishtweening();assert(saved.actor:GetX()==16)end})");
++    let finish = compare_pose_output(&mut pair);
++    assert!(finish[0].tween_reset);
++    assert!(finish[0].values.contains(&(Target::X, Update::F32(16.))));
++    pair.script("MESSAGEMAN:Broadcast('Change',{apply=function()assert(not pcall(function()saved.actor:linear(0.25):x(32);collectgarbage();error('partial pose')end));saved.actor:stoptweening()end})");
++    let stop = compare_pose_output(&mut pair);
++    assert!(stop[0].tween_reset);
++    assert!(stop[0].scheduled.iter().all(|u| u.target != Target::X));
++    // Stop discards the position destination; a relative write starts at the
++    // frozen current position. Keep raw state and destination getters in sync.
++    pair.script("assert(saved.actor:GetX()==16 and saved.actor:GetDestX()==16);saved.actor:addx(1);assert(saved.actor:GetDestX()==17)");
++    let relative = compare_pose_output(&mut pair);
++    assert!(relative[0].values.contains(&(Target::X, Update::F32(17.))));
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    assert!(pair.rust.drain_song_overlay_updates(pair.scene).is_none());
++    drop(pair);
++    assert!(
++        first[0]
++            .scheduled
++            .iter()
++            .any(|u| u.target == Target::Diffuse)
++    );
++}
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs (before pose output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs
+@@ -384,10 +384,19 @@
+ ) -> Result<(), Error> {
+     let poses = {
+         let mut store = store.lock().unwrap();
++        let fallback = song_pose::mode(&store, id);
+         let actor = store.actors.get_mut(&id).unwrap();
+         if actor.replay.is_some() {
+             actor.sync_rotation_getters();
+-            Some((actor.current, *actor.destination()))
++            let dest = if fallback {
++                *actor.getter_destination()
++            } else {
++                *actor.destination()
++            };
++            if fallback {
++                actor.state.rotation = [dest.rot_x_deg, dest.rot_y_deg, dest.rot_z_deg];
++            }
++            Some((actor.current, dest))
+         } else {
+             None
+         }
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs
+@@ -0,0 +1,374 @@
++//! Fallback pose publications and the compiler's sampled getter handoff.
++use super::*;
++use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
++
++pub(super) fn supported(target: Target) -> bool {
++    crate::tween_pose::TARGETS.contains(&target)
++        || song_immediate::TARGETS.contains(&target)
++        || song_properties::TARGETS.contains(&target)
++}
++pub(super) fn mode(store: &Store, id: TableId) -> bool {
++    song_immediate::context(store, id).is_some()
++        && store.replay_clock.as_ref().is_some_and(|c| c.fallback(id))
++}
++pub(super) fn prior_position(store: &Store, id: TableId) -> Option<[f32; 3]> {
++    if !store.replay_clock.as_ref()?.later(id) {
++        return None;
++    }
++    let (owner, index) = song_immediate::context(store, id)?;
++    store
++        .scenes
++        .get(&owner)?
++        .song_session
++        .as_ref()?
++        .messages
++        .as_ref()?
++        .immediate
++        .prior_positions
++        .get(&index)
++        .copied()
++}
++pub(super) fn record(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    delta: &crate::SongLuaOverlayStateDelta,
++) -> bool {
++    if !mode(&store.lock().unwrap(), id) {
++        return false;
++    }
++    let mut state = crate::SongLuaOverlayState::default();
++    crate::apply_overlay_delta(&mut state, delta);
++    for target in crate::tween_pose::TARGETS {
++        if !delta.has_update_target(target) {
++            continue;
++        }
++        let value = crate::perframe::overlay_state_update_value(&state, target);
++        let scheduled = song_properties::record_inner(call, store, id, target, value.clone());
++        if scheduled == Some(false)
++            && let Update::F32(value) = value
++        {
++            let axis = match target {
++                Target::X => Some(0),
++                Target::Y => Some(1),
++                Target::Z => Some(2),
++                Target::Aux => Some(3),
++                _ => None,
++            };
++            if let Some(axis) = axis {
++                let mut guard = store.lock().unwrap();
++                let actor = guard.actors.get_mut(&id).unwrap();
++                actor.current.set(target, &Update::F32(value));
++                let current = actor.current;
++                actor.preparation_getters.get_or_insert([
++                    current.x,
++                    current.y,
++                    current.z,
++                    current.aux,
++                ])[axis] = value;
++                if axis < 3 {
++                    let (owner, index) = song_immediate::context(&guard, id).unwrap();
++                    if let Some(position) = guard
++                        .scenes
++                        .get_mut(&owner)
++                        .and_then(|scene| scene.song_session.as_mut())
++                        .and_then(|session| session.messages.as_mut())
++                        .and_then(|capture| capture.immediate.prior_positions.get_mut(&index))
++                    {
++                        position[axis] = value;
++                    }
++                }
++            }
++        }
++    }
++    true
++}
++
++pub(super) fn advance_position(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++) -> Result<(), Error> {
++    let position = {
++        let mut guard = store.lock().unwrap();
++        if !mode(&guard, id) {
++            return Ok(());
++        }
++        let (owner, index) = song_immediate::context(&guard, id).unwrap();
++        let actor = &guard.actors[&id];
++        let current = actor.current;
++        let mut position =
++            actor
++                .preparation_getters
++                .unwrap_or([current.x, current.y, current.z, current.aux]);
++        let Some(frame) = guard.scenes[&owner]
++            .song_session
++            .as_ref()
++            .unwrap()
++            .messages
++            .as_ref()
++            .unwrap()
++            .immediate
++            .frames
++            .get(&index)
++        else {
++            return Ok(());
++        };
++        let mut destinations = [None; 3];
++        for update in &frame.scheduled {
++            let axis = match update.target {
++                Target::X => 0,
++                Target::Y => 1,
++                Target::Z => 2,
++                _ => continue,
++            };
++            let Update::F32(to) = update.value else {
++                continue;
++            };
++            let from = destinations[axis]
++                .or(match update.initial_value {
++                    Some(Update::F32(value)) => Some(value),
++                    _ => None,
++                })
++                .unwrap_or(position[axis]);
++            destinations[axis] = Some(to);
++            if update.frame_advance + 1.0e-7 < update.delay_seconds {
++                continue;
++            }
++            let factor = if update.duration_seconds <= f32::EPSILON {
++                1.
++            } else {
++                ((update.frame_advance - update.delay_seconds) / update.duration_seconds)
++                    .clamp(0., 1.)
++            };
++            let factor =
++                crate::overlay_command_ease_factor(update.easing.as_deref(), factor, update.opt1);
++            position[axis] = (to - from).mul_add(factor, from);
++        }
++        let actor = guard.actors.get_mut(&id).unwrap();
++        actor.preparation_getters = Some(position);
++        [actor.current.x, actor.current.y, actor.current.z] =
++            [position[0], position[1], position[2]];
++        position
++    };
++    for (key, value) in [
++        "__songlua_current_x",
++        "__songlua_current_y",
++        "__songlua_current_z",
++    ]
++    .into_iter()
++    .zip(position)
++    {
++        song_replay::raw_set(call, id, key, Value::Number(f64::from(value)))?;
++    }
++    Ok(())
++}
++
++fn scalar_key(target: Target) -> Option<&'static str> {
++    Some(match target {
++        Target::Aux => "aux",
++        Target::X => "x",
++        Target::Y => "y",
++        Target::Z => "z",
++        Target::Zoom => "zoom",
++        Target::ZoomX => "zoom_x",
++        Target::ZoomY => "zoom_y",
++        Target::ZoomZ => "zoom_z",
++        Target::RotationX => "rot_x_deg",
++        Target::RotationY => "rot_y_deg",
++        Target::RotationZ => "rot_z_deg",
++        Target::SkewX => "skew_x",
++        Target::SkewY => "skew_y",
++        Target::CropLeft => "cropleft",
++        Target::CropRight => "cropright",
++        Target::CropTop => "croptop",
++        Target::CropBottom => "cropbottom",
++        Target::FadeLeft => "fadeleft",
++        Target::FadeRight => "faderight",
++        Target::FadeTop => "fadetop",
++        Target::FadeBottom => "fadebottom",
++        _ => return None,
++    })
++}
++
++pub(super) fn set_getter(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    target: Target,
++    value: &Update,
++) -> Result<(), Error> {
++    if matches!(
++        target,
++        Target::Zoom
++            | Target::ZoomX
++            | Target::ZoomY
++            | Target::ZoomZ
++            | Target::RotationX
++            | Target::RotationY
++            | Target::RotationZ
++            | Target::SkewX
++            | Target::SkewY
++    ) {
++        let key = call.try_intern(b"__songlua_player_index")?;
++        let player = call.raw_table_get(id, key)?;
++        let key = call.try_intern(b"__songlua_player_child_name")?;
++        let child = call.raw_table_get(id, key)?;
++        if player != Value::Nil && child == Value::Nil {
++            return Ok(());
++        }
++    }
++    let scalar = scalar_key(target);
++    if !matches!(value,Update::F32(_) if scalar.is_some())
++        && !matches!(
++            (target, value),
++            (Target::Diffuse, Update::Vec4(_)) | (_, Update::Quaternion(_))
++        )
++    {
++        return Ok(());
++    }
++    {
++        let mut guard = store.lock().unwrap();
++        let fallback = mode(&guard, id);
++        let actor = guard.actors.get_mut(&id).unwrap();
++        let dest = *actor.getter_destination();
++        let replay = actor.replay.get_or_insert_with(song_replay::State::default);
++        let getters = replay.getters.get_or_insert(dest);
++        if !matches!(target, Target::X | Target::Y | Target::Z | Target::Aux) {
++            getters.set(target, value);
++        }
++        if fallback {
++            actor.current.set(target, value);
++            // Non-position samples replace the native raw destination. Relative
++            // setters must read that sample even while a captured queue exists.
++            if !matches!(target, Target::X | Target::Y | Target::Z | Target::Aux) {
++                actor.destination_mut().set(target, value);
++            }
++        }
++        if let Update::F32(v) = value {
++            let axis = match target {
++                Target::X => Some(0),
++                Target::Y => Some(1),
++                Target::Z => Some(2),
++                Target::Aux => Some(3),
++                _ => None,
++            };
++            if let Some(axis) = axis {
++                let cur = actor.current;
++                actor
++                    .preparation_getters
++                    .get_or_insert([cur.x, cur.y, cur.z, cur.aux])[axis] = *v;
++            }
++            match target {
++                Target::RotationX => actor.state.rotation[0] = *v,
++                Target::RotationY => actor.state.rotation[1] = *v,
++                Target::RotationZ => actor.state.rotation[2] = *v,
++                _ => {}
++            }
++        }
++    }
++    match value {
++        Update::F32(value) => {
++            let key = match target {
++                Target::X => "__songlua_current_x".to_owned(),
++                Target::Y => "__songlua_current_y".to_owned(),
++                Target::Z => "__songlua_current_z".to_owned(),
++                Target::Aux => "__songlua_aux".to_owned(),
++                _ => format!("__songlua_state_{}", scalar.unwrap()),
++            };
++            song_replay::raw_set(call, id, &key, Value::Number(f64::from(*value)))?;
++        }
++        Update::Vec4(value) => {
++            let value = sprites::vector_value(call, value)?;
++            song_replay::raw_set(call, id, "__songlua_state_diffuse", value)?;
++            song_replay::raw_set(call, id, "__songlua_diffuse", value)?;
++        }
++        Update::Quaternion(value) => {
++            let value = sprites::vector_value(call, value)?;
++            song_replay::raw_set(call, id, "__songlua_state_quaternion", value)?;
++        }
++        _ => {}
++    }
++    Ok(())
++}
++
++fn apply_getters(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let (store, values) = call
++        .function_data::<(Shared, Vec<(TableId, Target, Update)>)>()
++        .unwrap()
++        .clone();
++    for (id, target, value) in values {
++        set_getter(call, &store, id, target, &value)?;
++    }
++    Ok(())
++}
++
++impl Actors {
++    pub(in crate::rust_engine) fn set_song_replay_prior_positions(
++        &self,
++        screen: ActorScene,
++        states: &[crate::SongLuaOverlayState],
++    ) -> bool {
++        let mut guard = self.store.lock().unwrap();
++        if guard.replay_frame.map(|f| f.0) != Some(screen.id) {
++            return false;
++        }
++        let Some(capture) = guard
++            .scenes
++            .get_mut(&screen.id)
++            .and_then(|s| s.song_session.as_mut())
++            .and_then(|s| s.messages.as_mut())
++        else {
++            return false;
++        };
++        let count = capture.indices.values().max().map_or(0, |i| i + 1);
++        for (index, state) in states.iter().take(count).enumerate() {
++            capture
++                .immediate
++                .prior_positions
++                .insert(index, [state.x, state.y, state.z]);
++        }
++        true
++    }
++    pub(in crate::rust_engine) fn set_song_replay_pose_getters(
++        &self,
++        vm: &mut Vm,
++        screen: ActorScene,
++        values: &[(usize, Target, Update)],
++    ) -> Result<bool, Error> {
++        let Some(values) = (|| {
++            let guard = self.store.lock().unwrap();
++            if guard.replay_frame?.0 != screen.id {
++                return None;
++            }
++            let capture = guard
++                .scenes
++                .get(&screen.id)?
++                .song_session
++                .as_ref()?
++                .messages
++                .as_ref()?;
++            values
++                .iter()
++                .map(|(index, target, value)| {
++                    if !crate::tween_pose::TARGETS.contains(target) {
++                        return None;
++                    }
++                    let id = capture
++                        .indices
++                        .iter()
++                        .find_map(|(id, i)| (*i == *index).then_some(*id))?;
++                    Some((id, *target, value.clone()))
++                })
++                .collect::<Option<Vec<_>>>()
++        })() else {
++            return Ok(false);
++        };
++        let mut captures = vec![Value::Table(self.registry), Value::Table(self.helpers)];
++        captures.extend(values.iter().map(|(id, _, _)| Value::Table(*id)));
++        let function =
++            vm.new_host_function_with_data(apply_getters, &captures, (self.store.clone(), values))?;
++        vm.call(function, &[])?;
++        Ok(true)
++    }
++}

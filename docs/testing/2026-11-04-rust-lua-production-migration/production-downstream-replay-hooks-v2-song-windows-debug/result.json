@@ -1,0 +1,51 @@
+{
+  "stage": "production-downstream-replay-hooks-v2",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "legacy-oracle",
+    "--test",
+    "rust_live_scene",
+    "--test",
+    "rust_live_frames",
+    "--test",
+    "rust_live_layers",
+    "--test",
+    "rust_live_gameplay",
+    "--test",
+    "rust_gameplay_reload",
+    "--test",
+    "rust_live_compiler",
+    "--no-fail-fast",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 572.0709687001072,
+  "log_sha256": "def1fc66fe68627b0d7d964d99d14a9e734721b490fe75c42ee33cdda07e317d",
+  "tests_passed": 86,
+  "tests_failed": 2,
+  "test_results": [
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.87s",
+    "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 89.20s",
+    "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.60s",
+    "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.22s",
+    "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.49s",
+    "test result: FAILED. 20 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.48s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

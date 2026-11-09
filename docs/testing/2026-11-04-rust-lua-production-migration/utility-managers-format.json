@@ -1,0 +1,22 @@
+[
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/utility.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/tests/rust_utility_managers.rs",
+    "exit_code": 0,
+    "output": ""
+  }
+]

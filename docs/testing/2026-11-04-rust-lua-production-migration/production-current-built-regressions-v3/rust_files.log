@@ -1,0 +1,14 @@
+
+running 9 tests
+test combo_font_helper_resolves_current_lua_callbacks_during_collection_and_reentry ... ok
+test combo_fonts_scan_current_theme_and_preserve_wendy_order_without_fallbacks ... ok
+test file_queries_preserve_paths_sorting_filters_argument_rules_and_errors ... ok
+test mutation_stubs_keep_result_arity_counts_and_files_unchanged ... ok
+test rage_file_argument_conversion_return_arity_and_error_recovery_match ... ok
+test rage_file_read_write_seek_eof_and_destroy_match_the_existing_contract ... ok
+test rage_file_saved_methods_gc_reentry_and_session_write_isolation_match ... ok
+test saved_file_callbacks_survive_collection_and_effects_allow_global_reentry ... ok
+test sprite_hint_stripping_preserves_native_string_conversion_and_suffix_rules ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+

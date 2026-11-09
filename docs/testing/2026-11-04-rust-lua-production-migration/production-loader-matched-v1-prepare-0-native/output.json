@@ -1,0 +1,34 @@
+{
+  "simfile": "\\\\?\\C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+  "iterations": 3,
+  "renderer": "null",
+  "chart_index": 0,
+  "samples": [
+    {
+      "wall_seconds": 1.3744932,
+      "thread_cpu_cycles": 2979443182,
+      "allocations": 1286908,
+      "reallocations": 49203,
+      "allocated_bytes": 187263915,
+      "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"
+    },
+    {
+      "wall_seconds": 1.3250854,
+      "thread_cpu_cycles": 2899586428,
+      "allocations": 1285961,
+      "reallocations": 49042,
+      "allocated_bytes": 176258416,
+      "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"
+    },
+    {
+      "wall_seconds": 1.3551915,
+      "thread_cpu_cycles": 2963588879,
+      "allocations": 1285961,
+      "reallocations": 49042,
+      "allocated_bytes": 176258416,
+      "allocation_scope": "current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"
+    }
+  ],
+  "compiled_sha256": "4cb85853327b6f0d1d64729200de2c54edf4e3cddbba903784303c41e6aa808a",
+  "measurement": "production prepare_song_lua, including context/timing; parsing initial song/notes and hashing compiled output excluded"
+}

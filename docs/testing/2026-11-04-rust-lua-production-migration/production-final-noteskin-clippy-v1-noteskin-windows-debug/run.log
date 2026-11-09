@@ -1,0 +1,362 @@
+    Blocking waiting for file lock on build directory
+    Checking num-traits v0.2.19
+    Checking memchr v2.8.3
+    Checking log v0.4.35
+    Checking num-integer v0.1.47
+    Checking v_frame v0.3.9
+    Checking bytemuck v1.25.2
+    Checking num-bigint v0.4.8
+    Checking nom v8.0.0
+    Checking num-rational v0.4.2
+    Checking no_std_io2 v0.9.4
+    Checking av-scenechange v0.14.1
+    Checking bitstream-io v4.10.0
+    Checking av1-grain v0.2.5
+    Checking half v2.7.1
+    Checking libm v0.2.16
+    Checking num-complex v0.4.6
+    Checking rav1e v0.8.1
+    Checking pulp v0.22.3
+    Checking smallvec v1.16.4
+    Checking tiff v0.11.3
+    Checking exr v1.74.2
+    Checking ravif v0.13.0
+    Checking moxcms v0.8.1
+    Checking qoi v0.4.1
+    Checking serde_json v1.0.154
+    Checking hashbrown v0.17.1
+    Checking image v0.25.10
+    Checking deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-noteskin\src\draw.rs:389:1
+    |
+389 | / fn model_draw_at_impl(
+390 | |     base_draw: ModelDrawState,
+391 | |     timeline: &[ModelTweenSegment],
+392 | |     effect: ModelEffectState,
+...   |
+397 | |     optimized: bool,
+398 | | ) -> ModelDrawState {
+    | |___________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-noteskin\src\draw.rs:634:1
+    |
+634 | / pub fn model_glow_at(
+635 | |     base_draw: ModelDrawState,
+636 | |     timeline: &[ModelTweenSegment],
+637 | |     effect: ModelEffectState,
+...   |
+642 | |     diffuse_alpha: f32,
+643 | | ) -> Option<[f32; 4]> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-noteskin\src\explosion.rs:1179:1
+     |
+1179 | / pub fn itg_hold_explosion_slot<L, T: Clone>(
+1180 | |     wrapper_layers: &[L],
+1181 | |     source_layers: &[L],
+1182 | |     active_key: &str,
+...    |
+1191 | |     mut wrapped_slots: impl FnMut() -> Vec<T>,
+1192 | | ) -> Option<T> {
+     | |______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-noteskin\src\runtime.rs:404:24
+    |
+404 |     pub load_animated: fn(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+    = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-noteskin\src\runtime.rs:807:1
+    |
+807 | / pub fn itg_hold_explosion_from_resolved_layers<T: Clone>(
+808 | |     wrapper_layers: &[ItgResolvedSprite<T>],
+809 | |     source_layers: &[ItgResolvedSprite<T>],
+810 | |     active_key: &str,
+...   |
+816 | |     mut apply_commands: impl FnMut(T, &HashMap<String, String>, &str) -> T,
+817 | | ) -> Option<T> {
+    | |______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1401:1
+     |
+1401 | / pub fn itg_load_sprite_decl_slot<T>(
+1402 | |     data: &itg::NoteskinData,
+1403 | |     sprite: &actor::ItgLuaSpriteDecl,
+1404 | |     arg0_path: Option<&Path>,
+...    |
+1416 | |     mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
+1417 | | ) -> Option<T> {
+     | |______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1446:1
+     |
+1446 | / pub fn itg_resolve_sprite_decl<T>(
+1447 | |     data: &itg::NoteskinData,
+1448 | |     element: &str,
+1449 | |     sprite: actor::ItgLuaSpriteDecl,
+...    |
+1458 | |     mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+1459 | | ) -> Option<ItgResolvedSprite<T>> {
+     | |_________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1491:1
+     |
+1491 | / pub fn itg_resolve_model_decl<T>(
+1492 | |     data: &itg::NoteskinData,
+1493 | |     button: &str,
+1494 | |     element: &str,
+...    |
+1501 | |     mut apply_rotation: impl FnMut(&mut T, i32),
+1502 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1635:1
+     |
+1635 | / pub fn itg_resolve_ref_decl<T>(
+1636 | |     data: &itg::NoteskinData,
+1637 | |     button: &str,
+1638 | |     steps_type: &str,
+...    |
+1643 | |     apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+1644 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (25/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1670:1
+     |
+1670 | / pub fn itg_resolve_actor_file_compiled<T>(
+1671 | |     data: &itg::NoteskinData,
+1672 | |     compiled_actors: &compiled::CompiledActors,
+1673 | |     button: &str,
+...    |
+1706 | |     mut resolve_element: impl FnMut(&str, &str, &mut HashSet<String>) -> Vec<ItgResolvedSprite<T>>,
+1707 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1916:1
+     |
+1916 | / pub fn itg_resolve_actor_sprites_inner_compiled<T>(
+1917 | |     data: &itg::NoteskinData,
+1918 | |     compiled: &compiled::CompiledLoader,
+1919 | |     button: &str,
+...    |
+1933 | |     mut apply_loader_command: impl FnMut(&mut [ItgResolvedSprite<T>], Option<&str>),
+1934 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1973:1
+     |
+1973 | / pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
+1974 | |     data: &itg::NoteskinData,
+1975 | |     compiled: &compiled::CompiledLoader,
+1976 | |     compiled_actors: &compiled::CompiledActors,
+...    |
+1981 | |     ops: ItgCompiledSpriteOps<T>,
+1982 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:1998:1
+     |
+1998 | / fn itg_resolve_actor_sprites_with_ops_inner<T>(
+1999 | |     data: &itg::NoteskinData,
+2000 | |     compiled: &compiled::CompiledLoader,
+2001 | |     compiled_actors: &compiled::CompiledActors,
+...    |
+2008 | |     ops: &ItgCompiledSpriteOps<T>,
+2009 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (15/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2041:1
+     |
+2041 | / fn itg_resolve_actor_file_with_ops_inner<T>(
+2042 | |     data: &itg::NoteskinData,
+2043 | |     compiled: &compiled::CompiledLoader,
+2044 | |     compiled_actors: &compiled::CompiledActors,
+...    |
+2056 | |     ops: &ItgCompiledSpriteOps<T>,
+2057 | | ) -> Vec<ItgResolvedSprite<T>> {
+     | |______________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (13/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2118:1
+     |
+2118 | / pub fn itg_resolve_hold_explosion_slot_compiled<T: Clone>(
+2119 | |     data: &itg::NoteskinData,
+2120 | |     compiled_actors: &compiled::CompiledActors,
+2121 | |     wrapper_sprites: &[ItgResolvedSprite<T>],
+...    |
+2131 | |     mut apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+2132 | | ) -> Option<T> {
+     | |______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this method chain can be written more clearly with `if .. else ..`
+    --> crates\deadsync-noteskin\src\runtime.rs:2202:29
+     |
+2202 |               let idle_glow = visual_layers
+     |  _____________________________^
+2203 | |                 .iter()
+2204 | |                 .any(|sprite| {
+2205 | |                     sprite
+...    |
+2210 | |                 .then_some(ReceptorIdleGlow::BeatFade)
+2211 | |                 .unwrap_or_default();
+     | |____________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#obfuscated_if_else
+     = note: `#[warn(clippy::obfuscated_if_else)]` on by default
+help: try
+     |
+2202 ~             let idle_glow = if visual_layers
+2203 +                 .iter()
+2204 +                 .any(|sprite| {
+2205 +                     sprite
+2206 +                         .commands
+2207 +                         .get(actor::ITG_ACTOR_UPDATE_COMMAND)
+2208 +                         .is_some_and(|update| update == actor::ITG_BEAT_FADE_GLOW_UPDATE)
+2209 ~                 }) { ReceptorIdleGlow::BeatFade } else { Default::default() };
+     |
+
+warning: this function has too many arguments (11/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2380:1
+     |
+2380 | / pub fn itg_runtime_columns_compiled<T: Clone>(
+2381 | |     data: &itg::NoteskinData,
+2382 | |     style: crate::Style,
+2383 | |     compiled: &compiled::CompiledLoader,
+...    |
+2391 | |     tap_layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+2392 | | ) -> Result<ItgRuntimeColumns<T>, String> {
+     | |_________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (13/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2410:1
+     |
+2410 | / fn itg_runtime_columns_selected<T: Clone>(
+2411 | |     data: &itg::NoteskinData,
+2412 | |     style: crate::Style,
+2413 | |     compiled: &compiled::CompiledLoader,
+...    |
+2423 | |     load: RuntimeLoad,
+2424 | | ) -> Result<ItgRuntimeColumns<T>, String> {
+     | |_________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (13/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2693:1
+     |
+2693 | / pub fn itg_noteskin_runtime_compiled<T: Clone>(
+2694 | |     data: &itg::NoteskinData,
+2695 | |     style: crate::Style,
+2696 | |     compiled: &compiled::CompiledLoader,
+...    |
+2716 | |     apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+2717 | | ) -> NoteskinRuntime<T> {
+     | |_______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (14/7)
+    --> crates\deadsync-noteskin\src\runtime.rs:2736:1
+     |
+2736 | / fn itg_noteskin_runtime_selected<T: Clone>(
+2737 | |     data: &itg::NoteskinData,
+2738 | |     style: crate::Style,
+2739 | |     compiled: &compiled::CompiledLoader,
+...    |
+2760 | |     load: RuntimeLoad,
+2761 | | ) -> NoteskinRuntime<T> {
+     | |_______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+   --> crates\deadsync-noteskin\src\sprite.rs:320:1
+    |
+320 | / pub fn animation_sprite_slot_plan(
+321 | |     texture_key: String,
+322 | |     tex_dims: (u32, u32),
+323 | |     sheet_grid: (usize, usize),
+...   |
+330 | |     note_color_translate: bool,
+331 | | ) -> Option<SpriteSlotPlan> {
+    | |___________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+   --> crates\deadsync-noteskin\src\sprite.rs:409:1
+    |
+409 | / pub fn itg_animation_sprite_slot_plan_from_path(
+410 | |     path: &Path,
+411 | |     frame0: usize,
+412 | |     frame_count: usize,
+...   |
+419 | |     mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+420 | | ) -> Option<SpriteSlotPlan> {
+    | |___________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-noteskin\src\sprite.rs:546:1
+    |
+546 | / pub fn all_state_delays_source_plan(
+547 | |     texture_key: String,
+548 | |     tex_dims: (u32, u32),
+549 | |     frame_size: [i32; 2],
+...   |
+554 | |     beat_based: bool,
+555 | | ) -> SpriteSourcePlan {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: `deadsync-noteskin` (lib) generated 23 warnings (run `cargo clippy --fix --lib -p deadsync-noteskin -- --no-deps` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 3m 43s

@@ -1,0 +1,67 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 6m 42s
+     Running tests/rust_song_update_output.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_update_output-f407fc1bc3d2d7b8)
+
+running 8 tests
+test compact_option_snapshots_preserve_raw_state_and_numeric_conversion_rules ... 
+thread 'compact_option_snapshots_preserve_raw_state_and_numeric_conversion_rules' (2892975) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:251:13:
+assertion `left == right` failed
+  left: 0
+ right: 2147483648
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test option_capture_construction_validates_both_globals_and_keeps_lookup_order ... ok
+test option_capture_retains_original_tables_across_gc_and_replaced_globals ... 
+thread 'option_capture_retains_original_tables_across_gc_and_replaced_globals' (2892977) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:291:43:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "native stack must precede result writes", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(12884904324))), target_thread: None }
+FAILED
+test option_snapshots_recover_from_typed_errors_without_losing_roots_or_state ... 
+thread 'option_snapshots_recover_from_typed_errors_without_losing_roots_or_state' (2892978) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:337:48:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "native stack must precede result writes", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(17179869933))), target_thread: None }
+FAILED
+test static_output_keeps_column_transforms_and_owned_spline_coefficients ... 
+thread 'static_output_keeps_column_transforms_and_owned_spline_coefficients' (2892979) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:91:9:
+assertion `left == right` failed: Rust: Some("native stack must precede result writes")
+  left: true
+ right: false
+FAILED
+test static_output_preserves_phase_order_and_releases_option_roots_on_failure ... 
+thread 'static_output_preserves_phase_order_and_releases_option_roots_on_failure' (2892980) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:71:9:
+assertion `left == right` failed
+  left: [116, 97, 98, 108, 101, 49, 124, 116, 97, 98, 108, 101, 50, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 120, 109, 111, 100, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 99, 109, 111, 100, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 109, 109, 111, 100, 124, 112, 50, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 120, 109, 111, 100, 124, 112, 50, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 99, 109, 111, 100, 124, 112, 50, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 109, 109, 111, 100]
+ right: [116, 97, 98, 108, 101, 49, 124, 116, 97, 98, 108, 101, 50, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 120, 109, 111, 100, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 99, 109, 111, 100, 124, 112, 49, 58, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 112, 101, 101, 100, 109, 111, 100, 95, 109, 109, 111, 100]
+FAILED
+test static_output_uses_song_clock_origin_rate_and_exact_tail_limits ... 
+thread 'static_output_uses_song_clock_origin_rate_and_exact_tail_limits' (2892981) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:50:41:
+called `Result::unwrap()` on an `Err` value: RuntimeError("...eadsync-song-lua/tests/rust_song_update_output.rs:50:1: attempt to index a number value\nstack traceback:\n\t[C]: in ?\n\t...eadsync-song-lua/tests/rust_song_update_output.rs:50:1: in main chunk")
+FAILED
+test static_update_output_keeps_public_option_targets_and_approach_speeds ... 
+thread 'static_update_output_keeps_public_option_targets_and_approach_speeds' (2892982) panicked at crates/deadsync-song-lua/tests/rust_song_update_output.rs:50:41:
+called `Result::unwrap()` on an `Err` value: RuntimeError("...eadsync-song-lua/tests/rust_song_update_output.rs:50:2: attempt to index a number value\nstack traceback:\n\t[C]: in ?\n\t...eadsync-song-lua/tests/rust_song_update_output.rs:50:2: in main chunk")
+FAILED
+
+failures:
+
+failures:
+    compact_option_snapshots_preserve_raw_state_and_numeric_conversion_rules
+    option_capture_retains_original_tables_across_gc_and_replaced_globals
+    option_snapshots_recover_from_typed_errors_without_losing_roots_or_state
+    static_output_keeps_column_transforms_and_owned_spline_coefficients
+    static_output_preserves_phase_order_and_releases_option_roots_on_failure
+    static_output_uses_song_clock_origin_rate_and_exact_tail_limits
+    static_update_output_keeps_public_option_targets_and_approach_speeds
+
+test result: FAILED. 1 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.21s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_update_output`

@@ -92,15 +92,15 @@ pub(super) fn format_date(
     time: i64,
     utc: bool,
     format: &[u8],
-    output: &mut Vec<u8>,
+    output: &mut impl crate::memory::bytes::ByteOutput,
 ) -> Result<bool, super::Error> {
     #[cfg(windows)]
     {
-        Ok(windows::format_date(time, utc, format, output))
+        windows::format_date(time, utc, format, output)
     }
     #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
     {
-        Ok(posix_calendar::format_date(time, utc, format, output))
+        posix_calendar::format_date(time, utc, format, output)
     }
     #[cfg(not(any(
         windows,
@@ -121,12 +121,7 @@ pub(super) fn format_date(
 #[allow(unsafe_code)]
 mod windows;
 #[cfg(windows)]
-pub(super) use windows::{clock, rename, spawn};
-
-#[cfg(not(windows))]
-pub(super) fn rename(from: &std::path::Path, to: &std::path::Path) -> Result<(), i32> {
-    std::fs::rename(from, to).map_err(super::io::errno)
-}
+pub(super) use windows::{clock, spawn};
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
 #[allow(unsafe_code)]

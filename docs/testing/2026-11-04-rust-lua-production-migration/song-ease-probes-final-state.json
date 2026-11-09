@@ -1,0 +1,25 @@
+{
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "final_application_validation":  false,
+    "independent_verifier":  "PowerShell Get-FileHash and Git membership enumeration",
+    "source_count":  1238,
+    "full_watched_snapshot_matches":  true,
+    "watched_dependency_sources_match_review":  true,
+    "outside_dependency_graph_changes_after_review":  [
+
+                                                      ],
+    "earlier_176_activation_tests_unchanged":  true,
+    "activation_cases":  193,
+    "adapter_tests_passed":  426,
+    "adapter_targets":  24,
+    "objective_unchanged":  true,
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "source_diff_sha256":  "01fa02e44dc074012cc3153094455db5584b9e18fde529218ec82c35369160e3",
+    "document_and_runner_hashes":  {
+                                       "docs/lua-architecture.md":  "126253a405eb2b7faa44c1cfa2c93e5561b88bbfeed93209d423e3fe3ea5fc57",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "018e8559027963893bac6b9e4f69d0c40e5a60ed8a1f4de17720d559611da04f",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/checks.py":  "05439883fa88dd9c8f4c4440eed91f484d0aea1648559de28348d92720deb59d",
+                                       "docs/testing/2026-11-04-rust-lua-production-migration/review_song_ease_probes.py":  "ddd589d1f0deab6212b1aac6453235dd52f48e3905334c60a3b68c88cbeb0c58"
+                                   }
+}

@@ -1,0 +1,33 @@
+{
+  "stage": "production-existing-sharkmode-v1",
+  "suite": "downstream",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-shell",
+    "--lib",
+    "gameplay_regression_tests::tests::sharkmode_compiled_draws_keep_notes_in_direct_and_texture_passes",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 922.4646030000877,
+  "log_sha256": "105b1c60967b5ef6fc7a1fe9367e2868c4a29d175350ed8b41d95b312b19b75a",
+  "tests_passed": 1,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 439 filtered out; finished in 52.69s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

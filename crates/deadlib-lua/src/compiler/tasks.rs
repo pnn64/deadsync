@@ -90,17 +90,17 @@ impl<'a> Compiler<'a> {
             match task {
                 Task::Block(block) => {
                     if let Some((&id, rest)) = block.split_first() {
-                        self.tasks.push(Task::Block(rest));
-                        self.tasks.push(Task::Statement(id));
+                        self.tasks.try_push(Task::Block(rest))?;
+                        self.tasks.try_push(Task::Statement(id))?;
                     }
                 }
                 Task::Statement(id) => self.statement(id)?,
                 Task::Scope(body) => {
-                    self.tasks.push(Task::ScopeEnd(
+                    self.tasks.try_push(Task::ScopeEnd(
                         self.function.locals.len(),
                         self.function.next,
-                    ));
-                    self.tasks.push(Task::Block(body));
+                    ))?;
+                    self.tasks.try_push(Task::Block(body))?;
                 }
                 Task::ScopeEnd(locals, next) => {
                     let captured = self.function.locals[locals..].iter().any(|l| l.captured);
@@ -115,7 +115,7 @@ impl<'a> Compiler<'a> {
                 Task::Values(values, wanted) => {
                     let start = self.alloc(1)?;
                     self.tasks
-                        .push(Task::ValuesNext(values, wanted as u16, start, 0));
+                        .try_push(Task::ValuesNext(values, wanted as u16, start, 0))?;
                 }
                 Task::ValuesNext(values, wanted, start, index) => {
                     if let Some(&value) = values.get(usize::from(index)) {
@@ -129,9 +129,9 @@ impl<'a> Compiler<'a> {
                             1
                         };
                         self.tasks
-                            .push(Task::ValuesNext(values, wanted, start, index + 1));
+                            .try_push(Task::ValuesNext(values, wanted, start, index + 1))?;
                         self.tasks
-                            .push(Task::Results(value, start + index as u8, returns));
+                            .try_push(Task::Results(value, start + index as u8, returns))?;
                     } else {
                         let end = u16::from(start) + wanted.max(values.len() as u16).max(1);
                         if end > self.function.next {
@@ -170,8 +170,9 @@ impl<'a> Compiler<'a> {
                     self.assign_key(id, index, locations, table)?;
                 }
                 Task::AssignIndex(id, index, mut locations, table) => {
-                    locations.push(Target::Index(table, TargetKey::Register(self.result)));
-                    self.tasks.push(Task::AssignNext(id, index + 1, locations));
+                    locations.try_push(Target::Index(table, TargetKey::Register(self.result)))?;
+                    self.tasks
+                        .try_push(Task::AssignNext(id, index + 1, locations))?;
                 }
                 Task::AssignEnd(id, locations) => {
                     if matches!(self.ast.stmts[id].0, Stmt::FunctionDefinition(..)) {
@@ -233,17 +234,17 @@ impl<'a> Compiler<'a> {
                             self.alloc(end - self.function.next)?;
                         }
                         let all = index + 1 == values.len() && self.multiple(value);
-                        self.tasks.push(Task::ReturnNext(
+                        self.tasks.try_push(Task::ReturnNext(
                             id,
                             base,
                             index + 1,
                             if all { OPEN } else { count },
-                        ));
-                        self.tasks.push(Task::Results(
+                        ))?;
+                        self.tasks.try_push(Task::Results(
                             value,
                             (usize::from(base) + index) as u8,
                             if all { OPEN } else { 1 },
-                        ));
+                        ))?;
                     } else {
                         self.line = *end_line;
                         self.emit(Op::Return, base, 0, count)?;
@@ -262,9 +263,9 @@ impl<'a> Compiler<'a> {
                     };
                     let done = self.predicate_finish(*cond, reg)?;
                     self.reset(saved);
-                    self.function.loops.push((saved, Vec::new()));
-                    self.tasks.push(Task::WhileEnd(start, done));
-                    self.tasks.push(Task::Scope(body));
+                    self.function.loops.try_push((saved, Vec::new()))?;
+                    self.tasks.try_push(Task::WhileEnd(start, done))?;
+                    self.tasks.try_push(Task::Scope(body))?;
                 }
                 Task::WhileEnd(start, done) => {
                     self.emit(Op::Jump, 0, 0, start)?;
@@ -277,8 +278,8 @@ impl<'a> Compiler<'a> {
                     };
                     let reg = self.alloc(1)?;
                     self.tasks
-                        .push(Task::RepeatEnd(cond, saved, start, locals, reg));
-                    self.tasks.push(Task::BooleanNode(cond, reg));
+                        .try_push(Task::RepeatEnd(cond, saved, start, locals, reg))?;
+                    self.tasks.try_push(Task::BooleanNode(cond, reg))?;
                 }
                 Task::RepeatEnd(cond, saved, start, locals, reg) => {
                     let again = self.predicate_finish(cond, reg)?;
@@ -304,12 +305,13 @@ impl<'a> Compiler<'a> {
                     };
                     if let Some((cond, _)) = arms.get(index) {
                         let reg = self.alloc(1)?;
-                        self.tasks.push(Task::IfCond(id, index, saved, exits, reg));
-                        self.tasks.push(Task::BooleanNode(*cond, reg));
+                        self.tasks
+                            .try_push(Task::IfCond(id, index, saved, exits, reg))?;
+                        self.tasks.try_push(Task::BooleanNode(*cond, reg))?;
                     } else {
-                        self.tasks.push(Task::IfEnd(exits));
+                        self.tasks.try_push(Task::IfEnd(exits))?;
                         if let Some(other) = other {
-                            self.tasks.push(Task::Scope(other));
+                            self.tasks.try_push(Task::Scope(other))?;
                         }
                     }
                 }
@@ -319,18 +321,20 @@ impl<'a> Compiler<'a> {
                     };
                     let skip = self.predicate_finish(arms[index].0, reg)?;
                     self.reset(saved);
-                    self.tasks.push(Task::IfBody(id, index, saved, exits, skip));
-                    self.tasks.push(Task::Scope(&arms[index].1));
+                    self.tasks
+                        .try_push(Task::IfBody(id, index, saved, exits, skip))?;
+                    self.tasks.try_push(Task::Scope(&arms[index].1))?;
                 }
                 Task::IfBody(id, index, saved, mut exits, skip) => {
                     let Stmt::If(arms, other) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
                     if index + 1 < arms.len() || other.is_some() {
-                        exits.push(self.emit(Op::Jump, 0, 0, 0)?);
+                        exits.try_push(self.emit(Op::Jump, 0, 0, 0)?)?;
                     }
                     self.list_patch(skip, self.function.code.len());
-                    self.tasks.push(Task::IfNext(id, index + 1, saved, exits));
+                    self.tasks
+                        .try_push(Task::IfNext(id, index + 1, saved, exits))?;
                 }
                 Task::IfEnd(exits) => {
                     for pc in exits {
@@ -341,16 +345,16 @@ impl<'a> Compiler<'a> {
                     let Stmt::For { limit, .. } = self.ast.stmts[id].0 else {
                         unreachable!()
                     };
-                    self.tasks.push(Task::ForStep(id, saved, base));
-                    self.tasks.push(Task::Expr(limit, base + 1));
+                    self.tasks.try_push(Task::ForStep(id, saved, base))?;
+                    self.tasks.try_push(Task::Expr(limit, base + 1))?;
                 }
                 Task::ForStep(id, saved, base) => {
                     let Stmt::For { step, .. } = self.ast.stmts[id].0 else {
                         unreachable!()
                     };
-                    self.tasks.push(Task::ForInit(id, saved, base));
+                    self.tasks.try_push(Task::ForInit(id, saved, base))?;
                     if let Some(step) = step {
-                        self.tasks.push(Task::Expr(step, base + 2));
+                        self.tasks.try_push(Task::Expr(step, base + 2))?;
                     } else {
                         self.load(base + 2, Constant::Number(1.0))?;
                     }
@@ -370,17 +374,17 @@ impl<'a> Compiler<'a> {
                         .into_iter()
                         .enumerate()
                     {
-                        self.debug_local(name, base + i as u8);
+                        self.debug_local(name, base + i as u8)?;
                     }
                     self.line = *do_line;
                     let prep = self.emit(Op::ForPrep, base, 0, 0)?;
                     let head = self.function.code.len() as u32;
                     let locals = self.function.locals.len();
                     self.bind(name, base + 3)?;
-                    self.function.loops.push((saved, Vec::new()));
+                    self.function.loops.try_push((saved, Vec::new()))?;
                     self.tasks
-                        .push(Task::ForEnd(id, base, controls, locals, prep, head));
-                    self.tasks.push(Task::Scope(body));
+                        .try_push(Task::ForEnd(id, base, controls, locals, prep, head))?;
+                    self.tasks.try_push(Task::Scope(body))?;
                 }
                 Task::ForEnd(id, base, controls, locals, prep, head) => {
                     self.end_locals(locals);
@@ -421,7 +425,7 @@ impl<'a> Compiler<'a> {
                 Task::Operand(id, dst) => self.operand(id, dst)?,
                 Task::Paren(inner, line) => self.discharge_line(inner, line, LineUse::Copy),
                 Task::Unary(id, dst, work) => self.unary(id, dst, work)?,
-                Task::BooleanNode(id, work) => self.boolean_node(id, work),
+                Task::BooleanNode(id, work) => self.boolean_node(id, work)?,
                 Task::BooleanLeaf(id, work) => self.boolean_leaf(id, work),
                 Task::BooleanNot(id, work) => self.boolean_not(id, work)?,
                 Task::BooleanLeft(id, work) => self.boolean_left(id, work)?,
@@ -455,12 +459,12 @@ impl<'a> Compiler<'a> {
                     }
                     let right_reg =
                         self.right_register(right, left_reg, work, op == Kind::Concat)?;
-                    self.tasks.push(Task::BinaryRight(id, dst, left_reg));
-                    self.tasks.push(if op == Kind::Concat {
+                    self.tasks.try_push(Task::BinaryRight(id, dst, left_reg))?;
+                    self.tasks.try_push(if op == Kind::Concat {
                         Task::Expr(right, right_reg)
                     } else {
                         Task::Operand(right, right_reg)
-                    });
+                    })?;
                 }
                 Task::BinaryRight(id, dst, left) => self.binary_right(id, dst, u16::from(left))?,
                 Task::BinaryConstant(id, dst, work, constant) => {
@@ -472,8 +476,8 @@ impl<'a> Compiler<'a> {
                     };
                     let table = self.result;
                     let key_reg = self.right_register(key, table, work, false)?;
-                    self.tasks.push(Task::IndexKey(id, dst, table));
-                    self.tasks.push(Task::Operand(key, key_reg));
+                    self.tasks.try_push(Task::IndexKey(id, dst, table))?;
+                    self.tasks.try_push(Task::Operand(key, key_reg))?;
                 }
                 Task::IndexKey(id, dst, table) => {
                     self.line = self.ast.exprs[id].1.discharge;
@@ -487,8 +491,8 @@ impl<'a> Compiler<'a> {
                     let key = self.result;
                     let value = fields[state.index].1;
                     let value_reg = self.right_register(value, key, regs, false)?;
-                    self.tasks.push(Task::TableValue(state, regs, key));
-                    self.tasks.push(Task::Operand(value, value_reg));
+                    self.tasks.try_push(Task::TableValue(state, regs, key))?;
+                    self.tasks.try_push(Task::Operand(value, value_reg))?;
                 }
                 Task::TableValue(mut state, regs, key) => {
                     self.emit(
@@ -499,7 +503,7 @@ impl<'a> Compiler<'a> {
                     )?;
                     self.reset(u16::from(regs));
                     state.index += 1;
-                    self.tasks.push(Task::TableNext(state));
+                    self.tasks.try_push(Task::TableNext(state))?;
                 }
                 Task::TableConstant(mut state, scratch, constant) => {
                     let value = self.result;
@@ -531,7 +535,7 @@ impl<'a> Compiler<'a> {
                     self.emit(Op::SetTable, state.table, u16::from(key), u32::from(value))?;
                     self.reset(u16::from(scratch));
                     state.index += 1;
-                    self.tasks.push(Task::TableNext(state));
+                    self.tasks.try_push(Task::TableNext(state))?;
                 }
                 Task::TableList(mut state, open) => {
                     state.pending += 1;
@@ -547,7 +551,7 @@ impl<'a> Compiler<'a> {
                         self.reset(u16::from(state.table) + 1);
                     }
                     state.index += 1;
-                    self.tasks.push(Task::TableNext(state));
+                    self.tasks.try_push(Task::TableNext(state))?;
                 }
                 Task::Call(id, dst, wanted) => self.call(id, dst, wanted)?,
                 Task::CallCallee(state) => {
@@ -567,7 +571,7 @@ impl<'a> Compiler<'a> {
                         )?;
                         self.reset(u16::from(key));
                     }
-                    self.tasks.push(Task::CallArgs(state));
+                    self.tasks.try_push(Task::CallArgs(state))?;
                 }
                 Task::CallArgs(mut state) => {
                     let (_, method, args, _) = self.call_parts(state.id);
@@ -582,9 +586,9 @@ impl<'a> Compiler<'a> {
                                 + usize::from(state.index)
                         );
                         state.index += 1;
-                        self.tasks.push(Task::CallArgs(state));
+                        self.tasks.try_push(Task::CallArgs(state))?;
                         self.tasks
-                            .push(Task::Results(id, dst, if all { OPEN } else { 1 }));
+                            .try_push(Task::Results(id, dst, if all { OPEN } else { 1 }))?;
                     } else {
                         self.call_end(state)?;
                     }
@@ -592,7 +596,7 @@ impl<'a> Compiler<'a> {
                 Task::ChildEnd(line, dst) => {
                     self.line = line;
                     self.emit(Op::Return, 0, 0, 0)?;
-                    let child = self.finish();
+                    let child = self.finish()?;
                     self.function = self.parents.pop().expect("child has a parent");
                     self.emit(Op::Closure, dst, 0, child)?;
                 }

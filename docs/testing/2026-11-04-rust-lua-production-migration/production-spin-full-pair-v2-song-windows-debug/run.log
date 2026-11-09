@@ -1,0 +1,40 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 4m 10s
+     Running tests\rust_song_compiler.rs (target\rust-adapters\debug\deps\rust_song_compiler-038cb5d3f3e47fdf.exe)
+
+running 3 tests
+test existing_chronological_message_advance_matches_complete_compiler ... ok
+test existing_chronological_spin_tween_matches_complete_compiler ... 
+thread 'existing_chronological_spin_tween_matches_complete_compiler' (40568) panicked at crates\deadsync-song-lua\tests\rust_song_compiler.rs:137:5:
+layer 0: overlay_updates, first difference at 2983
+native: ple { time: 0.7, value: F32(1.7999997) }, SongLuaOverlayUpdateSample { time: 0.71666664, value: F32(1.8166662) }, SongLuaOverlayUpdateSample { time: 0.73333335, value: F32(30.5) }, SongLuaOverlayUpdateSample { time: 0.75, value: F32(31.95) }, SongLuaOverlayUpdateSample { time: 0.76666665, value: F32
+Rust: ple { time: 0.7, value: F32(1.7999997) }, SongLuaOverlayUpdateSample { time: 0.71666664, value: F32(29.159996) }, SongLuaOverlayUpdateSample { time: 0.73333335, value: F32(30.6) }, SongLuaOverlayUpdateSample { time: 0.75, value: F32(32.04) }, SongLuaOverlayUpdateSample { time: 0.76666665, value: F32
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test existing_chronological_tween_retarget_matches_complete_compiler ... ok
+
+failures:
+
+failures:
+    existing_chronological_spin_tween_matches_complete_compiler
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 8.63s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_compiler`

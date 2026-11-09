@@ -9,13 +9,15 @@ fn scene(source: &str) -> (SongLuaLiveScene, tempfile::TempDir) {
 
 fn scene_files(source: &str, files: &[(&str, &str)]) -> (SongLuaLiveScene, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
-    for (name, contents) in files { std::fs::write(directory.path().join(name), contents).unwrap(); }
+    for (name, contents) in files {
+        std::fs::write(directory.path().join(name), contents).unwrap();
+    }
     let path = directory.path().join("input.lua");
     std::fs::write(&path, source).unwrap();
     let mut context = SongLuaCompileContext::new(directory.path(), "actor input test");
     context.live = true;
     context.music_length_seconds = 1.0;
-    let mut compiled = compile_song_lua_layers_with_default_host(
+    let mut compiled = compile_song_lua_layers(
         &[&path],
         0,
         &context,

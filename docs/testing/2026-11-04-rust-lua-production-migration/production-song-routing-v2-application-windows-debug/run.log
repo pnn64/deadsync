@@ -1,0 +1,1606 @@
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:173:11
+    |
+173 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:180:11
+    |
+180 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:187:11
+    |
+187 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:192:11
+    |
+192 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:228:11
+    |
+228 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:234:11
+    |
+234 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:240:11
+    |
+240 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:286:11
+    |
+286 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:301:11
+    |
+301 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:306:11
+    |
+306 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:312:11
+    |
+312 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:318:11
+    |
+318 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:329:11
+    |
+329 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:335:11
+    |
+335 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:350:11
+    |
+350 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2189:11
+     |
+2189 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2201:11
+     |
+2201 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2223:11
+     |
+2223 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2228:11
+     |
+2228 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2246:11
+     |
+2246 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2273:37
+     |
+2273 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2296:37
+     |
+2296 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2302:37
+     |
+2302 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2314:37
+     |
+2314 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2319:37
+     |
+2319 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2331:37
+     |
+2331 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:2334:37
+     |
+2334 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:469:41
+    |
+469 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1136:41
+     |
+1136 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:537:45
+    |
+537 |         #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:672:45
+    |
+672 |         #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:613:49
+    |
+613 |             #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\lua_util.rs:969:11
+    |
+969 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24616:11
+      |
+24616 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+      |           ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24630:11
+      |
+24630 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+      |           ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24635:37
+      |
+24635 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24666:37
+      |
+24666 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24727:37
+      |
+24727 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24792:37
+      |
+24792 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24819:37
+      |
+24819 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:13002:41
+      |
+13002 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:1016:11
+     |
+1016 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9343:11
+     |
+9343 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9352:11
+     |
+9352 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9357:11
+     |
+9357 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9363:11
+     |
+9363 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9368:11
+     |
+9368 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9373:37
+     |
+9373 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: function `setter_targets` is never used
+   --> crates\deadsync-song-lua\src\actor_classes.rs:671:15
+    |
+671 | pub(crate) fn setter_targets(
+    |               ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `SongLuaCompiledActorInputs` is never constructed
+  --> crates\deadsync-song-lua\src\actor_input.rs:46:12
+   |
+46 | pub struct SongLuaCompiledActorInputs {
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> crates\deadsync-song-lua\src\actor_input.rs:58:12
+    |
+ 55 | impl SongLuaCompiledActorInputs {
+    | ------------------------------- methods in this implementation
+...
+ 58 |     pub fn input(&mut self, input: &SongLuaInputEvent<'_>) -> bool {
+    |            ^^^^^
+...
+ 64 |     pub fn input_with_actions(
+    |            ^^^^^^^^^^^^^^^^^^
+...
+ 79 |     fn run(
+    |        ^^^
+...
+123 |     pub fn states(&self) -> &[SongLuaOverlayState] {
+    |            ^^^^^^
+...
+128 |     pub fn tracked_states(
+    |            ^^^^^^^^^^^^^^
+...
+139 |     pub fn scalar_states(
+    |            ^^^^^^^^^^^^^
+...
+158 |     pub fn boolean_states(&self) -> impl Iterator<Item = (u32, &[u8], bool)> + '_ {
+    |            ^^^^^^^^^^^^^^
+...
+166 |     pub fn retained_bytes(&self) -> usize {
+    |            ^^^^^^^^^^^^^^
+
+warning: function `compile` is never used
+   --> crates\deadsync-song-lua\src\actor_input.rs:179:15
+    |
+179 | pub(crate) fn compile(
+    |               ^^^^^^^
+
+warning: function `compile_with_updates` is never used
+   --> crates\deadsync-song-lua\src\actor_input.rs:188:4
+    |
+188 | fn compile_with_updates(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `SourceJob` is never used
+ --> crates\deadsync-song-lua\src\actor_input\update.rs:6:17
+  |
+6 | pub(crate) enum SourceJob {
+  |                 ^^^^^^^^^
+
+warning: struct `Node` is never constructed
+  --> crates\deadsync-song-lua\src\actor_input\update.rs:18:8
+   |
+18 | struct Node {
+   |        ^^^^
+
+warning: struct `Delta` is never constructed
+  --> crates\deadsync-song-lua\src\actor_input\update.rs:27:8
+   |
+27 | struct Delta {
+   |        ^^^^^
+
+warning: enum `Job` is never used
+  --> crates\deadsync-song-lua\src\actor_input\update.rs:31:6
+   |
+31 | enum Job {
+   |      ^^^
+
+warning: struct `SongLuaCompiledActorInteractions` is never constructed
+  --> crates\deadsync-song-lua\src\actor_input\update.rs:43:12
+   |
+43 | pub struct SongLuaCompiledActorInteractions {
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> crates\deadsync-song-lua\src\actor_input\update.rs:51:12
+    |
+ 50 | impl SongLuaCompiledActorInteractions {
+    | ------------------------------------- methods in this implementation
+ 51 |     pub fn input(&mut self, event: &SongLuaInputEvent<'_>) -> bool {
+    |            ^^^^^
+...
+ 54 |     pub fn input_with_actions(
+    |            ^^^^^^^^^^^^^^^^^^
+...
+ 61 |     pub fn states(&self) -> &[SongLuaOverlayState] {
+    |            ^^^^^^
+...
+ 64 |     pub fn tracked_states(
+    |            ^^^^^^^^^^^^^^
+...
+ 69 |     pub fn scalar_states(
+    |            ^^^^^^^^^^^^^
+...
+ 76 |     pub fn update(&mut self, delta_seconds: f64) {
+    |            ^^^^^^
+...
+ 81 |     pub fn update_with_actions(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+131 |     pub fn retained_bytes(&self) -> usize {
+    |            ^^^^^^^^^^^^^^
+
+warning: function `compile` is never used
+   --> crates\deadsync-song-lua\src\actor_input\update.rs:140:15
+    |
+140 | pub(crate) fn compile(
+    |               ^^^^^^^
+
+warning: function `capture_array` is never used
+ --> crates\deadsync-song-lua\src\actor_input\tables.rs:4:15
+  |
+4 | pub(super) fn capture_array(
+  |               ^^^^^^^^^^^^^
+
+warning: fields `0` and `1` are never read
+  --> crates\deadsync-song-lua\src\actor_methods.rs:31:14
+   |
+31 | struct Bound(Setter, usize);
+   |        ----- ^^^^^^  ^^^^^
+   |        |
+   |        fields in this struct
+   |
+   = help: consider removing these fields
+   = note: `Bound` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: function `identity` is never used
+  --> crates\deadsync-song-lua\src\actor_methods.rs:69:15
+   |
+69 | pub(crate) fn identity(lua: &Lua, function: &Function) -> mlua::Result<Option<Method>> {
+   |               ^^^^^^^^
+
+warning: constant `COMPILE_LAYER_KEY` is never used
+  --> crates\deadsync-song-lua\src\compile.rs:31:7
+   |
+31 | const COMPILE_LAYER_KEY: &str = "__songlua_compile_layer";
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: type alias `CompiledSongLua` is never used
+  --> crates\deadsync-song-lua\src\compile.rs:33:6
+   |
+33 | type CompiledSongLua<A> = crate::CompiledSongLuaData<A, crate::live::SongLuaLiveScene>;
+   |      ^^^^^^^^^^^^^^^
+
+warning: function `compile_song_lua_with_default_host` is never used
+  --> crates\deadsync-song-lua\src\compile.rs:39:8
+   |
+39 | pub fn compile_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `compile_song_lua_layers_with_default_host` is never used
+  --> crates\deadsync-song-lua\src\compile.rs:74:8
+   |
+74 | pub fn compile_song_lua_layers_with_default_host<
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `reload_song_lua_with_default_host` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:114:8
+    |
+114 | pub fn reload_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_default_named_child_actor` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:139:15
+    |
+139 | pub(crate) fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `default_note_field_column_actors` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:149:4
+    |
+149 | fn default_note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Result<Table> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_default_dummy_actor` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:153:15
+    |
+153 | pub(crate) fn create_default_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `install_default_actor_methods` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:157:4
+    |
+157 | fn install_default_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `add_default_actor_child_from_path` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:168:4
+    |
+168 | fn add_default_actor_child_from_path(lua: &Lua, actor: &Table, path: &str) -> mlua::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `compile_song_lua_with_actors` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:368:8
+    |
+368 | pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `compile_song_lua_layers_with_actors` is never used
+   --> crates\deadsync-song-lua\src\compile.rs:411:8
+    |
+411 | pub fn compile_song_lua_layers_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `take_final_events` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1572:4
+     |
+1572 | fn take_final_events<T: Clone>(events: &mut Vec<T>, remaining: &mut usize) -> Vec<T> {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `finalize_sprite_textures` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1584:4
+     |
+1584 | fn finalize_sprite_textures<NoteskinSlot, ModelVertex>(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `finalize_tracked_actors` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1625:4
+     |
+1625 | fn finalize_tracked_actors<NoteskinSlot, ModelVertex>(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `resolve_late_actor_targets` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1760:4
+     |
+1760 | fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `mark_compile_layers` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1840:4
+     |
+1840 | fn mark_compile_layers(root: &Value) -> mlua::Result<()> {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `mark_actor_layer` is never used
+    --> crates\deadsync-song-lua\src\compile.rs:1850:4
+     |
+1850 | fn mark_actor_layer(actor: &Value, index: usize) -> mlua::Result<()> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `take` is never used
+   --> crates\deadsync-song-lua\src\draw_capture.rs:486:15
+    |
+486 | pub(crate) fn take<Kind>(
+    |               ^^^^
+
+warning: struct `LiveSources` is never constructed
+   --> crates\deadsync-song-lua\src\draw_capture.rs:517:19
+    |
+517 | pub(crate) struct LiveSources(pub FxHashMap<usize, DrawSource>);
+    |                   ^^^^^^^^^^^
+
+warning: function `take_live` is never used
+   --> crates\deadsync-song-lua\src\draw_capture.rs:519:15
+    |
+519 | pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
+    |               ^^^^^^^^^
+
+warning: field `0` is never read
+  --> crates\deadsync-song-lua\src\host.rs:48:40
+   |
+48 | pub(crate) struct SongLuaScreenRequest(pub String);
+   |                   -------------------- ^^^^^^^^^^
+   |                   |
+   |                   field in this struct
+   |
+   = help: consider removing this field
+
+warning: function `replace_gameplay_screen` is never used
+   --> crates\deadsync-song-lua\src\host.rs:107:15
+    |
+107 | pub(crate) fn replace_gameplay_screen(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `function` and `native` are never read
+  --> crates\deadsync-song-lua\src\input.rs:53:5
+   |
+51 | struct Callback {
+   |        -------- fields in this struct
+52 |     key: usize,
+53 |     function: Function,
+   |     ^^^^^^^^
+54 |     native: Option<SongLuaCompiledInput>,
+   |     ^^^^^^
+
+warning: function `functions` is never used
+  --> crates\deadsync-song-lua\src\input.rs:57:15
+   |
+57 | pub(crate) fn functions(lua: &Lua) -> Option<Vec<Function>> {
+   |               ^^^^^^^^^
+
+warning: function `require_offline_compatible` is never used
+  --> crates\deadsync-song-lua\src\input.rs:82:15
+   |
+82 | pub(crate) fn require_offline_compatible(lua: &Lua) -> Result<(), String> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `dispatch` is never used
+   --> crates\deadsync-song-lua\src\input.rs:134:15
+    |
+134 | pub(crate) fn dispatch(
+    |               ^^^^^^^^
+
+warning: function `create_event` is never used
+   --> crates\deadsync-song-lua\src\input.rs:238:15
+    |
+238 | pub(crate) fn create_event(lua: &Lua, input: &SongLuaInputEvent<'_>) -> mlua::Result<Table> {
+    |               ^^^^^^^^^^^^
+
+warning: function `take_runtime_broadcasts` is never used
+   --> crates\deadsync-song-lua\src\lua_util.rs:940:15
+    |
+940 | pub(crate) fn take_runtime_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `execute_script_file_with_source` is never used
+    --> crates\deadsync-song-lua\src\lua_util.rs:1471:15
+     |
+1471 | pub(crate) fn execute_script_file_with_source(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `take_message_coverage` is never used
+    --> crates\deadsync-song-lua\src\lua_util.rs:3068:15
+     |
+3068 | pub(crate) fn take_message_coverage(lua: &Lua) -> Vec<String> {
+     |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `take_source_broadcasts` is never used
+    --> crates\deadsync-song-lua\src\lua_util.rs:3452:15
+     |
+3452 | pub(crate) fn take_source_broadcasts(lua: &Lua) -> Vec<crate::live::SongLuaLiveBroadcast> {
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `install_background_upper_left` is never used
+    --> crates\deadsync-song-lua\src\lua_util.rs:4406:15
+     |
+4406 | pub(crate) fn install_background_upper_left(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<Table> {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `init_actor_native_state` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11125:15
+      |
+11125 | pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_background_transition` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11178:15
+      |
+11178 | pub(crate) fn run_background_transition(lua: &Lua, actor: &Table, transition: &str) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `can_compile_actor_position` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11720:15
+      |
+11720 | pub(crate) fn can_compile_actor_position(lua: &Lua, actor: &Table) -> bool {
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `can_compile_actor_input` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11742:15
+      |
+11742 | pub(crate) fn can_compile_actor_input(lua: &Lua) -> bool {
+      |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `begin_live_actor_playback` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11748:15
+      |
+11748 | pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `begin_live_runtime` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11946:15
+      |
+11946 | pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `set_live_frame` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:11968:15
+      |
+11968 | pub(crate) fn set_live_frame(lua: &Lua, seconds: f64, beat: f64, delta: f64) {
+      |               ^^^^^^^^^^^^^^
+
+warning: function `startup_clock_path` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12538:4
+      |
+12538 | fn startup_clock_path(actor: &Table) -> mlua::Result<Vec<[f32; 2]>> {
+      |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `collect_initial_states` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12677:15
+      |
+12677 | pub(crate) fn collect_initial_states(
+      |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `screen_layer_states` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12697:15
+      |
+12697 | pub(crate) fn screen_layer_states(
+      |               ^^^^^^^^^^^^^^^^^^^
+
+warning: function `capture_startup_states` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12712:15
+      |
+12712 | pub(crate) fn capture_startup_states(
+      |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `collect_startup_states` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12782:4
+      |
+12782 | fn collect_startup_states(
+      |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `collect_wrapper_initials` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12839:4
+      |
+12839 | fn collect_wrapper_initials(
+      |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_startup` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12860:4
+      |
+12860 | fn read_startup(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<crate::SongLuaStartup> {
+      |    ^^^^^^^^^^^^
+
+warning: struct `SongLuaStartupCapture` is never constructed
+     --> crates\deadsync-song-lua\src\lua_util.rs:12879:19
+      |
+12879 | pub(crate) struct SongLuaStartupCapture {
+      |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `capture_initial_update` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12898:4
+      |
+12898 | fn capture_initial_update(
+      |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_actor_startup_commands` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:12946:15
+      |
+12946 | pub(crate) fn run_actor_startup_commands(
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `end_actor_scene` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:13137:15
+      |
+13137 | pub(crate) fn end_actor_scene(lua: &Lua, root: &Table) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^
+
+warning: function `callback_update_jobs` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:13416:15
+      |
+13416 | pub(crate) fn callback_update_jobs(lua: &Lua, root: &Value) -> Option<Vec<crate::actor_input::update::SourceJob>> {
+      |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_live_actor_handle_cache` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:13472:15
+      |
+13472 | pub(crate) fn prepare_live_actor_handle_cache(
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_live_updates` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:13488:15
+      |
+13488 | pub(crate) fn prepare_live_updates(lua: &Lua, root: &Value) -> mlua::Result<()> {
+      |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `capture_deferred_messages` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:19010:15
+      |
+19010 | pub(crate) fn capture_deferred_messages<Kind>(
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `sync_sprite_states` is never used
+     --> crates\deadsync-song-lua\src\lua_util.rs:22334:15
+      |
+22334 | pub(crate) fn sync_sprite_states(
+      |               ^^^^^^^^^^^^^^^^^^
+
+warning: fields `windows`, `active`, and `pending` are never read
+  --> crates\deadsync-song-lua\src\live.rs:19:5
+   |
+18 | struct LiveChartAttacks {
+   |        ---------------- fields in this struct
+19 |     windows: std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>,
+   |     ^^^^^^^
+20 |     active: Vec<usize>,
+   |     ^^^^^^
+21 |     pending: Vec<usize>,
+   |     ^^^^^^^
+
+warning: method `update` is never used
+  --> crates\deadsync-song-lua\src\live.rs:25:8
+   |
+24 | impl LiveChartAttacks {
+   | --------------------- method in this implementation
+25 |     fn update(&mut self, lua: &Lua, player: usize, master: bool,
+   |        ^^^^^^
+
+warning: fields `actor`, `start_beat`, `stop_beat`, `started`, and `finished` are never read
+  --> crates\deadsync-song-lua\src\live.rs:51:5
+   |
+50 | struct LiveForeground {
+   |        -------------- fields in this struct
+51 |     actor: Table,
+   |     ^^^^^
+52 |     start_beat: f32,
+   |     ^^^^^^^^^^
+53 |     stop_beat: f32,
+   |     ^^^^^^^^^
+54 |     started: bool,
+   |     ^^^^^^^
+55 |     finished: bool,
+   |     ^^^^^^^^
+
+warning: field `actor` is never read
+  --> crates\deadsync-song-lua\src\live.rs:59:5
+   |
+58 | struct LiveBackground {
+   |        -------------- field in this struct
+59 |     actor: Table,
+   |     ^^^^^
+
+warning: fields `changes`, `change_index`, `current`, and `fading` are never read
+  --> crates\deadsync-song-lua\src\live.rs:64:5
+   |
+63 | struct LiveBackgroundLayer {
+   |        ------------------- fields in this struct
+64 |     changes: Vec<(usize, deadsync_chart::song::SongBackgroundLuaActivation)>,
+   |     ^^^^^^^
+65 |     change_index: Option<usize>,
+   |     ^^^^^^^^^^^^
+66 |     current: Option<usize>,
+   |     ^^^^^^^
+67 |     fading: Option<usize>,
+   |     ^^^^^^
+
+warning: field `hooks` is never read
+   --> crates\deadsync-song-lua\src\live.rs:188:5
+    |
+185 | struct QueryTrace {
+    |        ---------- field in this struct
+...
+188 |     hooks: Vec<(Table, &'static str)>,
+    |     ^^^^^
+
+warning: function `hook_query` is never used
+   --> crates\deadsync-song-lua\src\live.rs:300:4
+    |
+300 | fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str) -> mlua::Result<()> {
+    |    ^^^^^^^^^^
+
+warning: function `install_query_trace` is never used
+   --> crates\deadsync-song-lua\src\live.rs:357:15
+    |
+357 | pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
+    |               ^^^^^^^^^^^^^^^^^^^
+
+warning: function `record_player_life` is never used
+   --> crates\deadsync-song-lua\src\live.rs:545:4
+    |
+545 | fn record_player_life(lua: &Lua, player: usize, life: f32) -> mlua::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `live_tap_note` is never used
+   --> crates\deadsync-song-lua\src\live.rs:584:4
+    |
+584 | fn live_tap_note(lua: &Lua, params: &Table, note: &deadsync_rules::note::Note) -> mlua::Result<Table> {
+    |    ^^^^^^^^^^^^^
+
+warning: function `tap_row_judgment_params` is never used
+   --> crates\deadsync-song-lua\src\live.rs:608:4
+    |
+608 | fn tap_row_judgment_params<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `finish_health_update` is never used
+   --> crates\deadsync-song-lua\src\live.rs:659:4
+    |
+659 | fn finish_health_update(lua: &Lua) -> mlua::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `feed_live_stats` is never used
+   --> crates\deadsync-song-lua\src\live.rs:862:4
+    |
+862 | fn feed_live_stats(stage: &Table, players: &[Table; LUA_PLAYERS], frame: &SongLuaLiveFrame) -> mlua::Result<()> {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `invoke_note_field_tap_callback` is never used
+   --> crates\deadsync-song-lua\src\live.rs:883:4
+    |
+883 | fn invoke_note_field_tap_callback(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `0` is never read
+   --> crates\deadsync-song-lua\src\live.rs:939:37
+    |
+939 | pub(crate) struct TransitionRequest(pub String);
+    |                   ----------------- ^^^^^^^^^^
+    |                   |
+    |                   field in this struct
+    |
+    = help: consider removing this field
+
+warning: multiple fields are never read
+    --> crates\deadsync-song-lua\src\live.rs:1037:16
+     |
+1036 | pub struct SongLuaLiveScene {
+     |            ---------------- fields in this struct
+1037 |     pub(crate) lua: Lua,
+     |                ^^^
+1038 |     root: Value,
+     |     ^^^^
+1039 |     stage: Table,
+     |     ^^^^^
+1040 |     players: [Table; LUA_PLAYERS],
+     |     ^^^^^^^
+1041 |     pub(crate) actors: Vec<Table>,
+1042 |     pub(crate) states: Vec<SongLuaOverlayState>,
+     |                ^^^^^^
+1043 |     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
+1044 |     targets: Vec<(usize, SongLuaLiveTarget)>,
+     |     ^^^^^^^
+1045 |     visual_targets: rustc_hash::FxHashMap<usize, SongLuaLiveTarget>,
+     |     ^^^^^^^^^^^^^^
+1046 |     context: SongLuaCompileContext,
+     |     ^^^^^^^
+1047 |     pub(crate) entry_paths: Vec<std::path::PathBuf>,
+     |                ^^^^^^^^^^^
+1048 |     pub(crate) primary_index: usize,
+     |                ^^^^^^^^^^^^^
+1049 |     last_beat: f64,
+     |     ^^^^^^^^^
+1050 |     last_music_seconds: f32,
+     |     ^^^^^^^^^^^^^^^^^^
+1051 |     prepared_frame_beat: Option<f64>,
+     |     ^^^^^^^^^^^^^^^^^^^
+1052 |     backgrounds: Vec<LiveBackground>,
+     |     ^^^^^^^^^^^
+1053 |     background_layers: [LiveBackgroundLayer; 2],
+     |     ^^^^^^^^^^^^^^^^^
+1054 |     background_order: Vec<usize>,
+     |     ^^^^^^^^^^^^^^^^
+1055 |     foregrounds: Vec<LiveForeground>,
+     |     ^^^^^^^^^^^
+1056 |     pub(crate) startup_output: SongLuaLiveOutput,
+     |                ^^^^^^^^^^^^^^
+1057 |     outro_started: bool,
+     |     ^^^^^^^^^^^^^
+1058 |     outro_options_reset: bool,
+     |     ^^^^^^^^^^^^^^^^^^^
+1059 |     outro_off_pending: bool,
+     |     ^^^^^^^^^^^^^^^^^
+1060 |     outro_failed: bool,
+     |     ^^^^^^^^^^^^
+1061 |     ended: bool,
+     |     ^^^^^
+1062 |     updated: bool,
+     |     ^^^^^^^
+1063 |     chart_attacks: [LiveChartAttacks; LUA_PLAYERS],
+     |     ^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> crates\deadsync-song-lua\src\live.rs:1078:12
+     |
+1075 | impl SongLuaLiveScene {
+     | --------------------- associated items in this implementation
+...
+1078 |     pub fn lua_memory_bytes(&self) -> usize { self.lua.used_memory() }
+     |            ^^^^^^^^^^^^^^^^
+...
+1091 |     pub fn compile_actor_inputs(&self) -> Option<crate::actor_input::SongLuaCompiledActorInputs> {
+     |            ^^^^^^^^^^^^^^^^^^^^
+...
+1100 |     pub fn compile_actor_interactions(&self) -> Option<crate::actor_input::SongLuaCompiledActorInteractions> {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1119 |     pub fn input(&mut self, event: &crate::SongLuaInputEvent<'_>)
+     |            ^^^^^
+...
+1158 |     pub(crate) fn new(
+     |                   ^^^
+...
+1241 |     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
+     |            ^^^^^^^
+...
+1249 |     pub fn update(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
+     |            ^^^^^^
+...
+1338 |     pub fn prepare_gameplay_frame(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<()> {
+     |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+1345 |     fn prepare_frame(&mut self, frame: &SongLuaLiveFrame) -> mlua::Result<f64> {
+     |        ^^^^^^^^^^^^^
+...
+1419 |     pub fn has_custom_draw(&self) -> mlua::Result<bool> {
+     |            ^^^^^^^^^^^^^^^
+...
+1425 |     pub fn draw(&mut self) -> mlua::Result<SongLuaLiveOutput> {
+     |            ^^^^
+...
+1448 |     fn advance_backgrounds(&mut self, beat: f32, music_seconds: f32) -> mlua::Result<()> {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1514 |     fn advance_foreground(&mut self, actor: &Table, beat: f32, music_seconds: f32) -> mlua::Result<()> {
+     |        ^^^^^^^^^^^^^^^^^^
+...
+1560 |     fn feed_stats(&self, frame: &SongLuaLiveFrame) -> mlua::Result<()> {
+     |        ^^^^^^^^^^
+...
+1564 |     fn tween_off_screen(&self) -> mlua::Result<()> {
+     |        ^^^^^^^^^^^^^^^^
+...
+1576 |     pub fn install_note_field_tap_callback<P, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1629 |     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
+     |            ^^^^^^^
+1630 |
+1631 |     pub fn install_step_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^
+...
+1668 |     pub fn install_tap_row_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1698 |     pub fn install_hold_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1740 |     pub fn install_avoided_mine_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1774 |     pub fn note_gameplay_outro_after_actors(&mut self) {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1779 |     pub fn outro_off_dispatched(&self) -> bool {
+     |            ^^^^^^^^^^^^^^^^^^^^
+...
+1783 |     pub fn failed_outro(&self) -> bool {
+     |            ^^^^^^^^^^^^
+...
+1787 |     pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1797 |     pub fn prepare_gameplay_player_options<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1807 |     pub fn apply_output_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1822 |     pub fn selected_context(&self) -> mlua::Result<SongLuaCompileContext> {
+     |            ^^^^^^^^^^^^^^^^
+...
+1826 |     pub fn matches_entries(&self, paths: &[&std::path::Path], primary: usize) -> bool {
+     |            ^^^^^^^^^^^^^^^
+...
+1834 |     pub fn end(&mut self) -> mlua::Result<SongLuaLiveOutput> {
+     |            ^^^
+...
+1850 |     pub fn bind_targets(&mut self, targets: Vec<(usize, SongLuaLiveTarget)>) -> Result<(), String> {
+     |            ^^^^^^^^^^^^
+...
+1860 |     fn proxy_target(&self, owned: &Table, owner: SongLuaLiveTarget) -> Result<crate::SongLuaProxyTarget, String> {
+     |        ^^^^^^^^^^^^
+...
+1881 |     pub fn write_visuals<N, M>(
+     |            ^^^^^^^^^^^^^
+...
+1929 |     pub fn states(&self) -> &[SongLuaOverlayState] { &self.states }
+     |            ^^^^^^
+...
+1933 |     pub fn next_screen_name(&self) -> mlua::Result<Option<String>> {
+     |            ^^^^^^^^^^^^^^^^
+...
+1939 |     pub fn tracked_states(&self) -> impl Iterator<Item = (SongLuaTrackedActorTarget, SongLuaOverlayState)> + '_ {
+     |            ^^^^^^^^^^^^^^
+...
+1943 |     pub fn take_startup_output(&mut self) -> SongLuaLiveOutput {
+     |            ^^^^^^^^^^^^^^^^^^^
+
+warning: function `sync_visual_content` is never used
+    --> crates\deadsync-song-lua\src\live.rs:1948:4
+     |
+1948 | fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>) ->...
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `take_output` is never used
+    --> crates\deadsync-song-lua\src\live.rs:1977:4
+     |
+1977 | fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
+     |    ^^^^^^^^^^^
+
+warning: function `install` is never used
+   --> crates\deadsync-song-lua\src\model_texture.rs:240:15
+    |
+240 | pub(crate) fn install<S, V, A>(
+    |               ^^^^^^^
+
+warning: function `take` is never used
+   --> crates\deadsync-song-lua\src\model_texture.rs:326:15
+    |
+326 | pub(crate) fn take<S, V, A>(
+    |               ^^^^
+
+warning: function `install_multitap_hits` is never used
+   --> crates\deadsync-song-lua\src\multitap.rs:587:15
+    |
+587 | pub(crate) fn install_multitap_hits<Kind>(
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `capture_explosion_hits` is never used
+   --> crates\deadsync-song-lua\src\multitap.rs:617:4
+    |
+617 | fn capture_explosion_hits<Kind>(
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `preserve_on_reset` is never used
+  --> crates\deadsync-song-lua\src\render_flags.rs:60:12
+   |
+50 | impl RenderFlags {
+   | ---------------- method in this implementation
+...
+60 |     pub fn preserve_on_reset(&mut self, previous: Self) {
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: function `apply_startup_states` is never used
+  --> crates\deadsync-song-lua\src\perframe.rs:40:15
+   |
+40 | pub(crate) fn apply_startup_states<Kind>(
+   |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `apply_initial_updates` is never used
+  --> crates\deadsync-song-lua\src\perframe.rs:68:15
+   |
+68 | pub(crate) fn apply_initial_updates<Kind>(
+   |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `apply_layer_startup` is never used
+  --> crates\deadsync-song-lua\src\perframe.rs:90:15
+   |
+90 | pub(crate) fn apply_layer_startup(
+   |               ^^^^^^^^^^^^^^^^^^^
+
+warning: function `apply_startup_tweens` is never used
+   --> crates\deadsync-song-lua\src\perframe.rs:133:15
+    |
+133 | pub(crate) fn apply_startup_tweens<Kind>(
+    |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `reset_song_runtime_position` is never used
+   --> crates\deadsync-song-lua\src\runtime.rs:151:15
+    |
+151 | pub(crate) fn reset_song_runtime_position(lua: &Lua) -> mlua::Result<()> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `parts` is never read
+  --> crates\deadsync-song-lua\src\rust_engine\actors\generated_players.rs:15:5
+   |
+ 9 | pub(super) struct Build {
+   |                   ----- field in this struct
+...
+15 |     parts: bool,
+   |     ^^^^^
+   |
+   = note: `Build` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: methods `player_base`, `gameplay_player`, and `player` are never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\generated_players.rs:28:35
+   |
+25 | impl Actors {
+   | ----------- methods in this implementation
+...
+28 |     pub(in crate::rust_engine) fn player_base(
+   |                                   ^^^^^^^^^^^
+...
+39 |     pub(in crate::rust_engine) fn gameplay_player(
+   |                                   ^^^^^^^^^^^^^^^
+...
+50 |     fn player(
+   |        ^^^^^^
+
+warning: function `construct` is never used
+   --> crates\deadsync-song-lua\src\rust_engine\actors\generated_players.rs:203:4
+    |
+203 | fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
+    |    ^^^^^^^^^
+
+warning: struct `Build` is never constructed
+  --> crates\deadsync-song-lua\src\rust_engine\actors\notefields.rs:12:8
+   |
+12 | struct Build {
+   |        ^^^^^
+
+warning: method `note_field` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\notefields.rs:18:35
+   |
+17 | impl Actors {
+   | ----------- method in this implementation
+18 |     pub(in crate::rust_engine) fn note_field(
+   |                                   ^^^^^^^^^^
+
+warning: function `construct` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\notefields.rs:42:4
+   |
+42 | fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
+   |    ^^^^^^^^^
+
+warning: struct `Build` is never constructed
+ --> crates\deadsync-song-lua\src\rust_engine\actors\screen_parts.rs:6:8
+  |
+6 | struct Build {
+  |        ^^^^^
+
+warning: method `screen_part` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\screen_parts.rs:31:35
+   |
+30 | impl Actors {
+   | ----------- method in this implementation
+31 |     pub(in crate::rust_engine) fn screen_part(
+   |                                   ^^^^^^^^^^^
+
+warning: function `construct` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\screen_parts.rs:80:4
+   |
+80 | fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
+   |    ^^^^^^^^^
+
+warning: method `initialize_steps_displays` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\steps_displays.rs:24:35
+   |
+23 | impl Actors {
+   | ----------- method in this implementation
+24 |     pub(in crate::rust_engine) fn initialize_steps_displays(
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `initialize_callback` is never used
+   --> crates\deadsync-song-lua\src\rust_engine\actors\steps_displays.rs:347:4
+    |
+347 | fn initialize_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: method `top_screen_base` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\top_screen.rs:18:35
+   |
+16 | impl Actors {
+   | ----------- method in this implementation
+17 |     // Screen allocation precedes generated player/theme adoption and controls.
+18 |     pub(in crate::rust_engine) fn top_screen_base(
+   |                                   ^^^^^^^^^^^^^^^
+
+warning: function `create_base` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\top_screen.rs:65:4
+   |
+65 | fn create_base(call: &mut HostCall<'_>) -> Result<(), Error> {
+   |    ^^^^^^^^^^^
+
+warning: method `start_transition` is never used
+  --> crates\deadsync-song-lua\src\rust_engine\actors\transitions.rs:99:35
+   |
+98 | impl Actors {
+   | ----------- method in this implementation
+99 |     pub(in crate::rust_engine) fn start_transition(
+   |                                   ^^^^^^^^^^^^^^^^
+
+warning: function `start_callback` is never used
+   --> crates\deadsync-song-lua\src\rust_engine\actors\transitions.rs:177:4
+    |
+177 | fn start_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+    |    ^^^^^^^^^^^^^^
+
+warning: method `preserving_command_locals` is never used
+   --> crates\deadsync-song-lua\src\rust_engine\song_output.rs:210:19
+    |
+207 | impl RustSongRuntime {
+    | -------------------- method in this implementation
+...
+210 |     pub(super) fn preserving_command_locals<T>(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `restart_stage_options` is never used
+  --> crates\deadsync-song-lua\src\song_tables.rs:70:15
+   |
+70 | pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `clear_active_attack_options` is never used
+  --> crates\deadsync-song-lua\src\song_tables.rs:95:15
+   |
+95 | pub(crate) fn clear_active_attack_options(lua: &Lua) -> mlua::Result<()> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_active_attack_options` is never used
+   --> crates\deadsync-song-lua\src\song_tables.rs:115:15
+    |
+115 | pub(crate) fn rebuild_active_attack_options<'a>(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `live_player_fail_type` is never used
+   --> crates\deadsync-song-lua\src\song_tables.rs:219:15
+    |
+219 | pub(crate) fn live_player_fail_type(
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `advance_option_levels_with_frame_delta` is never used
+   --> crates\deadsync-song-lua\src\song_tables.rs:235:15
+    |
+235 | pub(crate) fn advance_option_levels_with_frame_delta(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `advance_option_levels_with_clock_deltas` is never used
+   --> crates\deadsync-song-lua\src\song_tables.rs:241:15
+    |
+241 | pub(crate) fn advance_option_levels_with_clock_deltas(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `sync_text` is never used
+ --> crates\deadsync-song-lua\src\text_publication.rs:7:15
+  |
+7 | pub(crate) fn sync_text(actor: &Table, text: &mut Arc<str>) -> mlua::Result<()> {
+  |               ^^^^^^^^^
+
+warning: function `sync_attributes` is never used
+  --> crates\deadsync-song-lua\src\text_publication.rs:26:15
+   |
+26 | pub(crate) fn sync_attributes(
+   |               ^^^^^^^^^^^^^^^
+
+warning: function `same_attribute` is never used
+  --> crates\deadsync-song-lua\src\text_publication.rs:65:4
+   |
+65 | fn same_attribute(a: &TextAttribute, b: &TextAttribute) -> bool {
+   |    ^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 173 warnings
+    Checking deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+    Checking deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+    Checking deadsync-online v0.1.0 (C:\GitHub\deadsync\crates\deadsync-online)
+warning: variable does not need to be mutable
+  --> crates\deadsync-online\src\player_leaderboards.rs:33:9
+   |
+33 |     let mut combined = groovestats::fetch_validated_combined_player_leaderboards(
+   |         ----^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-online` (lib) generated 1 warning (run `cargo fix --lib -p deadsync-online` to apply 1 suggestion)
+    Checking deadsync-theme-simply-love v0.5.2494 (C:\GitHub\deadsync\crates\deadsync-theme-simply-love)
+warning: type `ScoreboxCycleClock` is more private than the item `screens::select_music::State::scorebox_cycle_clocks`
+    --> crates\deadsync-theme-simply-love\src\screens\select_music.rs:1689:5
+     |
+1689 |     pub scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `screens::select_music::State::scorebox_cycle_clocks` is reachable at visibility `pub`
+     |
+note: but type `ScoreboxCycleClock` is only usable at visibility `pub(crate)`
+    --> crates\deadsync-theme-simply-love\src\screens\components\shared\gs_scorebox.rs:209:1
+     |
+ 209 | pub(crate) struct ScoreboxCycleClock {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: `#[warn(private_interfaces)]` on by default
+
+warning: unused `Result` that must be used
+   --> crates\deadsync-theme-simply-love\src\screens\gameplay.rs:990:9
+    |
+990 |         scene.install_tap_row_judgment_callback(&mut self.gameplay);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+990 |         let _ = scene.install_tap_row_judgment_callback(&mut self.gameplay);
+    |         +++++++
+
+warning: unused `Result` that must be used
+   --> crates\deadsync-theme-simply-love\src\screens\gameplay.rs:991:9
+    |
+991 |         scene.install_step_callback(&mut self.gameplay);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+991 |         let _ = scene.install_step_callback(&mut self.gameplay);
+    |         +++++++
+
+warning: unused `Result` that must be used
+   --> crates\deadsync-theme-simply-love\src\screens\gameplay.rs:992:9
+    |
+992 |         scene.install_hold_judgment_callback(&mut self.gameplay);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+992 |         let _ = scene.install_hold_judgment_callback(&mut self.gameplay);
+    |         +++++++
+
+warning: unused `Result` that must be used
+   --> crates\deadsync-theme-simply-love\src\screens\gameplay.rs:993:9
+    |
+993 |         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+993 |         let _ = scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
+    |         +++++++
+
+warning: `deadsync-theme-simply-love` (lib) generated 5 warnings
+    Checking deadsync-shell v0.1.0 (C:\GitHub\deadsync\crates\deadsync-shell)
+    Checking deadsync v0.5.2494 (C:\GitHub\deadsync)
+    Finished `dev` profile [unoptimized] target(s) in 1m 08s

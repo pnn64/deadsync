@@ -1,0 +1,190 @@
+    Checking bytemuck v1.25.2
+    Checking windows-sys v0.61.2
+    Checking thiserror v2.0.21
+    Checking windows v0.62.2
+    Checking indexmap v2.14.2
+    Checking num-complex v0.4.6
+    Checking serde v1.0.229
+    Checking av-scenechange v0.14.1
+    Checking symphonia-core v0.6.1
+    Checking rav1e v0.8.1
+    Checking pulp v0.22.3
+    Checking anstyle-query v1.1.5
+    Checking anstyle-wincon v3.0.11
+    Checking anstream v1.0.0
+    Checking dirs-sys v0.5.0 (C:\GitHub\deadsync\vendor\dirs-sys-win7)
+    Checking directories v6.0.0
+    Checking env_logger v0.11.11
+    Checking symphonia-metadata v0.6.1
+    Checking ravif v0.13.0
+    Checking qoi v0.4.1
+    Checking symphonia-common v0.6.1
+    Checking naga-types v30.0.1
+    Checking serde_json v1.0.154
+    Checking rustfft v6.4.1
+    Checking exr v1.74.2
+    Checking naga v30.0.1
+    Checking image v0.25.10
+    Checking wgpu-types v30.0.1
+    Checking symphonia-codec-vorbis v0.6.1
+    Checking symphonia-format-ogg v0.6.1
+    Checking symphonia-bundle-flac v0.6.1
+    Checking symphonia-bundle-mp3 v0.6.1
+    Checking deadlib-render-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-core)
+    Checking symphonia v0.6.1
+    Checking realfft v3.5.1
+    Checking rubato v5.0.1
+    Checking softbuffer v0.4.8
+    Checking deadlib-render-backend-gl v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-gl)
+    Checking deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+    Checking deadlib-present v0.1.0 (C:\GitHub\deadsync\crates\deadlib-present)
+    Checking deadsync-score v0.1.0 (C:\GitHub\deadsync\crates\deadsync-score)
+    Checking wgpu-naga-bridge v30.0.1
+    Checking deadlib-video v0.1.0 (C:\GitHub\deadsync\crates\deadlib-video)
+    Checking winapi-util v0.1.11
+    Checking ebur128 v0.1.11
+    Checking clap_builder v4.6.7
+    Checking rssp v0.4.290 (https://github.com/pnn64/rssp?branch=main#da616e3a)
+    Checking same-file v1.0.6
+    Checking hidapi v2.6.7 (C:\GitHub\deadsync\vendor\hidapi-win7)
+    Checking null-or-die-audio v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+    Checking null-or-die-core v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+    Checking walkdir v2.5.0
+    Checking clap v4.6.7
+    Checking rustmaniax-sdk v2.1.1
+    Checking deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+    Checking null-or-die-rssp v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+    Checking null-or-die-cli v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+    Checking deadlib-lua-legacy v0.12.2 (C:\GitHub\deadsync\crates\deadlib-lua-legacy)
+    Checking null-or-die v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+    Checking zstd-safe v8.2.0
+    Checking fastrand v2.5.0
+    Checking tempfile v3.27.0
+    Checking zstd v0.14.3
+    Checking deadlib-platform v0.1.0 (C:\GitHub\deadsync\crates\deadlib-platform)
+    Checking gpu-allocator v0.28.0
+    Checking wgpu-hal v30.0.1
+    Checking deadlib-render-backend-vulkan v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-vulkan)
+    Checking deadsync-input v0.1.0 (C:\GitHub\deadsync\crates\deadsync-input)
+    Checking deadlib-audio-decode v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-decode)
+    Checking deadsync-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-gameplay)
+    Checking deadsync-audio-analysis v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-analysis)
+    Checking deadlib-audio-backend-wasapi v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-backend-wasapi)
+    Checking deadsync-audio-replaygain v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-replaygain)
+    Checking deadlib-audio v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio)
+    Checking deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+    Checking deadsync-audio-stream v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-stream)
+    Checking wgpu-core-deps-windows-linux-android v30.0.1
+    Checking wgpu-core v30.0.1
+    Checking deadsync-lights v0.1.0 (C:\GitHub\deadsync\crates\deadsync-lights)
+    Checking deadsync-smx v0.1.0 (C:\GitHub\deadsync\crates\deadsync-smx)
+    Checking wgpu v30.0.1
+    Checking deadlib-render-backend-wgpu v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-wgpu)
+    Checking deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+    Checking deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+    Checking deadsync-theme v0.1.0 (C:\GitHub\deadsync\crates\deadsync-theme)
+    Checking deadsync-config v0.1.0 (C:\GitHub\deadsync\crates\deadsync-config)
+    Checking deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+    Checking deadsync-profile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile)
+    Checking deadsync-simfile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-simfile)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:10:23
+   |
+10 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Checking deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+    Checking deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+error[E0308]: mismatched types
+   --> crates\deadsync-song-lua\tests\rust_song_observations.rs:378:32
+    |
+378 |         for result in [native, rust] {
+    |                                ^^^^ expected `SongLuaLiveScene`, found `SongLiveScene`
+    |
+    = note: expected enum `Result<Vec<CompiledSongLuaData<_, deadsync_song_lua::legacy::SongLuaLiveScene>>, _>`
+               found enum `Result<Vec<CompiledSongLuaData<_, SongLiveScene>>, _>`
+
+error[E0308]: mismatched types
+   --> crates\deadsync-song-lua\tests\rust_song_observations.rs:446:33
+    |
+446 |         for output in [&mut *a, &mut *b] {
+    |                                 ^^^^^^^ expected `SongLuaLiveScene`, found `SongLiveScene`
+    |
+    = note: expected mutable reference `&mut CompiledSongLuaData<_, deadsync_song_lua::legacy::SongLuaLiveScene>`
+               found mutable reference `&mut CompiledSongLuaData<_, SongLiveScene>`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `deadsync-song-lua` (test "rust_song_observations") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error[E0432]: unresolved import `crate::input_types`
+ --> crates\deadsync-song-lua\tests\..\src\input.rs:4:16
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                ^^^^^^^^^^^ could not find `input_types` in the crate root
+
+error[E0432]: unresolved import `crate::input_types`
+ --> crates\deadsync-song-lua\tests\..\src\input.rs:5:23
+  |
+5 | pub(crate) use crate::input_types::RUNTIME_REQUIRED;
+  |                       ^^^^^^^^^^^ could not find `input_types` in the crate root
+
+error[E0432]: unresolved import `crate::input_types`
+ --> crates\deadsync-song-lua\tests\..\src\runtime_fallback.rs:3:12
+  |
+3 | use crate::input_types::RUNTIME_REQUIRED as REQUIRED;
+  |            ^^^^^^^^^^^ could not find `input_types` in the crate root
+
+warning: unused import: `screen_input as input`
+ --> crates\deadsync-song-lua\tests\compiled_input.rs:4:5
+  |
+4 | use screen_input as input;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0308]: mismatched types
+  --> crates\deadsync-song-lua\tests\compiled_input.rs:69:57
+   |
+69 |             let program = SongLuaCompiledInput::compile(&f).expect(body);
+   |                           ----------------------------- ^^ expected `&[u8]`, found `&Function`
+   |                           |
+   |                           arguments to this function are incorrect
+   |
+   = note: expected reference `&[u8]`
+              found reference `&LuaFunction`
+note: associated function defined here
+  --> crates\deadsync-song-lua\src\rust_engine\input\predicate.rs:23:12
+   |
+23 |     pub fn compile(bytes: &[u8]) -> Option<Self> {
+   |            ^^^^^^^
+
+error[E0308]: mismatched types
+   --> crates\deadsync-song-lua\tests\compiled_input.rs:144:47
+    |
+144 |         assert!(SongLuaCompiledInput::compile(&f).is_none(), "{source}");
+    |                 ----------------------------- ^^ expected `&[u8]`, found `&Function`
+    |                 |
+    |                 arguments to this function are incorrect
+    |
+    = note: expected reference `&[u8]`
+               found reference `&LuaFunction`
+note: associated function defined here
+   --> crates\deadsync-song-lua\src\rust_engine\input\predicate.rs:23:12
+    |
+ 23 |     pub fn compile(bytes: &[u8]) -> Option<Self> {
+    |            ^^^^^^^
+
+Some errors have detailed explanations: E0308, E0432.
+For more information about an error, try `rustc --explain E0308`.
+warning: `deadsync-song-lua` (test "compiled_input") generated 1 warning
+error: could not compile `deadsync-song-lua` (test "compiled_input") due to 5 previous errors; 1 warning emitted

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "check",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--lib"
+  ],
+  "exit_code": 0,
+  "seconds": 234.68705421616323,
+  "log_sha256": "aae1de50566b1405addd1755029ca72b6c2c1d1bc813dde5e64875ebd72d1bca",
+  "scope": "Early library-only diagnostic while integration tests are authored; not final-source verification."
+}

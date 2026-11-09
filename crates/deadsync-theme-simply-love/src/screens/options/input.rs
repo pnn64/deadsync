@@ -858,6 +858,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::NoteScrollClock => crate::SimplyLoveGameplayConfigRequest::NoteScrollClock(
                 config::audio::NoteScrollClock::from_choice(new_index),
             ),
+            SubRowId::SongLuaMode => crate::SimplyLoveGameplayConfigRequest::SongLuaMode(
+                config::options::SongLuaMode::from_choice(new_index),
+            ),
             SubRowId::AnimatedBanners => {
                 let mode = match new_index {
                     0 => config::theme::GameplayBannerMode::Static,

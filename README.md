@@ -117,6 +117,11 @@ Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
 command verifies each part and restores the exact archives locally; restored
 files are ignored by Git. Run both commands again after fixture updates.
 
+Lua regression snapshots live in `tests/fixtures/regression-expectations`, grouped
+by crate. Snapshots of 50 MB or more are stored as gzip files and restored by the
+same setup command. Use `python scripts/prepare_test_fixtures.py --split` to prepare
+new oversized archives or snapshots before committing fixture changes.
+
 When updating fixtures, commit and push changes in `tests/fixtures` first, then
 commit the updated submodule pointer in this repository. Test runners and fixture
 maintenance scripts stay in this repository; their existing paths still work.

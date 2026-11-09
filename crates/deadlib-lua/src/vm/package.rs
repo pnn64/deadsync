@@ -1,9 +1,9 @@
 //! Lua 5.1 module discovery, cached imports and module environments.
 use super::*;
-mod library;
+use crate::memory::fallible::{self, SliceExt, VecExt};
+#[allow(unsafe_code)]
+mod paths;
 mod returns;
-pub(in crate::vm) use library::LoadingLibrary;
-pub use library::{NativeLibrary, NativeLibraryLoader, NativeSymbol};
 
 pub(super) const REQUIRE: u64 = 151;
 pub(super) const MODULE: u64 = 152;
@@ -13,78 +13,36 @@ const LUA: u64 = 155;
 const C: u64 = 156;
 const CROOT: u64 = 157;
 const LOADLIB: u64 = 158;
-const LIB_GC: u64 = 170;
 const SENTINEL: Value = Value::LightUserdata(u64::MAX);
 
 pub(super) fn contains(id: u64) -> bool {
-    (REQUIRE..=LOADLIB).contains(&id) || id == LIB_GC
+    (REQUIRE..=LOADLIB).contains(&id)
 }
 
-fn runtime(message: impl Into<Box<str>>) -> Error {
-    Error::new(ErrorKind::Runtime, 0, message)
+fn runtime(message: &'static str) -> Error {
+    Error::runtime_static(message)
 }
 
-fn replace(source: &[u8], needle: u8, value: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(source.len());
+fn replace(source: &[u8], needle: u8, value: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut out = fallible::with_capacity(source.len())?;
     for &byte in source {
         if byte == needle {
-            out.extend_from_slice(value)
+            out.try_extend_from_slice(value)?
         } else {
-            out.push(byte)
+            out.try_push(byte)?
         }
     }
-    out
-}
-
-fn initial_path(variable: &str, default: &[u8]) -> Vec<u8> {
-    let source = std::env::var_os(variable).map(|s| s.to_string_lossy().as_bytes().to_vec());
-    let path = if let Some(source) = source {
-        let mut out = Vec::new();
-        let mut at = 0;
-        while at < source.len() {
-            if source[at..].starts_with(b";;") {
-                out.extend_from_slice(b";\x01;");
-                at += 2
-            } else {
-                out.push(source[at]);
-                at += 1
-            }
-        }
-        replace(&out, 1, default)
-    } else {
-        default.to_vec()
-    };
-    #[cfg(windows)]
-    {
-        let executable = std::env::current_exe().expect("current executable path");
-        let parent = executable
-            .parent()
-            .expect("executable directory")
-            .to_string_lossy();
-        replace(&path, b'!', parent.as_bytes())
-    }
-    #[cfg(not(windows))]
-    {
-        path
-    }
+    Ok(out)
 }
 
 impl Vm {
-    /// Bind a resolved native symbol as a fresh Lua closure in this environment.
-    /// The adapter's private data stays separate from its Lua upvalues.
-    ///
-    /// # Errors
-    /// Propagates errors while creating the host closure.
-    pub fn new_native_function(&mut self, symbol: NativeSymbol) -> Result<Value, Error> {
-        self.host_function(symbol.callback, &[], symbol.data)
-    }
-
     fn module_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
         let scratch = base + frame.argc();
         if frame.pc == 0 {
             let name = self.package_name(frame)?;
+            self.reserve_registers(scratch + 9)?;
             self.resize_registers(self.registers.len().max(scratch + 9));
             let arguments = frame.vararg_start..frame.vararg_start + frame.argc();
             self.registers.copy_within(arguments.clone(), base);
@@ -94,7 +52,7 @@ impl Vm {
             frame.vararg_start = base;
             frame.pc = 1;
             self.frames[owner] = frame;
-            let key = self.intern(b"_LOADED");
+            let key = self.try_intern(b"_LOADED")?;
             self.get_table(Value::Table(self.registry), key, scratch)?;
             return Ok(None);
         }
@@ -127,14 +85,14 @@ impl Vm {
                     .position(|&b| b == b'.')
                     .map(|n| start + n);
                 let end = dot.unwrap_or(name.len());
-                let key = self.intern(&name[start..end]);
+                let key = self.try_intern(&name[start..end])?;
                 let target = self.registers[scratch + 2];
                 let value = self.table(target)?.get(key);
                 self.registers[scratch + 4] = Value::Number(dot.map_or(-1., |n| (n + 1) as f64));
                 self.frames[owner].pc = 4;
                 self.registers[scratch + 1] = match value {
                     Value::Table(_) => value,
-                    Value::Nil => Value::Table(self.new_table()),
+                    Value::Nil => Value::Table(self.try_new_table()?),
                     _ => {
                         return Err(self.package_named_error(
                             b"name conflict for module '",
@@ -163,7 +121,7 @@ impl Vm {
             5 => self.frames[owner].pc = 6,
             6 => {
                 self.frames[owner].pc = 7;
-                let key = self.intern(b"_NAME");
+                let key = self.try_intern(b"_NAME")?;
                 self.get_table(self.registers[scratch + 1], key, scratch + 3)?;
             }
             7 => {
@@ -174,7 +132,7 @@ impl Vm {
                 } else {
                     self.frames[owner].pc = 8;
                     self.registers[scratch + 2] = self.registers[scratch + 1];
-                    let key = self.intern(b"_M");
+                    let key = self.try_intern(b"_M")?;
                     self.set_table(
                         self.registers[scratch + 1],
                         key,
@@ -184,7 +142,7 @@ impl Vm {
             }
             8 => {
                 self.frames[owner].pc = 9;
-                let key = self.intern(b"_NAME");
+                let key = self.try_intern(b"_NAME")?;
                 self.registers[scratch + 2] = self.registers[scratch + 8];
                 self.set_table(
                     self.registers[scratch + 1],
@@ -195,8 +153,8 @@ impl Vm {
             9 => {
                 let name = self.concat_bytes(self.registers[scratch + 8])?;
                 let length = name.iter().rposition(|&b| b == b'.').map_or(0, |n| n + 1);
-                let package = self.intern(&name[..length]);
-                let key = self.intern(b"_PACKAGE");
+                let package = self.try_intern(&name[..length])?;
+                let key = self.try_intern(b"_PACKAGE")?;
                 self.registers[scratch + 2] = package;
                 self.frames[owner].pc = 10;
                 self.set_table(self.registers[scratch + 1], key, package)?;
@@ -211,8 +169,7 @@ impl Vm {
                 let Value::Table(module) = self.registers[scratch + 1] else {
                     unreachable!("module table")
                 };
-                self.functions[slot_index(function.0)].env = module;
-                self.gc_barrier(Value::Function(function), Value::Table(module));
+                self.set_closure_environment(Value::Function(function), module)?;
                 self.registers[scratch + 2] = Value::Table(module);
                 self.registers[scratch + 5] = Value::Number(1.);
                 self.frames[owner].pc = 11;
@@ -222,7 +179,7 @@ impl Vm {
                     unreachable!("module option index")
                 };
                 if index as usize >= frame.argc() {
-                    return Ok(self.return_frame(frame, base, 0));
+                    return self.return_frame(frame, base, 0);
                 }
                 self.registers[scratch + 6] = self.registers[base + index as usize];
                 self.registers[scratch + 7] = self.registers[scratch + 2];
@@ -251,6 +208,7 @@ impl Vm {
                 };
                 self.registers[frame.vararg_start..frame.vararg_start + frame.argc()]
                     .fill(Value::Nil);
+                self.reserve_registers(base + 18)?;
                 self.resize_registers(self.registers.len().max(base + 18));
                 self.registers[name_slot] = name;
                 self.registers[base] = original;
@@ -258,7 +216,7 @@ impl Vm {
                 frame.vararg_count = 1;
                 frame.pc = 1;
                 self.frames[owner] = frame;
-                let key = self.intern(b"_LOADED");
+                let key = self.try_intern(b"_LOADED")?;
                 self.get_table(Value::Table(self.registry), key, base + 1)?;
             }
             1 => {
@@ -282,7 +240,7 @@ impl Vm {
                             b"'",
                         ));
                     }
-                    return Ok(self.return_frame(frame, base + 2, 1));
+                    return self.return_frame(frame, base + 2, 1);
                 }
                 self.frames[owner].pc = 3;
                 self.package_field(REQUIRE, b"loaders", base + 3)?;
@@ -291,7 +249,7 @@ impl Vm {
                 if !matches!(self.registers[base + 3], Value::Table(_)) {
                     return Err(runtime("'package.loaders' must be a table"));
                 }
-                self.registers[base + 4] = self.intern(b"");
+                self.registers[base + 4] = self.try_intern(b"")?;
                 self.registers[index_slot] = Value::Number(1.);
                 frame.pc = 4;
                 frame.vararg_count = 5;
@@ -303,16 +261,14 @@ impl Vm {
                     .get(self.registers[index_slot]);
                 if loader == Value::Nil {
                     let name = self.concat_bytes(self.registers[name_slot])?;
-                    let errors = self
-                        .concat_bytes(self.registers[base + 4])
-                        .unwrap_or_else(|_| b"(null)".to_vec());
-                    let mut message = self.take_buffer(name.len() + errors.len() + 32);
-                    message.extend_from_slice(b"module '");
-                    message.extend_from_slice(&name);
-                    message.extend_from_slice(b"' not found:");
-                    message.extend_from_slice(io::c_bytes(&errors));
-                    let value = self.finish_buffer(message);
-                    let value = self.located_error(value, 1);
+                    let errors = self.package_error_text(self.registers[base + 4])?;
+                    let mut message = self.try_take_buffer(name.len() + errors.len() + 32)?;
+                    message.try_extend_from_slice(b"module '")?;
+                    message.try_extend_from_slice(&name)?;
+                    message.try_extend_from_slice(b"' not found:")?;
+                    message.try_extend_from_slice(io::c_bytes(&errors))?;
+                    let value = self.try_finish_buffer(message)?;
+                    let value = self.try_located_error(value, 1)?;
                     return Err(self.package_raised(value));
                 }
                 let Value::Number(index) = self.registers[index_slot] else {
@@ -386,7 +342,7 @@ impl Vm {
                 frame.vararg_count += 1;
                 self.frames[owner] = frame;
                 if self.registers[result] != SENTINEL {
-                    return Ok(self.return_frame(frame, result, 1));
+                    return self.return_frame(frame, result, 1);
                 }
                 self.registers[result + 1] = Value::Boolean(true);
                 self.registers[result + 2] = Value::Boolean(true);
@@ -403,19 +359,25 @@ impl Vm {
                 self.registers[base + frame.argc() - 1] = Value::Nil;
                 frame.vararg_count -= 1;
                 self.frames[owner] = frame;
-                return Ok(self.return_frame(frame, base + frame.argc() - 1, 1));
+                return self.return_frame(frame, base + frame.argc() - 1, 1);
             }
             _ => unreachable!("require phase"),
         }
         Ok(None)
     }
     fn package_raised(&self, value: Value) -> Error {
-        let message = if let Value::String(id) = value {
-            String::from_utf8_lossy(&self.strings.bytes[slot_index(id.0)]).into_owned()
+        if matches!(value, Value::String(_)) {
+            self.host_error(value)
         } else {
-            "Lua error".into()
-        };
-        Error::raised(value, message)
+            Error::raised_static(value, "Lua error")
+        }
+    }
+    fn package_error_text(&self, value: Value) -> Result<Vec<u8>, Error> {
+        if matches!(value, Value::String(_) | Value::Number(_)) {
+            self.concat_bytes(value)
+        } else {
+            b"(null)".try_to_vec().map_err(|_| self.memory_failure())
+        }
     }
     fn preload_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
@@ -437,13 +399,13 @@ impl Vm {
                 self.registers[base + 3] = self.registers[base + 2];
                 if self.registers[base + 2] == Value::Nil {
                     let name = self.concat_bytes(self.registers[base])?;
-                    let mut bytes = self.take_buffer(name.len() + 40);
-                    bytes.extend_from_slice(b"\n\tno field package.preload['");
-                    bytes.extend_from_slice(&name);
-                    bytes.extend_from_slice(b"']");
-                    self.registers[base + 2] = self.finish_buffer(bytes);
+                    let mut bytes = self.try_take_buffer(name.len() + 40)?;
+                    bytes.try_extend_from_slice(b"\n\tno field package.preload['")?;
+                    bytes.try_extend_from_slice(&name)?;
+                    bytes.try_extend_from_slice(b"']")?;
+                    self.registers[base + 2] = self.try_finish_buffer(bytes)?;
                 }
-                return Ok(self.return_frame(frame, base + 2, 1));
+                return self.return_frame(frame, base + 2, 1);
             }
             _ => unreachable!("preload phase"),
         }
@@ -458,11 +420,12 @@ impl Vm {
             let mt = if let Some(mt) = self.metatable(value) {
                 mt
             } else {
-                let mt = self.new_table();
-                self.set_metatable(value, Some(mt));
+                let mt = self.try_new_table()?;
+                self.set_metatable(value, Some(mt))?;
                 mt
             };
             let arguments = frame.vararg_start..frame.vararg_start + frame.argc();
+            self.reserve_registers(frame.base + frame.argc() + 2)?;
             self.resize_registers(self.registers.len().max(frame.base + frame.argc() + 2));
             self.registers.copy_within(arguments.clone(), frame.base);
             self.relocate_native_error_functions(arguments.clone(), frame.base);
@@ -473,60 +436,44 @@ impl Vm {
             frame.vararg_count += 2;
             frame.pc = 1;
             *self.frames.last_mut().expect("seeall frame") = frame;
-            let key = self.intern(b"__index");
+            let key = self.try_intern(b"__index")?;
             self.set_table(Value::Table(mt), key, Value::Table(self.globals))?;
             return Ok(None);
         }
         self.registers[frame.base + frame.argc() - 1] = Value::Nil;
         frame.vararg_count -= 1;
         *self.frames.last_mut().expect("seeall frame") = frame;
-        Ok(self.return_frame(frame, frame.base, 0))
+        self.return_frame(frame, frame.base, 0)
     }
-    fn searcher_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
-        if frame.pc >= 100 {
-            return self.library_step(id, frame);
-        }
+    fn searcher_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let owner = self.frames.len() - 1;
         match frame.pc {
             0 => {
                 let name = self.package_name(frame)?;
                 let bytes = self.concat_bytes(name)?;
-                let search = if id == CROOT {
-                    let Some(dot) = bytes.iter().position(|&b| b == b'.') else {
-                        return Ok(self.return_frame(frame, base, 0));
-                    };
-                    &bytes[..dot]
-                } else {
-                    &bytes
-                };
-                let replaced = replace(search, b'.', if cfg!(windows) { b"\\" } else { b"/" });
+                let search = &bytes;
+                let replaced = replace(search, b'.', if cfg!(windows) { b"\\" } else { b"/" })?;
+                self.reserve_registers(base + 11)?;
                 self.resize_registers(self.registers.len().max(base + 11));
                 self.registers[base] = name;
-                self.registers[base + 1] = self.intern(&replaced);
+                self.registers[base + 1] = self.try_intern(&replaced)?;
                 self.registers[base + 8] = self.registers[base + 1];
-                if id == CROOT {
-                    self.registers[base + 10] = self.intern(search);
-                }
                 self.frames[owner].pc = 1;
-                self.package_field(id, if id == LUA { b"path" } else { b"cpath" }, base + 2)?;
+                self.package_field(LUA, b"path", base + 2)?;
             }
             1 => {
                 if !matches!(
                     self.registers[base + 2],
                     Value::String(_) | Value::Number(_)
                 ) {
-                    return Err(runtime(if id == LUA {
-                        "'package.path' must be a string"
-                    } else {
-                        "'package.cpath' must be a string"
-                    }));
+                    return Err(runtime("'package.path' must be a string"));
                 }
                 let path = self.concat_bytes(self.registers[base + 2])?;
-                let path = self.intern(io::c_bytes(&path));
+                let path = self.try_intern(io::c_bytes(&path))?;
                 self.registers[base + 2] = path;
                 self.registers[base + 9] = path;
-                self.registers[base + 3] = self.intern(b"");
+                self.registers[base + 3] = self.try_intern(b"")?;
                 self.registers[base + 4] = Value::Number(0.);
                 self.frames[owner].pc = 2;
             }
@@ -543,7 +490,7 @@ impl Vm {
                     start += 1
                 }
                 if start == path.len() {
-                    return Ok(self.return_frame(frame, base + 3, 1));
+                    return self.return_frame(frame, base + 3, 1);
                 }
                 let end = path[start..]
                     .iter()
@@ -557,34 +504,26 @@ impl Vm {
                     &path[start..end],
                     b'?',
                     &self.strings.bytes[slot_index(name_id.0)],
-                );
-                if io::open(&filename, b"r").is_ok() {
-                    self.registers[base + 5] = self.intern(&filename);
-                    if id != LUA {
-                        if self.native_library_support {
-                            return self.library_step(id, frame);
-                        }
-                        let error =
-                            self.intern(b"dynamic libraries are not enabled in this Rust engine");
-                        return self.package_load_error(frame, base + 5, error);
-                    }
+                )?;
+                if io::open_input(&filename, false)?.is_ok() {
+                    self.registers[base + 5] = self.try_intern(&filename)?;
                     self.registers[base + 6] = Value::Native(CONT_FILE);
                     self.registers[base + 7] = self.registers[base + 5];
                     self.frames[owner].pc = 3;
                     self.package_call(base + 6, 1, 2)?;
                 } else {
                     let mut bytes = self.concat_bytes(self.registers[base + 3])?;
-                    bytes.extend_from_slice(b"\n\tno file '");
-                    bytes.extend_from_slice(&filename);
-                    bytes.push(b'\'');
-                    self.registers[base + 3] = self.intern(&bytes);
+                    bytes.try_extend_from_slice(b"\n\tno file '")?;
+                    bytes.try_extend_from_slice(&filename)?;
+                    bytes.try_push(b'\'')?;
+                    self.registers[base + 3] = self.try_intern(&bytes)?;
                 }
             }
             3 => {
                 if self.registers[base + 6] == Value::Nil {
                     return self.package_load_error(frame, base + 5, self.registers[base + 7]);
                 }
-                return Ok(self.return_frame(frame, base + 6, 1));
+                return self.return_frame(frame, base + 6, 1);
             }
             _ => unreachable!("file search phase"),
         }
@@ -598,29 +537,22 @@ impl Vm {
     ) -> Result<Option<usize>, Error> {
         let name = self.concat_bytes(self.registers[frame.base])?;
         let filename = self.concat_bytes(self.registers[file])?;
-        let text = self
-            .concat_bytes(error)
-            .unwrap_or_else(|_| b"(null)".to_vec());
-        let mut bytes = self.take_buffer(name.len() + filename.len() + text.len() + 50);
-        bytes.extend_from_slice(b"error loading module '");
-        bytes.extend_from_slice(&name);
-        bytes.extend_from_slice(b"' from file '");
-        bytes.extend_from_slice(&filename);
-        bytes.extend_from_slice(b"':\n\t");
-        bytes.extend_from_slice(io::c_bytes(&text));
-        let value = self.finish_buffer(bytes);
-        let value = self.located_error(value, 1);
+        let text = self.package_error_text(error)?;
+        let mut bytes = self.try_take_buffer(name.len() + filename.len() + text.len() + 50)?;
+        bytes.try_extend_from_slice(b"error loading module '")?;
+        bytes.try_extend_from_slice(&name)?;
+        bytes.try_extend_from_slice(b"' from file '")?;
+        bytes.try_extend_from_slice(&filename)?;
+        bytes.try_extend_from_slice(b"':\n\t")?;
+        bytes.try_extend_from_slice(io::c_bytes(&text))?;
+        let value = self.try_finish_buffer(bytes)?;
+        let value = self.try_located_error(value, 1)?;
         Err(self.package_raised(value))
     }
-    pub(super) fn open_package(&mut self, loaded: TableId) {
-        let mt = self.new_table();
-        let key = self.intern(b"__gc");
-        self.raw_set(mt, key, Value::Native(LIB_GC)).unwrap();
-        let key = self.intern(b"_LOADLIB");
-        self.raw_set(self.registry, key, Value::Table(mt)).unwrap();
-        let library = self.new_table();
-        let loaders = self.new_table();
-        let preload = self.new_table();
+    pub(super) fn open_package(&mut self, loaded: TableId) -> Result<(), Error> {
+        let library = self.try_new_table()?;
+        let loaders = self.try_new_table()?;
+        let preload = self.try_new_table()?;
         for (name, value) in [
             (b"loaded".as_slice(), Value::Table(loaded)),
             (b"preload", Value::Table(preload)),
@@ -628,38 +560,38 @@ impl Vm {
             (b"seeall", Value::Native(SEEALL)),
             (b"loadlib", Value::Native(LOADLIB)),
         ] {
-            let key = self.intern(name);
-            self.raw_set(library, key, value).unwrap();
+            let key = self.try_intern(name)?;
+            self.raw_set(library, key, value)?;
         }
         for (i, id) in [PRELOAD, LUA, C, CROOT].into_iter().enumerate() {
-            self.raw_set(loaders, Value::Number((i + 1) as f64), Value::Native(id))
-                .unwrap();
-            self.set_native_environment(id, library);
+            self.raw_set(loaders, Value::Number((i + 1) as f64), Value::Native(id))?;
+            self.set_native_environment(id, library)?;
         }
         #[cfg(windows)]
-        let (path, cpath, config) = (
+        let (path, config) = (
             b".\\?.lua;!\\lua\\?.lua;!\\lua\\?\\init.lua;!\\?.lua;!\\?\\init.lua".as_slice(),
-            b".\\?.dll;!\\?.dll;!\\loadall.dll".as_slice(),
             b"\\\n;\n?\n!\n-".as_slice(),
         );
         #[cfg(not(windows))]
-        let (path,cpath,config)=(b"./?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua;/usr/local/lib/lua/5.1/?.lua;/usr/local/lib/lua/5.1/?/init.lua".as_slice(),b"./?.so;/usr/local/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/loadall.so".as_slice(),b"/\n;\n?\n!\n-".as_slice());
-        for (field, bytes) in [
-            (b"path".as_slice(), initial_path("LUA_PATH", path)),
-            (b"cpath", initial_path("LUA_CPATH", cpath)),
-            (b"config", config.to_vec()),
-        ] {
-            let key = self.intern(field);
-            let value = self.intern(&bytes);
-            self.raw_set(library, key, value).unwrap();
-        }
+        let (path,config)=(b"./?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua;/usr/local/lib/lua/5.1/?.lua;/usr/local/lib/lua/5.1/?/init.lua".as_slice(),b"/\n;\n?\n!\n-".as_slice());
+        let bytes = paths::initial(c"LUA_PATH", path, self.tables.memory().clone())?;
+        let key = self.try_intern(b"path")?;
+        let value = self.try_intern(&bytes)?;
+        self.raw_set(library, key, value)?;
+        let key = self.try_intern(b"cpath")?;
+        let value = self.try_intern(b"")?;
+        self.raw_set(library, key, value)?;
+        let key = self.try_intern(b"config")?;
+        let value = self.try_intern(config)?;
+        self.raw_set(library, key, value)?;
         for (name, id) in [(b"require".as_slice(), REQUIRE), (b"module", MODULE)] {
-            self.set_global(name, Value::Native(id)).unwrap();
-            self.set_native_environment(id, library);
+            self.set_global(name, Value::Native(id))?;
+            self.set_native_environment(id, library)?;
         }
-        let name = self.intern(b"package");
-        self.raw_set(loaded, name, Value::Table(library)).unwrap();
-        self.set_global(b"package", Value::Table(library)).unwrap();
+        let name = self.try_intern(b"package")?;
+        self.raw_set(loaded, name, Value::Table(library))?;
+        self.set_global(b"package", Value::Table(library))?;
+        Ok(())
     }
     fn package_name(&mut self, frame: Frame) -> Result<Value, Error> {
         if !matches!(
@@ -675,55 +607,48 @@ impl Vm {
         if bytes.len() == full.len() {
             return Ok(Value::String(id));
         }
-        let bytes = bytes.to_vec();
-        Ok(self.intern(&bytes))
+        let bytes = bytes.try_to_vec().map_err(|_| self.memory_failure())?;
+        self.try_intern(&bytes)
     }
     fn package_named_error(&mut self, prefix: &[u8], name: Value, suffix: &[u8]) -> Error {
-        let name = self.concat_bytes(name).expect("validated package name");
-        let mut bytes = self.take_buffer(prefix.len() + name.len() + suffix.len());
-        bytes.extend_from_slice(prefix);
-        bytes.extend_from_slice(&name);
-        bytes.extend_from_slice(suffix);
-        let value = self.finish_buffer(bytes);
-        let value = self.located_error(value, 1);
-        self.package_raised(value)
+        let mut build = || -> Result<Value, Error> {
+            let name = self.concat_bytes(name)?;
+            let mut bytes = self.try_take_buffer(prefix.len() + name.len() + suffix.len())?;
+            bytes.try_extend_from_slice(prefix)?;
+            bytes.try_extend_from_slice(&name)?;
+            bytes.try_extend_from_slice(suffix)?;
+            let value = self.try_finish_buffer(bytes)?;
+            self.try_located_error(value, 1)
+        };
+        match build() {
+            Ok(value) => self.package_raised(value),
+            Err(_) => self.memory_failure(),
+        }
     }
     fn package_bad(&mut self, frame: Frame, index: usize, expected: &[u8]) -> Error {
-        let (name, kind) = self
-            .debug_name(self.thread, self.frames.len() - 1)
-            .unwrap_or_else(|| (b"?".to_vec().into_boxed_slice(), b""));
         let actual = if index >= frame.argc() {
             "no value"
         } else {
             self.argument(frame.vararg_start - 1, frame.argc(), index)
                 .type_name()
         };
-        let mut bytes = self.take_buffer(96);
-        if kind == b"method" && index == 0 {
-            bytes.extend_from_slice(b"calling '");
-            bytes.extend_from_slice(&name);
-            bytes.extend_from_slice(b"' on bad self (");
-        } else {
-            bytes.extend_from_slice(
-                format!(
-                    "bad argument #{} to '",
-                    index + usize::from(kind != b"method")
-                )
-                .as_bytes(),
-            );
-            bytes.extend_from_slice(&name);
-            bytes.extend_from_slice(b"' (");
+        let mut build = || -> Result<Value, Error> {
+            let mut detail = expected.try_to_vec()?;
+            detail.try_extend_from_slice(b" expected, got ")?;
+            detail.try_extend_from_slice(actual.as_bytes())?;
+            let error = self.argument_error(index, &detail);
+            if error.kind() == ErrorKind::Memory {
+                return Err(error);
+            }
+            self.error_value(&error, 1)
+        };
+        match build() {
+            Ok(value) => self.package_raised(value),
+            Err(_) => self.memory_failure(),
         }
-        bytes.extend_from_slice(expected);
-        bytes.extend_from_slice(b" expected, got ");
-        bytes.extend_from_slice(actual.as_bytes());
-        bytes.push(b')');
-        let value = self.finish_buffer(bytes);
-        let value = self.located_error(value, 1);
-        self.package_raised(value)
     }
     fn package_field(&mut self, id: u64, name: &[u8], result: usize) -> Result<(), Error> {
-        let key = self.intern(name);
+        let key = self.try_intern(name)?;
         self.get_table(Value::Table(self.builtin_environment(id)), key, result)
     }
     fn package_call(&mut self, call: usize, count: usize, wanted: u32) -> Result<(), Error> {
@@ -737,13 +662,15 @@ impl Vm {
             REQUIRE => self.require_step(frame),
             MODULE => self.module_step(frame),
             PRELOAD => self.preload_step(frame),
-            LUA | C | CROOT => self.searcher_step(id, frame),
+            LUA => self.searcher_step(frame),
+            C | CROOT => {
+                self.package_name(frame)?;
+                self.registers[frame.base] =
+                    self.try_intern(b"\n\tC modules are not supported by deadlib-lua")?;
+                self.return_frame(frame, frame.base, 1)
+            }
             SEEALL => self.seeall_step(frame),
-            LIB_GC => self.library_gc(frame),
             LOADLIB => {
-                if self.native_library_support || frame.pc >= 100 {
-                    return self.library_step(id, frame);
-                }
                 for index in 0..2 {
                     if !matches!(
                         self.argument(frame.vararg_start - 1, frame.argc(), index),
@@ -754,9 +681,9 @@ impl Vm {
                 }
                 self.registers[frame.base] = Value::Nil;
                 self.registers[frame.base + 1] =
-                    self.intern(b"dynamic libraries are not enabled in this Rust engine");
-                self.registers[frame.base + 2] = self.intern(b"absent");
-                Ok(self.return_frame(frame, frame.base, 3))
+                    self.try_intern(b"C modules are not supported by deadlib-lua")?;
+                self.registers[frame.base + 2] = self.try_intern(b"absent")?;
+                self.return_frame(frame, frame.base, 3)
             }
             _ => unreachable!("package native ID"),
         }

@@ -1,0 +1,76 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 41s
+     Running tests/rust_screen_assembly.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_assembly-bef917e9ca0a29cf)
+
+running 1 test
+test first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records ... screen players
+screen child Underlay
+underlay source underlay_header
+underlay run InitCommand on TableId(17179869730)
+underlay source underlay_filter
+underlay source underlay_filter
+underlay source underlay_difficulty
+underlay run InitCommand on TableId(17179869756)
+underlay run InitCommand on TableId(17179869765)
+underlay run InitCommand on TableId(17179869774)
+underlay source underlay_life
+underlay run InitCommand on TableId(17179869794)
+underlay run InitCommand on TableId(17179869803)
+underlay run OnCommand on TableId(17179869803)
+underlay run InitCommand on TableId(17179869812)
+underlay run OnCommand on TableId(17179869812)
+underlay run InitCommand on TableId(17179869821)
+underlay run OnCommand on TableId(17179869821)
+underlay run InitCommand on TableId(17179869834)
+underlay run OnCommand on TableId(17179869834)
+underlay run OnCommand on TableId(17179869794)
+underlay source underlay_difficulty
+underlay run InitCommand on TableId(17179869858)
+underlay run InitCommand on TableId(17179869867)
+underlay run InitCommand on TableId(17179869877)
+underlay source underlay_life
+underlay run InitCommand on TableId(12884902830)
+underlay run InitCommand on TableId(12884902839)
+underlay run OnCommand on TableId(12884902839)
+underlay run InitCommand on TableId(8589935587)
+underlay run OnCommand on TableId(8589935587)
+underlay run InitCommand on TableId(4294968396)
+underlay run OnCommand on TableId(4294968396)
+underlay run InitCommand on TableId(4294968409)
+underlay run OnCommand on TableId(4294968409)
+underlay run OnCommand on TableId(12884902830)
+underlay source underlay_bpm
+underlay run InitCommand on TableId(4294968426)
+underlay run InitCommand on TableId(4294968435)
+underlay run InitCommand on TableId(4294968447)
+underlay run InitCommand on TableId(4294968456)
+underlay run InitCommand on TableId(4294968468)
+screen child Overlay
+screen child SongBackground
+screen child SongForeground
+screen child In
+
+thread 'first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records' (2648129) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969343))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.05s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_screen_assembly`

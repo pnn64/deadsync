@@ -1,0 +1,9 @@
+
+running 4 tests
+test bounded_array_choices_preserve_table_aliases_and_independent_machine_state ... ok
+test byte_keyed_state_keeps_nil_false_aliases_actions_and_vm_independence ... ok
+test released_key_cache_preserves_nil_and_stays_bounded_under_distinct_inputs ... ok
+test table_schemas_and_unsupported_keys_values_are_rejected_without_execution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

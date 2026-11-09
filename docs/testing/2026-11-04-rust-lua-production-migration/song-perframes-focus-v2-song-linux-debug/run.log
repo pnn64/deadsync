@@ -1,0 +1,24 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 8m 03s
+     Running tests/rust_song_activation.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 5 tests
+test sampled_perframes_keep_gap_holds_and_side_effect_only_diagnostics ... ok
+test sampled_perframes_keep_prefix_global_order_overlaps_raw_holes_and_player_curves ... ok
+test sampled_perframes_replay_messages_in_stable_order_and_filter_queued_blocks ... ok
+test sampled_perframes_restore_clocks_after_errors_and_keep_partial_script_writes ... ok
+test sampled_perframes_root_future_callbacks_and_release_consumed_inputs_after_gc ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 207 filtered out; finished in 10.42s
+

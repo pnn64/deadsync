@@ -1,0 +1,40 @@
+{
+  "created_utc": "2026-11-08T14:36:03.560897+00:00",
+  "binary": "target\\rust-adapters\\debug\\deps\\rust_live_scene-36ecf767e307a22f.exe",
+  "binary_sha256": "068b74045ba48ce12037f6dccc0bb1783993c12fe23750bdf0e79f03fd2af863",
+  "source_snapshot": "production-effect-and-scope-v4-song-windows-debug/sources.json",
+  "runs": [
+    {
+      "test": "replay_captured_subscriber_paths_preserve_the_native_order",
+      "exit_code": 0,
+      "seconds": 0.5306065001059324,
+      "log": "run-1.log",
+      "log_sha256": "035382a8d6872b5fe0efe4ce6c1a5985f0734f81ade2ab06276b5bf9d8601625",
+      "details": []
+    },
+    {
+      "test": "replay_missing_subscriber_identity_dispatches_and_reports_coverage_once",
+      "exit_code": 0,
+      "seconds": 0.5263229999691248,
+      "log": "run-2.log",
+      "log_sha256": "4516132dce79ab1ef9c098a03adb918b0d1dccc2fca03e98473773708c932f81",
+      "details": []
+    },
+    {
+      "test": "replay_captured_subscriber_paths_preserve_the_native_order",
+      "exit_code": 0,
+      "seconds": 0.5211342999245971,
+      "log": "run-3.log",
+      "log_sha256": "65072c5fd24b36de81a3e37a8b168c7778c6b8716a01931c6285672cad0b750e",
+      "details": []
+    },
+    {
+      "test": "replay_missing_subscriber_identity_dispatches_and_reports_coverage_once",
+      "exit_code": 0,
+      "seconds": 0.5402738000266254,
+      "log": "run-4.log",
+      "log_sha256": "98ba1e6b5a65a598dbec21a508eefda97fe18d760761bcf5f98f7363225b9b57",
+      "details": []
+    }
+  ]
+}

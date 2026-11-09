@@ -1,5 +1,5 @@
 #[inline]
-fn lua_newline_count(text: &str) -> usize {
+pub(crate) fn lua_newline_count(text: &str) -> usize {
     if text.len() < 16 {
         text.bytes().filter(|&byte| byte == b'\n').count()
     } else {
@@ -8,7 +8,7 @@ fn lua_newline_count(text: &str) -> usize {
 }
 
 #[inline]
-fn append_lua_newlines(out: &mut String, text: &str) {
+pub(crate) fn append_lua_newlines(out: &mut String, text: &str) {
     out.extend(std::iter::repeat_n('\n', lua_newline_count(text)));
 }
 
@@ -193,7 +193,7 @@ fn lua_cmd_name(command: &str) -> Result<(&str, &str), String> {
     Ok((&command[..end], &command[end..]))
 }
 
-fn lua_cmd_commands(body: &str) -> impl Iterator<Item = Result<&str, String>> {
+pub(crate) fn lua_cmd_commands(body: &str) -> impl Iterator<Item = Result<&str, String>> {
     // Consume each validated slice directly instead of collecting all of them.
     // EOF still yields the final slice, including empty/whitespace-only text:
     // the formatter uses its leading newlines to preserve native source lines.
@@ -512,7 +512,7 @@ fn lua_comment_end(source: &str, index: usize) -> usize {
         .unwrap_or(source.len())
 }
 
-fn lua_quoted_end(source: &str, index: usize) -> Result<usize, String> {
+pub(crate) fn lua_quoted_end(source: &str, index: usize) -> Result<usize, String> {
     let bytes = source.as_bytes();
     let quote = bytes[index];
     let mut cursor = index + 1;
@@ -597,242 +597,4 @@ fn lua_long_string_end(source: &str, index: usize, open_end: usize) -> Result<us
         }
     }
     Err("unterminated Lua long string".to_string())
-}
-
-#[cfg(test)]
-mod dispatch_perf {
-    include!("../tests/perf/cmd_dispatch.rs");
-}
-
-#[cfg(test)]
-mod perf {
-    include!("../tests/perf/cmd.rs");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::preprocess_lua_cmd_syntax;
-
-    #[test]
-    fn preprocess_lua_cmd_turns_commands_into_function() {
-        assert_eq!(
-            preprocess_lua_cmd_syntax("return cmd(diffuse, 1, 0, 0, 1; zoom, 2)").unwrap(),
-            "return function(self) self:diffuse(1, 0, 0, 1); self:zoom(2); return self end"
-        );
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_accepts_native_adjacent_commands() {
-        let source = r#"return cmd(sleep,0
-pulse; effectmagnitude,1,1,1;
-value, (2 + 3) * 4 nextvalue, false or 7;
-value, function() return {3, 4} end nextvalue, ({9, 10})[2];
-value, "literal" nextvalue, [=[long literal]=];
-value, math.max(2, 3) nextvalue, .5e+1;
-value, (function(x) return x end){11} nextvalue, -2^3;
-)"#;
-        let expanded = preprocess_lua_cmd_syntax(source).unwrap();
-        assert_eq!(expanded.matches('\n').count(), source.matches('\n').count());
-        let lua = mlua::Lua::new();
-        let command = lua
-            .load(expanded)
-            .eval::<mlua::Function>()
-            .expect("native cmd argument expressions end before the next command name");
-        let actor = lua
-            .load(
-                r#"
-            local a = {calls={}}
-            for _, name in ipairs({'sleep','pulse','effectmagnitude','value','nextvalue'}) do
-                a[name] = function(self, ...) self.calls[#self.calls+1] = {name, ...} end
-            end
-            return a
-        "#,
-            )
-            .eval::<mlua::Table>()
-            .unwrap();
-        command.call::<()>(actor.clone()).unwrap();
-        let calls: mlua::Table = actor.get("calls").unwrap();
-        assert_eq!(calls.raw_len(), 13);
-        assert_eq!(
-            calls.get::<mlua::Table>(1).unwrap().get::<i32>(2).unwrap(),
-            0
-        );
-        assert_eq!(calls.get::<mlua::Table>(2).unwrap().raw_len(), 1);
-        assert_eq!(
-            calls.get::<mlua::Table>(4).unwrap().get::<i32>(2).unwrap(),
-            20
-        );
-        assert_eq!(
-            calls.get::<mlua::Table>(5).unwrap().get::<i32>(2).unwrap(),
-            7
-        );
-        assert_eq!(
-            calls.get::<mlua::Table>(7).unwrap().get::<i32>(2).unwrap(),
-            10
-        );
-        assert_eq!(
-            calls.get::<mlua::Table>(11).unwrap().get::<i32>(2).unwrap(),
-            5
-        );
-        assert_eq!(
-            calls.get::<mlua::Table>(13).unwrap().get::<i32>(2).unwrap(),
-            -8
-        );
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_accepts_comments_between_commands_and_arguments() {
-        let source = r#"return cmd(
-            -- Disabled: x, 99; )
-            x, --[=[ ignored ; ) ]=] 12;
-            -- another command
-            settext, "--literal; )";
-            settext, [=[--long literal]=];
-            y, 34 -- trailing comment
-        )"#;
-        let lua = mlua::Lua::new();
-        let command = lua
-            .load(preprocess_lua_cmd_syntax(source).unwrap())
-            .eval::<mlua::Function>()
-            .unwrap();
-        let actor = lua
-            .load(
-                r#"return {
-            x = function(self, value) self.a = value end,
-            y = function(self, value) self.b = value end,
-            settext = function(self, value) self.label = (self.label or '') .. value end,
-        }"#,
-            )
-            .eval::<mlua::Table>()
-            .unwrap();
-        command.call::<mlua::Value>(actor.clone()).unwrap();
-        assert_eq!(actor.get::<i32>("a").unwrap(), 12);
-        assert_eq!(actor.get::<i32>("b").unwrap(), 34);
-        assert_eq!(
-            actor.get::<String>("label").unwrap(),
-            "--literal; )--long literal"
-        );
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_preserves_function_arguments() {
-        let source = r#"return cmd(SetUpdateFunction, function(self)
-            local count = 0;
-            for i = 1, 3 do
-                if i == 1 then count = count + i;
-                elseif i == 2 then do count = count + i; end
-                else count = count + i; end
-            end
-            while count < 7 do count = count + 1; end
-            repeat count = count + 1; until count == 8
-            local nested = function() return "function; do; end", count; end;
-            local label, result = nested(); self.label = label; self.count = result;
-        end; zoom, 2)"#;
-        let lua = mlua::Lua::new();
-        let command = lua
-            .load(preprocess_lua_cmd_syntax(source).unwrap())
-            .eval::<mlua::Function>()
-            .unwrap();
-        let actor = lua
-            .load(
-                r#"return {
-                SetUpdateFunction = function(self, callback) self.callback = callback end,
-                zoom = function(self, value) self.scale = value end,
-            }"#,
-            )
-            .eval::<mlua::Table>()
-            .unwrap();
-        command.call::<mlua::Value>(actor.clone()).unwrap();
-        actor
-            .get::<mlua::Function>("callback")
-            .unwrap()
-            .call::<()>(actor.clone())
-            .unwrap();
-        assert_eq!(actor.get::<i32>("count").unwrap(), 8);
-        assert_eq!(actor.get::<i32>("scale").unwrap(), 2);
-        assert_eq!(actor.get::<String>("label").unwrap(), "function; do; end");
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_ignores_strings_and_comments() {
-        let source = "local s = \"cmd(zoom, 2)\" -- cmd(diffuse, 1)\nreturn cmd(linear, 1)";
-
-        assert_eq!(
-            preprocess_lua_cmd_syntax(source).unwrap(),
-            "local s = \"cmd(zoom, 2)\" -- cmd(diffuse, 1)\nreturn function(self) self:linear(1); return self end"
-        );
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_appends_multiple_expansions_and_preserves_surroundings() {
-        let source = "local a = cmd(); local b = cmd(zoom, f(1, 2); diffuse, {1, 0, 0, 1}); return cmd(settext, [=[cmd(x); y]=]) -- cmd(noop)";
-        assert_eq!(
-            preprocess_lua_cmd_syntax(source).unwrap(),
-            "local a = function(self) return self end; local b = function(self) self:zoom(f(1, 2)); self:diffuse({1, 0, 0, 1}); return self end; return function(self) self:settext([=[cmd(x); y]=]); return self end -- cmd(noop)"
-        );
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_keeps_errors_after_an_earlier_expansion() {
-        for (command, expected) in [
-            ("cmd(zoom, 1", "unterminated cmd expression"),
-            ("cmd(1zoom, 1)", "invalid cmd command '1zoom, 1'"),
-            ("cmd(zoom 1)", "invalid cmd command 'zoom 1'"),
-            ("cmd(settext, 'abc)", "unterminated Lua string"),
-            ("cmd(settext, [[abc)", "unterminated Lua long string"),
-        ] {
-            let source = format!("local a = cmd(zoom, 2); return {command}");
-            assert_eq!(preprocess_lua_cmd_syntax(&source).unwrap_err(), expected);
-        }
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_reuses_openings_across_whitespace_and_long_strings() {
-        let source = "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn cmd \t\r\n (settext, [==[x; cmd(noop); )]==]; zoom, 2)";
-        assert_eq!(
-            preprocess_lua_cmd_syntax(source).unwrap(),
-            "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn \nfunction(self) self:settext([==[x; cmd(noop); )]==]); self:zoom(2); return self end"
-        );
-        for source in ["cmd", "cmd  \t", "cmdx(zoom, 1)", "xcmd(zoom, 1)"] {
-            assert_eq!(preprocess_lua_cmd_syntax(source).unwrap(), source);
-        }
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_preserves_native_function_source_lines() {
-        let source = "local first = cmd\n(\nzoom, 2;\nlinear, 1\n)\nlocal second = function() return 7 end\nreturn {first, second}\n";
-        let expanded = preprocess_lua_cmd_syntax(source).unwrap();
-        assert_eq!(expanded.matches('\n').count(), source.matches('\n').count());
-        let lua = mlua::Lua::new();
-        let functions = lua
-            .load(expanded)
-            .set_name("@cmd-source-lines.lua")
-            .eval::<mlua::Table>()
-            .unwrap();
-        let first = functions.get::<mlua::Function>(1).unwrap().info();
-        assert_eq!(first.line_defined, Some(2));
-        assert_eq!(first.last_line_defined, Some(5));
-        let second = functions.get::<mlua::Function>(2).unwrap().info();
-        assert_eq!(second.line_defined, Some(6));
-        assert_eq!(second.last_line_defined, Some(6));
-    }
-
-    #[test]
-    fn preprocess_lua_cmd_preserves_invalid_comment_openings() {
-        for comment in [
-            "--[not a long string",
-            "--[=not a long string",
-            "--[=[unclosed",
-        ] {
-            let source = format!("{comment}\nreturn cmd(zoom, 2)");
-            assert_eq!(
-                preprocess_lua_cmd_syntax(&source).unwrap(),
-                format!("{comment}\nreturn function(self) self:zoom(2); return self end")
-            );
-        }
-        assert_eq!(
-            preprocess_lua_cmd_syntax("return [=[unclosed").unwrap_err(),
-            "unterminated Lua long string"
-        );
-    }
 }

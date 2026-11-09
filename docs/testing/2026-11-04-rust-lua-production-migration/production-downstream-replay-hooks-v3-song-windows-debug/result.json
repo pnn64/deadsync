@@ -1,0 +1,37 @@
+{
+  "stage": "production-downstream-replay-hooks-v3",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "legacy-oracle",
+    "--test",
+    "rust_live_scene",
+    "--no-fail-fast",
+    "replay_",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 265.28047990007326,
+  "log_sha256": "ed9d225b3e95d38cc0bf0e612f58a70c7a6407799cf553dcf4b1e41f790b0233",
+  "tests_passed": 2,
+  "tests_failed": 1,
+  "test_results": [
+    "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 19 filtered out; finished in 2.54s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

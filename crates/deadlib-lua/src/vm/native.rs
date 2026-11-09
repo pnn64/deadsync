@@ -1,5 +1,6 @@
 //! Native library functions and explicit callback continuations.
 use super::*;
+use crate::memory::fallible::{self, VecExt};
 
 impl Vm {
     pub(super) fn finish_call(&mut self, call: usize, actual: usize, wanted: u32) {
@@ -96,6 +97,7 @@ impl Vm {
             {
                 self.check_calls()?;
                 let base = self.registers.len();
+                self.reserve_registers(base + count.max(2) + 4)?;
                 self.resize_registers(base + count.max(2) + 4);
                 self.push_record(Frame {
                     function: FrameKind::Native(id),
@@ -127,6 +129,7 @@ impl Vm {
                     || (io::FIRST..=io::LAST).contains(&id)
                     || id >= strings::ITERATOR_FIRST;
                 if separate && host.is_none() {
+                    self.reserve_registers(base + count + 1)?;
                     self.resize_registers(base + count + 1);
                     self.registers[base] = Value::Native(id);
                     self.registers
@@ -156,15 +159,7 @@ impl Vm {
                             .map(|actual| (source, actual))
                     }
                 }
-                .map_err(|error| {
-                    if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                        let value = self.intern(error.message_bytes());
-                        let value = self.located_error(value, 1);
-                        error.with_value(value)
-                    } else {
-                        error
-                    }
-                });
+                .map_err(|error| self.attach_error_value(error, 1));
                 self.active_native = previous;
                 if result.is_ok() && self.frames[index].pc == threads::HOST_YIELDED {
                     return Ok(None);
@@ -173,7 +168,7 @@ impl Vm {
                     && self.hooks.mask & hooks::RETURN != 0
                     && self.hooks.allowed()
                 {
-                    self.return_frame(self.frames[index], source, actual);
+                    self.return_frame(self.frames[index], source, actual)?;
                     return Ok(None);
                 }
                 let (source, actual) = result?;
@@ -207,6 +202,8 @@ impl Vm {
                     }))
         });
         let base = self.registers.len();
+        self.reserve_registers(base + 1 + args.len())?;
+        self.reserve_frames(1)?;
         self.registers.push(function);
         self.registers.extend_from_slice(args);
         self.push_record(Frame {
@@ -312,20 +309,6 @@ impl Vm {
         ) && matches!(frame.pc, 1 | 3 | 7))
             || (loads::protected(frame.function) && matches!(frame.pc, 1 | 3))
     }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(super) fn thread_has_protection(&self, thread: ThreadId) -> bool {
-        let state = &self.threads[slot_index(thread.0)];
-        if thread == self.main || state.resumer.is_some() {
-            return true;
-        }
-        let frames = if thread == self.thread {
-            &self.frames
-        } else {
-            &state.frames
-        };
-        (0..frames.len()).any(|index| self.thread_protection_active(thread, index))
-    }
-
     pub(super) fn catch_error_from(
         &mut self,
         original: &Error,
@@ -346,13 +329,20 @@ impl Vm {
             };
             let mut frame = self.frames[index];
             frame.function = self.body_kind(index, frame.function);
-            let value = if let Some(value) = error.value() {
-                value
-            } else {
-                let value = self.intern(error.message_bytes());
-                self.located_error(value, 1)
+            let value = match self.error_value(error, 1) {
+                Ok(value) => value,
+                Err(error) => {
+                    pending = Some(error);
+                    continue;
+                }
             };
             if error.kind() == ErrorKind::Memory || error.bypass_handler {
+                if error.kind() == ErrorKind::Memory {
+                    // Return the prepared protected result before retrying automatic
+                    // collection: the next scheduler step must not allocate merely
+                    // to deliver an allocation failure while rejection persists.
+                    self.defer_gc_until_allocation();
+                }
                 self.protected_failure(index, value);
                 if matches!(
                     frame.function,
@@ -474,7 +464,7 @@ impl Vm {
                 }
                 let values = self.take_resume_values(frame)?;
                 self.frames[index].vararg_count = (self.top - frame.vararg_start) as u32;
-                Ok(self.return_frame(self.frames[index], values.start, values.len()))
+                self.return_frame(self.frames[index], values.start, values.len())
             }
             CONT_HOST_LOAD if matches!(frame.pc, 2 | 4 | 5) => {
                 self.frames.pop();
@@ -495,21 +485,15 @@ impl Vm {
                         self.registers[base].is_truthy() == (u64::from(frame.pc) == CONT_BOOL),
                     );
                 }
-                Ok(self.return_frame(frame, base, usize::from(frame.wanted != 0)))
+                self.return_frame(frame, base, usize::from(frame.wanted != 0))
             }
             CONT_STANDALONE => self.standalone_driver(frame),
             debug::CONSOLE => self.debug_console_step(frame),
             _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),
             CONT_HOOK | CONT_TRACE | CONT_RETURN => self.hook_step(id, frame),
             debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
-                // lua_concat raises in the C traceback frame; it does not add
-                // the caller location used by Lua-level arithmetic failures.
-                if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                    let value = self.intern(error.message_bytes());
-                    error.with_value(value)
-                } else {
-                    error
-                }
+                // Traceback concatenation raises in its own native frame.
+                self.attach_error_value(error, 0)
             }),
             LOAD_READER => self.load_step(frame),
             strings::STR_DUMP => self.dump_step(frame),
@@ -528,7 +512,7 @@ impl Vm {
                     frame.vararg_start,
                     frame.vararg_start + frame.argc() - 1,
                 )?;
-                self.maybe_gc();
+                self.maybe_gc()?;
                 Ok(None)
             }
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
@@ -536,7 +520,7 @@ impl Vm {
                     self.registers[base] =
                         Value::Boolean(self.registers[base].is_truthy() == (id == CONT_BOOL));
                 }
-                Ok(self.return_frame(frame, base, usize::from(id != CONT_IGNORE)))
+                self.return_frame(frame, base, usize::from(id != CONT_IGNORE))
             }
             CONT_HANDLER => {
                 let value = self.registers[base];
@@ -562,9 +546,9 @@ impl Vm {
                     self.resize_registers(self.registers.len().max(base + count + 1));
                     self.registers.copy_within(base..base + count, base + 1);
                     self.registers[base] = Value::Boolean(true);
-                    Ok(self.return_frame(frame, base, count + 1))
+                    self.return_frame(frame, base, count + 1)
                 } else {
-                    Ok(self.return_frame(frame, base, 2))
+                    self.return_frame(frame, base, 2)
                 }
             }
             TOSTRING => {
@@ -583,12 +567,12 @@ impl Vm {
                         }
                         return Ok(None);
                     }
-                    self.registers[base] = self.default_string(value);
+                    self.registers[base] = self.default_string(value)?;
                     if matches!(value, Value::Number(_)) {
                         self.registers[frame.vararg_start] = self.registers[base];
                     }
                 }
-                Ok(self.return_frame(frame, base, 1))
+                self.return_frame(frame, base, 1)
             }
             PRINT => self.print_step(frame),
             strings::STR_GSUB => self.substitute_step(frame),
@@ -602,7 +586,7 @@ impl Vm {
                     if self.frames[index].pc == threads::HOST_YIELDED {
                         return Ok(None);
                     }
-                    return Ok(self.return_frame(self.frames[index], source, actual));
+                    return self.return_frame(self.frames[index], source, actual);
                 }
                 // Return hooks run before results replace the caller's slots.
                 self.registers[base] = self.builtin_context(id).unwrap_or(Value::Native(id));
@@ -611,26 +595,31 @@ impl Vm {
                     base + 1,
                 );
                 let actual = self.native(id, base, frame.argc())?;
-                Ok(self.return_frame(self.frames[index], base, actual))
+                self.return_frame(self.frames[index], base, actual)
             }
         }
     }
-    pub(super) fn default_string(&mut self, value: Value) -> Value {
+    fn default_string(&mut self, value: Value) -> Result<Value, Error> {
         match value {
-            Value::String(_) => value,
-            Value::Number(n) => self.intern(format_number(n).as_slice()),
-            Value::Nil => self.intern(b"nil"),
-            Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
-            Value::ParserPrototype(_) => {
-                self.intern(format!("proto: {}", identity::pointer_text(0)).as_bytes())
-            }
+            Value::String(_) => Ok(value),
+            Value::Number(n) => self.intern_number(n),
+            Value::Nil => self.try_intern(b"nil"),
+            Value::Boolean(b) => self.try_intern(if b { b"true" } else { b"false" }),
+            Value::ParserPrototype(_) => self.try_intern(
+                fallible::format(format_args!("proto: {}", identity::pointer_display(0)))?
+                    .as_bytes(),
+            ),
             _ => {
                 let pointer = self
                     .object_pointer(value)
                     .expect("live object has an identity");
-                self.intern(
-                    format!("{}: {}", value.type_name(), identity::pointer_text(pointer))
-                        .as_bytes(),
+                self.try_intern(
+                    fallible::format(format_args!(
+                        "{}: {}",
+                        value.type_name(),
+                        identity::pointer_display(pointer)
+                    ))?
+                    .as_bytes(),
                 )
             }
         }
@@ -640,7 +629,7 @@ impl Vm {
         let index = self.frames.len() - 1;
         if frame.pc() == 0 {
             self.frames[index].pc = 1;
-            let key = self.intern(b"tostring");
+            let key = self.try_intern(b"tostring")?;
             self.get_table(Value::Table(self.globals), key, base + 1)?;
             return Ok(None);
         }
@@ -649,11 +638,9 @@ impl Vm {
             let value = self.registers[base + 2];
             let value = match value {
                 Value::String(_) => value,
-                Value::Number(_) => self.default_string(value),
+                Value::Number(number) => self.intern_number(number)?,
                 _ => {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
+                    return Err(Error::runtime_static(
                         "'tostring' must return a string to 'print'",
                     ));
                 }
@@ -661,32 +648,28 @@ impl Vm {
             let Value::String(id) = value else {
                 unreachable!("print string conversion");
             };
-            if self.output.is_none() {
-                self.ensure_file_backend()?;
-            }
             let bytes = &self.strings.bytes[slot_index(id.0)];
             let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
             if let Some(output) = &mut self.output {
                 if completed != 0 {
-                    output.push(b'\t');
+                    output.try_push(b'\t')?;
                 }
-                output.extend_from_slice(bytes);
+                output.try_extend_from_slice(bytes)?;
             } else {
                 if completed != 0 {
-                    let _ = self.io.write_standard(1, b"\t");
+                    self.io.write_print(b"\t")?;
                 }
-                let _ = self.io.write_standard(1, bytes);
+                self.io.write_print(bytes)?;
             }
         }
         let next = if frame.pc() == 1 { 0 } else { completed + 1 };
         if next >= frame.argc() {
             if let Some(output) = &mut self.output {
-                output.push(b'\n');
+                output.try_push(b'\n')?;
             } else {
-                self.ensure_file_backend()?;
-                let _ = self.io.write_standard(1, b"\n");
+                self.io.write_print(b"\n")?;
             }
-            return Ok(self.return_frame(frame, base, 0));
+            return self.return_frame(frame, base, 0);
         }
         self.registers[base + 2] = self.registers[base + 1];
         self.registers[base + 3] = self.registers[frame.vararg_start + next];
@@ -737,30 +720,41 @@ impl Vm {
         self.stack_frame(level)
             .map(|index| index.map_or(FrameKind::Native(GET_ENV), |i| self.frames[i].function))
     }
-    pub(super) fn located_error(&mut self, value: Value, level: isize) -> Value {
+    pub(super) fn try_located_error(&mut self, value: Value, level: isize) -> Result<Value, Error> {
+        use crate::memory::fallible::{self, VecExt};
         if level <= 0 || !matches!(value, Value::String(_) | Value::Number(_)) {
-            return value;
+            return Ok(value);
         }
         let Ok(Some(index)) = self.stack_frame(level as usize) else {
-            return value;
+            return Ok(value);
         };
         let frame = self.frames[index];
         let FrameKind::Lua(function) = frame.function else {
-            return value;
+            return Ok(value);
         };
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
         let line =
             prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
-        let mut bytes = crate::bytecode::chunk_id(program.source(prototype));
-        bytes.extend_from_slice(format!(":{line}: ").as_bytes());
-        bytes.extend_from_slice(
-            &self
-                .concat_bytes(value)
-                .expect("error value is a string or number"),
-        );
-        self.intern(&bytes)
+        let mut chunk = [0; 60];
+        let used = crate::bytecode::chunk_id_into(program.source(prototype), &mut chunk);
+        let build = || -> Result<Vec<u8>, Error> {
+            let mut bytes = Vec::new();
+            bytes.try_extend_from_slice(&chunk[..used])?;
+            bytes.try_extend_from_slice(fallible::format(format_args!(":{line}: "))?.as_bytes())?;
+            match value {
+                Value::String(id) => bytes
+                    .try_extend_from_slice(self.string_bytes(id).expect("live error string"))?,
+                Value::Number(number) => {
+                    bytes.try_extend_from_slice(&try_format_number(number)?)?
+                }
+                _ => unreachable!(),
+            }
+            Ok(bytes)
+        };
+        let bytes = build().map_err(|_| self.memory_failure())?;
+        self.try_intern(&bytes)
     }
     pub(super) fn native_where(&self, level: isize) -> Vec<u8> {
         if level <= 0 {
@@ -850,33 +844,39 @@ impl Vm {
                     return Err(self.argument_error(0, b"value expected"));
                 }
                 if !arg(self, 0).is_truthy() {
-                    let text = match arg(self, 1) {
-                        Value::Nil => self.intern(b"assertion failed!"),
-                        v @ Value::String(_) => v,
-                        v @ Value::Number(_) => self.default_string(v),
+                    use crate::memory::fallible::SliceExt;
+                    let bytes = match arg(self, 1) {
+                        Value::Nil => b"assertion failed!".try_to_vec(),
+                        Value::String(id) => {
+                            let bytes = self.string_bytes(id).unwrap_or_default();
+                            bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
+                                .try_to_vec()
+                        }
+                        Value::Number(number) => try_format_number(number),
                         _ => return Err(self.argument_type_error(base, count, 1, "string")),
                     };
-                    let Value::String(id) = text else {
-                        unreachable!("assertion message is a string");
-                    };
-                    let bytes = self.string_bytes(id).unwrap_or_default();
-                    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
-                    let message = String::from_utf8_lossy(bytes).into_owned();
-                    let object = self.intern(bytes.to_vec().as_slice());
-                    let object = self.located_error(object, 1);
-                    return Err(Error::raised(object, message));
+                    let error = self.runtime_message(bytes);
+                    if error.kind() == ErrorKind::Memory {
+                        return Err(error);
+                    }
+                    let object = self.try_intern(error.message_bytes())?;
+                    let object = self.try_located_error(object, 1)?;
+                    return Err(error.with_value(object));
                 }
                 self.registers.copy_within(base + 1..base + 1 + count, base);
                 return Ok(count);
             }
             1 => {
-                let message = match arg(self, 0) {
+                use crate::memory::fallible::SliceExt;
+                let error = match arg(self, 0) {
                     Value::String(id) => {
-                        String::from_utf8_lossy(self.string_bytes(id).unwrap_or_default())
-                            .into_owned()
+                        self.runtime_message(self.string_bytes(id).unwrap_or_default().try_to_vec())
                     }
-                    _ => "Lua error".into(),
+                    value => Error::raised_static(value, "Lua error"),
                 };
+                if error.kind() == ErrorKind::Memory {
+                    return Err(error);
+                }
                 let level = if count < 2 || arg(self, 1) == Value::Nil {
                     1
                 } else {
@@ -884,8 +884,8 @@ impl Vm {
                         .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?
                         as isize
                 };
-                let object = self.located_error(arg(self, 0), level);
-                return Err(Error::raised(object, message));
+                let object = self.try_located_error(arg(self, 0), level)?;
+                return Err(error.with_value(object));
             }
             2 => {
                 if count == 0 {
@@ -1027,10 +1027,14 @@ impl Vm {
                         return Err(self.argument_type_error(base, count, 1, "table"));
                     };
                     match target {
-                        Value::Function(id) => self.functions[slot_index(id.0)].env = env,
-                        Value::Native(id) => self.set_native_environment(id, env),
-                        Value::Thread(id) => self.set_thread_environment(id, env),
-                        Value::Userdata(id) => self.userdata[slot_index(id.0)].env = env,
+                        Value::Function(_) | Value::Native(_) => {
+                            self.set_closure_environment(target, env)?
+                        }
+                        Value::Thread(id) => self.set_thread_environment(id, env)?,
+                        Value::Userdata(id) => {
+                            self.reserve_gc_barrier(target, Value::Table(env))?;
+                            self.userdata[slot_index(id.0)].env = env;
+                        }
                         _ => {
                             return Err(Error::new(
                                 ErrorKind::Runtime,
@@ -1064,7 +1068,7 @@ impl Vm {
                             let Value::Table(env) = arg(self, 1) else {
                                 unreachable!("environment type checked");
                             };
-                            self.set_thread_environment(self.thread, env);
+                            self.set_thread_environment(self.thread, env)?;
                             return Ok(0);
                         }
                         self.stack_kind(level as usize)?
@@ -1079,8 +1083,7 @@ impl Vm {
                         let Value::Table(env) = arg(self, 1) else {
                             unreachable!("environment type checked");
                         };
-                        self.functions[slot_index(id.0)].env = env;
-                        self.gc_barrier(Value::Function(id), Value::Table(env));
+                        self.set_closure_environment(Value::Function(id), env)?;
                         Value::Function(id)
                     }
                     _ => {
@@ -1094,21 +1097,39 @@ impl Vm {
             }
             LOAD_STRING => {
                 let source = self.string_argument(base, count, 0)?;
-                let source = self.strings.bytes[slot_index(source.0)].to_vec();
                 let name = match arg(self, 1) {
-                    Value::Nil => source.clone(),
-                    _ => {
-                        let id = self.string_argument(base, count, 1)?;
-                        self.strings.bytes[slot_index(id.0)].to_vec()
-                    }
+                    Value::Nil => source,
+                    _ => self.string_argument(base, count, 1)?,
                 };
+                let binary = self.strings.bytes[slot_index(source.0)].first() == Some(&27);
                 let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
-                let compiled = loads::compile(&source, &name, depth);
+                // Compilation is synchronous and cannot reenter Lua. Borrowing
+                // these rooted strings avoids unbudgeted copies of the source.
+                let compiled = crate::memory::compilation::Workspace::new(self.registers.memory())
+                    .and_then(|workspace| {
+                        workspace.run(|| {
+                            loads::compile(
+                                &self.strings.bytes[slot_index(source.0)],
+                                &self.strings.bytes[slot_index(name.0)],
+                                depth,
+                            )
+                        })
+                    });
+                let compiled = compiled.and_then(|program| self.load(&program));
                 match compiled {
-                    Ok(program) => Value::Function(self.load(&program)),
+                    Ok(function) => Value::Function(function),
                     Err(error) => {
-                        let message = loads::message(&name, &error, source.first() == Some(&27));
-                        let value = self.intern(&message);
+                        let value = if error.kind() == ErrorKind::Memory {
+                            Value::String(self.memory_error)
+                        } else {
+                            let message = loads::message(
+                                &self.strings.bytes[slot_index(name.0)],
+                                &error,
+                                binary,
+                            )?;
+                            self.try_intern(&message)?
+                        };
+                        self.reserve_registers(base + 2)?;
                         self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Nil;
                         self.registers[base + 1] = value;
@@ -1148,7 +1169,7 @@ impl Vm {
                         "cannot change a protected metatable",
                     ));
                 }
-                self.set_metatable(target, mt);
+                self.set_metatable(target, mt)?;
                 if id == DEBUG_SET_META {
                     Value::Boolean(true)
                 } else {
@@ -1170,43 +1191,87 @@ impl Vm {
 
 // Locale punctuation is applied after the pure Rust %.14g conversion.
 pub(super) fn format_number(n: f64) -> Vec<u8> {
-    let mut bytes = format_number_c(n).into_bytes();
-    crate::locale::localize(&mut bytes);
-    bytes
+    try_format_number(n).expect("allocate formatted number")
 }
-fn format_number_c(n: f64) -> String {
+pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
+    use std::fmt::Write;
+    // binary64 %.14g needs at most 22 ASCII bytes, including sign/exponent.
+    // Fixed backing storage keeps formatting itself allocation-free.
+    struct Buffer {
+        bytes: [u8; 64],
+        len: usize,
+    }
+    impl Buffer {
+        fn new() -> Self {
+            Self {
+                bytes: [0; 64],
+                len: 0,
+            }
+        }
+        fn text(&self) -> &str {
+            std::str::from_utf8(&self.bytes[..self.len]).unwrap()
+        }
+    }
+    impl Write for Buffer {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            let end = self.len + text.len();
+            let target = self.bytes.get_mut(self.len..end).ok_or(std::fmt::Error)?;
+            target.copy_from_slice(text.as_bytes());
+            self.len = end;
+            Ok(())
+        }
+    }
+    let mut output = Buffer::new();
     if !n.is_finite() {
-        return if n.is_nan() {
-            format!(
+        if n.is_nan() {
+            write!(
+                output,
                 "{}{}",
                 if n.is_sign_negative() { "-" } else { "" },
                 crate::format::nan_body(n)
             )
+            .unwrap();
         } else if n < 0.0 {
-            "-inf".into()
+            output.write_str("-inf").unwrap();
         } else {
-            "inf".into()
-        };
-    }
-    let scientific = format!("{n:.13e}");
-    let (digits, exp) = scientific
-        .split_once('e')
-        .expect("scientific formatting includes exponent");
-    let exponent: i32 = exp.parse().expect("formatted exponent is an integer");
-    if !(-4..14).contains(&exponent) {
-        let digits = digits.trim_end_matches('0').trim_end_matches('.');
-        format!(
-            "{digits}e{}{abs:02}",
-            if exponent < 0 { '-' } else { '+' },
-            abs = exponent.abs()
-        )
+            output.write_str("inf").unwrap();
+        }
     } else {
-        let decimals = (13 - exponent).max(0) as usize;
-        let fixed = format!("{n:.decimals$}");
-        if fixed.contains('.') {
-            fixed.trim_end_matches('0').trim_end_matches('.').into()
+        let mut scientific = Buffer::new();
+        write!(scientific, "{n:.13e}").unwrap();
+        let (digits, exp) = scientific
+            .text()
+            .split_once('e')
+            .expect("scientific formatting includes exponent");
+        let exponent: i32 = exp.parse().expect("formatted exponent is an integer");
+        if !(-4..14).contains(&exponent) {
+            let digits = digits.trim_end_matches('0').trim_end_matches('.');
+            write!(
+                output,
+                "{digits}e{}{abs:02}",
+                if exponent < 0 { '-' } else { '+' },
+                abs = exponent.abs()
+            )
+            .unwrap();
         } else {
-            fixed
+            let decimals = (13 - exponent).max(0) as usize;
+            let mut fixed = Buffer::new();
+            write!(fixed, "{n:.decimals$}").unwrap();
+            let fixed = fixed.text();
+            if fixed.contains('.') {
+                output
+                    .write_str(fixed.trim_end_matches('0').trim_end_matches('.'))
+                    .unwrap();
+            } else {
+                output.write_str(fixed).unwrap();
+            }
         }
     }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(output.len)
+        .map_err(|_| Error::memory())?;
+    bytes.extend_from_slice(&output.bytes[..output.len]);
+    crate::locale::try_localize(&mut bytes)?;
+    Ok(bytes)
 }

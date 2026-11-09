@@ -1,5 +1,12 @@
 //! Stream scanning preserves the native runtime's partial-token consumption.
 use super::{ERRNO, parse_number, stream::Stream};
+use crate::memory::Buffer;
+
+fn take(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<(), i32> {
+    bytes.try_reserve(1).map_err(|_| 12)?;
+    bytes.push(file.get()?.expect("peeked numeric byte"));
+    Ok(())
+}
 
 fn lower(byte: u8) -> u8 {
     if cfg!(all(target_os = "linux", target_env = "gnu")) {
@@ -8,7 +15,7 @@ fn lower(byte: u8) -> u8 {
         byte.to_ascii_lowercase()
     }
 }
-fn word(file: &mut Stream, bytes: &mut Vec<u8>, text: &[u8]) -> Result<bool, i32> {
+fn word(file: &mut Stream, bytes: &mut Buffer<u8>, text: &[u8]) -> Result<bool, i32> {
     for &expected in text {
         let byte = file.peek()?;
         if byte.map(lower) != Some(expected) {
@@ -19,16 +26,13 @@ fn word(file: &mut Stream, bytes: &mut Vec<u8>, text: &[u8]) -> Result<bool, i32
             }
             return Ok(false);
         }
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
     }
     #[cfg(windows)]
     file.peek()?;
     Ok(true)
 }
-pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i32> {
-    if let Some(super::stream::Resource::Native(native)) = file.resource.as_mut() {
-        return native.number();
-    }
+pub(super) fn read_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>, i32> {
     let result = scan_number(file, bytes);
     #[cfg(windows)]
     if result.is_ok() {
@@ -36,13 +40,13 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
     }
     result
 }
-fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i32> {
+fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>, i32> {
     file.flush()?;
     while file.peek()?.is_some_and(crate::locale::is_space) {
         file.get()?;
     }
     if file.peek()?.is_some_and(|b| matches!(b, b'+' | b'-')) {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
     }
     let sign = usize::from(!bytes.is_empty());
     let negative = bytes.first() == Some(&b'-');
@@ -77,13 +81,13 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
             file.discard_number_sentinel();
             let mut bits = 0x7ff8_0000_0000_0000u64;
             if file.peek()? == Some(b'(') {
-                bytes.push(file.get()?.unwrap());
+                take(file, bytes)?;
                 let start = bytes.len();
                 while file
                     .peek()?
                     .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
                 {
-                    bytes.push(file.get()?.unwrap());
+                    take(file, bytes)?;
                 }
                 let tail = file.peek()?;
                 if tail != Some(b')') {
@@ -104,7 +108,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
                 if !cfg!(all(target_os = "linux", target_env = "gnu")) && snan {
                     bits = 0x7ff0_0000_0000_0001;
                 }
-                bytes.push(file.get()?.unwrap());
+                take(file, bytes)?;
                 #[cfg(windows)]
                 if ind || snan {
                     file.peek()?;
@@ -128,7 +132,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
     // can expose more digits, but cannot turn a later x into a radix prefix.
     #[cfg(windows)]
     let hex = if file.peek()? == Some(b'0') {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
         digits = 1;
         let hex = file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'));
         if !hex {
@@ -141,7 +145,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
     #[cfg(not(windows))]
     let hex = {
         while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
-            bytes.push(file.get()?.unwrap());
+            take(file, bytes)?;
             digits += 1;
         }
         digits == 1
@@ -149,7 +153,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
             && file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'))
     };
     if hex {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
         digits = 0;
     }
     while file.peek()?.is_some_and(|b| {
@@ -159,18 +163,18 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
             b.is_ascii_digit()
         }
     }) {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
         digits += 1;
     }
     let point = crate::locale::decimal();
     let has_point = file.peek()? == point.first().copied();
     if has_point {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
         for &byte in &point[1..] {
             if file.peek()? != Some(byte) {
                 return Ok(None);
             }
-            bytes.push(file.get()?.unwrap());
+            take(file, bytes)?;
         }
         while file.peek()?.is_some_and(|b| {
             if hex {
@@ -179,7 +183,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
                 b.is_ascii_digit()
             }
         }) {
-            bytes.push(file.get()?.unwrap());
+            take(file, bytes)?;
             digits += 1;
         }
     }
@@ -202,12 +206,12 @@ fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i3
             matches!(b, b'e' | b'E')
         }
     }) {
-        bytes.push(file.get()?.unwrap());
+        take(file, bytes)?;
         if file.peek()?.is_some_and(|b| matches!(b, b'+' | b'-')) {
-            bytes.push(file.get()?.unwrap());
+            take(file, bytes)?;
         }
         while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
-            bytes.push(file.get()?.unwrap());
+            take(file, bytes)?;
             exponent_digits += 1;
         }
     }

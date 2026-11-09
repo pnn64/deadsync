@@ -1,0 +1,50 @@
+{
+  "goal_complete": false,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "source_count": 1253,
+  "changed": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/perframe.rs",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/update_options.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_update_output.rs",
+    "crates/deadsync-song-lua/tests/rust_song_update_output.rs"
+  ],
+  "removed": [],
+  "native_compiler_only_shares_visibility": true,
+  "existing_tests_byte_unchanged": true,
+  "original_212_activation_cases_preserved": true,
+  "new_cases": 8,
+  "adapter_tests_passed": 239,
+  "adapter_targets": 4,
+  "formatting_passed": true,
+  "clippy_diagnostics_match_preexisting_baseline": true,
+  "dependency_graph_unchanged": true,
+  "engine_sources_unchanged": true,
+  "runner_unchanged": true,
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "source_diff_sha256": "7d4b338c562a9d2da00bad2705615ec62a848d4f4d4d9c7304fa3547791125a1",
+  "results": {
+    "song-static-update-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 564.2930551201571,
+      "tests_passed": 239,
+      "tests_failed": 0,
+      "log_sha256": "d0d385c6f0ffd47175ac72ba88323aa7ab10740f34153b77fe95c326fa46ace1",
+      "sources_unchanged": true
+    },
+    "song-static-update-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 213.72568238317035,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "log_sha256": "9e1837195168249ba3712a0bd695b42e7302e1f00fe44cdb0f89397ceb474b84",
+      "sources_unchanged": true
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "stage": "production-effect-and-scope-v3",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--test",
+    "rust_song_compiler",
+    "--test",
+    "rust_live_compiler",
+    "--test",
+    "rust_effects",
+    "--test",
+    "rust_messages",
+    "--test",
+    "rust_live_scene",
+    "--test",
+    "rust_actors",
+    "--no-fail-fast",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 775.1950774998404,
+  "log_sha256": "a602c94aef89bae48ce26493f7558c399efc0082e4c9837764419d7895dab38b",
+  "tests_passed": 34,
+  "tests_failed": 81,
+  "test_results": [
+    "test result: FAILED. 15 passed; 12 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.14s",
+    "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s",
+    "test result: FAILED. 0 passed; 17 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.55s",
+    "test result: FAILED. 1 passed; 22 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.22s",
+    "test result: FAILED. 7 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s",
+    "test result: FAILED. 1 passed; 24 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.46s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

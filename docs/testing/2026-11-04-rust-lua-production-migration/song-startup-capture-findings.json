@@ -1,0 +1,18 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: activation implemented; 140 tests across 10 targets, source and formatting audits passed",
+  "scope": "Owned initial-update output, wrapper defaults, Init/On preparation tween capture and startup broadcasts",
+  "remaining": "Shared-state queued discovery/rewind, prepared/live output integration, full reload orchestration, fallback/cache, unconditional cutover and final fixture/app/render/dependency/performance evidence",
+  "failures": {
+    "focused-v1": "10/12 passed. Owned actor states, blocks, wrapper defaults and removed-actor retention matched. Live broadcast output incorrectly included construction LifeChanged/MeterSet/CurrentSongChanged events; added exact native life-loaded and Underlay suppression scopes while retaining callback dispatch. Corrected new explicit-nil assertion: runtime event presence differs from Lua history has_params flag."
+  },
+  "passing_intermediate": {
+    "focused-v2": "69/69 across five targets after broadcast fixes",
+    "focused-v3": "90/90 across seven targets including final tween output and narrowed construction suppression scope"
+  },
+  "final_review": "song-startup-capture-review.json",
+  "final_activation_recheck": 12,
+  "broad_regressions": 90,
+  "lint_cleanup": "Replaced or_insert_with(Default::default) with or_default; audit proves it is the only difference after broad regressions.",
+  "audit_matcher": "Corrected only the inserted blank separator before impl Pair after exact diff inspection; no source or test behavior changed."
+}

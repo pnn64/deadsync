@@ -1,0 +1,15 @@
+{
+  "path": "crates/deadsync-score/src/leaderboard.rs",
+  "baseline_sha256": "4e8d8151167754c92d759814f7ef46a370fb4e3fbf89c4f57faea91d43a359bc",
+  "history_versions_checked": 12,
+  "baseline_matches": [
+    {
+      "commit": "ab614ef65fdd2b0e3ebd5a402b5582e9c4d278ee",
+      "encoding": [
+        "crlf"
+      ],
+      "signature": "pub const fn new(\n        display_scorebox: bool,\n        gs_active: bool,\n        ac_active: bool,\n        show_ex_score: bool,\n        api_key: String,\n        arrowcloud_api_key: String,\n        include_arrowcloud: bool,\n        gs_username: String,\n        persistent_profile_id: Option<String>,\n        auto_profile_id: Option<String>,\n        should_auto_populate: bool,\n    ) -> Self"
+    }
+  ],
+  "current_equals_HEAD_normalized": true
+}

@@ -1,0 +1,37 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.80s
+     Running tests/rust_scene_retirement.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_scene_retirement-90f39b3f0e621d27)
+
+running 10 tests
+test detached_fields_metatables_and_collecting_callbacks_keep_native_state ... ok
+test failed_end_still_allows_retained_state_and_eventual_cleanup ... ok
+test retained_sound_handle_keeps_its_actor_and_native_parameters ... ok
+test retirement_unsubscribes_old_messages_but_keeps_direct_commands_callable ... ok
+test saved_actor_state_and_late_wrappers_match_native_after_retirement ... ok
+test scene_handles_from_another_vm_cannot_retire_or_release_local_actors ... 
+thread 'scene_handles_from_another_vm_cannot_retire_or_release_local_actors' (2671105) panicked at crates/deadsync-song-lua/tests/rust_scene_retirement.rs:231:5:
+scene identity must include originating VM
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them ... ok
+test shared_actors_transfer_after_the_last_active_owner_retires_or_releases ... ok
+test unused_retired_scenes_release_rust_metadata_in_repeated_cycles ... ok
+test weak_authored_command_fields_still_follow_native_collection_rules ... ok
+
+failures:
+
+failures:
+    scene_handles_from_another_vm_cannot_retire_or_release_local_actors
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.80s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_scene_retirement`

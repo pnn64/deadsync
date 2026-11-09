@@ -1,0 +1,43 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 9.42s
+     Running tests/rust_preparation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_preparation-02ff760d99ca05e4)
+
+running 1 test
+test construction_retains_initial_state_and_defers_init_links_and_subscriptions ... 
+thread 'construction_retains_initial_state_and_defers_init_links_and_subscriptions' (2622457) panicked at crates/deadsync-song-lua/tests/rust_preparation.rs:74:37:
+production probe 
+        assert(root~=declaration and root[1]~=declaration[1], 'distinct instances')
+        assert(root:GetName()=='root', 'root name: '..root:GetName())
+        assert(root[1]:GetName()=='child', 'child name: '..root[1]:GetName())
+        assert(root:GetChild('child')==root[1], 'named child lookup')
+        assert(root:GetParent()==nil, 'root parent')
+        assert(root[1]:GetParent()==nil, 'child parent')
+        assert(root:GetNumChildren()==1, 'child count')
+        MESSAGEMAN:Broadcast('Mark')
+        assert(#events==0, 'early subscribers: '..table.concat(events,'|'))
+        collectgarbage('collect')
+    : runtime error: ...rates/deadsync-song-lua/tests/rust_preparation.rs:72:2: distinct instances
+stack traceback:
+	[C]: in ?
+	[C]: in function 'assert'
+	...rates/deadsync-song-lua/tests/rust_preparation.rs:72:2: in main chunk
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    construction_retains_initial_state_and_defers_init_links_and_subscriptions
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.56s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_preparation`

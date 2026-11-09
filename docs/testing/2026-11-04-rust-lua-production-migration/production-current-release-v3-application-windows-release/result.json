@@ -1,0 +1,31 @@
+{
+  "command": [
+    "cargo",
+    "rustc",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--bin",
+    "deadsync",
+    "--release",
+    "--",
+    "-C",
+    "link-arg=/MAP:C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\production-current-application.map"
+  ],
+  "exit_code": 0,
+  "seconds": 1407.8378942999989,
+  "log_sha256": "0073bb0d9d05739139fd9007e77d0af0565f4feedc693e19bd9b6e7c543d85a8",
+  "sources_unchanged": true,
+  "changed_sources": [],
+  "artifact": {
+    "path": "C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\deadsync.exe",
+    "sha256": "0d9fb234ca5780b385550a4ebc2e56a2c0f3ea0efcc2c392e1e753b33fc7e835"
+  },
+  "link_map": {
+    "exists": true,
+    "sha256": "54d75978c9bf25f7b3101372b779df1755b09dde22295a311715a13711f2d778",
+    "rust_engine_symbols_found": true,
+    "forbidden_lines": [],
+    "validation_passed": true
+  }
+}

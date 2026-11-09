@@ -1,0 +1,96 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: completed and recorded final cancellation verification, with 460 passing adapter tests; review revalidated before editing",
+  "scope": "Authored preparation capture, Init/On startup queue boundary and owned compiler queue metadata; full production migration remains incomplete",
+  "changes": [
+    "Explicit preparation mode captures new actor instances before Init and retains startup queues across subsequent roots and On",
+    "Discovery releases the startup barrier, runs eligible zero-time commands and keeps delayed commands/messages for chronological frame replay",
+    "ActorCommandCapture exports typed blocks, block-step indices, pending tween steps and command starts without Lua handles",
+    "Startup visibility writes use native immediate capture; Stop/Finish clear deferred discovery",
+    "Scene retirement removes pending startup owners before their Lua registry roots are released; callback errors restore command guards and discovery scope"
+  ],
+  "oracle": "New test-support wrappers use the existing production constructor and full startup routine. The generic actor control installs replay only on its own dummy root, after the fixture setup hook. Fresh authored declarations use ActorDefinitionHost with its production installer; the unrelated existing-root clone hook is explicitly rejected. Real game-state, preference and runtime globals supply startup reads; the fixture loader frame supplies screen options with no transition overrides. Native production implementations are unchanged.",
+  "initial_runs": [
+    {
+      "stage": "preparation-startup-focused",
+      "exit_code": 101,
+      "seconds": 107.3015426620841,
+      "tests_passed": 1,
+      "tests_failed": 4,
+      "sources_unchanged": true,
+      "log_sha256": "aa95e19dc92646bc71234b0831babb46f37db9a3b19a375f9ababbcf8a05f4e0"
+    },
+    {
+      "stage": "preparation-startup-focused-v2",
+      "exit_code": 101,
+      "seconds": 104.07191999885254,
+      "tests_passed": 2,
+      "tests_failed": 3,
+      "sources_unchanged": true,
+      "log_sha256": "291d24a3d4f88566f487c4cd26c39842f04dd2b1f24bb1e53c99c5aa73b5fc4b"
+    },
+    {
+      "stage": "preparation-startup-focused-v3",
+      "exit_code": 101,
+      "seconds": 105.53892444190569,
+      "tests_passed": 2,
+      "tests_failed": 4,
+      "sources_unchanged": true,
+      "log_sha256": "f3101d49da17f275cb754f94fe6847ba3846b3219fc44998b11672950ed6f019"
+    }
+  ],
+  "coverage": [
+    "Explicit Init/Begin/On/Update(0)/queued command trace and shared state across sibling layers, with nested playcommand and forced GC",
+    "Every typed capture block, block-to-step mapping, pending tween step and queued command start from authored Init",
+    "Delayed command and zero-time message deferral, including later appends",
+    "Exact intended callback error, subsequent recovery and pending dispatch",
+    "Stop and Finish resetting the deferred queue marker",
+    "Scene release and GC before discovery, preserving another scene queue and repeated discovery behavior"
+  ],
+  "remaining": [
+    "Full compiler startup orchestration: screen activation/transitions, initial state capture, shared-state snapshots and rewinding",
+    "Chronological frame clocks, recurring commands and remaining capture channels",
+    "Existing baking/live/fallback orchestration, remaining screen/theme trees and unconditional cutover",
+    "Final application/rendering, dependency/link, fixture and workload measurements"
+  ],
+  "findings": [
+    "The first run exposed a real visibility timing mismatch: startup visibility is immediate even with a pending tween. The adapter was corrected and the full-block comparison passed on v2.",
+    "Startup controls initially lacked required game-state/screen globals, then PREFSMAN needed by the zero-delta option update. These were control setup errors before queued discovery, not relaxed behavioral assertions.",
+    "The error test now requires the intended discovery-failure message; an arbitrary setup error cannot satisfy it.",
+    "Reading clear_actor_queue confirmed cancellation clears deferred state; the adapter and an additional differential test now cover this boundary."
+  ],
+  "final_validation": {
+    "focused": {
+      "exit_code": 0,
+      "seconds": 110.05297741410322,
+      "tests_passed": 6,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "4476ac3a3bbde52ea1a613f6c3081823ba760e8b784422a1c483fe864708c8dc"
+    },
+    "lint": {
+      "exit_code": 101,
+      "seconds": 27.367578809149563,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "0d0336da57deb51a992301fc1cff7ff1747eca276d8387f6e5341bcf7d0fa914"
+    },
+    "lint_baseline": "166 existing warnings and existing cmd.rs:349 error; all diagnostic messages and files match the prior stage",
+    "adapters": {
+      "exit_code": 0,
+      "seconds": 458.0056417128071,
+      "tests_passed": 466,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "14fb21a7d6da16d2cccde536c3c9d541892bd0ae941fb4f895ae25d004606663"
+    },
+    "audit": "preparation-startup-review.json",
+    "formatting": "passed for all five changed/new Rust files"
+  },
+  "integration_findings": [
+    "Production compile.rs collects initial actor states and assigns the foreground parent before running Init. The current convenience instantiate_actor combines construction and Init; compiler integration still needs those separate phases.",
+    "Production startup dispatches Begin across session roots, activates In, broadcasts ScreenChanged, runs On, captures options and Update(0), then performs discovery with shared-state snapshots. This change provides only the capture/queue boundary; it does not claim that orchestration or rewind is complete.",
+    "Production captures Init/On tween metadata separately from queued discovery output. ActorCommandCapture now supplies owned blocks/steps/commands; full compiler publication and chronological replay remain outstanding."
+  ]
+}

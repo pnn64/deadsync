@@ -1,0 +1,46 @@
+   Compiling deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Checking deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+    Checking deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: empty line after doc comment
+  --> crates\deadsync-song-lua\src\actor_input.rs:22:1
+   |
+22 | / /// Other scene lifecycle work is not part of this input-only snapshot.
+23 | |
+   | |_^
+24 |   pub struct SongLuaCompiledActorInputs {
+   |   ------------------------------------- the comment documents this struct
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#empty_line_after_doc_comments
+   = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+   = help: if the empty line is unintentional, remove it
+
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+error[E0502]: cannot borrow `*s` as immutable because it is also borrowed as mutable
+   --> crates\deadsync-song-lua\src\rust_engine\actors\live_trace.rs:515:21
+    |
+513 |     let bytes = s
+    |                 - mutable borrow occurs here
+514 |         .to_bytes(-1)?
+515 |         .ok_or_else(|| s.error(b"trace string expected"))?
+    |          ---------- ^^ - second borrow occurs due to use of `*s` in closure
+    |          |          |
+    |          |          immutable borrow occurs here
+    |          mutable borrow later used by call
+
+For more information about this error, try `rustc --explain E0502`.
+warning: `deadsync-song-lua` (lib) generated 3 warnings
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error; 3 warnings emitted

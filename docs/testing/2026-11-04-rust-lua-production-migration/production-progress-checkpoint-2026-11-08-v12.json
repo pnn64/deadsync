@@ -1,0 +1,41 @@
+{
+  "created_utc": "2026-11-08T14:20:33.765012+00:00",
+  "goal_status": "active",
+  "previous": "production-progress-checkpoint-2026-11-08-v11.json",
+  "terminal_consumed_sessions": [
+    92904,
+    30111,
+    52032,
+    71077
+  ],
+  "current_source": [
+    "Temporary effect-clock probe and Debug derives completely removed. Original chronological.rs restored byte-for-byte from before-v4.",
+    "Effect setters now publish typed state changes through the existing raw snapshot mapping so chronological getters see the current effect mode and phase.",
+    "Callback scope follows declared-command/update observations. Dynamic commands use the existing trace_dynamic_commands profile; GC/error cleanup and autonomous theme exclusion controls remain enabled.",
+    "v3 verification:34 pass81 fail; the newly introduced direct NativeStack inspector could open after result writes or a prior stack. Replaced it with the existing helper inspector in its own call frame. No core changes."
+  ],
+  "verification": {
+    "stage": "production-effect-and-scope-v3-song-windows-debug",
+    "sources_unchanged": true,
+    "log_sha256": "a602c94aef89bae48ce26493f7558c399efc0082e4c9837764419d7895dab38b",
+    "note": "Failed verification, not accepted passing evidence."
+  },
+  "live_runners": [
+    {
+      "session_id": 96001,
+      "stage": "production-effect-and-scope-v4-song-windows-debug",
+      "source_freeze": "Do not edit watched Rust/Lua/manifests/tests until terminal."
+    }
+  ],
+  "investigation": [
+    "Read-only review of speculative broadcast leakage: native runtime capture is installed for chronological updates; Rust song_broadcasts exists through earlier compiler probes. Guard the existing probe boundaries rather than altering event merging. Earlier summary statement that native begin_action_capture_scope removes OverlayUpdateCapture was incorrect; actual source reviewed and correction recorded here.",
+    "Existing trace observers remain unported. Review exact native selected hook set, object labels, caller provenance, callback scopes and query-depth suppression. No broader interpreter work."
+  ],
+  "remaining": [
+    "Consume v4 and fix genuine existing effect/preparation/live failures.",
+    "Existing deferred shared-local retry, speculative queued messages, Sharkmode missing baked draws, alpha-loop and table-order functional review.",
+    "Original diagnostic trace/query/actor observations.",
+    "Final-source regressions, graph/build/link/rendered refresh, representative preparation/live/memory measurements, formatting/Clippy attribution, final docs."
+  ],
+  "limits": "Fixed original attachment objective. Interpreter and C API removal closed. No new baking/JIT/ASM/parity campaign, subagents, commits or resets. Preserve unrelated work and historical evidence."
+}

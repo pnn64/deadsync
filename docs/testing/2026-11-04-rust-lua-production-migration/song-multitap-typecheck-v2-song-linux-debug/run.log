@@ -1,0 +1,55 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0624]: method `compiler_value_field` is private
+  --> crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:57:22
+   |
+57 | ...lf.compi...field(gl...
+   |       ^^^^^...^^^^^ private method
+   |
+  ::: crates/deadsync-song-lua/src/rust_engine/song_prepare_globals.rs:89:5
+   |
+89 |     fn co...ring> {
+   |     -----...----- private method defined here
+
+error[E0283]: type annotations needed for `Result<(), _>`
+   --> crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:92:17
+    |
+ 92 | ...et result = (|| {
+    |       ^^^^^^
+...
+105 | ...               return Err("function expected".into());
+    |                                                  ---- type must be known at this point
+    |
+    = note: multiple `impl`s satisfying `_: From<&str>` found in the following crates: `deadlib_present`, `naga`, `zune_core`, `zune_jpeg`:
+            - impl From<&'static str> for TextContent;
+            - impl From<&'static str> for naga::front::wgsl::error::DiagnosticAttributeNotSupportedPosition;
+            - impl From<&'static str> for zune_core::bytestream::reader::ZByteIoError;
+            - impl From<&'static str> for zune_jpeg::errors::DecodeErrors;
+    = note: required for `&str` to implement `Into<_>`
+help: consider giving `result` an explicit type, where the type for type parameter `T` is specified
+    |
+ 92 |             let result: Result<_, E> = (|| {
+    |                       ++++++++++++++
+
+error[E0624]: method `compiler_value_field` is private
+   --> crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:451:18
+    |
+451 | ...  .compi...field(gl...
+    |       ^^^^^...^^^^^ private method
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/song_prepare_globals.rs:89:5
+    |
+ 89 |     fn co...ring> {
+    |     -----...----- private method defined here
+
+Some errors have detailed explanations: E0283, E0624.
+For more information about an error, try `rustc --explain E0283`.
+error: could not compile `deadsync-song-lua` (lib) due to 3 previous errors

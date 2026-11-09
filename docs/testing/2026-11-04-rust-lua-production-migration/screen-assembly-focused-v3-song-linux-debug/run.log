@@ -1,0 +1,67 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 43s
+     Running tests/rust_screen_assembly.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_assembly-bef917e9ca0a29cf)
+
+running 8 tests
+test failed_screen_construction_releases_partial_actors_and_allows_recovery ... 
+thread 'failed_screen_construction_releases_partial_actors_and_allows_recovery' (2647905) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:338:5:
+assertion failed: error.to_string().contains("width failed")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records ... 
+thread 'first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records' (2647906) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969332))), target_thread: None }
+FAILED
+test named_underlay_children_restore_names_and_copy_enabled_tags_without_metamethod_writes ... 
+thread 'named_underlay_children_restore_names_and_copy_enabled_tags_without_metamethod_writes' (2647907) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:16:89:
+called `Result::unwrap()` on an `Err` value: RuntimeError("...s/deadsync-song-lua/tests/rust_screen_assembly.rs:16:5: attempt to index global 'Actor' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t...s/deadsync-song-lua/tests/rust_screen_assembly.rs:16:5: in function 'GetComboFonts'")
+FAILED
+test required_theme_helpers_keep_argument_rules_fresh_colors_and_mutable_style_lookup ... 
+thread 'required_theme_helpers_keep_argument_rules_fresh_colors_and_mutable_style_lookup' (2647908) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969329))), target_thread: None }
+FAILED
+test screen_scene_retirement_releases_owned_players_underlay_and_transitions ... 
+thread 'screen_scene_retirement_releases_owned_players_underlay_and_transitions' (2647909) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969332))), target_thread: None }
+FAILED
+test screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order ... 
+thread 'screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order' (2647910) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969333))), target_thread: None }
+FAILED
+test underlay_geometry_text_filters_and_variant_selection_match_production ... 
+thread 'underlay_geometry_text_filters_and_variant_selection_match_production' (2647911) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969332))), target_thread: None }
+FAILED
+test underlay_update_closures_keep_bpm_rate_and_life_owners_across_collection ... 
+thread 'underlay_update_closures_keep_bpm_rate_and_life_owners_across_collection' (2647912) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:21:71:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969329))), target_thread: None }
+FAILED
+
+failures:
+
+failures:
+    failed_screen_construction_releases_partial_actors_and_allows_recovery
+    first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records
+    named_underlay_children_restore_names_and_copy_enabled_tags_without_metamethod_writes
+    required_theme_helpers_keep_argument_rules_fresh_colors_and_mutable_style_lookup
+    screen_scene_retirement_releases_owned_players_underlay_and_transitions
+    screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order
+    underlay_geometry_text_filters_and_variant_selection_match_production
+    underlay_update_closures_keep_bpm_rate_and_life_owners_across_collection
+
+test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.83s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_screen_assembly`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_screen_assembly`

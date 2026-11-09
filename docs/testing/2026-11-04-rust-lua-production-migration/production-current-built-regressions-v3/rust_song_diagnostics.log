@@ -1,0 +1,16 @@
+
+running 11 tests
+test authored_flag_reset_reenables_callback_reporting ... ok
+test callback_and_queue_failures_use_independent_report_once_flags ... ok
+test draw_errors_keep_partial_output_and_report_the_compiler_root_once ... ok
+test framebuffer_script_notices_do_not_become_callback_failures ... ok
+test initial_update_errors_keep_partial_state_and_report_once ... ok
+test ordinary_report_flags_and_labels_can_reenter_and_collect ... ok
+test positive_update_errors_keep_each_actor_and_later_frames ... ok
+test queued_and_recurring_failures_preserve_dispatch_frames_and_command_labels ... ok
+test startup_recurring_commands_without_errors_keep_chronological_output ... ok
+test startup_tween_queue_failure_still_rejects_preparation ... ok
+test truthy_report_flags_suppress_errors_without_stopping_callback_writes ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.72s
+

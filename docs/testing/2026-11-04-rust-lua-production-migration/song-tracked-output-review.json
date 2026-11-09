@@ -1,0 +1,50 @@
+{
+  "goal_complete": false,
+  "source_count": 1211,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/draw.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/player_parts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "native_change": "crate-private factory visibility only; actual default constructor reused by test-support",
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/song_output.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_output.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/state_snapshot.rs"
+  ],
+  "other_source_changes_preserved": [],
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-tracked-output-focused-v8-song-linux-debug": [],
+    "song-tracked-output-lint-v5-song-linux-debug": []
+  },
+  "earlier_63_activation_tests_unchanged": true,
+  "new_cases": 6,
+  "adapter_formatting_passed": true,
+  "native_formatting": "one visibility prefix; otherwise byte-identical to baseline, no bulk formatting",
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-tracked-output-focused-v8-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 295.5799291068688,
+      "log_sha256": "0f411e367239feb4b7ddd632e40c6a243fcafb09021cebe0b5ef0bd4f11b7a8a",
+      "tests_passed": 242,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-tracked-output-lint-v5-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 161.33558043907396,
+      "log_sha256": "175b2b7f8d9d4ae491fce4f2236f73fcb43e91087b24c8f1b5d6db4abe6ea5ea",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

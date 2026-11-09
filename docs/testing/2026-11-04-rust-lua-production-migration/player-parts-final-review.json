@@ -1,0 +1,248 @@
+{
+  "goal_complete": false,
+  "scope": "Player Init assembly: Combo, Judgment, per-column HoldJudgments and NoteField",
+  "watched_sources": 1142,
+  "current_source_keys_and_hashes_match_test_and_lint": false,
+  "current_adapter_sources_match_test_and_lint": true,
+  "broad_test_wrapper_source_guard_passed": false,
+  "changed_non_dependency_during_tests": [
+    {
+      "path": "crates/deadsync-theme-simply-love/src/screens/select_music.rs",
+      "before": "35e08a8e9930bbb54d5e5c6de283321ed4c188cc1a300bb845c73f924cf1e24f",
+      "after": "e40a6b96aaa532bc6effb2e31b48b326d9b8666e58afa9dc932160ef70d2d550"
+    }
+  ],
+  "adapter_dependency_graph": {
+    "command": [
+      "cargo",
+      "tree",
+      "--locked",
+      "--offline",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "rust-engine,test-support",
+      "--edges",
+      "normal,build,dev",
+      "--prefix",
+      "none"
+    ],
+    "exit_code": 0,
+    "log_sha256": "9968bb6a6460eb4e8a75872dc9ecf82a6454fd1fbd07bf9a71fe017bc74f9f3e",
+    "changed_non_dependency": "crates/deadsync-theme-simply-love/src/screens/select_music.rs",
+    "deadsync_theme_simply_love_in_test_dependency_graph": false
+  },
+  "rust_adapter_targets": [
+    "rust_actors",
+    "rust_baked_program",
+    "rust_baked_program_tables",
+    "rust_banners",
+    "rust_bitmap_text",
+    "rust_catalog",
+    "rust_clock",
+    "rust_courses",
+    "rust_definitions",
+    "rust_draw",
+    "rust_effects",
+    "rust_framebuffers",
+    "rust_game_state",
+    "rust_generated_players",
+    "rust_graphs",
+    "rust_input",
+    "rust_loader",
+    "rust_meshes",
+    "rust_messages",
+    "rust_models",
+    "rust_notefields",
+    "rust_noteskin",
+    "rust_player_options",
+    "rust_player_parts",
+    "rust_player_state",
+    "rust_preferences_display",
+    "rust_profiles",
+    "rust_proxies",
+    "rust_random",
+    "rust_render",
+    "rust_screen_manager",
+    "rust_screen_ui",
+    "rust_sl",
+    "rust_song_meters",
+    "rust_song_options",
+    "rust_sound",
+    "rust_sprites",
+    "rust_statistics",
+    "rust_text_displays",
+    "rust_theme",
+    "rust_utility_managers",
+    "rust_wrappers"
+  ],
+  "tests_passed": 423,
+  "tests_failed": 0,
+  "test_log_sha256": "d5395b050eabb1fc33bb0dc8d41bc994bebc8980f389224005cd8272ef256171",
+  "lint_log_sha256": "c94c5470f3937bd0c75a0d3c0efe253f37ae959ac0fa94162bee29c71883dafb",
+  "lint_library_diagnostics_unchanged": true,
+  "core_and_root_entries_unchanged": 240,
+  "native_controls_unchanged": [
+    "crates/deadsync-song-lua/src/compat.rs",
+    "crates/deadsync-song-lua/src/host.rs",
+    "crates/deadsync-song-lua/src/input.rs",
+    "crates/deadsync-song-lua/src/input/compiled.rs",
+    "crates/deadsync-song-lua/src/lib.rs",
+    "crates/deadsync-song-lua/src/live.rs",
+    "crates/deadsync-song-lua/src/noteskin.rs",
+    "crates/deadsync-song-lua/src/option_rows.rs",
+    "crates/deadsync-song-lua/src/player_options.rs",
+    "crates/deadsync-song-lua/src/runtime.rs",
+    "crates/deadsync-song-lua/src/song_tables.rs",
+    "crates/deadsync-song-lua/src/state_text.rs",
+    "crates/deadsync-song-lua/src/tables.rs",
+    "crates/deadsync-song-lua/src/values.rs"
+  ],
+  "native_prefixes_and_test_accessors": {
+    "crates/deadsync-song-lua/src/compile.rs": {
+      "unchanged_prefix_bytes": 86658,
+      "appended_bytes": 486,
+      "append_sha256": "7f762e20a4f6a1842bf7dbaa0fc1b46b099944c287264ee82ea6becb06e86cd7",
+      "sha256": "a16484982cd48c8666ae0df432b730bcdbc298764bef0a8932cc438aca9a6463"
+    },
+    "crates/deadsync-song-lua/src/lua_util.rs": {
+      "unchanged_prefix_bytes": 983823,
+      "appended_bytes": 525,
+      "append_sha256": "fbb92a924980443ab5a786060ba34feb5e2a7e272ab735cb02c7a7dec871d7bc",
+      "sha256": "addf357dc435d210872fc0da825a2ba9c126ca9b58ce2cb5993d05e9217ce75f"
+    }
+  },
+  "fixtures": {
+    "tests/fixtures/itgmania-song-lua-micro/current-options/window-control.json": "6838830cb7d8a758d91abeca9f7790be64af7ce2877a91062fe6de752aeec493",
+    "tests/fixtures/itgmania-song-lua-micro/current-options/native-control.json": "2ea95d0aed23a9c4dcf21697050bb4674f6206fb42d47b40979dbb678e7f27d4",
+    "tests/fixtures/itgmania-song-lua-micro/current-options/speed-query-control.json": "c1286a371b1ad63d306b1e4230ae425c6912bd42fb5626d90daa85b6e1c43349",
+    "tests/fixtures/itgmania-song-lua-micro/song-options-string/control.lua": "91bce52c0df46957dab0e4977e9887da6320a18fd615f0893076dc0b859ffe07",
+    "tests/fixtures/itgmania-song-lua-micro/song-options-string/native.json": "67f5fff6d1041aec46d9452ad43133ee4b0a7c44f1c37f96e3f0a61eee3ff884",
+    "tests/fixtures/itgmania-song-lua-micro/native-dance-percent.json": "0420aa93cab6ef1929093d59a13fac63bb7f8ce9419bc21553e7edc924bb9955"
+  },
+  "delta": {
+    "added": [
+      "crates/deadsync-notefield/src/atlas_kernel_perf.rs",
+      "crates/deadsync-notefield/src/atlas_original.rs",
+      "crates/deadsync-notefield/src/combo_kernel_perf.rs",
+      "crates/deadsync-notefield/src/combo_original.rs",
+      "crates/deadsync-notefield/src/edit_bars_original.rs",
+      "crates/deadsync-notefield/src/edit_bars_performance.rs",
+      "crates/deadsync-notefield/src/feedback_kernel_perf.rs",
+      "crates/deadsync-notefield/src/feedback_original.rs",
+      "crates/deadsync-notefield/src/hold_guard_original.rs",
+      "crates/deadsync-notefield/src/hold_guard_perf.rs",
+      "crates/deadsync-notefield/src/hud_original.rs",
+      "crates/deadsync-notefield/src/hud_performance.rs",
+      "crates/deadsync-notefield/src/mini_indicator_original.rs",
+      "crates/deadsync-notefield/src/mini_indicator_performance.rs",
+      "crates/deadsync-notefield/src/number_adapter.rs",
+      "crates/deadsync-notefield/src/number_original.rs",
+      "crates/deadsync-notefield/src/number_performance.rs",
+      "crates/deadsync-notefield/src/numeric_original.rs",
+      "crates/deadsync-notefield/src/numeric_performance.rs",
+      "crates/deadsync-notefield/src/text_original.rs",
+      "crates/deadsync-notefield/src/text_performance.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/player_parts.rs",
+      "crates/deadsync-song-lua/tests/rust_player_parts.rs"
+    ],
+    "removed": [],
+    "changed": [
+      "crates/deadsync-notefield/src/combo_feedback.rs",
+      "crates/deadsync-notefield/src/display_mods.rs",
+      "crates/deadsync-notefield/src/error_bar.rs",
+      "crates/deadsync-notefield/src/feedback.rs",
+      "crates/deadsync-notefield/src/judgment_feedback.rs",
+      "crates/deadsync-notefield/src/measure_lines.rs",
+      "crates/deadsync-notefield/src/mini_indicator.rs",
+      "crates/deadsync-notefield/src/placement.rs",
+      "crates/deadsync-notefield/src/transforms.rs",
+      "crates/deadsync-song-lua/Cargo.toml",
+      "crates/deadsync-song-lua/src/compile.rs",
+      "crates/deadsync-song-lua/src/lua_util.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors.lua",
+      "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/notefields.rs",
+      "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+      "crates/deadsync-theme-simply-love/src/screens/select_music.rs"
+    ],
+    "unchanged": 1101
+  },
+  "preserved_concurrent_changes": [
+    {
+      "path": "crates/deadsync-notefield/src/combo_feedback.rs",
+      "before": "75944b052190a5837fcc675850dcc81bf50687f39d96032ac749c641c01fe1ba",
+      "after": "486acfa14529a79c0963eb0736761e2db8e1c23466055c53ba6231ae816fb65d"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/display_mods.rs",
+      "before": "0dd5c7ea7d994dbed9fe578ad3c14c6b8cd20578119d9e9f5bb593d1995b45ab",
+      "after": "6aee13899bcbde416265f5167bd6e0c90416e73ee4002646c468d4bf01af941b"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/error_bar.rs",
+      "before": "7d880be591a19a55044b225ebe1f09bc38f93ed3c47ade0c23ad7f4cce4e08af",
+      "after": "481ccfd3df7743fe40f670ee4053df24a535447d8f451251c0b65f1c41a8407b"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/feedback.rs",
+      "before": "cc3903daea3f9687b78fdbb08db9a80b1a68574143f724134cebd29533d687b0",
+      "after": "b79957014e573a83a1d2316cbabd44aff50a8d233137c9ea9ebf1f0b224eb2c3"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/judgment_feedback.rs",
+      "before": "e3605cee2d7afa3555566ce060fb3ed5312539e1be4301ead2bbd7263692a963",
+      "after": "6e02c20fc2870f46811424894956f0ba44a8dc5795e20639d1eb7ad6cb40b166"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/measure_lines.rs",
+      "before": "cbcb8d217c909d0934b5003f1047b2763f4e9577022bba762c4adaef5e61b49d",
+      "after": "3073ce56862247176f1fb7b6d62f1c3b7dae1d76ca05e6f05e6717a8da383ab5"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/mini_indicator.rs",
+      "before": "441724feee647ed4474cdc9d77a4a5511b59abc0a90b1593f398829a92c09ecd",
+      "after": "0f75b61881ade3e9e2908c0ff8b59ba99a5b2120a0f1a0b09c8331a1e4c54f71"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/placement.rs",
+      "before": "cc7453a6d6ed560691ab09a5a9e944a9d740ec9534df5daf3c0e8be7683a3842",
+      "after": "20303deef55304fc60910cffb989c14899e163a35d70f6392caa525c8f8d6b49"
+    },
+    {
+      "path": "crates/deadsync-notefield/src/transforms.rs",
+      "before": "0fe930f92d21c2bde0c4c3d451a702211fa3061126fb169ca25eabb6f1858a1c",
+      "after": "7bb797ed6a8fb7f41de078f622900b939e744b8b7e890d6e9986f796362e283c"
+    },
+    {
+      "path": "crates/deadsync-theme-simply-love/src/screens/select_music.rs",
+      "before": "2349c26514e8f790167578069909eb0e905c43a53cdb2e44fb22eedb713b91a8",
+      "after": "e40a6b96aaa532bc6effb2e31b48b326d9b8666e58afa9dc932160ef70d2d550"
+    }
+  ],
+  "preserved_concurrent_additions": {
+    "crates/deadsync-notefield/src/atlas_kernel_perf.rs": "5befccb66a1bbcb7e57900cf1e1c1de9007f646cb0c189c30994e6b7ec855cbf",
+    "crates/deadsync-notefield/src/atlas_original.rs": "89164a24c4131fde8b1c190d32e1131be11083d24792c1bae95c9771587f879c",
+    "crates/deadsync-notefield/src/combo_kernel_perf.rs": "3b7a71c42edd8fcd5cfc7566870e703b29a5932d5270ad092c494fe27206d8e0",
+    "crates/deadsync-notefield/src/combo_original.rs": "1765a70b5e492bee512072c2749b23fc19bf383eeaa013683e569af4f1023505",
+    "crates/deadsync-notefield/src/edit_bars_original.rs": "3bcba9b95d6950ab50cdfee87d438c451f9dffb4bf4e67398e39f8f4c169c1f1",
+    "crates/deadsync-notefield/src/edit_bars_performance.rs": "73829c9357c90c44280b37b32952f91e121c515e10aa58682f4e1e056e78c3bd",
+    "crates/deadsync-notefield/src/feedback_kernel_perf.rs": "d5085abfa27c266e0c630343dc99161a5015dfbf7a527e5bd697a70259c65dd6",
+    "crates/deadsync-notefield/src/feedback_original.rs": "7bba241d944367cb6520755275fab2580c3c30b1eb13ebcf557a7d75365d94ed",
+    "crates/deadsync-notefield/src/hold_guard_original.rs": "471e7644858b6b53c4ffb15c7948cd67e75d05f5c345b837f2c92bf0217f1b78",
+    "crates/deadsync-notefield/src/hold_guard_perf.rs": "ff111c70143db4cf81ef94136aa9e6197e7adaaf54d99b957b356b5ff7787f7b",
+    "crates/deadsync-notefield/src/hud_original.rs": "f00d3e362ac3bedc6367d34d257a63a1343581ef9d830fe5ea269f27cb6b0492",
+    "crates/deadsync-notefield/src/hud_performance.rs": "b15996de23d53fe2027e492ea01e3b338f156256c4c8a921051804c6f7b4b509",
+    "crates/deadsync-notefield/src/mini_indicator_original.rs": "bc6b2696cbc869bf2c6764a7143bd26aa87c57bb1bd31f75aa60726da5fedfcc",
+    "crates/deadsync-notefield/src/mini_indicator_performance.rs": "d84938f39f7d1c405a54be29f589eb9d1db1de2d6d3511ce8a4e5bb994b1a66b",
+    "crates/deadsync-notefield/src/number_adapter.rs": "26d8f9d8f78064cac6b85120fc38106c20793779185d49c401386be216316c26",
+    "crates/deadsync-notefield/src/number_original.rs": "ce23b1dee76f7369939105901a29b2c353819ada206efe096a47df9dfc4693eb",
+    "crates/deadsync-notefield/src/number_performance.rs": "9cd46a23435aecfa1c5a7af4bc505a75efd22a24c1ac051ffc66b4cc79589ee0",
+    "crates/deadsync-notefield/src/numeric_original.rs": "4692144a79e34475cbf66f840347db4fd6a93c20af550a2ffe864b5ac0ef2310",
+    "crates/deadsync-notefield/src/numeric_performance.rs": "801e58b518636429acfe0618c88aad89fa69b2ed23ce1d946ee8a4f121d89a7e",
+    "crates/deadsync-notefield/src/text_original.rs": "19594ecccd775e7569b8d20847a920c3c7e25863b2f9133981da36d51288580e",
+    "crates/deadsync-notefield/src/text_performance.rs": "b3d612ced8bb446510037d3f8cf83cac70e9cb894fac4700d3e1832e6bad523f"
+  },
+  "remaining": "Screen tree and later theme commands/milestones/transitions, compiler capture/baking/live orchestration, unconditional cutover and final application/dependency/fixture/performance gates"
+}

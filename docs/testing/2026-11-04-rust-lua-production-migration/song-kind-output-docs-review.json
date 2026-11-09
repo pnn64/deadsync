@@ -1,0 +1,8 @@
+{
+  "prior_ledger_bytes_preserved": true,
+  "prior_architecture_text_preserved": true,
+  "sha256": {
+    "docs/lua-architecture.md": "e54d55714a9622612878723498c18ec61f1c125f52416d0f4af562f50a7e4b16",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "b0c51695661aca43e6fcc1ed03339fd15fe8f25991bb18ae7795111497438a80"
+  }
+}

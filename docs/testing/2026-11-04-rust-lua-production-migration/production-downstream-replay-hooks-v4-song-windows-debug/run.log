@@ -1,0 +1,40 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 3m 51s
+     Running tests\rust_live_scene.rs (target/rust-adapters\debug\deps\rust_live_scene-83f19e6ae1e327b5.exe)
+
+running 3 tests
+test replay_captured_subscriber_paths_preserve_the_native_order ... 
+thread 'replay_captured_subscriber_paths_preserve_the_native_order' (49128) panicked at crates\deadsync-song-lua\tests\rust_live_scene.rs:60:49:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "subscriber has no captured actor path", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589937431))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test replay_option_deltas_are_independent_consumed_once_and_survive_a_prepared_frame ... ok
+test replay_overlay_observation_precedes_foreground_writes_and_survives_gc ... ok
+
+failures:
+
+failures:
+    replay_captured_subscriber_paths_preserve_the_native_order
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 19 filtered out; finished in 2.53s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_live_scene`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_live_scene`

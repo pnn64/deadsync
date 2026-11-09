@@ -1,0 +1,42 @@
+{
+  "stage": "production-preparation-capture-v1",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--test",
+    "rust_song_compiler",
+    "--test",
+    "rust_song_activation",
+    "--test",
+    "rust_live_scene",
+    "--no-fail-fast",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 769.5814448001329,
+  "log_sha256": "b3544f7d0710dce80a2bb6f0e053656f685931fef0fdd4fd9cc62aa25ba10987",
+  "tests_passed": 259,
+  "tests_failed": 2,
+  "test_results": [
+    "test result: FAILED. 22 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.33s",
+    "test result: FAILED. 212 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 85.83s",
+    "test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.03s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

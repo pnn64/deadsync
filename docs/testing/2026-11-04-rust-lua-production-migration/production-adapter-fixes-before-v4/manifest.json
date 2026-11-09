@@ -1,0 +1,22 @@
+[
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "sha256": "141204c927f97daf84dd6ac47a42ddb86668d179f6a93bc7c56a6d082c563572"
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs",
+    "sha256": "860d9c4c7d01e64bd825b478d169d0c7330d6d74bf3af89c77012a098b277ab4"
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/actors/chronological.rs",
+    "sha256": "e755b37582b6878abca3415d426bd3cacad460670643ebf0e6271af6009c1796"
+  },
+  {
+    "path": "crates/deadsync-song-lua/tests/rust_live_compiler.rs",
+    "sha256": "9012b68c0c28592a8b0741bdbf532baf924d54f8b92e703ffb504e58e4e777fc"
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/actors/effects.rs",
+    "sha256": "d24fa8a566fa8fc01241a37d3cd5de317d926aa153586777f00835e5304ee2cf"
+  }
+]

@@ -1,6 +1,7 @@
 //! UCRT ABI, pinned to the declarations in the Windows SDK's locale/ctype headers.
 //! No Lua values cross this boundary. The recursive CRT locale lock protects
 //! returned strings and lconv storage even against other CRT setlocale callers.
+use crate::{Error, memory::fallible::SliceExt};
 use std::{
     cmp::Ordering,
     ffi::{CStr, c_char},
@@ -39,24 +40,23 @@ impl Drop for Lock {
     }
 }
 pub(super) struct Cache {
-    pub decimal: Option<Vec<u8>>,
+    pub decimal: Option<super::Decimal>,
     pub ctype: Option<([u32; 256], bool)>,
     pub collate_c: Option<bool>,
 }
 pub(super) struct Change {
-    pub result: Vec<u8>,
+    pub result: Result<Vec<u8>, Error>,
     pub cache: Option<Cache>,
 }
 
-pub(super) fn set(name: Option<&[u8]>, category: usize) -> Option<Change> {
+pub(super) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Change>, Error> {
     assert!(category < 6);
-    let name = name.map(|s| {
-        let len = s.iter().position(|&b| b == 0).unwrap_or(s.len());
-        let mut value = Vec::with_capacity(len + 1);
-        value.extend_from_slice(&s[..len]);
-        value.push(0);
-        value
-    });
+    let name = name
+        .map(|s| {
+            let len = s.iter().position(|&b| b == 0).unwrap_or(s.len());
+            super::terminated(&s[..len])
+        })
+        .transpose()?;
     let _lock = Lock::new();
     // SAFETY: SDK category constants are exactly 0..=5 in Lua category order.
     // The optional buffer is NUL terminated and remains alive for this call.
@@ -67,17 +67,25 @@ pub(super) fn set(name: Option<&[u8]>, category: usize) -> Option<Change> {
         )
     };
     if result.is_null() {
-        return None;
+        return Ok(None);
     }
     // SAFETY: nonnull setlocale results are NUL terminated. The CRT locale
     // lock prevents replacement/freeing until this copy finishes.
-    let result = unsafe { CStr::from_ptr(result) }.to_bytes().to_vec();
+    // Retain a failed copy as part of the change: the native locale is already
+    // selected, so its cache must be published even when the result is Memory.
+    let result = unsafe { CStr::from_ptr(result) }.to_bytes().try_to_vec();
     let cache = name.map(|_| {
         // SAFETY: fixed valid categories query current CRT-owned NUL strings;
         // localeconv returns a valid lconv whose first field is decimal_point.
         // The same CRT lock keeps every pointer alive through these reads.
-        let decimal = matches!(category, 0 | 4)
-            .then(|| unsafe { CStr::from_ptr((*localeconv()).decimal).to_bytes().to_vec() });
+        let decimal = matches!(category, 0 | 4).then(|| {
+            let bytes = unsafe { CStr::from_ptr((*localeconv()).decimal).to_bytes() };
+            // UCRT initnum.cpp obtains this from LOCALE_SDECIMAL: at most three
+            // characters (four including NUL). Even UTF-8 needs at most twelve
+            // bytes, fitting the sixteen-byte inline cache without allocation.
+            // https://learn.microsoft.com/windows/win32/intl/locale-sdecimal
+            super::Decimal::inline(bytes).expect("Windows decimal separator bound")
+        });
         // SAFETY: the fixed valid category returns a CRT-owned NUL string,
         // stabilized by the same locale lock.
         let collate_c = matches!(category, 0 | 1).then(|| unsafe {
@@ -110,16 +118,12 @@ pub(super) fn set(name: Option<&[u8]>, category: usize) -> Option<Change> {
             collate_c,
         }
     });
-    Some(Change { result, cache })
+    Ok(Some(Change { result, cache }))
 }
 
-pub(super) fn compare(left: &[u8], right: &[u8]) -> Ordering {
-    let mut a = Vec::with_capacity(left.len() + 1);
-    let mut b = Vec::with_capacity(right.len() + 1);
-    a.extend_from_slice(left);
-    a.push(0);
-    b.extend_from_slice(right);
-    b.push(0);
+pub(super) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
+    let a = super::terminated(left)?;
+    let b = super::terminated(right)?;
     let _lock = Lock::new();
     let (mut x, mut y) = (0, 0);
     loop {
@@ -127,25 +131,25 @@ pub(super) fn compare(left: &[u8], right: &[u8]) -> Ordering {
         // buffer. The CRT lock stabilizes collation state for this comparison.
         let result = unsafe { strcoll(a.as_ptr().add(x).cast(), b.as_ptr().add(y).cast()) };
         if result != 0 {
-            return result.cmp(&0);
+            return Ok(result.cmp(&0));
         }
         let n = a[x..].iter().position(|&c| c == 0).unwrap();
         // Lua 5.1 advances both suffixes by the left segment's byte length,
         // including when differently sized segments collate as equal.
         if n == right.len().saturating_sub(y) {
-            return if n == left.len() - x {
+            return Ok(if n == left.len() - x {
                 Ordering::Equal
             } else {
                 Ordering::Greater
-            };
+            });
         }
         if n == left.len() - x {
-            return Ordering::Less;
+            return Ok(Ordering::Less);
         }
         x += n + 1;
         y += n + 1;
         if y > right.len() {
-            return Ordering::Greater;
+            return Ok(Ordering::Greater);
         }
     }
 }

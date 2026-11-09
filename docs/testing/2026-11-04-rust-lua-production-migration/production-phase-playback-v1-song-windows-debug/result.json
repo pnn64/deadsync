@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--test",
+    "playback",
+    "--features",
+    "legacy-oracle",
+    "--",
+    "song_lua_message_advance_matches_native",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 70.33648830000311,
+  "log_sha256": "acc936a5e8030f1f09837c3353d8ea682730c78864b27a857923215a222f84eb",
+  "sources_unchanged": true,
+  "tests_passed": 1,
+  "tests_failed": 0,
+  "check_only": false
+}

@@ -1,0 +1,193 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: unused import: `super::*`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:1:5
+  |
+1 | use super::*;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::actor_classes::forward_values_perf::before`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:2:5
+  |
+2 | use crate...efore;
+  |     ^^^^^...^^^^^
+
+warning: unused imports: `METHODS_KEY` and `forward`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:3:28
+  |
+3 | ...::{METHODS_KEY, forward};
+  |       ^^^^^^^^^^^  ^^^^^^^
+
+warning: use of deprecated type alias `mlua::String`: use `mlua::LuaString` instead
+  --> crates/deadsync-song-lua/src/../tests/perf/native_function.rs:42:31
+   |
+42 | ...a::String, V...
+   |       ^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/deadsync-song-lua/src/../tests/perf/asset_strings.rs:159:9
+    |
+159 | ...et mut paths = ...
+    |       ----^^^^^
+    |       |
+    |       help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `matrix` is never used
+  --> crates/deadsync-song-lua/src/actor_quaternion.rs:49:15
+   |
+49 | ...fn matrix(q:...
+   |       ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `bind` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/vm_reads_actor_before.rs:4:15
+  |
+4 | ...fn bind(lu...
+  |       ^^^^
+
+warning: function `assign` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/vm_reads_actor_before.rs:58:15
+   |
+58 | ...fn assign(_:...
+   |       ^^^^^^
+
+warning: function `bind` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/forward_values_before.rs:42:15
+   |
+42 | ...fn bind(lu...
+   |       ^^^^
+
+warning: enum `Work` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:269:6
+    |
+269 | enum Work {
+    |      ^^^^
+
+warning: method `run` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:280:8
+    |
+279 | impl Work {
+    | --------- method in this implementation
+280 |     fn run(&m...
+    |        ^^^
+
+warning: function `prepare` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:310:4
+    |
+310 | fn prepare(lu...
+    |    ^^^^^^^
+
+warning: struct `TraceLogger` is never constructed
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:6:8
+  |
+6 | ...ct TraceLogger(Mu...
+  |       ^^^^^^^^^^^
+
+warning: static `LOGGER` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:7:8
+  |
+7 | ...ic LOGGER: T...
+  |       ^^^^^^
+
+warning: function `bindings` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/rage_file.rs:203:4
+    |
+203 | fn bindings(cu...
+    |    ^^^^^^^^
+
+warning: function `reset` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/rage_file_before.rs:349:15
+    |
+349 | ...fn reset(fi...
+    |       ^^^^^
+
+warning: constant `SONG_LUA_EASING_NAME_KEY` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:8:11
+  |
+8 | ...st SONG_...E_KEY: &...
+  |       ^^^^^...^^^^^
+
+warning: function `read_f64` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:24:8
+   |
+24 | ...fn read_f64(va...
+   |       ^^^^^^^^
+
+warning: function `read_boolish` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:34:8
+   |
+34 | ...fn read_boolish(va...
+   |       ^^^^^^^^^^^^
+
+warning: function `read_string` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:61:8
+   |
+61 | ...fn read_string(va...
+   |       ^^^^^^^^^^^
+
+warning: function `read_u32_value` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:69:8
+   |
+69 | ...fn read_...value(va...
+   |       ^^^^^...^^^^^
+
+warning: function `read_player` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:100:8
+    |
+100 | ...fn read_player(va...
+    |       ^^^^^^^^^^^
+
+warning: function `read_span_mode` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:109:8
+    |
+109 | ...fn read_..._mode(va...
+    |       ^^^^^...^^^^^
+
+warning: function `read_easing_name` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:124:8
+    |
+124 | ...fn read_..._name(
+    |       ^^^^^...^^^^^
+
+warning: function `truthy` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:142:14
+    |
+142 | ...fn truthy(va...
+    |       ^^^^^^
+
+warning: function `player_index_from_value` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:179:8
+    |
+179 | ...fn playe...value(va...
+    |       ^^^^^...^^^^^
+
+warning: function `player_number_name` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:203:8
+    |
+203 | ...fn playe..._name(pl...
+    |       ^^^^^...^^^^^
+
+warning: `deadsync-song-lua` (lib test) generated 27 warnings (run `cargo fix --lib -p deadsync-song-lua --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 4m 55s
+     Running unittests src/lib.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/deadsync_song_lua-affb80fd97ebdb4a)
+
+running 1 test
+test host::tests::arrow_offset_uses_native_music_clock ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 848 filtered out; finished in 1.43s
+

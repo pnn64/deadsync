@@ -1,0 +1,28 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 26s
+     Running tests/rust_song_updates.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_updates-d497579e929025fc)
+
+running 9 tests
+test complete_driver_appends_runtime_wrappers_and_remaps_their_tracks ... ok
+test complete_driver_bakes_player_options_and_column_rotation ... ok
+test complete_driver_captures_notefield_wrappers_motion_and_hold_frames ... ok
+test complete_driver_captures_parent_child_callbacks_and_getter_feedback ... ok
+test complete_driver_keeps_field_wrapper_cursor_reads_after_authored_gc ... ok
+test complete_driver_keeps_startup_queues_cancellation_and_recurrence ... ok
+test complete_driver_preserves_message_replay_and_broadcast_provenance ... ok
+test complete_driver_preserves_static_tree_output ... ok
+test complete_driver_reports_frame_metadata_errors ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.46s
+

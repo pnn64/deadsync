@@ -1,0 +1,112 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 44s
+     Running tests/rust_screen_assembly.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_assembly-bef917e9ca0a29cf)
+
+running 8 tests
+test failed_screen_construction_releases_partial_actors_and_allows_recovery ... 
+thread 'failed_screen_construction_releases_partial_actors_and_allows_recovery' (2648339) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:384:10:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 4, message: "attempt to index global 'SCREENMAN' (a nil value)", bytes: None, near: false, bypass_handler: false, value: None, target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test first_life_messages_initialize_real_meter_tweens_without_authored_broadcast_records ... ok
+test named_underlay_children_restore_names_and_copy_enabled_tags_without_metamethod_writes ... ok
+test required_theme_helpers_keep_argument_rules_fresh_colors_and_mutable_style_lookup ... ok
+test screen_scene_retirement_releases_owned_players_underlay_and_transitions ... ok
+test screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order ... 
+thread 'screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order' (2648344) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:54:33:
+legacy: 
+                assert(TOP==__songlua_top_screen)
+                local group=TOP:GetChild('');assert(#group==5)
+                local roles={Toasty=true,NextSong=true,Ready=true,Go=true,Failed=true}
+                for _,actor in ipairs(group) do
+                    assert(actor:GetParent()==TOP and roles[actor.__songlua_screen_actor_role])
+                    assert(actor.__songlua_transition_state==0)
+                end
+                assert(not role(TOP,'Toasty'):GetVisible())
+                local seen={};local previous=-math.huge
+                for i,actor in ipairs(TOP) do
+                    assert(not seen[actor] and actor:GetParent()==TOP);seen[actor]=true
+                    local order=actor:GetDrawOrder();assert(order>=previous);previous=order
+                    log(i,actor:GetName(),actor.__songlua_actor_type,actor.__songlua_screen_actor_role,
+                        order,actor.__songlua_theme_hibernating,actor:GetVisible(),actor.GetNumChildren and actor:GetNumChildren() or -1)
+                end
+                assert(TOP:GetNumChildren()==#TOP)
+                for i,pn in ipairs{PLAYER_1,PLAYER_2} do
+                    local player=_G['__songlua_top_screen_player_'..i]
+                    assert(player:GetParent()==TOP and player:GetChild('NoteField'):GetParent()==player)
+                    local meter=player.__songlua_life_meter
+                    assert(meter:GetParent()==TOP and meter:GetVisible() and meter.__songlua_theme_hibernating)
+                    local enabled=GAMESTATE:IsPlayerEnabled(pn)
+                    assert((TOP:GetChild('PlayerP'..i)~=nil)==enabled)
+                    assert((TOP:GetLifeMeter(pn)~=nil)==enabled)
+                    for _,name in ipairs{'ScoreP','StepsDisplayP','StepsDescriptionP','PlayerOptionsP','OniGameOverP'} do
+                        assert((TOP:GetChild(name..i)~=nil)==enabled)
+                    end
+                end
+                local underlay=TOP:GetChild('Underlay')
+                assert(underlay:GetParent()==TOP and underlay:GetChild('Header'):GetParent()==underlay)
+                for i,actor in ipairs(underlay) do
+                    assert(actor:GetParent()==underlay)
+                    log('underlay',i,actor.__songlua_underlay_role,actor:GetName(),actor.__songlua_actor_type,actor.GetNumChildren and actor:GetNumChildren() or -1)
+                end
+                for i,pn in ipairs{PLAYER_1,PLAYER_2} do
+                    local enabled=GAMESTATE:IsPlayerEnabled(pn)
+                    assert((underlay:GetChild('P'..i..'Score')~=nil)==enabled)
+                    assert(underlay:GetChild('StepStatsPaneP'..i)==nil)
+                end
+            
+runtime error: ...s/deadsync-song-lua/tests/rust_screen_assembly.rs:52:13: attempt to call method 'GetDrawOrder' (a nil value)
+stack traceback:
+	[C]: in method 'GetDrawOrder'
+	...s/deadsync-song-lua/tests/rust_screen_assembly.rs:52:13: in main chunk
+FAILED
+test underlay_geometry_text_filters_and_variant_selection_match_production ... 
+thread 'underlay_geometry_text_filters_and_variant_selection_match_production' (2648345) panicked at crates/deadsync-song-lua/tests/rust_screen_assembly.rs:54:33:
+legacy: 
+            local underlay=TOP:GetChild('Underlay')
+            local function pose(a)
+                log(a:GetName(),a.__songlua_actor_type,a:GetX(),a:GetY(),a:GetWidth(),a:GetHeight(),
+                    a:GetZoomX(),a:GetZoomY(),a:GetDiffuseAlpha(),a:GetVisible(),a.Font,a.Texture)
+                if a.GetText then log(a:GetText()) end
+            end
+            pose(underlay:GetChild('Header'))
+            for _,actor in ipairs(underlay) do
+                log(actor.__songlua_underlay_role);pose(actor)
+                for _,child in ipairs(actor) do
+                    assert(child:GetParent()==actor);pose(child)
+                    for _,grandchild in ipairs(child) do assert(grandchild:GetParent()==child);pose(grandchild) end
+                end
+            end
+            assert(#TOP:GetChild('')==5)
+            log(TOP:GetChild('In'):GetDrawOrder(),TOP:GetChild('Out'):GetDrawOrder(),TOP:GetChild('Cancel'):GetDrawOrder())
+        
+runtime error: ...s/deadsync-song-lua/tests/rust_screen_assembly.rs:52:17: attempt to call method 'GetDrawOrder' (a nil value)
+stack traceback:
+	[C]: in method 'GetDrawOrder'
+	...s/deadsync-song-lua/tests/rust_screen_assembly.rs:52:17: in main chunk
+FAILED
+test underlay_update_closures_keep_bpm_rate_and_life_owners_across_collection ... ok
+
+failures:
+
+failures:
+    failed_screen_construction_releases_partial_actors_and_allows_recovery
+    screen_tree_preserves_enabled_children_parents_roles_and_stable_draw_order
+    underlay_geometry_text_filters_and_variant_selection_match_production
+
+test result: FAILED. 5 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.28s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_screen_assembly`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_screen_assembly`

@@ -1,0 +1,17 @@
+
+running 12 tests
+test dynamic_metric_getters_preserve_lookup_order_reentry_and_gc_roots ... ok
+test lead_in_metrics_use_current_double_rate_while_definition_queries_do_not_evaluate_it ... ok
+test mapped_metrics_keep_arbitrary_lua_values_and_boolean_conversion ... ok
+test metric_definitions_enumeration_and_context_numbers_match_production ... ok
+test saved_queries_follow_replaced_state_and_release_discarded_manager_tables ... ok
+test strings_and_invalid_metric_arguments_preserve_missing_value_contracts ... ok
+test theme_font_paths_and_metrics_feed_owned_actor_resources ... ok
+test theme_identity_methods_fresh_lists_and_side_effects_match_production ... ok
+test theme_paths_preserve_argument_rules_aliases_and_path_info_results ... ok
+test unchanged_simply_love_mode_fixture_supplies_the_current_metric_values ... ok
+test virtual_theme_actor_paths_keep_production_classes_spelling_and_fresh_identity ... ok
+test virtual_theme_actors_materialize_with_owned_commands_and_render_state ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s
+

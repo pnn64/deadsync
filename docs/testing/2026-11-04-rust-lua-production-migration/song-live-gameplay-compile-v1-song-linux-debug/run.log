@@ -1,0 +1,283 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find function `number` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/live_gameplay.rs:205:13
+    |
+205 | ...   number(n....
+    |       ^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/initial_state.rs:566:1
+    |
+566 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::initial_state::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/effects.rs:163:1
+    |
+163 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::effects::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs:76:1
+    |
+ 76 | fn nu... Json {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::live_sources::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs:171:1
+    |
+171 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::perframes::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs:304:1
+    |
+304 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::screen_parts::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/underlay.rs:80:1
+    |
+ 80 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::underlay::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs:130:1
+    |
+130 | pub(s...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::song_options::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/statistics.rs:337:1
+    |
+337 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::statistics::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/observations.rs:238:1
+    |
+238 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::observations::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:400:1
+    |
+400 | fn nu...<f32> {
+    | ^^^^^...^^^^^ `crate::rust_engine::song_multitap::number`: not accessible
+help: consider importing one of these functions
+    |
+  2 + use crate::rust_engine::actors::sprites::number;
+    |
+  2 + use crate::rust_engine::number;
+    |
+
+error[E0425]: cannot find function `number` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/live_gameplay.rs:213:13
+    |
+213 | ...   number(n....
+    |       ^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/initial_state.rs:566:1
+    |
+566 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::initial_state::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/effects.rs:163:1
+    |
+163 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::effects::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs:76:1
+    |
+ 76 | fn nu... Json {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::live_sources::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs:171:1
+    |
+171 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::perframes::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs:304:1
+    |
+304 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::screen_parts::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/underlay.rs:80:1
+    |
+ 80 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::underlay::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs:130:1
+    |
+130 | pub(s...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::song_options::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/statistics.rs:337:1
+    |
+337 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::statistics::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/observations.rs:238:1
+    |
+238 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::observations::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:400:1
+    |
+400 | fn nu...<f32> {
+    | ^^^^^...^^^^^ `crate::rust_engine::song_multitap::number`: not accessible
+help: consider importing one of these functions
+    |
+  2 + use crate::rust_engine::actors::sprites::number;
+    |
+  2 + use crate::rust_engine::number;
+    |
+
+error[E0425]: cannot find function `number` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/live_gameplay.rs:265:21
+    |
+265 | ...   number(ju...
+    |       ^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/initial_state.rs:566:1
+    |
+566 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::initial_state::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/effects.rs:163:1
+    |
+163 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::effects::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs:76:1
+    |
+ 76 | fn nu... Json {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::live_sources::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs:171:1
+    |
+171 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::perframes::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs:304:1
+    |
+304 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::screen_parts::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/underlay.rs:80:1
+    |
+ 80 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::underlay::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs:130:1
+    |
+130 | pub(s...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::song_options::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/statistics.rs:337:1
+    |
+337 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::statistics::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/observations.rs:238:1
+    |
+238 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::observations::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:400:1
+    |
+400 | fn nu...<f32> {
+    | ^^^^^...^^^^^ `crate::rust_engine::song_multitap::number`: not accessible
+help: consider importing one of these functions
+    |
+  2 + use crate::rust_engine::actors::sprites::number;
+    |
+  2 + use crate::rust_engine::number;
+    |
+
+error[E0425]: cannot find function `number` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/live_gameplay.rs:278:21
+    |
+278 | ...   number(ea...
+    |       ^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/initial_state.rs:566:1
+    |
+566 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::initial_state::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/effects.rs:163:1
+    |
+163 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::effects::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/live_sources.rs:76:1
+    |
+ 76 | fn nu... Json {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::live_sources::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs:171:1
+    |
+171 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::perframes::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs:304:1
+    |
+304 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::screen_parts::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/underlay.rs:80:1
+    |
+ 80 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::underlay::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs:130:1
+    |
+130 | pub(s...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::song_options::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/statistics.rs:337:1
+    |
+337 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::statistics::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/observations.rs:238:1
+    |
+238 | fn nu...rror> {
+    | ^^^^^...^^^^^ `crate::rust_engine::observations::number`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/song_multitap.rs:400:1
+    |
+400 | fn nu...<f32> {
+    | ^^^^^...^^^^^ `crate::rust_engine::song_multitap::number`: not accessible
+help: consider importing one of these functions
+    |
+  2 + use crate::rust_engine::actors::sprites::number;
+    |
+  2 + use crate::rust_engine::number;
+    |
+
+error[E0308]: mismatched types
+   --> crates/deadsync-song-lua/src/rust_engine/actors/live_gameplay.rs:223:66
+    |
+223 | ...rn(crate..._name(p).a...
+    |       -----...----- ^ expected `usize`, found `u8`
+    |       |
+    |       arguments to this function are incorrect
+    |
+note: function defined here
+   --> crates/deadsync-song-lua/src/values.rs:203:8
+    |
+203 | ...fn playe..._name(player: usize) -...
+    |       ^^^^^...^^^^^ -------------
+help: you can convert a `u8` to a `usize`
+    |
+223 |             Some(p) => call.try_intern(crate::player_number_name(p.into()).as_bytes())?,
+    |                                                                   +++++++
+
+Some errors have detailed explanations: E0308, E0425.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `deadsync-song-lua` (lib) due to 5 previous errors

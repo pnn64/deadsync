@@ -1,0 +1,50 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 8m 34s
+     Running tests/rust_song_activation.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 7 tests
+test static_schedule_composes_prefix_global_mods_eases_actions_and_perframe_inputs ... ok
+test static_schedule_hard_errors_preserve_partial_script_effects_and_clean_roots ... 
+thread 'static_schedule_hard_errors_preserve_partial_script_effects_and_clean_roots' (2888360) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:9827:5:
+assertion `left == right` failed: native=None Rust=Some("table expected")
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test static_schedule_keeps_prefix_lookup_order_soft_perframe_errors_and_fresh_globals ... 
+thread 'static_schedule_keeps_prefix_lookup_order_soft_perframe_errors_and_fresh_globals' (2888361) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:9844:9:
+assertion `left == right` failed
+  left: "SongStaticSchedule { beat_mods: [SongLuaModWindow { unit: Beat, start: 1.0, limit: 2.0, span_mode: Len, mods: \"50% drunk\", player: None }, SongLuaModWindow { unit: Beat, start: 3.0, limit: 2.0, span_mode: Len, mods: \"25% stealth\", player: None }], time_mods: [], eases: [SongLuaEaseWindow { approach_speed: None, unit: Beat, start: 2.0, limit: 1.0, span_mode: Len, from: 0.0, to: 1.0, target: Mod(\"dizzy\"), easing: None, player: None, sustain: None, opt1: None, opt2: None }], overlay_eases: [], column_offsets: [], messages: [SongLuaMessageEvent { beat: 4.0, message: \"Prefix\", persists: false }], sound_events: [], info: SongLuaCompileInfo { unsupported_perframes: 0, unsupported_function_eases: 0, unsupported_function_actions: 0, unsupported_perframe_captures: [], unsupported_function_ease_captures: [], unsupported_function_action_captures: [], skipped_message_command_captures: [] }, counter: 0 }"
+ right: "SongStaticSchedule { beat_mods: [], time_mods: [], eases: [], overlay_eases: [], column_offsets: [], messages: [], sound_events: [], info: SongLuaCompileInfo { unsupported_perframes: 0, unsupported_function_eases: 0, unsupported_function_actions: 0, unsupported_perframe_captures: [], unsupported_function_ease_captures: [], unsupported_function_action_captures: [], skipped_message_command_captures: [] }, counter: 0 }"
+FAILED
+test static_schedule_retains_selected_perframe_tables_after_global_replacement ... ok
+test static_schedule_skips_reader_owned_tables_by_identity_and_initialized_presence ... 
+thread 'static_schedule_skips_reader_owned_tables_by_identity_and_initialized_presence' (2888363) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:9853:9:
+assertion `left == right` failed
+  left: [false, true, true, true, true]
+ right: [false, false, true, true, true]
+FAILED
+test static_schedule_xero_captures_retain_future_functions_and_release_parsed_tables ... ok
+test static_schedule_xero_nodes_keep_first_winner_sparse_pairs_state_and_capture_dedup ... ok
+
+failures:
+
+failures:
+    static_schedule_hard_errors_preserve_partial_script_effects_and_clean_roots
+    static_schedule_keeps_prefix_lookup_order_soft_perframe_errors_and_fresh_globals
+    static_schedule_skips_reader_owned_tables_by_identity_and_initialized_presence
+
+test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 200 filtered out; finished in 7.52s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

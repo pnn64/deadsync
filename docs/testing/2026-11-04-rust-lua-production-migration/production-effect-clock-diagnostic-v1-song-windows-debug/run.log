@@ -1,0 +1,30 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+error[E0502]: cannot borrow `*call` as immutable because it is also borrowed as mutable
+  --> crates\deadsync-song-lua\src\rust_engine\actors\live_sources.rs:27:16
+   |
+23 |             let mut s = call.native_stack()?;
+   |                         ---- mutable borrow occurs here
+...
+27 |             if call.captures()[2] != Value::Boolean(true) {
+   |                ^^^^ immutable borrow occurs here
+28 |                 for level in 1..32 {
+29 |                     let Some(frame) = s.get_stack(thread, level)? else {
+   |                                       - mutable borrow later used here
+
+For more information about this error, try `rustc --explain E0502`.
+warning: `deadsync-song-lua` (lib) generated 2 warnings
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error; 2 warnings emitted

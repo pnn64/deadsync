@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/mnt/c/GitHub/deadsync/target/rust-lua-production-baseline-dbus/artifacts/linux/debug/song_lua_execution",
+    "/mnt/c/GitHub/deadsync/target/debug/Songs/lua-songs/Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+    "/mnt/c/GitHub/deadsync/docs/testing/2026-11-04-rust-lua-production-migration/baseline-live-cursed-v2-linux-debug/output.json",
+    "--benchmark",
+    "241"
+  ],
+  "binary_sha256": "4045d0211c8f21427c0fac9e9c4b81507d74d125b2d632466ed00af0d1ed474d",
+  "simfile_sha256": "6ecc8277910384a2358c5a178fb3a83474e01c4997beea5f6fe23a0d1bc35d4d",
+  "exit_code": 1,
+  "seconds": 20.383733029011637,
+  "inputs_sha256": "9489bb7955d70cb221af06bf6db55a2a00395d7f937541fb3ad3c6eef9deffe3",
+  "log_sha256": "ac09c8c9d31af208af3f04fb4d57ae3d9487513b6c3aad56562033c605a373fa",
+  "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+  "peak_rss_bytes": 99233792,
+  "user_seconds": 16.119293,
+  "system_seconds": 0.368899,
+  "inputs_unchanged": true,
+  "output_sha256": "4b44818703575c68b4ed2ae1c06b4dc681170ba4fcaa7bf20faf70767c44c6d2"
+}

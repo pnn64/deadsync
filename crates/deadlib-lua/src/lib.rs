@@ -1,6 +1,6 @@
 //! A standalone Lua compiler and register interpreter written in Rust.
 //!
-//! This crate is under construction. See the README for its current language coverage.
+//! The embedding interface is Rust-only. See the README for supported capabilities.
 //! Compilation does not depend on a VM, and a compiled program can run in multiple VMs.
 //!
 //! ```
@@ -14,6 +14,10 @@
 #![deny(unsafe_code)]
 
 #[cfg(test)]
+#[allow(dead_code)]
+mod reference_test;
+
+#[cfg(test)]
 #[path = "../tests/support/allocation_probe.rs"]
 mod allocation_probe;
 mod arena;
@@ -25,8 +29,8 @@ mod error;
 mod format;
 mod lexer;
 mod locale;
-#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-mod native_abi;
+#[allow(unsafe_code)]
+mod memory;
 mod numeric;
 mod optimizer;
 mod parser;
@@ -41,27 +45,21 @@ pub use bytecode::Program;
 pub use cache::{CacheStatus, CachedProgram, ProgramCache};
 #[doc(inline)]
 pub use error::{Error, ErrorKind};
-#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-#[doc(inline)]
-pub use native_abi::{NativeCAbiLoader, NativeCAbiStats, NativeCDriver, NativeCProgram};
-#[cfg(all(feature = "c-api-runtime", any(windows, target_os = "linux")))]
-#[doc(hidden)]
-pub use native_abi::{c_api_owned_state, c_api_version};
 #[doc(inline)]
 pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{
-    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, NativeBuiltinBody,
-    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
-    NativeHookEvent, NativeHookInfo, NativeLibrary, NativeLibraryLoader, NativeLoadStatus,
-    NativeStack, NativeSymbol, NativeThreadStack, NativeThreadStatus, Root, Vm,
+    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, MemoryUsage,
+    NativeBuiltinBody, NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString,
+    NativeHook, NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
+    NativeThreadStatus, Root, Vm,
 };
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.
 ///
 /// # Errors
 /// Returns a syntax or limit error for invalid input. Native chunks must match
-/// this target's Lua 5.1 ABI header.
+/// this target's Lua 5.1 ABI header. Allocation failure returns a memory error.
 pub fn compile(source: &[u8]) -> Result<Program, Error> {
     compile_named(source, b"=(deadlib-lua)")
 }
@@ -74,7 +72,8 @@ pub fn compile(source: &[u8]) -> Result<Program, Error> {
 /// the supplied name identifies loading errors.
 ///
 /// # Errors
-/// Returns syntax or limit errors for invalid source.
+/// Returns syntax or limit errors for invalid source, or a memory error if
+/// compilation cannot allocate its working storage or the resulting program.
 pub fn compile_named(source: &[u8], name: &[u8]) -> Result<Program, Error> {
     if source.first() == Some(&27) {
         return chunk51::compile(source, name, 0);

@@ -1,0 +1,70 @@
+{
+  "created_utc": "2026-11-08T13:19:47.527066+00:00",
+  "goal_status": "active",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "previous": "production-progress-checkpoint-2026-11-08-v9.json",
+  "completed": [
+    "Unchanged original Multitap regression v2 passes both skins/offline+live; 1 pass,400 filtered,7.58s actual test; source guard passed. v1 incorrectly combined --tests with --test and stopped in unrelated custom archive selector before target; preserved and runner corrected.",
+    "First focused four-target adapter v2 run:54 pass,1 new large-scene control failure. All original tests and new nested live relative-load control pass.",
+    "Four exact Lua snippets extracted from unchanged native_gameplay tests: legacy succeeds all4, Rust fails all4 at original lines. production-native-tree-controls-v1/result.json exit0 with log8c23347c...; source proof confirms missing actor tostring and retained AMV proxy.",
+    "Second source edit window complete: remaining action/function capture lists now attach traced actor batches to existing snapshot roots; actor class tostring uses stable opaque VM identities; AMV SetTexture retains RageTexture proxy/metadata and GetTexture returns it by identity. Four new meaningful regression controls appended overall, all original test text prefixes preserved.",
+    "All 15 failing theme test sources byte-identical to baseline. Entire content_browser/shared modules64 source files also exact. Workshop failure explained by separate committed model/resource resolver change fa2853facf51251606ccae9aed71c538ea6ee343, with explicit validation limits.",
+    "Current README/completion-audit updated to incomplete actual downstream state; earlier audit bytes preserved.",
+    "Latest strict release smoke screenshot visually inspected,600frame result passed before current adapter runtime fixes; final source refresh remains required."
+  ],
+  "evidence": [
+    "production-downstream-failure-index-v1.json",
+    "production-downstream-theme-source-review-v1.json",
+    "production-downstream-theme-module-identity-v1.json",
+    "production-downstream-workshop-source-review-v1.json",
+    "production-adapter-fixes-source-review-v2.json",
+    "production-remaining-replay-investigation-v1.json",
+    "production-adapter-fixes-before-v1/manifest.json",
+    "production-adapter-fixes-before-v2/manifest.json"
+  ],
+  "live_runners": [
+    {
+      "session_id": 4704,
+      "stage": "production-adapter-fixes-focused-v3-song-windows-debug",
+      "description": "Eight complete original adapter targets plus four appended controls; last active compiler rust_live_compiler PID33684 at14:19, CPU243s. Finite compile, not blocked."
+    },
+    {
+      "session_id": 36063,
+      "stage": "production-adapter-fixes-seventh-v1-downstream-windows-debug",
+      "description": "Unchanged original7thGear regression, waiting target lock."
+    },
+    {
+      "session_id": 18333,
+      "stage": "production-adapter-fixes-native-gameplay-v1-downstream-windows-debug",
+      "description": "Whole original native_gameplay::tests prefix; trace omissions expected to remain; waiting target lock."
+    }
+  ],
+  "terminal_consumed_sessions": [
+    24831,
+    21130,
+    56258,
+    27001
+  ],
+  "formatting": {
+    "stage": "production-adapter-fixes-format-v1.json",
+    "exit_code": 1,
+    "files_checked": 15,
+    "only_difference": "actors.rs mod retained must sort before mod retirement. Apply after live guarded runs finish; do not invalidate their snapshots.",
+    "note": "All other changed Rust files are formatted."
+  },
+  "remaining": [
+    "Consume all three current runs. No watched source edits until terminal. Fix any new control defects without weakening original assertions.",
+    "Move retained module declaration before retirement in next source edit window.",
+    "Investigate/fix remaining original semantic/replay trace failures. Read-only investigation report contains precise native and Rust trace/scope sites. Do not simply retarget production tests to legacy.",
+    "For failing visual/timing microfixtures, compare complete native vsRust prepared payloads before changing renderer; add bounded existing-fixture controls, no new feature/parity campaign.",
+    "Shell Sharkmode first failure remains unresolved; its11 lock-poison cascades should be rerun after actual cause fixed.",
+    "Refresh final-source relevant regressions, graph/normalbuild/link/rendered evidence after runtime fixes.",
+    "Matched representative prep/live/process-memory and bundled noteskin measurements remain outstanding. No new performance target.",
+    "Final active docs/audit and goal completion only when original criteria fulfilled, then stop."
+  ],
+  "limits": [
+    "Generic interpreter and C API removal milestones stay closed. Core255-capture limit unchanged.",
+    "Normal graph/profile evidence needs refresh after added RustVMdevopt3 entry.",
+    "Leave unrelated work/processes and old stuck WSL pids alone. No subagents, resets, reverts or commits."
+  ]
+}

@@ -1,0 +1,776 @@
+--- crates/deadsync-song-lua/src/rust_engine/actors.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -49,6 +49,9 @@
+ mod recurring;
+ mod render;
+ mod retirement;
++mod song_media;
++#[cfg(feature = "test-support")]
++pub(super) use song_media::TARGETS as MEDIA_CAPTURE_TARGETS;
+ mod song_pose;
+ mod song_properties;
+ mod sound;
+--- crates/deadsync-song-lua/src/rust_engine/actors/capture.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
+@@ -259,6 +259,7 @@
+         song_messages::record(call, store, id, &delta);
+     }
+     song_immediate::delta(call, store, id, &delta, immediate);
++    song_media::delta(call, store, id, &delta);
+ }
+ 
+ fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
+@@ -502,6 +503,7 @@
+         song_messages::record(call, store, id, &delta);
+     }
+     song_immediate::delta(call, store, id, &delta, immediate);
++    song_media::delta(call, store, id, &delta);
+ }
+ 
+ // Once a fallback actor queues during an update, that queue belongs to frame
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs
+@@ -6,6 +6,7 @@
+     crate::tween_pose::TARGETS.contains(&target)
+         || song_immediate::TARGETS.contains(&target)
+         || song_properties::TARGETS.contains(&target)
++        || song_media::TARGETS.contains(&target)
+ }
+ pub(super) fn mode(store: &Store, id: TableId) -> bool {
+     song_immediate::context(store, id).is_some()
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
+@@ -210,15 +210,15 @@
+     ) -> Option<Vec<SongReplayImmediateUpdates>> {
+         let mut frames = self.drain_song_overlay_updates(screen)?;
+         for frame in &mut frames {
+-            frame
+-                .values
+-                .retain(|(target, _)| !crate::tween_pose::TARGETS.contains(target));
+-            frame
+-                .final_values
+-                .retain(|(target, _)| !crate::tween_pose::TARGETS.contains(target));
+-            frame
+-                .scheduled
+-                .retain(|u| !crate::tween_pose::TARGETS.contains(&u.target));
++            frame.values.retain(|(target, _)| {
++                TARGETS.contains(target) || song_properties::TARGETS.contains(target)
++            });
++            frame.final_values.retain(|(target, _)| {
++                TARGETS.contains(target) || song_properties::TARGETS.contains(target)
++            });
++            frame.scheduled.retain(|u| {
++                TARGETS.contains(&u.target) || song_properties::TARGETS.contains(&u.target)
++            });
+         }
+         frames.retain(|f| {
+             f.tween_reset
+--- crates/deadsync-song-lua/src/rust_engine/actors/text.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/text.rs
+@@ -1,6 +1,7 @@
+ //! BitmapText bindings and immutable renderer payloads over the Rust host API.
+ use super::{
+-    Shared, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, sprites, table,
++    Shared, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, song_media,
++    sprites, table,
+ };
+ use deadlib_lua::{Error, ErrorKind, HostCall, TableId, Value};
+ use deadlib_present::actors::TextAttribute;
+@@ -359,7 +360,9 @@
+         actor,
+         &format!("__songlua_state_{key}"),
+         Value::Boolean(value),
+-    )
++    )?;
++    song_media::record(call, store, actor, key);
++    Ok(())
+ }
+ pub(super) fn pre_zoom(
+     call: &mut HostCall<'_>,
+@@ -479,6 +482,7 @@
+                 "__songlua_state_text_distortion",
+                 Value::Number(n as f64),
+             )?;
++            song_media::record(call, store, actor, "text_distortion");
+         }
+         "wrapwidthpixels" | "vertspacing" => {
+             if let Some(n) = float_scalar(call, arg(call, 1), false) {
+@@ -508,6 +512,7 @@
+                         &format!("__songlua_state_{key}"),
+                         Value::Number(n as f64),
+                     )?;
++                    song_media::record(call, store, actor, key);
+                 }
+             }
+         }
+@@ -533,6 +538,12 @@
+                     },
+                     Value::Number(n as f64),
+                 )?;
++                song_media::record(
++                    call,
++                    store,
++                    actor,
++                    if width { "max_width" } else { "max_height" },
++                );
+                 flag(
+                     call,
+                     store,
+@@ -571,6 +582,7 @@
+                     .text_glow_mode = mode;
+                 let value = call.try_intern(crate::text_glow_mode_label(mode).as_bytes())?;
+                 set(call, actor, "__songlua_state_text_glow_mode", value)?;
++                song_media::record(call, store, actor, "text_glow_mode");
+             }
+         }
+         _ => unreachable!(),
+--- crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
+@@ -4,6 +4,8 @@
+ 
+ pub(super) const ACTOR_METHODS: &[&str] = &[
+     "animate",
++    "loop",
++    "rate",
+     "setstate",
+     "GetNumStates",
+     "texturetranslate",
+@@ -414,17 +416,30 @@
+             Value::Nil,
+         )?;
+     }
+-    let mut store = store.lock().unwrap();
+-    let actor = store.actors.get_mut(&actor).unwrap();
++    let mut guard = store.lock().unwrap();
++    let instance = guard.actors.get_mut(&actor).unwrap();
+     if clear_rect {
+-        for clock in actor.model_materials.iter_mut().flatten() {
++        for clock in instance.model_materials.iter_mut().flatten() {
+             clock.set_state(index.min(i32::MAX as u32) as i32);
+         }
+     }
+-    let render = &mut actor.state.render;
++    let render = &mut instance.state.render;
+     render.sprite_state_index = Some(index);
+     if clear_rect {
+         render.custom_texture_rect = None;
++    }
++    drop(guard);
++    if clear_rect {
++        capture::write(
++            call,
++            store,
++            actor,
++            crate::SongLuaOverlayStateDelta {
++                sprite_state_index: Some(index),
++                ..Default::default()
++            },
++            true,
++        );
+     }
+     Ok(())
+ }
+@@ -441,6 +456,23 @@
+         crate::SONG_LUA_SPRITE_STATE_CLEAR,
+         false,
+     )?;
++    capture::write(
++        call,
++        store,
++        actor,
++        crate::SongLuaOverlayStateDelta {
++            sprite_state_index: Some(crate::SONG_LUA_SPRITE_STATE_CLEAR),
++            ..Default::default()
++        },
++        false,
++    );
++    song_properties::record(
++        call,
++        store,
++        actor,
++        crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
++        crate::SongLuaOverlayUpdateValue::U32(crate::SONG_LUA_SPRITE_STATE_CLEAR),
++    );
+     put_vector(call, actor, "__songlua_state_custom_texture_rect", &rect)?;
+     store
+         .lock()
+@@ -451,6 +483,7 @@
+         .state
+         .render
+         .custom_texture_rect = Some(rect);
++    song_media::record(call, store, actor, "custom_texture_rect");
+     Ok(())
+ }
+ fn current_rect(call: &mut HostCall<'_>, actor: TableId) -> Result<[f32; 4], Error> {
+@@ -734,6 +767,7 @@
+             .state
+             .render
+             .sprite_loop = value;
++        song_media::record(call, store, actor, "sprite_loop");
+     } else if let Some(value) = float_scalar(call, value, false) {
+         set(
+             call,
+@@ -750,6 +784,7 @@
+             .state
+             .render
+             .sprite_playback_rate = value;
++        song_media::record(call, store, actor, "sprite_playback_rate");
+     }
+     Ok(())
+ }
+@@ -796,25 +831,32 @@
+                 && n.fract() == 0.0
+             {
+                 state(call, store, actor, n as u32, true)?;
+-                song_immediate::record(
+-                    call,
+-                    store,
+-                    actor,
+-                    crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
+-                    crate::SongLuaOverlayUpdateValue::U32(n as u32),
+-                );
+             }
+         }
+         "animate" | "texturewrapping" => {
+             let enabled = boolish(call, value).unwrap_or(true);
+-            let mut store = store.lock().unwrap();
+-            let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
++            let mut guard = store.lock().unwrap();
++            let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "animate" {
+                 render.sprite_animate = enabled;
+             } else {
+                 render.texture_wrapping = enabled;
+             }
+-        }
++            drop(guard);
++            let key = if name == "animate" {
++                "sprite_animate"
++            } else {
++                "texture_wrapping"
++            };
++            set(
++                call,
++                actor,
++                &format!("__songlua_state_{key}"),
++                Value::Boolean(enabled),
++            )?;
++            song_media::record(call, store, actor, key);
++        }
++        "loop" | "rate" => texture_parameter(call, store, actor, name, value)?,
+         "SetDecodeMovie" => decode(call, store, actor, boolish(call, value).unwrap_or(true))?,
+         "GetDecodeMovie" => {
+             let value = field(call, actor, "__songlua_state_decode_movie")?;
+@@ -848,6 +890,7 @@
+                     .state
+                     .render
+                     .sprite_state_delay = delay;
++                song_media::record(call, store, actor, "sprite_state_delay");
+             }
+         }
+         "GetAnimationLengthSeconds" => {
+@@ -924,6 +967,7 @@
+                         .state
+                         .render
+                         .sprite_state_delay = delay;
++                    song_media::record(call, store, actor, "sprite_state_delay");
+                 }
+                 state(call, store, actor, first.unwrap_or(0), true)?;
+             }
+@@ -955,13 +999,21 @@
+         }
+         "texturetranslate" | "texcoordvelocity" => {
+             let value = [1, 2].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
+-            let mut store = store.lock().unwrap();
+-            let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
++            let mut guard = store.lock().unwrap();
++            let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "texturetranslate" {
+                 render.texcoord_offset = Some(value);
+             } else {
+                 render.texcoord_velocity = Some(value);
+             }
++            drop(guard);
++            let key = if name == "texturetranslate" {
++                "texcoord_offset"
++            } else {
++                "texcoord_velocity"
++            };
++            put_vector(call, actor, &format!("__songlua_state_{key}"), &value)?;
++            song_media::record(call, store, actor, key);
+         }
+         "CropTo" | "scaletoclipped" => {
+             let (Some(w), Some(h)) = (
+@@ -973,6 +1025,7 @@
+             let target = [w, h];
+             if name == "scaletoclipped" {
+                 size(store, actor, target);
++                capture::property(call, store, actor, "size");
+             } else if target.iter().all(|n| n.is_finite() && *n > 0.0) {
+                 let source = match frame_size(call, actor)? {
+                     Some(size) => Some(size),
+@@ -982,13 +1035,16 @@
+                     && let Some(crop) = crate::crop_texture_rect(source, target)
+                 {
+                     size(store, actor, target);
++                    capture::property(call, store, actor, "size");
+                     rect(call, store, actor, crop)?;
+-                    let mut store = store.lock().unwrap();
+-                    let pose = store.actors.get_mut(&actor).unwrap().destination_mut();
++                    let mut guard = store.lock().unwrap();
++                    let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
+                     pose.zoom = 1.0;
+                     pose.zoom_x = 1.0;
+                     pose.zoom_y = 1.0;
+                     pose.zoom_z = 1.0;
++                    drop(guard);
++                    capture::property(call, store, actor, "zoom");
+                 }
+             }
+         }
+--- crates/deadsync-song-lua/src/rust_engine/actors/sound.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/sound.rs
+@@ -100,6 +100,9 @@
+         )
+     };
+     if !is_sound {
++        if !matches!(name, "play" | "pause") {
++            return call.push(Value::Table(actor));
++        }
+         store
+             .lock()
+             .unwrap()
+@@ -109,6 +112,13 @@
+             .state
+             .render
+             .sprite_animate = name == "play";
++        sprites::set(
++            call,
++            actor,
++            "__songlua_state_sprite_animate",
++            Value::Boolean(name == "play"),
++        )?;
++        song_media::record(call, store, actor, "sprite_animate");
+         return call.push(Value::Table(actor));
+     }
+     match name {
+--- crates/deadsync-song-lua/src/rust_engine/actors/render.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/actors/render.rs
+@@ -1,8 +1,8 @@
+ //! Song actor render bindings. Tween destinations and immediate render settings
+ //! stay separate so queued commands cannot delay native immediate properties.
+ use super::{
+-    Shared, arg, capture, children, float_scalar, helper, song_immediate, song_properties,
+-    song_replay,
++    Shared, arg, capture, children, float_scalar, helper, song_immediate, song_media,
++    song_properties, song_replay,
+ };
+ use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
+ use deadlib_lua::{Error, HostCall, TableId, Value};
+@@ -79,6 +79,8 @@
+     "ztestmode",
+     "zbias",
+     "clearzbuffer",
++    "MaskSource",
++    "MaskDest",
+     "SetTextureFiltering",
+ ];
+ pub(super) const FRAME_METHODS: &[&str] = &["fov", "vanishpoint", "SetDrawByZPosition"];
+@@ -432,6 +434,28 @@
+             crate::SongLuaOverlayUpdateTarget::CullMode,
+             crate::SongLuaOverlayUpdateValue::CullMode(mode),
+         );
++    } else if matches!(name, "MaskSource" | "MaskDest") {
++        let key = if name == "MaskSource" {
++            "mask_source"
++        } else {
++            "mask_dest"
++        };
++        {
++            let mut guard = store.lock().unwrap();
++            let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
++            if name == "MaskSource" {
++                render.mask_source = true;
++            } else {
++                render.mask_dest = true;
++            }
++        }
++        super::sprites::set(
++            call,
++            actor,
++            &format!("__songlua_state_{key}"),
++            Value::Boolean(true),
++        )?;
++        song_media::record(call, store, actor, key);
+     } else if matches!(name, "zbuffer" | "ztest" | "zwrite") {
+         let enabled = strict_boolean(call, name)?;
+         depth(
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1447,6 +1447,7 @@
+         .iter()
+         .chain(super::actors::SCHEDULED_RENDER_TARGETS)
+         .chain(crate::tween_pose::TARGETS.iter())
++        .chain(super::actors::MEDIA_CAPTURE_TARGETS)
+         .copied()
+         .collect();
+     legacy_drain_song_property_subset(lua, &targets)
+--- crates/deadsync-song-lua/src/rust_engine/song_discovery.rs (before media output)
++++ crates/deadsync-song-lua/src/rust_engine/song_discovery.rs
+@@ -113,7 +113,7 @@
+             && self.actors.set_song_pending_overlay_updates(screen, values)
+     }
+ 
+-    /// Drain immediate, scheduled renderer and fallback pose publications.
++    /// Drain all captured pose, renderer, text and sprite publications.
+     /// This shares a buffer with the narrower drains; choose one per sample.
+     pub fn drain_song_overlay_updates(
+         &mut self,
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs (before media output)
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -3496,3 +3496,252 @@
+             .any(|u| u.target == Target::Diffuse)
+     );
+ }
++
++#[test]
++fn media_output_captures_text_masks_and_sprite_setters_in_native_order() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply();collectgarbage()end,
++            Def.BitmapText{Text="x",InitCommand=function(self)saved.text=self end},
++            Def.Sprite{InitCommand=function(self)saved.sprite=self end},
++            Def.Quad{InitCommand=function(self)saved.mask=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "media publications"));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["text", "sprite", "mask"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
++    let setters = r#"
++        saved.text:uppercase(true):rainbowscroll(true):jitter(true):distort(0.2)
++            :textglowmode('TextGlowMode_Inner'):set_mult_attrs_with_diffuse(true)
++            :vertspacing(3):wrapwidthpixels(120):maxwidth(80):maxheight(40):max_dimension_use_zoom(true)
++        saved.sprite:animate(false):loop(false):rate(2):SetAllStateDelays(0.125)
++            :texturewrapping(true):texturetranslate(0.25,0.5):customtexturerect(0,0.1,0.8,0.9):texcoordvelocity(1,2)
++        saved.mask:MaskSource():MaskDest()
++    "#;
++    pair.script(&format!(
++        "MESSAGEMAN:Broadcast('Change',{{apply=function(){setters}end}})"
++    ));
++    let direct = compare_pose_output(&mut pair);
++    assert_eq!(direct.iter().map(|f| f.values.len()).sum::<usize>(), 24);
++    assert!(direct.iter().all(|f| f.scheduled.is_empty()));
++    pair.script(&format!("MESSAGEMAN:Broadcast('Change',{{apply=function()saved.text:sleep(0.125):accelerate(0.25);saved.sprite:sleep(0.125):accelerate(0.25);saved.mask:sleep(0.125):accelerate(0.25);{setters};saved.text:uppercase(true)end}})"));
++    let timed = compare_pose_output(&mut pair);
++    assert_eq!(timed.iter().map(|f| f.scheduled.len()).sum::<usize>(), 24);
++    assert!(
++        timed
++            .iter()
++            .flat_map(|f| &f.scheduled)
++            .all(|u| u.delay_seconds == 0.125 && u.duration_seconds == 0.25)
++    );
++    // The older 41-target view consumes media writes without exposing them.
++    pair.script("saved.text:uppercase(false)");
++    assert_eq!(
++        pair.rust.drain_song_property_updates(pair.scene).unwrap(),
++        test_support::legacy_drain_song_property_updates(&pair.native).unwrap()
++    );
++    assert!(
++        pair.rust
++            .drain_song_overlay_updates(pair.scene)
++            .unwrap()
++            .is_empty()
++    );
++}
++
++#[test]
++fn media_output_preserves_retained_texture_state_and_geometry_write_order() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    image::RgbaImage::from_pixel(16, 8, image::Rgba([255, 255, 255, 255]))
++        .save(dir.path().join("sheet 2x1.png"))
++        .unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply()end,
++            Def.Sprite{Texture='sheet 2x1.png',InitCommand=function(self)saved.sprite=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "media texture capture",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["sprite"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
++    pair.script(
++        r#"MESSAGEMAN:Broadcast('Change',{apply=function()
++        local a=saved.sprite;local t=a:GetTexture();collectgarbage();t:loop(false);t:rate(0.5)
++        a:SetStateProperties{{Frame=1,Delay=0.2},{Frame=0,Delay=0.3}}
++        a:SetSecondsIntoAnimation(0.21):pause():play():linear(0.4)
++            :customtexturerect(0,0,0.5,1):stretchtexcoords(0.1,0.2):addimagecoords(1,2)
++            :CropTo(4,4):scaletoclipped(5,6)
++        assert(a:GetWidth()==5 and a:GetHeight()==6)
++    end})"#,
++    );
++    let output = compare_pose_output(&mut pair);
++    assert!(
++        output[0]
++            .values
++            .contains(&(Target::Size, Update::Vec2([5., 6.])))
++    );
++    assert!(
++        output[0]
++            .scheduled
++            .iter()
++            .any(|u| u.target == Target::CustomTextureRect)
++    );
++    assert!(
++        output[0]
++            .scheduled
++            .iter()
++            .any(|u| u.target == Target::ZoomX)
++    );
++}
++
++#[test]
++fn media_output_retains_partial_writes_and_pending_stop_finish_values() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply()end,
++            Def.BitmapText{InitCommand=function(self)saved.text=self end},
++            Def.Sprite{InitCommand=function(self)saved.sprite=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "media pending cancellation",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["text", "sprite"]);
++    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
++    pair.script(
++        r#"MESSAGEMAN:Broadcast('Change',{apply=function()
++        assert(not pcall(function()
++            saved.text:linear(0.5):maxwidth(12):jitter(true)
++            saved.sprite:linear(0.5):texturetranslate(0.1,0.2):animate(false)
++            collectgarbage();error('partial media')
++        end))
++    end})"#,
++    );
++    let first = compare_pose_output(&mut pair);
++    let pending: Vec<_> = first
++        .iter()
++        .flat_map(|f| {
++            f.scheduled
++                .iter()
++                .map(|u| (f.overlay_index, u.target, u.value.clone()))
++        })
++        .collect();
++    test_support::legacy_set_song_pending_render_updates(&pair.native, &pending);
++    assert!(
++        pair.rust
++            .set_song_pending_overlay_updates(pair.scene, &pending)
++    );
++    pair.script(
++        r#"MESSAGEMAN:Broadcast('Change',{apply=function()
++        saved.text:linear(0.25):maxwidth(24):jitter(false):stoptweening()
++        saved.sprite:linear(0.25):texturetranslate(0.3,0.4):animate(true):stoptweening()
++    end})"#,
++    );
++    let stop = compare_pose_output(&mut pair);
++    assert!(stop.iter().all(|f| f.tween_reset));
++    assert_eq!(stop.iter().map(|f| f.scheduled.len()).sum::<usize>(), 5);
++    let pending: Vec<_> = stop
++        .iter()
++        .flat_map(|f| {
++            f.scheduled
++                .iter()
++                .map(|u| (f.overlay_index, u.target, u.value.clone()))
++        })
++        .collect();
++    test_support::legacy_set_song_pending_render_updates(&pair.native, &pending);
++    assert!(
++        pair.rust
++            .set_song_pending_overlay_updates(pair.scene, &pending)
++    );
++    assert!(!pair.rust.set_song_pending_overlay_updates(
++        pair.scene,
++        &[(99, Target::Uppercase, Update::Bool(true))]
++    ));
++    pair.script("MESSAGEMAN:Broadcast('Change',{apply=function()saved.text:finishtweening();saved.sprite:finishtweening()end})");
++    let finish = compare_pose_output(&mut pair);
++    assert!(
++        finish
++            .iter()
++            .all(|f| f.tween_reset && f.scheduled.is_empty())
++    );
++    assert!(
++        finish
++            .iter()
++            .flat_map(|f| &f.values)
++            .any(|(t, v)| *t == Target::MaxWidth && *v == Update::F32(24.))
++    );
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    assert!(pair.rust.drain_song_overlay_updates(pair.scene).is_none());
++    drop(pair);
++    assert_eq!(first.iter().map(|f| f.scheduled.len()).sum::<usize>(), 5);
++}
++
++#[test]
++fn media_output_startup_blocks_and_queued_discovery_match_native() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            Def.BitmapText{InitCommand=function(self)saved.text=self;self:uppercase(true):maxwidth(80)end,
++                OnCommand=function(self)self:sleep(0.25):maxheight(40):queuecommand('Later')end,
++                LaterCommand=function(self)self:jitter(true):distort(0.25);collectgarbage()end},
++            Def.Sprite{InitCommand=function(self)saved.sprite=self;self:animate(false):rate(0.5)end,
++                OnCommand=function(self)self:sleep(0.25):texturetranslate(0.1,0.2):queuecommand('Later')end,
++                LaterCommand=function(self)self:loop(false):texcoordvelocity(1,2)end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "media startup capture",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    let expected =
++        test_support::legacy_discover_song_startup_commands(&pair.native, &native, false).unwrap();
++    assert!(
++        pair.rust
++            .discover_song_startup_commands(pair.scene, &rust)
++            .unwrap()
++    );
++    let actual = pair.rust.song_startup_queued_states(pair.scene).unwrap();
++    for key in ["text", "sprite"] {
++        let (a, b) = saved_pair(&mut pair, key);
++        let a = a.to_pointer() as usize;
++        assert_eq!(
++            rust.updates.get(&b),
++            native.updates.get(&a),
++            "initial update {key}"
++        );
++        assert_eq!(rust.tweens.get(&b), native.tweens.get(&a), "startup {key}");
++        assert_eq!(actual.get(&b), expected.get(&a), "queued {key}");
++        assert!(actual.contains_key(&b), "queued capture missing {key}");
++    }
++    pair.compare();
++}
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_media.rs
+@@ -0,0 +1,90 @@
++//! Existing text, mask and sprite properties published by preparation setters.
++use super::*;
++use crate::{SongLuaOverlayStateDelta as Delta, SongLuaOverlayUpdateTarget as Target};
++
++pub(crate) const TARGETS: &[Target] = &[
++    Target::Uppercase,
++    Target::MaskSource,
++    Target::MaskDest,
++    Target::RainbowScroll,
++    Target::TextJitter,
++    Target::TextDistortion,
++    Target::TextGlowMode,
++    Target::MultAttrsWithDiffuse,
++    Target::SpriteAnimate,
++    Target::SpriteLoop,
++    Target::SpritePlaybackRate,
++    Target::SpriteStateDelay,
++    Target::VertSpacing,
++    Target::WrapWidthPixels,
++    Target::MaxWidth,
++    Target::MaxHeight,
++    Target::MaxWPreZoom,
++    Target::MaxHPreZoom,
++    Target::MaxDimensionUsesZoom,
++    Target::TextureWrapping,
++    Target::TexcoordOffset,
++    Target::CustomTextureRect,
++    Target::TexcoordVelocity,
++];
++
++// Each call represents one successful setter write, including equal values.
++// Compound setters call this in native order instead of comparing snapshots.
++pub(super) fn record(call: &mut HostCall<'_>, store: &Shared, id: TableId, key: &str) {
++    let delta = {
++        let guard = store.lock().unwrap();
++        let state = &guard.actors[&id].state.render;
++        let mut delta = Delta::default();
++        match key {
++            "uppercase" => delta.uppercase = Some(state.uppercase),
++            "mask_source" => delta.mask_source = Some(state.mask_source),
++            "mask_dest" => delta.mask_dest = Some(state.mask_dest),
++            "rainbow_scroll" => delta.rainbow_scroll = Some(state.rainbow_scroll),
++            "text_jitter" => delta.text_jitter = Some(state.text_jitter),
++            "text_distortion" => delta.text_distortion = Some(state.text_distortion),
++            "text_glow_mode" => delta.text_glow_mode = Some(state.text_glow_mode),
++            "mult_attrs_with_diffuse" => {
++                delta.mult_attrs_with_diffuse = Some(state.mult_attrs_with_diffuse)
++            }
++            "sprite_animate" => delta.sprite_animate = Some(state.sprite_animate),
++            "sprite_loop" => delta.sprite_loop = Some(state.sprite_loop),
++            "sprite_playback_rate" => delta.sprite_playback_rate = Some(state.sprite_playback_rate),
++            "sprite_state_delay" => delta.sprite_state_delay = Some(state.sprite_state_delay),
++            "vert_spacing" => delta.vert_spacing = state.vert_spacing,
++            "wrap_width_pixels" => delta.wrap_width_pixels = state.wrap_width_pixels,
++            "max_width" => delta.max_width = state.max_width,
++            "max_height" => delta.max_height = state.max_height,
++            "max_w_pre_zoom" => delta.max_w_pre_zoom = Some(state.max_w_pre_zoom),
++            "max_h_pre_zoom" => delta.max_h_pre_zoom = Some(state.max_h_pre_zoom),
++            "max_dimension_uses_zoom" => {
++                delta.max_dimension_uses_zoom = Some(state.max_dimension_uses_zoom)
++            }
++            "texture_wrapping" => delta.texture_wrapping = Some(state.texture_wrapping),
++            "texcoord_offset" => delta.texcoord_offset = state.texcoord_offset,
++            "custom_texture_rect" => delta.custom_texture_rect = state.custom_texture_rect,
++            "texcoord_velocity" => delta.texcoord_velocity = state.texcoord_velocity,
++            _ => unreachable!("unknown captured media property"),
++        }
++        delta
++    };
++    capture::write(call, store, id, delta, false);
++}
++
++pub(super) fn delta(call: &mut HostCall<'_>, store: &Shared, id: TableId, delta: &Delta) {
++    if song_immediate::context(&store.lock().unwrap(), id).is_none() {
++        return;
++    }
++    let mut state = crate::SongLuaOverlayState::default();
++    crate::apply_overlay_delta(&mut state, delta);
++    for &target in TARGETS {
++        if delta.has_update_target(target) {
++            song_properties::record(
++                call,
++                store,
++                id,
++                target,
++                crate::perframe::overlay_state_update_value(&state, target),
++            );
++        }
++    }
++}

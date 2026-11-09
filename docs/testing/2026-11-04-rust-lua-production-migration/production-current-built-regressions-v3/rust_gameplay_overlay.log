@@ -1,0 +1,14 @@
+
+running 9 tests
+test decorations_load_real_files_merge_metric_on_and_sort_after_init ... ok
+test observed_clock_inputs_use_original_source_lines_and_fifo_values ... ok
+test original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc ... ok
+test overlay_on_failure_preserves_replacement_and_releases_partial_construction ... ok
+test overlay_replaces_its_placeholder_and_preserves_capture_probe_tree_and_layer ... ok
+test overlay_resource_loader_uses_current_shared_environment_and_closed_paths ... ok
+test overlay_root_is_replaced_before_init_and_direct_begin_on_keep_native_order ... ok
+test screen_release_retires_overlay_and_decoration_owners ... ok
+test uptime_keeps_native_precision_runtime_replacement_and_error_rules ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.83s
+

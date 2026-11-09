@@ -1,0 +1,13 @@
+
+running 8 tests
+test all_option_factories_match_native_metadata_and_create_independent_rows ... ok
+test load_selections_uses_captured_count_raw_lists_and_native_argument_forms ... ok
+test save_selections_publishes_preferences_and_player_modifiers_with_existing_policies ... ok
+test save_uses_current_fields_and_callbacks_with_rooted_values_and_partial_errors ... ok
+test saved_row_callbacks_retain_only_required_objects_then_collect ... ok
+test screen_routing_background_fit_and_centering_use_existing_dynamic_policies ... ok
+test simply_love_formatting_and_messages_preserve_dynamic_lookup_order_and_reentry ... ok
+test theme_row_initialization_forwards_exact_arguments_to_current_global_method ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+

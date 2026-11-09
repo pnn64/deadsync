@@ -1,0 +1,64 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+error[E0502]: cannot borrow `*call` as mutable because it is also borrowed as immutable
+  --> crates\deadsync-song-lua\src\rust_engine\actors\live_observation.rs:69:30
+   |
+69 |     let screen = table(call, get(call, globals, b"__songlua_top_screen")?)?;
+   |                  ----- ----  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+   |                  |     |
+   |                  |     immutable borrow occurs here
+   |                  immutable borrow later used by call
+
+error[E0502]: cannot borrow `*call` as mutable because it is also borrowed as immutable
+  --> crates\deadsync-song-lua\src\rust_engine\actors\live_observation.rs:70:32
+   |
+70 |     let children = table(call, native_children::named_children(call, screen)?)?;
+   |                    ----- ----  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+   |                    |     |
+   |                    |     immutable borrow occurs here
+   |                    immutable borrow later used by call
+
+error[E0502]: cannot borrow `*call` as mutable because it is also borrowed as immutable
+  --> crates\deadsync-song-lua\src\rust_engine\actors\live_observation.rs:71:31
+   |
+71 |     let overlay = table(call, get(call, children, b"Overlay")?)?;
+   |                   ----- ----  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+   |                   |     |
+   |                   |     immutable borrow occurs here
+   |                   immutable borrow later used by call
+
+error[E0502]: cannot borrow `*call` as mutable because it is also borrowed as immutable
+  --> crates\deadsync-song-lua\src\rust_engine\actors\live_observation.rs:72:32
+   |
+72 |     let children = table(call, native_children::named_children(call, overlay)?)?;
+   |                    ----- ----  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+   |                    |     |
+   |                    |     immutable borrow occurs here
+   |                    immutable borrow later used by call
+
+error[E0502]: cannot borrow `*call` as mutable because it is also borrowed as immutable
+   --> crates\deadsync-song-lua\src\rust_engine\actors\live_observation.rs:123:9
+    |
+121 |     let runtime = table(
+    |                   ----- immutable borrow later used by call
+122 |         call,
+    |         ---- immutable borrow occurs here
+123 |         get(call, globals, crate::SONG_LUA_RUNTIME_KEY.as_bytes())?,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+For more information about this error, try `rustc --explain E0502`.
+warning: `deadsync-song-lua` (lib) generated 2 warnings
+error: could not compile `deadsync-song-lua` (lib) due to 5 previous errors; 2 warnings emitted

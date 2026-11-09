@@ -1,0 +1,16 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: implemented replay setup and fixed getter behavior; 127 tests and source/format preservation audits passed.",
+  "scope": "Record the existing preparation tween scheduler output; no new baking capability or engine API.",
+  "implementation": "Explicit song-time replay advancement, per-step native time-left samples with hibernation/update-rate/wrapper span propagation, hold samples for paused actors, explicit tween target masks, owned output and association of original startup blocks with their recorded progress.",
+  "failures": [],
+  "remaining": "Full compiler overlay extraction and chronological write/message provenance capture; orchestration of actions, tracked actors, options, media and text; retained live/session lifecycle and fallback/cache; unconditional production cutover; final fixture/application/render/dependency/link/performance validation.",
+  "timing_note": "Test durations are verification cost, not runtime performance measurements.",
+  "verification": {
+    "tests_passed": 106,
+    "tests_failed": 0,
+    "seconds": 260.37599004106596,
+    "log_sha256": "0ed4b85904cc2ee9d9f324c36605cc91d5799d30306c1a5f242d72e02b58197e",
+    "sources_unchanged": true
+  }
+}

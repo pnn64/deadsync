@@ -1,0 +1,44 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 48s
+     Running tests/rust_song_layers.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_layers-e330a353d8c34dd3)
+
+running 7 tests
+test authored_sources_parenting_init_and_foreground_attachment_match_production ... 
+thread 'authored_sources_parenting_init_and_foreground_attachment_match_production' (2686545) panicked at crates/deadsync-song-lua/tests/rust_song_layers.rs:86:14:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "attempt to call a nil value", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(30064771782))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test background_upper_left_wraps_before_init_and_composes_existing_commands ... ok
+test compiler_debug_keeps_context_policy_lua_upvalues_and_author_replacements ... 
+thread 'compiler_debug_keeps_context_policy_lua_upvalues_and_author_replacements' (2686547) panicked at crates/deadsync-song-lua/tests/rust_song_layers.rs:68:9:
+assertion `left == right` failed
+  left: "info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,nil|info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,|info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,|upvalue,item,true,24|absent,2,nil,nil|absent,2,nil,nil|absent,2,nil,nil|absent,2,nil,nil|trace,12,,message|debug-fields,3|info,=[songlua],=[songlua],Lua,0,0,0,"
+ right: "info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,nil|info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,|info,@/tmp/.tmpPJ7GTc/debug.lua,@/tmp/.tmpPJ7GTc/debug.lua,Lua,0,0,0,|upvalue,item,true,24|absent,2,nil,nil|absent,2,nil,nil|absent,2,nil,nil|absent,2,nil,nil|trace,,,message|debug-fields,3|info,=[songlua],=[songlua],Lua,0,0,0,"
+FAILED
+test failed_init_preserves_partial_state_and_all_constructor_owners_retire ... ok
+test invalid_plans_reject_entries_before_any_lua_execution ... ok
+test live_load_errors_and_scalar_returns_keep_prior_side_effects_and_dummy_layers ... ok
+test source_alias_selects_xero_environment_and_nested_file_directory ... ok
+
+failures:
+
+failures:
+    authored_sources_parenting_init_and_foreground_attachment_match_production
+    compiler_debug_keeps_context_policy_lua_upvalues_and_author_replacements
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.10s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_layers`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_song_layers`

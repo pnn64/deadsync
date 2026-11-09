@@ -1,0 +1,26 @@
+{
+  "docs": {
+    "crates/deadlib-lua/README.md": {
+      "sha256": "37a1855c5625dcadc49a7879ef131b963f34252f20f8ea473af1e4140cffd2a0",
+      "local_links_checked": 3,
+      "line_endings_preserved": true
+    },
+    "crates/deadsync-song-lua/README.md": {
+      "sha256": "020cba86d9dd836cf185fd89093413af600bd7ac4af8011884edec8548c732d3",
+      "local_links_checked": 0,
+      "line_endings_preserved": true
+    },
+    "docs/lua-architecture.md": {
+      "sha256": "b3b890ba2a60f9fc34e22ebbb01f38ac1c9bf4a5a9b2d8dde998d8ae89e9890d",
+      "local_links_checked": 0,
+      "line_endings_preserved": true
+    },
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": {
+      "sha256": "c513b115cc43eec69b3cefbc80b0a53ec6672bc6306d1e2c87c89dce80a4c8c6",
+      "local_links_checked": 11,
+      "line_endings_preserved": true
+    }
+  },
+  "historical_ledger_preserved": true,
+  "goal_complete": false
+}

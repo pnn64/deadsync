@@ -1,0 +1,153 @@
+    Checking deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+    Checking deadlib-audio-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-core)
+    Checking deadlib-audio-backend-wasapi v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-backend-wasapi)
+    Checking deadlib-audio v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio)
+    Checking deadsync-audio-stream v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-stream)
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Checking deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+    Checking deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+    Checking deadsync-theme v0.1.0 (C:\GitHub\deadsync\crates\deadsync-theme)
+    Checking deadsync-config v0.1.0 (C:\GitHub\deadsync\crates\deadsync-config)
+    Checking deadsync-simfile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-simfile)
+    Checking deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+    Checking deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+    Checking deadsync-profile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile)
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Checking deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+    Checking deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: struct `Callbacks` is never constructed
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:12:8
+   |
+12 | struct Callbacks {
+   |        ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `Callback` is never constructed
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:18:8
+   |
+18 | struct Callback {
+   |        ^^^^^^^^
+
+warning: function `functions` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:24:15
+   |
+24 | pub(crate) fn functions(lua: &Lua) -> Option<Vec<Function>> {
+   |               ^^^^^^^^^
+
+warning: method `remove` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:39:8
+   |
+38 | impl Callbacks {
+   | -------------- method in this implementation
+39 |     fn remove(&mut self, key: usize) {
+   |        ^^^^^^
+
+warning: struct `RequiresRuntime` is never constructed
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:52:8
+   |
+52 | struct RequiresRuntime;
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `require_offline_compatible` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:54:15
+   |
+54 | pub(crate) fn require_offline_compatible(lua: &Lua) -> Result<(), String> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `install` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input.rs:62:15
+   |
+62 | pub(crate) fn install(lua: &Lua, screen: &Table) -> mlua::Result<()> {
+   |               ^^^^^^^
+
+warning: function `dispatch` is never used
+   --> crates\deadsync-song-lua\examples\..\src\input.rs:106:15
+    |
+106 | pub(crate) fn dispatch(
+    |               ^^^^^^^^
+
+warning: function `create_event` is never used
+   --> crates\deadsync-song-lua\examples\..\src\input.rs:210:15
+    |
+210 | pub(crate) fn create_event(lua: &Lua, input: &SongLuaInputEvent<'_>) -> mlua::Result<Table> {
+    |               ^^^^^^^^^^^^
+
+warning: struct `SongLuaCompiledInput` is never constructed
+  --> crates\deadsync-song-lua\examples\..\src\input\compiled.rs:16:12
+   |
+16 | pub struct SongLuaCompiledInput(Machine);
+   |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `compile`, `evaluate`, `retained_bytes`, and `evaluate_frame` are never used
+  --> crates\deadsync-song-lua\examples\..\src\input\compiled.rs:21:12
+   |
+18 | impl SongLuaCompiledInput {
+   | ------------------------- associated items in this implementation
+...
+21 |     pub fn compile(callback: &Function) -> Option<Self> {
+   |            ^^^^^^^
+...
+30 |     pub fn evaluate(&mut self, input: &SongLuaInputEvent<'_>) -> bool {
+   |            ^^^^^^^^
+...
+36 |     pub fn retained_bytes(&self) -> usize {
+   |            ^^^^^^^^^^^^^^
+...
+40 |     pub(super) fn evaluate_frame(&mut self, values: &[Datum<'_>]) -> bool {
+   |                   ^^^^^^^^^^^^^^
+
+warning: function `bindings` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input\compiled.rs:49:15
+   |
+49 | pub(crate) fn bindings() -> Bindings {
+   |               ^^^^^^^^
+
+warning: variants `FirstPress` and `Release` are never constructed
+ --> crates\deadsync-song-lua\examples\..\src\input_types.rs:5:5
+  |
+4 | pub enum SongLuaInputType {
+  |          ---------------- variants in this enum
+5 |     FirstPress,
+  |     ^^^^^^^^^^
+6 |     Repeat,
+7 |     Release,
+  |     ^^^^^^^
+  |
+  = note: `SongLuaInputType` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: constant `RUNTIME_REQUIRED` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input_types.rs:38:18
+   |
+38 | pub(crate) const RUNTIME_REQUIRED: &str =
+   |                  ^^^^^^^^^^^^^^^^
+
+warning: enum `SongLuaActorInputAction` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input_types.rs:43:10
+   |
+43 | pub enum SongLuaActorInputAction {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `SongLuaInputScalar` is never used
+  --> crates\deadsync-song-lua\examples\..\src\input_types.rs:62:10
+   |
+62 | pub enum SongLuaInputScalar<'a> {
+   |          ^^^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (example "input_frames") generated 16 warnings
+    Finished `dev` profile [unoptimized] target(s) in 1m 10s

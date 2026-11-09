@@ -1,0 +1,51 @@
+{
+  "changed_existing_sources": [
+    "crates/deadlib-lua/src/bytecode.rs",
+    "crates/deadlib-lua/src/compiler.rs",
+    "crates/deadlib-lua/src/lib.rs",
+    "crates/deadlib-lua/src/locale.rs",
+    "crates/deadlib-lua/src/memory.rs",
+    "crates/deadlib-lua/src/vm.rs",
+    "crates/deadlib-lua/src/chunk51/dump.rs",
+    "crates/deadlib-lua/src/chunk51/translate.rs",
+    "crates/deadlib-lua/src/memory/buffer.rs",
+    "crates/deadlib-lua/src/memory/fallible.rs",
+    "crates/deadlib-lua/src/vm/console.rs",
+    "crates/deadlib-lua/src/vm/gc.rs",
+    "crates/deadlib-lua/src/vm/loads.rs",
+    "crates/deadlib-lua/src/vm/native.rs",
+    "crates/deadlib-lua/src/vm/strings.rs",
+    "crates/deadlib-lua/src/vm/tables.rs",
+    "crates/deadlib-lua/src/vm/threads.rs",
+    "crates/deadlib-lua/src/vm/io/number.rs",
+    "crates/deadlib-lua/src/vm/io/stream.rs",
+    "crates/deadlib-lua/src/vm/os/calendar.rs",
+    "crates/deadlib-lua/src/vm/os/platform.rs",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs",
+    "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs"
+  ],
+  "artifacts": [
+    {
+      "name": "song_lua_execution",
+      "artifact_sha256": "245bd406798ae4e35421d2066f166aef516f86375cfd51ca6facb59989a1b88c",
+      "dep_info_sha256": "e70b0b96747f8d5ab45d86be07aa16aa255b762e59e7bfd947731e6468328ea3",
+      "core_in_dep_info": false,
+      "scope": "Unchanged legacy production baseline; the changed core is absent from this binary dependency graph."
+    },
+    {
+      "name": "song_lua_performance",
+      "artifact_sha256": "e7acc03a9eda9b65ac53e66b87146ca766581ffd5d0b547987e8c64d2089b976",
+      "dep_info_sha256": "133c812720987d59504524069d155248b29677bcf6cb7165d6cd167fb479a98d",
+      "core_in_dep_info": false,
+      "scope": "Unchanged legacy production baseline; the changed core is absent from this binary dependency graph."
+    },
+    {
+      "name": "compare_lua_engines",
+      "artifact_sha256": "5263801c2ebc5fbb1f25183289caf996a2ff1a539ace631c195fe3109c4f0533",
+      "scope": "Legacy oracle baseline is unchanged. Rust adapter was built during core migration and is not final-source evidence."
+    }
+  ]
+}

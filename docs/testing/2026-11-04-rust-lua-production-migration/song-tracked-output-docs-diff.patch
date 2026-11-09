@@ -1,0 +1,89 @@
+--- before/docs/lua-architecture.md
++++ after/docs/lua-architecture.md
+@@ -869,6 +869,24 @@
+ fallback/cache, unconditional cutover and the original application/content/
+ performance gates remain pending. Normal production songs still use legacy Lua.
+ 
++The [tracked compiler-output check](testing/2026-11-04-rust-lua-production-migration/song-tracked-output-review.json)
++records **242 passing tests across 17 targets**. The Rust collector exports the
++existing player/HUD/foreground/screen-layer targets in native order, preserving
++registry aliases, optional layers and actual lazy child construction. A pinned
++batch retains identities across authored getters, GC and scene retirement;
++explicit release invalidates copied identity handles while owned state survives
++VM destruction. Manual Draw snapshots preserve raw semantic data and native
++getter order, skip hidden HUD draws and whole-player resurrection, and distinguish
++inferred Sprite binding from explicit texture writes. Six new comparisons retain
++the exact earlier 63-case activation prefix. Formatting passes for the ten
++migrated adapter/test files; the native factory changes only crate-private
++visibility for the test oracle. Clippy retains the exact existing 166 warnings
++and cmd.rs:349 error. All 1,211 watched hashes match both final checks. This ports
++the tracked collector, not the complete production compiler: full overlay/tree/
++wrapper/message/action extraction, derived output, compiler/live sessions,
++fallback/cache, unconditional cutover and the original application/content/
++performance gates remain required. Normal production songs still use legacy Lua.
++
+ The [migration ledger](testing/2026-11-04-rust-lua-production-migration/README.md)
+ records these differential checks and their limitations. Complete compiler/session
+ startup, navigation, automatic End/retirement, captured preparation/live output,
+--- before/docs/testing/2026-11-04-rust-lua-production-migration/README.md
++++ after/docs/testing/2026-11-04-rust-lua-production-migration/README.md
+@@ -4869,3 +4869,59 @@
+ application/render, dependency/link and performance gates remain pending. Normal
+ song execution still uses legacy Lua. The migration remains open; the completed
+ interpreter and C API-removal milestones remain closed.
++## Tracked compiler actors and manual draw snapshots (2026-11-06)
++
++This continues the explicitly authorized production migration with its fixed
++finish line. The interpreter and C API-removal milestones remain closed.
++
++The Rust collector now reads the published top-screen registry and both players
++in native order, exports Player/Judgment/Combo, SongForeground and optional
++screen-layer state, and preserves aliases and missing optional entries. Missing
++foreground/HUD actors use the existing actual constructors, including native
++partial mutations before a later read fails. A pinned batch retains identities
++before authored getters can collect them. Copied rows reject foreign VMs and
++released generations. Explicit release is required on compiler/session exit;
++owned captured state remains available after release and VM destruction.
++
++Manual Draw snapshots copy raw semantic fields and mutable table data, retain
++wrapper identities, and leave authored property reads at their native boundary.
++Hidden HUD draws do not mark manual output; drawing a whole player does not
++resurrect it. Uninitialized preparation Sprites resolve Texture/AFT at draw time.
++Inferred binding is omitted from raw snapshots, while explicit texture writes
++publish the native flag used by later reads. All behavior remains in the song
++adapter; no core compatibility layer or interpreter milestone was reopened.
++
++- [Regressions](song-tracked-output-focused-v8-song-linux-debug/result.json):
++  **242 passed, zero failed across 17 targets**, Cargo exit 0 in
++  295.5799291068688 seconds. Activation has 69 cases, preserving the exact prior
++  63-case prefix. Six new comparisons cover preparation/live output and order,
++  actual child fallback, aliases, manual state and getter events, partial errors,
++  forced GC, retirement, foreign owners, explicit release and owned teardown data.
++  Log SHA-256: `0f411e367239feb4b7ddd632e40c6a243fcafb09021cebe0b5ef0bd4f11b7a8a`.
++- [Focused corrected cases](song-tracked-output-focused-v7-song-linux-debug/result.json):
++  six passed before the complete group was rerun. The earlier failed runs remain
++  preserved. The [findings](song-tracked-output-findings.json) explain the initial
++  HostCall API compile error, invalid native fixture, omitted draw getter,
++  inferred snapshot flag and missing explicit texture-state publication. No
++  failing test or assertion was removed or ignored.
++- [Clippy](song-tracked-output-lint-v5-song-linux-debug/result.json): exit 101,
++  exactly the baseline 166 warnings and existing cmd.rs:349 error; no new
++  diagnostics. Log SHA-256: `175b2b7f8d9d4ae491fce4f2236f73fcb43e91087b24c8f1b5d6db4abe6ea5ea`.
++- [Source review](song-tracked-output-review.json): all 1,211 watched source
++  hashes match the final regression and lint runs; both recorded unchanged
++  sources. Seven adapter/test files changed and three modules were added.
++  Formatting passes for those ten files. Native compile.rs changes only one
++  crate-private visibility prefix to let test-support reuse the actual default
++  constructor, with all other bytes retained and no bulk legacy formatting.
++  Source/documentation baselines and the [source diff](song-tracked-output-source-diff.patch)
++  preserve the change boundary. Durations are check costs, not application
++  performance measurements.
++
++Full overlay kind/tree/wrapper/message/action and remaining derived output,
++production preparation compiler and retained live/session/navigation lifecycle,
++automatic teardown and fallback/cache integration still need completion.
++Unconditional song cutover, original content/final-source regressions, normal
++application build and rendered smoke, dependency/link proof and matched
++preparation/live/memory measurements remain required. Normal production songs
++still use legacy Lua. The migration remains active and incomplete.
++

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "check",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--example",
+    "actor_input",
+    "--example",
+    "timed_input"
+  ],
+  "exit_code": 0,
+  "seconds": 1.5785682001151145,
+  "sources_unchanged": true,
+  "log_sha256": "94d00b8bccbeff046706cd19577ed8c414ce7521a33f262eff347253a9bb2993",
+  "scope": "Compile tooling only. No timing or memory measurement claimed. Rust heap estimates are explicitly distinct from the frozen legacy allocator counts."
+}

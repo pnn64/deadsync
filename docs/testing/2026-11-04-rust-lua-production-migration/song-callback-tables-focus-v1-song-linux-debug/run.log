@@ -1,0 +1,56 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 7m 56s
+     Running tests/rust_song_activation.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 7 tests
+test callback_tables_global_name_predicate_keeps_literals_short_circuit_and_meter_stream ... 
+thread 'callback_tables_global_name_predicate_keeps_literals_short_circuit_and_meter_stream' (2887037) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:248:18:
+called `Result::unwrap()` on an `Err` value: "failed to run actor startup commands for song lua session '/tmp/.tmpbSP92P/default.lua': OnCommand failed for Quad 'Stream': runtime error: [string \"/tmp/.tmpbSP92P/default.lua\"]:6: attempt to call method 'SetUpdateFunction' (a nil value)\nstack traceback:\n\t[C]: in method 'SetUpdateFunction'\n\t[string \"/tmp/.tmpbSP92P/default.lua\"]:6: in function <[string \"/tmp/.tmpbSP92P/default.lua\"]:6>"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test callback_tables_keep_direct_nested_recurring_and_raw_child_discovery_order ... 
+thread 'callback_tables_keep_direct_nested_recurring_and_raw_child_discovery_order' (2887038) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:9419:13:
+assertion `left == right` failed
+  left: ["B", "C"]
+ right: []
+FAILED
+test callback_tables_keep_original_global_namespace_and_authored_debug_getter ... 
+thread 'callback_tables_keep_original_global_namespace_and_authored_debug_getter' (2887039) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:215:41:
+called `Result::unwrap()` on an `Err` value: RuntimeError(".../deadsync-song-lua/tests/rust_song_activation.rs:215:6: attempt to index global 'debug' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t.../deadsync-song-lua/tests/rust_song_activation.rs:215:6: in main chunk")
+FAILED
+test callback_tables_mod_windows_keep_native_coercions_holes_spans_and_time_units ... ok
+test callback_tables_preserve_optional_debug_lookup_and_typed_metadata_errors ... 
+thread 'callback_tables_preserve_optional_debug_lookup_and_typed_metadata_errors' (2887041) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:9405:5:
+assertion `left == right` failed: native=None rust=Some(Error { kind: Runtime, line: 0, message: "function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(12884904198))), target_thread: None })
+  left: false
+ right: true
+FAILED
+test callback_tables_root_detached_results_across_getters_gc_and_foreign_release ... 
+thread 'callback_tables_root_detached_results_across_getters_gc_and_foreign_release' (2887042) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:215:41:
+called `Result::unwrap()` on an `Err` value: RuntimeError(".../deadsync-song-lua/tests/rust_song_activation.rs:215:9: attempt to index global 'debug' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t.../deadsync-song-lua/tests/rust_song_activation.rs:215:9: in main chunk")
+FAILED
+test callback_tables_runtime_mods_keep_first_unique_order_player_state_and_static_selection ... ok
+
+failures:
+
+failures:
+    callback_tables_global_name_predicate_keeps_literals_short_circuit_and_meter_stream
+    callback_tables_keep_direct_nested_recurring_and_raw_child_discovery_order
+    callback_tables_keep_original_global_namespace_and_authored_debug_getter
+    callback_tables_preserve_optional_debug_lookup_and_typed_metadata_errors
+    callback_tables_root_detached_results_across_getters_gc_and_foreign_release
+
+test result: FAILED. 2 passed; 5 failed; 0 ignored; 0 measured; 193 filtered out; finished in 5.28s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

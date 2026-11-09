@@ -3,6 +3,31 @@ use deadlib_lua::{Error, ErrorKind, HostCall, Value, Vm, compile};
 fn execute(vm: &mut Vm, source: &[u8]) -> Vec<Value> {
     vm.execute(&compile(source).unwrap()).unwrap().to_vec()
 }
+
+#[test]
+fn constructor_list_fields_keep_nil_holes_in_array_storage() {
+    let mut vm = Vm::new();
+    execute(
+        &mut vm,
+        br#"
+local function check()
+    local controls = {false, '0', nil, 1}
+    assert(#controls == 4 and controls[1] == false and controls[2] == '0')
+    assert(controls[3] == nil and controls[4] == 1)
+    local values = {[51] = 'kept', 1, nil, 3}
+    assert(#values == 3 and values[2] == nil and values[51] == 'kept')
+    local seen = {}
+    for key, value in pairs(values) do seen[key] = value end
+    assert(seen[1] == 1 and seen[3] == 3 and seen[51] == 'kept')
+    local function tail() return nil, 5, nil end
+    local expanded = {1, nil, 3, tail()}
+    assert(expanded[4] == nil and expanded[5] == 5 and expanded[6] == nil)
+end
+check()
+assert(loadstring(string.dump(check)))()
+"#,
+    );
+}
 fn get(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = call.native_stack()?;
     stack.push(stack.value(2).unwrap())?;

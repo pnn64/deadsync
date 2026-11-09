@@ -1,0 +1,75 @@
+{
+  "goal_complete": false,
+  "source_count": 1207,
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-pose-output-focused-v5-song-linux-debug": [
+      "crates/deadsync-shell/src/session_results.rs"
+    ],
+    "song-pose-output-lint-v4-song-linux-debug": [
+      "crates/deadsync-shell/src/session_results.rs"
+    ]
+  },
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/recurring.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_clock.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_discovery.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "adapter_added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs"
+  ],
+  "external_additions_preserved": {
+    "crates/deadsync-assets/tests/hold_explosion_blend.rs": {
+      "current_sha256": "1a6882b16ec170232aca228333eb86a2146a0cafbc85d0f1209a30f29dbde27c",
+      "present_in_first_pose_check": false,
+      "first_pose_check_sha256": null
+    },
+    "crates/deadsync-noteskin/tests/model_pieces.rs": {
+      "current_sha256": "b621905ed2aaa9642e42e3032653bf14c5d1aa5644c24af09411923ff64cd3f3",
+      "present_in_first_pose_check": false,
+      "first_pose_check_sha256": null
+    }
+  },
+  "added": [
+    "crates/deadsync-assets/tests/hold_explosion_blend.rs",
+    "crates/deadsync-noteskin/tests/model_pieces.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs"
+  ],
+  "external_changes_preserved": 93,
+  "external_crlf_only": 78,
+  "other_external_changes": 15,
+  "removed": [],
+  "unchanged_from_previous_checkpoint": 1100,
+  "earlier_56_activation_tests_unchanged": true,
+  "new_cases": 3,
+  "formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-pose-output-focused-v5-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 443.2125607330818,
+      "log_sha256": "023cf8f85b8fa1fbad03ada5e79c24d0892fd18bd231fb72994e6f9b9fc03931",
+      "tests_passed": 162,
+      "tests_failed": 0,
+      "sources_unchanged": false
+    },
+    "song-pose-output-lint-v4-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 63.369384774938226,
+      "log_sha256": "fda63cfe1efa929c20e14e7a5dd55eaabd09cc3504e48ae0f499c2328fe30468",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": false
+    }
+  }
+}

@@ -95,25 +95,22 @@ fn opaque_pointer_bookkeeping_does_not_keep_objects_or_native_bindings_alive() {
 
 #[test]
 fn default_object_addresses_use_the_same_native_pointer_format_as_official_lua() {
-    let reference = lua_reference::Lua::new();
     let mut vm = Vm::new();
     let values = object_set(&mut vm);
     for value in values {
         let pointer = vm.object_pointer(value).unwrap();
-        reference
-            .globals()
-            .set(
-                "pointer",
-                lua_reference::LightUserData(pointer as *mut std::ffi::c_void),
-            )
-            .unwrap();
-        let expected: String = reference.load("return tostring(pointer)").eval().unwrap();
         vm.set_global(b"value", value).unwrap();
         let actual = run(&mut vm, b"return tostring(value)");
         let Value::String(id) = actual[0] else {
             panic!("string expected")
         };
-        let suffix = expected.strip_prefix("userdata: ").unwrap();
+        #[cfg(windows)]
+        let suffix = format!(
+            "{pointer:0width$X}",
+            width = std::mem::size_of::<usize>() * 2
+        );
+        #[cfg(not(windows))]
+        let suffix = format!("{pointer:#x}");
         let expected = format!("{}: {suffix}", value.type_name());
         assert_eq!(vm.string_bytes(id).unwrap(), expected.as_bytes());
     }

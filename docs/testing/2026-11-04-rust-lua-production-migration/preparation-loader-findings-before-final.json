@@ -1,0 +1,72 @@
+{
+  "goal_complete": false,
+  "previous_turn": "progress: direct preparation constructor and clone work verified by 476 passing tests; revalidated current source before edits",
+  "scope": "Existing production preparation actor/file/font loaders as part of the saved migration objective",
+  "runs": {
+    "preparation-loader-baseline": {
+      "exit_code": 101,
+      "tests_passed": 0,
+      "tests_failed": 3,
+      "seconds": 133.99097437202,
+      "log_sha256": "18f6979a2ddb8e029cab461ca49fde7c95e42b766bac209a4075b71281adad06",
+      "sources_unchanged": true
+    },
+    "preparation-loader-focused-v1": {
+      "exit_code": 101,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "seconds": 27.049946199869737,
+      "log_sha256": "93ac9b9174a11378f95733cce05c1fb38e2e8d1e271c5edf4e33aa7d30b25ed5",
+      "sources_unchanged": true
+    },
+    "preparation-loader-focused-v2": {
+      "exit_code": 0,
+      "tests_passed": 19,
+      "tests_failed": 0,
+      "seconds": 137.9462878841441,
+      "log_sha256": "decb8bb42116b6dbf20bddc1410907a2d02ea8a814de69a1871c581fcc3bd697",
+      "sources_unchanged": true
+    },
+    "preparation-loader-focused-v3": {
+      "exit_code": 0,
+      "tests_passed": 60,
+      "tests_failed": 0,
+      "seconds": 64.31363407894969,
+      "log_sha256": "215ac1e8ecb4c519badb585a45cfcb19b680511c44df7d2216aec7d8c787a1ca",
+      "sources_unchanged": true
+    },
+    "preparation-loader-adapters": {
+      "exit_code": -15,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "seconds": 83.99983440106735,
+      "log_sha256": "815155cd9abe20c9d28e66184e65a6d5788e6dd3ea93880132d138611c45baff",
+      "sources_unchanged": true
+    },
+    "preparation-loader-lint": {
+      "exit_code": 101,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "seconds": 30.25211553601548,
+      "log_sha256": "05ac0ce4afe6697a409cc0632f8e7daadde483284c253a4a5b1e3aaccde9b015",
+      "sources_unchanged": true
+    },
+    "preparation-loader-focused-v4": {
+      "exit_code": 0,
+      "tests_passed": 69,
+      "tests_failed": 0,
+      "seconds": 169.27369048306718,
+      "log_sha256": "38a975a9cdd82547c878b2ffe4445e37e82a449639ef89a38ab2158c2556deed",
+      "sources_unchanged": true
+    }
+  },
+  "findings": [
+    "The unchanged production controls reproduce three initial failures: LoadActor returned 3 values instead of 1, NullActor was reused without cloning, and non-string arguments errored instead of producing a dummy actor.",
+    "Native media/font loaders create and register dummy actors before assigning resource fields. Def constructor resource initialization must not run on that path.",
+    "File loading uses the production resolver rules and pinned source loader; caller environment replacement does not replace its global file environment policy.",
+    "Initial implementation compile errors were a nested mutable/immutable HostCall borrow and a missing exhaustive match case. Corrected before the passing v2 run; the Dummy resource mode was also connected explicitly.",
+    "Review found the newly bound file loader shadowing the original source-string compiler used by noteskin callbacks. The first full run was stopped intentionally during compilation (exit -15, 0 tests executed), with its wrapper recording unchanged sources. Renamed the binding and expanded final focused coverage to the unchanged rust_noteskin target; the complete 46-target suite must rerun on the corrected source."
+  ],
+  "remaining": "Full compiler startup/state rewind/frame scheduling, remaining capture channels, existing baking/live integration, remaining screen trees/transitions, unconditional production cutover and final fixture/application/render/dependency/performance checks.",
+  "original_failing_coverage_unchanged": "The current test source prefix through the original three failing tests exactly matches its recorded baseline SHA-256; two additional boundary tests were appended."
+}

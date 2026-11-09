@@ -1,0 +1,75 @@
+   Compiling deadsync-input v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-input)
+   Compiling deadsync-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-gameplay)
+   Compiling deadsync-lights v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-lights)
+   Compiling deadsync-smx v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-smx)
+   Compiling deadsync-notefield v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-notefield)
+   Compiling deadsync-config v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-config)
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling deadsync-simfile v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-simfile)
+   Compiling deadsync-profile v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile)
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 41s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 6 tests
+test indexed_actor_capture_errors_rewind_state_and_restore_reentrant_properties ... 
+thread 'indexed_actor_capture_errors_rewind_state_and_restore_reentrant_properties' (2744217) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4624:5:
+assertion `left == right` failed
+  left: (8.0, 8.0)
+ right: (0.0, 0.0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test indexed_actor_capture_keeps_nested_queue_output_and_outer_script_mutations ... 
+thread 'indexed_actor_capture_keeps_nested_queue_output_and_outer_script_mutations' (2744238) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4623:5:
+assertion `left == right` failed: Rust capture error: Err("native stack must precede result writes")
+  left: true
+ right: false
+FAILED
+test indexed_actor_capture_limit_errors_restore_metadata_and_allow_later_capture ... 
+thread 'indexed_actor_capture_limit_errors_restore_metadata_and_allow_later_capture' (2744239) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4872:5:
+assertion `left == right` failed
+  left: (7.0, 7.0)
+ right: (0.0, 0.0)
+FAILED
+test indexed_actor_capture_preserves_order_duplicates_state_and_runtime_clock ... 
+thread 'indexed_actor_capture_preserves_order_duplicates_state_and_runtime_clock' (2744240) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4623:5:
+assertion `left == right` failed: Rust capture error: Err("native stack must precede result writes")
+  left: true
+ right: false
+FAILED
+test indexed_actor_capture_restores_media_effects_raw_tables_and_wrapper_membership ... 
+thread 'indexed_actor_capture_restores_media_effects_raw_tables_and_wrapper_membership' (2744241) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4623:5:
+assertion `left == right` failed: Rust capture error: Err("native stack must precede result writes")
+  left: true
+ right: false
+FAILED
+test indexed_actor_capture_snapshot_errors_keep_native_clock_boundary_and_recover ... 
+thread 'indexed_actor_capture_snapshot_errors_keep_native_clock_boundary_and_recover' (2744242) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:4623:5:
+assertion `left == right` failed: Rust capture error: Err("native stack must precede result writes")
+  left: true
+ right: false
+FAILED
+
+failures:
+
+failures:
+    indexed_actor_capture_errors_rewind_state_and_restore_reentrant_properties
+    indexed_actor_capture_keeps_nested_queue_output_and_outer_script_mutations
+    indexed_actor_capture_limit_errors_restore_metadata_and_allow_later_capture
+    indexed_actor_capture_preserves_order_duplicates_state_and_runtime_clock
+    indexed_actor_capture_restores_media_effects_raw_tables_and_wrapper_membership
+    indexed_actor_capture_snapshot_errors_keep_native_clock_boundary_and_recover
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 80 filtered out; finished in 4.62s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

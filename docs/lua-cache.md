@@ -7,6 +7,15 @@ Programs retain the normal host-clone, VM-binding and garbage-collection rules.
 The cache contains code and immutable metadata; every VM builds its own runtime
 strings, closures, environments and other objects.
 
+This is the compiled-program stage of the
+[Lua architecture contract](lua-architecture.md). It does not cache a baked
+scene or native machine code. The target architecture prefers scene baking for
+eligible gameplay work, with live/hybrid execution for dynamic behavior. Scene
+artifacts need their own dependency identity, host/baker version and stateful
+callback reconstruction; a valid ProgramCache entry alone cannot establish that
+a scene is reusable. Those artifact classes are planned separately and must not
+be described as implemented by this cache.
+
 ~~~rust
 use deadlib_lua::{ProgramCache, Vm};
 

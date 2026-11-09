@@ -1,4 +1,4 @@
-"""Compare fixed Lua 5.1 process probes in isolated Rust/reference children."""
+"""Check fixed process probes on the Rust host API and CLI against saved expectations."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -25,15 +25,17 @@ def lua_bytes(data: bytes) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--extra-rust-binary', type=Path, help='Retain an additional implementation comparison without weakening the three-engine checks')
+    parser.add_argument('--extra-rust-binary', type=Path, help='Check an additional Rust executable against the same fixed expectations')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    sources = list((root/'crates/deadlib-lua').rglob('*.rs'))
-    sources += [root/'crates/deadlib-lua/Cargo.toml', Path(__file__).resolve()]
-    sources += [root/'docs/testing/lua51-gc-finalizer-phase.lua']
+    sources = [p for p in (root/'crates/deadlib-lua').rglob('*')
+               if p.is_file() and (p.suffix in {'.rs','.c','.h'} or p.name == 'Cargo.toml')]
+    sources += [root/'Cargo.toml', root/'Cargo.lock', root/'.cargo/config.toml', Path(__file__).resolve()]
+    sources += [root/'crates/deadlib-lua/tests/fixtures/gc-finalizer-phase.lua']
     def hashes() -> dict[str, str]:
         return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(sources)}
+    sources += list((root/'crates/deadlib-lua/tests/fixtures').glob('process-*'))
     before = hashes()
     command = ['cargo', 'build', '--release', '-p', 'deadlib-lua', '--example', 'os_process', '--bin', 'deadlua']
     subprocess.run(command, cwd=root, check=True)
@@ -54,10 +56,11 @@ def main() -> None:
         for k,v in ipairs(t)do if type(v)=='number' then sum=sum+k*v end end
         return f(sum),f(-1),#t[3],debug.getinfo(1,'S').source
     """
-    with tempfile.TemporaryDirectory(prefix='lua-native-') as temporary:
-        source_path=Path(temporary)/'source.lua'
-        source_path.write_text(native_source,encoding='utf-8')
-        native = subprocess.run([str(binary),'dump',str(source_path)],capture_output=True,check=True).stdout
+    fixtures=root/'crates/deadlib-lua/tests/fixtures'
+    expected_path=fixtures/f'process-{sys.platform}.json'
+    baseline=json.loads(expected_path.read_text(encoding='utf-8'))
+    native=(fixtures/'process-native.luac').read_bytes()
+    assert hashlib.sha256(native).hexdigest()==baseline['native_sha256'], 'native fixture changed'
     literal=lua_bytes(native)
     case('concat_ranges', """
         local trace={};local mt={};local weak=setmetatable({},{__mode='v'})
@@ -269,6 +272,21 @@ def main() -> None:
             f=assert(io.tmpfile());f:write(3.4,'|',string.format('%.2f',2.5));f:seek('set');print(f:read('*a'));f:close()
             assert(os.setlocale('C'))
         """)
+        case('locale_stream_categories', """
+            for _,numeric in ipairs({'C','ptb','fr-FR','.UTF-8'})do
+              for _,ctype in ipairs({'C','ptb','.UTF-8','trk'})do
+                assert(os.setlocale('C'));assert(os.setlocale(numeric,'numeric'))
+                assert(os.setlocale(ctype,'ctype'))
+                print(os.setlocale(nil,'numeric'),os.setlocale(nil,'ctype'))
+                local f=assert(io.tmpfile());f:write(' 3,4| 5.6|'..string.char(160)..'42|')
+                f:seek('set')
+                for i=1,5 do print(f:read('*n'),f:read(1))end
+                print(f:read('*a'));f:close()
+                print(os.setlocale(nil,'numeric'),os.setlocale(nil,'ctype'))
+              end
+            end
+            assert(os.setlocale('C'))
+        """)
         case('locale_digit_grammar', """
             for _,name in ipairs({'C','ptb','.UTF-8','trk'})do
               assert(os.setlocale(name));print(name)
@@ -310,7 +328,7 @@ def main() -> None:
         ('gc_negative_step_budget', "print(collectgarbage('step',-1),pressure())"),
     ):
         case(name, gc_setup+operation)
-    case('gc_finalizer_phase', (root/'docs/testing/lua51-gc-finalizer-phase.lua').read_text(encoding='utf-8'))
+    case('gc_finalizer_phase', (root/'crates/deadlib-lua/tests/fixtures/gc-finalizer-phase.lua').read_text(encoding='utf-8'))
     case('gc_mark_mutation', """
         collectgarbage('stop');local roots={};local weak=setmetatable({},{__mode='v'})
         for i=1,512 do roots[i]={i};weak[i]={i}end
@@ -480,10 +498,10 @@ def main() -> None:
                 if value is None:env.pop(key,None)
                 else:env[key]=value
             row={'name':name,'source':source,'env_changes':env_changes}
-            engines=('reference','rust','cli') + (('extra',) if args.extra_rust_binary else ())
+            engines=('rust','cli') + (('extra',) if args.extra_rust_binary else ())
             for engine in engines:
                 if engine=='extra' and name=='comspec_binary_cmd':
-                    row[engine]={'not_run':'The historical std launcher would parse a PE executable as batch-file commands. Native/reference/CLI checks still run.'}
+                    row[engine]={'not_run':'The historical std launcher would parse a PE executable as batch-file commands. Rust host API and CLI checks still run.'}
                     continue
                 for filename in ('output.dat','other.dat'):
                     (directory/filename).unlink(missing_ok=True)
@@ -499,16 +517,33 @@ def main() -> None:
                                             for name in ('output.dat','other.dat')})
                 except subprocess.TimeoutExpired:
                     row[engine]={'timeout':True,'seconds':time.monotonic()-started}
+            def normalize(data: bytes) -> bytes:
+                for raw,label in [(str(directory),b'$CASE_DIR'),(str(root),b'$REPO')]:
+                    for value in [raw,raw.replace('\\','/')]:
+                        data=data.replace(value.encode(),label)
+                        data=data.replace(value.replace('\\','\\\\').encode(),label)
+                return data
             def observations(engine: str) -> dict:
-                return {k:v for k,v in row[engine].items() if k!='seconds'}
-            row['equal']=all('returncode' in row[e] for e in ('reference','rust','cli')) and observations('reference')==observations('rust')==observations('cli')
+                result={key:value for key,value in row[engine].items() if key!='seconds'}
+                for key in ('stdout_hex','stderr_hex'):
+                    if key in result: result[key]=normalize(bytes.fromhex(result[key])).hex()
+                if 'files' in result:
+                    result['files']={key:None if value is None else normalize(bytes.fromhex(value)).hex()
+                                     for key,value in result['files'].items()}
+                return result
+            expected=baseline['cases'][name]
+            assert hashlib.sha256(normalize(source.encode())).hexdigest()==expected['source_sha256'], f'process source changed: {name}'
+            assert {key:None if value is None else normalize(value.encode()).decode() for key,value in env_changes.items()}==expected['env_changes'], f'process environment changed: {name}'
+            row['expected']=expected['expected']
+            row['equal']=all(observations(engine)==expected['expected'] for engine in ('rust','cli'))
             if args.extra_rust_binary:
-                row['extra_equal']=observations('reference')==observations('extra')
+                row['extra_equal']=observations('extra')==expected['expected']
             results.append(row)
             print(name,'pass' if row['equal'] else 'FAIL',flush=True)
             if not row['equal']:
-                for engine in ('reference','rust','cli'):
+                for engine in ('rust','cli'):
                     print(engine,observations(engine),flush=True)
+    assert {row['name'] for row in results}==set(baseline['cases']), 'process case inventory changed'
     if before != hashes():
         raise SystemExit('sources changed during process probes')
     output=args.output.resolve()

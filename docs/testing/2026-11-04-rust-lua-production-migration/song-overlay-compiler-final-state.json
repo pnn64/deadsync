@@ -1,0 +1,21 @@
+{
+    "goal_complete":  false,
+    "source_count":  1229,
+    "current_source_count":  1229,
+    "membership_changes":  [
+
+                           ],
+    "missing":  [
+
+                ],
+    "mismatched":  [
+
+                   ],
+    "regressions_passed":  379,
+    "regression_targets":  24,
+    "earlier_133_activation_tests_unchanged":  true,
+    "formatting_passed":  true,
+    "clippy_baseline_unchanged":  true,
+    "production_cutover":  false,
+    "final_application_validation":  false
+}

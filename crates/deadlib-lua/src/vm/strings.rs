@@ -1,6 +1,10 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern};
+use crate::pattern::{Capture, Matched, Pattern, Work};
+#[cfg(test)]
+mod allocation_tests;
+#[cfg(test)]
+mod substitution_allocation_tests;
 
 pub(super) const STR_FIRST: u64 = 64;
 pub(super) const STR_LEN: u64 = 64;
@@ -40,10 +44,10 @@ pub(super) struct Substitution {
     maximum: i32,
     top: usize,
     level: usize,
-    output: Vec<u8>,
+    output: Buffer<u8>,
     // Buffer concatenations can invoke Lua after debug mutation of C slots.
     // Continuations allocate only when such a metamethod actually suspends us.
-    actions: Vec<SubAction>,
+    actions: Buffer<SubAction>,
     matched: Option<Matched>,
     done: bool,
 }
@@ -71,8 +75,8 @@ fn relative(index: i64, len: usize) -> i64 {
     }
 }
 impl Vm {
-    pub(super) fn open_strings(&mut self) {
-        let table = self.new_table();
+    pub(super) fn open_strings(&mut self) -> Result<(), Error> {
+        let table = self.try_new_table()?;
         for (i, name) in [
             b"len".as_slice(),
             b"sub",
@@ -92,25 +96,19 @@ impl Vm {
         .iter()
         .enumerate()
         {
-            let key = self.intern(name);
-            self.tables[slot_index(table.0)]
-                .set(key, Value::Native(STR_FIRST + i as u64))
-                .expect("string names are valid");
+            let key = self.try_intern(name)?;
+            self.tables[slot_index(table.0)].set(key, Value::Native(STR_FIRST + i as u64))?;
         }
-        let key = self.intern(b"gfind");
-        self.tables[slot_index(table.0)]
-            .set(key, Value::Native(STR_GMATCH))
-            .expect("string names are valid");
-        self.set_global(b"string", Value::Table(table))
-            .expect("string name is valid");
-        let mt = self.new_table();
-        self.tables[slot_index(mt.0)]
-            .set(
-                Value::String(self.meta_names[Meta::Index as usize]),
-                Value::Table(table),
-            )
-            .expect("string metatable key is valid");
+        let key = self.try_intern(b"gfind")?;
+        self.tables[slot_index(table.0)].set(key, Value::Native(STR_GMATCH))?;
+        self.set_global(b"string", Value::Table(table))?;
+        let mt = self.try_new_table()?;
+        self.tables[slot_index(mt.0)].set(
+            Value::String(self.meta_names[Meta::Index as usize]),
+            Value::Table(table),
+        )?;
         self.type_metatables[3] = Some(mt);
+        Ok(())
     }
     pub(super) fn argument(&self, base: usize, count: usize, index: usize) -> Value {
         if index < count {
@@ -128,7 +126,9 @@ impl Vm {
         match self.argument(base, count, index) {
             Value::String(id) => Ok(id),
             Value::Number(n) => {
-                let id = self.strings.intern(format_number(n).as_slice());
+                let Value::String(id) = self.intern_number(n)? else {
+                    unreachable!()
+                };
                 self.registers[base + 1 + index] = Value::String(id);
                 if let Some(frame) = self.active_native.map(|i| self.frames[i])
                     && frame.base == base
@@ -159,23 +159,58 @@ impl Vm {
             .map(lua_integer)
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
-    fn prepare_pattern(&mut self, id: StringId, anchor: bool) {
+    fn prepare_pattern(&mut self, id: StringId, anchor: bool) -> Result<(), Error> {
         let revision = crate::locale::revision();
         if revision != self.pattern_locale {
             self.patterns.clear();
             self.pattern_locale = revision;
         }
-        self.patterns
-            .entry((id, anchor))
-            .or_insert_with(|| Pattern::compile(&self.strings.bytes[slot_index(id.0)], anchor));
+        if !self.patterns.contains_key(&(id, anchor)) {
+            let before = self.patterns.storage_bytes();
+            let reserved = self.patterns.try_reserve(1);
+            self.gc_note_control(self.patterns.storage_bytes().saturating_sub(before));
+            reserved.map_err(|_| self.memory_failure())?;
+            let pattern = Pattern::compile(
+                &self.strings.bytes[slot_index(id.0)],
+                anchor,
+                self.functions.memory().clone(),
+            )
+            .map_err(|_| self.memory_failure())?;
+            self.gc_note_control(pattern.heap_bytes());
+            self.patterns.insert((id, anchor), pattern);
+        }
+        Ok(())
+    }
+    fn with_pattern(
+        &mut self,
+        pattern: StringId,
+        anchor: bool,
+        source: StringId,
+        action: impl FnOnce(&Pattern, &[u8], &mut Work) -> Result<Option<Matched>, Error>,
+    ) -> Result<Option<Matched>, Error> {
+        self.prepare_pattern(pattern, anchor)?;
+        let before = self.pattern_work.heap_bytes();
+        let result = action(
+            &self.patterns[&(pattern, anchor)],
+            &self.strings.bytes[slot_index(source.0)],
+            &mut self.pattern_work,
+        );
+        // Failed matching can retain a successfully grown backtracking buffer.
+        self.gc_note_control(self.pattern_work.heap_bytes().saturating_sub(before));
+        result.map_err(|error| self.pattern_error(error))
+    }
+    fn pattern_error(&self, error: Error) -> Error {
+        if error.kind() == ErrorKind::Memory {
+            self.memory_failure()
+        } else {
+            error
+        }
     }
     fn capture_value(&mut self, source: StringId, capture: Capture) -> Result<Value, Error> {
         if capture.position() {
             Ok(Value::Number((capture.start + 1) as f64))
         } else {
-            Ok(Value::String(
-                self.strings.substring(source, capture.range()?),
-            ))
+            self.string_slice(source, capture.range()?)
         }
     }
     fn capture_results(
@@ -190,6 +225,7 @@ impl Vm {
         } else {
             usize::from(matched.count)
         };
+        self.reserve_registers(base + count)?;
         self.resize_registers(self.registers.len().max(base + count));
         for index in 0..count {
             let capture = matched.capture(index)?;
@@ -228,16 +264,18 @@ impl Vm {
                 ));
             };
             let closure = &self.functions[slot_index(function.0)];
-            let bytes =
-                crate::chunk51::dump(&self.programs[closure.program].data, closure.prototype)?;
-            self.registers[base] = self.intern(&bytes);
+            let workspace = crate::memory::compilation::Workspace::new(self.registers.memory())?;
+            let bytes = workspace.run(|| {
+                crate::chunk51::dump(&self.programs[closure.program].data, closure.prototype)
+            })?;
+            self.registers[base] = self.try_intern(&bytes)?;
             return Ok(1);
         }
         if id == STR_FORMAT {
             return self.string_format(base, count);
         }
         if id == STR_CHAR {
-            let mut bytes = self.take_buffer(count);
+            let mut bytes = self.try_take_buffer(count)?;
             for index in 0..count {
                 let n = self.integer_argument(base, count, index, None)? as i32;
                 if !(0..=255).contains(&n) {
@@ -245,7 +283,7 @@ impl Vm {
                 }
                 bytes.push(n as u8);
             }
-            self.registers[base] = self.finish_buffer(bytes);
+            self.registers[base] = self.try_finish_buffer(bytes)?;
             return Ok(1);
         }
         let source = self.string_argument(base, count, 0)?;
@@ -279,7 +317,7 @@ impl Vm {
                     start as usize - 1..end as usize
                 };
                 if id == STR_SUB {
-                    Value::String(self.strings.substring(source, range))
+                    self.string_slice(source, range)?
                 } else {
                     let results = range.len();
                     if results > i32::MAX as usize {
@@ -292,6 +330,7 @@ impl Vm {
                             "stack overflow (string slice too long)",
                         ));
                     }
+                    self.reserve_registers(base + results)?;
                     self.resize_registers(self.registers.len().max(base + results));
                     for (i, &byte) in self.strings.bytes[slot_index(source.0)][range]
                         .iter()
@@ -305,30 +344,32 @@ impl Vm {
             STR_REP => {
                 let repeat = (self.integer_argument(base, count, 1, None)? as i32).max(0) as usize;
                 if len == 0 || repeat == 0 {
-                    self.registers[base] = self.intern(b"");
+                    self.registers[base] = self.try_intern(b"")?;
                     return Ok(1);
                 }
                 let size = len
                     .checked_mul(repeat)
                     .ok_or_else(|| Error::new(ErrorKind::Limit, 0, "string length overflow"))?;
-                let mut bytes = self.take_buffer(0);
+                let mut bytes = self.try_take_buffer(0)?;
                 bytes
                     .try_reserve_exact(size)
-                    .map_err(|_| Error::new(ErrorKind::Limit, 0, "string length overflow"))?;
+                    .map_err(|_| self.memory_failure())?;
                 for _ in 0..repeat {
                     bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
                 }
-                self.finish_buffer(bytes)
+                self.try_finish_buffer(bytes)?
             }
             STR_REVERSE | STR_LOWER | STR_UPPER => {
-                let mut bytes = self.take_buffer(len);
+                let mut bytes = self.try_take_buffer(len)?;
                 let text = &self.strings.bytes[slot_index(source.0)];
                 if id == STR_REVERSE {
-                    bytes.extend(text.iter().rev().copied());
+                    for &byte in text.iter().rev() {
+                        bytes.push(byte);
+                    }
                 } else {
                     crate::locale::map_case(text, id == STR_UPPER, &mut bytes);
                 }
-                self.finish_buffer(bytes)
+                self.try_finish_buffer(bytes)?
             }
             STR_FIND | STR_MATCH => {
                 let pattern = self.string_argument(base, count, 1)?;
@@ -359,12 +400,10 @@ impl Vm {
                     }
                     Value::Nil
                 } else {
-                    self.prepare_pattern(pattern, true);
-                    let found = self.patterns[&(pattern, true)].find(
-                        &self.strings.bytes[slot_index(source.0)],
-                        start,
-                        &mut self.pattern_work,
-                    )?;
+                    let found =
+                        self.with_pattern(pattern, true, source, |pattern, text, work| {
+                            pattern.find(text, start, work)
+                        })?;
                     if let Some(found) = found {
                         if id == STR_MATCH {
                             return self.capture_results(base, source, found, true);
@@ -380,7 +419,7 @@ impl Vm {
             }
             STR_GMATCH => {
                 let pattern = self.string_argument(base, count, 1)?;
-                self.prepare_pattern(pattern, false);
+                self.prepare_pattern(pattern, false)?;
                 self.new_native(
                     threads::NativeKind::Match,
                     &[
@@ -410,7 +449,7 @@ impl Vm {
         for (slot, target) in ids.iter_mut().enumerate() {
             let value = self.native_closures[index].captures[slot];
             let value = match value {
-                Value::Number(number) => self.intern(&native::format_number(number)),
+                Value::Number(number) => self.intern_number(number)?,
                 _ => value,
             };
             let Value::String(string) = value else {
@@ -428,12 +467,9 @@ impl Vm {
             .number(self.native_closures[index].captures[2])
             .map(lua_integer)
             .unwrap_or(0) as usize;
-        self.prepare_pattern(pattern, false);
-        let found = self.patterns[&(pattern, false)].find(
-            &self.strings.bytes[slot_index(source.0)],
-            position,
-            &mut self.pattern_work,
-        )?;
+        let found = self.with_pattern(pattern, false, source, |pattern, text, work| {
+            pattern.find(text, position, work)
+        })?;
         if let Some(found) = found {
             self.native_closures[index].captures[2] =
                 Value::Number((found.end + usize::from(found.end == found.start)) as f64);
@@ -448,18 +484,40 @@ impl Vm {
             .last()
             .is_some_and(|s| s.owner >= self.frames.len())
         {
-            let state = self.substitutions.pop().expect("substitution exists");
-            self.buffers.push(state.output);
+            self.substitutions.pop();
         }
     }
-    fn substitution_push(&mut self, index: usize, value: Value) {
-        let state = &mut self.substitutions[index];
-        let frame = &mut self.frames[state.owner];
+    fn substitution_push(&mut self, index: usize, value: Value) -> Result<(), Error> {
+        let state = &self.substitutions[index];
+        let frame = &self.frames[state.owner];
         let position = frame.vararg_start + state.top;
-        state.top += 1;
-        frame.vararg_count = state.top as u32;
+        self.reserve_registers(self.registers.len().max(position + 1))?;
         self.resize_registers(self.registers.len().max(position + 1));
+        let state = &mut self.substitutions[index];
+        state.top += 1;
+        self.frames[state.owner].vararg_count = state.top as u32;
         self.registers[position] = value;
+        Ok(())
+    }
+    fn substitution_queue(
+        &mut self,
+        index: usize,
+        position: usize,
+        action: SubAction,
+    ) -> Result<(), Error> {
+        let before = self.substitutions[index].actions.capacity();
+        self.substitutions[index]
+            .actions
+            .try_reserve(1)
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control(
+            (self.substitutions[index].actions.capacity() - before) * size_of::<SubAction>(),
+        );
+        let actions = &mut self.substitutions[index].actions;
+        assert!(position <= actions.len());
+        actions.push(action);
+        actions[position..].rotate_right(1);
+        Ok(())
     }
     fn substitution_pop(&mut self, index: usize, count: usize) {
         let state = &mut self.substitutions[index];
@@ -469,32 +527,34 @@ impl Vm {
         let end = frame.vararg_start + state.top;
         self.truncate_registers(end);
     }
-    fn substitution_flush(&mut self, index: usize) -> bool {
+    fn substitution_flush(&mut self, index: usize) -> Result<bool, Error> {
         if self.substitutions[index].output.is_empty() {
-            return false;
+            return Ok(false);
         }
-        let mut bytes = std::mem::take(&mut self.substitutions[index].output);
-        let value = self.intern(&bytes);
-        bytes.clear();
-        self.substitutions[index].output = bytes;
-        self.substitution_push(index, value);
+        let value = self
+            .strings
+            .try_intern(&self.substitutions[index].output)
+            .map(Value::String)
+            .map_err(|_| self.memory_failure())?;
+        self.substitutions[index].output.clear();
+        self.substitution_push(index, value)?;
         self.substitutions[index].level += 1;
-        true
+        Ok(true)
     }
-    fn substitution_concat_done(&mut self, index: usize, count: usize) {
+    fn substitution_concat_done(&mut self, index: usize, count: usize) -> Result<(), Error> {
         let state = &self.substitutions[index];
         let start = self.frames[state.owner].vararg_start + state.top - count;
         let value = self.registers[start];
         self.substitution_pop(index, count);
-        self.substitution_push(index, value);
+        self.substitution_push(index, value)
     }
     fn substitution_concat(&mut self, index: usize, count: usize) -> Result<bool, Error> {
         if count == 1 {
             return Ok(true);
         }
         if count == 0 {
-            let value = self.intern(b"");
-            self.substitution_push(index, value);
+            let value = self.try_intern(b"")?;
+            self.substitution_push(index, value)?;
             return Ok(true);
         }
         let state = &self.substitutions[index];
@@ -507,26 +567,28 @@ impl Vm {
         let owner = state.owner;
         self.concat_range(start, start, end - 1)?;
         if self.frames.len() > owner + 1 {
-            self.substitutions[index]
-                .actions
-                .push(SubAction::Concat(count));
+            self.substitution_queue(
+                index,
+                self.substitutions[index].actions.len(),
+                SubAction::Concat(count),
+            )?;
             return Ok(false);
         }
-        self.substitution_concat_done(index, count);
+        self.substitution_concat_done(index, count)?;
         Ok(true)
     }
-    fn substitution_length(&mut self, position: usize) -> usize {
+    fn substitution_length(&mut self, position: usize) -> Result<usize, Error> {
         let mut value = self.registers[position];
-        if matches!(value, Value::Number(_)) {
-            value = self.default_string(value);
+        if let Value::Number(number) = value {
+            value = self.intern_number(number)?;
             self.registers[position] = value;
         }
-        match value {
+        Ok(match value {
             Value::String(id) => self.strings.bytes[slot_index(id.0)].len(),
             Value::Table(id) => self.tables[slot_index(id.0)].len(),
             Value::Userdata(id) => self.userdata[slot_index(id.0)].bytes.len(),
             _ => 0,
-        }
+        })
     }
     fn substitution_adjust(&mut self, index: usize) -> Result<bool, Error> {
         let state = &self.substitutions[index];
@@ -542,10 +604,10 @@ impl Vm {
             return Ok(true);
         }
         let end = self.frames[state.owner].vararg_start + state.top;
-        let mut size = self.substitution_length(end - 1);
+        let mut size = self.substitution_length(end - 1)?;
         let mut count = 1;
         while count < level {
-            let next = self.substitution_length(end - count - 1);
+            let next = self.substitution_length(end - count - 1)?;
             if level - count + 1 < 10 && size <= next {
                 break;
             }
@@ -559,11 +621,9 @@ impl Vm {
     fn substitution_byte(&mut self, index: usize, byte: u8) -> Result<bool, Error> {
         let queued = self.substitutions[index].actions.len();
         if self.substitutions[index].output.len() == io::LINE_BUFFER {
-            self.substitution_flush(index);
+            self.substitution_flush(index)?;
             if !self.substitution_adjust(index)? {
-                self.substitutions[index]
-                    .actions
-                    .insert(queued, SubAction::Byte(byte));
+                self.substitution_queue(index, queued, SubAction::Byte(byte))?;
                 return Ok(false);
             }
         }
@@ -580,11 +640,13 @@ impl Vm {
         let mut cursor = range.start;
         while cursor < range.end {
             if self.substitutions[index].output.len() == io::LINE_BUFFER {
-                self.substitution_flush(index);
+                self.substitution_flush(index)?;
                 if !self.substitution_adjust(index)? {
-                    self.substitutions[index]
-                        .actions
-                        .insert(queued, SubAction::String(source, cursor..range.end));
+                    self.substitution_queue(
+                        index,
+                        queued,
+                        SubAction::String(source, cursor..range.end),
+                    )?;
                     return Ok(false);
                 }
             }
@@ -603,8 +665,8 @@ impl Vm {
         let frame = self.frames[state.owner];
         let last = frame.vararg_start + state.top - 1;
         let value = self.registers[last];
-        let value = if matches!(value, Value::Number(_)) {
-            self.default_string(value)
+        let value = if let Value::Number(number) = value {
+            self.intern_number(number)?
         } else {
             value
         };
@@ -624,7 +686,7 @@ impl Vm {
             self.substitution_pop(index, 1);
             Ok(true)
         } else {
-            if self.substitution_flush(index) {
+            if self.substitution_flush(index)? {
                 self.registers.swap(last, last + 1);
             }
             self.substitutions[index].level += 1;
@@ -639,8 +701,8 @@ impl Vm {
             let found = state.matched.expect("substitution has a match");
             let source = state.source;
             self.substitution_pop(index, 1);
-            let value = Value::String(self.strings.substring(source, found.start..found.end));
-            self.substitution_push(index, value);
+            let value = self.string_slice(source, found.start..found.end)?;
+            self.substitution_push(index, value)?;
         }
         self.substitution_value(index)
     }
@@ -681,9 +743,7 @@ impl Vm {
             if c != b'%' {
                 pos += 1;
                 if !self.substitution_byte(index, c)? {
-                    self.substitutions[index]
-                        .actions
-                        .insert(queued, SubAction::Replacement(text, pos));
+                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
                     return Ok(false);
                 }
                 continue;
@@ -696,26 +756,20 @@ impl Vm {
             pos += 1;
             if c == b'0' {
                 if !self.substitution_string(index, source, found.start..found.end)? {
-                    self.substitutions[index]
-                        .actions
-                        .insert(queued, SubAction::Replacement(text, pos));
+                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
                     return Ok(false);
                 }
             } else if crate::locale::is_digit(c) {
                 let capture = found.capture(usize::from(c - b'1'))?;
                 let value = self.capture_value(source, capture)?;
-                self.substitution_push(index, value);
+                self.substitution_push(index, value)?;
                 if !self.substitution_value(index)? {
-                    self.substitutions[index]
-                        .actions
-                        .insert(queued, SubAction::Replacement(text, pos));
+                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
                     return Ok(false);
                 }
             } else {
                 if !self.substitution_byte(index, c)? {
-                    self.substitutions[index]
-                        .actions
-                        .insert(queued, SubAction::Replacement(text, pos));
+                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
                     return Ok(false);
                 }
             }
@@ -732,23 +786,19 @@ impl Vm {
                 source,
                 cursor..self.strings.bytes[slot_index(source.0)].len(),
             )? {
-                self.substitutions[index]
-                    .actions
-                    .insert(queued, SubAction::Complete(1));
+                self.substitution_queue(index, queued, SubAction::Complete(1))?;
                 return Ok(None);
             }
         }
         if phase <= 1 {
-            self.substitution_flush(index);
+            self.substitution_flush(index)?;
             if !self.substitution_concat(index, self.substitutions[index].level)? {
-                self.substitutions[index]
-                    .actions
-                    .insert(queued, SubAction::Complete(2));
+                self.substitution_queue(index, queued, SubAction::Complete(2))?;
                 return Ok(None);
             }
         }
         let count = self.substitutions[index].count;
-        self.substitution_push(index, Value::Number(f64::from(count)));
+        self.substitution_push(index, Value::Number(f64::from(count)))?;
         let state = self
             .substitutions
             .pop()
@@ -758,9 +808,8 @@ impl Vm {
             self.substitutions.len(),
             "substitution stack is ordered"
         );
-        self.buffers.push(state.output);
         let frame = self.frames[state.owner];
-        Ok(self.return_frame(frame, frame.vararg_start + state.top - 2, 2))
+        self.return_frame(frame, frame.vararg_start + state.top - 2, 2)
     }
     pub(super) fn substitute_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
@@ -784,8 +833,20 @@ impl Vm {
             ) {
                 return Err(self.argument_error(2, b"string/function/table expected"));
             }
-            self.prepare_pattern(pattern, true);
-            let output = self.take_buffer(io::LINE_BUFFER);
+            self.prepare_pattern(pattern, true)?;
+            let mut output = Buffer::new_in(self.registers.memory().clone());
+            output
+                .try_reserve_exact(io::LINE_BUFFER)
+                .map_err(|_| self.memory_failure())?;
+            self.gc_note_control(output.capacity());
+            let capacity = self.substitutions.capacity();
+            self.substitutions
+                .try_reserve(1)
+                .map_err(|_| self.memory_failure())?;
+            self.gc_note_control(
+                (self.substitutions.capacity() - capacity) * size_of::<Substitution>(),
+            );
+            self.reserve_registers(self.registers.len().max(base + argc + 1))?;
             self.resize_registers(self.registers.len().max(base + argc + 1));
             self.registers
                 .copy_within(frame.vararg_start..frame.vararg_start + argc, base + 1);
@@ -802,7 +863,7 @@ impl Vm {
                 top: argc,
                 level: 0,
                 output,
-                actions: Vec::new(),
+                actions: Buffer::new_in(self.registers.memory().clone()),
                 matched: None,
                 done: false,
             });
@@ -813,7 +874,7 @@ impl Vm {
         };
         if let Some(action) = self.substitutions[index].actions.pop() {
             match action {
-                SubAction::Concat(count) => self.substitution_concat_done(index, count),
+                SubAction::Concat(count) => self.substitution_concat_done(index, count)?,
                 SubAction::Byte(byte) => {
                     self.substitution_byte(index, byte)?;
                 }
@@ -836,16 +897,14 @@ impl Vm {
             if frame.pc() & 3 == 1 {
                 let value = self.registers[end];
                 self.truncate_registers(end + 1);
-                self.substitution_push(index, value);
+                self.substitution_push(index, value)?;
             } else {
                 self.truncate_registers(end);
             }
             let complete = self.substitution_replacement(index)?;
             self.frames[owner].pc = ((index + 1) << 2) as u32;
             if !complete {
-                self.substitutions[index]
-                    .actions
-                    .insert(0, SubAction::Advance);
+                self.substitution_queue(index, 0, SubAction::Advance)?;
                 return Ok(None);
             }
             if !self.substitution_advance(index)? {
@@ -859,12 +918,9 @@ impl Vm {
         }
         let state = &self.substitutions[index];
         let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
-        self.prepare_pattern(pattern, true);
-        let found = self.patterns[&(pattern, true)].match_at(
-            &self.strings.bytes[slot_index(source.0)],
-            cursor,
-            &mut self.pattern_work,
-        )?;
+        let found = self.with_pattern(pattern, true, source, |pattern, text, work| {
+            pattern.match_at(text, cursor, work)
+        })?;
         if let Some(found) = found {
             self.substitutions[index].matched = Some(found);
             self.substitutions[index].count += 1;
@@ -875,9 +931,7 @@ impl Vm {
                 Value::String(_) | Value::Number(_) => {
                     let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
                     if !self.replacement_string(index, text, 0)? {
-                        self.substitutions[index]
-                            .actions
-                            .insert(0, SubAction::Advance);
+                        self.substitution_queue(index, 0, SubAction::Advance)?;
                         return Ok(None);
                     }
                     if !self.substitution_advance(index)? {
@@ -886,7 +940,7 @@ impl Vm {
                 }
                 Value::Table(_) => {
                     let key = self.capture_value(source, found.capture(0)?)?;
-                    self.substitution_push(index, key);
+                    self.substitution_push(index, key)?;
                     let call = frame.vararg_start + self.substitutions[index].top - 1;
                     self.frames[owner].pc |= 2;
                     self.get_table(replacement, key, call)?;
@@ -909,9 +963,7 @@ impl Vm {
                         ));
                     }
                     if !self.substitution_replacement(index)? {
-                        self.substitutions[index]
-                            .actions
-                            .insert(0, SubAction::Advance);
+                        self.substitution_queue(index, 0, SubAction::Advance)?;
                         return Ok(None);
                     }
                     if !self.substitution_advance(index)? {
@@ -936,8 +988,20 @@ impl Vm {
         Ok(None)
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
+        let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());
+        let result = self.string_format_inner(base, count, &mut scratch);
+        self.gc_note_control(scratch.allocated);
+        result
+    }
+    fn string_format_inner(
+        &mut self,
+        base: usize,
+        count: usize,
+        scratch: &mut crate::format::Scratch,
+    ) -> Result<usize, Error> {
         let id = self.string_argument(base, count, 0)?;
-        let mut output = self.take_buffer(self.strings.bytes[slot_index(id.0)].len());
+        let mut output =
+            crate::format::buffer(scratch, self.strings.bytes[slot_index(id.0)].len())?;
         let mut pos = 0;
         let mut arg = 0;
         while pos < self.strings.bytes[slot_index(id.0)].len() {
@@ -945,10 +1009,12 @@ impl Vm {
             let c = bytes[pos];
             pos += 1;
             if c != b'%' {
+                scratch.reserve(&mut output, 1)?;
                 output.push(c);
                 continue;
             }
             if bytes.get(pos) == Some(&b'%') {
+                scratch.reserve(&mut output, 1)?;
                 output.push(b'%');
                 pos += 1;
                 continue;
@@ -963,9 +1029,11 @@ impl Vm {
                     let text = self.string_argument(base, count, arg)?;
                     let bytes = &self.strings.bytes[slot_index(text.0)];
                     if spec.conversion == b'q' {
-                        crate::format::quote(bytes, &mut output);
+                        crate::format::quote(bytes, &mut output, scratch)?;
                     } else {
-                        output.extend_from_slice(&spec.string(bytes));
+                        let bytes = spec.string(bytes, scratch)?;
+                        scratch.reserve(&mut output, bytes.len())?;
+                        output.extend_from_slice(&bytes);
                     }
                 }
                 b'c' | b'd' | b'i' | b'o' | b'u' | b'x' | b'X' | b'e' | b'E' | b'f' | b'g'
@@ -974,10 +1042,11 @@ impl Vm {
                         .number(self.argument(base, count, arg))
                         .ok_or_else(|| self.argument_type_error(base, count, arg, "number"))?;
                     let bytes = match spec.conversion {
-                        b'c' => spec.character(n),
-                        b'd' | b'i' | b'o' | b'u' | b'x' | b'X' => spec.integer(n),
-                        _ => spec.float(n),
+                        b'c' => spec.character(n, scratch)?,
+                        b'd' | b'i' | b'o' | b'u' | b'x' | b'X' => spec.integer(n, scratch)?,
+                        _ => spec.float(n, scratch)?,
                     };
+                    scratch.reserve(&mut output, bytes.len())?;
                     output.extend_from_slice(&bytes);
                 }
                 c => {
@@ -992,7 +1061,7 @@ impl Vm {
                 }
             }
         }
-        self.registers[base] = self.finish_buffer(output);
+        self.registers[base] = Value::String(self.strings.try_intern(&output)?);
         Ok(1)
     }
 
@@ -1013,6 +1082,9 @@ impl Vm {
         frame.pc = 1;
         let index = self.frames.len() - 1;
         self.frames[index] = frame;
-        Ok(self.return_frame(frame, frame.base + 1, 1))
+        self.return_frame(frame, frame.base + 1, 1)
     }
 }
+
+#[cfg(test)]
+mod format_allocation_tests;

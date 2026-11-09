@@ -3,13 +3,29 @@ use super::*;
 mod libraries;
 
 impl Vm {
+    pub(in crate::vm) fn return_scratch(
+        &self,
+        values: &[Value],
+        additional: usize,
+    ) -> Result<Buffer<Value>, Error> {
+        let capacity = values
+            .len()
+            .checked_add(additional)
+            .ok_or_else(|| self.memory_failure())?;
+        let mut stack = Buffer::new_in(self.registers.memory().clone());
+        stack
+            .try_reserve_exact(capacity)
+            .map_err(|_| self.memory_failure())?;
+        stack.extend_from_slice(values);
+        Ok(stack)
+    }
     pub(in crate::vm) fn native_return_stack(
         &mut self,
         id: u64,
         frame: &mut Frame,
         source: usize,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize, Error> {
         let kind = self.native_closures.get(id).map(|c| &c.kind);
         let iterator =
             matches!(kind, Some(threads::NativeKind::Match)) || id == host::stack::body::MATCH;
@@ -19,10 +35,10 @@ impl Vm {
         };
         let lines =
             matches!(kind, Some(threads::NativeKind::Lines)) || id == host::stack::body::LINES;
-        if let Some(stack) = self.package_return_stack(code, *frame, source, count) {
+        if let Some(stack) = self.package_return_stack(code, *frame, source, count)? {
             return self.install_return_stack(frame, stack, count);
         }
-        if let Some(stack) = self.library_return_stack(code, lines, *frame, source, count) {
+        if let Some(stack) = self.library_return_stack(code, lines, *frame, source, count)? {
             return self.install_return_stack(frame, stack, count);
         }
         let append = iterator
@@ -62,10 +78,11 @@ impl Vm {
                     | XPCALL
             )
         {
-            return source;
+            return Ok(source);
         }
         let old = frame.vararg_start..frame.vararg_start + frame.argc();
-        let mut stack = self.registers[old.clone()].to_vec();
+        // Every generic shape adds at most two temporaries plus the results.
+        let mut stack = self.return_scratch(&self.registers[old.clone()], count + 2)?;
         let results = &self.registers[source..source + count];
         match code {
             0 => {} // assert returns its existing arguments.
@@ -136,14 +153,15 @@ impl Vm {
     fn install_return_stack(
         &mut self,
         frame: &mut Frame,
-        stack: Vec<Value>,
+        stack: Buffer<Value>,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize, Error> {
         let old = frame.vararg_start..frame.vararg_start + frame.argc();
         // The returned suffix must alias the values presented to the hook.
         // Moving the live C window also releases discarded arguments/scratch.
         let window = self.registers.len();
         let result = window + stack.len() - count;
+        self.reserve_registers(window + stack.len())?;
         self.registers.extend_from_slice(&stack);
         self.relocate_native_error_functions(old.clone(), window);
         self.registers[old.start..old.end.min(window)].fill(Value::Nil);
@@ -151,6 +169,6 @@ impl Vm {
         frame.base = window;
         frame.vararg_start = window;
         frame.vararg_count = stack.len() as u32;
-        result
+        Ok(result)
     }
 }

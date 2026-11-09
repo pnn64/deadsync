@@ -1,0 +1,24 @@
+{
+  "build": "production-final-linked-app-v1-application-windows-release",
+  "normal_features": true,
+  "engine_selection_flag": false,
+  "artifact_sha256": "675069ef8b598e37a6a49f8522c013aebc3e9a0c9c6fb77a8844fcde8a43564d",
+  "map_sha256": "fbbf314d09946ac47112732740bcecf7d6236b843468f1056dedfd4f3363708a",
+  "rust_symbol_rows": 1671,
+  "legacy_runtime_symbol_or_object_matches": [],
+  "normal_and_instrumented_graph": "production-lua-graph-v2: 399 unique package names each, no legacy runtime; 81 inputs unchanged.",
+  "rendered_smoke": "production-final-rendered-dreaming-v1",
+  "renderer": "OpenGL",
+  "resolution": [
+    1280,
+    720
+  ],
+  "audio": "wasapi-shared",
+  "measured_frames": 480,
+  "warmup_frames": 120,
+  "warnings_or_errors": [],
+  "screenshot": "production-final-rendered-dreaming-v1\\data\\save\\screenshots\\2026\\11-November\\2026-11-08_112049__315__DREAMING_ING__.png",
+  "screenshot_sha256": "9e3481f2e8995d8cdc3af1a991e8dc00edb90c0d61aa927fb998ef9225a03733",
+  "visual_review": "Inspected current image and frozen native early-gameplay image: HUD, cel receptors, song background and autoplay visible. Captures have no synchronized playhead timestamp; no pixel-equality claim.",
+  "limits": "Concurrent work means smoke pacing is functional evidence, not a controlled performance comparison. Existing fixture/adapter suites provide semantic checks."
+}

@@ -710,6 +710,7 @@ pub enum SimplyLoveGameplayConfigRequest {
     BackgroundBrightnessTenths(u8),
     CenterPlayerOneNotefield(bool),
     NoteScrollClock(NoteScrollClock),
+    SongLuaMode(deadsync_config::options::SongLuaMode),
     BannerMode(GameplayBannerMode),
     ZmodRatingBoxText(bool),
     ShowBpmDecimal(bool),

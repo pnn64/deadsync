@@ -1,0 +1,42 @@
+{
+  "goal_complete": false,
+  "source_count": 1232,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/song_easing_reader.rs"
+  ],
+  "native_reader_and_test_support_unchanged": true,
+  "other_source_changes_preserved": [],
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-easing-reader-regressions-v1-song-linux-debug": [],
+    "song-easing-reader-lint-v1-song-linux-debug": []
+  },
+  "earlier_155_activation_tests_unchanged": true,
+  "new_cases": 9,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-easing-reader-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 491.12635413510725,
+      "log_sha256": "c51de069610e34f0a5c4380bd0c06f0381647c663299e32d007282f389743e00",
+      "tests_passed": 397,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-easing-reader-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 41.80235600005835,
+      "log_sha256": "7c3989b48c23b47996efe57a081dc364092c3cfc9ad2cd663ccdbb954ef93dd1",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

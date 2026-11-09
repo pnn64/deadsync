@@ -1,0 +1,34 @@
+{
+  "stage": "production-adapter-fixes-multitap-v2",
+  "suite": "downstream",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--test",
+    "song_lua_itgmania_semantic_parity",
+    "multitap::multitap_boundaries_and_noteskin_commands_match",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 362.84903299994767,
+  "log_sha256": "ec2b0bae4afe5ccaab04efaa572909b41d7526fe23e1ce73e2ef6c433aca5270",
+  "tests_passed": 1,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 400 filtered out; finished in 7.58s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

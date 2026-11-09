@@ -1,20 +1,49 @@
-//! Mr. Sandman retains 192*108 native actors in one Lua VM.
+//! The existing actor-grid size must fit in the Rust VM's pinned roots.
+use deadlib_lua::{Error, HostCall, Value, Vm};
+
 #[test]
 fn rust_handles_can_retain_a_native_sized_actor_grid() {
-    let lua = mlua::Lua::new();
+    let mut vm = Vm::new();
     let mut handles = Vec::new();
-    for index in 0..(192*108) {
-        handles.push(lua.create_table().unwrap_or_else(|error| panic!("actor handle {index}: {error}")));
+    for index in 0..(192 * 108) {
+        let table = vm.try_new_table().unwrap();
+        handles.push(
+            vm.pin(Value::Table(table))
+                .unwrap_or_else(|error| panic!("actor handle {index}: {error}")),
+        );
     }
     assert_eq!(handles.len(), 20_736);
-    handles[20_735].raw_set("marker", 19).unwrap();
-    assert_eq!(handles[20_735].raw_get::<i32>("marker").unwrap(), 19);
+    vm.collect_garbage().unwrap();
+    let Value::Table(table) = vm.rooted(handles[20_735]).unwrap() else {
+        panic!("retained table")
+    };
+    let marker = vm.intern(b"marker");
+    vm.raw_table_set(table, marker, Value::Number(19.)).unwrap();
+    assert_eq!(vm.raw_table_get(table, marker).unwrap(), Value::Number(19.));
+    for handle in handles {
+        vm.unpin(handle).unwrap();
+    }
 }
 
 #[test]
 fn normal_c_calls_keep_the_native_stack_limit() {
-    let lua = mlua::Lua::new();
-    let function = lua.create_function(|_, args: mlua::MultiValue| Ok(args.len())).unwrap();
-    let args = mlua::MultiValue::from_vec(vec![mlua::Value::Nil; 8_001]);
-    assert!(matches!(function.call::<usize>(args), Err(mlua::Error::StackError)));
+    fn count(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let arguments = stack.top();
+        stack.push(Value::Number(arguments as f64))?;
+        stack.finish(1)
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(count, &[]).unwrap();
+    let root = vm.pin(function).unwrap();
+    let error = vm.call(function, &vec![Value::Nil; 8_001]).unwrap_err();
+    assert!(
+        error.message().contains("native stack overflow"),
+        "{error:?}"
+    );
+    assert_eq!(
+        vm.call(function, &[Value::Nil; 2]).unwrap(),
+        &[Value::Number(2.)]
+    );
+    vm.unpin(root).unwrap();
 }

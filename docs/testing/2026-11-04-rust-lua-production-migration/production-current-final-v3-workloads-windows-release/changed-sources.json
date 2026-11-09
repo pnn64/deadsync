@@ -1,0 +1,5 @@
+[
+  "crates/deadsync-notefield/src/appearance_performance.rs",
+  "crates/deadsync-notefield/src/transforms.rs",
+  "crates/deadsync-song-lua/examples/input_frames.rs"
+]

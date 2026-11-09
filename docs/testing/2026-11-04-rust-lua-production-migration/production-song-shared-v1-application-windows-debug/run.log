@@ -1,0 +1,510 @@
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+error[E0425]: cannot find function `sort_compiled_song_lua` in this scope
+   --> crates\deadsync-song-lua\src\compiled_layers.rs:395:9
+    |
+395 |         sort_compiled_song_lua(output);
+    |         ^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+  2 + use crate::sort_compiled_song_lua;
+    |
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:174:11
+    |
+174 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:181:11
+    |
+181 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:188:11
+    |
+188 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:193:11
+    |
+193 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:229:11
+    |
+229 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:235:11
+    |
+235 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:241:11
+    |
+241 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:287:11
+    |
+287 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:302:11
+    |
+302 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:307:11
+    |
+307 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:313:11
+    |
+313 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:319:11
+    |
+319 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:330:11
+    |
+330 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:336:11
+    |
+336 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:351:11
+    |
+351 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1805:11
+     |
+1805 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1817:11
+     |
+1817 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1839:11
+     |
+1839 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1844:11
+     |
+1844 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1862:11
+     |
+1862 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1889:37
+     |
+1889 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1912:37
+     |
+1912 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1918:37
+     |
+1918 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1930:37
+     |
+1930 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1935:37
+     |
+1935 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1947:37
+     |
+1947 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1950:37
+     |
+1950 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:10:23
+   |
+10 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:470:41
+    |
+470 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\compile.rs:1137:41
+     |
+1137 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:538:45
+    |
+538 |         #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:673:45
+    |
+673 |         #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\compile.rs:614:49
+    |
+614 |             #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `rust-engine`
+   --> crates\deadsync-song-lua\src\lua_util.rs:969:11
+    |
+969 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `performance` and `test-support`
+    = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24616:11
+      |
+24616 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+      |           ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24630:11
+      |
+24630 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+      |           ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24635:37
+      |
+24635 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24666:37
+      |
+24666 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24727:37
+      |
+24727 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24792:37
+      |
+24792 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24819:37
+      |
+24819 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+     --> crates\deadsync-song-lua\src\lua_util.rs:13002:41
+      |
+13002 |     #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+      |                                         ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = note: expected values for `feature` are: `performance` and `test-support`
+      = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:1016:11
+     |
+1016 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9343:11
+     |
+9343 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9352:11
+     |
+9352 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9357:11
+     |
+9357 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9363:11
+     |
+9363 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9368:11
+     |
+9368 | #[cfg(all(feature = "rust-engine", feature = "test-support"))]
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `rust-engine`
+    --> crates\deadsync-song-lua\src\live.rs:9373:37
+     |
+9373 | #[cfg(all(feature = "test-support", feature = "rust-engine"))]
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `performance` and `test-support`
+     = help: consider adding `rust-engine` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+For more information about this error, try `rustc --explain E0425`.
+warning: `deadsync-song-lua` (lib) generated 50 warnings
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error; 50 warnings emitted

@@ -1,0 +1,70 @@
+   Compiling x11-dl v2.21.0
+   Compiling dirs-sys v0.5.0 (/mnt/c/GitHub/deadsync/vendor/dirs-sys-win7)
+   Compiling link-cplusplus v1.0.12
+   Compiling deadsync-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-core)
+   Compiling deadlib-bincode-derive v2.0.1 (/mnt/c/GitHub/deadsync/crates/deadlib-bincode/derive)
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling opusic-sys v0.7.5 (/mnt/c/GitHub/deadsync/vendor/opusic-sys)
+   Compiling deadlib-render-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-core)
+   Compiling tiny-xlib v0.2.5
+   Compiling deadlib-audio-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-core)
+   Compiling alsa-sys v0.6.1
+   Compiling hidapi v2.6.7 (/mnt/c/GitHub/deadsync/vendor/hidapi-win7)
+   Compiling deadlib-audio-backend-pipewire v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-pipewire)
+   Compiling lua-src v551.0.2 (/mnt/c/GitHub/deadsync/vendor/lua-src)
+   Compiling deadlib-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua)
+   Compiling deadlib-video v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-video)
+   Compiling deadsync-rules v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-rules)
+   Compiling shaderc-sys v0.10.1
+   Compiling directories v6.0.0
+   Compiling softbuffer v0.4.8
+   Compiling deadlib-lua-legacy-sys v0.13.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua-legacy/mlua-sys)
+error: failed to run custom build command for `deadlib-audio-backend-pipewire v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-pipewire)`
+
+Caused by:
+  process didn't exit successfully: `/var/tmp/deadsync-rust-adapters-target/debug/build/deadlib-audio-backend-pipewire-fd76fb1e7e855afd/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-changed=src/pipewire_bridge.c
+  cargo:rerun-if-env-changed=LIBPIPEWIRE_0.3_NO_PKG_CONFIG
+  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG
+  cargo:rerun-if-env-changed=PKG_CONFIG
+  cargo:rerun-if-env-changed=LIBPIPEWIRE_0.3_STATIC
+  cargo:rerun-if-env-changed=LIBPIPEWIRE_0.3_DYNAMIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_STATIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_DYNAMIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR
+
+  --- stderr
+
+  thread 'main' (2465706) panicked at crates/deadlib-audio-backend-pipewire/build.rs:11:10:
+  Cannot find PipeWire development headers: 
+  pkg-config exited with status code 1
+  > PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags libpipewire-0.3
+
+  pkg-config output:
+    Package libpipewire-0.3 was not found in the pkg-config search path.
+    Perhaps you should add the directory containing `libpipewire-0.3.pc'
+    to the PKG_CONFIG_PATH environment variable
+    Package 'libpipewire-0.3', required by 'virtual:world', not found
+
+  The system library `libpipewire-0.3` required by crate `deadlib-audio-backend-pipewire` was not found.
+  The file `libpipewire-0.3.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.
+  The PKG_CONFIG_PATH environment variable is not set.
+
+  HINT: if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `libpipewire-0.3.pc`.
+
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...

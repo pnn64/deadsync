@@ -1,0 +1,16 @@
+{
+  "test": "catalog-owned-adapters-song-linux-debug",
+  "lint": "catalog-owned-lint-song-linux-debug",
+  "watched_files": 1066,
+  "source_manifests_match": true,
+  "current_files_and_keyset_match": true,
+  "format_passes": 7,
+  "legacy_controls_unchanged": true,
+  "clippy_log_matches_prior_stage": true,
+  "rust_adapter_lint_diagnostics": false,
+  "known_cmd_sha256": "7405d85dc6d7cc6b276beb0b7e682ab6dfdcee1de062bfa59f2e7d6230557b3e",
+  "core_and_root_cargo_entries_unchanged": 240,
+  "baseline_fixture_hashes": 6,
+  "previous_goal_turn": "no progress",
+  "current_goal_turn": "progress"
+}

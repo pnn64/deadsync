@@ -1,0 +1,163 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: use of deprecated type alias `mlua::String`: use `mlua::LuaString` instead
+   --> crates/deadsync-song-lua/tests/rust_baked_program.rs:727:44
+    |
+727 | ...a::String>(i...
+    |       ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `deadsync-song-lua` (test "rust_baked_program") generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 2m 00s
+     Running tests/rust_actors.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_actors-4388fa2e489c3f32)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.93s
+
+     Running tests/rust_baked_program.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_baked_program-9c28981254a6c577)
+
+running 27 tests
+test batch_compilation_keeps_binding_bits_identity_errors_and_independent_state ... ok
+test borrowed_byte_values_reuse_storage_without_merging_cells_or_changing_equality ... ok
+test borrowed_instruction_decoding_preserves_endianness_and_outlives_the_dump ... ok
+test byte_cells_reject_transient_inputs_type_changes_and_incompatible_initial_contents ... ok
+test equal_scalar_values_do_not_merge_distinct_captured_cells ... ok
+test group_code_sharing_preserves_independent_cells_constants_and_object_ids ... ok
+test grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction ... ok
+test groups_check_cell_layout_bits_and_clear_scratch_between_programs ... ok
+test identical_group_code_shares_storage_without_merging_execution_or_machine_state ... ok
+test implicit_entry_nils_are_restored_only_where_control_flow_can_read_them ... ok
+test input_contract_errors_and_static_schema_errors_are_checked ... ok
+test malformed_or_mutated_dumps_never_need_a_lua_vm_to_validate_or_execute ... ok
+test method_chains_tail_calls_and_receiver_identity_are_verified ... ok
+test noncanonical_boolean_constants_are_rejected ... ok
+test numeric_operations_and_branches_match_authored_lua ... ok
+test prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage ... ok
+test primitive_truthiness_short_circuit_and_byte_strings_match_lua ... ok
+test real_branching_inputs_actions_and_aliased_state_survive_vm_destruction ... ok
+test repeated_function_dumps_keep_bytes_native_errors_and_detached_results ... ok
+test reusable_dumps_keep_byte_state_rebinding_independent_of_the_loading_vm ... ok
+test reused_registers_do_not_leak_previous_inputs_after_branches_or_failed_reads ... ok
+test scalar_cells_preserve_number_bits_and_are_independent_per_machine ... ok
+test shared_byte_cells_keep_pool_meaning_copy_semantics_and_binary_bytes_after_vm_destruction ... ok
+test shared_group_code_keeps_mutable_byte_arena_indices_after_vm_destruction ... ok
+test shared_signatures_check_each_field_receiver_and_preserve_distinct_return_objects ... ok
+test truthiness_execution_matches_lua_after_vm_destruction_and_keeps_input_errors ... ok
+test unsupported_behavior_is_rejected_without_running_a_prefix ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/rust_baked_program_tables.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_baked_program_tables-d5f3ab33750b94f2)
+
+running 4 tests
+test bounded_array_choices_preserve_table_aliases_and_independent_machine_state ... ok
+test byte_keyed_state_keeps_nil_false_aliases_actions_and_vm_independence ... ok
+test released_key_cache_preserves_nil_and_stays_bounded_under_distinct_inputs ... ok
+test table_schemas_and_unsupported_keys_values_are_rejected_without_execution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/rust_banners.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_banners-2b946be6f93bdd61)
+
+running 6 tests
+test banner_construction_inheritance_and_scrolling_match_production ... ok
+test banner_live_texture_events_animation_and_retained_handles ... ok
+test banner_path_queries_and_fallbacks_preserve_load_distinctions ... ok
+test banner_song_loader_uses_real_blank_bitmap_and_lossy_song_paths ... ok
+test current_background_helper_keeps_dynamic_calls_and_theme_provenance ... ok
+test group_sort_and_reentrant_path_getters_match_error_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+     Running tests/rust_bitmap_text.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_bitmap_text-e2d15f2e22059c1a)
+
+running 8 tests
+test attributes_dedup_aliases_raw_reads_and_immutable_publication ... ok
+test collecting_getters_reentry_and_failed_reads_leave_no_stale_payload ... ok
+test font_resolution_and_builtin_fallback_match_production ... ok
+test load_font_templates_concat_composition_and_independent_attributes ... ok
+test native_fixture_inheritance_and_theme_helpers ... ok
+test retained_text_updates_during_live_tweens_and_draw_callbacks ... ok
+test text_conversion_stroke_errors_and_fresh_color_tables ... ok
+test text_layout_strict_flags_fit_bounds_and_zoom_ordering ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+     Running tests/rust_catalog.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_catalog-0f42b98a1ba4209b)
+
+running 12 tests
+test chart_selectors_keep_native_identity_and_numeric_enum_rules ... ok
+test column_cues_root_timing_callbacks_across_collection_and_reentry ... ok
+test density_radar_and_column_cues_match_and_keep_fresh_mutable_results ... ok
+test frozen_song_steps_metadata_matches_selected_and_catalog_objects ... ok
+test frozen_split_timing_uses_each_loaded_chart_owner ... ok
+test malformed_chart_rows_fail_initialization_on_both_backends ... ok
+test manager_shared_arrays_lookup_errors_and_side_effects_match ... ok
+test retained_selectors_survive_gc_and_runtimes_are_isolated ... ok
+test saved_chart_callbacks_retain_only_their_data_after_catalog_release ... ok
+test song_steps_course_and_trail_metadata_match_production ... ok
+test song_util_uses_live_getters_and_preserves_arguments_and_reentry ... ok
+test timing_uses_owned_rate_and_float_traversal_with_fresh_arrays ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.58s
+
+     Running tests/rust_clock.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_clock-01f108064b1570e5)
+
+running 8 tests
+test bpm_segments_deltas_and_backward_seeks_match_legacy ... ok
+test generated_bpm_tables_and_invalid_numeric_fields_follow_legacy_behavior ... ok
+test getters_preserve_metamethod_coercion_and_callback_captures_under_gc ... ok
+test live_players_keep_separate_positions_and_reset_without_losing_identity ... ok
+test lua_error_identity_matches_puc_while_the_legacy_host_wraps_it ... ok
+test native_timing_stops_delays_warps_and_seeks_match_legacy ... ok
+test replay_music_time_preserves_native_float_rounding_rate_and_origin ... ok
+test temporary_player_tables_remain_rooted_during_reentrant_reset_setters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.34s
+
+     Running tests/rust_courses.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_courses-27a9ffed75489c97)
+
+running 11 tests
+test existing_display_actor_and_duplicate_array_declaration_keep_native_names ... ok
+test leaf_display_receives_both_set_song_passes_and_missing_steps_defaults ... ok
+test malformed_display_cleanup_leaves_the_runtime_usable ... ok
+test positioning_preserves_transform_priority_and_collecting_callbacks ... 

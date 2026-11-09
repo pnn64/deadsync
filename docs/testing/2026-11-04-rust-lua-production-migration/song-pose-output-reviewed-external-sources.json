@@ -1,0 +1,560 @@
+{
+  "crates/deadlib-lua/src/arena.rs": {
+    "prior_sha256": "968d19827004344031a44ceb3641aa8d1ee8ba6cd7d680f64916ffdae6ec2441",
+    "current_sha256": "add799cfad6f64c5ebab1f89c07fadad0c693ac94d6483814368e64058d3445e",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/bin/deadlua/cli.rs": {
+    "prior_sha256": "6a9ffca4a38984406531e330916b8176c534d2c42412e993dff5e9c6d9dd3568",
+    "current_sha256": "36b004d79e10ca862366e93469e38a42ddc261d278834157d55a316d2bef3383",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/bytecode.rs": {
+    "prior_sha256": "bf3413fd7a784e62438384b523dea3e2b015dd978e09b35c83888c28106c115e",
+    "current_sha256": "900fcf880d71128b53e01c65ec4992540660b0e85162ce058a36a24ffa2f829f",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/cache/codec.rs": {
+    "prior_sha256": "67512bc4a6e7a4a691e7bf6e0bcb90530a7b53158bb2bfe94aa108dd0a3bbad4",
+    "current_sha256": "1783a7cac83f261003a3079f2f224a140a47dae1569b7905ca5f3dff4eacc718",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/cache/tests.rs": {
+    "prior_sha256": "58819bef8d933ee023823493d3d14bcb1e7616c7516bcfa7a39b4200818e7685",
+    "current_sha256": "e0a49e1b535009da76e131f8d045c6c1ff57f81d335f659acebb8c6e6a8ce11a",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/chunk51.rs": {
+    "prior_sha256": "4563a884ad58ccc1285c8f02500110f8eaa88b731fe04d86368203500df763ee",
+    "current_sha256": "7e4fe78cfcd34ecdeefcfa2aa2ddeb47c96576e602ee0d2982c8e8bcb6e6ee27",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/chunk51/dump/jumps.rs": {
+    "prior_sha256": "396131784d8da9cb2d0f14662c265fdb04b119455a100d6256bb2e40fb2e5c27",
+    "current_sha256": "6bdcc1cd7176848b47b449d0fc56589bd158c77aa200c9bfae3738cdac56d867",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/chunk51/dump/lower.rs": {
+    "prior_sha256": "4011f810a2246a728c7cc3247efc7cb01b59d21c7b55a55fbc69fd99e888a52c",
+    "current_sha256": "48a4944264300fe2caa2c737b9903f8d2fac6c2baa1b67963ecf7218ca6d27b2",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/chunk51/tests.rs": {
+    "prior_sha256": "59024a68de1c0fc1748bd3f04574f097b1655830fed81fe9f4bcad40b93c7b73",
+    "current_sha256": "dfe59f500dbf26ae810e2a18ffde6eb37416cb45d86988734f15068a6befe043",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/chunk51/translate.rs": {
+    "prior_sha256": "1ba2f7311ae0efd5760ae0ecdf17992ed43d09a62f0d158c4be6d805d436f2c1",
+    "current_sha256": "0cd82ab7a164fa0f89f016557cd2a0fa653024e2dc409d2027e57097650ace1f",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler.rs": {
+    "prior_sha256": "69329b003c546eff3e869257959674c8519b7595a7576f8c3dbb175044198995",
+    "current_sha256": "e921936bde3d7a4cf3dd707d0717d8439ffe29fc926b8789c69eed67f936dee5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler/constants.rs": {
+    "prior_sha256": "c2799ce623b3833192e3827e8f51b6a5688c79b8be6562dae4970ba1df304fdd",
+    "current_sha256": "697571b222da10b44144060cbe183293735238d7292d9759c769f8c2625a07cd",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler/constants/tests.rs": {
+    "prior_sha256": "e77b42e470b0b7d2761677063f17a1e626ece34d94f995601ee35947caadbacf",
+    "current_sha256": "7953c194cb309e26ac680eda67e6cbd67853adb9bbef89b11ce29da516bcf24c",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler/expressions.rs": {
+    "prior_sha256": "e83bb80a5b9881f00846e642893156c23871dd631a372057ddb097a6db51df4d",
+    "current_sha256": "43770dbaa31d7e7378c277cf82373d72aef9e7af795dadfd3ce72088c30b609a",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler/statements.rs": {
+    "prior_sha256": "ea9055c4caed82f2d8e11a2b6b6cceb302aea306a0baceac3c20776fc12aaf01",
+    "current_sha256": "0d2bb41849044a15b90b4deef263920b2f23cf86be66cebfbf0320c2d0a79e3e",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/compiler/tasks.rs": {
+    "prior_sha256": "67dc95ceb0cc1cfce8b129af707d67f47ffbaefb0d6b8770c1b9d63662ffc627",
+    "current_sha256": "5cab86a1164a1d0bfc283a2ec067d5c5096a7ff8a67ad51fa511bd1f1e62694d",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/error.rs": {
+    "prior_sha256": "bbdc3038a5cfa58513c3f14f03b9501a5dc9fa841bf2a6310265d193d67d475c",
+    "current_sha256": "8ebe03e568ef59ecd4056e11a8ca2b7b76c437eb42771d7981cc34a2ffe434af",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/format.rs": {
+    "prior_sha256": "e4a488b3cbda0d5eb79d047885588466b5046a7e8cb245dc14616ad1a69c2bc5",
+    "current_sha256": "57c23b94b8ef0cd7e42381702af070dee665f6a2dc3f8603ffb8745db39130ee",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/lexer.rs": {
+    "prior_sha256": "9439be5e5688bcbe2bb2faf092cdf85e196a176d4c42395af0be9dd6c1d4b36e",
+    "current_sha256": "723950ff2ba62ddc58cf340a74f71af3fdedc4f5d17c28b2186eb11cb76db77d",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/lexer/scanner.rs": {
+    "prior_sha256": "9d5ce4f0a4e272219ec49bc4ecbd5903162d414f29939260f65b642465faa90a",
+    "current_sha256": "d79d51827e39e33ddcc0150288cece38e68ac29485eafcf910ff660c8d7e15ae",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/lib.rs": {
+    "prior_sha256": "c31caa89782b2cb70e8082b112b70a846e3e8ee76cbf021aa2c33a1819301ed3",
+    "current_sha256": "95ce3f6ba6f9fb275afa6e109c4fab345e7e78bab03b55666ca347e057425dc3",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/locale.rs": {
+    "prior_sha256": "7d7e92bdda67cb4937752533bd05c5cae778632b1d8168913520e50e881dedfb",
+    "current_sha256": "5d431ee4ba41b1d32819de910efbe1b3c62d8ad76f898b5e009b5e0a5c840ea6",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/locale/posix.rs": {
+    "prior_sha256": "5bc0c700a96806bf57962202f4f8d033c13c43f968e647f1b4877d26ebfcb914",
+    "current_sha256": "920e6ef49632ea84d7a713f3da104e50a7549c987f486efff971bce147f7caf0",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/numeric.rs": {
+    "prior_sha256": "ada70f7cc03426d5bf0135c08efea7493626c96fed15cb167f1d9f12acf89272",
+    "current_sha256": "e94572ce4d91e02be56ae58828f0ce7fb736f4f96902607fd01c1dd6a403cfab",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/parser.rs": {
+    "prior_sha256": "c7d7c5f467a23f5554486a6580648b1459702ce6e96be2b9bb72e54baae5fc9a",
+    "current_sha256": "674a7ae20f9cdb1bea21c202b538ca20df6693215185d8410f3de6047aad57b5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/parser/bindings.rs": {
+    "prior_sha256": "7d950784680d55b5f7fb1e81c77af39e47e1ca2650b53b0e6e7457c720718dc9",
+    "current_sha256": "331d99ba8278876677b8a01d6f9b0ce13ea936a96a6b2f879ecefcfe90fb6560",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/parser/resources.rs": {
+    "prior_sha256": "3e3bb53c1f1a8c051cbc6e43637cfb315114b59214faab43dbe56eee2b963b94",
+    "current_sha256": "5de3ba7f7a73d0d2110beda8dd604cc11a4acc2edf389c89bbc663dddef3db24",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/parser/resume.rs": {
+    "prior_sha256": "db1a82acf14331bcf3a902d61d3eaf7309eb65c11472ebd88fdebb536b3ac9ce",
+    "current_sha256": "62a4c985e173574e9d618cc214530620d2136d22848e9b048309024eb3cba2a0",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/pattern.rs": {
+    "prior_sha256": "7aa82fe45f43abf09c6b767352af06ea674795c9be75034032e8815a83981102",
+    "current_sha256": "1f166aead7feac00a95aff13050b69b964e5038004476857c6d9aad558d404b4",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/table.rs": {
+    "prior_sha256": "73521e9d5fe34af4d894c859ce63d3eb007d5655d19b4a20bbeea70df1d3843a",
+    "current_sha256": "7a2e61a5b07db55fef7fa99b124cd8110c61c76c98afbbcbac438db1873de3e1",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm.rs": {
+    "prior_sha256": "f5deb5df8e96de84da796b019ce74b03dcbdd1c2ea528d3eb039c264198428e3",
+    "current_sha256": "4e60c7999e5bd97474802f61cd4f2f97abc81f396d997ac45ddb2634243c6460",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/console.rs": {
+    "prior_sha256": "f334ba69bf80fafc5cdcd222f1b05fd6f3ba6e975a831e41bdb961347262fd08",
+    "current_sha256": "a2387d94f9808833b28aa50e4e77c1247fc5fcd8108d241c1705a036dfb48021",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/errors.rs": {
+    "prior_sha256": "8ba863b6e3a9aa543830df816936ab5dd70d06294823b5117350f833528806b9",
+    "current_sha256": "e2ca8c356de37699bc6bebf4fcfba032ca61dbd3eee0c935536f6c0e97ad3f1e",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/hooks.rs": {
+    "prior_sha256": "46476681bef745e0b0c9ba1839df36442dcb9cc1addc332fa3d803d82cefe94a",
+    "current_sha256": "b720b7b64d695faea4a8e40efb17e156a4f838fbc8f97aaebe5fe7a423e5d79b",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/hooks/returns.rs": {
+    "prior_sha256": "be0f29b1f870bc925fb5a4c03571b6fd2b509c50fb34baf0f504c374368b1fb1",
+    "current_sha256": "1cb2eacd5cb525109f8e54a26aabd76ca175416d8663e2e0168dbea1a77c8dd6",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/hooks/returns/libraries.rs": {
+    "prior_sha256": "ad1a4b877b48c10c9bd5f64820856a7831d947f3ee79c978142168772d91e526",
+    "current_sha256": "4be364af35d958c2511633b680996ff5d76d260fd1b3867207d567b7e00ad71e",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host.rs": {
+    "prior_sha256": "c4261fc24ce95d8a29cdaf536e154983d18429bcf1b14d908c5b2dfc5b6868b8",
+    "current_sha256": "3db5de613bcb0d594dad5a01de59ebaeeab8e6c16975aa2cb8c7659449fe5b35",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/api.rs": {
+    "prior_sha256": "123b26404c77fcc4c32176c51aed117b7a21ae4d9fdce2ac7b5a56ce6d321acb",
+    "current_sha256": "6ff56d12ce5765489d18f49dea34299beac95c291c1783681ccc7749a039a44b",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/file.rs": {
+    "prior_sha256": "0ef92b819840e03720967fd6e30603eba9cdda38e26a7f2c2e269883d124bf8c",
+    "current_sha256": "d694e90eb994c0774edf829d94a49e53f5db619150486f9a4ddbdc2dd0835c7e",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/hooks.rs": {
+    "prior_sha256": "3ee4e64bf6a0d265271afa0536472c70e9d9c84cf9125c924d9f43ec1c3f7420",
+    "current_sha256": "51e5695e557385fef2bc8f2086b29fd0890ad9d1919a0f9f92c4ec9f548b7fbb",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/loader.rs": {
+    "prior_sha256": "c6d424656129f9d8a2ed23284328067002d3bfe913ca15b770bb3eb774c448b2",
+    "current_sha256": "5ec69f4d6acf1d251e63005095bf12ec4718e567e022ff81b2c569cfa85d43ac",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": {
+    "prior_sha256": "ef9fdcf581756815673dfd020ba00faa4575ab11de24550df44133e643d5666b",
+    "current_sha256": "0a1a30115e8798412b4a4a852dfbc095551d5a8de7a6fe7e151750dc3d5b9f13",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/protected.rs": {
+    "prior_sha256": "44bd7a101fd8785b5497098ef7257c59df78b3110106f7f099fd6f766cb1405a",
+    "current_sha256": "62c9eba5701120d153a1fbca71dfbfe740d2b93cb7fe97cd49eec1510313e28d",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/thread_stack/calls.rs": {
+    "prior_sha256": "7bf0821dd7a50a6db6ea59835db5a5721a5b59242c5c87bc1c32934327a2fd2b",
+    "current_sha256": "63234ddf7d4323cdd7897446fd03e38cf4b94563ae1e9db0ff6b2d7ff4bff294",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": {
+    "prior_sha256": "e94e46d1cad404f8cc1682301e159f9f8cbe24b752b16b12fa047a8fd2894bdd",
+    "current_sha256": "a14a486666b7878800b262d292bd92ac044fbc212009e49654559aea83c4c7b5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/host/thread.rs": {
+    "prior_sha256": "7547cd03ebb130ac333f5986948d90a10bad978d5b1b4de603afc32ac2df7f3a",
+    "current_sha256": "a8aee3366ac7ed3de5e53ffc7d19e2114ae8a820208335a040e91d7656dffeed",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/identity.rs": {
+    "prior_sha256": "1cbbfa0dd9ff4dd5bee9ba8218a3791680a83bf4a4a5ae1f2ddd4784ddc7bacd",
+    "current_sha256": "96a4d4281aaa73076c07d2a8a63c4e77f785048bb7de294a84727858c5e0b2d5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/io.rs": {
+    "prior_sha256": "cc3b3819ade40af30c6d199f165b38b2f7778f00dd9de72dfb402278881ba229",
+    "current_sha256": "d7ee8ff8a6a276bfa7302f803f3dae74fc872ca9d905738fe5ef9b924805037b",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/io/output.rs": {
+    "prior_sha256": "710e0e9dd1f8260842748738f836a6c1bc42486d0a78329f7fad2ddaa9db5cda",
+    "current_sha256": "129b4a52ac5209c278907d6bea939ce385fe6216fec1ccf7043b5ad1719a6065",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/io/returns.rs": {
+    "prior_sha256": "412c5c2929417e23a4a2f23ba0cf0a5e4272cc2859a5bbc5e0c1df14d5bab415",
+    "current_sha256": "4dc8593dd58adc86e6604d5a6f370473c022ccc5b6982878a7de9e321bd93d34",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/io/stream.rs": {
+    "prior_sha256": "e2d28d946c2d77c88d3fd32bfdb34cf93c50b373b00bc34f2289730d3c792e5e",
+    "current_sha256": "8d7960d8910d70bf855a01c796f7971357ef5a7d24f854386ed79c8a992fffd9",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/limits.rs": {
+    "prior_sha256": "4cab2e639f586c701885d46858b37892fb9c4d6cc3a571195c1e7393f43e52ec",
+    "current_sha256": "533c0215956df766b849be2b53ca0eeb8086011884ad9703977e54020c3dfeb0",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/loads.rs": {
+    "prior_sha256": "dc6fa934b81fadb7a1b1edd5167181ed69cd5c2d4f8f0ea778d91a2951d5d0b6",
+    "current_sha256": "f84adee728f5a4d932ea8b2d4f60ace42eafc644e58151a0bc1663ff92ddf8e9",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/math.rs": {
+    "prior_sha256": "8957b0022b6b3bcc3e651ae33bc15156138fe108c5e5df0a5850bec3f1df1e99",
+    "current_sha256": "8ccd27b0916adcd2b2d326b0f3025c5452f99e9f57e696678221a31b91eb2055",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/meta.rs": {
+    "prior_sha256": "9abfa4c7ec043a56b319670d8a99532bf21837172a67102fb6b735d0999f1425",
+    "current_sha256": "ccdb9c430a274cb35a2017f62f6e9862de18a22f13494e2a42a3a056a730b490",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/native.rs": {
+    "prior_sha256": "19b9c1ec878e0275852355c27d5055e269b13e86ea30f4802c300093af4c6fbf",
+    "current_sha256": "d298f9a299ee03c89e8cdffdbbf6672ba4ab0e487ff72ec6761ef6d02030a932",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/os.rs": {
+    "prior_sha256": "6eb3a2b4f3aefdfa5ec2e6e90c75d5360b809e554dc4f9f4403ca4e3249ba810",
+    "current_sha256": "0ba7a6fb1246697bceb45e6d5dd093d0b1bd06cb6830b90da504f8a85cdcb6ce",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/os/process.rs": {
+    "prior_sha256": "34923f634addfdd0d4c0c46b3111fff4e31d628f3596fc6a30c92c15dc593309",
+    "current_sha256": "5169265787dbab3d4da91226c1a65a3156de496ee01f9a4869736f41c7da810c",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/package.rs": {
+    "prior_sha256": "22978b7a13ad7667bc27e7a55f1226a4a89893dabc316dce6b50fb4a9acff9f5",
+    "current_sha256": "e65e6175fe4af9783ff4cde48417fe91530e9d69a7d1579c49d6d413c7f48110",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/package/returns.rs": {
+    "prior_sha256": "ff0f898e5b9b75a58b14163248db06110f7f893a0b66a6179d062b272a51e30e",
+    "current_sha256": "2624c0ed799968affadbe584eec067e85433fd8f09a898721049d884ce7449fd",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/strings.rs": {
+    "prior_sha256": "a91fc0756832830102cd2ff160d52d105ddd542c366cdb504d681202b528e313",
+    "current_sha256": "2e7badb4f0beb042ecba7df2125d807191620f03d87bc7233eb1bacc9306ed82",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/threads.rs": {
+    "prior_sha256": "c501f117b9097fc34eb7575bd3ef435c66ce0a1c3a1f36a7541f85c8d2758e52",
+    "current_sha256": "f86f5180fa4fb9a6be32fe0fb8c2715c40277c3fb1be69a106b8198d800e51e3",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/traces.rs": {
+    "prior_sha256": "a4501adea676d8f6b74dd697bf1a5a0e1e78499144b0996d7b6992279df6f8af",
+    "current_sha256": "080e1674b3102939d55721320f17e9a755789b21e54889842b97abf97c17bf67",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/src/vm/userdata.rs": {
+    "prior_sha256": "ece7124c42eb43db92db03309ecb09b3afc1f30e998cd28063e59808fc856fe9",
+    "current_sha256": "044f0ba262bbf2cf42f66537adfd76fb0caf8995b678949cabb33ff09603d50d",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/file_userdata.rs": {
+    "prior_sha256": "9f61bf570ff8b584d6c471e4d980f4862a65d87323040b92d3be1998760bb3a2",
+    "current_sha256": "ae27f02de53401457bfa89ee2fd288c8f9aa495b3842f376e5229b0da9aa1cb7",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/gc.rs": {
+    "prior_sha256": "f3fb7cb16fd58191c0343ca60ff776676c5acdb8825428dfad240883aa7d13a2",
+    "current_sha256": "02a34bed37a6e57a3032104c0f4ba983306e6eee66c1b56228e6bc158dab8250",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/io.rs": {
+    "prior_sha256": "23256e09bddecdd62f08cb82eaae7c75f200bd605d05e0f284dd02d2f7024c37",
+    "current_sha256": "228ac71e7975c1f85aa9fabca9e41dfcde4d0201b2135d1f3bb4a146d0d909c5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/library_initializers.rs": {
+    "prior_sha256": "cc239cf284693c30cd6bde0cd0dcfa11dce46132eefd2396ed7305ea86973f9e",
+    "current_sha256": "9c7edbb8274b39124f022d599e5f0ba045197b24c285e344ce4961f2eb5a9191",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/native_thread_tables.rs": {
+    "prior_sha256": "30b319a66796192fbbab557ef875dc76ef06d13dc947f900d5b61850134b683d",
+    "current_sha256": "5831c13fc47475e412d7d95938cec1a75de025ffde9c1df5e67e298c2b4f6198",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/package.rs": {
+    "prior_sha256": "90d38fc89079d9ed62606e6ba5a62d88eb2252783af22e113cd52f1ed3147659",
+    "current_sha256": "ff4cc992b2a9e1139f2491e812b95876c6aed1f77f142ae01a7272b5b99aa4b4",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/support/allocation_probe.rs": {
+    "prior_sha256": "57a48d59edb499378793441ab5f7e48911196317619d2abfed0a6f7d920d66aa",
+    "current_sha256": "781d272d4582c2680f77ebc5befdd4768e62d3b43424991d73ac5fd7671c2f45",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadlib-lua/tests/table_allocation_failures.rs": {
+    "prior_sha256": "73cae0e410b513c17b9ef5498a6f819b68c8e725bdaa6297868e99a5180c72e0",
+    "current_sha256": "9bd38ab0c1eeb0bd65daec07ed64de2a7a0686917e1e0790cb1d838325d8697b",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-assets/src/noteskin/mod.rs": {
+    "prior_sha256": "85d948e2c813cd191545649d629d96b65486848777e36ebaeec0f972f26b6e31",
+    "current_sha256": "c170bdb0df3fbe57c1a15f93d5f08ec9123bd593b2009ee238c8dc0f48666fff",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-assets/src/noteskin/texture.rs": {
+    "prior_sha256": "57146d372145c156b09fee82a8c1e631040746eb10d6e61096236bc4503fa704",
+    "current_sha256": "0fbfd58d171eac0e1ba61faf5622fa5aa433182c068103cfdc1a82cc03935727",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-noteskin/src/explosion.rs": {
+    "prior_sha256": "2326cf6a935c69016181d07b61ac48bb556828a3a81fd81b1dcdaf3500e0223b",
+    "current_sha256": "16526f949b5e34c10efde1ab6ec55fe7baf6b3a54cd56e6c1007fcbd4a36e046",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-noteskin/src/model.rs": {
+    "prior_sha256": "e4ec9e18c1c5c7e17c10477f7eb80f53c3ba6d152ed02224fa6310194377f69f",
+    "current_sha256": "818b912e58a146acde8285614cc9a7f2f91b7aae38c01233331d73cb10bc729b",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-noteskin/src/model_merge_original.rs": {
+    "prior_sha256": "981aae8fb26595cd336297e4a2a33aa802b5e9b2ed29dbc4e14bb25fa686546c",
+    "current_sha256": "9b0dc2717a12919606a29fbcafdeb9f467c1c874e32f4e6d2ddac26db7f9bc40",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-noteskin/src/runtime.rs": {
+    "prior_sha256": "764dc342f32afcedd8ca967dd2042a6d48f84c59578b893905a45620cda0826c",
+    "current_sha256": "d92b919ef486702c77c9483a2753b4a625e39184e7145e853ebb21ba456220c5",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-noteskin/src/script.rs": {
+    "prior_sha256": "033c245c5eec95f7dc7a6e5235d061e63d670d5aa0d655936472ce93e7176b51",
+    "current_sha256": "0bf346e61b681e8d29570ee44632b946744636a43b845c360deea39738f86783",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-shell/src/app/mod.rs": {
+    "prior_sha256": "bcad4e322936ce9100b47fda97315db6b4a3694d889ae3b6ba1598dacfd7c426",
+    "current_sha256": "ce775140bc7e119cb5578653aafad599aa350ba988ef280e17f062cc3853d322",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  },
+  "crates/deadsync-shell/src/post_song.rs": {
+    "prior_sha256": "75a81f03712a6bcc2f1a256bf628fa8439fe8f530f127de870604a6ae5eeb409",
+    "current_sha256": "3a4aa915f2a092fc069ddf14355cdbe0233e281449a53059b2e84754f0a6b49b",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  },
+  "crates/deadsync-shell/src/session_results.rs": {
+    "prior_sha256": "dcc5bf6d1bfc174bc472ce069a85ee908a0363b51aa43b8cb8fa5c862ff657fd",
+    "current_sha256": "c7556c3804fb4554fd9c06e168b0067c3849dcf4ab9073b6cb0dc46e12b5dbad",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  },
+  "crates/deadsync-song-lua/Cargo.toml": {
+    "prior_sha256": "ab78872135f7bf183c93a80ae7a981fdc1d9c0f33dd452b6c6ffe3fdde5eba94",
+    "current_sha256": "f43e6140d9ac96a4c8b749d3e564d2d7bfe6c0e4aa061a219bf22d4f2e48bbd5",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/compile.rs": {
+    "prior_sha256": "19a8b604411bb687bafd16330558a8ac043a392afda7b7e6b1627bd58eb34630",
+    "current_sha256": "066dbdd8902befaea8ebdf38e4f99a59bea7d653784db8612e65589e51f509eb",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/draw_capture.rs": {
+    "prior_sha256": "b05b26fea5723609fd22b940c7950f6f8ac09ff6291d20c29e75479375ff044d",
+    "current_sha256": "72809806f08be0d4e349022b6a5b257782bb3b307fccd3b6bc3bafb4b87712a8",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/lib.rs": {
+    "prior_sha256": "65d69bcb0f9ac4b6e40bb0ea44e10c66d744ef99cbd91b17481948b7ffdde857",
+    "current_sha256": "4498ffa28b0a6f1f2632dcd90a0525fe76ec451df39b58ed82df87653ecb4804",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/live.rs": {
+    "prior_sha256": "c4d81fead12191eba72501f6c0768f91ccffdd743ca2b3e14b67f559aa4802b3",
+    "current_sha256": "b2573d9de85d67934129bb21bea5f1e029cbf7b3b8a3f66eb52dc1a3ec392dbd",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/lua_util.rs": {
+    "prior_sha256": "94116aa4f607ef376bf2c836944d0d9bdd854e93bf87d0bbdf44f0d8b3fde3f4",
+    "current_sha256": "2e7664ff01d6d78b2dd67a2ab41c4eefa0166de113334cc6d91a717438df7563",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/model_texture.rs": {
+    "prior_sha256": "3ed2adcd08ebcea7918704cfed6fb1711629c6f4bf908c66202ca29ef88dc8eb",
+    "current_sha256": "23dd504b88af731f8b873f07762207875533f13966257a9fcb6a7d09a5c9c70b",
+    "crlf_only": true,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-song-lua/src/song_tables.rs": {
+    "prior_sha256": "1c778ad09d8fb5eb736e5dc98d2946f0f2d875b75ce6ea1493c858d320229370",
+    "current_sha256": "6ea3bf9ba0e749316cd3aa17289c027d91731c002e2a17abb282db57c5be84a1",
+    "crlf_only": false,
+    "outside_test_dependency_graph": false
+  },
+  "crates/deadsync-theme-simply-love/src/screens/evaluation.rs": {
+    "prior_sha256": "4522ac8d34fabc688e8155e565c2fa1084fc2e4cb5a8fa55668a32b1b740747c",
+    "current_sha256": "4b68f765c4651bc40796ff57ca3b51a9f7c44262c3ea398d1bd83562b0d45db2",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  },
+  "crates/deadsync-theme-simply-love/src/screens/initials.rs": {
+    "prior_sha256": "3c98d12116f6c107ec5c015225bef88150d20cafd41b88f9f551c50d36a35937",
+    "current_sha256": "bc01c79593b017c8b8d532cd5ceb2c15c6c2ce6f724414b43d39c4643810caf8",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  },
+  "crates/deadsync-theme-simply-love/src/views.rs": {
+    "prior_sha256": "558b3d509b9a7e464bed4ae0955072e1d40274a94168847f71452e52c0108735",
+    "current_sha256": "85e52dfb14dae1b40e7720ac951d9e2b03bbd985c84bee3cb157394790de4703",
+    "crlf_only": false,
+    "outside_test_dependency_graph": true
+  }
+}

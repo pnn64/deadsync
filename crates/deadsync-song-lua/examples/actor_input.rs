@@ -25,7 +25,7 @@ fn load(path: &Path) -> SongLuaLiveScene {
     let mut context = SongLuaCompileContext::new(path.parent().unwrap(), "actor input benchmark");
     context.live = true;
     context.music_length_seconds = 1.0;
-    let mut compiled = compile_song_lua_layers_with_default_host(
+    let mut compiled = compile_song_lua_layers(
         &[path],
         0,
         &context,
@@ -111,9 +111,12 @@ fn main() {
         trace.push(serde_json::json!({"handled":handled,"actions":format!("{actions:?}"),
             "states":format!("{:?}",native.states()),"tracked":format!("{:?}",tracked(native.tracked_states()))}));
     }
+    let heap = live.runtime().vm_mut().heap_stats();
     let memory = serde_json::json!({"native_payload_bytes":native.retained_bytes(),
-        "retained_lua_allocator_bytes":live.lua_memory_bytes(),
-        "scope":"native owned input code, all overlay/tracked states and target identities; allocator/Arc bookkeeping excluded"});
+        "rust_vm_estimated_live_bytes":heap.live_bytes,
+        "rust_vm_estimated_reserved_bytes":heap.reserved_bytes,
+        "rust_vm_observed_peak_reserved_bytes":heap.peak_reserved_bytes,
+        "scope":"Native payload counts owned input code, overlay/tracked states and target identities, excluding allocator/Arc bookkeeping. Rust VM heap figures are estimates without forced GC; they exclude allocator headers, exact hash layouts and opaque Rust adapter state. They are not equivalent to the legacy Lua allocator count; compare process memory separately."});
     let mut rows = Vec::new();
     let runtime_samples = if std::env::args().nth(3).as_deref() == Some("prepare") {
         0

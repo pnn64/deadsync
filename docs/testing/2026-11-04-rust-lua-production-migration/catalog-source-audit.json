@@ -1,0 +1,24 @@
+{
+  "changed": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/src/rust_engine.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/managers/catalog/charts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/catalog/timing.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs",
+    "crates/deadsync-song-lua/tests/rust_catalog.rs"
+  ],
+  "removed": [],
+  "unchanged": 1058,
+  "legacy_controls_unchanged": [
+    "crates/deadsync-song-lua/src/lib.rs",
+    "crates/deadsync-song-lua/src/host.rs",
+    "crates/deadsync-song-lua/src/tables.rs",
+    "crates/deadsync-song-lua/src/song_tables.rs"
+  ],
+  "core_and_root_cargo_entries_unchanged": 240,
+  "final_source_manifest": "catalog-owned-adapters-song-linux-debug/sources.json"
+}

@@ -1,0 +1,2558 @@
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15:
+ mod actions;
+ mod actor_classes;
+ mod actor_input;
+[31m-pub use actor_input::{SongLuaActorInputAction, SongLuaCompiledActorInputs, SongLuaCompiledActorInteractions, SongLuaInputScalar};
+(B[m[31m-mod actor_methods;
+(B[m[32m+pub use actor_input::{
+(B[m[32m+    SongLuaActorInputAction, SongLuaCompiledActorInputs, SongLuaCompiledActorInteractions,
+(B[m[32m+    SongLuaInputScalar,
+(B[m[32m+};
+(B[m mod actor_method_name;
+[32m+mod actor_methods;
+(B[m[32m+mod bitmap_font;
+(B[m mod callback_args;
+ mod cmd;
+ mod compat;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:26:
+ mod crypto;
+ mod draw_capture;
+ mod draw_commands;
+[31m-mod bitmap_font;
+(B[m pub use draw_capture::{
+     DrawFrame as SongLuaDrawFrame, DrawOp as SongLuaDrawOp, DrawSource as SongLuaDrawSource,
+ };
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:33:
+[32m+#[cfg(feature = "test-support")]
+(B[m[32m+mod clock_inputs;
+(B[m mod eases;
+ mod files;
+ mod host;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:36:
+[31m-#[cfg(feature = "test-support")]
+(B[m[31m-mod clock_inputs;
+(B[m mod input;
+ pub use input::{SongLuaCompiledInput, SongLuaInputEvent, SongLuaInputType};
+ mod json;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:41:
+[31m-mod lua_util;
+(B[m[31m-mod raw_vm;
+(B[m mod live;
+ #[cfg(feature = "performance")]
+ mod live_profile;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:46:
+[31m-#[cfg(feature = "performance")]
+(B[m[31m-pub use live_profile::{live_profile_report, reset_live_profile};
+(B[m[31m-pub use live::{SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
+(B[m[32m+mod lua_util;
+(B[m[32m+mod raw_vm;
+(B[m #[cfg(feature = "test-support")]
+ pub use live::SongLuaOverlayStageObservation;
+[32m+pub use live::{
+(B[m[32m+    SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput,
+(B[m[32m+    SongLuaLivePlayer, SongLuaLiveRequest, SongLuaLiveScene, SongLuaLiveSourceRequest,
+(B[m[32m+    SongLuaLiveTarget,
+(B[m[32m+};
+(B[m[32m+#[cfg(feature = "performance")]
+(B[m[32m+pub use live_profile::{live_profile_report, reset_live_profile};
+(B[m mod mod_windows;
+ mod model_texture;
+ #[cfg(feature = "test-support")]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:55:
+ pub use model_texture::{
+     SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
+ };
+[32m+mod base_transform;
+(B[m mod multitap;
+ mod native_vector;
+[31m-mod render_flags;
+(B[m[31m-mod base_transform;
+(B[m[31m-mod tween_pose;
+(B[m mod net;
+ mod noteskin;
+ mod option_rows;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:66:
+ mod perframe;
+ mod player_options;
+ mod rage_file;
+[32m+mod render_flags;
+(B[m[32m+mod tween_pose;
+(B[m pub use rage_file::create_rage_file_util_table;
+ mod runtime;
+[31m-#[cfg(feature = "rust-engine")]
+(B[m[31m-pub mod rust_engine;
+(B[m mod runtime_fallback;
+ mod runtime_mod;
+[32m+#[cfg(feature = "rust-engine")]
+(B[m[32m+pub mod rust_engine;
+(B[m mod sl;
+ mod song_tables;
+ mod string_args;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:115:
+     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
+     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
+     initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_compile_host,
+[31m-    install_core_globals, install_date_globals, install_game_state_globals,
+(B[m[31m-    install_late_globals, install_manager_globals, install_message_manager_globals,
+(B[m[31m-    install_screen_manager_globals, install_screen_string_globals, install_screen_utility_globals,
+(B[m[31m-    install_sound_globals, is_compile_global_name, register_loaded_easing_names,
+(B[m[31m-    restore_compile_globals, snapshot_compile_globals, song_lua_local_date_globals,
+(B[m[32m+    install_core_globals, install_date_globals, install_game_state_globals, install_late_globals,
+(B[m[32m+    install_manager_globals, install_message_manager_globals, install_screen_manager_globals,
+(B[m[32m+    install_screen_string_globals, install_screen_utility_globals, install_sound_globals,
+(B[m[32m+    is_compile_global_name, register_loaded_easing_names, restore_compile_globals,
+(B[m[32m+    snapshot_compile_globals, song_lua_local_date_globals,
+(B[m };
+ pub use json::{json_to_lua_value, lua_to_json_value};
+ pub use lua_util::{
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:126:
+     SongLuaActionCaptureScope, SongLuaCapturedMessageCommands, SongLuaFunctionActionCapture,
+     SongLuaNoteColumnHandlerSnapshot, SongLuaNoteFieldColumnSnapshot, SongLuaNoteskinTapActorModel,
+     SongLuaOverlayCompileActor, TopScreenLuaTables, actor_active_commands, actor_aft_capture_name,
+[31m-    actor_base_size, actor_base_size_with_image, actor_children,
+(B[m[31m-    actor_command_queue, actor_crop_source_size, actor_current_capture_block, actor_debug_label,
+(B[m[31m-    actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
+(B[m[31m-    actor_halign, actor_image_frame_size, actor_image_texture_size, actor_indices_for_pointers,
+(B[m[32m+    actor_base_size, actor_base_size_with_image, actor_children, actor_command_queue,
+(B[m[32m+    actor_crop_source_size, actor_current_capture_block, actor_debug_label, actor_decode_movie,
+(B[m[32m+    actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow, actor_halign,
+(B[m[32m+    actor_image_frame_size, actor_image_texture_size, actor_indices_for_pointers,
+(B[m     actor_is_bitmap_text, actor_is_child_group, actor_named_children, actor_overlay_initial_state,
+     actor_pointers_touch_actor, actor_runs_startup_commands, actor_shadow_len,
+     actor_sprite_frame_count, actor_sprite_sheet_dims, actor_table_has_update_functions,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:152:
+     classify_function_ease_probe, collect_aft_capture_names, collect_indexed_actor_capture_blocks,
+     collect_tracked_capture_blocks_for_indices, compile_note_column_pos_function_ease,
+     compile_overlay_compile_actor_function_action, copy_dummy_actor_tags, create_actor_child_group,
+[31m-    create_bool_array, create_color_constants_table,
+(B[m[31m-    create_debug_table, create_dummy_actor, create_life_meter_table, create_loader_function,
+(B[m[31m-    create_media_actor, create_music_wheel_table, create_named_actor, create_named_child_actor,
+(B[m[31m-    create_named_text_actor, create_note_column_actor, create_note_column_spline_handler,
+(B[m[31m-    create_note_field_actor, create_option_row_table, create_owned_string_array,
+(B[m[31m-    create_score_display_percent_actor, create_score_percent_text_actor, create_screen_timer_actor,
+(B[m[31m-    create_string_array, create_texture_proxy, create_theme_path_actor,
+(B[m[31m-    create_top_screen_player_actor, create_top_screen_score_actor,
+(B[m[31m-    create_top_screen_table,
+(B[m[31m-    create_top_screen_theme_actor, create_underlay_theme_actor, crop_actor_to,
+(B[m[31m-    crop_actor_to_source_size, current_gamestate_player_value, current_gamestate_value,
+(B[m[31m-    current_song_lua_style_name, current_song_value, current_steps_value,
+(B[m[31m-    default_message_command_params, drain_actor_command_queue, execute_script_file,
+(B[m[31m-    finish_actor_tweening, flush_actor_capture, function_named_upvalue_tables,
+(B[m[31m-    hurry_actor_tweening, inherit_actor_dirs, install_actor_basic_getter_methods,
+(B[m[31m-    install_actor_child_command_methods, install_actor_child_query_methods,
+(B[m[31m-    install_actor_command_methods, install_actor_crop_shadow_methods,
+(B[m[31m-    install_actor_display_state_methods, install_actor_effect_methods,
+(B[m[31m-    install_actor_effect_time_getter_methods, install_actor_extra_transform_methods,
+(B[m[31m-    install_actor_image_coord_methods, install_actor_metatable, install_actor_methods,
+(B[m[31m-    install_actor_parent_methods, install_actor_path_child_methods,
+(B[m[31m-    install_actor_render_compat_methods, install_actor_runtime_child_methods,
+(B[m[31m-    install_actor_scale_size_methods, install_actor_size_getter_methods,
+(B[m[31m-    install_actor_sprite_animation_methods, install_actor_tap_note_methods,
+(B[m[31m-    install_actor_texture_load_methods, install_actor_texture_proxy_getter_methods,
+(B[m[31m-    install_actor_transform_getter_methods, install_actor_transform_methods,
+(B[m[31m-    install_actor_visual_text_methods, install_actor_wrapper_query_methods,
+(B[m[31m-    install_course_contents_list_children, install_def_globals, install_file_loader_globals,
+(B[m[31m-    install_song_meter_display_children, install_texture_proxy_methods,
+(B[m[31m-    install_top_screen_theme_children, install_underlay_theme_children, load_actor_path,
+(B[m[31m-    load_script_file, lua_format_text, lua_text_value, make_actor_add_f32_method,
+(B[m[31m-    make_actor_capture_f32_method, make_actor_chain_method, make_actor_finish_tweening_method,
+(B[m[31m-    make_actor_set_size_method, make_actor_stop_tweening_method, make_actor_tween_method,
+(B[m[31m-    make_actor_wrap_width_method, make_color_table, make_vertex_color_table, method_arg,
+(B[m[31m-    method_arg_offset, nested_function_named_upvalue_tables, normalize_broadcast_params,
+(B[m[31m-    note_column_pos_offset_y, note_field_column_actors, note_field_tables, note_zoom_point_hides,
+(B[m[31m-    offset_actor_texture_rect, overlay_compile_actor_tables_for_indices,
+(B[m[31m-    overlay_model_layers_from_slots, populate_course_contents_display, position_scroller_items,
+(B[m[31m-    prepare_capture_scope_actor, probe_actor_pointers, probe_call_names,
+(B[m[31m-    probe_function_ease_target, probe_target_kind, push_note_hide_window, push_sequence_child_once,
+(B[m[31m-    push_unique_actor_child, read_actor_capture_blocks, read_actor_color_field,
+(B[m[31m-    read_actor_model_layers, read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
+(B[m[32m+    create_bool_array, create_color_constants_table, create_debug_table, create_dummy_actor,
+(B[m[32m+    create_life_meter_table, create_loader_function, create_media_actor, create_music_wheel_table,
+(B[m[32m+    create_named_actor, create_named_child_actor, create_named_text_actor,
+(B[m[32m+    create_note_column_actor, create_note_column_spline_handler, create_note_field_actor,
+(B[m[32m+    create_option_row_table, create_owned_string_array, create_score_display_percent_actor,
+(B[m[32m+    create_score_percent_text_actor, create_screen_timer_actor, create_string_array,
+(B[m[32m+    create_texture_proxy, create_theme_path_actor, create_top_screen_player_actor,
+(B[m[32m+    create_top_screen_score_actor, create_top_screen_table, create_top_screen_theme_actor,
+(B[m[32m+    create_underlay_theme_actor, crop_actor_to, crop_actor_to_source_size,
+(B[m[32m+    current_gamestate_player_value, current_gamestate_value, current_song_lua_style_name,
+(B[m[32m+    current_song_value, current_steps_value, default_message_command_params,
+(B[m[32m+    drain_actor_command_queue, execute_script_file, finish_actor_tweening, flush_actor_capture,
+(B[m[32m+    function_named_upvalue_tables, hurry_actor_tweening, inherit_actor_dirs,
+(B[m[32m+    install_actor_basic_getter_methods, install_actor_child_command_methods,
+(B[m[32m+    install_actor_child_query_methods, install_actor_command_methods,
+(B[m[32m+    install_actor_crop_shadow_methods, install_actor_display_state_methods,
+(B[m[32m+    install_actor_effect_methods, install_actor_effect_time_getter_methods,
+(B[m[32m+    install_actor_extra_transform_methods, install_actor_image_coord_methods,
+(B[m[32m+    install_actor_metatable, install_actor_methods, install_actor_parent_methods,
+(B[m[32m+    install_actor_path_child_methods, install_actor_render_compat_methods,
+(B[m[32m+    install_actor_runtime_child_methods, install_actor_scale_size_methods,
+(B[m[32m+    install_actor_size_getter_methods, install_actor_sprite_animation_methods,
+(B[m[32m+    install_actor_tap_note_methods, install_actor_texture_load_methods,
+(B[m[32m+    install_actor_texture_proxy_getter_methods, install_actor_transform_getter_methods,
+(B[m[32m+    install_actor_transform_methods, install_actor_visual_text_methods,
+(B[m[32m+    install_actor_wrapper_query_methods, install_course_contents_list_children,
+(B[m[32m+    install_def_globals, install_file_loader_globals, install_song_meter_display_children,
+(B[m[32m+    install_texture_proxy_methods, install_top_screen_theme_children,
+(B[m[32m+    install_underlay_theme_children, load_actor_path, load_script_file, lua_format_text,
+(B[m[32m+    lua_text_value, make_actor_add_f32_method, make_actor_capture_f32_method,
+(B[m[32m+    make_actor_chain_method, make_actor_finish_tweening_method, make_actor_set_size_method,
+(B[m[32m+    make_actor_stop_tweening_method, make_actor_tween_method, make_actor_wrap_width_method,
+(B[m[32m+    make_color_table, make_vertex_color_table, method_arg, method_arg_offset,
+(B[m[32m+    nested_function_named_upvalue_tables, normalize_broadcast_params, note_column_pos_offset_y,
+(B[m[32m+    note_field_column_actors, note_field_tables, note_zoom_point_hides, offset_actor_texture_rect,
+(B[m[32m+    overlay_compile_actor_tables_for_indices, overlay_model_layers_from_slots,
+(B[m[32m+    populate_course_contents_display, position_scroller_items, prepare_capture_scope_actor,
+(B[m[32m+    probe_actor_pointers, probe_call_names, probe_function_ease_target, probe_target_kind,
+(B[m[32m+    push_note_hide_window, push_sequence_child_once, push_unique_actor_child,
+(B[m[32m+    read_actor_capture_blocks, read_actor_color_field, read_actor_model_layers,
+(B[m[32m+    read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
+(B[m     read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
+[31m-    read_color_args, read_color_call, read_color_value,
+(B[m[31m-    read_global_function_nested_tables, read_graph_display_body_state,
+(B[m[31m-    read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
+(B[m[31m-    read_model_paths, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
+(B[m[31m-    read_note_column_transform_samples, read_note_column_transform_samples_for_fields,
+(B[m[31m-    read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor,
+(B[m[31m-    read_noteskin_tap_actor_model, read_noteskin_tap_actor_slots,
+(B[m[31m-    read_overlay_compile_actor_actions, read_overlay_compile_actors, read_proxy_target_kind,
+(B[m[31m-    read_song_lua_sound_paths, read_song_meter_display_state, read_tracked_compile_actors,
+(B[m[31m-    read_update_function_nested_tables, read_update_function_tables, read_vertex_colors_value,
+(B[m[31m-    record_probe_method_call, register_song_lua_actor, remove_actor_child,
+(B[m[31m-    remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
+(B[m[32m+    read_color_args, read_color_call, read_color_value, read_global_function_nested_tables,
+(B[m[32m+    read_graph_display_body_state, read_graph_display_line_state, read_graph_display_size,
+(B[m[32m+    read_graph_display_values, read_model_paths, read_note_column_pos_samples,
+(B[m[32m+    read_note_column_pos_samples_for_fields, read_note_column_transform_samples,
+(B[m[32m+    read_note_column_transform_samples_for_fields, read_note_column_zoom_hides,
+(B[m[32m+    read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
+(B[m[32m+    read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
+(B[m[32m+    read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
+(B[m[32m+    read_tracked_compile_actors, read_update_function_nested_tables, read_update_function_tables,
+(B[m[32m+    read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
+(B[m[32m+    remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
+(B[m     reset_indexed_actor_capture_tables, reset_overlay_compile_actor_capture_tables,
+     reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
+     restore_actor_mutable_state, restore_actors_semantic_state, restore_note_column_handlers,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:213:
+     restore_note_field_columns, rolling_numbers_text, run_actor_draw_functions,
+     run_actor_draw_functions_for_table, run_actor_init_commands, run_actor_init_commands_for_table,
+     run_actor_named_command, run_actor_named_command_with_drain,
+[31m-    run_actor_named_command_with_drain_and_params,
+(B[m[31m-    run_actor_startup_commands_for_table, run_actor_update_functions,
+(B[m[31m-    run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
+(B[m[31m-    run_added_actor_child_commands, run_command_on_leaves,
+(B[m[32m+    run_actor_named_command_with_drain_and_params, run_actor_startup_commands_for_table,
+(B[m[32m+    run_actor_update_functions, run_actor_update_functions_for_table,
+(B[m[32m+    run_actor_update_functions_with_delta, run_added_actor_child_commands, run_command_on_leaves,
+(B[m     run_named_command_on_children_recursively, run_named_command_on_leaves,
+     scale_actor_to_rect_with_base_size, set_actor_decode_movie_for_texture,
+     set_actor_effect_defaults, set_actor_effect_mode, set_actor_overlay_getter_state,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:229:
+     song_lua_screen_center, song_lua_screen_size, stateful_message_captures, table_bool_field,
+     table_f32_field, table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4,
+     table_vec5, table_vertex_colors, text_attribute_matches, text_attribute_value,
+[31m-    texture_source_size, tracked_indices_for_actor_pointers,
+(B[m[31m-    tracked_song_lua_actor, update_tree_reads_global,
+(B[m[32m+    texture_source_size, tracked_indices_for_actor_pointers, tracked_song_lua_actor,
+(B[m[32m+    update_tree_reads_global,
+(B[m };
+ pub use mod_windows::read_mod_windows;
+ pub use multitap::{
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:298:
+     create_gameplay_layout, create_hooks_table, create_index_array, create_ini_file_table,
+     create_life_record_table, create_memcardman_table, create_network_response_table,
+     create_other_player_table, create_player_number_table, create_prefsmgr_table,
+[31m-    create_profileman_table, create_radar_values_table,
+(B[m[31m-    create_range_table, create_screen_system_layer_helpers_table, create_screen_table,
+(B[m[31m-    create_single_value_array, create_song_group_table, create_split_table, create_statsman_table,
+(B[m[31m-    create_string_enum_table, create_style_table, create_theme_table, create_timing_table,
+(B[m[31m-    create_unlockman_table, create_version_parts_table, create_websocket_table,
+(B[m[31m-    deduplicate_lua_table, display_bpms_for_args, format_number_and_suffix, lua_table_to_string,
+(B[m[31m-    map_lua_table, prefsmgr_default_value, rotate_lua_table, scale_value, seconds_to_hhmmss,
+(B[m[31m-    seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms, set_path_methods,
+(B[m[32m+    create_profileman_table, create_radar_values_table, create_range_table,
+(B[m[32m+    create_screen_system_layer_helpers_table, create_screen_table, create_single_value_array,
+(B[m[32m+    create_song_group_table, create_split_table, create_statsman_table, create_string_enum_table,
+(B[m[32m+    create_style_table, create_theme_table, create_timing_table, create_unlockman_table,
+(B[m[32m+    create_version_parts_table, create_websocket_table, deduplicate_lua_table,
+(B[m[32m+    display_bpms_for_args, format_number_and_suffix, lua_table_to_string, map_lua_table,
+(B[m[32m+    prefsmgr_default_value, rotate_lua_table, scale_value, seconds_to_hhmmss, seconds_to_mmss,
+(B[m[32m+    seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms, set_path_methods,
+(B[m     set_string_method, stringify_lua_table,
+ };
+ pub use theme_colors::{
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:323:
+ pub use top_screen::{
+     SONG_LUA_TOP_SCREEN_OPTION_ROWS, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
+     option_row_default_text, player_child_proxy_name, top_screen_danger_index,
+[31m-    top_screen_life_meter_index, top_screen_life_meter_name,
+(B[m[31m-    top_screen_option_row_name, top_screen_option_row_name_at, top_screen_player_index,
+(B[m[31m-    top_screen_player_name, top_screen_score_index, top_screen_score_name,
+(B[m[31m-    top_screen_score_percent_name,
+(B[m[32m+    top_screen_life_meter_index, top_screen_life_meter_name, top_screen_option_row_name,
+(B[m[32m+    top_screen_option_row_name_at, top_screen_player_index, top_screen_player_name,
+(B[m[32m+    top_screen_score_index, top_screen_score_name, top_screen_score_percent_name,
+(B[m     top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
+     underlay_score_name,
+ };
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:424:
+ const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
+     [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+ const SONG_LUA_PUMP_COLUMN_X: [f32; 5] = [-96.0, -48.0, 0.0, 48.0, 96.0];
+[31m-const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [-220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0];
+(B[m[32m+const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [
+(B[m[32m+    -220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0,
+(B[m[32m+];
+(B[m const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
+ 
+ #[derive(Debug, Clone, Copy, PartialEq)]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:475:
+     // GameManager.cpp dance/pump style metadata; Style::GetWidth uses the
+     // span plus average column spacing, including the pump center gap.
+     let (name, steps_type, style_type, x_offsets): (_, _, _, &'static [f32]) = match normalized {
+[31m-        "double" | "dancedouble" | "stepstypedancedouble" =>
+(B[m[31m-            ("double", "StepsType_Dance_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_DOUBLE_COLUMN_X),
+(B[m[31m-        "versus" => ("versus", "StepsType_Dance_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+(B[m[31m-        "couple" | "dancecouple" | "stepstypedancecouple" =>
+(B[m[31m-            ("couple", "StepsType_Dance_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+(B[m[31m-        "routine" | "danceroutine" | "stepstypedanceroutine" =>
+(B[m[31m-            ("routine", "StepsType_Dance_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_DOUBLE_COLUMN_X),
+(B[m[31m-        "pumpsingle" | "stepstypepumpsingle" =>
+(B[m[31m-            ("single", "StepsType_Pump_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_PUMP_COLUMN_X),
+(B[m[31m-        "pumpversus" => ("versus", "StepsType_Pump_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
+(B[m[31m-        "pumpdouble" | "stepstypepumpdouble" =>
+(B[m[31m-            ("double", "StepsType_Pump_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_PUMP_DOUBLE_X),
+(B[m[31m-        "pumpcouple" | "stepstypepumpcouple" =>
+(B[m[31m-            ("couple", "StepsType_Pump_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
+(B[m[31m-        "pumproutine" | "stepstypepumproutine" =>
+(B[m[31m-            ("routine", "StepsType_Pump_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_PUMP_DOUBLE_X),
+(B[m[31m-        _ => ("single", "StepsType_Dance_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_COLUMN_X),
+(B[m[32m+        "double" | "dancedouble" | "stepstypedancedouble" => (
+(B[m[32m+            "double",
+(B[m[32m+            "StepsType_Dance_Double",
+(B[m[32m+            "StyleType_OnePlayerTwoSides",
+(B[m[32m+            &SONG_LUA_DOUBLE_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "versus" => (
+(B[m[32m+            "versus",
+(B[m[32m+            "StepsType_Dance_Single",
+(B[m[32m+            "StyleType_TwoPlayersTwoSides",
+(B[m[32m+            &SONG_LUA_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "couple" | "dancecouple" | "stepstypedancecouple" => (
+(B[m[32m+            "couple",
+(B[m[32m+            "StepsType_Dance_Couple",
+(B[m[32m+            "StyleType_TwoPlayersTwoSides",
+(B[m[32m+            &SONG_LUA_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "routine" | "danceroutine" | "stepstypedanceroutine" => (
+(B[m[32m+            "routine",
+(B[m[32m+            "StepsType_Dance_Routine",
+(B[m[32m+            "StyleType_TwoPlayersSharedSides",
+(B[m[32m+            &SONG_LUA_DOUBLE_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "pumpsingle" | "stepstypepumpsingle" => (
+(B[m[32m+            "single",
+(B[m[32m+            "StepsType_Pump_Single",
+(B[m[32m+            "StyleType_OnePlayerOneSide",
+(B[m[32m+            &SONG_LUA_PUMP_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "pumpversus" => (
+(B[m[32m+            "versus",
+(B[m[32m+            "StepsType_Pump_Single",
+(B[m[32m+            "StyleType_TwoPlayersTwoSides",
+(B[m[32m+            &SONG_LUA_PUMP_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "pumpdouble" | "stepstypepumpdouble" => (
+(B[m[32m+            "double",
+(B[m[32m+            "StepsType_Pump_Double",
+(B[m[32m+            "StyleType_OnePlayerTwoSides",
+(B[m[32m+            &SONG_LUA_PUMP_DOUBLE_X,
+(B[m[32m+        ),
+(B[m[32m+        "pumpcouple" | "stepstypepumpcouple" => (
+(B[m[32m+            "couple",
+(B[m[32m+            "StepsType_Pump_Couple",
+(B[m[32m+            "StyleType_TwoPlayersTwoSides",
+(B[m[32m+            &SONG_LUA_PUMP_COLUMN_X,
+(B[m[32m+        ),
+(B[m[32m+        "pumproutine" | "stepstypepumproutine" => (
+(B[m[32m+            "routine",
+(B[m[32m+            "StepsType_Pump_Routine",
+(B[m[32m+            "StyleType_TwoPlayersSharedSides",
+(B[m[32m+            &SONG_LUA_PUMP_DOUBLE_X,
+(B[m[32m+        ),
+(B[m[32m+        _ => (
+(B[m[32m+            "single",
+(B[m[32m+            "StepsType_Dance_Single",
+(B[m[32m+            "StyleType_OnePlayerOneSide",
+(B[m[32m+            &SONG_LUA_COLUMN_X,
+(B[m[32m+        ),
+(B[m     };
+     let span = x_offsets[x_offsets.len() - 1] - x_offsets[0];
+[31m-    SongLuaStyleInfo { name, steps_type, style_type, columns: x_offsets.len(),
+(B[m[31m-        width: span + span / (x_offsets.len() - 1) as f32, x_offsets }
+(B[m[32m+    SongLuaStyleInfo {
+(B[m[32m+        name,
+(B[m[32m+        steps_type,
+(B[m[32m+        style_type,
+(B[m[32m+        columns: x_offsets.len(),
+(B[m[32m+        width: span + span / (x_offsets.len() - 1) as f32,
+(B[m[32m+        x_offsets,
+(B[m[32m+    }
+(B[m }
+ 
+ #[inline(always)]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:573:
+ 
+ pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDifficulty> {
+     if matches!(value, mlua::Value::Integer(_) | mlua::Value::Number(_)) {
+[31m-        let index = song_tables::option_enum(Some(&value), &[
+(B[m[31m-            "Difficulty_Beginner", "Difficulty_Easy", "Difficulty_Medium",
+(B[m[31m-            "Difficulty_Hard", "Difficulty_Challenge", "Difficulty_Edit",
+(B[m[31m-        ], "Difficulty").ok()?;
+(B[m[31m-        return Some([SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy,
+(B[m[31m-            SongLuaDifficulty::Medium, SongLuaDifficulty::Hard,
+(B[m[31m-            SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit][index]);
+(B[m[32m+        let index = song_tables::option_enum(
+(B[m[32m+            Some(&value),
+(B[m[32m+            &[
+(B[m[32m+                "Difficulty_Beginner",
+(B[m[32m+                "Difficulty_Easy",
+(B[m[32m+                "Difficulty_Medium",
+(B[m[32m+                "Difficulty_Hard",
+(B[m[32m+                "Difficulty_Challenge",
+(B[m[32m+                "Difficulty_Edit",
+(B[m[32m+            ],
+(B[m[32m+            "Difficulty",
+(B[m[32m+        )
+(B[m[32m+        .ok()?;
+(B[m[32m+        return Some(
+(B[m[32m+            [
+(B[m[32m+                SongLuaDifficulty::Beginner,
+(B[m[32m+                SongLuaDifficulty::Easy,
+(B[m[32m+                SongLuaDifficulty::Medium,
+(B[m[32m+                SongLuaDifficulty::Hard,
+(B[m[32m+                SongLuaDifficulty::Challenge,
+(B[m[32m+                SongLuaDifficulty::Edit,
+(B[m[32m+            ][index],
+(B[m[32m+        );
+(B[m     }
+     let mlua::Value::String(value) = value else {
+         return None;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:941:
+         return Ok(mlua::Value::String(lua.create_string(&value)?));
+     }
+     if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("DefaultNoteSkinName") {
+[31m-        return Ok(mlua::Value::String(lua.create_string(SONG_LUA_DEFAULT_NOTESKIN_NAME)?));
+(B[m[32m+        return Ok(mlua::Value::String(
+(B[m[32m+            lua.create_string(SONG_LUA_DEFAULT_NOTESKIN_NAME)?,
+(B[m[32m+        ));
+(B[m     }
+     if name.eq_ignore_ascii_case("Class") {
+         return Ok(mlua::Value::String(lua.create_string(group)?));
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:1075:
+ pub fn theme_metric_names(group: &str) -> Vec<String> {
+     let mut names = Vec::new();
+     if group.eq_ignore_ascii_case("ScreenGameplay") {
+[31m-        names.extend(["MinSecondsToStep", "MinSecondsToMusic", "MinSecondsToStepNextSong"]
+(B[m[31m-            .into_iter().map(str::to_string));
+(B[m[32m+        names.extend(
+(B[m[32m+            [
+(B[m[32m+                "MinSecondsToStep",
+(B[m[32m+                "MinSecondsToMusic",
+(B[m[32m+                "MinSecondsToStepNextSong",
+(B[m[32m+            ]
+(B[m[32m+            .into_iter()
+(B[m[32m+            .map(str::to_string),
+(B[m[32m+        );
+(B[m         for player in 1..=2 {
+             names.extend(THEME_PLAYER_X_STYLES.map(|style| format!("PlayerP{player}{style}X")));
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:1131:
+         for prefix in ["PercentScoreWeight", "GradeWeight"] {
+             names.extend(
+                 [
+[31m-                    "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine", "CheckpointHit",
+(B[m[32m+                    "W1",
+(B[m[32m+                    "W2",
+(B[m[32m+                    "W3",
+(B[m[32m+                    "W4",
+(B[m[32m+                    "W5",
+(B[m[32m+                    "Miss",
+(B[m[32m+                    "LetGo",
+(B[m[32m+                    "Held",
+(B[m[32m+                    "HitMine",
+(B[m[32m+                    "CheckpointHit",
+(B[m                 ]
+                 .map(|judgment| format!("{prefix}{judgment}")),
+             );
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:1203:
+     if section == "ScreenGameplay" && name == "HeaderText" {
+         return String::new();
+     }
+[31m-    if section == "OptionTitles" && name == "MusicRateMultiplier" { return "x rate".into(); }
+(B[m[32m+    if section == "OptionTitles" && name == "MusicRateMultiplier" {
+(B[m[32m+        return "x rate".into();
+(B[m[32m+    }
+(B[m     if section.eq_ignore_ascii_case("Difficulty")
+         || section.eq_ignore_ascii_case("CustomDifficulty")
+     {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:1471:
+ 
+ impl From<&deadsync_chart::ChartData> for SongLuaStep {
+     fn from(chart: &deadsync_chart::ChartData) -> Self {
+[31m-        let steps_type = chart.chart_type.split('-').map(|part| {
+(B[m[31m-            let mut chars = part.chars();
+(B[m[31m-            chars.next().map_or_else(String::new, |first| {
+(B[m[31m-                format!("{}{rest}", first.to_ascii_uppercase(), rest = chars.as_str())
+(B[m[32m+        let steps_type = chart
+(B[m[32m+            .chart_type
+(B[m[32m+            .split('-')
+(B[m[32m+            .map(|part| {
+(B[m[32m+                let mut chars = part.chars();
+(B[m[32m+                chars.next().map_or_else(String::new, |first| {
+(B[m[32m+                    format!(
+(B[m[32m+                        "{}{rest}",
+(B[m[32m+                        first.to_ascii_uppercase(),
+(B[m[32m+                        rest = chars.as_str()
+(B[m[32m+                    )
+(B[m[32m+                })
+(B[m             })
+[31m-        }).collect::<Vec<_>>().join("_");
+(B[m[32m+            .collect::<Vec<_>>()
+(B[m[32m+            .join("_");
+(B[m         Self {
+             steps_type: format!("StepsType_{steps_type}"),
+             difficulty: with_compact_ascii_lowercase_song_key(
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:1483:
+[31m-                &chart.difficulty, song_lua_difficulty_from_normalized,
+(B[m[31m-            ).unwrap_or(SongLuaDifficulty::Edit),
+(B[m[32m+                &chart.difficulty,
+(B[m[32m+                song_lua_difficulty_from_normalized,
+(B[m[32m+            )
+(B[m[32m+            .unwrap_or(SongLuaDifficulty::Edit),
+(B[m             description: chart.description.clone(),
+             chart_name: chart.chart_name.clone(),
+             credit: chart.step_artist.clone(),
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:2077:
+ 
+ impl<OverlayActor> CompiledSongLua<OverlayActor> {
+     /// Positions in the retained scene, in this layer's overlay order.
+[31m-    pub fn live_actor_indices(&self) -> &[usize] { &self.live_indices }
+(B[m[32m+    pub fn live_actor_indices(&self) -> &[usize] {
+(B[m[32m+        &self.live_indices
+(B[m[32m+    }
+(B[m }
+ 
+ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:3837:
+     if let Some(value) = delta.rot_z_deg {
+         state.rot_z_deg = value;
+     }
+[31m-    if let Some(value) = delta.quaternion { state.quaternion = value; }
+(B[m[31m-    if let Some(value) = delta.base_alpha { state.base_alpha = value; }
+(B[m[32m+    if let Some(value) = delta.quaternion {
+(B[m[32m+        state.quaternion = value;
+(B[m[32m+    }
+(B[m[32m+    if let Some(value) = delta.base_alpha {
+(B[m[32m+        state.base_alpha = value;
+(B[m[32m+    }
+(B[m     if let Some(value) = delta.base_rotation {
+         state.base_rotation = value;
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:4142:
+     if let Some(to) = delta.rot_z_deg {
+         from.rot_z_deg = actor_lerp(from.rot_z_deg, to, t);
+     }
+[31m-    if let Some(to) = delta.quaternion { from.quaternion = crate::actor_quaternion::slerp(from.quaternion, to, t); }
+(B[m[31m-    if let Some(to) = delta.base_alpha { from.base_alpha = to; }
+(B[m[32m+    if let Some(to) = delta.quaternion {
+(B[m[32m+        from.quaternion = crate::actor_quaternion::slerp(from.quaternion, to, t);
+(B[m[32m+    }
+(B[m[32m+    if let Some(to) = delta.base_alpha {
+(B[m[32m+        from.base_alpha = to;
+(B[m[32m+    }
+(B[m     if let Some(to) = delta.base_rotation {
+         from.base_rotation = to;
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:4627:
+     if from.rot_z_deg.is_some() {
+         into.rot_z_deg = from.rot_z_deg;
+     }
+[31m-    if from.quaternion.is_some() { into.quaternion = from.quaternion; }
+(B[m[31m-    if from.base_alpha.is_some() { into.base_alpha = from.base_alpha; }
+(B[m[32m+    if from.quaternion.is_some() {
+(B[m[32m+        into.quaternion = from.quaternion;
+(B[m[32m+    }
+(B[m[32m+    if from.base_alpha.is_some() {
+(B[m[32m+        into.base_alpha = from.base_alpha;
+(B[m[32m+    }
+(B[m     if from.base_rotation.is_some() {
+         into.base_rotation = from.base_rotation;
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:5316:
+             (Self::Vec3(from), Self::Vec3(to)) => {
+                 Self::Vec3(std::array::from_fn(|i| mix(from[i], to[i])))
+             }
+[31m-            (Self::Quaternion(from), Self::Quaternion(to)) => Self::Quaternion(crate::actor_quaternion::slerp(*from, *to, t)),
+(B[m[32m+            (Self::Quaternion(from), Self::Quaternion(to)) => {
+(B[m[32m+                Self::Quaternion(crate::actor_quaternion::slerp(*from, *to, t))
+(B[m[32m+            }
+(B[m             (Self::Vec4(from), Self::Vec4(to)) => {
+                 Self::Vec4(std::array::from_fn(|i| mix(from[i], to[i])))
+             }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:5828:
+         let percent = 1.0_f32 - 0.2640790343284607_f32 / 0.3_f32;
+         let factor = super::overlay_command_ease_factor(Some("outQuad"), percent, None);
+         assert_eq!(factor, 0.22513633966445923_f32);
+[31m-        let mut pose = super::SongLuaOverlayState { y: 816.0, ..Default::default() };
+(B[m[31m-        let target = super::SongLuaOverlayStateDelta { y: Some(528.0), ..Default::default() };
+(B[m[32m+        let mut pose = super::SongLuaOverlayState {
+(B[m[32m+            y: 816.0,
+(B[m[32m+            ..Default::default()
+(B[m[32m+        };
+(B[m[32m+        let target = super::SongLuaOverlayStateDelta {
+(B[m[32m+            y: Some(528.0),
+(B[m[32m+            ..Default::default()
+(B[m[32m+        };
+(B[m         super::overlay_state_lerp(&mut pose, &target, factor);
+         assert_eq!(pose.y, 751.1607666015625_f32);
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:5943:
+         fs::write(
+             song_dir.join("easing.lua"),
+             include_str!("../../../tests/fixtures/song_lua/easing.lua"),
+[31m-        ).expect("write chart owned easing library");
+(B[m[32m+        )
+(B[m[32m+        .expect("write chart owned easing library");
+(B[m     }
+ 
+     fn test_dir(name: &str) -> PathBuf {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:5998:
+             assert(not pcall(function() return true .. 'x' end))
+             assert(1 .. 2 .. object == '1number:table')
+         "#;
+[31m-        lua.load(source).exec().expect("native Lua 5.1 concatenation");
+(B[m[32m+        lua.load(source)
+(B[m[32m+            .exec()
+(B[m[32m+            .expect("native Lua 5.1 concatenation");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6094:
+     fn offline_compile_rejects_input_callbacks_instead_of_dropping_them() {
+         for (name, command) in [
+             ("immediate-input", "OnCommand=function(self) register() end"),
+[31m-            ("delayed-input", "OnCommand=function(self) self:sleep(0.1):queuecommand('Ready') end, ReadyCommand=function(self) register() end"),
+(B[m[32m+            (
+(B[m[32m+                "delayed-input",
+(B[m[32m+                "OnCommand=function(self) self:sleep(0.1):queuecommand('Ready') end, ReadyCommand=function(self) register() end",
+(B[m[32m+            ),
+(B[m         ] {
+             let dir = test_dir(name);
+             let entry = dir.join("custom.lua");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6101:
+[31m-            std::fs::write(&entry, format!(r#"
+(B[m[32m+            std::fs::write(
+(B[m[32m+                &entry,
+(B[m[32m+                format!(
+(B[m[32m+                    r#"
+(B[m local function register()
+     local screen=SCREENMAN:GetTopScreen()
+     local callback=function(event) return event.button=='Down' end
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6105:
+     screen:AddInputCallback(callback):RemoveInputCallback(callback)
+ end
+ return Def.Actor {{ {command} }}
+[31m-"#)).unwrap();
+(B[m[32m+"#
+(B[m[32m+                ),
+(B[m[32m+            )
+(B[m[32m+            .unwrap();
+(B[m             let mut context = SongLuaCompileContext::new(&dir, name);
+             context.music_length_seconds = 0.5;
+             let error = test_compile_song_lua(&entry, &context).unwrap_err();
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6516:
+     fn frame_init_follows_child() {
+         let song_dir = test_dir("frame-init-order");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m local order = 0
+ return Def.ActorFrame{
+     InitCommand=function(self)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6532:
+         InitCommand=function(self) order = order + 1; self:x(order) end
+     }
+ }
+[31m-"#).expect("write frame Init control");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write frame Init control");
+(B[m         let compiled = test_compile_song_lua(
+[31m-            &entry, &SongLuaCompileContext::new(&song_dir, "Frame Init Order"),
+(B[m[31m-        ).expect("compile frame Init control");
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Frame Init Order"),
+(B[m[32m+        )
+(B[m[32m+        .expect("compile frame Init control");
+(B[m         for (name, x) in [("First", 10.0), ("Second", 2.0)] {
+[31m-            let actor = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(name))
+(B[m[32m+            let actor = compiled
+(B[m[32m+                .overlays
+(B[m[32m+                .iter()
+(B[m[32m+                .find(|actor| actor.name.as_deref() == Some(name))
+(B[m                 .expect("initialized child");
+             assert_eq!(actor.initial_state.x, x, "{name} Init order");
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6809:
+         let song_dir = test_dir("noteskin-round-trip");
+         for skin in ["cyber", "default", "cel", "dark", "skew", "turn"] {
+             fs::create_dir_all(song_dir.join(skin)).expect("local skin directory");
+[31m-            fs::write(song_dir.join(skin).join("metrics.ini"), "[Global]\n").expect("local metrics");
+(B[m[32m+            fs::write(song_dir.join(skin).join("metrics.ini"), "[Global]\n")
+(B[m[32m+                .expect("local metrics");
+(B[m         }
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m local state = GAMESTATE:GetPlayerState(PLAYER_1)
+ local po = state:GetPlayerOptions('ModsLevel_Song')
+ assert(po:NoteSkin() == 'cyber')
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6843:
+         assert(before == 'CYBER' and accepted == nil and po:NoteSkin() == 'CYBER')
+     end)
+ end}
+[31m-"#).expect("noteskin fixture");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("noteskin fixture");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "noteskin strings");
+         context.players[0].noteskin_name = "cyber".into();
+         context.song_timing_bpms = vec![(0.0, 120.0)];
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6850:
+         context.music_length_seconds = 0.125;
+[31m-        let compiled = test_compile_song_lua(&entry, &context).expect("source-backed skin semantics");
+(B[m[32m+        let compiled =
+(B[m[32m+            test_compile_song_lua(&entry, &context).expect("source-backed skin semantics");
+(B[m         #[cfg(feature = "test-support")]
+         {
+             let writes = &compiled.noteskin_writes;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:6856:
+             assert_eq!(writes[0].current, "default");
+             assert_eq!(writes[1].current, "skew");
+             assert_eq!(writes[2].current, "cel");
+[31m-            assert_eq!(writes.iter().filter(|write| write.second == 0.0).count(), 7 + 4,
+(B[m[31m-                "startup and one genuine zero-time update, without discovery duplicates");
+(B[m[32m+            assert_eq!(
+(B[m[32m+                writes.iter().filter(|write| write.second == 0.0).count(),
+(B[m[32m+                7 + 4,
+(B[m[32m+                "startup and one genuine zero-time update, without discovery duplicates"
+(B[m[32m+            );
+(B[m         }
+         #[cfg(not(feature = "test-support"))]
+         let _ = compiled;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7037:
+             let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+                 .join("../../tests/fixtures/itgmania-song-lua-micro");
+             let input: serde_json::Value = serde_json::from_slice(
+[31m-                &fs::read(fixtures.join(format!("{name}-input.json"))).expect("native Sprite input"),
+(B[m[32m+                &fs::read(fixtures.join(format!("{name}-input.json")))
+(B[m[32m+                    .expect("native Sprite input"),
+(B[m             )
+             .expect("native Sprite JSON");
+             let body = input["lua_assertions"]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7077:
+             let input: serde_json::Value = serde_json::from_slice(
+                 &fs::read(fixtures.join(format!("{name}-input.json")))
+                     .expect("native runtime actor input"),
+[31m-            ).expect("native runtime actor JSON");
+(B[m[31m-            let body = input["lua_assertions"].as_str()
+(B[m[32m+            )
+(B[m[32m+            .expect("native runtime actor JSON");
+(B[m[32m+            let body = input["lua_assertions"]
+(B[m[32m+                .as_str()
+(B[m                 .expect("native runtime actor assertions");
+             let script = fs::read_to_string(fixtures.join(format!("{name}.lua")))
+[31m-                .expect("runtime actor assertions").replace("\r\n", "\n");
+(B[m[32m+                .expect("runtime actor assertions")
+(B[m[32m+                .replace("\r\n", "\n");
+(B[m             assert!(script.contains(body), "unchanged native assertions: {name}");
+             let song_dir = test_dir(name);
+             let entry = song_dir.join("default.lua");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7088:
+             fs::write(&entry, script).expect("write runtime actor control");
+             test_compile_song_lua(
+[31m-                &entry, &SongLuaCompileContext::new(&song_dir, "Native runtime actor contracts"),
+(B[m[31m-            ).expect("native actor identity and strict BitmapText boolean arguments");
+(B[m[32m+                &entry,
+(B[m[32m+                &SongLuaCompileContext::new(&song_dir, "Native runtime actor contracts"),
+(B[m[32m+            )
+(B[m[32m+            .expect("native actor identity and strict BitmapText boolean arguments");
+(B[m         }
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7098:
+             .join("../../tests/fixtures/itgmania-song-lua-micro");
+         let input: serde_json::Value = serde_json::from_slice(
+             &fs::read(fixtures.join("bitmap-methods-input.json")).expect("native bitmap input"),
+[31m-        ).expect("native bitmap JSON");
+(B[m[31m-        let body = input["lua_assertions"].as_str().expect("native bitmap assertions");
+(B[m[32m+        )
+(B[m[32m+        .expect("native bitmap JSON");
+(B[m[32m+        let body = input["lua_assertions"]
+(B[m[32m+            .as_str()
+(B[m[32m+            .expect("native bitmap assertions");
+(B[m         // Check the native inventory before the fallback theme adds Lua helpers.
+[31m-        let (inventory, assertions) = body.split_once("assert(type(BitmapText.GetX)")
+(B[m[32m+        let (inventory, assertions) = body
+(B[m[32m+            .split_once("assert(type(BitmapText.GetX)")
+(B[m             .expect("native inventory boundary");
+         let lua = Lua::new();
+         crate::actor_classes::install_native(&lua).expect("native class tables");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7108:
+[31m-        lua.load(inventory).exec().expect("exact native BitmapText inventory");
+(B[m[32m+        lua.load(inventory)
+(B[m[32m+            .exec()
+(B[m[32m+            .expect("exact native BitmapText inventory");
+(B[m         let song_dir = test_dir("native-bitmap-methods");
+         let entry = song_dir.join("default.lua");
+         fs::write(&entry, format!(
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7112:
+             "native_label=Def.BitmapText{{}}\nassert(type(BitmapText.GetX){assertions}\nreturn Def.ActorFrame{{native_label}}\n"
+         )).expect("unchanged native bitmap assertions");
+[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native bitmap methods"))
+(B[m[31m-            .expect("native bitmap inventory, inheritance and boolean conversion");
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native bitmap methods"),
+(B[m[32m+        )
+(B[m[32m+        .expect("native bitmap inventory, inheritance and boolean conversion");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7121:
+             .join("../../tests/fixtures/itgmania-song-lua-micro");
+         let input: serde_json::Value = serde_json::from_slice(
+             &fs::read(fixtures.join("proxy-methods-input.json")).expect("native proxy input"),
+[31m-        ).expect("native proxy JSON");
+(B[m[31m-        let body = input["lua_assertions"].as_str().expect("native proxy Lua assertions");
+(B[m[32m+        )
+(B[m[32m+        .expect("native proxy JSON");
+(B[m[32m+        let body = input["lua_assertions"]
+(B[m[32m+            .as_str()
+(B[m[32m+            .expect("native proxy Lua assertions");
+(B[m         let song_dir = test_dir("native-proxy-methods");
+         let entry = song_dir.join("default.lua");
+         fs::write(&entry, format!(
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7129:
+             "native_proxy=Def.ActorProxy{{}}\nnative_target=Def.Actor{{}}\n{body}\nreturn Def.ActorFrame{{native_proxy,native_target}}\n"
+         )).expect("unchanged native proxy assertions");
+[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native proxy methods"))
+(B[m[31m-            .expect("native proxy inventory, target identity and live inheritance");
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native proxy methods"),
+(B[m[32m+        )
+(B[m[32m+        .expect("native proxy inventory, target identity and live inheritance");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7139:
+         let body = |name: &str| {
+             let value: serde_json::Value = serde_json::from_slice(
+                 &fs::read(fixtures.join(name)).expect("native actor control input"),
+[31m-            ).expect("native actor control JSON");
+(B[m[31m-            value["aft_creation"].as_str().expect("native assertion body").to_owned()
+(B[m[32m+            )
+(B[m[32m+            .expect("native actor control JSON");
+(B[m[32m+            value["aft_creation"]
+(B[m[32m+                .as_str()
+(B[m[32m+                .expect("native assertion body")
+(B[m[32m+                .to_owned()
+(B[m         };
+         // The exact raw native inventory is checked before fallback Lua helpers.
+         let lua = Lua::new();
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7147:
+         crate::actor_classes::install_native(&lua).expect("native class tables");
+[31m-        lua.load(body("actor-class-inventory-input.json")).exec()
+(B[m[32m+        lua.load(body("actor-class-inventory-input.json"))
+(B[m[32m+            .exec()
+(B[m             .expect("unchanged bidirectional native C method inventory");
+ 
+         let song_dir = test_dir("native-actor-classes");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7152:
+         let entry = song_dir.join("default.lua");
+[31m-        let script = format!("frozen=Def.ActorFrameTexture{{}}\n{}\n{}\n{}\n{}\n{}\nreturn Def.ActorFrame{{frozen}}\n",
+(B[m[31m-            body("actor-class-inheritance-input.json"), body("actor-class-override-input.json"),
+(B[m[31m-            body("actor-class-callback-input.json"), body("actor-class-multi-return-input.json"),
+(B[m[31m-            body("actor-class-wrapper-input.json"));
+(B[m[32m+        let script = format!(
+(B[m[32m+            "frozen=Def.ActorFrameTexture{{}}\n{}\n{}\n{}\n{}\n{}\nreturn Def.ActorFrame{{frozen}}\n",
+(B[m[32m+            body("actor-class-inheritance-input.json"),
+(B[m[32m+            body("actor-class-override-input.json"),
+(B[m[32m+            body("actor-class-callback-input.json"),
+(B[m[32m+            body("actor-class-multi-return-input.json"),
+(B[m[32m+            body("actor-class-wrapper-input.json")
+(B[m[32m+        );
+(B[m         fs::write(&entry, script).expect("unchanged native class controls");
+[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native actor classes"))
+(B[m[31m-            .expect("native inheritance and live method replacement");
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native actor classes"),
+(B[m[32m+        )
+(B[m[32m+        .expect("native inheritance and live method replacement");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7163:
+     fn actor_lookup_matches_itg() {
+         let song_dir = test_dir("native-actor-lookup");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m return Def.ActorFrame{
+     OnCommand=function(self)
+         assert(self:GetNumChildren() == 4)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7186:
+     Def.BPMDisplay{Name="BPM"},
+     Def.DeviceList{Name="Devices"}
+ }
+[31m-"#).expect("write native actor lookup fixture");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write native actor lookup fixture");
+(B[m         let compiled = test_compile_song_lua(
+[31m-            &entry, &SongLuaCompileContext::new(&song_dir, "Native actor lookup"),
+(B[m[31m-        ).expect("native child and GetText lookup assertions");
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native actor lookup"),
+(B[m[32m+        )
+(B[m[32m+        .expect("native child and GetText lookup assertions");
+(B[m         assert_eq!(compiled.messages.len(), 1);
+         assert_eq!(compiled.messages[0].message, "NativeLookupChecked");
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:7825:
+     fn compile_song_lua_merges_actor_definitions() {
+         let song_dir = test_dir("native-definition-concat");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, include_str!("../tests/fixtures/definition-concat.lua"))
+(B[m[31m-            .expect("write definition control");
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            include_str!("../tests/fixtures/definition-concat.lua"),
+(B[m[32m+        )
+(B[m[32m+        .expect("write definition control");
+(B[m         let compiled = test_compile_song_lua(
+[31m-            &entry, &SongLuaCompileContext::new(&song_dir, "Native Definition Concat"),
+(B[m[31m-        ).expect("compile native definition control");
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native Definition Concat"),
+(B[m[32m+        )
+(B[m[32m+        .expect("compile native definition control");
+(B[m         assert_eq!(compiled.overlays.len(), 1);
+         assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:8491:
+ 
+         let mut context = SongLuaCompileContext::new(&song_dir, "Theme Enum SongUtil");
+         context.song_steps = test_song_steps();
+[31m-        let compiled = test_compile_song_lua(&entry, &context)
+(B[m[31m-        .unwrap();
+(B[m[32m+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+(B[m 
+         assert_eq!(compiled.messages.len(), 1);
+         assert_eq!(
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:8690:
+             &SongLuaCompileContext::new(&song_dir, "SetUpdateFunction QueueCommand Song"),
+         )
+         .unwrap();
+[31m-        assert_eq!(compiled.messages.iter().filter(|event| event.message == "update-queued").count(), 1);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled
+(B[m[32m+                .messages
+(B[m[32m+                .iter()
+(B[m[32m+                .filter(|event| event.message == "update-queued")
+(B[m[32m+                .count(),
+(B[m[32m+            1
+(B[m[32m+        );
+(B[m         assert_eq!(compiled.overlays.len(), 1);
+[31m-        assert_eq!(compiled.overlays[0].initial_state.x, 0.0, "Actor::UpdateTweening(0) does not dispatch Pulse");
+(B[m[31m-        let queued = compiled.overlays[0].message_commands.iter()
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.overlays[0].initial_state.x, 0.0,
+(B[m[32m+            "Actor::UpdateTweening(0) does not dispatch Pulse"
+(B[m[32m+        );
+(B[m[32m+        let queued = compiled.overlays[0]
+(B[m[32m+            .message_commands
+(B[m[32m+            .iter()
+(B[m             .find(|command| command.message == "__songlua_queued_startup")
+             .expect("next-frame Pulse capture");
+[31m-        assert_eq!(crate::overlay_state_after_blocks(compiled.overlays[0].initial_state, &queued.blocks, 0.0).x, 12.0);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            crate::overlay_state_after_blocks(
+(B[m[32m+                compiled.overlays[0].initial_state,
+(B[m[32m+                &queued.blocks,
+(B[m[32m+                0.0
+(B[m[32m+            )
+(B[m[32m+            .x,
+(B[m[32m+            12.0
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:9264:
+         let dir = test_dir("live-lua-worker-transfer");
+         fs::write(dir.join("input.bin"), b"abcdef").expect("file cursor input");
+         let lua_path = dir.join("default.lua");
+[31m-        fs::write(&lua_path, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &lua_path,
+(B[m[32m+            r#"
+(B[m local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
+ local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+ local source_file = RageFileUtil:CreateRageFile()
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:9284:
+         end)
+     end,
+ }
+[31m-"#).expect("live session source");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("live session source");
+(B[m         let (lua, root) = std::thread::spawn(move || {
+             let lua = Lua::new();
+             let context = SongLuaCompileContext::new(&dir, "Transferred Lua session");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:9291:
+[31m-            crate::install_compile_host(&lua, &context, SongLuaNoteskinResolver::default(),
+(B[m[31m-                test_create_dummy_actor, test_create_named_child_actor, test_install_actor_methods)
+(B[m[31m-                .expect("worker-owned Lua host");
+(B[m[31m-            let root = crate::execute_script_file(&lua, &lua_path, &dir).expect("worker loads source");
+(B[m[32m+            crate::install_compile_host(
+(B[m[32m+                &lua,
+(B[m[32m+                &context,
+(B[m[32m+                SongLuaNoteskinResolver::default(),
+(B[m[32m+                test_create_dummy_actor,
+(B[m[32m+                test_create_named_child_actor,
+(B[m[32m+                test_install_actor_methods,
+(B[m[32m+            )
+(B[m[32m+            .expect("worker-owned Lua host");
+(B[m[32m+            let root =
+(B[m[32m+                crate::execute_script_file(&lua, &lua_path, &dir).expect("worker loads source");
+(B[m             crate::run_actor_init_commands(&lua, &root).expect("worker initializes scene");
+[31m-            crate::lua_util::run_actor_startup_commands(&lua, &root,
+(B[m[31m-                std::collections::HashMap::new(), &context).expect("worker starts scene");
+(B[m[32m+            crate::lua_util::run_actor_startup_commands(
+(B[m[32m+                &lua,
+(B[m[32m+                &root,
+(B[m[32m+                std::collections::HashMap::new(),
+(B[m[32m+                &context,
+(B[m[32m+            )
+(B[m[32m+            .expect("worker starts scene");
+(B[m             // A compile probe must rewind the same VM's RNG before handoff.
+             let snapshot = crate::compat::preserve_random(&lua).expect("random snapshot");
+[31m-            lua.load("return math.random()").eval::<f64>().expect("random probe");
+(B[m[32m+            lua.load("return math.random()")
+(B[m[32m+                .eval::<f64>()
+(B[m[32m+                .expect("random probe");
+(B[m             drop(snapshot);
+             (lua, root)
+[31m-        }).join().expect("worker returns its initialized VM and actors");
+(B[m[31m-        assert_eq!(lua.load("return math.random()").eval::<f64>().expect("continued random stream"),
+(B[m[31m-            0.7203244895202072); // Same next value as the native seeded control.
+(B[m[31m-        assert_eq!(lua.load("return NEXT_FILE_BYTES()").eval::<String>().expect("continued cursor"), "cd");
+(B[m[32m+        })
+(B[m[32m+        .join()
+(B[m[32m+        .expect("worker returns its initialized VM and actors");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            lua.load("return math.random()")
+(B[m[32m+                .eval::<f64>()
+(B[m[32m+                .expect("continued random stream"),
+(B[m[32m+            0.7203244895202072
+(B[m[32m+        ); // Same next value as the native seeded control.
+(B[m[32m+        assert_eq!(
+(B[m[32m+            lua.load("return NEXT_FILE_BYTES()")
+(B[m[32m+                .eval::<String>()
+(B[m[32m+                .expect("continued cursor"),
+(B[m[32m+            "cd"
+(B[m[32m+        );
+(B[m         crate::set_compile_song_runtime_values(&lua, 1.0 / 60.0, 1.0 / 60.0)
+             .expect("advance live clock");
+         crate::run_actor_update_functions_with_delta(&lua, &root, 1.0 / 60.0)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:9310:
+             .expect("same callback runs on the receiving thread");
+[31m-        let Value::Table(root) = root else { panic!("control returns an ActorFrame"); };
+(B[m[31m-        assert_eq!(root.get::<Function>("getaux").expect("aux getter")
+(B[m[31m-            .call::<i32>(root.clone()).expect("retained callback locals"), 2);
+(B[m[31m-        assert_eq!(lua.load("return NEXT_FILE_BYTES()").eval::<String>().expect("same handle"), "ef");
+(B[m[32m+        let Value::Table(root) = root else {
+(B[m[32m+            panic!("control returns an ActorFrame");
+(B[m[32m+        };
+(B[m[32m+        assert_eq!(
+(B[m[32m+            root.get::<Function>("getaux")
+(B[m[32m+                .expect("aux getter")
+(B[m[32m+                .call::<i32>(root.clone())
+(B[m[32m+                .expect("retained callback locals"),
+(B[m[32m+            2
+(B[m[32m+        );
+(B[m[32m+        assert_eq!(
+(B[m[32m+            lua.load("return NEXT_FILE_BYTES()")
+(B[m[32m+                .eval::<String>()
+(B[m[32m+                .expect("same handle"),
+(B[m[32m+            "ef"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10237:
+ 
+     #[test]
+     fn compile_song_lua_keeps_static_column_rotation() {
+[31m-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+(B[m[31m-            .join("../../tests/fixtures/song-lua");
+(B[m[32m+        let dir =
+(B[m[32m+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+(B[m         let mut context = SongLuaCompileContext::new(&dir, "Static column rotation");
+         context.music_length_seconds = 4.0;
+         context.song_timing_bpms = vec![(0.0, 60.0)];
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10245:
+         let compiled = test_compile_song_lua(&dir.join("static-column-rotation.lua"), &context)
+             .expect("static rotation control");
+         let timing = deadsync_rules::timing::TimingData::from_segments(
+[31m-            0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+(B[m[31m-                bpms: vec![(0.0, 60.0)], ..Default::default()
+(B[m[31m-            }, &[],
+(B[m[32m+            0.0,
+(B[m[32m+            0.0,
+(B[m[32m+            &deadsync_rules::timing::TimingSegments {
+(B[m[32m+                bpms: vec![(0.0, 60.0)],
+(B[m[32m+                ..Default::default()
+(B[m[32m+            },
+(B[m[32m+            &[],
+(B[m         );
+         for player in 0..2 {
+             let windows = crate::gameplay::build_song_lua_column_offset_windows_for_player(
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10254:
+                 &compiled, &timing, player, 0.0,
+             );
+             for second in [0.0, 0.5, 2.0, 4.0] {
+[31m-                let (transforms, _) = deadsync_gameplay::song_lua_column_transforms(
+(B[m[31m-                    &windows, 4, second,
+(B[m[31m-                );
+(B[m[32m+                let (transforms, _) =
+(B[m[32m+                    deadsync_gameplay::song_lua_column_transforms(&windows, 4, second);
+(B[m                 for rotation in &transforms[3][..4] {
+[31m-                    assert!((*rotation - 180.0).abs() < 1e-5,
+(B[m[31m-                        "player {player} at {second}: {transforms:?}");
+(B[m[32m+                    assert!(
+(B[m[32m+                        (*rotation - 180.0).abs() < 1e-5,
+(B[m[32m+                        "player {player} at {second}: {transforms:?}"
+(B[m[32m+                    );
+(B[m                 }
+             }
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10403:
+         fs::write(
+             &entry,
+             include_str!("../../../tests/fixtures/song-lua/easing-global.lua"),
+[31m-        ).expect("write chart easing guard");
+(B[m[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Chart Easing"))
+(B[m[31m-            .expect("chart must load its own guarded nonlinear easing functions");
+(B[m[32m+        )
+(B[m[32m+        .expect("write chart easing guard");
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Chart Easing"),
+(B[m[32m+        )
+(B[m[32m+        .expect("chart must load its own guarded nonlinear easing functions");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10852:
+     fn compile_song_lua_keeps_combo_child_callback() {
+         let root = test_dir("combo-child-current-theme");
+         let entry = root.join("combo-child.lua");
+[31m-        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/combo-child.lua")).unwrap();
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            include_str!("../../../tests/fixtures/song-lua/combo-child.lua"),
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         // Simply Love returns a leaf Actor when the current theme has no combo
+         // fonts. Provide the directory entries this child-lookup test needs.
+[31m-        let font = root.join(crate::SONG_LUA_THEME_PATH_PREFIX).join("Fonts/_Combo Fonts/Wendy");
+(B[m[32m+        let font = root
+(B[m[32m+            .join(crate::SONG_LUA_THEME_PATH_PREFIX)
+(B[m[32m+            .join("Fonts/_Combo Fonts/Wendy");
+(B[m         fs::create_dir_all(&font).unwrap();
+         fs::write(font.join("Wendy.ini"), "[main]\n").unwrap();
+         fs::write(font.join("Wendy 4x4.png"), b"").unwrap();
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:10862:
+         let mut context = SongLuaCompileContext::new(&root, "Combo Child Callback");
+         context.music_length_seconds = 2.0;
+[31m-        context.players = std::array::from_fn(|_| SongLuaPlayerContext { enabled: true, ..Default::default() });
+(B[m[32m+        context.players = std::array::from_fn(|_| SongLuaPlayerContext {
+(B[m[32m+            enabled: true,
+(B[m[32m+            ..Default::default()
+(B[m[32m+        });
+(B[m         let compiled = test_compile_song_lua(&entry, &context).unwrap();
+[31m-        assert_eq!(compiled.info.unsupported_perframes, 0, "{:?}", compiled.info);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.info.unsupported_perframes, 0,
+(B[m[32m+            "{:?}",
+(B[m[32m+            compiled.info
+(B[m[32m+        );
+(B[m         for (player, expected) in [(1, 300.0), (2, 400.0)] {
+[31m-            let movement = compiled.eases.iter().rev()
+(B[m[31m-                .find(|ease| ease.player == Some(player) && ease.target == SongLuaEaseTarget::PlayerX)
+(B[m[32m+            let movement = compiled
+(B[m[32m+                .eases
+(B[m[32m+                .iter()
+(B[m[32m+                .rev()
+(B[m[32m+                .find(|ease| {
+(B[m[32m+                    ease.player == Some(player) && ease.target == SongLuaEaseTarget::PlayerX
+(B[m[32m+                })
+(B[m                 .expect("player movement after Combo child lookup");
+             assert_eq!(movement.to, expected);
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:11045:
+     fn startup_self_queue_moves() {
+         let song_dir = test_dir("self-queued-startup-move");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m return Def.Quad{
+     Name="Ball",
+     InitCommand=function(self) self:x(0) end,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:11055:
+         if self:GetX() < 6 then self:sleep(0.007):queuecommand("Move") end
+     end,
+ }
+[31m-"#).expect("write queued movement control");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write queued movement control");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Self-queued Startup Move");
+         context.song_display_bpms = [60.0, 60.0];
+         context.music_length_seconds = 0.25;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:11062:
+         let compiled = test_compile_song_lua(&entry, &context).expect("compile queued movement");
+[31m-        let index = compiled.overlays.iter().position(|o| o.name.as_deref() == Some("Ball"))
+(B[m[32m+        let index = compiled
+(B[m[32m+            .overlays
+(B[m[32m+            .iter()
+(B[m[32m+            .position(|o| o.name.as_deref() == Some("Ball"))
+(B[m             .expect("movement actor");
+         assert_eq!(compiled.overlays[index].initial_state.x, 1.0);
+[31m-        let track = compiled.overlay_updates.iter().find(|track|
+(B[m[31m-            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::X)
+(B[m[32m+        let track = compiled
+(B[m[32m+            .overlay_updates
+(B[m[32m+            .iter()
+(B[m[32m+            .find(|track| {
+(B[m[32m+                track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::X
+(B[m[32m+            })
+(B[m             .expect("the startup queue must continue moving its own actor");
+[31m-        for (time, expected) in [(1.0 / 60.0, 3.0), (2.0 / 60.0, 5.0), (0.05, 6.0), (0.25, 6.0)] {
+(B[m[31m-            let value = track.samples.iter().rev().find(|sample| sample.time <= time + 0.000_001)
+(B[m[32m+        for (time, expected) in [
+(B[m[32m+            (1.0 / 60.0, 3.0),
+(B[m[32m+            (2.0 / 60.0, 5.0),
+(B[m[32m+            (0.05, 6.0),
+(B[m[32m+            (0.25, 6.0),
+(B[m[32m+        ] {
+(B[m[32m+            let value = track
+(B[m[32m+                .samples
+(B[m[32m+                .iter()
+(B[m[32m+                .rev()
+(B[m[32m+                .find(|sample| sample.time <= time + 0.000_001)
+(B[m                 .expect("queued movement sample");
+[31m-            assert!(matches!(value.value, SongLuaOverlayUpdateValue::F32(x) if x == expected),
+(B[m[31m-                "movement at {time} must be {expected}, got {:?}", value.value);
+(B[m[32m+            assert!(
+(B[m[32m+                matches!(value.value, SongLuaOverlayUpdateValue::F32(x) if x == expected),
+(B[m[32m+                "movement at {time} must be {expected}, got {:?}",
+(B[m[32m+                value.value
+(B[m[32m+            );
+(B[m         }
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12048:
+             &SongLuaCompileContext::new(&song_dir, "Actor Queued Message"),
+         )
+         .unwrap();
+[31m-        let overlay = compiled.overlays.iter()
+(B[m[32m+        let overlay = compiled
+(B[m[32m+            .overlays
+(B[m[32m+            .iter()
+(B[m             .find(|overlay| overlay.name.as_deref() == Some("ShakeTarget"))
+             .expect("queued message target");
+[31m-        let event = compiled.messages.iter()
+(B[m[32m+        let event = compiled
+(B[m[32m+            .messages
+(B[m[32m+            .iter()
+(B[m             .find(|event| event.beat == 2.0)
+             .expect("queued action is retained at its scheduled beat");
+[31m-        let command = overlay.message_commands.iter()
+(B[m[32m+        let command = overlay
+(B[m[32m+            .message_commands
+(B[m[32m+            .iter()
+(B[m             .find(|command| command.message == event.message)
+             .expect("queued action captures the listener with its empty table");
+         assert_eq!(overlay.initial_state.x, 0.0);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12061:
+[31m-        assert_eq!(overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.05).x, 6.0);
+(B[m[31m-        assert_eq!(overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.1).x, 12.0);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.05).x,
+(B[m[32m+            6.0
+(B[m[32m+        );
+(B[m[32m+        assert_eq!(
+(B[m[32m+            overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.1).x,
+(B[m[32m+            12.0
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12600:
+                 ("1".into(), if parent_first { 1 } else { 2 }),
+                 ("1/1".into(), if parent_first { 2 } else { 1 }),
+             ];
+[31m-            let compiled = test_compile_song_lua(&entry, &context).expect("compile broadcast fixture");
+(B[m[32m+            let compiled =
+(B[m[32m+                test_compile_song_lua(&entry, &context).expect("compile broadcast fixture");
+(B[m             assert_eq!(compiled.overlays[0].initial_state.visible, parent_first);
+[31m-            assert_eq!(compiled.overlays[0].initial_state.x, if parent_first { 42.0 } else { 0.0 });
+(B[m[32m+            assert_eq!(
+(B[m[32m+                compiled.overlays[0].initial_state.x,
+(B[m[32m+                if parent_first { 42.0 } else { 0.0 }
+(B[m[32m+            );
+(B[m         }
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12894:
+     fn compile_song_lua_preserves_null_display_context() {
+         let song_dir = test_dir("null-display-context");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m assert(SCREEN_WIDTH == 854 and SCREEN_HEIGHT == 480)
+ assert(DISPLAY:GetDisplayWidth() == 0 and DISPLAY:GetDisplayHeight() == 0)
+ assert(PREFSMAN:GetPreference('DisplayWidth') == 0)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12909:
+     root[#root + 1] = Def.ActorFrameTexture{Name='UnexpectedAFT'}
+ end
+ return root
+[31m-"#).expect("write null-renderer control");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write null-renderer control");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Null Display");
+         context.screen_width = 854.0;
+         context.screen_height = 480.0;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12926:
+         let song_dir = test_dir("display-preference-size");
+         let entry = song_dir.join("default.lua");
+         for (width, height, aspect) in [(0.0, 0.0, 16.0 / 9.0), (3840.0, 2160.0, 4.0 / 3.0)] {
+[31m-            fs::write(&entry, format!(r#"
+(B[m[32m+            fs::write(
+(B[m[32m+                &entry,
+(B[m[32m+                format!(
+(B[m[32m+                    r#"
+(B[m assert(math.abs(PREFSMAN:GetPreference('DisplayAspectRatio') - {aspect}) < 1e-6)
+ assert(PREFSMAN:GetPreference('DisplayWidth') == {width})
+ assert(PREFSMAN:GetPreference('DisplayHeight') == {height})
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12934:
+ PREFSMAN:SetPreference('DisplayHeight', 768)
+ assert(math.abs(PREFSMAN:GetPreference('DisplayAspectRatio') - {aspect}) < 1e-6)
+ return Def.ActorFrame{{}}
+[31m-"#)).expect("display preference control");
+(B[m[32m+"#
+(B[m[32m+                ),
+(B[m[32m+            )
+(B[m[32m+            .expect("display preference control");
+(B[m             let mut context = SongLuaCompileContext::new(&song_dir, "Display Preference");
+             context.display_width = width;
+             context.display_height = height;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12947:
+     fn screen_aspect_uses_preference_with_rounded_logical_dimensions() {
+         let song_dir = test_dir("rounded-screen-aspect");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m assert(SCREEN_WIDTH == 854 and _screen.w == 854)
+ assert(GetScreenAspectRatio() == PREFSMAN:GetPreference('DisplayAspectRatio'),
+     'physical display preference is independent of rounded logical dimensions')
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:12958:
+ assert(math.abs(GetScreenAspectRatio() - 4 / 3) < 1e-6)
+ assert(SCREEN_WIDTH == 854, 'changing a preference does not reload screen dimensions')
+ return Def.ActorFrame{}
+[31m-"#).unwrap();
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Rounded Screen Aspect");
+         context.screen_width = 854.0;
+         context.screen_height = 480.0;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13253:
+ 
+     fn test_song_steps() -> Vec<crate::SongLuaStep> {
+         use crate::SongLuaStep;
+[31m-        [SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy, SongLuaDifficulty::Medium,
+(B[m[31m-            SongLuaDifficulty::Hard, SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]
+(B[m[31m-            .into_iter().map(|difficulty| SongLuaStep {
+(B[m[31m-                steps_type: "StepsType_Dance_Single".into(), difficulty,
+(B[m[31m-                description: String::new(), chart_name: String::new(), credit: String::new(),
+(B[m[31m-                meter: difficulty.meter().max(0) as u32,
+(B[m[31m-                music_file: String::new(),
+(B[m[31m-                possible_grade_points: 0,
+(B[m[31m-            }).collect()
+(B[m[32m+        [
+(B[m[32m+            SongLuaDifficulty::Beginner,
+(B[m[32m+            SongLuaDifficulty::Easy,
+(B[m[32m+            SongLuaDifficulty::Medium,
+(B[m[32m+            SongLuaDifficulty::Hard,
+(B[m[32m+            SongLuaDifficulty::Challenge,
+(B[m[32m+            SongLuaDifficulty::Edit,
+(B[m[32m+        ]
+(B[m[32m+        .into_iter()
+(B[m[32m+        .map(|difficulty| SongLuaStep {
+(B[m[32m+            steps_type: "StepsType_Dance_Single".into(),
+(B[m[32m+            difficulty,
+(B[m[32m+            description: String::new(),
+(B[m[32m+            chart_name: String::new(),
+(B[m[32m+            credit: String::new(),
+(B[m[32m+            meter: difficulty.meter().max(0) as u32,
+(B[m[32m+            music_file: String::new(),
+(B[m[32m+            possible_grade_points: 0,
+(B[m[32m+        })
+(B[m[32m+        .collect()
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13272:
+         let expected: serde_json::Value = serde_json::from_str(
+             &fs::read_to_string(root.join("step-selection-native.json"))
+                 .expect("read native selection capture"),
+[31m-        ).expect("native selection JSON");
+(B[m[32m+        )
+(B[m[32m+        .expect("native selection JSON");
+(B[m         for native in expected["controls"].as_array().expect("native controls") {
+             let kind = native["kind"].as_str().expect("control name");
+             // RSSP currently loads single/double simfiles only. The routine
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13281:
+             let song = deadsync_simfile::song::parse_song_meta_file(
+                 &root.join("step-selection-single.ssc"),
+                 &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+[31m-                0.0, |_| 0.0,
+(B[m[31m-            ).expect("parse native selection control");
+(B[m[32m+                0.0,
+(B[m[32m+                |_| 0.0,
+(B[m[32m+            )
+(B[m[32m+            .expect("parse native selection control");
+(B[m             let mut context = SongLuaCompileContext::new(&root, "Native step selection");
+             context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+             if kind == "routine" {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13291:
+                 }
+             }
+             context.style_name = native["style"].as_str().expect("native style").into();
+[31m-            let selected = native["initial_step_index"].as_u64().expect("native initial selection") as usize;
+(B[m[32m+            let selected = native["initial_step_index"]
+(B[m[32m+                .as_u64()
+(B[m[32m+                .expect("native initial selection") as usize;
+(B[m             context.player_step_indices = [Some(selected); crate::LUA_PLAYERS];
+             for player in &mut context.players {
+                 player.difficulty = context.song_steps[selected].difficulty;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13301:
+                 .expect("native selection script");
+             // On broadcasts are absorbed into the startup snapshot. Audit the
+             // calls themselves rather than looking for scheduled messages.
+[31m-            let snapshots: Vec<_> = compiled.state_calls.iter()
+(B[m[32m+            let snapshots: Vec<_> = compiled
+(B[m[32m+                .state_calls
+(B[m[32m+                .iter()
+(B[m                 .filter(|call| call.operation == "MessageManager.Broadcast")
+                 .filter_map(|call| call.args.first().and_then(serde_json::Value::as_str))
+[31m-                .filter(|message| message.contains(':')).collect();
+(B[m[31m-            let native_snapshots: Vec<_> = native["snapshots"].as_array().expect("native snapshots")
+(B[m[31m-                .iter().map(|value| value.as_str().expect("native message")).collect();
+(B[m[31m-            assert_eq!(snapshots, native_snapshots, "{kind} native state and synchronous messages: {:?}", compiled.info);
+(B[m[32m+                .filter(|message| message.contains(':'))
+(B[m[32m+                .collect();
+(B[m[32m+            let native_snapshots: Vec<_> = native["snapshots"]
+(B[m[32m+                .as_array()
+(B[m[32m+                .expect("native snapshots")
+(B[m[32m+                .iter()
+(B[m[32m+                .map(|value| value.as_str().expect("native message"))
+(B[m[32m+                .collect();
+(B[m[32m+            assert_eq!(
+(B[m[32m+                snapshots, native_snapshots,
+(B[m[32m+                "{kind} native state and synchronous messages: {:?}",
+(B[m[32m+                compiled.info
+(B[m[32m+            );
+(B[m             #[cfg(feature = "test-support")]
+[31m-            assert_eq!(compiled.state_calls.iter().filter(|call| call.operation == "GameState.SetCurrentSteps")
+(B[m[31m-                .map(|call| &call.args).collect::<Vec<_>>(),
+(B[m[31m-                native["calls"].as_array().expect("native calls").iter()
+(B[m[31m-                    .map(|call| call.as_array().expect("native arguments")).collect::<Vec<_>>(),
+(B[m[31m-                "{kind} native call order");
+(B[m[32m+            assert_eq!(
+(B[m[32m+                compiled
+(B[m[32m+                    .state_calls
+(B[m[32m+                    .iter()
+(B[m[32m+                    .filter(|call| call.operation == "GameState.SetCurrentSteps")
+(B[m[32m+                    .map(|call| &call.args)
+(B[m[32m+                    .collect::<Vec<_>>(),
+(B[m[32m+                native["calls"]
+(B[m[32m+                    .as_array()
+(B[m[32m+                    .expect("native calls")
+(B[m[32m+                    .iter()
+(B[m[32m+                    .map(|call| call.as_array().expect("native arguments"))
+(B[m[32m+                    .collect::<Vec<_>>(),
+(B[m[32m+                "{kind} native call order"
+(B[m[32m+            );
+(B[m         }
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13320:
+     #[test]
+     fn song_steps_match_native() {
+         use crate::{LUA_PLAYERS, SongLuaStep};
+[31m-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/itgmania-song-lua-micro");
+(B[m[32m+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+(B[m[32m+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+(B[m         let song = deadsync_simfile::song::parse_song_meta_file(
+             &root.join("song-steps.sm"),
+             &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13327:
+[31m-            0.0, |_| 0.0,
+(B[m[31m-        ).expect("parse native metadata control");
+(B[m[32m+            0.0,
+(B[m[32m+            |_| 0.0,
+(B[m[32m+        )
+(B[m[32m+        .expect("parse native metadata control");
+(B[m         let expected: serde_json::Value = serde_json::from_str(
+             &fs::read_to_string(root.join("song-steps-native.json")).expect("read native values"),
+[31m-        ).expect("native values JSON");
+(B[m[32m+        )
+(B[m[32m+        .expect("native values JSON");
+(B[m         let steps: Vec<SongLuaStep> = song.charts.iter().map(SongLuaStep::from).collect();
+         let native = expected["charts"].as_array().expect("native chart list");
+         assert_eq!(steps.len(), native.len());
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13335:
+         for (actual, expected) in steps.iter().zip(native) {
+[31m-            assert_eq!(u64::from(actual.difficulty.sort_key()), expected["difficulty_code"]);
+(B[m[32m+            assert_eq!(
+(B[m[32m+                u64::from(actual.difficulty.sort_key()),
+(B[m[32m+                expected["difficulty_code"]
+(B[m[32m+            );
+(B[m             assert_eq!(actual.description, expected["description"]);
+             assert_eq!(actual.credit, expected["credit"]);
+             assert_eq!(actual.meter, expected["meter"]);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13363:
+         context.song_steps = steps;
+         context.player_step_indices = [Some(0); LUA_PLAYERS];
+         let compiled = test_compile_song_lua(&entry, &context).expect("native event-mode branch");
+[31m-        assert_eq!(compiled.messages[0].message, "Difficulty_Easy:Difficulty_Edit");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.messages[0].message,
+(B[m[32m+            "Difficulty_Easy:Difficulty_Edit"
+(B[m[32m+        );
+(B[m         #[cfg(feature = "test-support")]
+[31m-        assert_eq!(compiled.state_calls.iter().filter(|call| call.operation != "MessageManager.Broadcast")
+(B[m[31m-            .map(|call| &call.args).collect::<Vec<_>>(),
+(B[m[31m-            expected["seeded_calls"].as_array().expect("native state calls").iter()
+(B[m[31m-                .map(|call| call.as_array().expect("native call arguments")).collect::<Vec<_>>());
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled
+(B[m[32m+                .state_calls
+(B[m[32m+                .iter()
+(B[m[32m+                .filter(|call| call.operation != "MessageManager.Broadcast")
+(B[m[32m+                .map(|call| &call.args)
+(B[m[32m+                .collect::<Vec<_>>(),
+(B[m[32m+            expected["seeded_calls"]
+(B[m[32m+                .as_array()
+(B[m[32m+                .expect("native state calls")
+(B[m[32m+                .iter()
+(B[m[32m+                .map(|call| call.as_array().expect("native call arguments"))
+(B[m[32m+                .collect::<Vec<_>>()
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13385:
+         let song = create_song_table(&lua, &context).expect("song metadata");
+         let players = create_player_tables(&lua, &context, &runtime, &song).expect("players");
+         lua.globals().set("song", song).expect("install song");
+[31m-        lua.globals().set("p1", players.steps[0].clone()).expect("install selected Steps");
+(B[m[31m-        lua.load(r#"
+(B[m[32m+        lua.globals()
+(B[m[32m+            .set("p1", players.steps[0].clone())
+(B[m[32m+            .expect("install selected Steps");
+(B[m[32m+        lua.load(
+(B[m[32m+            r#"
+(B[m             local a = song:GetAllSteps()
+             assert(#a == 3 and a[1]:GetDifficulty() == 'Difficulty_Challenge')
+             assert(a[2]:GetDifficulty() == 'Difficulty_Beginner')
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13399:
+             assert(not song:HasStepsTypeAndDifficulty('StepsType_Dance_Single', 'Difficulty_Hard'))
+             assert(song:HasEdits('StepsType_Dance_Single'))
+             assert(song:GetOneSteps('StepsType_Dance_Single', 'Difficulty_Edit') == p1)
+[31m-        "#).exec().expect("metadata, presence and identity");
+(B[m[32m+        "#,
+(B[m[32m+        )
+(B[m[32m+        .exec()
+(B[m[32m+        .expect("metadata, presence and identity");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13416:
+         for event_mode in [true, false] {
+             let mut context = SongLuaCompileContext::new(&song_dir, "event mode");
+             context.event_mode = event_mode;
+[31m-            fs::write(&entry, format!("expected = {event_mode}\n{source}")).expect("write probe input");
+(B[m[32m+            fs::write(&entry, format!("expected = {event_mode}\n{source}"))
+(B[m[32m+                .expect("write probe input");
+(B[m             test_compile_song_lua(&entry, &context).expect("live EventMode preference");
+         }
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13461:
+ 
+         let mut context = SongLuaCompileContext::new(&song_dir, "Song Steps Type Selectors");
+         context.song_steps = test_song_steps();
+[31m-        let compiled = test_compile_song_lua(&entry, &context)
+(B[m[31m-        .unwrap();
+(B[m[32m+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+(B[m         assert_eq!(compiled.messages.len(), 1);
+         assert_eq!(
+             compiled.messages[0].message,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13711:
+     fn screen_request_keeps_current_name() {
+         let song_dir = test_dir("queued-screen-name");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m return Def.Quad{OnCommand=function(self)
+     local screen = SCREENMAN:GetTopScreen()
+     local name = screen:GetName()
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13724:
+     end
+     self:x(31)
+ end}
+[31m-"#).expect("write screen request control");
+(B[m[31m-        let compiled = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Queued Screen Name"))
+(B[m[31m-            .expect("compile native screen request control");
+(B[m[31m-        assert!(compiled.overlays.iter().any(|actor| actor.initial_state.x == 31.0));
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write screen request control");
+(B[m[32m+        let compiled = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Queued Screen Name"),
+(B[m[32m+        )
+(B[m[32m+        .expect("compile native screen request control");
+(B[m[32m+        assert!(
+(B[m[32m+            compiled
+(B[m[32m+                .overlays
+(B[m[32m+                .iter()
+(B[m[32m+                .any(|actor| actor.initial_state.x == 31.0)
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13764:
+ 
+         let mut context = SongLuaCompileContext::new(&song_dir, "Save Your Tears Compat");
+         context.song_steps = test_song_steps();
+[31m-        let compiled = test_compile_song_lua(&entry, &context)
+(B[m[31m-        .unwrap();
+(B[m[32m+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+(B[m         assert_eq!(compiled.messages.len(), 1);
+         assert_eq!(compiled.messages[0].message, "6:NoHideLights, 1x, Overhead");
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13816:
+         .unwrap();
+         // ActorSound::play is immediate even after sleep(). Its file is the
+         // one loaded at the call, rather than the final File on the actor.
+[31m-        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, song_dir.join("second.wav"))]);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            test_compiled_sound_calls(&compiled),
+(B[m[32m+            vec![(0.0, song_dir.join("second.wav"))]
+(B[m[32m+        );
+(B[m     }
+ 
+     fn test_compiled_sound_calls(compiled: &TestCompiledSongLua) -> Vec<(f32, PathBuf)> {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13823:
+         let mut calls = Vec::new();
+         for actor in &compiled.overlays {
+[31m-            let SongLuaOverlayKind::Sound { sound_path } = &actor.kind else { continue };
+(B[m[32m+            let SongLuaOverlayKind::Sound { sound_path } = &actor.kind else {
+(B[m[32m+                continue;
+(B[m[32m+            };
+(B[m             for command in &actor.message_commands {
+[31m-                for event in compiled.messages.iter().filter(|event| event.message == command.message) {
+(B[m[32m+                for event in compiled
+(B[m[32m+                    .messages
+(B[m[32m+                    .iter()
+(B[m[32m+                    .filter(|event| event.message == command.message)
+(B[m[32m+                {
+(B[m                     for block in &command.blocks {
+                         if block.delta.sound_play == Some(true) {
+                             assert_eq!(block.start, 0.0, "Sound:play is not a tween property");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:13873:
+         assert_eq!(compiled.sound_paths, vec![song_dir.join("hit.ogg")]);
+         // Native On and Ding each call ActorSound::Play once. sleep() queues
+         // actor state, while playforplayer() still executes in that callback.
+[31m-        assert_eq!(test_compiled_sound_calls(&compiled), vec![
+(B[m[31m-            (0.0, song_dir.join("hit.ogg")),
+(B[m[31m-            (1.0, song_dir.join("hit.ogg")),
+(B[m[31m-        ]);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            test_compiled_sound_calls(&compiled),
+(B[m[32m+            vec![
+(B[m[32m+                (0.0, song_dir.join("hit.ogg")),
+(B[m[32m+                (1.0, song_dir.join("hit.ogg")),
+(B[m[32m+            ]
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14401:
+             .join("../../tests/fixtures/itgmania-song-lua-micro");
+         let native: serde_json::Value = serde_json::from_str(include_str!(
+             "../../../tests/fixtures/itgmania-song-lua-micro/startup-reload-native.json",
+[31m-        )).expect("native reload snapshots");
+(B[m[32m+        ))
+(B[m[32m+        .expect("native reload snapshots");
+(B[m         let song = deadsync_simfile::song::parse_song_meta_file(
+             &fixtures.join("startup-reload.ssc"),
+             &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14408:
+[31m-            0.0, |_| 0.0,
+(B[m[31m-        ).expect("reload chart metadata");
+(B[m[32m+            0.0,
+(B[m[32m+            |_| 0.0,
+(B[m[32m+        )
+(B[m[32m+        .expect("reload chart metadata");
+(B[m         let song_dir = test_dir("native-startup-reload");
+         let entry = song_dir.join("reload.lua");
+         fs::copy(fixtures.join("startup-reload.lua"), &entry).expect("unchanged native control");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14413:
+         let observer = song_dir.join("observer.lua");
+[31m-        fs::write(&observer, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &observer,
+(B[m[32m+            r#"
+(B[m RELOAD_SNAPSHOTS = RELOAD_SNAPSHOTS or {}
+ return Def.ActorFrame {
+     HarnessReloadControlMessageCommand = function(self, p)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14424:
+         end
+     end,
+ }
+[31m-"#).expect("reload observer");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("reload observer");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Native reload");
+         context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+[31m-        let initial = context.song_steps.iter().position(|steps|
+(B[m[31m-            steps.difficulty == SongLuaDifficulty::Challenge).expect("initial Challenge");
+(B[m[32m+        let initial = context
+(B[m[32m+            .song_steps
+(B[m[32m+            .iter()
+(B[m[32m+            .position(|steps| steps.difficulty == SongLuaDifficulty::Challenge)
+(B[m[32m+            .expect("initial Challenge");
+(B[m         context.player_step_indices = [Some(initial), None];
+         context.players[0].difficulty = SongLuaDifficulty::Challenge;
+         context.music_length_seconds = 1.0;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14435:
+         let compiled = test_compile_song_lua_layers(&[&entry, &observer], 0, &context)
+             .expect("native control reloads in the same Lua VM");
+[31m-        let expected = native["snapshots"].as_array().expect("native startup snapshots").iter()
+(B[m[31m-            .map(|p| format!("{}:{}:{}:{}:{}", p["count"], p["difficulty"].as_str().expect("difficulty"),
+(B[m[31m-                p["possible"], p["current_possible"], p["top_name"].as_str().expect("screen name")))
+(B[m[31m-            .collect::<Vec<_>>().join(";");
+(B[m[31m-        let easy = context.song_steps.iter().position(|steps|
+(B[m[31m-            steps.difficulty == SongLuaDifficulty::Easy).expect("replacement Easy");
+(B[m[31m-        assert!(compiled.iter().flat_map(|layer| &layer.messages)
+(B[m[31m-            .any(|event| event.message == expected), "{compiled:?}");
+(B[m[32m+        let expected = native["snapshots"]
+(B[m[32m+            .as_array()
+(B[m[32m+            .expect("native startup snapshots")
+(B[m[32m+            .iter()
+(B[m[32m+            .map(|p| {
+(B[m[32m+                format!(
+(B[m[32m+                    "{}:{}:{}:{}:{}",
+(B[m[32m+                    p["count"],
+(B[m[32m+                    p["difficulty"].as_str().expect("difficulty"),
+(B[m[32m+                    p["possible"],
+(B[m[32m+                    p["current_possible"],
+(B[m[32m+                    p["top_name"].as_str().expect("screen name")
+(B[m[32m+                )
+(B[m[32m+            })
+(B[m[32m+            .collect::<Vec<_>>()
+(B[m[32m+            .join(";");
+(B[m[32m+        let easy = context
+(B[m[32m+            .song_steps
+(B[m[32m+            .iter()
+(B[m[32m+            .position(|steps| steps.difficulty == SongLuaDifficulty::Easy)
+(B[m[32m+            .expect("replacement Easy");
+(B[m[32m+        assert!(
+(B[m[32m+            compiled
+(B[m[32m+                .iter()
+(B[m[32m+                .flat_map(|layer| &layer.messages)
+(B[m[32m+                .any(|event| event.message == expected),
+(B[m[32m+            "{compiled:?}"
+(B[m[32m+        );
+(B[m         for layer in compiled {
+             assert_eq!(layer.startup_reloads, 1);
+             assert_eq!(layer.loaded_steps, Some([Some(easy), None]));
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14452:
+     fn startup_reload_keeps_globals_and_deletes_old_queues() {
+         let song_dir = test_dir("startup-reload-lifecycle");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m SCENES = (SCENES or 0) + 1
+ local scene = SCENES
+ TRACE = TRACE or {}
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14487:
+         end
+     end,
+ }
+[31m-"#).expect("reload lifecycle control");
+(B[m[31m-        let compiled = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Reload lifecycle"))
+(B[m[31m-            .expect("startup screen replacement");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("reload lifecycle control");
+(B[m[32m+        let compiled = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Reload lifecycle"),
+(B[m[32m+        )
+(B[m[32m+        .expect("startup screen replacement");
+(B[m         assert_eq!(compiled.startup_reloads, 1);
+[31m-        assert!(compiled.messages.iter().any(|event| event.message ==
+(B[m[31m-            "init1:begin1:changed1:on1:end1:init2:begin2:changed2:on2"), "{:?}", compiled.messages);
+(B[m[32m+        assert!(
+(B[m[32m+            compiled
+(B[m[32m+                .messages
+(B[m[32m+                .iter()
+(B[m[32m+                .any(|event| event.message
+(B[m[32m+                    == "init1:begin1:changed1:on1:end1:init2:begin2:changed2:on2"),
+(B[m[32m+            "{:?}",
+(B[m[32m+            compiled.messages
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14502:
+         let entry = song_dir.join("default.lua");
+         fs::write(&entry, "return Def.ActorFrame{InitCommand=function() SCREENMAN:SetNewScreen('ScreenGameplay') end}")
+             .expect("Init request control");
+[31m-        let compiled = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Init reload"))
+(B[m[31m-            .expect("native reports the invalid request and keeps the initialized screen");
+(B[m[32m+        let compiled = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Init reload"),
+(B[m[32m+        )
+(B[m[32m+        .expect("native reports the invalid request and keeps the initialized screen");
+(B[m         assert_eq!(compiled.startup_reloads, 0);
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14512:
+     fn startup_reload_accepts_zero_delta_updates() {
+         let song_dir = test_dir("startup-reload-update-zero");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m ZERO_SCENES = (ZERO_SCENES or 0) + 1
+ local scene = ZERO_SCENES
+ return Def.ActorFrame {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14525:
+         else mod_actions = {{1, tostring(ZERO_SCENES), true}} end
+     end,
+ }
+[31m-"#).expect("zero-delta reload control");
+(B[m[31m-        let compiled = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Zero-delta reload"))
+(B[m[31m-            .expect("reload is consumed at the Update(0) boundary");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("zero-delta reload control");
+(B[m[32m+        let compiled = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Zero-delta reload"),
+(B[m[32m+        )
+(B[m[32m+        .expect("reload is consumed at the Update(0) boundary");
+(B[m         assert_eq!(compiled.startup_reloads, 1);
+         assert!(compiled.messages.iter().any(|event| event.message == "2"));
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14539:
+         let entry = song_dir.join("default.lua");
+         fs::write(&entry, "return Def.ActorFrame{OnCommand=function() SCREENMAN:SetNewScreen('ScreenGameplay') end}")
+             .expect("endless reload control");
+[31m-        let error = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Endless reload"))
+(B[m[31m-            .expect_err("do not hang the loader on a script that always reloads");
+(B[m[32m+        let error = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Endless reload"),
+(B[m[32m+        )
+(B[m[32m+        .expect_err("do not hang the loader on a script that always reloads");
+(B[m         assert!(error.contains("128 startup gameplay reloads"), "{error}");
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14631:
+         let context = SongLuaCompileContext::new(&song_dir, "Video Driver");
+         test_compile_song_lua(&entry, &context).expect("native video driver preference must exist");
+ 
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m local driver = PREFSMAN:GetPreference("LastSeenVideoDriver")
+ local nvidia = string.find(string.lower(driver), "nvidia") ~= nil
+ assert(PREFSMAN:PreferenceExists("lastseenvideodriver"))
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14639:
+ assert(PREFSMAN:GetPreference("VideoRenderers") == "null")
+ mod_actions = {{1, driver .. ":" .. tostring(nvidia), true}}
+ return Def.ActorFrame{}
+[31m-"#).unwrap();
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         let mut context = context;
+         context.video_renderers = "null".into();
+[31m-        for (driver, expected) in [("NVIDIA Test Adapter", "NVIDIA Test Adapter:true"), ("OpenGL", "OpenGL:false")] {
+(B[m[32m+        for (driver, expected) in [
+(B[m[32m+            ("NVIDIA Test Adapter", "NVIDIA Test Adapter:true"),
+(B[m[32m+            ("OpenGL", "OpenGL:false"),
+(B[m[32m+        ] {
+(B[m             context.last_seen_video_driver = driver.into();
+             let compiled = test_compile_song_lua(&entry, &context).unwrap();
+             assert_eq!(compiled.messages[0].message, expected);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14962:
+         let lua = Lua::new();
+         let actor = test_create_dummy_actor(&lua, "ActorFrame").unwrap();
+         lua.globals().set("actor", actor).unwrap();
+[31m-        lua.load(r#"
+(B[m[32m+        lua.load(
+(B[m[32m+            r#"
+(B[m actor:SetUpdateRate("2")
+ for _, value in ipairs{0, -1, -math.huge, false, "bad"} do
+     assert(not pcall(function() actor:SetUpdateRate(value) end))
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:14974:
+ actor:SetUpdateRate(math.huge)
+ assert(actor:GetUpdateRate() == math.huge)
+ actor:SetUpdateRate(2)
+[31m-"#).exec().unwrap();
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .exec()
+(B[m[32m+        .unwrap();
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15219:
+         assert_eq!(compiled.messages[0].message, "640:360:1:1");
+     }
+ 
+[31m-
+(B[m     #[test]
+     fn compile_song_lua_stretch_keeps_native_intrinsic_size_and_scale() {
+         let song_dir = test_dir("native-stretch-scale");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15244:
+ assert(native_target:GetZoomedWidth() == 320 and native_target:GetZoomedHeight() == 240)
+ 
+         end }"#).unwrap();
+[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native StretchTo")).unwrap();
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native StretchTo"),
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15329:
+         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+             .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+         let entry = song_dir.join("default.lua");
+[31m-        for (name, expected) in [("gif-offset.gif", "16:24:16:24:16:32"),
+(B[m[31m-            ("gif-first-frame.gif", "16:24:16:24:16:32"), ("os2-4.bmp", "8:8:8:8:8:8")] {
+(B[m[32m+        for (name, expected) in [
+(B[m[32m+            ("gif-offset.gif", "16:24:16:24:16:32"),
+(B[m[32m+            ("gif-first-frame.gif", "16:24:16:24:16:32"),
+(B[m[32m+            ("os2-4.bmp", "8:8:8:8:8:8"),
+(B[m[32m+        ] {
+(B[m             fs::copy(root.join(name), song_dir.join(name)).expect("copy native indexed file");
+[31m-            fs::write(&entry, format!(r#"
+(B[m[32m+            fs::write(
+(B[m[32m+                &entry,
+(B[m[32m+                format!(
+(B[m[32m+                    r#"
+(B[m return Def.Sprite{{
+     Texture="{name}",
+     OnCommand=function(self)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15343:
+             texture:GetTextureWidth(), texture:GetTextureHeight()), true}}}}
+     end,
+ }}
+[31m-"#)).expect("indexed Sprite Lua");
+(B[m[32m+"#
+(B[m[32m+                ),
+(B[m[32m+            )
+(B[m[32m+            .expect("indexed Sprite Lua");
+(B[m             let compiled = test_compile_song_lua(
+[31m-                &entry, &SongLuaCompileContext::new(&song_dir, "Native Indexed Dimensions"),
+(B[m[31m-            ).expect("compile indexed Sprite source getters");
+(B[m[32m+                &entry,
+(B[m[32m+                &SongLuaCompileContext::new(&song_dir, "Native Indexed Dimensions"),
+(B[m[32m+            )
+(B[m[32m+            .expect("compile indexed Sprite source getters");
+(B[m             assert_eq!(compiled.messages.len(), 1);
+             assert_eq!(compiled.messages[0].message, expected, "{name}");
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15359:
+             .join("../../tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation");
+         fs::copy(root.join("tiny.png"), song_dir.join("tiny.png")).expect("native tiny input");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m return Def.Sprite{Texture="tiny.png", OnCommand=function(self)
+     mod_actions={{1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true}}
+     self:addimagecoords(1,2)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15366:
+ end}
+[31m-"#).expect("tiny image offset Lua");
+(B[m[31m-        let compiled = test_compile_song_lua(&entry,
+(B[m[31m-            &SongLuaCompileContext::new(&song_dir, "Native Tiny Offsets")).expect("compile offsets");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("tiny image offset Lua");
+(B[m[32m+        let compiled = test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native Tiny Offsets"),
+(B[m[32m+        )
+(B[m[32m+        .expect("compile offsets");
+(B[m         assert_eq!(compiled.messages[0].message, "3:2");
+         // Sprite.cpp AddImageCoords divides by native allocation axes. This
+         // native 3x2 input fills its prepared 8x8 allocation (bitmap golden).
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15373:
+[31m-        assert_eq!(compiled.overlays[0].initial_state.custom_texture_rect,
+(B[m[31m-            Some([0.125, 0.25, 1.125, 1.25]));
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.overlays[0].initial_state.custom_texture_rect,
+(B[m[32m+            Some([0.125, 0.25, 1.125, 1.25])
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15381:
+             .join("../../tests/fixtures/itgmania-song-lua-micro/texture-image-getters");
+         let cases: serde_json::Value = serde_json::from_slice(
+             &fs::read(root.join("cases.json")).expect("native image dimensions"),
+[31m-        ).expect("captured native dimension cases");
+(B[m[32m+        )
+(B[m[32m+        .expect("captured native dimension cases");
+(B[m         let entry = song_dir.join("default.lua");
+         fs::copy(root.join("sheet 2x1.png"), song_dir.join("sheet 2x1.png"))
+             .expect("replacement texture");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15388:
+         for case in cases.as_array().expect("native cases") {
+             let file = case["file"].as_str().expect("native source filename");
+             fs::copy(root.join(file), song_dir.join(file)).expect("native image input");
+[31m-            fs::write(&entry, format!(r#"
+(B[m[32m+            fs::write(
+(B[m[32m+                &entry,
+(B[m[32m+                format!(
+(B[m[32m+                    r#"
+(B[m return Def.ActorFrame{{
+     Def.Sprite{{Texture="{file}"}},
+     Def.Sprite{{
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15405:
+     end,
+     }},
+ }}
+[31m-"#)).expect("texture getter Lua");
+(B[m[32m+"#
+(B[m[32m+                ),
+(B[m[32m+            )
+(B[m[32m+            .expect("texture getter Lua");
+(B[m             let compiled = test_compile_song_lua(
+[31m-                &entry, &SongLuaCompileContext::new(&song_dir, "Native Image Getters"),
+(B[m[31m-            ).expect("compile native texture getters");
+(B[m[32m+                &entry,
+(B[m[32m+                &SongLuaCompileContext::new(&song_dir, "Native Image Getters"),
+(B[m[32m+            )
+(B[m[32m+            .expect("compile native texture getters");
+(B[m             let dims = &case["dimensions"];
+[31m-            let expected = ["source", "image", "texture", "image"].into_iter()
+(B[m[32m+            let expected = ["source", "image", "texture", "image"]
+(B[m[32m+                .into_iter()
+(B[m                 .flat_map(|kind| dims[kind].as_array().expect("native dimension pair"))
+                 .map(|value| value.as_u64().expect("native dimension").to_string())
+[31m-                .collect::<Vec<_>>().join(":");
+(B[m[32m+                .collect::<Vec<_>>()
+(B[m[32m+                .join(":");
+(B[m             assert_eq!(compiled.messages.len(), 1, "{file}");
+             assert_eq!(compiled.messages[0].message, expected, "{file}");
+         }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:15963:
+         assert!(compiled.overlays.iter().any(|actor| matches!(
+             &actor.kind, SongLuaOverlayKind::Sound { sound_path }
+                 if sound_path == &song_dir.join("other.ogg"))));
+[31m-        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, audio_path)],
+(B[m[31m-            "the play call keeps its binary audio file across a later load");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            test_compiled_sound_calls(&compiled),
+(B[m[32m+            vec![(0.0, audio_path)],
+(B[m[32m+            "the play call keeps its binary audio file across a later load"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:16921:
+         assert_eq!(vertices[0].pos, [0.0, 0.0]);
+         assert_eq!(vertices[0].color, [1.0, 0.0, 0.0, 1.0]);
+         assert_eq!(vertices[5].pos, [0.0, 0.0]);
+[31m-        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &compiled.overlays[1].kind else {
+(B[m[32m+        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &compiled.overlays[1].kind
+(B[m[32m+        else {
+(B[m             panic!("expected line strip overlay");
+         };
+         assert_eq!(vertices.len(), 6);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:16928:
+[31m-        let left = vertices.iter().map(|vertex| vertex.pos[0]).fold(f32::INFINITY, f32::min);
+(B[m[31m-        let right = vertices.iter().map(|vertex| vertex.pos[0]).fold(f32::NEG_INFINITY, f32::max);
+(B[m[31m-        assert_eq!(right - left, 3.0, "native SetLineWidth controls drawn geometry");
+(B[m[32m+        let left = vertices
+(B[m[32m+            .iter()
+(B[m[32m+            .map(|vertex| vertex.pos[0])
+(B[m[32m+            .fold(f32::INFINITY, f32::min);
+(B[m[32m+        let right = vertices
+(B[m[32m+            .iter()
+(B[m[32m+            .map(|vertex| vertex.pos[0])
+(B[m[32m+            .fold(f32::NEG_INFINITY, f32::max);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            right - left,
+(B[m[32m+            3.0,
+(B[m[32m+            "native SetLineWidth controls drawn geometry"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:18660:
+             &SongLuaCompileContext::new(&song_dir, "SkewY Probe"),
+         )
+         .unwrap();
+[31m-        assert_eq!(compiled.info.unsupported_function_eases, 0, "{:?}", compiled.info);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.info.unsupported_function_eases, 0,
+(B[m[32m+            "{:?}",
+(B[m[32m+            compiled.info
+(B[m[32m+        );
+(B[m         assert_eq!(compiled.eases.len(), 1);
+         assert!(matches!(
+             compiled.eases[0].target,
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:20303:
+     fn compile_song_lua_underlay_has_only_enabled_player_children() {
+         let song_dir = test_dir("underlay-enabled-players");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m return Def.ActorFrame{
+     InitCommand=function(self)
+         local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:20319:
+         assert(underlay:GetChild('SongMeter'))
+     end,
+ }
+[31m-"#).unwrap();
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         for enabled in [[true, false], [false, true], [true, true]] {
+             let mut context = SongLuaCompileContext::new(&song_dir, "enabled underlay players");
+             context.screen_width = 854.0;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:21224:
+             .join("../../tests/fixtures/itgmania-song-lua-micro/stage-points-native.json");
+         let fixture: serde_json::Value = serde_json::from_slice(
+             &fs::read(native_path).expect("captured native stage point control"),
+[31m-        ).expect("native stage point JSON");
+(B[m[31m-        let assertions = fixture["lua_assertions"].as_str().expect("native assertions");
+(B[m[32m+        )
+(B[m[32m+        .expect("native stage point JSON");
+(B[m[32m+        let assertions = fixture["lua_assertions"]
+(B[m[32m+            .as_str()
+(B[m[32m+            .expect("native assertions");
+(B[m         let song_dir = test_dir("native-stage-points");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, format!(
+(B[m[31m-            "local function _ITG_STAGE_STATS(player)\n\
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            format!(
+(B[m[32m+                "local function _ITG_STAGE_STATS(player)\n\
+(B[m              return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+              {assertions}\nreturn Def.ActorFrame{{}}\n",
+[31m-        )).expect("stage point control script");
+(B[m[32m+            ),
+(B[m[32m+        )
+(B[m[32m+        .expect("stage point control script");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Native stage points");
+         context.players[1].enabled = true;
+         test_compile_song_lua(&entry, &context).expect("same stage point assertions as native");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:21242:
+     fn stage_grade_matches_native() {
+         let fixture: serde_json::Value = serde_json::from_str(include_str!(
+             "../../../tests/fixtures/itgmania-song-lua-micro/stage-grade-native.json",
+[31m-        )).expect("native stage grade control");
+(B[m[31m-        let assertions = fixture["lua_assertions"].as_str().expect("native grade assertions");
+(B[m[32m+        ))
+(B[m[32m+        .expect("native stage grade control");
+(B[m[32m+        let assertions = fixture["lua_assertions"]
+(B[m[32m+            .as_str()
+(B[m[32m+            .expect("native grade assertions");
+(B[m         let song_dir = test_dir("native-stage-grade");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, format!(
+(B[m[31m-            "local function _ITG_STAGE_STATS(player)\n\
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            format!(
+(B[m[32m+                "local function _ITG_STAGE_STATS(player)\n\
+(B[m              return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+              {assertions}\nreturn Def.ActorFrame{{}}\n",
+[31m-        )).expect("stage grade control script");
+(B[m[31m-        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native grade"))
+(B[m[31m-            .expect("same empty and failed stage grades as native");
+(B[m[32m+            ),
+(B[m[32m+        )
+(B[m[32m+        .expect("stage grade control script");
+(B[m[32m+        test_compile_song_lua(
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Native grade"),
+(B[m[32m+        )
+(B[m[32m+        .expect("same empty and failed stage grades as native");
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:21354:
+             &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
+         )
+         .unwrap();
+[31m-        assert_eq!(compiled.info.unsupported_function_actions, 0, "{:?}", compiled.info);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            compiled.info.unsupported_function_actions, 0,
+(B[m[32m+            "{:?}",
+(B[m[32m+            compiled.info
+(B[m[32m+        );
+(B[m         assert!(compiled.messages.is_empty());
+         assert!(compiled.overlays.is_empty());
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:21883:
+     fn compile_begin_proxies() {
+         let song_dir = test_dir("begin-player-proxy");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/begin-player-proxy.lua"))
+(B[m[31m-            .expect("write root Begin player binding");
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            include_str!("../../../tests/fixtures/song-lua/begin-player-proxy.lua"),
+(B[m[32m+        )
+(B[m[32m+        .expect("write root Begin player binding");
+(B[m         let compiled = test_compile_song_lua(
+[31m-            &entry, &SongLuaCompileContext::new(&song_dir, "Begin Player Proxy"),
+(B[m[31m-        ).expect("compile root and proxy Begin commands");
+(B[m[32m+            &entry,
+(B[m[32m+            &SongLuaCompileContext::new(&song_dir, "Begin Player Proxy"),
+(B[m[32m+        )
+(B[m[32m+        .expect("compile root and proxy Begin commands");
+(B[m         for player_index in 0..2 {
+             let name = format!("ProxyP{}", player_index + 1);
+[31m-            let proxy = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(&name))
+(B[m[32m+            let proxy = compiled
+(B[m[32m+                .overlays
+(B[m[32m+                .iter()
+(B[m[32m+                .find(|actor| actor.name.as_deref() == Some(&name))
+(B[m                 .expect("retain player proxy");
+[31m-            assert!(matches!(proxy.kind, SongLuaOverlayKind::ActorProxy {
+(B[m[32m+            assert!(
+(B[m[32m+                matches!(proxy.kind, SongLuaOverlayKind::ActorProxy {
+(B[m                 target: SongLuaProxyTarget::Player { player_index: target },
+[31m-            } if target == player_index), "{name}: {:?}", proxy.kind);
+(B[m[32m+            } if target == player_index),
+(B[m[32m+                "{name}: {:?}",
+(B[m[32m+                proxy.kind
+(B[m[32m+            );
+(B[m         }
+     }
+ 
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:22679:
+             assert_eq!(state.x, 222.0);
+         }
+         for frame in &compiled.draw_frames {
+[31m-            let sources = frame.ops.iter().filter_map(|op| match op {
+(B[m[31m-                SongLuaDrawOp::Draw { source, .. } => Some(*source),
+(B[m[31m-                _ => None,
+(B[m[31m-            }).collect::<Vec<_>>();
+(B[m[31m-            assert_eq!(sources, [SongLuaDrawSource::Judgment(0), SongLuaDrawSource::Player(0)],
+(B[m[31m-                "the theme judgment frame remains a distinct HUD draw source");
+(B[m[32m+            let sources = frame
+(B[m[32m+                .ops
+(B[m[32m+                .iter()
+(B[m[32m+                .filter_map(|op| match op {
+(B[m[32m+                    SongLuaDrawOp::Draw { source, .. } => Some(*source),
+(B[m[32m+                    _ => None,
+(B[m[32m+                })
+(B[m[32m+                .collect::<Vec<_>>();
+(B[m[32m+            assert_eq!(
+(B[m[32m+                sources,
+(B[m[32m+                [SongLuaDrawSource::Judgment(0), SongLuaDrawSource::Player(0)],
+(B[m[32m+                "the theme judgment frame remains a distinct HUD draw source"
+(B[m[32m+            );
+(B[m         }
+         assert!(compiled.player_actors[0].manual_hud_draw);
+     }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23049:
+     fn compile_song_lua_keeps_notefield_wrapper_skew_on_child() {
+         let song_dir = test_dir("notefield-wrapper-skew");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m local field, inner, outer
+ return Def.ActorFrame {
+     OnCommand=function(self)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23065:
+         end)
+     end
+ }
+[31m-"#).expect("write wrapper chart");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .expect("write wrapper chart");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Wrapper Skew");
+         context.music_length_seconds = 2.0;
+         let compiled = test_compile_song_lua(&entry, &context).expect("capture child wrappers");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23072:
+         let frames = &compiled.player_actors[0].note_field_frames;
+         assert!(frames.len() > 30, "retain the child's animated poses");
+[31m-        let frame = frames.iter().find(|frame| (frame.second - 0.5).abs() < 0.001)
+(B[m[32m+        let frame = frames
+(B[m[32m+            .iter()
+(B[m[32m+            .find(|frame| (frame.second - 0.5).abs() < 0.001)
+(B[m             .expect("native half-second sample");
+         assert_eq!(frame.wrappers.len(), 2);
+         assert_eq!(frame.wrappers[0].x, 17.0, "outer wrapper draws first");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23078:
+[31m-        assert!(frame.wrappers[0].spin_baked, "native accumulated spin runs once");
+(B[m[32m+        assert!(
+(B[m[32m+            frame.wrappers[0].spin_baked,
+(B[m[32m+            "native accumulated spin runs once"
+(B[m[32m+        );
+(B[m         assert!((frame.wrappers[0].rot_z_deg - 45.0).abs() < 0.001);
+         assert!((frame.wrappers[1].skew_x - 0.015).abs() < 0.0001);
+         assert_eq!(compiled.player_actors[0].initial_state.skew_x, 0.0);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23082:
+         assert!(!compiled.eases.iter().any(|ease| {
+[31m-            matches!(ease.target, SongLuaEaseTarget::PlayerSkewX | SongLuaEaseTarget::PlayerSkewY)
+(B[m[32m+            matches!(
+(B[m[32m+                ease.target,
+(B[m[32m+                SongLuaEaseTarget::PlayerSkewX | SongLuaEaseTarget::PlayerSkewY
+(B[m[32m+            )
+(B[m         }));
+[31m-        assert_eq!(crate::runtime_player_option_ease_target("skewx", "skewx"), None);
+(B[m[31m-        assert_eq!(crate::runtime_player_option_ease_target("skewy", "skewy"), None);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            crate::runtime_player_option_ease_target("skewx", "skewx"),
+(B[m[32m+            None
+(B[m[32m+        );
+(B[m[32m+        assert_eq!(
+(B[m[32m+            crate::runtime_player_option_ease_target("skewy", "skewy"),
+(B[m[32m+            None
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:23725:
+         let entry = song_dir.join("default.lua");
+         // Run the unchanged normal-API control also captured with native C++
+         // getters. Its callbacks check approach, freeze and level propagation.
+[31m-        fs::write(&entry, include_str!(
+(B[m[31m-            "../../../tests/fixtures/itgmania-song-lua-micro/current-options/default.lua"
+(B[m[31m-        )).expect("native control Lua");
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            include_str!(
+(B[m[32m+                "../../../tests/fixtures/itgmania-song-lua-micro/current-options/default.lua"
+(B[m[32m+            ),
+(B[m[32m+        )
+(B[m[32m+        .expect("native control Lua");
+(B[m         let mut context = SongLuaCompileContext::new(&song_dir, "Current options");
+         context.song_display_bpms = [60.0, 60.0];
+         context.music_length_seconds = 1.0;
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:24713:
+     fn center_player_utility() {
+         let song_dir = test_dir("center-player-utility");
+         let entry = song_dir.join("default.lua");
+[31m-        fs::write(&entry, r#"
+(B[m[32m+        fs::write(
+(B[m[32m+            &entry,
+(B[m[32m+            r#"
+(B[m local before = Center1Player()
+ PREFSMAN:SetPreference("Center1Player", true)
+ mod_actions = {{0, tostring(before) .. ":" .. tostring(Center1Player()), true}}
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:24720:
+ return Def.ActorFrame{}
+[31m-"#).unwrap();
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         for (style, expected) in [
+             ("single", "false:true"),
+             ("double", "true:true"),
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:24929:
+         let mut context = SongLuaCompileContext::new(&song_dir, "Theme Process Helpers");
+         context.live = true;
+         let mut compiled = test_compile_song_lua(&entry, &context).unwrap();
+[31m-        let output = compiled.live_scene.as_mut().expect("owned runtime callbacks").take_startup_output();
+(B[m[31m-        let messages = output.broadcasts.iter().filter(|event| event.1.starts_with("ScreenGameplay:"))
+(B[m[31m-            .map(|event| event.1.as_str()).collect::<Vec<_>>();
+(B[m[32m+        let output = compiled
+(B[m[32m+            .live_scene
+(B[m[32m+            .as_mut()
+(B[m[32m+            .expect("owned runtime callbacks")
+(B[m[32m+            .take_startup_output();
+(B[m[32m+        let messages = output
+(B[m[32m+            .broadcasts
+(B[m[32m+            .iter()
+(B[m[32m+            .filter(|event| event.1.starts_with("ScreenGameplay:"))
+(B[m[32m+            .map(|event| event.1.as_str())
+(B[m[32m+            .collect::<Vec<_>>();
+(B[m         assert_eq!(messages.len(), 1, "startup output: {output:?}");
+         assert_eq!(
+             messages[0],
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:25394:
+         }
+         let last = position.coefficients[7];
+         assert_eq!([last[0][0], last[1][0], last[2][0]], [9.0, 0.0, 0.0]);
+[31m-        lua.load(r#"
+(B[m[32m+        lua.load(
+(B[m[32m+            r#"
+(B[m             spline = column:GetPosHandler():GetSpline()
+             spline:set_size(4):set_loop(true)
+             for i, x in ipairs({0, 96, 0, -96}) do spline:set_point(i, {x,0,0}) end
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:25403:
+             assert(spline:evaluate(-0.25)[1] == spline:evaluate(3.75)[1])
+             assert(spline:evaluate(4.5)[1] == spline:evaluate(0.5)[1])
+             assert(spline:evaluate(0.5)[1] == 66)
+[31m-        "#).exec().unwrap();
+(B[m[32m+        "#,
+(B[m[32m+        )
+(B[m[32m+        .exec()
+(B[m[32m+        .unwrap();
+(B[m         let mut scratch = crate::lua_util::ColumnSplineReadScratch::default();
+[31m-        crate::lua_util::read_column_position_splines(&lua, |_, _| None,
+(B[m[31m-            &mut scratch, &mut frames).unwrap();
+(B[m[32m+        crate::lua_util::read_column_position_splines(&lua, |_, _| None, &mut scratch, &mut frames)
+(B[m[32m+            .unwrap();
+(B[m         let looped = frames.clone();
+         assert!(looped[0].2.position.as_ref().unwrap().looping);
+         lua.load("spline:set_loop(false):solve()").exec().unwrap();
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:25413:
+[31m-        crate::lua_util::read_column_position_splines(&lua,
+(B[m[31m-            |_, _| Some(&looped[0].2), &mut scratch, &mut frames).unwrap();
+(B[m[32m+        crate::lua_util::read_column_position_splines(
+(B[m[32m+            &lua,
+(B[m[32m+            |_, _| Some(&looped[0].2),
+(B[m[32m+            &mut scratch,
+(B[m[32m+            &mut frames,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m         let straight = frames[0].2.position.as_ref().unwrap();
+         assert!(!straight.looping);
+[31m-        assert_ne!(straight.coefficients, looped[0].2.position.as_ref().unwrap().coefficients);
+(B[m[32m+        assert_ne!(
+(B[m[32m+            straight.coefficients,
+(B[m[32m+            looped[0].2.position.as_ref().unwrap().coefficients
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:26360:
+         let lua = Lua::new();
+         let owner = test_create_dummy_actor(&lua, "Quad").expect("probe owner");
+         let other = test_create_dummy_actor(&lua, "Quad").expect("other owner");
+[31m-        lua.globals().set("owner", owner.clone()).expect("owner global");
+(B[m[32m+        lua.globals()
+(B[m[32m+            .set("owner", owner.clone())
+(B[m[32m+            .expect("owner global");
+(B[m         lua.globals().set("other", other).expect("other global");
+[31m-        lua.load(r#"
+(B[m[32m+        lua.load(
+(B[m[32m+            r#"
+(B[m original = owner:AddWrapperState():x(3)
+ other_original = other:AddWrapperState():x(7)
+ owner.ProbeMessageCommand = function(self)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:26370:
+     other:AddWrapperState():x(50)
+     other:GetWrapperState(1):x(90)
+ end
+[31m-"#).exec().expect("wrapper command");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .exec()
+(B[m[32m+        .expect("wrapper command");
+(B[m         crate::capture_actor_command_preserving_state(&lua, &owner, "ProbeMessageCommand")
+             .expect("isolated command probe");
+[31m-        lua.load(r#"
+(B[m[32m+        lua.load(
+(B[m[32m+            r#"
+(B[m assert(owner:GetNumWrapperStates() == 1)
+ assert(other:GetNumWrapperStates() == 1)
+ assert(owner:GetWrapperState(1) == original)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/lib.rs:26380:
+ assert(other:GetWrapperState(1) == other_original)
+ assert(original:GetX() == 3)
+ assert(other_original:GetX() == 7)
+[31m-"#).exec().expect("membership, identity and existing state restored");
+(B[m[32m+"#,
+(B[m[32m+        )
+(B[m[32m+        .exec()
+(B[m[32m+        .expect("membership, identity and existing state restored");
+(B[m     }
+ 
+     #[test]

@@ -1,0 +1,43 @@
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 1m 08s
+     Running tests\rust_song_compiler.rs (target\rust-adapters\debug\deps\rust_song_compiler-038cb5d3f3e47fdf.exe)
+
+running 2 tests
+test existing_chronological_message_advance_matches_complete_compiler ... 
+thread 'existing_chronological_message_advance_matches_complete_compiler' (42632) panicked at crates\deadsync-song-lua\tests\rust_song_compiler.rs:127:5:
+layer 0: overlays, first difference at 12143
+native: ze: None, stretch_rect: None }, message_commands: [SongLuaOverlayMessageCommand { frame_advance: 0.01666668, message: "Kick", blocks: [SongLuaOverlayCommandBlock { progress: None, queued: false, start: 0.0, duration: 0.2, easing: Some("linear"), opt1: None, opt2: None, delta: SongLuaOverlayStateDelt
+Rust: ze: None, stretch_rect: None }, message_commands: [SongLuaOverlayMessageCommand { frame_advance: 0.0, message: "Kick", blocks: [SongLuaOverlayCommandBlock { progress: None, queued: false, start: 0.0, duration: 0.2, easing: Some("linear"), opt1: None, opt2: None, delta: SongLuaOverlayStateDelta { aux
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test existing_chronological_tween_retarget_matches_complete_compiler ... 
+thread 'existing_chronological_tween_retarget_matches_complete_compiler' (32868) panicked at crates\deadsync-song-lua\tests\rust_song_compiler.rs:127:5:
+layer 0: overlays, first difference at 8249
+native: ze: None, stretch_rect: None }, message_commands: [SongLuaOverlayMessageCommand { frame_advance: 0.01666668, message: "Kick", blocks: [SongLuaOverlayCommandBlock { progress: None, queued: false, start: 0.0, duration: 0.4, easing: Some("linear"), opt1: None, opt2: None, delta: SongLuaOverlayStateDelt
+Rust: ze: None, stretch_rect: None }, message_commands: [SongLuaOverlayMessageCommand { frame_advance: 0.0, message: "Kick", blocks: [SongLuaOverlayCommandBlock { progress: None, queued: false, start: 0.0, duration: 0.4, easing: Some("linear"), opt1: None, opt2: None, delta: SongLuaOverlayStateDelta { aux
+FAILED
+
+failures:
+
+failures:
+    existing_chronological_message_advance_matches_complete_compiler
+    existing_chronological_tween_retarget_matches_complete_compiler
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 12 filtered out; finished in 5.37s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_compiler`

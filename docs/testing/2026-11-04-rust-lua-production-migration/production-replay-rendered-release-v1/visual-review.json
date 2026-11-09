@@ -1,0 +1,11 @@
+{
+  "status": "visually inspected",
+  "image": "data\\save\\screenshots\\2026\\11-November\\2026-11-08_132522__315__DREAMING_ING__.png",
+  "sha256": "e2b633f3b6d46a9570f4de9669b92fe5043a21f57f67e4c7df904f3729b3f949",
+  "observed": [
+    "DREAMING-ING!! background video frame",
+    "cel receptors and HUD including BPM180",
+    "Autoplay presentation"
+  ],
+  "limits": "Functional rendered smoke for recorded replay-hook source/exe. Not synchronized pixel parity or final-source evidence for subsequent runtime adapter fixes."
+}

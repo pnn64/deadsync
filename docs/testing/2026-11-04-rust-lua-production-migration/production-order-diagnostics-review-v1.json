@@ -1,0 +1,21 @@
+{
+  "scope": "Explain retained oracle-only ordering failures without deleting, weakening, skipping or claiming they passed",
+  "conflicting_setter_history": {
+    "original_test": "runtime_modifiers::native_table_order_preserves_shared_speed_fields",
+    "original_test_source": "tests/song_lua_itgmania_semantic_parity/runtime_modifiers.rs; exact baseline bytes per production-original-semantic-review-v1.json",
+    "recorded_failure": "32 intermediate speed-field observations at beat0 differ; the unchanged54-setter-count assertion passes",
+    "input": "tests/fixtures/song-lua/native-table-order.lua uses pairs(record) over four literal records containing setters for overlapping speed fields; each player ends with explicit options:XMod(4)",
+    "production_boundary": "CompiledSongLuaData.speed_writes is cfg(feature=test-support), lib.rs2906-2907. It is absent from normal shipping payloads. No shell/gameplay/notefield consumer references it.",
+    "functional_control": "existing_conflicting_speed_setters_final_payload compares every production compiled field after the original fixture's final explicit setter; passes in production-existing-bindings-v1-song-windows-debug with all28 compiler comparisons",
+    "classification": "Explained intermediate unordered-table setter-history difference; no missing setter or demonstrated final production payload difference in this fixture. Original red test remains enabled and will remain visible in final reports.",
+    "limit": "Does not assert that every script relying on pairs order is equivalent. No C table layout compatibility or wider language parity work is introduced. Any actual production output/callback-order regression remains a migration defect."
+  },
+  "unranked_coverage_diagnostics": {
+    "original_tests": ["replay_captured_subscriber_paths_preserve_the_native_order", "replay_missing_subscriber_identity_dispatches_and_reports_coverage_once"],
+    "observed_difference": "Two missing-identity diagnostics for ScreenGameplay/25 and ScreenGameplay/3/1 are reversed; captured known subscriber delivery and state assertions remain intact",
+    "evidence": ["production-replay-coverage-order-repeat-v1", "production-replay-coverage-order-full-repeat-v1", "production-live-observer-regressions-v1-song-windows-debug"],
+    "bounded_control": "Same preserved binary passes both isolated tests on all four repeats; full repeats vary21/23 and22/23 only by unranked diagnostic order. No sorting/normalization added to tests or runtime.",
+    "classification": "Explained allocation-identity ordering of unranked coverage diagnostics; report any final red assertions separately from passing functional dispatch checks",
+    "limit": "No blanket pass claim. Does not excuse wrong known-subscriber ordering, lost callbacks, missing coverage rows or state differences. No C pointer/layout compatibility work."
+  }
+}

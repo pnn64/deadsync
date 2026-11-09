@@ -1,0 +1,52 @@
+{
+  "stage": "song-frame-capture-regressions-v2",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--test",
+    "rust_song_frame_capture",
+    "--test",
+    "rust_song_activation",
+    "--test",
+    "rust_song_column_output",
+    "--test",
+    "rust_song_update_output",
+    "--test",
+    "rust_player_options",
+    "--lib",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 1477.8884850540198,
+  "log_sha256": "f95c5b94e623e15fe38a602e889bf866ac1321875a0bccbaaf283fa5ed14bf76",
+  "tests_passed": 1096,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 849 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 475.03s",
+    "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.75s",
+    "test result: ok. 212 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 222.69s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.24s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.44s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.77s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "PKG_CONFIG_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/pkgconfig:/var/tmp/deadsync-rust-adapters-native-deps/root/usr/share/pkgconfig",
+    "CPATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include",
+    "LD_LIBRARY_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu:"
+  }
+}

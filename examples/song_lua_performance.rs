@@ -52,7 +52,8 @@ fn main() {
         let prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
             &song, &charts, [&payload.timing; 2], &profiles, &scroll, 1.0,
             deadsync_gameplay::GameplayViewport::new(640.0, 480.0), (640, 480),
-            4.0 / 3.0, 1.0, &session, &config, renderer, 0);
+            4.0 / 3.0, 1.0, &session, &config, renderer, 0,
+            deadsync_config::options::SongLuaMode::Baked, None);
         samples.push(measurement.finish());
         let mut fingerprint = Fingerprint(Sha256::new());
         let mut count = 0;

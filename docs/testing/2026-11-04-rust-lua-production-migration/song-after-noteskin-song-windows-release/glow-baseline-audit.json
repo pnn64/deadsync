@@ -1,0 +1,48 @@
+{
+  "classification": "Pre-existing deterministic renderer/test expectation mismatch, verified at source level; not a newly executed frozen-baseline test run.",
+  "test": "playback::tests::song_lua_actor_multi_vertex_builds_textured_mesh_overlay",
+  "assertion_line": 7530,
+  "actual_glow_vertex_color": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "expected_glow_vertex_color": [
+    1,
+    1,
+    1,
+    0.5
+  ],
+  "cause": "SongLuaProjectedMeshScratch::update_textured_glow unconditionally replaces RGBA with [1.0; 4]. The test expects source alpha to remain. This test constructs an ActorMultiVertex overlay directly and does not execute Lua.",
+  "files": {
+    "crates/deadsync-song-lua/src/playback.rs": {
+      "baseline_sha256": "7263d11df1616d9adfc28b5cb7232f341e2db80683481145b7442974599f5c1b",
+      "current_sha256": "7263d11df1616d9adfc28b5cb7232f341e2db80683481145b7442974599f5c1b",
+      "identical": true
+    },
+    "crates/deadsync-song-lua/tests/playback/cases.rs": {
+      "baseline_sha256": "eab46c3e04f901171bf8219b2f1d61ca49cfcc744b61f75ca567e3708150a542",
+      "current_sha256": "eab46c3e04f901171bf8219b2f1d61ca49cfcc744b61f75ca567e3708150a542",
+      "identical": true
+    },
+    "crates/deadsync-song-lua/src/lib.rs": {
+      "baseline_sha256": "ef6a6fa19e963766366c9b1f60344ea21896058a47d49ce1f0026663056fee9e",
+      "current_sha256": "ef6a6fa19e963766366c9b1f60344ea21896058a47d49ce1f0026663056fee9e",
+      "identical": true
+    },
+    "crates/deadsync-noteskin/src/lib.rs": {
+      "baseline_sha256": "675273e4c9e5c8c70348e49a36c7f10318106eb678161a5d344a481e72606be2",
+      "current_sha256": "675273e4c9e5c8c70348e49a36c7f10318106eb678161a5d344a481e72606be2",
+      "identical": true
+    }
+  },
+  "coverage_preserved": true,
+  "implementation_unchanged": true,
+  "all_executed_test_binaries": {
+    "passed": 1130,
+    "failed": 1,
+    "ignored": 43
+  },
+  "wrapper_caveat": "Original result.json counts passing binaries only (916); 214 additional tests passed in the failing playback binary. The original report remains unchanged. Source hashes changed during the long run due to Rust actor work, so this is interim evidence."
+}

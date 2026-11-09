@@ -1,0 +1,44 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 53s
+     Running tests/rust_gameplay_reload.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_gameplay_reload-ed5b3e6b789c401a)
+
+running 8 tests
+test context_uses_retained_chart_identity_metadata_and_missing_selection_fallbacks ... ok
+test failed_theme_load_keeps_published_partial_screen_owned_until_explicit_release ... ok
+test initial_screen_seeds_nonhuman_chart_and_loads_all_original_phases ... ok
+test rebuild_preserves_process_state_and_rng_but_resets_options_statistics_clock_and_subscriptions ... ok
+test repeated_reconstruction_releases_outgoing_scene_roots_after_collection ... 
+thread 'repeated_reconstruction_releases_outgoing_scene_roots_after_collection' (2665995) panicked at crates/deadsync-song-lua/tests/rust_gameplay_reload.rs:90:33:
+native: collectgarbage('collect');collectgarbage('collect');assert(WEAK[1]==nil);log('released outgoing screen')
+runtime error: /fixture/gameplay-reload.lua:1: assertion failed!
+stack traceback:
+	[C]: in ?
+	[C]: in function 'assert'
+	/fixture/gameplay-reload.lua:1: in main chunk
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test replacement_resets_screen_input_map_and_keeps_saved_methods_bound_to_new_map ... ok
+test selected_context_uses_chart_timing_and_keeps_supplied_fallback_when_timing_is_missing ... ok
+test style_projection_keeps_native_fallback_reentry_and_read_order ... ok
+
+failures:
+
+failures:
+    repeated_reconstruction_releases_outgoing_scene_roots_after_collection
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.89s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_gameplay_reload`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_gameplay_reload`

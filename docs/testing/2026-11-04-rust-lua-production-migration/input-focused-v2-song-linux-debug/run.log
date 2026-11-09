@@ -1,0 +1,79 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: use of deprecated type alias `mlua::String`: use `mlua::LuaString` instead
+   --> crates/deadsync-song-lua/tests/rust_baked_program.rs:727:44
+    |
+727 | ...a::String>(i...
+    |       ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `deadsync-song-lua` (test "rust_baked_program") generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 13.65s
+     Running tests/rust_baked_program.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_baked_program-9c28981254a6c577)
+
+running 27 tests
+test batch_compilation_keeps_binding_bits_identity_errors_and_independent_state ... ok
+test borrowed_byte_values_reuse_storage_without_merging_cells_or_changing_equality ... ok
+test borrowed_instruction_decoding_preserves_endianness_and_outlives_the_dump ... ok
+test byte_cells_reject_transient_inputs_type_changes_and_incompatible_initial_contents ... ok
+test equal_scalar_values_do_not_merge_distinct_captured_cells ... ok
+test group_code_sharing_preserves_independent_cells_constants_and_object_ids ... ok
+test grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction ... ok
+test groups_check_cell_layout_bits_and_clear_scratch_between_programs ... ok
+test identical_group_code_shares_storage_without_merging_execution_or_machine_state ... ok
+test implicit_entry_nils_are_restored_only_where_control_flow_can_read_them ... ok
+test input_contract_errors_and_static_schema_errors_are_checked ... ok
+test malformed_or_mutated_dumps_never_need_a_lua_vm_to_validate_or_execute ... ok
+test method_chains_tail_calls_and_receiver_identity_are_verified ... ok
+test noncanonical_boolean_constants_are_rejected ... ok
+test numeric_operations_and_branches_match_authored_lua ... ok
+test prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage ... ok
+test primitive_truthiness_short_circuit_and_byte_strings_match_lua ... ok
+test real_branching_inputs_actions_and_aliased_state_survive_vm_destruction ... ok
+test repeated_function_dumps_keep_bytes_native_errors_and_detached_results ... ok
+test reusable_dumps_keep_byte_state_rebinding_independent_of_the_loading_vm ... ok
+test reused_registers_do_not_leak_previous_inputs_after_branches_or_failed_reads ... ok
+test scalar_cells_preserve_number_bits_and_are_independent_per_machine ... ok
+test shared_byte_cells_keep_pool_meaning_copy_semantics_and_binary_bytes_after_vm_destruction ... ok
+test shared_group_code_keeps_mutable_byte_arena_indices_after_vm_destruction ... ok
+test shared_signatures_check_each_field_receiver_and_preserve_distinct_return_objects ... ok
+test truthiness_execution_matches_lua_after_vm_destruction_and_keeps_input_errors ... ok
+test unsupported_behavior_is_rejected_without_running_a_prefix ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/rust_baked_program_tables.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_baked_program_tables-d5f3ab33750b94f2)
+
+running 4 tests
+test bounded_array_choices_preserve_table_aliases_and_independent_machine_state ... ok
+test byte_keyed_state_keeps_nil_false_aliases_actions_and_vm_independence ... ok
+test released_key_cache_preserves_nil_and_stays_bounded_under_distinct_inputs ... ok
+test table_schemas_and_unsupported_keys_values_are_rejected_without_execution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/rust_input.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_input-f924240b3b331dd1)
+
+running 10 tests
+test additions_and_nested_removals_repair_the_dispatch_cursor ... ok
+test collected_registry_callbacks_and_screens_release_at_remove_and_rebind ... ok
+test compiled_predicates_match_lua_for_all_event_fields_and_reject_side_effects ... ok
+test errors_truthiness_and_deferred_removals_preserve_identity_order ... ok
+test event_shape_conversions_shared_mutation_and_fresh_dispatch_tables ... ok
+test fully_compiled_dispatch_allocates_no_lua_event_and_hooks_force_fallback ... ok
+test mixed_callbacks_share_mutations_and_removal_restores_compiled_dispatch ... ok
+test resource_limit_unwinds_dispatch_and_applies_deferred_cleanup ... ok
+test screen_replacement_keeps_active_callbacks_live_and_saved_methods_use_new_registry ... ok
+test strict_registration_chaining_dedup_and_sticky_offline_rejection ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.19s
+

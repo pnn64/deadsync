@@ -1,0 +1,287 @@
+{
+  "method": "Literal globals.set names from existing install functions in host/compat/files that have no mention anywhere in Rust adapter code. Absence is a review candidate; mentions do not prove installation or behavioral parity.",
+  "candidates": [
+    {
+      "name": "tableshuffle",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 155
+    },
+    {
+      "name": "Basename",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 200
+    },
+    {
+      "name": "findFiles",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 219
+    },
+    {
+      "name": "cleanGSub",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 220
+    },
+    {
+      "name": "force_to_range",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 256
+    },
+    {
+      "name": "wrapped_index",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 260
+    },
+    {
+      "name": "GetVersionParts",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 270
+    },
+    {
+      "name": "GetProductVersion",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 280
+    },
+    {
+      "name": "IsProductVersion",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 286
+    },
+    {
+      "name": "IsMinimumProductVersion",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 290
+    },
+    {
+      "name": "IsITGmania",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 294
+    },
+    {
+      "name": "StepManiaVersionIsSupported",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 298
+    },
+    {
+      "name": "MinimumVersionString",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 302
+    },
+    {
+      "name": "CurrentGameIsSupported",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 308
+    },
+    {
+      "name": "GetThemeVersion",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 312
+    },
+    {
+      "name": "DetermineTimingWindow",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 338
+    },
+    {
+      "name": "GetStepsCredit",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 359
+    },
+    {
+      "name": "GetJudgmentGraphics",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 373
+    },
+    {
+      "name": "GetHoldJudgments",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 377
+    },
+    {
+      "name": "GetHeldMissGraphics",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 381
+    },
+    {
+      "name": "GetFallbackBanner",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 536
+    },
+    {
+      "name": "TotalCourseLength",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 544
+    },
+    {
+      "name": "TotalCourseLengthPlayed",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 548
+    },
+    {
+      "name": "IsGameAndMenuButton",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 563
+    },
+    {
+      "name": "getAuthorTable",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 582
+    },
+    {
+      "name": "courseLengthBySong",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 586
+    },
+    {
+      "name": "lerp_color",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 703
+    },
+    {
+      "name": "CRYPTMAN",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 776
+    },
+    {
+      "name": "NETWORK",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 777
+    },
+    {
+      "name": "IniFile",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 778
+    },
+    {
+      "name": "JsonDecode",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 783
+    },
+    {
+      "name": "JsonEncode",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 797
+    },
+    {
+      "name": "BinaryToHex",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 804
+    },
+    {
+      "name": "GetExJudgmentCounts",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 816
+    },
+    {
+      "name": "GetWorstJudgment",
+      "file": "compat.rs",
+      "function": "install_stdlib_compat",
+      "line": 837
+    },
+    {
+      "name": "PlayerNumberToString",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 593
+    },
+    {
+      "name": "FormatPercentScore",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 811
+    },
+    {
+      "name": "FindInTable",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 867
+    },
+    {
+      "name": "DeepCopy",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 882
+    },
+    {
+      "name": "SecondsToMSSMsMs",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 908
+    },
+    {
+      "name": "SecondsToMMSSMsMs",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 916
+    },
+    {
+      "name": "FormatNumberAndSuffix",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 924
+    },
+    {
+      "name": "HolidayCheer",
+      "file": "host.rs",
+      "function": "install_basic_globals",
+      "line": 959
+    },
+    {
+      "name": "DayOfMonth",
+      "file": "host.rs",
+      "function": "install_date_globals",
+      "line": 1039
+    },
+    {
+      "name": "DayOfYear",
+      "file": "host.rs",
+      "function": "install_date_globals",
+      "line": 1047
+    },
+    {
+      "name": "Hour",
+      "file": "host.rs",
+      "function": "install_date_globals",
+      "line": 1053
+    },
+    {
+      "name": "Minute",
+      "file": "host.rs",
+      "function": "install_date_globals",
+      "line": 1057
+    }
+  ]
+}

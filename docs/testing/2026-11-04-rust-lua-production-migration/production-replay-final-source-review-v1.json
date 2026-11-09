@@ -1,0 +1,109 @@
+{
+  "changed_since_full_song": [
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "before_sha256": "1cdf255232051f8b53d5babed6fd5ccd321dce2d0dc735ca4f51ebccc9635898",
+      "after_sha256": "bb9c68d60ca313dbac9c47ef0b2ad8eb4840c640de606a0e2aa28ad0cb707974"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/live_observation.rs",
+      "before_sha256": null,
+      "after_sha256": "e9e34de41cfa1ad542f603d957d307c5b44378d4c0d8bab1cf113a3e83ce8f74"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/live_visuals.rs",
+      "before_sha256": "a9fca63321ce54432ef51bbee1f5888ffbd9347c2b67934ca7ce14ffe0d76228",
+      "after_sha256": "b0f540ac137a6148682234f12708bfd69ae7b7ba99dfa47dd4a762c6ac6b1a1b"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs",
+      "before_sha256": "7a512e44f444bfa138b7004fc5dd8bf338154194a286946e6046753884292240",
+      "after_sha256": "ada51cc29d6064882167e1b0e9de0df87faf71cceb062d27cbd1b263c98680d5"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/song_multitap.rs",
+      "before_sha256": "d9dee0ca0d2a7921dba7614d8b5dbc182c5c31873c7fd28d404a75e9bdcca4ab",
+      "after_sha256": "e7f558583cc0dfcda4e7def3707ab5bdb93a70e3fa09e6297e7cd7f103059591"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+      "before_sha256": "04dca720db1ed4c8ab682a2fcdf49603bfcebd00b797dbb79145ae4f3d907ff0",
+      "after_sha256": "b3cb9d943169fb808b0db440d6237a485bdaf401ab63fdfaa0905a5e3eb932ab"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/live_scene.rs",
+      "before_sha256": "dae51963d1dc866d73b6963ca448e540a9095728c2109f2a5b8e6a6631fa6d66",
+      "after_sha256": "ced270720819cbadcdf7d4c11a0b5a591ce1ea3ab709fffeb6564f193c16024e"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/live_scene/replay.rs",
+      "before_sha256": null,
+      "after_sha256": "eb8209ca32d9b264f9694ea55c3170260f17dae6df40b12d845b2c88e3c4b941"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/managers/game_state/scene.rs",
+      "before_sha256": "9913d4c2c5c491d8eea8834352f237e9d0573ebdd97a77729a4598138fc9fcc2",
+      "after_sha256": "d5296c5da523ea59ce70721a75ecc70a4265efd683b75d4fddc0066138057aa3"
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_scene.rs",
+      "before_sha256": "2d7dbc18999422264b1765fb11d833421b8784cb021722f112062e84d19804fe",
+      "after_sha256": "f15d8cd957d1231598f00baf081085fe2904f0d9b14416934afc1b37c3b0cc10"
+    }
+  ],
+  "unchanged": [
+    "generic interpreter",
+    "noteskin adapter and tests",
+    "Simply Love/GIF implementation and tests",
+    "normal/build graph inputs (81)",
+    "runtime constructor",
+    "generic actor traversal",
+    "original application replay harness",
+    "all original retained-scene assertions"
+  ],
+  "change_scope": "The downstream harness exposed four frozen test-support methods and a shared receiver. Restored explicit option clocks, overlay observation at the live callback phase, captured subscriber identities on reload, unknown-identity coverage and selected_context(&self). Replay additions are cfg(test-support); normal frame deltas remain None and normal coverage stays empty.",
+  "native_phase": "Frozen host.rs install_compile_host and replace_gameplay_screen run all five theme phases before compile.rs installs captured message identities. Rust now installs at that boundary.",
+  "original_tests_preserved": true,
+  "added_retained_scene_controls": 4,
+  "final_retained_scene": {
+    "stage": "production-downstream-replay-hooks-v5",
+    "suite": "song",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "legacy-oracle",
+      "--test",
+      "rust_live_scene",
+      "--no-fail-fast",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 297.6842282998841,
+    "log_sha256": "f67537f04ea3453f808cfb9603d1977ba35f3c4d53feb12dc932d0e9ac72afbf",
+    "tests_passed": 23,
+    "tests_failed": 0,
+    "test_results": [
+      "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.16s"
+    ],
+    "sources_unchanged": true,
+    "environment": {
+      "CARGO_TARGET_DIR": "target/rust-adapters",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_BUILD_JOBS": "4"
+    }
+  },
+  "earlier_affected_run": "production-downstream-replay-hooks-v2 passes 86 controls in six targets, failing only two new hook controls. v3/v4 retain remaining ordering failures; final v5 entire 23-test target passes with none ignored or filtered.",
+  "full_song_context": "The earlier full song snapshot plus exact launch-only retries passes 2190 checks with one frozen mesh defect. This final-source affected target supplements that evidence; do not label the earlier full run as a rerun of the later hook sources.",
+  "graph_inputs_unchanged": true,
+  "unexplained_current_hook_failures": 0,
+  "formatting": "production-replay-hooks-format-v2: all 12 inspected files pass. Original 114 attributed baseline/unrelated formatting failures remain in the full audit."
+}

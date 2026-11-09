@@ -1,0 +1,17 @@
+{
+  "test": "sl-final-adapters-song-linux-debug",
+  "lint": "sl-final-lint-song-linux-debug",
+  "watched_files": 1062,
+  "source_manifests_match": true,
+  "current_files_and_keyset_match": true,
+  "format_passes": 6,
+  "legacy_controls_unchanged": true,
+  "column_cues_body_unchanged": true,
+  "clippy_headings_match_prior_stage": true,
+  "rust_adapter_lint_diagnostics": false,
+  "known_cmd_sha256": "7405d85dc6d7cc6b276beb0b7e682ab6dfdcee1de062bfa59f2e7d6230557b3e",
+  "core_and_root_cargo_entries_unchanged": 240,
+  "baseline_fixture_hashes": 1,
+  "previous_goal_turn": "progress",
+  "current_goal_turn": "progress"
+}

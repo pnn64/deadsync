@@ -1,0 +1,284 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0433]: cannot find module or crate `action_capture` in this scope
+  --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:97:9
+   |
+97 | ...   actio...pture::p...
+   |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+   |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+  --> crates/deadsync-song-lua/src/lib.rs:1:1
+   |
+ 1 + mod action_capture;
+   |
+help: consider importing this module
+   |
+ 3 + use crate::rust_engine::actors::action_capture;
+   |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:233:5
+    |
+233 |     actio...pture::p...
+    |     ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:261:17
+    |
+261 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:325:13
+    |
+325 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:380:13
+    |
+380 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:428:9
+    |
+428 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:446:9
+    |
+446 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:496:9
+    |
+496 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:518:13
+    |
+518 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:557:13
+    |
+557 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:721:5
+    |
+721 |     actio...pture::p...
+    |     ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:748:5
+    |
+748 |     actio...pture::p...
+    |     ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  3 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/text.rs:354:5
+    |
+354 |     actio...pture::p...
+    |     ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  2 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/text.rs:481:13
+    |
+481 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  2 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/text.rs:507:21
+    |
+507 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  2 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/text.rs:535:17
+    |
+535 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  2 + use crate::rust_engine::actors::action_capture;
+    |
+
+error[E0433]: cannot find module or crate `action_capture` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/text.rs:588:17
+    |
+588 | ...   actio...pture::p...
+    |       ^^^^^...^^^^^ use of unresolved module or unlinked crate `action_capture`
+    |
+help: to make use of source file crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs, use `mod action_capture` in this file to declare the module
+   --> crates/deadsync-song-lua/src/lib.rs:1:1
+    |
+  1 + mod action_capture;
+    |
+help: consider importing this module
+    |
+  2 + use crate::rust_engine::actors::action_capture;
+    |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `deadsync-song-lua` (lib) due to 17 previous errors

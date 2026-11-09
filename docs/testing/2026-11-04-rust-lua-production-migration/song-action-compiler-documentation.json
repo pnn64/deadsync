@@ -1,0 +1,9 @@
+{
+  "goal_complete": false,
+  "documentation": {
+    "docs/lua-architecture.md": "7fbda1e4c6bc5a98a4b5a3b548f33d6bc4fdd173878cfa7cab06e7879012ec09",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "f08e767393982ca95b4f33106a1c889f594e5e927a3c4d22d2e3bf86f5860179"
+  },
+  "source_diff_sha256": "b52cd1d9516c772b56dc3c35e68b7724eef69266e906420cc7fba4a6aa518688",
+  "final_state_sha256": "fe9cccc2677a8e2acf563ae04a490b197cb376a2fbc4a55deab3954af45fc288"
+}

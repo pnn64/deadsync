@@ -1,0 +1,29 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: pre-Init capture implemented; 566 tests / 55 targets and source/format audits passed",
+  "scope": "Integrate existing activation and initial zero-update boundary; original migration finish line unchanged",
+  "remaining": "Initial-update/wrapper and broadcast capture outputs, shared-state queued discovery/rewind, prepared/live output, reload orchestration, fallback/cache, unconditional cutover and final fixture/app/render/dependency/performance evidence",
+  "resumption": {
+    "previous_goal_turn": "no progress: scope acknowledgment only",
+    "revalidation": "Read objective; it separately authorizes production integration and keeps interpreter/C API removal closed. Inspected pending source and corrected initial update traversal."
+  },
+  "failures": {
+    "focused-v1": "Two new test assumptions corrected from production observations: declaration child Init precedes parent, unattached live declarations have no instance GetParent method.",
+    "focused-v2": "Test observer held an app-data borrow while mutating app data; fixed by ending the read before set_app_data. Existing 21 preparation and 11 retirement cases passed.",
+    "focused-v3": "Wrapper callback was absent because default Rust wrapper storage is metadata; fixed dynamic zero traversal. Queue comparison includes unnamed theme actors. Cleanup now compares a control stopped after Init, preserving its pre-existing independent constructor owner.",
+    "focused-v4": "8/9 new cases passed; complete queue comparison exposed four extra native entries.",
+    "queue-probe-v1": "Descriptors identified duplicate Quad/BitmapText pending owners. Oracle had built a screen then entered retained-VM reload; first-load marker now lets empty retained VM execute actual normal first-load branch; no queue entries filtered or behavior skipped."
+  },
+  "fixed_scope": [
+    "Native activation order and Init NewScreen discard boundary",
+    "Retained typed Init globals rooted by active screen",
+    "Background/deferred On and zero-update flags",
+    "Dynamic child and wrapper zero traversal, partial callback errors, pending callback selector",
+    "Options captured before initial update, only NewScreen consumed afterward",
+    "New constructor owner adoption on success and failure"
+  ],
+  "final_review": "song-activation-review.json",
+  "tests_passed": 140,
+  "test_targets": 10,
+  "new_cases": 9
+}

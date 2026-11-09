@@ -1,0 +1,13 @@
+{
+  "command": "cargo clippy --locked -p deadsync-song-lua --features test-support --no-deps --lib",
+  "result": "one denied lint, clippy::while_immutable_condition, cmd.rs:349; 500 warnings retained",
+  "baseline_function": "lua_cmd_operand",
+  "frozen_lines": [
+    302,
+    367
+  ],
+  "function_body_exactly_matches_frozen_source": true,
+  "frozen_function_sha256": "dc4083c22e3904f2e4048a3809790cca13cdbf4aed2140a95f5620ff3a7b640e",
+  "policy": "Recorded separately as pre-existing. No blanket allow, warning suppression, coverage change or unrelated parser refactor.",
+  "log_sha256": "ff3059180dfa6902782a8ef094bf32b370fe8966978ae034d0534b12712e20a9"
+}

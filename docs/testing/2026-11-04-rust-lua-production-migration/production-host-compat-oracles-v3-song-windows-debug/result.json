@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--test",
+    "rust_compat_globals",
+    "--features",
+    "legacy-oracle",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 29.364500900032,
+  "log_sha256": "a63ea30d50e49ab18874d956bf41d78243d9af35adea1a0ec882b0858b272be4",
+  "sources_unchanged": true,
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "check_only": false
+}

@@ -1,0 +1,26 @@
+{
+  "reason": "Original rust_definitions regression found unrestricted relative-loader fallback; final Rust source requires a narrow profile fix. Cancel only own obsolete measurement-tool build, preserve its completed artifact/report bytes.",
+  "owned_root_pid": 45240,
+  "verified_root_creation_unix_ms": 1794159640293,
+  "scope": "taskkill45240/T/F after exact stage+executable+creation-time identity check; no other processes targeted",
+  "completed_results": [
+    {
+      "name": "song_lua_execution",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "deadsync-shell",
+        "--bin",
+        "song_lua_execution",
+        "--release"
+      ],
+      "exit_code": 0,
+      "seconds": 13.245740699814633,
+      "log_sha256": "0f741a6351b2410898e3fcf996c11cd20eeeae87d8a12863917ec24145140403",
+      "artifact": "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-current-final-v4\\artifacts\\windows\\release\\song_lua_execution.exe",
+      "artifact_sha256": "0fb8e267abd35084f2e6ccee43cc0b39c333af4e6fab8cb3a33fd3919d1bfce1"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 38s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 6 tests
+test message_retry_deferred_rejects_unrepresentable_sound_music_broadcast_and_state_changes ... ok
+test message_retry_deferred_success_captures_source_cross_tracked_and_repeated_sounds ... ok
+test message_retry_removed_handler_preserves_prior_publication_and_consumes_records_on_error ... ok
+test message_retry_runtime_capture_coverage_and_missing_overlay_consume_without_retry ... ok
+test message_retry_stable_cross_actor_scope_freezes_handlers_and_preserves_alias_indices ... ok
+test message_retry_unstable_targets_and_second_run_errors_defer_with_original_details ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 125 filtered out; finished in 10.13s
+

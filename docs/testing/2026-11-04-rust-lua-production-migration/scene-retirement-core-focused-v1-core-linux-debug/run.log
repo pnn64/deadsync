@@ -1,0 +1,22 @@
+   Compiling deadlib-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua)
+    Finished `test` profile [unoptimized] target(s) in 15.82s
+     Running tests/host_table_state.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/host_table_state-c9d289b132353e2a)
+
+running 4 tests
+test callback_attachments_trace_through_collecting_lua_reentry ... ok
+test detaching_and_replacing_state_releases_the_previous_attachment ... ok
+test invalid_and_foreign_handles_do_not_replace_private_state ... 
+thread 'invalid_and_foreign_handles_do_not_replace_private_state' (2670076) panicked at crates/deadlib-lua/tests/host_table_state.rs:106:5:
+assertion failed: vm.set_table_host_state(owner, Some(other)).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test private_state_survives_field_and_metatable_changes_and_collects_with_its_owner ... ok
+
+failures:
+
+failures:
+    invalid_and_foreign_handles_do_not_replace_private_state
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p deadlib-lua --test host_table_state`

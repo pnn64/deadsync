@@ -1,0 +1,19 @@
+
+running 14 tests
+test clock_validation_and_callback_failures_preserve_native_commit_boundaries ... ok
+test controller_and_health_queries_read_published_phase_results ... ok
+test group_updates_preserve_f32_rates_independent_deltas_and_cmod_speed ... ok
+test host_phase_entry_points_match_the_native_operations ... ok
+test player_positions_retain_original_backing_and_queries_do_not_advance_options ... ok
+test player_state_surface_identity_and_level_selection_match_native ... ok
+test preference_reentry_gc_and_public_alias_replacement_preserve_native_owners ... ok
+test raw_option_state_and_captured_primitives_ignore_public_replacements ... ok
+test restart_apply_and_attack_rebuild_keep_level_identities_and_master_song_ownership ... ok
+test saved_state_queries_survive_gc_and_release_unneeded_owners ... ok
+test set_player_options_preserves_owners_and_propagates_from_the_requested_level ... ok
+test set_player_options_writes_current_first_and_keeps_partial_failure_state ... ok
+test strings_arrays_preserve_native_order_rounding_aliases_and_skin_capitalization ... ok
+test updates_copy_discrete_values_and_windows_but_approach_numeric_fields_in_sorted_order ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.32s
+

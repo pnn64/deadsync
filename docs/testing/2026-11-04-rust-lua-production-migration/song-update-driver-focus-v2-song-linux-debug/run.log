@@ -1,0 +1,33 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+error[E0277]: a value of type `Vec<[f64; 3]>` cannot be built from an iterator over elements of type `[f64; 2]`
+  --> crates/deadsync-song-lua/tests/rust_song_updates.rs:18:87
+   |
+18 | ...]).collect();
+   |       ^^^^^^^ value of type `Vec<[f64; 3]>` cannot be built from `std::iter::Iterator<Item=[f64; 2]>`
+   |
+help: the trait `FromIterator<[f64; 2]>` is not implemented for `Vec<[f64; 3]>`
+      but trait `FromIterator<[f64; 3]>` is implemented for it
+  --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/alloc/src/vec/mod.rs:3993:0
+note: the method call chain might not have had the expected associated types
+  --> crates/deadsync-song-lua/tests/rust_song_updates.rs:18:45
+   |
+18 | ... = (0..=12).map(|...30.]).co...
+   |       -------- ^^^^^...^^^^^ `Iterator::Item` is `[f64; 2]` here
+   |       |
+   |       this expression has type `RangeInclusive<{integer}>`
+note: required by a bound in `collect`
+  --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/iter/traits/iterator.rs:2073:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `deadsync-song-lua` (test "rust_song_updates") due to 1 previous error

@@ -1,0 +1,1226 @@
+--- before/crates/deadsync-song-lua/src/rust_engine.rs
++++ after/crates/deadsync-song-lua/src/rust_engine.rs
+@@ -23,6 +23,7 @@
+ mod song_action;
+ mod song_action_compile;
+ pub use song_action_compile::SongActionOutput;
++mod song_column_eases;
+ mod song_easing;
+ mod song_easing_reader;
+ pub use song_easing_reader::{SongEasingNames, SongFunctionEaseInput};
+--- before/crates/deadsync-song-lua/src/rust_engine/actors.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -56,6 +56,7 @@
+ mod command_locals;
+ mod function_action;
+ mod function_capture;
++mod song_columns;
+ pub(super) mod song_kinds;
+ mod song_output;
+ mod song_pose;
+@@ -661,6 +662,7 @@
+         native_children::install_helpers(vm, actor, helpers)?;
+         state_snapshot::install(vm, helpers)?;
+         function_action::install(vm, helpers)?;
++        song_columns::install(vm, helpers)?;
+         let broadcast = messages::install(vm, &store, &captures)?;
+         let instantiate = vm.new_host_function_with_data(
+             callback,
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/function_action.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/function_action.rs
+@@ -54,6 +54,63 @@
+     }
+ }
+ impl Actors {
++    pub(in crate::rust_engine) fn begin_column_capture(
++        &self,
++        vm: &mut Vm,
++    ) -> Result<Session, Error> {
++        let retained = vm.try_new_table()?;
++        let pin = vm.pin(Value::Table(retained))?;
++        let scope = Scope {
++            retained,
++            data: Arc::new(Mutex::new(State::default())),
++        };
++        let result = (|| {
++            let roots = vm.try_new_table()?;
++            vm.raw_table_set(retained, Value::Number(ROOTS as f64), Value::Table(roots))?;
++            let setup = vm.new_host_function_with_data(
++                |call| {
++                    let scope = call.function_data::<Scope>().unwrap().clone();
++                    let columns = snapshot_columns(call, &scope)?;
++                    scope.data.lock().unwrap().columns = columns;
++                    Ok(())
++                },
++                &[
++                    Value::Table(self.registry),
++                    Value::Table(self.helpers),
++                    Value::Table(retained),
++                ],
++                scope.clone(),
++            )?;
++            vm.call(setup, &[])?;
++            Ok(())
++        })();
++        if let Err(error) = result {
++            vm.unpin(pin)?;
++            return Err(error);
++        }
++        Ok(Session { scope, pin })
++    }
++    pub(in crate::rust_engine) fn restore_column_capture(
++        &self,
++        vm: &mut Vm,
++        session: &Session,
++    ) -> Result<(), Error> {
++        let finish = vm.new_host_function_with_data(
++            |call| {
++                let scope = call.function_data::<Scope>().unwrap().clone();
++                let columns = std::mem::take(&mut scope.data.lock().unwrap().columns);
++                restore_columns(call, columns)
++            },
++            &[
++                Value::Table(self.registry),
++                Value::Table(self.helpers),
++                Value::Table(session.scope.retained),
++            ],
++            session.scope.clone(),
++        )?;
++        vm.call(finish, &[])?;
++        Ok(())
++    }
+     pub(in crate::rust_engine) fn snapshot_function_action(
+         &self,
+         vm: &mut Vm,
+--- before/crates/deadsync-song-lua/tests/rust_song_activation.rs
++++ after/crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -8345,3 +8345,520 @@
+     assert_eq!(pair.compare(), "nested outer,3|nested outer,4");
+     pair.script("collectgarbage();collectgarbage();assert(ease_weak[1]==nil and ease_weak[2]==nil and ease_weak[3]==nil)");
+ }
++
++fn compare_column_samples(
++    pair: &mut Pair,
++    globals: bool,
++) -> Result<Vec<deadsync_song_lua::SongLuaColumnTransformSample>, String> {
++    let native = if globals {
++        deadsync_song_lua::read_note_column_transform_samples(&pair.native)
++    } else {
++        deadsync_song_lua::read_note_column_transform_samples_for_fields(
++            pair.native
++                .globals()
++                .get::<Vec<mlua::Table>>("fields_probe")
++                .unwrap(),
++        )
++    };
++    let rust = if globals {
++        pair.rust.read_song_note_column_transform_samples()
++    } else {
++        let Value::Table(list) = pair.rust.vm_mut().get_global(b"fields_probe").unwrap() else {
++            panic!()
++        };
++        let mut fields = Vec::new();
++        for i in 1usize.. {
++            let v = pair
++                .rust
++                .vm_mut()
++                .raw_table_get(list, Value::Number(i as f64))
++                .unwrap();
++            if v == Value::Nil {
++                break;
++            }
++            fields.push(v);
++        }
++        pair.rust
++            .read_song_note_column_transform_samples_for_fields(&fields)
++    };
++    assert_eq!(
++        rust.is_ok(),
++        native.is_ok(),
++        "native={native:?} rust={rust:?}"
++    );
++    if let (Ok(a), Ok(b)) = (&rust, &native) {
++        assert_eq!(a, b);
++    }
++    pair.compare();
++    rust
++}
++fn column_sample_fixture(pair: &mut Pair) {
++    pair.script(
++        r#"
++        function column_handler(mode,size,points)
++            return {__songlua_spline_mode='NoteColumnSplineMode_'..mode,
++                __songlua_beats_per_t=1,__songlua_receptor_t=0,__songlua_subtract_song_beat=true,
++                __songlua_spline={__songlua_spline_size=size,__songlua_spline_points=points or {}}}
++        end
++        function sample_column(player,index,pos,zoom,rot)
++            return {__songlua_player_index=player,__songlua_column_index=index,
++                __songlua_pos_handler=pos,__songlua_zoom_handler=zoom,__songlua_rot_handler=rot}
++        end
++        sample_points={{2,3,4},{2,3,4},{2,3,4}}
++        sample_pos=column_handler('Offset',3,sample_points)
++        sample_zoom=column_handler('Offset',3,{{.5},{.5},{.5}})
++        sample_rot=column_handler('Position',3,{{0,0,30},{0,0,90},{0,0,180}})
++        sample_col=sample_column(0,0,sample_pos,sample_zoom,sample_rot)
++        sample_field={__songlua_note_columns={sample_col}}
++        fields_probe={sample_field}
++    "#,
++    );
++}
++fn column_ease_params() -> deadsync_song_lua::SongLuaColumnOffsetBuildParams {
++    deadsync_song_lua::SongLuaColumnOffsetBuildParams {
++        unit: deadsync_song_lua::SongLuaTimeUnit::Beat,
++        start: 4.,
++        limit: 2.,
++        span_mode: deadsync_song_lua::SongLuaSpanMode::Len,
++        easing: Some("inQuad".into()),
++        sustain: Some(3.),
++        opt1: Some(4.),
++        opt2: Some(5.),
++    }
++}
++fn compare_column_eases(
++    pair: &mut Pair,
++    params: deadsync_song_lua::SongLuaColumnOffsetBuildParams,
++) -> Result<Vec<deadsync_song_lua::SongLuaColumnOffsetWindow>, String> {
++    let f = pair
++        .native
++        .globals()
++        .get::<mlua::Function>("column_ease_probe")
++        .unwrap();
++    let native = deadsync_song_lua::compile_note_column_pos_function_ease(
++        &pair.native,
++        &f,
++        params.unit,
++        params.start,
++        params.limit,
++        params.span_mode,
++        2.,
++        6.,
++        params.easing.clone(),
++        params.sustain,
++        params.opt1,
++        params.opt2,
++    );
++    let f = pair.rust.vm_mut().get_global(b"column_ease_probe").unwrap();
++    let rust = pair
++        .rust
++        .capture_song_note_column_function_eases(f, params, [2., 6.]);
++    assert_eq!(
++        rust.is_ok(),
++        native.is_ok(),
++        "native={native:?} rust={rust:?}"
++    );
++    if let (Ok(a), Ok(b)) = (&rust, &native) {
++        assert_eq!(a, b);
++    }
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    pair.compare();
++    rust
++}
++fn column_endpoint_fixture(pair: &mut Pair) {
++    pair.script(
++        r#"
++        column_field=SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
++        column_list=column_field:GetColumnActors();column_actor=column_list[1]
++        column_pos=column_actor:GetPosHandler();column_spline=column_pos:GetSpline()
++        column_before_mode=column_pos.__songlua_spline_mode
++    "#,
++    );
++}
++
++#[test]
++fn column_eases_samples_keep_native_mode_baselines_numeric_coercion_and_target_order() {
++    use deadsync_song_lua::SongLuaColumnTransformTarget as T;
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_sample_fixture(&mut pair);
++    let out = compare_column_samples(&mut pair, false).unwrap();
++    assert_eq!(
++        out.iter().map(|v| (v.target, v.value)).collect::<Vec<_>>(),
++        [
++            (T::OffsetX, 2.),
++            (T::OffsetY, 3.),
++            (T::Zoom, 1.5),
++            (T::RotationZ, 30.),
++            (T::PositionEnabled, 0.)
++        ]
++    );
++    for change in [
++        "sample_pos.__songlua_spline_mode='notecolumnsplinemode_disabled';sample_zoom.__songlua_spline_mode='NoteColumnSplineMode_Position'",
++        "sample_pos.__songlua_spline_mode='NoteColumnSplineMode_Position';sample_rot.__songlua_spline_mode='NoteColumnSplineMode_Disabled'",
++        "sample_pos.__songlua_spline_mode='unknown';sample_zoom.__songlua_spline_mode=nil;sample_rot.__songlua_spline=nil",
++        "sample_pos=column_handler('Offset',0);sample_col.__songlua_pos_handler=sample_pos;sample_col.__songlua_zoom_handler=nil;sample_col.__songlua_rot_handler=nil",
++        "sample_pos.__songlua_spline.__songlua_spline_size='3.9';sample_pos.__songlua_spline.__songlua_spline_points={{' 0x2 ','3.5'},{'2','3.5'},{'2','3.5'}};sample_col.__songlua_player_index='1.9';sample_col.__songlua_column_index='2.8'",
++        "sample_col.__songlua_player_index=-1",
++        "sample_col.__songlua_player_index=nil",
++    ] {
++        pair.script(change);
++        compare_column_samples(&mut pair, false).unwrap();
++    }
++}
++
++#[test]
++fn column_eases_samples_validate_two_point_splines_and_preserve_sparse_raw_points() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_sample_fixture(&mut pair);
++    pair.script("sample_pos.__songlua_spline.__songlua_spline_size=2;sample_pos.__songlua_beats_per_t='-2';sample_pos.__songlua_receptor_t='3.5';sample_pos.__songlua_subtract_song_beat=0;sample_points[1]=setmetatable({1,nil,3},{__index=function()error('raw axis')end});sample_points[2]=nil;setmetatable(sample_points,{__index=function()error('raw point')end})");
++    let out = compare_column_samples(&mut pair, false).unwrap();
++    assert_eq!(out.len(), 14);
++    for change in [
++        "sample_pos.__songlua_beats_per_t=0",
++        "sample_pos.__songlua_beats_per_t=math.huge",
++        "sample_pos.__songlua_beats_per_t=1;sample_pos.__songlua_receptor_t=0/0",
++        "sample_pos.__songlua_receptor_t=0;sample_points[1]={0/0,4,0}",
++        "sample_points[1]={1,2,3};sample_points[2]=false",
++        "sample_points[2]={true,2,3}",
++    ] {
++        pair.script(change);
++        let result = compare_column_samples(&mut pair, false);
++        if change.ends_with("false") || change.contains("{true") {
++            assert!(result.is_err());
++        } else {
++            result.unwrap();
++        }
++    }
++}
++
++#[test]
++fn column_eases_samples_recheck_nonuniform_witnesses_and_keep_later_y_errors() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_sample_fixture(&mut pair);
++    pair.script("sample_points[2]={7,3,4}");
++    compare_column_samples(&mut pair, false).unwrap();
++    pair.script(
++        "assert(sample_pos.__songlua_spline.__songlua_nonuniform_x==2);sample_points[2]={2,3,4}",
++    );
++    let out = compare_column_samples(&mut pair, false).unwrap();
++    assert_eq!(out[0].value, 2.);
++    pair.script("sample_points[2]={7,8,4};sample_points[3]=false");
++    assert!(compare_column_samples(&mut pair, false).is_err());
++    pair.script("sample_points[3]={2,3,4};sample_pos.__songlua_spline.__songlua_nonuniform_x=-1");
++    assert!(compare_column_samples(&mut pair, false).is_err());
++    pair.script("sample_pos.__songlua_spline.__songlua_nonuniform_x=1e19");
++    compare_column_samples(&mut pair, false).unwrap();
++}
++
++#[test]
++fn column_eases_samples_pin_transient_columns_handlers_and_points_during_witness_setters() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_sample_fixture(&mut pair);
++    pair.script(r#"
++        sample_points[2]={7,3,4}
++        sample_weak=setmetatable({sample_col,sample_pos,sample_pos.__songlua_spline,sample_points},{__mode='v'})
++        setmetatable(sample_pos.__songlua_spline,{__newindex=function(t,k,v)
++            if k=='__songlua_nonuniform_x'then
++                sample_field.__songlua_note_columns[1]=nil
++                sample_col=nil;sample_pos=nil;sample_points=nil;collectgarbage();collectgarbage()
++                assert(sample_weak[1] and sample_weak[2] and sample_weak[3] and sample_weak[4]);log('witness',v)
++            end
++            rawset(t,k,v)
++        end})
++    "#);
++    let out = compare_column_samples(&mut pair, false).unwrap();
++    assert!(out.iter().any(|s| s.target
++        == deadsync_song_lua::SongLuaColumnTransformTarget::OffsetY
++        && s.value == 3.));
++    pair.script("collectgarbage();collectgarbage();assert(sample_weak[1]==nil and sample_weak[2]==nil and sample_weak[3]==nil and sample_weak[4]==nil)");
++}
++
++#[test]
++fn column_eases_global_collection_roots_both_fields_before_reading_columns() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_sample_fixture(&mut pair);
++    pair.script(r#"
++        local second={__songlua_note_columns={sample_column(1,0,column_handler('Disabled',0))}}
++        local player={__songlua_children={NoteField=second}}
++        fields_weak=setmetatable({sample_field,second,player},{__mode='v'})
++        __songlua_top_screen_player_1={__songlua_children={NoteField=sample_field}}
++        __songlua_top_screen_player_2=nil
++        setmetatable(_G,{__index=function(t,k)
++            if k=='__songlua_top_screen_player_2'then
++                log('global second');local result=player;player=nil;setmetatable(t,nil);return result
++            end
++        end})
++        local columns=sample_field.__songlua_note_columns
++        sample_field.__songlua_note_columns=nil
++        setmetatable(sample_field,{__index=function(t,k)
++            if k=='__songlua_note_columns'then
++                collectgarbage();collectgarbage();assert(fields_weak[2] and fields_weak[3]==nil)
++                log('columns first');return columns
++            end
++        end})
++    "#);
++    let out = compare_column_samples(&mut pair, true).unwrap();
++    assert_eq!(out.len(), 8);
++    assert_eq!(pair.compare(), "global second|columns first");
++    pair.script("collectgarbage();collectgarbage();assert(fields_weak[2]==nil)");
++}
++
++#[test]
++fn column_eases_endpoint_capture_keeps_metadata_clocks_shared_cells_rng_and_original_splines() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    column_endpoint_fixture(&mut pair);
++    pair.script(r#"
++        local count=0
++        column_ease_probe=function(v)
++            count=count+1;column_count=count;column_random=math.random();saved.a:x(v)
++            column_pos:SetSplineMode('NoteColumnSplineMode_Offset'):SetBeatsPerT(2):SetReceptorT(3):SetSubtractSongBeat(false)
++            column_spline:SetSize(2);column_spline:SetPoint(1,{v,GAMESTATE:GetSongBeat(),0});column_spline:SetPoint(2,{v+1,GAMESTATE:GetSongBeat()+2,0})
++            log('column endpoint',v,GAMESTATE:GetSongBeat());collectgarbage()
++        end
++    "#);
++    for unit in [
++        deadsync_song_lua::SongLuaTimeUnit::Beat,
++        deadsync_song_lua::SongLuaTimeUnit::Second,
++    ] {
++        let mut params = column_ease_params();
++        params.unit = unit;
++        params.span_mode = deadsync_song_lua::SongLuaSpanMode::End;
++        params.limit = 1.;
++        let out = compare_column_eases(&mut pair, params.clone()).unwrap();
++        assert!(!out.is_empty());
++        assert!(out.iter().all(|w| w.unit == unit
++            && w.start == 4.
++            && w.limit == 1.
++            && w.span_mode == params.span_mode
++            && w.easing == params.easing
++            && w.sustain == params.sustain
++            && w.opt1 == params.opt1
++            && w.opt2 == params.opt2));
++        pair.script("assert(column_pos.__songlua_spline_mode==column_before_mode and column_spline.__songlua_spline_size==0);assert(column_actor:GetPosHandler()==column_pos and column_pos:GetSpline()==column_spline and column_field:GetColumnActors()==column_list);assert(saved.a:GetX()==6 and column_count%2==0);log('random after',column_random,math.random())");
++    }
++    assert!(pair.compare().contains("column endpoint,6,4"));
++}
++
++#[test]
++fn column_eases_endpoint_errors_keep_native_body_sample_and_restore_priority() {
++    for (body, marker) in [
++        (
++            "column_pos:SetSplineMode('NoteColumnSplineMode_Position');error('column body error')",
++            "column body error",
++        ),
++        (
++            "column_pos:SetSplineMode('NoteColumnSplineMode_Offset');rawset(column_spline,'__songlua_spline_size',2);rawset(column_spline,'__songlua_spline_points',false)",
++            "table",
++        ),
++        (
++            "column_pos:SetSplineMode('NoteColumnSplineMode_Offset');rawset(column_spline,'__songlua_spline_size',2);rawset(column_spline,'__songlua_spline_points',false);error('body before invalid samples')",
++            "body before invalid samples",
++        ),
++        (
++            "rawset(column_pos,'__songlua_spline_mode',nil);setmetatable(column_pos,{__newindex=function(t,k,v)if k=='__songlua_spline_mode'then error('column restore error')end;rawset(t,k,v)end});error('lower priority body error')",
++            "column restore error",
++        ),
++    ] {
++        let (_dir, mut pair) =
++            command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++        column_endpoint_fixture(&mut pair);
++        pair.script(&format!(
++            "column_ease_probe=function()saved.a:x(91);{body} end"
++        ));
++        let error = compare_column_eases(&mut pair, column_ease_params()).unwrap_err();
++        assert!(error.contains(marker), "{error}");
++        pair.script("assert(saved.a:GetX()==91)");
++        if marker != "column restore error" {
++            pair.script("assert(column_pos.__songlua_spline_mode==column_before_mode and column_spline.__songlua_spline_size==0)");
++        } else {
++            pair.script("assert(GAMESTATE:GetSongBeat()==4)");
++        }
++    }
++}
++
++#[test]
++fn column_eases_endpoint_first_return_stays_alive_during_authored_restoration() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_endpoint_fixture(&mut pair);
++    pair.script(r#"
++        column_ease_probe=function(v)
++            rawset(column_pos,'__songlua_spline_mode',nil)
++            setmetatable(column_pos,{__newindex=function(t,k,v)
++                if k=='__songlua_spline_mode'then
++                    collectgarbage();collectgarbage();assert(column_return_weak[1] and column_return_weak[2]==nil);log('restore returned')
++                end;rawset(t,k,v)
++            end})
++            local first,second={},{};column_return_weak=setmetatable({first,second},{__mode='v'});return first,second
++        end
++    "#);
++    // Sampling fails on the removed required mode, but restoration still runs
++    // with only the first return retained, then restores the previous clock.
++    assert!(compare_column_eases(&mut pair, column_ease_params()).is_err());
++    assert_eq!(pair.compare(), "restore returned");
++    pair.script("collectgarbage();collectgarbage();assert(column_return_weak[1]==nil and column_return_weak[2]==nil)");
++}
++
++#[test]
++fn column_eases_snapshot_failure_preserves_selected_clock_and_does_not_call_body() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_endpoint_fixture(&mut pair);
++    pair.script("column_field.__songlua_note_columns={false};column_ease_probe=function()error('unreached body')end");
++    let error = compare_column_eases(&mut pair, column_ease_params()).unwrap_err();
++    assert!(!error.contains("unreached body"));
++    pair.script("assert(GAMESTATE:GetSongBeat()==4)");
++}
++
++#[test]
++fn column_eases_instruction_abort_restores_columns_clocks_and_releases_detached_values() {
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_endpoint_fixture(&mut pair);
++    pair.script("column_ease_probe=function()column_pos:SetSplineMode('NoteColumnSplineMode_Offset');column_spline:SetSize(2);column_spline:SetPoint(1,{3,4,5});column_spline:SetPoint(2,{6,7,8});column_ease_probe=nil;while true do end end;column_function_weak=setmetatable({column_ease_probe},{__mode='v'})");
++    let f = pair.rust.vm_mut().get_global(b"column_ease_probe").unwrap();
++    let previous = pair.rust.values().unwrap();
++    pair.rust.vm_mut().set_instruction_limit(Some(60_000));
++    let result =
++        pair.rust
++            .capture_song_note_column_function_eases(f, column_ease_params(), [2., 6.]);
++    pair.rust.vm_mut().set_instruction_limit(None);
++    assert!(result.is_err());
++    assert_eq!(pair.rust.values().unwrap(), previous);
++    pair.rust.vm_mut().execute(&compile_named(b"assert(column_pos.__songlua_spline_mode==column_before_mode and column_spline.__songlua_spline_size==0);collectgarbage();collectgarbage();assert(column_function_weak[1]==nil);column_ease_probe=function()end",b"=column abort recovery").unwrap()).unwrap();
++    let f = pair.rust.vm_mut().get_global(b"column_ease_probe").unwrap();
++    assert!(
++        pair.rust
++            .capture_song_note_column_function_eases(f, column_ease_params(), [2., 6.])
++            .unwrap()
++            .is_empty()
++    );
++}
++
++#[test]
++fn column_eases_samples_release_each_processed_field_before_the_next_getter() {
++    for globals in [false, true] {
++        let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++        column_sample_fixture(&mut pair);
++        pair.script(r#"
++            local first=sample_field
++            local second={}
++            local columns1=first.__songlua_note_columns
++            local columns2={sample_column(1,0,column_handler('Disabled',0))}
++            processed_weak=setmetatable({first,second},{__mode='v'})
++            first.__songlua_note_columns=nil
++            setmetatable(first,{__index=function(t,k)
++                if k=='__songlua_note_columns'then
++                    fields_probe=nil;sample_field=nil
++                    __songlua_top_screen_player_1=nil;__songlua_top_screen_player_2=nil
++                    return columns1
++                end
++            end})
++            setmetatable(second,{__index=function(t,k)
++                if k=='__songlua_note_columns'then
++                    collectgarbage();collectgarbage();assert(processed_weak[1]==nil and processed_weak[2]);log('processed field released')
++                    return columns2
++                end
++            end})
++            fields_probe={first,second}
++            __songlua_top_screen_player_1={__songlua_children={NoteField=first}}
++            __songlua_top_screen_player_2={__songlua_children={NoteField=second}}
++        "#);
++        let out = compare_column_samples(&mut pair, globals).unwrap();
++        assert_eq!(out.len(), 8);
++        assert_eq!(pair.compare(), "processed field released");
++        pair.script("collectgarbage();collectgarbage();assert(processed_weak[1]==nil and processed_weak[2]==nil)");
++    }
++}
++
++#[test]
++fn column_eases_reader_publishes_real_column_endpoints_and_keeps_owned_rows_after_teardown() {
++    use deadsync_song_lua::{SongLuaFunctionEaseDecision as Decision, SongLuaTimeUnit};
++    let (_dir, mut pair) = command_scope_pair("return Def.Actor{}");
++    column_endpoint_fixture(&mut pair);
++    pair.script(
++        r#"
++        ease=nil;xero=nil
++        column_ease_probe=function(v)
++            column_pos:SetSplineMode('NoteColumnSplineMode_Offset')
++            column_spline:SetSize(3)
++            for i=1,3 do column_spline:SetPoint(i,{v,v+GAMESTATE:GetSongBeat(),0})end
++        end
++        eases_probe={{4,2,2,6,column_ease_probe,'len','linear',1,9,8,7},{9,1,0,1,'drunk'}}
++    "#,
++    );
++    let mut names = easing_reader_names(&mut pair);
++    let native = deadsync_song_lua::read_eases_with_function_capture(
++        pair.native.globals().get("eases_probe").unwrap(),
++        SongLuaTimeUnit::Second,
++        &names.0.easing_names,
++        |i, _| {
++            let rows = deadsync_song_lua::compile_note_column_pos_function_ease(
++                &pair.native,
++                &i.function,
++                i.unit,
++                i.start,
++                i.limit,
++                i.span_mode,
++                i.from,
++                i.to,
++                i.easing,
++                i.sustain,
++                i.opt1,
++                i.opt2,
++            )?;
++            Ok(deadsync_song_lua::SongLuaFunctionEaseResult {
++                decision: Decision::ColumnOffsets(rows),
++                stats: Default::default(),
++            })
++        },
++    )
++    .unwrap();
++    let table = pair.rust.vm_mut().get_global(b"eases_probe").unwrap();
++    let rust = pair
++        .rust
++        .read_song_eases_with_function_capture(
++            Some(table),
++            SongLuaTimeUnit::Second,
++            &names.1,
++            |runtime, i, _| {
++                let rows = runtime.capture_song_note_column_function_eases(
++                    i.function,
++                    deadsync_song_lua::SongLuaColumnOffsetBuildParams {
++                        unit: i.unit,
++                        start: i.start,
++                        limit: i.limit,
++                        span_mode: i.span_mode,
++                        easing: i.easing,
++                        sustain: i.sustain,
++                        opt1: i.opt1,
++                        opt2: i.opt2,
++                    },
++                    [i.from, i.to],
++                )?;
++                Ok(deadsync_song_lua::SongLuaFunctionEaseResult {
++                    decision: Decision::ColumnOffsets(rows),
++                    stats: Default::default(),
++                })
++            },
++        )
++        .unwrap();
++    assert_eq!(easing_result_text(&rust), easing_result_text(&native));
++    assert_eq!(rust.column_offsets.len(), 2);
++    assert_eq!(rust.stats.function_targets, 1);
++    assert_eq!(rust.stats.overlay_capture_attempts, 0);
++    pair.script("assert(column_pos.__songlua_spline_mode==column_before_mode and column_spline.__songlua_spline_size==0)");
++    pair.rust.release_song_easing_names(&mut names.1).unwrap();
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    drop(pair);
++    assert_eq!(rust.column_offsets[0].from_y, 2.);
++    assert_eq!(rust.column_offsets[0].to_y, 6.);
++    assert!(
++        rust.column_offsets
++            .iter()
++            .all(|w| w.unit == SongLuaTimeUnit::Second
++                && w.easing.as_deref() == Some("linear")
++                && w.sustain == Some(9.))
++    );
++}
+--- /dev/null
++++ after/crates/deadsync-song-lua/src/rust_engine/song_column_eases.rs
+@@ -0,0 +1,81 @@
++//! Existing compiler note-column endpoint sampling and ordered restoration.
++use super::*;
++
++impl RustSongRuntime {
++    pub fn read_song_note_column_transform_samples(
++        &mut self,
++    ) -> Result<Vec<crate::SongLuaColumnTransformSample>, String> {
++        self.actors
++            .read_column_samples(&mut self.vm, None)
++            .map_err(|e| e.to_string())
++    }
++    pub fn read_song_note_column_transform_samples_for_fields(
++        &mut self,
++        fields: &[Value],
++    ) -> Result<Vec<crate::SongLuaColumnTransformSample>, String> {
++        self.actors
++            .read_column_samples(&mut self.vm, Some(fields))
++            .map_err(|e| e.to_string())
++    }
++
++    /// Only columns and clocks are restored here. Script cells, RNG and other
++    /// actor writes retain the native endpoint behavior; the enclosing compiler
++    /// pass owns any broader snapshot. Seconds entries still use these beat
++    /// clocks, matching the existing production helper.
++    pub fn capture_song_note_column_function_eases(
++        &mut self,
++        function: Value,
++        params: crate::SongLuaColumnOffsetBuildParams,
++        endpoints: [f32; 2],
++    ) -> Result<Vec<crate::SongLuaColumnOffsetWindow>, String> {
++        let pin = self.vm.pin(function).map_err(|e| e.to_string())?;
++        let result = (|| {
++            let end = crate::song_lua_span_end(params.start, params.limit, params.span_mode)
++                .max(params.start);
++            let from = self.capture_column_endpoint(function, endpoints[0], params.start)?;
++            let to = self.capture_column_endpoint(function, endpoints[1], end)?;
++            Ok(crate::column_transform_windows_from_samples(
++                &from, &to, params,
++            ))
++        })();
++        self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        result
++    }
++    fn capture_column_endpoint(
++        &mut self,
++        function: Value,
++        value: f32,
++        beat: f32,
++    ) -> Result<Vec<crate::SongLuaColumnTransformSample>, String> {
++        let previous = self.values().map_err(|e| e.to_string())?;
++        self.set_beat(beat).map_err(|e| e.to_string())?;
++        // A snapshot failure leaves the selected clock, as native. Body and
++        // sampling failures still attempt ordinary column restoration first.
++        let session = self
++            .actors
++            .begin_column_capture(&mut self.vm)
++            .map_err(|e| e.to_string())?;
++        let mut returned = None;
++        let body = self
++            .vm
++            .call(function, &[number(value)])
++            .map(|values| values.first().copied().unwrap_or(Value::Nil))
++            .and_then(|value| self.vm.pin(value).map(|pin| returned = Some(pin)));
++        let result = (|| {
++            let samples = self.read_song_note_column_transform_samples();
++            // Fresh VM entries allow cleanup after a fatal instruction abort.
++            self.actors
++                .restore_column_capture(&mut self.vm, &session)
++                .map_err(|e| e.to_string())?;
++            self.set_values(previous.0, previous.1)
++                .map_err(|e| e.to_string())?;
++            body.map_err(|e| e.to_string())?;
++            samples
++        })();
++        session.release(&mut self.vm).map_err(|e| e.to_string())?;
++        if let Some(pin) = returned {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        result
++    }
++}
+--- /dev/null
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/song_columns.rs
+@@ -0,0 +1,522 @@
++//! Typed spline observations for the existing compiler's column transforms.
++use super::*;
++use crate::{SongLuaColumnTransformSample as Sample, SongLuaColumnTransformTarget as Target};
++
++const POS: &str = "__songlua_pos_handler";
++const ZOOM: &str = "__songlua_zoom_handler";
++const ROT: &str = "__songlua_rot_handler";
++const MODE: &str = "__songlua_spline_mode";
++const SPLINE: &str = "__songlua_spline";
++const SIZE: &str = "__songlua_spline_size";
++const POINTS: &str = "__songlua_spline_points";
++const DISABLED: &str = "NoteColumnSplineMode_Disabled";
++const OFFSET: &str = "NoteColumnSplineMode_Offset";
++const POSITION: &str = "NoteColumnSplineMode_Position";
++
++#[derive(Clone, Copy)]
++enum Numeric {
++    Float,
++    Integer,
++    Unsigned,
++}
++pub(super) fn install(vm: &mut Vm, helpers: TableId) -> Result<(), Error> {
++    for (name, mode) in [
++        ("column_float", Numeric::Float),
++        ("column_integer", Numeric::Integer),
++        ("column_unsigned", Numeric::Unsigned),
++    ] {
++        let function = vm.new_host_function_with_data(convert, &[], mode)?;
++        super::super::put(vm, helpers, name, function)?;
++    }
++    Ok(())
++}
++fn convert(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let mode = *call.function_data::<Numeric>().unwrap();
++    let mut stack = call.native_stack()?;
++    let number = match mode {
++        Numeric::Float => stack
++            .to_number(1)
++            .ok_or_else(|| stack.error(b"column number expected"))?,
++        Numeric::Integer => stack
++            .to_integer(1)
++            .ok_or_else(|| stack.error(b"column integer expected"))?
++            as f64,
++        Numeric::Unsigned => {
++            let number = stack
++                .to_number(1)
++                .ok_or_else(|| stack.error(b"column index expected"))?;
++            if matches!(stack.value(1), Some(Value::Number(_)))
++                && number >= 0.
++                && number < (usize::MAX as f64)
++            {
++                (number as usize) as f64
++            } else {
++                usize::try_from(
++                    stack
++                        .to_integer(1)
++                        .ok_or_else(|| stack.error(b"column index expected"))?,
++                )
++                .map_err(|_| stack.error(b"column index out of range"))? as f64
++            }
++        }
++    };
++    stack.push(Value::Number(number))?;
++    stack.finish(1)
++}
++fn numeric(call: &mut HostCall<'_>, value: Value, mode: Numeric) -> Result<f64, Error> {
++    let name: &[u8] = match mode {
++        Numeric::Float => b"column_float",
++        Numeric::Integer => b"column_integer",
++        Numeric::Unsigned => b"column_unsigned",
++    };
++    let function = native_children::helper_function(call, name)?;
++    let Value::Number(value) = call.call(function, &[value])?[0] else {
++        unreachable!()
++    };
++    Ok(value)
++}
++fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
++    sprites::field(call, actor, key)
++}
++fn text(call: &mut HostCall<'_>, value: Value, optional: bool) -> Result<String, Error> {
++    match initial_state::value_text(call, value)? {
++        Some(text) => Ok(text),
++        None if optional => Ok(String::new()),
++        None => Err(call.error(b"column string expected")),
++    }
++}
++fn mode(call: &mut HostCall<'_>, handler: TableId, optional: bool) -> Result<String, Error> {
++    let value = field(call, handler, MODE)?;
++    text(call, value, optional)
++}
++fn with_table<T>(
++    call: &mut HostCall<'_>,
++    value: Value,
++    read: impl FnOnce(&mut HostCall<'_>, Option<TableId>) -> Result<T, Error>,
++) -> Result<T, Error> {
++    if value == Value::Nil {
++        return read(call, None);
++    }
++    let table = table(call, value)?;
++    call.with_roots(&[value], |call| read(call, Some(table)))
++}
++fn required_table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
++    table(call, value)
++}
++fn optional_integer(call: &mut HostCall<'_>, value: Value) -> Result<Option<i64>, Error> {
++    if value == Value::Nil {
++        Ok(None)
++    } else {
++        Ok(Some(numeric(call, value, Numeric::Integer)? as i64))
++    }
++}
++fn point(call: &mut HostCall<'_>, points: TableId, index: usize) -> Result<[f32; 3], Error> {
++    let value = call.raw_table_get(points, Value::Number(index as f64))?;
++    with_table(call, value, |call, point| {
++        let Some(point) = point else {
++            return Ok([0.; 3]);
++        };
++        let mut result = [0.; 3];
++        for (axis, result) in result.iter_mut().enumerate() {
++            let value = call.raw_table_get(point, Value::Number((axis + 1) as f64))?;
++            if value != Value::Nil {
++                *result = numeric(call, value, Numeric::Float)? as f32;
++            }
++        }
++        Ok(result)
++    })
++}
++fn spline_size(call: &mut HostCall<'_>, spline: TableId) -> Result<usize, Error> {
++    let value = field(call, spline, SIZE)?;
++    Ok(optional_integer(call, value)?
++        .and_then(|n| usize::try_from(n).ok())
++        .unwrap_or(0))
++}
++fn uniform(
++    call: &mut HostCall<'_>,
++    column: TableId,
++    key: &str,
++    component: usize,
++    baseline: f32,
++) -> Result<Option<f32>, Error> {
++    let handler = field(call, column, key)?;
++    with_table(call, handler, |call, handler| {
++        let Some(handler) = handler else {
++            return Ok(None);
++        };
++        let mode = mode(call, handler, true)?;
++        if mode.eq_ignore_ascii_case(DISABLED) {
++            return Ok(Some(baseline));
++        }
++        let offset = mode.eq_ignore_ascii_case(OFFSET);
++        if !offset && !mode.eq_ignore_ascii_case(POSITION) {
++            return Ok(None);
++        }
++        let spline = field(call, handler, SPLINE)?;
++        with_table(call, spline, |call, spline| {
++            let Some(spline) = spline else {
++                return Ok(None);
++            };
++            let size = spline_size(call, spline)?;
++            if size == 0 {
++                return Ok(Some(baseline));
++            }
++            let points = field(call, spline, POINTS)?;
++            let points = required_table(call, points)?;
++            call.with_roots(&[Value::Table(points)], |call| {
++                if !offset && key == ZOOM {
++                    return Ok(Some(baseline));
++                }
++                if !offset {
++                    return Ok(Some(point(call, points, 1)?[component]));
++                }
++                let witness = match component {
++                    0 => "__songlua_nonuniform_x",
++                    1 => "__songlua_nonuniform_y",
++                    _ => "__songlua_nonuniform_z",
++                };
++                let index = field(call, spline, witness)?;
++                if index != Value::Nil {
++                    let index = numeric(call, index, Numeric::Unsigned)? as usize;
++                    if index <= size {
++                        let first = point(call, points, 1).ok().map(|p| p[component]);
++                        let other = point(call, points, index).ok().map(|p| p[component]);
++                        if first.zip(other).is_some_and(|(a, b)| (a - b).abs() > 0.001) {
++                            return Ok(None);
++                        }
++                    }
++                }
++                let mut first = None::<f32>;
++                for index in 1..=size {
++                    let value = point(call, points, index)?[component];
++                    if let Some(prior) = first {
++                        if (value - prior).abs() > 0.001 {
++                            sprites::set(call, spline, witness, Value::Number(index as f64))?;
++                            return Ok(None);
++                        }
++                    } else {
++                        first = Some(value);
++                    }
++                }
++                Ok(Some(baseline + first.unwrap_or(0.)))
++            })
++        })
++    })
++}
++fn x_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Error> {
++    let handler = field(call, column, POS)?;
++    with_table(call, handler, |call, handler| {
++        let Some(handler) = handler else {
++            return Ok(None);
++        };
++        let mode = mode(call, handler, false)?;
++        if mode.eq_ignore_ascii_case(OFFSET) {
++            uniform(call, column, POS, 0, 0.)
++        } else {
++            Ok(
++                (mode.eq_ignore_ascii_case(DISABLED) || mode.eq_ignore_ascii_case(POSITION))
++                    .then_some(0.),
++            )
++        }
++    })
++}
++fn y_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Error> {
++    let handler = field(call, column, POS)?;
++    with_table(call, handler, |call, handler| {
++        let Some(handler) = handler else {
++            return Ok(None);
++        };
++        let mode = mode(call, handler, true)?;
++        if mode.eq_ignore_ascii_case(DISABLED) {
++            return Ok(Some(0.));
++        }
++        if !mode.eq_ignore_ascii_case(OFFSET) {
++            return Ok(None);
++        }
++        let spline = field(call, handler, SPLINE)?;
++        with_table(call, spline, |call, spline| {
++            let Some(spline) = spline else {
++                return Ok(None);
++            };
++            let size = spline_size(call, spline)?;
++            if size == 0 {
++                return Ok(Some(0.));
++            }
++            let points = field(call, spline, POINTS)?;
++            let points = required_table(call, points)?;
++            call.with_roots(&[Value::Table(points)], |call| {
++                let mut first = None::<f32>;
++                let mut valid = true;
++                for index in 1..=size {
++                    let [x, y, _] = point(call, points, index)?;
++                    valid &= x.is_finite() && y.is_finite();
++                    if let Some(first) = first {
++                        valid &= (y - first).abs() <= 0.001;
++                    } else {
++                        first = Some(y)
++                    }
++                }
++                Ok(if valid { first } else { None })
++            })
++        })
++    })
++}
++fn position(
++    call: &mut HostCall<'_>,
++    column: TableId,
++) -> Result<Option<[(Target, f32); 10]>, Error> {
++    let handler = field(call, column, POS)?;
++    with_table(call, handler, |call, handler| {
++        let Some(handler) = handler else {
++            return Ok(None);
++        };
++        if !mode(call, handler, false)?.eq_ignore_ascii_case(OFFSET) {
++            return Ok(None);
++        }
++        let spline = field(call, handler, SPLINE)?;
++        let spline = required_table(call, spline)?;
++        call.with_roots(&[Value::Table(spline)], |call| {
++            let size = field(call, spline, SIZE)?;
++            if numeric(call, size, Numeric::Integer)? != 2. {
++                return Ok(None);
++            }
++            let points = field(call, spline, POINTS)?;
++            let points = required_table(call, points)?;
++            call.with_roots(&[Value::Table(points)], |call| {
++                let mut out = [(Target::PositionEnabled, 0.); 10];
++                for p in 0..2u8 {
++                    let values = point(call, points, usize::from(p) + 1)?;
++                    for axis in 0..3u8 {
++                        let value = values[usize::from(axis)];
++                        if !value.is_finite() {
++                            return Ok(None);
++                        }
++                        out[usize::from(p) * 3 + usize::from(axis)] =
++                            (Target::PositionPoint { point: p, axis }, value);
++                    }
++                }
++                let beats = field(call, handler, "__songlua_beats_per_t")?;
++                let beats = numeric(call, beats, Numeric::Float)? as f32;
++                let receptor = field(call, handler, "__songlua_receptor_t")?;
++                let receptor = numeric(call, receptor, Numeric::Float)? as f32;
++                if !beats.is_finite() || beats == 0. || !receptor.is_finite() {
++                    return Ok(None);
++                }
++                let subtract = field(call, handler, "__songlua_subtract_song_beat")?.is_truthy();
++                out[6..].copy_from_slice(&[
++                    (Target::PositionEnabled, 1.),
++                    (Target::PositionBeatsPerT, beats),
++                    (Target::PositionReceptorT, receptor),
++                    (Target::PositionSubtractBeat, if subtract { 1. } else { 0. }),
++                ]);
++                Ok(Some(out))
++            })
++        })
++    })
++}
++fn read_field(
++    call: &mut HostCall<'_>,
++    field_id: TableId,
++    out: &mut Vec<Sample>,
++) -> Result<(), Error> {
++    let columns = field(call, field_id, "__songlua_note_columns")?;
++    with_table(call, columns, |call, columns| {
++        let Some(columns) = columns else {
++            return Ok(());
++        };
++        for index in 1usize.. {
++            let column = call.raw_table_get(columns, Value::Number(index as f64))?;
++            if column == Value::Nil {
++                break;
++            }
++            let id = table(call, column)?;
++            call.with_roots(&[column], |call| {
++                let player = field(call, id, "__songlua_player_index")?;
++                let Some(player) =
++                    optional_integer(call, player)?.and_then(|n| usize::try_from(n).ok())
++                else {
++                    return Ok(());
++                };
++                let column = field(call, id, "__songlua_column_index")?;
++                let Some(column) =
++                    optional_integer(call, column)?.and_then(|n| usize::try_from(n).ok())
++                else {
++                    return Ok(());
++                };
++                let mut push = |target, value: Option<f32>| {
++                    if let Some(value) = value.filter(|v| v.is_finite()) {
++                        out.push(Sample {
++                            player,
++                            column,
++                            target,
++                            value,
++                        })
++                    }
++                };
++                let position = position(call, id)?;
++                let handler = field(call, id, POS)?;
++                let absolute = with_table(call, handler, |call, handler| {
++                    Ok(handler.is_some_and(|h| {
++                        mode(call, h, false).is_ok_and(|m| m.eq_ignore_ascii_case(POSITION))
++                    }))
++                })?;
++                if position.is_some() || absolute {
++                    push(Target::OffsetX, Some(0.));
++                    push(Target::OffsetY, Some(0.));
++                } else {
++                    push(Target::OffsetX, x_offset(call, id)?);
++                    push(Target::OffsetY, y_offset(call, id)?);
++                }
++                push(Target::Zoom, uniform(call, id, ZOOM, 0, 1.)?);
++                push(Target::RotationZ, uniform(call, id, ROT, 2, 0.)?);
++                if let Some(position) = position {
++                    for (target, value) in position {
++                        push(target, Some(value));
++                    }
++                } else {
++                    push(Target::PositionEnabled, Some(0.));
++                }
++                Ok(())
++            })?;
++        }
++        Ok(())
++    })
++}
++fn note_field(call: &mut HostCall<'_>, index: usize) -> Result<Option<TableId>, Error> {
++    let globals = helper(call, 5)?;
++    let player = super::super::field(
++        call,
++        globals,
++        if index == 0 {
++            "__songlua_top_screen_player_1"
++        } else {
++            "__songlua_top_screen_player_2"
++        },
++    )?;
++    with_table(call, player, |call, player| {
++        let Some(player) = player else {
++            return Ok(None);
++        };
++        let key = call.try_intern(b"__songlua_children")?;
++        let children = call.raw_table_get(player, key)?;
++        if call.raw_table_len(player)? == 0 && children != Value::Nil {
++            return with_table(call, children, |call, children| {
++                let key = call.try_intern(b"NoteField")?;
++                let value = call.raw_table_get(children.unwrap(), key)?;
++                if value == Value::Nil {
++                    Ok(None)
++                } else {
++                    table(call, value).map(Some)
++                }
++            });
++        }
++        let children = native_children::named_children(call, player)?;
++        call.with_roots(&[children], |call| {
++            let value = super::super::field(call, children, "NoteField")?;
++            if value == Value::Nil {
++                Ok(None)
++            } else {
++                table(call, value).map(Some)
++            }
++        })
++    })
++}
++fn read_pending(
++    call: &mut HostCall<'_>,
++    pending: TableId,
++    out: &mut Vec<Sample>,
++) -> Result<(), Error> {
++    for i in 1usize.. {
++        let key = Value::Number(i as f64);
++        let value = call.raw_table_get(pending, key)?;
++        if value == Value::Nil {
++            break;
++        }
++        let field = table(call, value)?;
++        call.with_roots(&[value], |call| {
++            // Native consumes its Vec<Table>: retain future fields, but drop
++            // each processed field before getters on the next field can run.
++            call.raw_table_set(pending, key, Value::Nil)?;
++            read_field(call, field, out)
++        })?;
++    }
++    Ok(())
++}
++fn global_fields(call: &mut HostCall<'_>, out: &mut Vec<Sample>) -> Result<(), Error> {
++    let pending = call.try_new_table()?;
++    call.with_roots(&[Value::Table(pending)], |call| {
++        let mut slot = 1;
++        for index in 0..crate::LUA_PLAYERS {
++            if let Some(field) = note_field(call, index)? {
++                call.raw_table_set(pending, Value::Number(slot as f64), Value::Table(field))?;
++                slot += 1;
++            }
++        }
++        read_pending(call, pending, out)
++    })
++}
++impl Actors {
++    pub(in crate::rust_engine) fn read_column_samples(
++        &self,
++        vm: &mut Vm,
++        fields: Option<&[Value]>,
++    ) -> Result<Vec<Sample>, Error> {
++        let mut pins = Vec::new();
++        let mut input_pin = None;
++        let output = Arc::new(Mutex::new(Vec::new()));
++        let result = (|| {
++            let input = if let Some(fields) = fields {
++                for &field in fields {
++                    pins.push(vm.pin(field)?);
++                    if !matches!(field, Value::Table(_)) {
++                        return vm.with_native_stack(|stack| {
++                            Err(stack.error(b"note field table expected"))
++                        });
++                    }
++                }
++                let table = vm.try_new_table()?;
++                input_pin = Some(vm.pin(Value::Table(table))?);
++                for (i, &field) in fields.iter().enumerate() {
++                    vm.raw_table_set(table, Value::Number((i + 1) as f64), field)?;
++                }
++                for pin in pins.drain(..) {
++                    vm.unpin(pin)?;
++                }
++                Value::Table(table)
++            } else {
++                Value::Nil
++            };
++            let callback = vm.new_host_function_with_data(
++                |call| {
++                    let output = call
++                        .function_data::<Arc<Mutex<Vec<Sample>>>>()
++                        .unwrap()
++                        .clone();
++                    let mut samples = Vec::new();
++                    if let Value::Table(input) = call.captures()[2] {
++                        read_pending(call, input, &mut samples)?;
++                    } else {
++                        global_fields(call, &mut samples)?;
++                    }
++                    *output.lock().unwrap() = samples;
++                    Ok(())
++                },
++                &[
++                    Value::Table(self.registry),
++                    Value::Table(self.helpers),
++                    input,
++                ],
++                output.clone(),
++            )?;
++            vm.call(callback, &[])?;
++            Ok(std::mem::take(&mut *output.lock().unwrap()))
++        })();
++        for pin in pins {
++            vm.unpin(pin)?;
++        }
++        if let Some(pin) = input_pin {
++            vm.unpin(pin)?;
++        }
++        result
++    }
++}

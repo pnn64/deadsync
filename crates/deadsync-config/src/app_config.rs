@@ -2,7 +2,7 @@ use crate::audio::{AudioOptions, NoteScrollClock};
 use crate::coin::CoinOptions;
 use crate::defaults::*;
 use crate::null_or_die::{GraphOrigin, NullOrDieOptions};
-use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
+use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SongLuaMode, SystemOptions};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
@@ -72,6 +72,8 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
+    /// Bake song Lua before gameplay or keep it running during play.
+    pub song_lua_mode: SongLuaMode,
     // Gameplay backdrop color matching the Simply Love ScreenGameplay underlay
     // quad. Non-black values draw over song art and below notefield/HUD actors.
     // Parsed from a `#RRGGBB` hex string in `deadsync.ini` (key
@@ -425,6 +427,7 @@ impl Default for Config {
             translated_titles: system.translated_titles,
             mine_hit_sound: system.mine_hit_sound,
             bg_brightness: system.bg_brightness,
+            song_lua_mode: system.song_lua_mode,
             gameplay_bg_color: Color::BLACK,
             center_1player_notefield: system.center_1player_notefield,
             banner_cache: system.banner_cache,

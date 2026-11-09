@@ -1,0 +1,28 @@
+{
+  "checks": {
+    "final_migration_sources_match_build": true,
+    "normal_build": true,
+    "full_build_workspace_guard": true,
+    "link_map": true,
+    "artifact_unchanged": true,
+    "rendered_600": true,
+    "measurement_tools": true,
+    "tool_migration_guard": true,
+    "noteskin_complete_outputs": true,
+    "paired_metrics_present": true,
+    "changed_rust_format": true,
+    "original_target_coverage": true,
+    "new_document_links": true
+  },
+  "all_required_evidence_present": true,
+  "changed_migration_sources": [],
+  "normal_artifact": {
+    "path": "C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\deadsync.exe",
+    "sha256": "22bc199b77cf860dfdf493bfd98b058b857fa9938da9a5eaed867c1536639b92"
+  },
+  "rendered_log_sha256": "487988abf48b35a7da0045be9c16adcdbd9b6f5d6893c24f63760ac0aa8e1053",
+  "test_rollup_qualifications": "This is an incremental per-target rollup, not a claim that all88 binaries were rebuilt after the narrow loader-profile repair. Full88 ran at window11; seven affected loading/compiler targets reran at final window13 and all pass; production behavior retained and original raw rejection restored. Root Multitap and72 gameplay checks also pass at final source. Exact source qualifications and binary guards remain in underlying reports.",
+  "measurement_qualification": "External compilation affected some live run boundaries; strict repeat refused before sampling. No controlled live comparison claimed.",
+  "known_red_checks": "Original mesh/diagnostic/setter-history, independent UI/model/architecture and frozen Clippy/example findings remain enabled and itemized in completion-audit.md",
+  "scope": "Original attachment objective only; no follow-on goals"
+}

@@ -1,0 +1,463 @@
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.15
+   Compiling cfg-if v1.0.5
+   Compiling which v8.0.6
+   Compiling cc v1.10.0
+   Compiling libc v0.2.191
+   Compiling luajit-src v210.7.4+c6ffc14
+   Compiling lua-src v551.0.2 (C:\GitHub\deadsync\vendor\lua-src)
+   Compiling pkg-config v0.3.34
+   Compiling parking_lot_core v0.9.12
+   Compiling autocfg v1.5.1
+   Compiling deadlib-lua-legacy-sys v0.13.0 (C:\GitHub\deadsync\crates\deadlib-lua-legacy\mlua-sys)
+   Compiling num-traits v0.2.19
+   Compiling windows-link v0.2.1
+   Compiling deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.16.4
+   Compiling lock_api v0.4.14
+   Compiling memchr v2.8.3
+   Compiling bstr v1.13.1
+   Compiling parking_lot v0.12.5
+   Compiling rustc-hash v2.1.3
+   Compiling either v1.19.0
+   Compiling deadlib-lua-legacy v0.12.2 (C:\GitHub\deadsync\crates\deadlib-lua-legacy)
+    Finished `test` profile [unoptimized] target(s) in 47.37s
+     Running tests\cache_persistence.rs (target/rust-lua-final-core\debug\deps\cache_persistence-389324e05036863d.exe)
+
+running 2 tests
+test cache_file_child ... ok
+test persisted_source_and_native_programs_reload_in_new_processes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests\call_limits.rs (target/rust-lua-final-core\debug\deps\call_limits-fb952cca08c70f2c.exe)
+
+running 16 tests
+test call_hooks_count_real_entries_and_preserve_tail_frame_reuse ... ok
+test coroutine_overflow_and_yielded_recovery_keep_independent_capacities ... ok
+test deep_error_tracebacks_run_before_the_faulting_frames_are_unwound ... ok
+test emergency_error_handlers_can_still_call_lua_and_native_callbacks ... ok
+test error_handlers_use_the_overflow_reserve_and_catch_nested_exhaustion ... ok
+test explicit_collection_shrinks_logical_call_storage_like_lua51 ... ok
+test first_and_repeated_overflows_preserve_depth_messages_and_recovery ... ok
+test handlers_can_reenter_after_a_handler_error_or_failed_handler_entry ... ok
+test host_overflow_is_runtime_and_later_executions_keep_the_recovered_limit ... ok
+test instruction_abort_in_an_overflow_handler_releases_the_reserved_context ... ok
+test near_capacity_calls_preserve_precedence_and_native_error_locations ... ok
+test nested_protected_calls_obey_the_reference_c_boundary_depth ... ok
+test overflow_while_handling_overflow_returns_the_reference_error_object ... ok
+test recursive_runtime_error_handlers_reach_the_c_call_emergency_limit ... ok
+test tail_recursion_reuses_frames_without_exhausting_the_call_reserve ... ok
+test unwinding_closes_surviving_captured_locals_before_collection ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.11s
+
+     Running tests\capture_limits.rs (target/rust-lua-final-core\debug\deps\capture_limits-385e4cd43f503f7b.exe)
+
+running 10 tests
+test capture_boundaries_match_for_complete_and_unfinished_functions ... ok
+test capture_checks_wait_for_the_next_lexical_token ... ok
+test descendant_captures_report_the_first_overflowing_ancestor ... ok
+test generated_lexical_layouts_preserve_capture_identity_and_error_order ... ok
+test globals_fields_methods_and_record_keys_do_not_consume_captures ... ok
+test local_activation_and_shadowed_initializers_preserve_outer_bindings ... ok
+test loop_variables_parameters_method_self_and_vararg_arg_have_function_scope ... ok
+test reader_failures_at_the_capture_boundary_keep_consumption_and_precedence ... ok
+test repeat_body_locals_remain_visible_in_the_until_condition ... ok
+test sequential_function_scopes_reuse_capture_storage_without_losing_parent_captures ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.42s
+
+     Running tests\coroutines.rs (target/rust-lua-final-core\debug\deps\coroutines-f037444010cdb99d.exe)
+
+running 11 tests
+test create_resume_yield_status_and_exact_result_counts ... ok
+test failed_wrappers_preserve_error_identity_and_source_locations ... ok
+test generated_resume_sequences_and_recursive_generators_preserve_state ... ok
+test generic_for_iterators_keep_native_yield_and_depth_boundaries ... ok
+test lua51_rejects_yields_through_native_and_metamethod_boundaries ... ok
+test native_jobs_survive_child_resumes_and_thread_metatables_are_shared ... ok
+test nested_resumes_preserve_normal_status_and_protected_calls ... ok
+test open_cells_remain_shared_across_suspended_and_normal_threads ... ok
+test suspended_threads_persist_across_host_executions_and_quota_abort_restores_main ... ok
+test thread_environments_and_debug_environments_follow_lua51 ... ok
+test wrappers_share_heap_and_keep_independent_native_identity ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\file_loading.rs (target/rust-lua-final-core\debug\deps\file_loading-ead1868d98fbba6f.exe)
+
+running 16 tests
+test binary_files_reopen_before_validation_and_preserve_native_errors ... ok
+test chunk_boundaries_and_long_headers_retain_file_roots_during_collection ... ok
+test dofile_keeps_original_argument_slots_and_roots_during_execution ... ok
+test dofile_propagates_arbitrary_runtime_objects_without_losing_faulting_frames ... ok
+test file_calls_preserve_hooks_and_allow_entry_argument_changes ... ok
+test file_reader_quota_abort_closes_handles_and_discards_parser_storage ... ok
+test files_can_be_reloaded_rewritten_and_outlive_their_source_data ... ok
+test host_file_errors_describe_the_raised_string ... ok
+test initial_hash_lines_and_text_translation_keep_source_lines ... ok
+test loading_uses_thread_globals_and_leaves_function_environments_independent ... ok
+test missing_files_and_bad_arguments_keep_errors_and_handler_order ... ok
+test named_loads_preserve_results_varargs_and_debug_source ... ok
+test nested_files_use_flat_scheduling_and_native_call_boundaries ... ok
+test repeated_file_loads_reclaim_readers_and_escaped_code_stays_live ... ok
+test standard_input_loading_shares_buffers_and_ignores_io_input_redirection ... ok
+test syntax_source_names_use_the_lexer_limit_for_each_loader ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+
+     Running tests\gc.rs (target/rust-lua-final-core\debug\deps\gc-330ac6d03f4a8e4c.exe)
+
+running 25 tests
+test automatic_collection_handles_opcode_only_churn_and_large_live_arrays ... ok
+test collected_threads_close_surviving_cells_and_preserve_identity ... ok
+test collection_hook_controls_run_before_and_after_the_native_cycle ... ok
+test collection_inside_callbacks_preserves_arguments_and_continuations ... ok
+test collector_controls_and_memory_relationships ... ok
+test deep_graphs_and_high_register_roots_survive_collection ... ok
+test explicit_collections_and_steps_resume_automatic_collection ... ok
+test explicit_steps_resume_pending_finalizers_and_queries_leave_them_pending ... ok
+test finalizer_control_checkpoints_survive_child_coroutine_suspension ... ok
+test generated_collector_control_sequences_match_reference_reachability ... ok
+test host_full_collection_uses_the_reference_restart_and_finalizer_controls ... ok
+test host_program_bindings_survive_collection_without_pinning_loadstring_caches ... ok
+test incremental_mutation_preserves_closures_environments_threads_and_finalizers ... ok
+test invalid_collector_arguments_do_not_resume_a_stopped_collector ... ok
+test native_handles_cannot_restore_collected_environments ... ok
+test negative_pause_settings_suspend_automatic_collection_after_the_cycle ... ok
+test nested_steps_finish_sweeping_before_running_new_finalizers ... ok
+test pause_changes_wait_for_a_cycle_and_restart_discards_the_old_threshold ... ok
+test repeated_collection_reclaims_programs_and_bounds_object_slots ... ok
+test roots_reject_release_and_foreign_vm_and_keep_values_alive ... ok
+test successful_automatic_finalizers_do_not_leave_collection_stopped ... ok
+test successful_finalizers_restore_controls_and_errors_preserve_the_last_change ... ok
+test weak_tables_preserve_lua51_strings_cycles_and_strong_values ... ok
+test wide_weak_tables_keep_live_array_and_hash_entries_after_batched_cleanup ... ok
+test wrapped_positive_step_limits_complete_a_large_live_graph ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.19s
+
+     Running tests\host_calls.rs (target/rust-lua-final-core\debug\deps\host_calls-c794711974d09ba2.exe)
+
+running 12 tests
+test chunks_receive_host_arguments_and_preserve_results ... ok
+test global_lookup_callbacks_keep_previous_results_alive_and_recover_after_errors ... ok
+test host_calls_reject_foreign_handles_and_recover_after_errors ... ok
+test host_calls_restore_state_after_instruction_abort ... ok
+test host_calls_reuse_lua_closures_and_builtin_results ... ok
+test host_file_loading_keeps_the_native_loader_after_global_mutation ... ok
+test host_global_writes_deliver_lua_newindex_and_recover_from_its_errors ... ok
+test host_sort_padding_does_not_overlap_native_comparison_storage ... ok
+test host_tables_use_raw_writes_and_callable_metatables ... ok
+test immediate_builtin_results_remain_roots_after_arguments_are_discarded ... ok
+test loaded_functions_follow_lua_ownership_after_the_program_is_dropped ... ok
+test native_chunk_parameters_and_old_varargs_use_the_shared_host_entry ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\host_closures.rs (target/rust-lua-final-core\debug\deps\host_closures-26fbfe86534cd34e.exe)
+
+running 8 tests
+test boxed_binding_object_size_is_included_in_heap_accounting ... ok
+test closure_data_survives_live_capture_cycles_and_drops_when_the_cycle_collects ... ok
+test failed_stack_closure_creation_preserves_the_stack_and_releases_data ... ok
+test native_stack_builds_a_closure_with_all_255_traced_captures ... ok
+test private_binding_data_is_typed_and_does_not_occupy_lua_upvalues ... ok
+test private_data_remains_alive_during_lua_shutdown_finalizers ... ok
+test pseudo_indexes_distinguish_registry_closure_environment_and_thread_globals ... ok
+test rejected_registrations_release_owned_data_and_do_not_publish_a_closure ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\host_functions.rs (target/rust-lua-final-core\debug\deps\host_functions-ed3ea3020c45c23a.exe)
+
+running 15 tests
+test borrowed_arguments_stay_intact_while_multiple_results_are_written ... ok
+test cached_programs_bind_separate_native_functions_in_each_vm ... ok
+test captures_keep_identity_and_mutations_across_gc_and_coroutine_calls ... ok
+test changing_captures_during_incremental_collection_preserves_new_edges ... ok
+test host_callbacks_work_as_pattern_replacements_and_metamethods ... ok
+test host_errors_preserve_arbitrary_values_and_allow_subsequent_calls ... ok
+test host_userdata_uses_native_environment_and_can_store_mutable_state ... ok
+test invalid_and_collected_captures_and_results_are_rejected ... ok
+test native_callbacks_run_during_collection_and_vm_shutdown ... ok
+test native_preload_modules_share_cached_table_identity ... ok
+test native_result_bounds_and_instruction_abort_leave_captures_usable ... ok
+test registered_native_functions_support_numeric_strings_methods_and_tail_calls ... ok
+test result_values_and_captures_survive_return_hooks_and_error_handlers ... ok
+test rust_panics_bypass_lua_handlers_and_disable_lua_finalizers_on_drop ... 
+thread 'rust_panics_bypass_lua_handlers_and_disable_lua_finalizers_on_drop' (44200) panicked at crates\deadlib-lua\tests\host_functions.rs:350:9:
+host callback panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+ok
+test unreachable_host_capture_cycles_are_reclaimed_and_registrations_are_distinct ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\host_reentry.rs (target/rust-lua-final-core\debug\deps\host_reentry-51689c070c3a504b.exe)
+
+running 11 tests
+test a_nested_rust_panic_bypasses_both_boundaries_and_skips_drop_finalizers ... 
+thread 'a_nested_rust_panic_bypasses_both_boundaries_and_skips_drop_finalizers' (19708) panicked at crates\deadlib-lua\tests\host_reentry.rs:290:9:
+nested host callback panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+ok
+test callbacks_share_the_outer_quota_even_when_rust_ignores_the_error ... ok
+test coroutine_callers_and_resumed_children_return_to_the_correct_rust_frame ... ok
+test nested_calls_preserve_outer_locals_and_open_results ... ok
+test nested_open_results_obey_the_host_stack_bound ... ok
+test nested_runtime_errors_preserve_identity_and_leave_outer_frames_usable ... ok
+test protected_reentry_matches_the_c_api_for_values_errors_and_live_native_slots ... ok
+test quota_abort_cleans_child_coroutines_and_allows_a_new_entry ... ok
+test recursive_reentry_reports_lua_stack_overflow_without_losing_the_parent ... ok
+test retained_child_results_and_errors_survive_collection_and_nested_finalizers ... ok
+test rust_can_inspect_results_and_append_across_repeated_calls ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\host_roots.rs (target/rust-lua-final-core\debug\deps\host_roots-8de0c6901db95a07.exe)
+
+running 3 tests
+test callbacks_created_during_host_calls_retain_typed_data_and_traced_values ... ok
+test partial_root_setup_failure_releases_earlier_roots ... ok
+test scoped_roots_survive_reentry_and_release_after_success_and_error ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\host_table_state.rs (target/rust-lua-final-core\debug\deps\host_table_state-95d578de2d352a41.exe)
+
+running 4 tests
+test callback_attachments_trace_through_collecting_lua_reentry ... ok
+test collected_handles_do_not_replace_private_state ... ok
+test detaching_and_replacing_state_releases_the_previous_attachment ... ok
+test private_state_survives_field_and_metatable_changes_and_collects_with_its_owner ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\host_tables.rs (target/rust-lua-final-core\debug\deps\host_tables-5b74761b2b56bd59.exe)
+
+running 6 tests
+test field_metamethods_cannot_suspend_the_rust_callback_stack ... ok
+test ignoring_a_field_instruction_limit_still_aborts_the_outer_entry ... ok
+test protected_fields_follow_metatable_chains_and_keep_operands_alive_during_collection ... ok
+test raw_reads_reject_collected_handles_and_do_not_invoke_metamethods ... ok
+test rust_can_handle_exact_metamethod_errors_and_continue_using_the_callback ... ok
+test rust_created_callbacks_keep_captures_and_coerce_strings_without_metamethods ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\loading.rs (target/rust-lua-final-core\debug\deps\loading-beb9703959bd8584.exe)
+
+running 20 tests
+test binary_headers_and_names_report_native_load_errors ... ok
+test binary_readers_stop_at_errors_and_preserve_the_initial_probe ... ok
+test dump_argument_errors_keep_native_messages_and_return_arity ... ok
+test dump_return_hooks_see_the_retained_function_and_result_slots ... ok
+test dumps_round_trip_closures_varargs_scopes_and_thread_environments ... ok
+test generated_chunk_widths_preserve_closures_varargs_and_binary_literals ... ok
+test instruction_abort_discards_reader_jobs_and_restores_main ... ok
+test loaded_chunks_inherit_thread_globals_after_the_reader_finishes ... ok
+test local_limits_stop_reader_requests_at_the_declaration ... ok
+test long_dump_relays_retain_the_branch_scope_and_source_line ... ok
+test lua_readers_expose_and_retain_real_parser_tables_through_eof_and_return_hooks ... ok
+test nested_loads_share_heap_without_recursive_interpreter_entry ... ok
+test one_byte_readers_handle_large_comments_literals_and_constructor_lists ... ok
+test reader_calls_stop_at_early_errors_and_cross_token_boundaries ... ok
+test reader_errors_are_protected_and_keep_arbitrary_lua_objects ... ok
+test reader_load_preserves_chunks_eof_coercions_and_result_counts ... ok
+test reader_runtime_errors_inherit_the_active_xpcall_handler ... ok
+test reader_state_survives_collection_and_retains_the_reserved_slot ... ok
+test reader_yields_are_caught_and_child_coroutines_can_yield ... ok
+test repeated_reader_loads_reclaim_code_closures_and_transient_state ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.74s
+
+     Running tests\memory_limits.rs (target/rust-lua-final-core\debug\deps\memory_limits-f1ab6bc9589f3866.exe)
+
+running 10 tests
+test bounded_rust_binding_storage_keeps_its_native_alignment ... ok
+test compilation_workspace_and_lua_loadstring_share_the_vm_ceiling ... ok
+test dump_workspace_cannot_bypass_the_remaining_vm_budget ... ok
+test host_userdata_obeys_the_budget_and_releases_storage_after_collection ... ok
+test initialization_must_fit_the_budget ... ok
+test loaded_bytecode_is_charged_once_and_released_with_its_binding ... ok
+test loadfile_source_storage_is_bounded_and_failure_closes_the_job ... ok
+test oversized_string_is_rejected_before_growth_and_the_vm_recovers ... ok
+test streaming_load_budget_survives_reader_reentry_and_is_released_on_failure ... ok
+test table_budget_failure_does_not_affect_another_state ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests\module_capabilities.rs (target/rust-lua-final-core\debug\deps\module_capabilities-e63ec5f592bf3e1e.exe)
+
+running 2 tests
+test c_modules_have_a_permanent_deterministic_unsupported_result ... ok
+test rust_preload_bindings_keep_captures_and_owned_data_until_collection ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\native_context.rs (target/rust-lua-final-core\debug\deps\native_context-29c9ec2e44b7e604.exe)
+
+running 5 tests
+test child_native_access_mutates_a_waiting_hooks_real_closure ... ok
+test empty_native_thread_rejects_replacing_a_nonexistent_calling_environment ... ok
+test external_hook_pseudo_indexes_use_the_interrupted_native_closure ... ok
+test hook_allocations_and_environment_writes_follow_the_interrupted_lua_function ... ok
+test suspended_lua_hook_context_keeps_its_function_environment ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\native_gc.rs (target/rust-lua-final-core\debug\deps\native_gc-5f4b9fb299aa90aa.exe)
+
+running 6 tests
+test collector_controls_and_count_parts_preserve_the_native_window ... ok
+test discarded_native_arguments_are_not_kept_by_finalizer_scratch_storage ... ok
+test explicit_steps_run_finalizers_and_restore_native_stack_results ... ok
+test finalizer_errors_keep_fault_frames_and_make_later_api_operations_sticky ... ok
+test finalizers_reenter_and_inspect_mutate_the_real_native_caller ... ok
+test native_collection_uses_the_outer_instruction_limit_and_recovers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\native_root.rs (target/rust-lua-final-core\debug\deps\native_root-3a597d26b3b0ce76.exe)
+
+running 8 tests
+test raw_builtin_bodies_execute_without_a_current_closure ... ok
+test root_can_resume_and_retain_a_coroutine_across_entries ... ok
+test root_entry_rejects_an_active_standalone_context ... ok
+test root_instruction_limits_escape_even_when_rust_ignores_the_protected_error ... ok
+test root_parser_calls_protection_and_recovery_keep_the_prefix ... ok
+test root_protected_calls_charge_the_same_c_depth_as_lua51 ... ok
+test root_stack_has_no_activation_and_retains_collector_roots_between_entries ... ok
+test unprotected_root_errors_unwind_and_leave_a_usable_error_stack ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\native_stack.rs (target/rust-lua-final-core\debug\deps\native_stack-b464527f460a37ba.exe)
+
+running 11 tests
+test an_empty_finished_stack_cannot_reopen_collected_original_arguments ... ok
+test direct_stack_errors_preserve_fault_locals_identity_and_later_calls ... ok
+test discarded_original_arguments_are_not_kept_as_duplicate_roots ... ok
+test mutable_stack_indexes_growth_coercion_and_selected_results ... ok
+test native_return_hooks_mutate_the_selected_result_slots_in_place ... ok
+test native_temporaries_outgrow_captures_and_survive_collection_without_upvalues ... ok
+test native_windows_preserve_sort_jobs_iterator_state_and_metamethod_continuations ... ok
+test popped_native_temporaries_stop_rooting_objects_before_the_next_callback ... ok
+test resource_abort_from_a_nested_stack_call_remains_fatal_when_ignored ... ok
+test stack_call_result_counts_pad_nil_and_keep_a_live_prefix ... ok
+test stack_capacity_checks_and_failed_operations_preserve_the_top ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\native_tables.rs (target/rust-lua-final-core\debug\deps\native_tables-002eeb93b6ce9ccf.exe)
+
+running 10 tests
+test field_lookup_does_not_expose_its_local_key_as_a_native_stack_value ... ok
+test ignored_table_faults_remain_pending_and_reject_result_writes ... ok
+test impossible_table_hints_and_failed_stack_operations_leave_existing_values_intact ... ok
+test indexed_metamethods_share_state_roots_and_child_coroutine_scheduling ... ok
+test metatable_access_bypasses_lua_protection_and_supports_shared_primitive_types ... ok
+test standalone_table_call_depth_accounts_for_its_outer_context_once ... ok
+test table_api_resource_failures_clean_up_and_allow_a_new_entry ... ok
+test table_creation_integer_keys_fields_and_raw_access_preserve_identity ... ok
+test table_faults_keep_native_inputs_and_mutable_open_lua_locals ... ok
+test traversal_and_stack_shifts_keep_values_rooted_and_release_removed_values ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\native_thread_calls.rs (target/rust-lua-final-core\debug\deps\native_thread_calls-c34a24048ba908ec.exe)
+
+running 4 tests
+test a_completed_target_yield_keeps_the_host_usable ... ok
+test an_api_call_between_yield_and_resume_restores_the_pending_lua_register_window ... ok
+test target_call_validation_preserves_both_native_windows ... ok
+test target_instruction_abort_restores_context_and_remains_sticky ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\native_thread_execution.rs (target/rust-lua-final-core\debug\deps\native_thread_execution-cec6c07847cf20ff.exe)
+
+running 4 tests
+test a_selected_concat_yield_keeps_the_physical_top_below_its_base ... ok
+test a_selected_concatenation_quota_error_restores_context_and_remains_fatal ... ok
+test multiple_pending_yields_report_invalid_resumption_without_a_rust_panic ... ok
+test selected_creation_and_concatenation_preserve_the_owner_and_target_prefix ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\native_thread_gc.rs (target/rust-lua-final-core\debug\deps\native_thread_gc-1a1eb3b2a03ee161.exe)
+
+running 2 tests
+test a_selected_finalizer_quota_error_restores_context_and_stays_fatal ... ok
+test selected_collection_needs_no_spare_public_slot_and_restores_its_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\native_thread_stacks.rs (target/rust-lua-final-core\debug\deps\native_thread_stacks-eda21fe6bacacc12.exe)
+
+running 18 tests
+test copied_call_levels_preserve_stacks_and_reach_active_and_normal_threads ... ok
+test copied_levels_preserve_the_resume_limit_and_error_handler_status ... ok
+test copying_collected_thread_call_levels_rejects_without_mutation ... ok
+test failed_stack_windows_retain_diagnostics_and_pop_without_resetting_error_status ... ok
+test inactive_primitives_coerce_slots_and_keep_thread_global_pseudo_indexes ... ok
+test inactive_stack_moves_preserve_nil_order_identity_and_shared_heap_roots ... ok
+test native_empty_threads_accept_entries_prefixes_and_reuse_after_completion ... ok
+test native_parser_level_changes_cover_text_binary_and_protected_recovery ... ok
+test native_resume_keeps_values_and_interoperates_with_lua_resume ... ok
+test native_resume_limits_escape_handlers_and_close_child_cells ... ok
+test native_resume_retains_error_status_and_rejects_yield_boundaries ... ok
+test native_resume_validates_argument_counts_before_touching_stacks ... ok
+test protected_call_level_changes_restore_on_failure_and_wrap_on_success ... ok
+test rejected_moves_and_stale_thread_handles_leave_live_stacks_unchanged ... ok
+test stock_reader_loads_wrap_the_c_call_count_and_restore_parser_failures ... ok
+test stock_readers_execute_before_syntax_limits_in_the_c_error_reserve ... ok
+test yielded_stacks_accept_staged_values_and_normal_parents_expose_auxresume_window ... ok
+test yielding_callbacks_return_through_rust_and_are_not_reentered_on_resume ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\native_upvalues.rs (target/rust-lua-final-core\debug\deps\native_upvalues-6072e36eab919ab8.exe)
+
+running 6 tests
+test named_lua_cells_share_mutation_across_open_closed_and_suspended_frames ... ok
+test native_slots_drive_builtin_execution_and_keep_replaced_values_rooted ... ok
+test pending_unprotected_errors_reject_upvalue_reads_and_writes_and_recover ... ok
+test stack_bounds_invalid_captures_and_empty_writes_preserve_values ... ok
+test unreachable_builtin_capture_cycles_are_reclaimed_and_handles_become_invalid ... ok
+test upvalue_names_stay_alive_after_compiler_programs_and_host_roots_are_released ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\thread_state.rs (target/rust-lua-final-core\debug\deps\thread_state-97b847102a11405f.exe)
+
+running 5 tests
+test invalid_root_rejection_leaves_the_type_slot_available ... ok
+test state_stays_alive_through_shutdown_finalizers_and_drops_once_afterward ... ok
+test suspended_thread_state_roots_survive_but_unreachable_self_cycles_collect ... ok
+test thread_identity_and_state_are_stable_independent_and_not_inherited ... ok
+test type_slots_coexist_and_duplicate_initialization_never_replaces_state ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\userdata.rs (target/rust-lua-final-core\debug\deps\userdata-8edb7b62405a9e73.exe)
+
+running 12 tests
+test automatic_finalization_restores_interrupted_lua_registers ... ok
+test finalizer_errors_preserve_objects_and_leave_pending_work_recoverable ... ok
+test finalizers_can_collect_recursively_and_resume_child_threads ... ok
+test finalizers_run_once_in_reverse_creation_order_and_can_resurrect ... ok
+test host_collection_runs_finalizers_and_preserves_return_roots ... ok
+test host_userdata_storage_and_collection_validate_live_handles ... ok
+test instruction_abort_preserves_pending_finalizers_and_recovers_the_vm ... ok
+test proxies_keep_raw_metatables_environments_and_identity ... ok
+test reused_userdata_slots_preserve_finalization_order_across_collections ... ok
+test userdata_dispatches_metamethods_with_lua51_arguments ... ok
+test vm_drop_finalizes_reachable_userdata_and_continues_after_errors ... ok
+test weak_tables_distinguish_finalized_userdata_keys_and_values ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+

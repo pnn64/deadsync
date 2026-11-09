@@ -166,6 +166,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &config,
         "Vulkan",
         1,
+        deadsync_config::options::SongLuaMode::Baked,
+        None,
     );
     deadsync_shell::gameplay_entry::apply_song_lua_reload(
         &song,

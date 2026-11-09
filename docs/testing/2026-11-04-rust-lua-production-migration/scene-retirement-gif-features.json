@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "tree",
+    "--locked",
+    "-p",
+    "deadsync-theme-simply-love",
+    "-e",
+    "features",
+    "--prefix",
+    "none",
+    "--format",
+    "{p} features={f}"
+  ],
+  "song_dependency_lines": [
+    "deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua) features="
+  ],
+  "rust_engine_enabled": false,
+  "module_gate": "crates/deadsync-song-lua/src/lib.rs:72"
+}

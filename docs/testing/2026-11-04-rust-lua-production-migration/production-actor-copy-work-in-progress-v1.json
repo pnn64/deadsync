@@ -1,0 +1,35 @@
+{
+  "created_utc": "2026-11-08T08:22:18.759321+00:00",
+  "goal_status": "active",
+  "previous_goal_turn_classification": "progress: 45 host/adjacent checks and five normal routing checks verified, existing host surface restored.",
+  "current_goal_turn_classification": "Progress: copy/adjacent 137 tests and five normal routing tests now pass; two measurement examples type-check. Full song regression is active.",
+  "live_runner": {
+    "native_session_id": 94461,
+    "stage": "production-full-song-after-copy-v1-song-windows-debug",
+    "confirmed_live": "Direct post-launch poll confirmed active; see checkpoint v4."
+  },
+  "source_freeze": "Active for full song regression; no original source edits until terminal.",
+  "older_results": {
+    "v1": "New-test float-literal syntax failed compilation.",
+    "v2": "Native harness omitted the existing basic globals installer; 25 adjacent checks passed, all four new controls failed setup.",
+    "v3": "29 checks passed: four exact live-copy comparisons, nine render and sixteen existing host helper checks.",
+    "v4": "Four pass, two fail: copied actor materialization lost pose/color/base; sampled base-scale getter missed presence metadata.",
+    "v5": "Corrected a nonexistent target name; no tests ran.",
+    "copy-phases-v1": "Six pass, two fail: raw pose/base data omitted before live promotion and in preparation.",
+    "copy-phases-v2": "136 pass, one new control used frame-only SetDrawByZPosition on a Quad. Corrected the test receiver, retained an explicit Quad missing-method assertion; phase gaps pass."
+  },
+  "current_changes": [
+    "Actor-owned BaseTransform values/presence, maintained by setters and cloned with templates.",
+    "Copy exports exactly 26 pose + eight render flag + six base fields from frozen native behavior, rooted through GC.",
+    "Copied declaration values are decoded back into new actor state; ordinary empty declarations retain default state.",
+    "Sampled getter and per-frame paths update base metadata; speculative captures restore it.",
+    "Background reset clears base metadata; source/native implementation bodies are retained.",
+    "Track when native replay getter fields have been exported; preserve untouched actor shape before playback.",
+    "Export existing preparation getter pose and explicit base fields into copies, and preserve ordinary raw flag writes before playback."
+  ],
+  "evidence": [
+    "production-actor-copy-field-scope-v1.json",
+    "production-actor-copy-native-preservation-v1.json"
+  ],
+  "completion": "Copy and adjacent repairs verified; full original migration acceptance remains active. See production-actor-copy-review-v2.json and checkpoint v4."
+}

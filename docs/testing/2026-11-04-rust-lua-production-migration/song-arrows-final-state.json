@@ -1,0 +1,31 @@
+{
+    "goal_status":  "active",
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "final_application_validation":  false,
+    "source_count":  1295,
+    "tests_passed":  658,
+    "test_targets":  38,
+    "library_tests":  1,
+    "arrow_cases":  14,
+    "captured_reference_cases":  246,
+    "engine_unchanged":  true,
+    "native_algorithms_byte_unchanged":  true,
+    "existing_tests_byte_unchanged":  true,
+    "native_math_expression_transfer_verified":  true,
+    "formatting_passed":  true,
+    "clippy_diagnostics_match_prior_baseline":  true,
+    "without_test_support_compiles":  true,
+    "ownership_regression_corrected":  true,
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "previous_goal_turn":  "progress: same-VM gameplay callbacks; 586 regression and 150 live library tests",
+    "current_goal_turn":  "progress: ArrowEffects bindings and post-health cache",
+    "documents":  {
+                      "docs/lua-architecture.md":  "e89f85c76b8c10e9cef8470eea6a68851767dd3d14742ac471042eeb83795381",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "0fbea0380a19d58f3851c785434578162c68aaf3731fc54e91aa32641b440063",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/review_song_arrows.py":  "712c011134599f51877034124349da67aa8a8d292d06ae51f84a2456e1025518",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/song-arrows-review.json":  "44f61f5150584be070f0655922578ede622a0873d824032254782c79d048b047",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/document_song_arrows.py":  "891ec3bd47194a46b435c64ad650b5f0180adf1050f4583171ad03cb52c5181c",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/audit_song_arrows.ps1":  "1adc9bd5b6930f5eb3849c1e04574431226d393f5b217a23ad1de8446c469c43"
+                  }
+}

@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "run",
+    "--manifest-path",
+    "/mnt/c/GitHub/deadsync/target/gif-migration-probe/Cargo.toml",
+    "--",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/AmongUs.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Bocchi.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/BrodyQuest.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/CatJAM.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/CrabPls.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Dancing Duck.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/DonChan.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Nyan Cat.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Randomizer.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Rin Cat.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Snoop.lua",
+    "/mnt/c/GitHub/deadsync/assets/graphics/step_stats_gifs/Sonic.lua"
+  ],
+  "exit_code": 0,
+  "seconds": 3.9381083329208195,
+  "adapter_sha256": "c7dae11a486e956b3a319649074b0ef63cd19db9a3dac6997de8e2d3f755be3b",
+  "sources_unchanged": true,
+  "legacy_sha256": "468272b2c6dcb35f3dd927581ff17cc9e3fad0636118f2a595f13ae7cdc9b627",
+  "log_sha256": "03fbcfac61ea174594dd123eff78fc8548a8f2c9533c1f192f79e916cf42a16d",
+  "scope": "isolated capture differential; not application integration or memory-limit validation"
+}

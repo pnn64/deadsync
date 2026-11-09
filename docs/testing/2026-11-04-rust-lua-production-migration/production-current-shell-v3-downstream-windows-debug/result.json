@@ -1,0 +1,32 @@
+{
+  "stage": "production-current-shell-v3",
+  "suite": "downstream",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-shell",
+    "--lib",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 736.7645982000977,
+  "log_sha256": "41c9b98994341b2645e167fa33da8419d4c6b972127fbdfd8b8313ffc38c081c",
+  "tests_passed": 424,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 424 passed; 0 failed; 16 ignored; 0 measured; 0 filtered out; finished in 183.74s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

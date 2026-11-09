@@ -1,0 +1,66 @@
+{
+  "tests/fixtures/itgmania-song-lua-micro/model-material/control.json": {
+    "baseline": "766663495ba4aea90ecb289efd2d24dd86ec22e26265ce602513af9bcdec441d",
+    "current": "766663495ba4aea90ecb289efd2d24dd86ec22e26265ce602513af9bcdec441d"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-material/default.lua": {
+    "baseline": "33820592fccee1f1fd9e328f1411115e4a2b02b25ea906d56f978b61dfce81b1",
+    "current": "33820592fccee1f1fd9e328f1411115e4a2b02b25ea906d56f978b61dfce81b1"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-material/native.json": {
+    "baseline": "555b345d1aee69d0466a0235581403aa5e4b7c4f56584d8428209cd46cff4b43",
+    "current": "555b345d1aee69d0466a0235581403aa5e4b7c4f56584d8428209cd46cff4b43"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-material/README.md": {
+    "baseline": "91cdccc879fdeeece48611cd5a263221dced8c6fefd03171527b6811aa1dc367",
+    "current": "91cdccc879fdeeece48611cd5a263221dced8c6fefd03171527b6811aa1dc367"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-material/triangle.txt": {
+    "baseline": "492b0ed2328ade4b8543b7e1252566920262993a2e9c82875078bb8264e00ebc",
+    "current": "492b0ed2328ade4b8543b7e1252566920262993a2e9c82875078bb8264e00ebc"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-material/unassigned.txt": {
+    "baseline": "e87718b2bdac523e5c2e682af657c47103a9dc56a9ff8da94770d7d5807bf6bc",
+    "current": "e87718b2bdac523e5c2e682af657c47103a9dc56a9ff8da94770d7d5807bf6bc"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/control.json": {
+    "baseline": "fc4b3e9bfb21de47f0031ca15510b5647d382f052431939e440115bd5d97019d",
+    "current": "fc4b3e9bfb21de47f0031ca15510b5647d382f052431939e440115bd5d97019d"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/default.lua": {
+    "baseline": "02296171212d590deb96385a0bec8696ad7e83d50b915ead48b77a9f51d9f979",
+    "current": "02296171212d590deb96385a0bec8696ad7e83d50b915ead48b77a9f51d9f979"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/frame.png": {
+    "baseline": "c21704e2430ff2c421a08438f7b2d412796fb2061312f1b9080f352eea663a15",
+    "current": "c21704e2430ff2c421a08438f7b2d412796fb2061312f1b9080f352eea663a15"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/model.txt": {
+    "baseline": "7541c02fed395ff49d046a13323fb84550bd93f28901a6b00391ee25848fad91",
+    "current": "7541c02fed395ff49d046a13323fb84550bd93f28901a6b00391ee25848fad91"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json": {
+    "baseline": "d90afbb90d56c497593023efd277677869bd9756e54acfae5fc521ce353821e6",
+    "current": "d90afbb90d56c497593023efd277677869bd9756e54acfae5fc521ce353821e6"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/README.md": {
+    "baseline": "d4496524e9455ccbb7f5c8263da55a602b9135de953ae6e08713921af05b7988",
+    "current": "d4496524e9455ccbb7f5c8263da55a602b9135de953ae6e08713921af05b7988"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/model-texture-order/texture.ini": {
+    "baseline": "8d7133fad8842f46cb005dfe7d0726ca56a5b368b471a760d473b65c19fed491",
+    "current": "8d7133fad8842f46cb005dfe7d0726ca56a5b368b471a760d473b65c19fed491"
+  },
+  "assets/noteskins/dance/cyber/_down tap lift model.txt": {
+    "baseline": "aad974cea521e2bc5d7f278487a26b543f2ccaf09a1538f0300f0952018b2871",
+    "current": "aad974cea521e2bc5d7f278487a26b543f2ccaf09a1538f0300f0952018b2871"
+  },
+  "assets/noteskins/dance/cyber/_down tap note model.txt": {
+    "baseline": "a656456344bc7d90a551d888b82483bdbfb44771cd3c972f7bf8081c3d1a0a55",
+    "current": "a656456344bc7d90a551d888b82483bdbfb44771cd3c972f7bf8081c3d1a0a55"
+  },
+  "assets/noteskins/dance/cyber/_mine model.txt": {
+    "baseline": "85d9e240ebd0a2e01df37db7e4f1052ba6eb84a243465bbe1ce5c3dd238c6b87",
+    "current": "85d9e240ebd0a2e01df37db7e4f1052ba6eb84a243465bbe1ce5c3dd238c6b87"
+  }
+}

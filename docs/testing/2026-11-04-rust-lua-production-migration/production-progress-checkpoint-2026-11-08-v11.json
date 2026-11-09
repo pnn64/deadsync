@@ -1,0 +1,50 @@
+{
+  "created_utc": "2026-11-08T13:46:54.930846+00:00",
+  "goal_status": "active",
+  "previous": "production-progress-checkpoint-2026-11-08-v10.json",
+  "new_accepted_results": [
+    "Expanded adapter v3:121 pass,1 fail,source guard passed. New actor tostring and copied-AMV-proxy controls pass; all original targets pass. Large300 control alone still failed at that snapshot.",
+    "Original Seventh Gear root test passes unchanged (21.97s actual test), guard true, log97515933c22adfaca373b4f139cc81b0059bed11b081584c9d3b613dec9a8267.",
+    "Whole original native_gameplay::tests prefix:60pass12fail; three tree tostring failures fixed. AMV Lua assertions now pass but trace event count still missing. All12 remaining failures are original trace/provenance tests.",
+    "Found sixth unbounded actor list in actors/capture.rs discover_queued; batched it with same traced roots helper. Entire rust_song_compiler v4:16pass9fail; new300-actor GC/native control now passes, all original compiler tests pass. Nine appended original-microfixture comparisons expose real prepared-payload differences.",
+    "Microfixture differences saved in production-adapter-microfixture-differences-v1.json: six effect-clock tracks missing/incomplete; nested-start/queued-state contain speculative beat0 BodyRotateBuildings broadcast; deferred-effects loses retried cross-actor commands because player local staysnil.",
+    "Formatting v2:16 files pass. Only module-order issue from v1 fixed.",
+    "Full shelllib rerun after six root batches:412pass12fail16ignored,guard true; Sharkmode still first genuine failure (missing baked custom draws),11 lock-poison cascades persist."
+  ],
+  "current_source_edit_window4": [
+    "Added song_callback_depth in Actors Store and actual run_actor_function boundary; matches native authored callback scope even when nested function has @theme source. Counter unwinds on Lua errors. live_sources now bypasses immediate-source theme exclusion only under active song callback.",
+    "Appended native-vsRust live compiler control for nested theme broadcast across GC and callback error followed by autonomous theme call (must be excluded). Pending verification.",
+    "TEMPORARY effect diagnostic in actors/chronological.rs, gated test-support + DEADSYNC_EFFECT_CLOCK_PROBE and clock1.24..1.31/MessageWag. effects.rs temporarily derivesDebug for State/Motion solely to log owned phase. MUST REMOVE this probe and Debug derives before final source validation. Originals preserved in production-adapter-fixes-before-v4.",
+    "First diagnostic v1 failed borrow check (call.captures read after native_stack borrow); corrected by copying primitive flag before opening stack. Original failed result preserved; no actual tests ran in v1."
+  ],
+  "live_runners": [
+    {
+      "session_id": 92904,
+      "stage": "production-effect-clock-diagnostic-v2-song-windows-debug",
+      "description": "One original callback-wag full prepared-payload comparison with temporary phase prints. It is expected to retain the existing assertion failure; inspect EFFECT_CLOCK_PROBE records."
+    },
+    {
+      "session_id": 30111,
+      "stage": "production-source-scope-v1-song-windows-debug",
+      "description": "Entire rust_live_compiler target including appended scope cleanup/GC control."
+    }
+  ],
+  "terminal_consumed_sessions": [
+    4704,
+    36063,
+    18333,
+    83004,
+    57174,
+    65762
+  ],
+  "temporary_source_warning": "No watched source edits until both live runners terminal. Remove temporary diagnostic/Debug derives after consuming evidence; do not leave debugging probe in final source.",
+  "remaining": [
+    "Fix EffectTime capture/runtime phase using observed raw/owned clock state, not renderer guesses. Native perframe.rs uses effect_render_time(raw actor). Rust chronological.rs effect_time currently gates owned fallback through actor.state.render then raw mode; inspect raw/owned disagreement.",
+    "Fix speculative beat0 broadcasts and deferred shared-local retries in existing compiler capture scopes. Keep all nine new complete-payload controls and original application tests enabled. Added microcontrols use shared representative context, not a claim of synchronized original native-frame pixel equality.",
+    "Finish existing trace/query/actor diagnostic stream port or bounded applicable-classification; read production-remaining-replay-investigation-v1.json. No C API or broad language parity campaign.",
+    "Original native-table-order.lua compares incidental pairs hash traversal of conflicting speed setters. Investigate final functional targets and all54call count before any classification; do not implement C table layout or silently skip/retarget test. No classification applied yet.",
+    "Sharkmode missing baked draws remains actual migration gate; eleven later shell failures are only poison cascades.",
+    "Final-source graph/build/link/rendered refresh; core/adapters/downstream regression attribution; applicable formatting/Clippy; matched representative prep/live/memory+noteskin timings; accurate final docs, then mark goal complete and stop."
+  ],
+  "unchanged_limits": "Interpreter and C API removal closed. Generic core255 capture limit unchanged. Keep unrelated work, external processes and historical reports. No commits/resets/subagents."
+}

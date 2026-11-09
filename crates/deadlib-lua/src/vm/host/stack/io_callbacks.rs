@@ -1,5 +1,6 @@
 //! I/O callbacks that invoke a C body in their existing activation.
 use super::*;
+use crate::memory::fallible::{self, SliceExt};
 
 fn stack<'call, 'vm>(call: &'call mut HostCall<'vm>) -> Result<NativeStack<'call, 'vm>, Error> {
     let stack = call.native_stack()?;
@@ -31,18 +32,17 @@ pub(in crate::vm) fn finalize(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = stack(call)?;
     let value = stack.value(1).unwrap_or(Value::Nil);
     let key = stack.call.vm.file_key(value, true).ok_or_else(|| {
-        stack.argument_error(
-            1,
-            format!(
-                "FILE* expected, got {}",
-                if stack.top() == 0 {
-                    "no value"
-                } else {
-                    value.type_name()
-                }
-            )
-            .as_bytes(),
-        )
+        match fallible::format(format_args!(
+            "FILE* expected, got {}",
+            if stack.top() == 0 {
+                "no value"
+            } else {
+                value.type_name()
+            }
+        )) {
+            Ok(message) => stack.argument_error(1, message.as_bytes()),
+            Err(error) => error,
+        }
     })?;
     if stack.call.vm.io.files[slot_index(key)].resource.is_some()
         && close_handler(&mut stack)?.is_none()
@@ -53,7 +53,7 @@ pub(in crate::vm) fn finalize(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 pub(in crate::vm) fn readline(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = stack(call)?;
-    stack.call.vm.ensure_file_backend()?;
+
     let file = stack.value(-10003).unwrap_or(Value::Nil);
     let close = stack.value(-10004).unwrap_or(Value::Nil).is_truthy();
     let key = stack
@@ -66,7 +66,7 @@ pub(in crate::vm) fn readline(call: &mut HostCall<'_>) -> Result<(), Error> {
         return Err(stack.error(b"file is already closed"));
     }
     let vm = &mut stack.call.vm;
-    let mut bytes = vm.take_buffer(128);
+    let mut bytes = vm.try_take_buffer(128)?;
     let before = vm.io.files[slot].heap_bytes();
     let result = vm.io.files[slot].read_line(&mut bytes);
     vm.io
@@ -75,21 +75,24 @@ pub(in crate::vm) fn readline(call: &mut HostCall<'_>) -> Result<(), Error> {
     let success = match result {
         Ok(success) => success,
         Err(code) => {
-            vm.buffers.push(bytes);
+            vm.recycle_buffer(bytes);
             crate::vm::io::set_errno(code);
-            return Err(Error::from_bytes(
+            if code == 12 {
+                return Err(vm.memory_failure());
+            }
+            return Err(Error::try_from_bytes(
                 ErrorKind::Runtime,
                 0,
-                crate::vm::io::message(code).into_owned(),
+                crate::vm::io::message(code)?.as_ref().try_to_vec()?,
             ));
         }
     };
     if success {
-        let line = stack.call.vm.finish_buffer(bytes);
+        let line = stack.call.vm.try_finish_buffer(bytes)?;
         stack.push(line)?;
         return stack.finish(1);
     }
-    stack.call.vm.buffers.push(bytes);
+    stack.call.vm.recycle_buffer(bytes);
     if close {
         stack.set_top(0)?;
         stack.push(file)?;
@@ -97,7 +100,7 @@ pub(in crate::vm) fn readline(call: &mut HostCall<'_>) -> Result<(), Error> {
             return Ok(());
         }
     } else {
-        let empty = stack.intern(b"");
+        let empty = stack.try_intern(b"")?;
         stack.push(empty)?;
     }
     stack.finish(0)

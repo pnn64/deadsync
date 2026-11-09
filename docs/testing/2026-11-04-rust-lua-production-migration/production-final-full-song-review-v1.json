@@ -1,0 +1,13 @@
+{
+  "stage": "production-final-full-song-v1-song-windows-debug",
+  "checks_passed": 2172,
+  "neutral_launch_retry_checks_passed": 18,
+  "combined_passed": 2190,
+  "assertion_failures": 1,
+  "known_failure": "playback::tests::song_lua_actor_multi_vertex_builds_textured_mesh_overlay; frozen-source no-Lua renderer/test alpha mismatch",
+  "source_guard": true,
+  "log_sha256": "9a04e8c022dd80762b4aed24f0e36175b2166cf980d842a91567d48fb816acb9",
+  "target_summaries": 86,
+  "formatter_regression": "rust_screen_ui all eight checks and rust_compat_globals all 17 checks pass in this full run. No new assertion failures.",
+  "coverage": "All original targets retained; only never-executed Windows 740 launch failures retried with byte-identical neutral names."
+}

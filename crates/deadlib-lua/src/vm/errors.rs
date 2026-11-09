@@ -1,6 +1,7 @@
 //! Operand provenance is reconstructed only when formatting a runtime failure.
 use super::*;
 use crate::bytecode::{Instruction, NameKind, Prototype};
+use crate::memory::fallible::{self, SliceExt, VecExt};
 
 fn definition(proto: &Prototype, end: usize, register: u8) -> Option<(usize, Instruction)> {
     let mut last = None;
@@ -107,34 +108,75 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
 }
 
 impl Vm {
+    /// Rust diagnostics own their bytes independently of the VM. A failed copy
+    /// uses the startup-rooted memory value, including during persistent denial.
+    pub(super) fn runtime_message(&self, bytes: Result<Vec<u8>, Error>) -> Error {
+        match bytes {
+            Ok(bytes) => {
+                let error = Error::try_from_bytes(ErrorKind::Runtime, 0, bytes);
+                if error.kind() == ErrorKind::Memory {
+                    self.memory_failure()
+                } else {
+                    error
+                }
+            }
+            Err(_) => self.memory_failure(),
+        }
+    }
+    pub(super) fn error_value(&mut self, error: &Error, level: isize) -> Result<Value, Error> {
+        if error.kind() == ErrorKind::Memory {
+            return Ok(Value::String(self.memory_error));
+        }
+        if let Some(value) = error.value() {
+            return Ok(value);
+        }
+        let value = self.try_intern(error.message_bytes())?;
+        self.try_located_error(value, level)
+    }
+    pub(super) fn attach_error_value(&mut self, error: Error, level: isize) -> Error {
+        if error.kind() == ErrorKind::Memory {
+            return error.with_value(Value::String(self.memory_error));
+        }
+        if error.kind() != ErrorKind::Runtime || error.value().is_some() {
+            return error;
+        }
+        match self.error_value(&error, level) {
+            Ok(value) => error.with_value(value),
+            Err(mut failed) => {
+                failed.target_thread = error.target_thread;
+                failed
+            }
+        }
+    }
     #[cold]
     pub(super) fn argument_error(&self, index: usize, detail: &[u8]) -> Error {
         self.argument_error_at(index as i64 + 1, detail)
     }
 
     #[cold]
-    pub(super) fn argument_error_at(&self, mut argument: i64, detail: &[u8]) -> Error {
-        let frame = self
-            .active_native
-            .or_else(|| self.frames.len().checked_sub(1));
-        let name = frame.and_then(|frame| self.debug_name(self.thread, frame));
-        let (name, method) = name
-            .as_ref()
-            .map_or((b"?".as_slice(), false), |(name, kind)| {
-                (name.as_ref(), *kind == b"method")
-            });
-        argument = argument.saturating_sub(i64::from(method));
-        let bad_self = method && argument == 0;
-        let mut bytes = if bad_self {
-            b"calling '".to_vec()
-        } else {
-            format!("bad argument #{argument} to '").into_bytes()
+    pub(super) fn argument_error_at(&self, argument: i64, detail: &[u8]) -> Error {
+        let build = || -> Result<Vec<u8>, Error> {
+            let frame = self
+                .active_native
+                .or_else(|| self.frames.len().checked_sub(1));
+            let (name, kind) = frame
+                .and_then(|frame| self.debug_name_ref(self.thread, frame))
+                .unwrap_or((b"?", b""));
+            let method = kind == b"method";
+            let argument = argument.saturating_sub(i64::from(method));
+            let bad_self = method && argument == 0;
+            let mut bytes = if bad_self {
+                b"calling '".try_to_vec()?
+            } else {
+                fallible::format(format_args!("bad argument #{argument} to '"))?.into_bytes()
+            };
+            bytes.try_extend_from_slice(name)?;
+            bytes.try_extend_from_slice(if bad_self { b"' on bad self (" } else { b"' (" })?;
+            bytes.try_extend_from_slice(detail)?;
+            bytes.try_push(b')')?;
+            Ok(bytes)
         };
-        bytes.extend_from_slice(name);
-        bytes.extend_from_slice(if bad_self { b"' on bad self (" } else { b"' (" });
-        bytes.extend_from_slice(detail);
-        bytes.push(b')');
-        Error::from_bytes(ErrorKind::Runtime, 0, bytes)
+        self.runtime_message(build())
     }
 
     #[cold]
@@ -150,20 +192,26 @@ impl Vm {
         } else {
             "no value"
         };
-        self.argument_error(
-            index,
-            format!("{expected} expected, got {actual}").as_bytes(),
-        )
+        match fallible::format(format_args!("{expected} expected, got {actual}")) {
+            Ok(detail) => self.argument_error(index, detail.as_bytes()),
+            Err(_) => self.memory_failure(),
+        }
     }
 
     #[cold]
     pub(super) fn argument_option_error(&self, index: usize, option: &[u8]) -> Error {
-        let mut detail = b"invalid option '".to_vec();
-        detail.extend_from_slice(
-            &option[..option.iter().position(|&b| b == 0).unwrap_or(option.len())],
-        );
-        detail.push(b'\'');
-        self.argument_error(index, &detail)
+        let build = || -> Result<Vec<u8>, Error> {
+            let mut detail = b"invalid option '".try_to_vec()?;
+            detail.try_extend_from_slice(
+                &option[..option.iter().position(|&b| b == 0).unwrap_or(option.len())],
+            )?;
+            detail.try_push(b'\'')?;
+            Ok(detail)
+        };
+        match build() {
+            Ok(detail) => self.argument_error(index, &detail),
+            Err(_) => self.memory_failure(),
+        }
     }
 
     #[cold]
@@ -231,18 +279,26 @@ impl Vm {
             }
             object_name(proto, pc, register as u8)
         });
-        let mut message = format!("attempt to {operation} ").into_bytes();
-        if let Some((name, kind)) = name {
-            message.extend_from_slice(kind.bytes());
-            message.extend_from_slice(b" '");
-            message.extend_from_slice(
-                &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())],
-            );
-            message.extend_from_slice(format!("' (a {} value)", value.type_name()).as_bytes());
-        } else {
-            message.extend_from_slice(format!("a {} value", value.type_name()).as_bytes());
-        }
-        let error = Error::from_bytes(ErrorKind::Runtime, 0, message);
+        let build = || -> Result<Vec<u8>, Error> {
+            let mut message =
+                fallible::format(format_args!("attempt to {operation} "))?.into_bytes();
+            if let Some((name, kind)) = name {
+                message.try_extend_from_slice(kind.bytes())?;
+                message.try_extend_from_slice(b" '")?;
+                message.try_extend_from_slice(
+                    &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())],
+                )?;
+                message.try_extend_from_slice(
+                    fallible::format(format_args!("' (a {} value)", value.type_name()))?.as_bytes(),
+                )?;
+            } else {
+                message.try_extend_from_slice(
+                    fallible::format(format_args!("a {} value", value.type_name()))?.as_bytes(),
+                )?;
+            }
+            Ok(message)
+        };
+        let error = self.runtime_message(build());
         self.operand_error(error)
     }
 
@@ -257,8 +313,7 @@ impl Vm {
             .find(|f| f.is_call())
             .is_some_and(|f| matches!(f.function, FrameKind::Native(_)))
         {
-            let value = self.intern(error.message_bytes());
-            error.with_value(value)
+            self.attach_error_value(error, 0)
         } else {
             error
         }

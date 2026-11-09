@@ -73,6 +73,9 @@ impl NativeStack<'_, '_> {
         if let Callback::Host(id) = callback {
             self.call
                 .vm
+                .reserve_gc_barrier(Value::Thread(thread), Value::Native(id))?;
+            self.call
+                .vm
                 .gc_barrier(Value::Thread(thread), Value::Native(id));
         }
         let state = if thread == self.thread_id() {
@@ -198,10 +201,20 @@ impl Vm {
         let depth = self.frames.len();
         let active = self.active_native;
         let top = self.top;
+        self.reserve_frames(1)?;
+        self.reserve_registers(self.registers.len().max(end))?;
+        // Prepare both saved windows before publishing an active hook. In
+        // particular, a failed second allocation must leave the first buffer
+        // empty and the interrupted registers and frame stack untouched.
+        self.reserve_hook_scratch(self.registers.len().saturating_sub(end), end - base)?;
         self.resize_registers(self.registers.len().max(end));
-        self.hooks.hidden = self.registers[end..].to_vec();
+        self.hooks.hidden.clear();
+        self.hooks.hidden.extend_from_slice(&self.registers[end..]);
         self.hooks.hidden_start = end;
-        self.hooks.popped = self.registers[base..end].to_vec();
+        self.hooks.popped.clear();
+        self.hooks
+            .popped
+            .extend_from_slice(&self.registers[base..end]);
         self.hooks.popped_start = base;
         self.hooks.host_owner = Some(owner);
         self.push_record(Frame {
@@ -265,5 +278,21 @@ impl Vm {
             self.hooks.host_owner = None;
         }
         result
+    }
+
+    fn reserve_hook_scratch(&mut self, hidden: usize, popped: usize) -> Result<(), Error> {
+        let before = self.hooks.hidden.capacity();
+        self.hooks
+            .hidden
+            .try_reserve(hidden.saturating_sub(self.hooks.hidden.len()))
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control((self.hooks.hidden.capacity() - before) * size_of::<Value>());
+        let before = self.hooks.popped.capacity();
+        self.hooks
+            .popped
+            .try_reserve(popped.saturating_sub(self.hooks.popped.len()))
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control((self.hooks.popped.capacity() - before) * size_of::<Value>());
+        Ok(())
     }
 }

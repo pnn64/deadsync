@@ -1,5 +1,6 @@
 //! Resumable lexical state over append-only input, with no token replay.
 use super::{Kind, Token, parse_number};
+use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -129,17 +130,16 @@ impl Scanner {
     pub(crate) fn line(&self) -> u32 {
         self.line
     }
-    pub(crate) fn near_buffer(&self, input: &[u8]) -> Vec<u8> {
-        match self.buffer {
+    pub(crate) fn near_buffer(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+        Ok(match self.buffer {
             Buffer::Empty => Vec::new(),
-            Buffer::Raw(start, end) => input[start..end].to_vec(),
+            Buffer::Raw(start, end) => input[start..end].try_to_vec()?,
             Buffer::String(start, end) => {
                 // Decode only a failed diagnostic's completed string token.
                 // Successful scans keep no duplicate lexical byte buffer.
                 let raw = &input[start..end];
                 let token = Self::default()
-                    .next(raw, true)
-                    .expect("completed string token")
+                    .next(raw, true)?
                     .expect("closed string input");
                 let prefix = if matches!(raw[0], b'\'' | b'"') {
                     1
@@ -150,29 +150,37 @@ impl Scanner {
                         .expect("long string delimiter")
                         + 2
                 };
-                let mut out = Vec::with_capacity(prefix * 2 + token.text.len());
-                out.extend_from_slice(&raw[..prefix]);
-                out.extend_from_slice(&token.text);
-                out.extend(
+                let mut out = fallible::with_capacity(prefix * 2 + token.text.len())?;
+                out.try_extend_from_slice(&raw[..prefix])?;
+                out.try_extend_from_slice(&token.text)?;
+                out.try_extend(
                     raw[..prefix]
                         .iter()
                         .map(|&b| if b == b'[' { b']' } else { b }),
-                );
+                )?;
                 out
             }
-        }
+        })
     }
     fn diagnostic(&self, message: &str, near: &[u8]) -> Error {
-        let mut bytes = message.as_bytes().to_vec();
-        bytes.extend_from_slice(b" near '");
-        bytes.extend_from_slice(&near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())]);
-        bytes.push(b'\'');
-        Error::from_bytes(ErrorKind::Syntax, self.line, bytes)
+        let build = || -> Result<Error, Error> {
+            let mut bytes = message.as_bytes().try_to_vec()?;
+            bytes.try_extend_from_slice(b" near '")?;
+            bytes.try_extend_from_slice(
+                &near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())],
+            )?;
+            bytes.try_push(b'\'')?;
+            Ok(Error::try_from_bytes(ErrorKind::Syntax, self.line, bytes))
+        };
+        build().unwrap_or_else(|error| error)
     }
     fn string_error(&self, message: &str, input: &[u8]) -> Error {
-        let mut near = vec![input[self.start]];
-        near.extend_from_slice(&self.text);
-        self.diagnostic(message, &near)
+        let build = || -> Result<Error, Error> {
+            let mut near = fallible::vec([input[self.start]])?;
+            near.try_extend_from_slice(&self.text)?;
+            Ok(self.diagnostic(message, &near))
+        };
+        build().unwrap_or_else(|error| error)
     }
     pub(crate) fn heap_bytes(&self) -> usize {
         self.text.capacity() + self.token.text.len()
@@ -189,10 +197,9 @@ impl Scanner {
         ) {
             self.pos += 1;
         }
-        self.line = self
-            .line
-            .checked_add(1)
-            .ok_or_else(|| Error::new(ErrorKind::Limit, self.line, "too many source lines"))?;
+        self.line = self.line.checked_add(1).ok_or_else(|| {
+            Error::new_static(ErrorKind::Limit, self.line, "too many source lines")
+        })?;
         Ok(true)
     }
 
@@ -232,9 +239,10 @@ impl Scanner {
         self.state = State::Emit;
     }
 
-    fn string(&mut self) {
-        self.token.text = std::mem::take(&mut self.text).into_boxed_slice();
+    fn string(&mut self) -> Result<(), Error> {
+        self.token.text = std::mem::take(&mut self.text).try_into_boxed_slice()?;
         self.emit(Kind::String);
+        Ok(())
     }
 
     pub(crate) fn next(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
@@ -437,7 +445,7 @@ impl Scanner {
                         _ => Kind::Name,
                     };
                     if kind == Kind::Name {
-                        self.token.text = text.into();
+                        self.token.text = text.try_boxed()?;
                     }
                     self.emit(kind);
                 }
@@ -534,7 +542,7 @@ impl Scanner {
                             continue;
                         }
                         if !comment {
-                            self.text.push(b'[');
+                            self.text.try_push(b'[')?;
                         }
                     }
                     Some(b']') => {
@@ -550,14 +558,14 @@ impl Scanner {
                             return Ok(None);
                         }
                         if !comment {
-                            self.text.push(b'\n');
+                            self.text.try_push(b'\n')?;
                         }
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
                         let count = long_boundary(rest, equals);
                         if !comment {
-                            self.text.extend_from_slice(&rest[..count]);
+                            self.text.try_extend_from_slice(&rest[..count])?;
                         }
                         self.pos += count;
                     }
@@ -584,12 +592,12 @@ impl Scanner {
                         if comment {
                             self.state = State::Skip;
                         } else {
-                            self.string();
+                            self.string()?;
                         }
                     } else {
                         if !comment {
-                            self.text.push(b']');
-                            self.text.extend(std::iter::repeat_n(b'=', seen));
+                            self.text.try_push(b']')?;
+                            self.text.try_extend(std::iter::repeat_n(b'=', seen))?;
                         }
                         self.state = State::Long { comment, equals };
                     }
@@ -601,7 +609,7 @@ impl Scanner {
                     }
                     Some(c) if c == quote => {
                         self.pos += 1;
-                        self.string();
+                        self.string()?;
                     }
                     Some(b'\\') => {
                         self.pos += 1;
@@ -613,7 +621,7 @@ impl Scanner {
                             .iter()
                             .position(|&b| b == quote || matches!(b, b'\\' | b'\n' | b'\r'))
                             .unwrap_or(rest.len());
-                        self.text.extend_from_slice(&rest[..count]);
+                        self.text.try_extend_from_slice(&rest[..count])?;
                         self.pos += count;
                     }
                 },
@@ -623,7 +631,7 @@ impl Scanner {
                         if !self.newline(input, closed)? {
                             return Ok(None);
                         }
-                        self.text.push(b'\n');
+                        self.text.try_push(b'\n')?;
                         self.state = State::Quoted(quote);
                     }
                     Some(c) if crate::locale::is_digit(c) => {
@@ -634,7 +642,7 @@ impl Scanner {
                         }
                     }
                     Some(c) => {
-                        self.text.push(match c {
+                        self.text.try_push(match c {
                             b'a' => 7,
                             b'b' => 8,
                             b'f' => 12,
@@ -643,7 +651,7 @@ impl Scanner {
                             b't' => 9,
                             b'v' => 11,
                             c => c,
-                        });
+                        })?;
                         self.pos += 1;
                         self.state = State::Quoted(quote);
                     }
@@ -670,10 +678,10 @@ impl Scanner {
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
-                    self.text.push(
-                        u8::try_from(value)
-                            .map_err(|_| self.string_error("escape sequence too large", input))?,
-                    );
+                    self.text
+                        .try_push(u8::try_from(value).map_err(|_| {
+                            self.string_error("escape sequence too large", input)
+                        })?)?;
                     self.state = State::Quoted(quote);
                 }
             }
@@ -780,7 +788,15 @@ mod tests {
 
     #[test]
     fn next_character_requests_match_the_lua51_reader_boundary() {
-        let lua = lua_reference::Lua::new();
+        let mut vm = crate::Vm::new();
+        let program = crate::compile(
+            br#"
+                local text=...;local tag={};local n=0
+                local ok,f,e=pcall(load,function()n=n+1;if n==1 then return text end;error(tag)end)
+                return n,ok,f==nil,e==tag
+            "#,
+        )
+        .unwrap();
         for fragment in [
             b")".as_slice(),
             b"@",
@@ -790,18 +806,18 @@ mod tests {
             b"[=[x]=]",
             b"'\\999",
         ] {
-            let observed = lua
-                .load(
-                    br#"
-                local text=...;local tag={};local n=0
-                local ok,f,e=pcall(load,function()n=n+1;if n==1 then return text end;error(tag)end)
-                return n,ok,f==nil,e==tag
-            "#
-                    .as_slice(),
-                )
-                .call::<(u32, bool, bool, bool)>(lua.create_string(fragment).unwrap())
-                .unwrap();
-            assert_eq!(observed, (2, true, true, true), "{fragment:?}");
+            let fragment_value = vm.intern(fragment);
+            let observed = vm.execute_with_args(&program, &[fragment_value]).unwrap();
+            assert_eq!(
+                observed,
+                &[
+                    crate::Value::Number(2.),
+                    crate::Value::Boolean(true),
+                    crate::Value::Boolean(true),
+                    crate::Value::Boolean(true),
+                ],
+                "{fragment:?}"
+            );
             assert!(
                 Scanner::default().next(fragment, false).unwrap().is_none(),
                 "{fragment:?}"

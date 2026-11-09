@@ -1,0 +1,9 @@
+{
+  "exit_code": -15,
+  "seconds": 156.73888822784647,
+  "tests_passed": 91,
+  "tests_failed": 0,
+  "sources_unchanged": true,
+  "log_sha256": "046779c58a0525dfe1c90546b6e3ae05e70196fc4701d936329c8c7890a1cb2e",
+  "reason": "Stopped owned Cargo/test descendants after review found an unrooted removed Autogen table across IsAutogen callback GC; this is not a completed regression run."
+}

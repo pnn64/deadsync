@@ -1,0 +1,1266 @@
+--- a/crates/deadsync-song-lua/src/rust_engine.rs
++++ b/crates/deadsync-song-lua/src/rust_engine.rs
+@@ -11,7 +11,9 @@
+     SongLuaCompileContext, song_display_bps, song_elapsed_seconds_at, song_music_rate,
+ };
+ use deadlib_lua::{Error, HostCall, Root, TableId, Value, Vm};
++mod actors;
+ mod definitions;
++pub use actors::{ActorScene, ActorSnapshot};
+ mod loader;
+ mod random;
+ pub use random::RandomSnapshot;
+@@ -57,6 +59,7 @@
+     random: random::RandomState,
+     loader: Root,
+     actor_loader: Root,
++    actors: actors::Actors,
+     clock: Arc<Clock>,
+     runtime: Root,
+     position: Root,
+@@ -70,6 +73,7 @@
+         let random = random::install(&mut vm, context.random_seed)?;
+         let loader = loader::install(&mut vm, &context.song_dir)?;
+         let actor_loader = definitions::install(&mut vm)?;
++        let actors = actors::Actors::install(&mut vm)?;
+         let clock = Arc::new(Clock {
+             timing: context.song_timing.clone(),
+             live: AtomicBool::new(context.live),
+@@ -157,6 +161,7 @@
+             random,
+             loader,
+             actor_loader,
++            actors,
+             clock,
+             runtime: runtime_root,
+             position: song_position,
+@@ -169,6 +174,33 @@
+     /// Values obtained here follow `deadlib-lua`'s ordinary rooting contract.
+     pub fn vm_mut(&mut self) -> &mut Vm {
+         &mut self.vm
++    }
++
++    /// Construct a scene from a declaration snapshot and run child-first Init.
++    /// The runtime retains instances and command closures until explicit release.
++    pub fn instantiate_actor(&mut self, declaration: Value) -> Result<ActorScene, Error> {
++        self.actors.instantiate(&mut self.vm, declaration)
++    }
++
++    /// The stable root instance, nil for a false Condition, or None after release.
++    pub fn actor_scene_root(&self, scene: ActorScene) -> Option<Value> {
++        self.actors.root(scene)
++    }
++
++    pub fn actor_scene_snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
++        self.actors.snapshot(scene)
++    }
++
++    /// Retire native actors and release their Lua roots. Retained Lua instance
++    /// tables remain ordinary tables; native methods reject the retired objects.
++    pub fn release_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
++        self.actors.release(&mut self.vm, scene)
++    }
++
++    /// Script command errors are reported and execution continues, as in native
++    /// Actor::RunCommands. Fatal engine limits still abort the Rust entry.
++    pub fn take_actor_diagnostics(&self) -> Vec<String> {
++        self.actors.take_diagnostics()
+     }
+ 
+     /// Load a song script with cmd preprocessing and its file environment.
+--- a/crates/deadsync-song-lua/Cargo.toml
++++ b/crates/deadsync-song-lua/Cargo.toml
+@@ -66,3 +66,7 @@
+ [[test]]
+ name = "rust_definitions"
+ required-features = ["rust-engine", "test-support"]
++
++[[test]]
++name = "rust_actors"
++required-features = ["rust-engine"]
+--- /dev/null
++++ b/crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -0,0 +1,830 @@
++//! Owned actor instances and synchronous commands over the Rust host API.
++use deadlib_lua::{Error, ErrorKind, HostCall, Root, TableId, Value, Vm, compile_named};
++use std::{
++    collections::HashMap,
++    sync::{Arc, Mutex},
++};
++
++/// A scene owned by one Rust song runtime. Release it explicitly when retired.
++/// Copies identify the same scene; they do not duplicate its actors or callbacks.
++#[derive(Clone, Copy, Debug)]
++pub struct ActorScene {
++    owner: TableId,
++    id: u64,
++}
++
++/// Native fields currently implemented by the actor host. Lua instance fields
++/// are separate: assigning `self.Name` or `self.x` does not change these values.
++#[derive(Clone, Debug, PartialEq)]
++pub struct ActorSnapshot {
++    pub class: &'static str,
++    pub name: Vec<u8>,
++    pub parent: Option<usize>,
++    pub children: Vec<usize>,
++    pub position: [f32; 3],
++    pub zoom: [f32; 3],
++    pub rotation: [f32; 3],
++    pub size: [f32; 2],
++    pub visible: bool,
++    pub draw_order: i32,
++    pub aux: f32,
++}
++struct Actor {
++    state: ActorSnapshot,
++    parent: Option<TableId>,
++    children: Vec<TableId>,
++    commands: TableId,
++    propagate: bool,
++}
++struct Scene {
++    actors: Vec<TableId>,
++    root: Option<TableId>,
++}
++#[derive(Default)]
++struct Store {
++    next: u64,
++    actors: HashMap<TableId, Actor>,
++    scenes: HashMap<u64, Scene>,
++    diagnostics: Vec<String>,
++}
++type Shared = Arc<Mutex<Store>>;
++
++#[derive(Clone, Copy)]
++enum Op {
++    Instantiate,
++    Release,
++    Name,
++    GetName,
++    GetParent,
++    GetChildren,
++    GetChild,
++    GetNumChildren,
++    Sort,
++    AddCommand,
++    GetCommand,
++    PlayCommand,
++    Recursive,
++    OnChildren,
++    OnLeaves,
++    NamedChildren,
++    NamedLeaves,
++    Propagate,
++    Set(&'static str),
++    Get(&'static str),
++}
++#[derive(Clone)]
++struct Binding {
++    store: Shared,
++    op: Op,
++}
++
++pub(super) struct Actors {
++    registry: TableId,
++    store: Shared,
++    instantiate: Root,
++    release: Root,
++}
++impl Actors {
++    pub(super) fn install(vm: &mut Vm) -> Result<Self, Error> {
++        let store = Arc::new(Mutex::new(Store::default()));
++        let registry = vm.try_new_table()?;
++        let registry_root = vm.pin(Value::Table(registry))?;
++        // Every callback captures this private table; it owns all Lua actor and
++        // command values until release. Rust metadata contains no untraced owner.
++        let helpers = vm.try_new_table()?;
++        let helpers_root = vm.pin(Value::Table(helpers))?;
++        let captures = [Value::Table(registry), Value::Table(helpers)];
++        let methods = vm.try_new_table()?;
++        let methods_root = vm.pin(Value::Table(methods))?;
++        let actor = vm.try_new_table()?;
++        super::put(vm, methods, "Actor", Value::Table(actor))?;
++        let frame = vm.try_new_table()?;
++        super::put(vm, methods, "ActorFrame", Value::Table(frame))?;
++        for (name, op) in [
++            ("name", Op::Name),
++            ("GetName", Op::GetName),
++            ("GetParent", Op::GetParent),
++            ("addcommand", Op::AddCommand),
++            ("GetCommand", Op::GetCommand),
++            ("playcommand", Op::PlayCommand),
++            ("RunCommandsRecursively", Op::Recursive),
++        ] {
++            install_method(vm, actor, name, op, &store, &captures)?;
++        }
++        for name in [
++            "x",
++            "y",
++            "z",
++            "xy",
++            "addx",
++            "addy",
++            "addz",
++            "zoom",
++            "zoomx",
++            "zoomy",
++            "zoomz",
++            "rotationx",
++            "rotationy",
++            "rotationz",
++            "addrotationx",
++            "addrotationy",
++            "addrotationz",
++            "SetWidth",
++            "SetHeight",
++            "setsize",
++            "aux",
++            "visible",
++            "draworder",
++        ] {
++            install_method(vm, actor, name, Op::Set(name), &store, &captures)?;
++        }
++        for name in [
++            "GetX",
++            "GetY",
++            "GetZ",
++            "GetDestX",
++            "GetDestY",
++            "GetDestZ",
++            "GetZoom",
++            "GetZoomX",
++            "GetZoomY",
++            "GetZoomZ",
++            "GetRotationX",
++            "GetRotationY",
++            "GetRotationZ",
++            "GetWidth",
++            "GetHeight",
++            "GetZoomedWidth",
++            "GetZoomedHeight",
++            "getaux",
++            "GetVisible",
++        ] {
++            install_method(vm, actor, name, Op::Get(name), &store, &captures)?;
++        }
++        for (name, op) in [
++            ("GetChild", Op::GetChild),
++            ("GetChildren", Op::GetChildren),
++            ("GetNumChildren", Op::GetNumChildren),
++            ("SortByDrawOrder", Op::Sort),
++            ("RunCommandsOnChildren", Op::OnChildren),
++            ("runcommandsonleaves", Op::OnLeaves),
++            ("playcommandonchildren", Op::NamedChildren),
++            ("playcommandonleaves", Op::NamedLeaves),
++            ("propagate", Op::Propagate),
++        ] {
++            install_method(vm, frame, name, op, &store, &captures)?;
++        }
++        let setup = compile_named(
++            include_bytes!("actors.lua"),
++            b"=DeadSync actor instance bindings",
++        )?;
++        let setup = vm.execute(&setup)?[0];
++        let values = vm.call(setup, &[Value::Table(methods)])?.to_vec();
++        for (i, value) in values.into_iter().enumerate() {
++            vm.raw_table_set(helpers, Value::Number((i + 1) as f64), value)?;
++        }
++        let instantiate = vm.new_host_function_with_data(
++            callback,
++            &captures,
++            Binding {
++                store: store.clone(),
++                op: Op::Instantiate,
++            },
++        )?;
++        let instantiate = vm.pin(instantiate)?;
++        let release = vm.new_host_function_with_data(
++            callback,
++            &captures,
++            Binding {
++                store: store.clone(),
++                op: Op::Release,
++            },
++        )?;
++        let release = vm.pin(release)?;
++        vm.unpin(methods_root)?;
++        vm.unpin(helpers_root)?;
++        vm.unpin(registry_root)?;
++        Ok(Self {
++            registry,
++            store,
++            instantiate,
++            release,
++        })
++    }
++    pub(super) fn instantiate(&self, vm: &mut Vm, declaration: Value) -> Result<ActorScene, Error> {
++        let function = vm.rooted(self.instantiate)?;
++        let Value::Number(id) = vm.call(function, &[declaration])?[0] else {
++            unreachable!()
++        };
++        Ok(ActorScene {
++            owner: self.registry,
++            id: id as u64,
++        })
++    }
++    pub(super) fn root(&self, scene: ActorScene) -> Option<Value> {
++        if scene.owner != self.registry {
++            return None;
++        }
++        self.store
++            .lock()
++            .unwrap()
++            .scenes
++            .get(&scene.id)
++            .map(|s| s.root.map_or(Value::Nil, Value::Table))
++    }
++    pub(super) fn release(&self, vm: &mut Vm, scene: ActorScene) -> Result<bool, Error> {
++        if scene.owner != self.registry {
++            return Ok(false);
++        }
++        let function = vm.rooted(self.release)?;
++        Ok(vm.call(function, &[Value::Number(scene.id as f64)])?[0] == Value::Boolean(true))
++    }
++    pub(super) fn snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
++        if scene.owner != self.registry {
++            return None;
++        }
++        let store = self.store.lock().unwrap();
++        let scene = store.scenes.get(&scene.id)?;
++        let ids: HashMap<_, _> = scene
++            .actors
++            .iter()
++            .enumerate()
++            .map(|(i, id)| (*id, i))
++            .collect();
++        Some(
++            scene
++                .actors
++                .iter()
++                .map(|id| {
++                    let actor = &store.actors[id];
++                    let mut state = actor.state.clone();
++                    state.parent = actor.parent.map(|id| ids[&id]);
++                    state.children = actor.children.iter().map(|id| ids[id]).collect();
++                    state
++                })
++                .collect(),
++        )
++    }
++    pub(super) fn take_diagnostics(&self) -> Vec<String> {
++        std::mem::take(&mut self.store.lock().unwrap().diagnostics)
++    }
++}
++fn install_method(
++    vm: &mut Vm,
++    table: TableId,
++    name: &str,
++    op: Op,
++    store: &Shared,
++    captures: &[Value],
++) -> Result<(), Error> {
++    let function = vm.new_host_function_with_data(
++        callback,
++        captures,
++        Binding {
++            store: store.clone(),
++            op,
++        },
++    )?;
++    super::put(vm, table, name, function)
++}
++fn table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
++    if let Value::Table(id) = value {
++        Ok(id)
++    } else {
++        Err(call.error(b"actor table expected"))
++    }
++}
++fn get(call: &mut HostCall<'_>, t: TableId, key: &[u8]) -> Result<Value, Error> {
++    let key = call.try_intern(key)?;
++    call.raw_table_get(t, key)
++}
++fn bytes(call: &mut HostCall<'_>, value: Value) -> Result<Vec<u8>, Error> {
++    let id = call
++        .coerce_string(value)?
++        .ok_or_else(|| call.error(b"string expected"))?;
++    Ok(call.string_bytes(id).unwrap().to_vec())
++}
++fn arg(call: &HostCall<'_>, i: usize) -> Value {
++    call.arguments().get(i).copied().unwrap_or(Value::Nil)
++}
++fn helper(call: &HostCall<'_>, index: usize) -> Result<Value, Error> {
++    let Value::Table(helpers) = call.captures()[1] else {
++        unreachable!()
++    };
++    call.raw_table_get(helpers, Value::Number(index as f64))
++}
++fn children(store: &Shared, actor: TableId) -> Vec<TableId> {
++    store.lock().unwrap().actors[&actor].children.clone()
++}
++fn is_frame(store: &Shared, actor: TableId) -> bool {
++    store.lock().unwrap().actors[&actor].state.class == "ActorFrame"
++}
++fn sort(store: &Shared, actor: TableId) {
++    let mut store = store.lock().unwrap();
++    let mut list = store.actors[&actor].children.clone();
++    list.sort_by_key(|id| store.actors[id].state.draw_order);
++    store.actors.get_mut(&actor).unwrap().children = list;
++}
++fn command(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    name: &[u8],
++) -> Result<Value, Error> {
++    let commands = store.lock().unwrap().actors[&actor].commands;
++    get(call, commands, name)
++}
++fn run(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    function: Value,
++    params: Value,
++) -> Result<(), Error> {
++    if is_frame(store, actor) && store.lock().unwrap().actors[&actor].propagate {
++        for child in children(store, actor) {
++            run(call, store, child, function, params)?;
++        }
++        return Ok(());
++    }
++    if let Err(error) = call.call(function, &[Value::Table(actor), params]) {
++        if error.kind() != ErrorKind::Runtime {
++            return Err(error);
++        }
++        store.lock().unwrap().diagnostics.push(error.to_string());
++    }
++    Ok(())
++}
++fn play(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    name: &[u8],
++    params: Value,
++    recurse: bool,
++) -> Result<(), Error> {
++    let function = command(call, store, actor, name)?;
++    if function != Value::Nil {
++        call.with_roots(&[function, params], |call| {
++            run(call, store, actor, function, params)
++        })?;
++    }
++    if recurse {
++        for child in children(store, actor) {
++            play(call, store, child, name, params, true)?;
++        }
++    }
++    Ok(())
++}
++fn walk(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    function: Value,
++    params: Value,
++    leaves: bool,
++) -> Result<(), Error> {
++    let children = children(store, actor);
++    for &child in &children {
++        walk(call, store, child, function, params, leaves)?;
++    }
++    if !leaves || !is_frame(store, actor) {
++        run(call, store, actor, function, params)?;
++    }
++    Ok(())
++}
++fn release(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result<bool, Error> {
++    let scene = store.lock().unwrap().scenes.remove(&id);
++    let Some(scene) = scene else { return Ok(false) };
++    let registry = table(call, call.captures()[0])?;
++    for actor in scene.actors {
++        call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
++        store.lock().unwrap().actors.remove(&actor);
++    }
++    Ok(true)
++}
++fn build(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    scene: u64,
++    node: TableId,
++    parent: Option<TableId>,
++) -> Result<Option<TableId>, Error> {
++    let attrs = table(call, call.raw_table_get(node, Value::Number(1.0))?)?;
++    if get(call, attrs, b"Condition")? == Value::Boolean(false) {
++        return Ok(None);
++    }
++    let mut kind = get(call, attrs, b"Class")?;
++    if kind == Value::Nil {
++        kind = get(call, attrs, b"Type")?;
++    }
++    let class = if kind == Value::Nil {
++        Vec::new()
++    } else {
++        bytes(call, kind)?
++    };
++    let dummy = class.is_empty();
++    let class = match class.as_slice() {
++        b"" | b"Actor" => "Actor",
++        b"ActorFrame" => "ActorFrame",
++        b"Quad" => "Quad",
++        _ => {
++            return Err(call.error(
++                format!(
++                    "actor class '{}' has no Rust instance implementation yet",
++                    String::from_utf8_lossy(&class)
++                )
++                .as_bytes(),
++            ));
++        }
++    };
++    let create = helper(call, 1)?;
++    let kind = call.try_intern(class.as_bytes())?;
++    let actor = call.call(create, &[kind, parent.map_or(Value::Nil, Value::Table)])?[0];
++    let actor = table(call, actor)?;
++    let commands = call.try_new_table()?;
++    let registry = table(call, call.captures()[0])?;
++    call.raw_table_set(registry, Value::Table(actor), Value::Table(commands))?;
++    {
++        let mut store = store.lock().unwrap();
++        store.scenes.get_mut(&scene).unwrap().actors.push(actor);
++        store.actors.insert(
++            actor,
++            Actor {
++                state: ActorSnapshot {
++                    class,
++                    name: Vec::new(),
++                    parent: None,
++                    children: Vec::new(),
++                    position: [0.; 3],
++                    zoom: [1.; 3],
++                    rotation: [0.; 3],
++                    size: [1.; 2],
++                    visible: dummy || class != "Actor",
++                    draw_order: 0,
++                    aux: 0.,
++                },
++                parent,
++                children: Vec::new(),
++                commands,
++                propagate: false,
++            },
++        );
++    }
++    if dummy {
++        return Ok(Some(actor));
++    }
++    if class == "ActorFrame" {
++        let nodes = table(call, call.raw_table_get(node, Value::Number(2.))?)?;
++        let mut selected = nodes;
++        let mut array_only = true;
++        for i in 1..=call.raw_table_len(nodes)? {
++            let entry = table(call, call.raw_table_get(nodes, Value::Number(i as f64))?)?;
++            let key = call.raw_table_get(entry, Value::Number(1.))?;
++            if bytes(call, key)? == b"children" {
++                let node = table(call, call.raw_table_get(entry, Value::Number(2.))?)?;
++                selected = table(call, call.raw_table_get(node, Value::Number(2.))?)?;
++                array_only = false;
++                break;
++            }
++        }
++        for i in 1..=call.raw_table_len(selected)? {
++            let entry = table(call, call.raw_table_get(selected, Value::Number(i as f64))?)?;
++            let name = call.raw_table_get(entry, Value::Number(1.))?;
++            let name = bytes(call, name)?;
++            if array_only && (name.is_empty() || !name.iter().all(u8::is_ascii_digit)) {
++                continue;
++            }
++            let child = table(call, call.raw_table_get(entry, Value::Number(2.))?)?;
++            if let Some(child) = build(call, store, scene, child, Some(actor))? {
++                store
++                    .lock()
++                    .unwrap()
++                    .actors
++                    .get_mut(&actor)
++                    .unwrap()
++                    .children
++                    .push(child);
++            }
++        }
++        sort(store, actor);
++    }
++    let name = get(call, attrs, b"Name")?;
++    if name != Value::Nil {
++        store
++            .lock()
++            .unwrap()
++            .actors
++            .get_mut(&actor)
++            .unwrap()
++            .state
++            .name = bytes(call, name)?;
++    }
++    let keys = call.call(helper(call, 5)?, &[Value::Table(attrs)])?[0];
++    call.with_roots(&[keys], |call| {
++        let keys = table(call, keys)?;
++        for i in 1..=call.raw_table_len(keys)? {
++            let key = call.raw_table_get(keys, Value::Number(i as f64))?;
++            let name = bytes(call, key)?;
++            if let Some(name) = name.strip_suffix(b"Command") {
++                let name = name.strip_suffix(b"Message").unwrap_or(name);
++                let value = call.raw_table_get(attrs, key)?;
++                let name = call.try_intern(name)?;
++                call.raw_table_set(commands, name, value)?;
++            }
++        }
++        Ok(())
++    })?;
++    let params = Value::Table(call.try_new_table()?);
++    call.with_roots(&[params], |call| {
++        play(call, store, actor, b"Init", params, false)
++    })?;
++    Ok(Some(actor))
++}
++fn group(call: &mut HostCall<'_>, store: &Shared, ids: &[TableId]) -> Result<Value, Error> {
++    match ids {
++        [] => Ok(Value::Nil),
++        [actor] => Ok(Value::Table(*actor)),
++        _ => {
++            let list = call.try_new_table()?;
++            for (i, id) in ids.iter().enumerate() {
++                call.raw_table_set(list, Value::Number((i + 1) as f64), Value::Table(*id))?;
++            }
++            let classes = table(call, helper(call, 4)?)?;
++            let class = store.lock().unwrap().actors[ids.last().unwrap()]
++                .state
++                .class;
++            let class = get(call, classes, class.as_bytes())?;
++            Ok(call.call(helper(call, 3)?, &[Value::Table(list), class])?[0])
++        }
++    }
++}
++fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let Binding { store, op } = call.function_data::<Binding>().unwrap().clone();
++    if matches!(op, Op::Instantiate) {
++        let declaration = table(call, arg(call, 0))?;
++        let node = call.call(helper(call, 2)?, &[Value::Table(declaration)])?[0];
++        return call.with_roots(&[node], |call| {
++            let id = {
++                let mut store = store.lock().unwrap();
++                if store.next >= (1u64 << 53) - 1 {
++                    return Err(call.error(b"actor scene identity exhausted"));
++                }
++                store.next += 1;
++                let id = store.next;
++                store.scenes.insert(
++                    id,
++                    Scene {
++                        actors: Vec::new(),
++                        root: None,
++                    },
++                );
++                id
++            };
++            match build(call, &store, id, table(call, node)?, None) {
++                Ok(root) => {
++                    store.lock().unwrap().scenes.get_mut(&id).unwrap().root = root;
++                    call.push(Value::Number(id as f64))
++                }
++                Err(error) => {
++                    release(call, &store, id)?;
++                    Err(error)
++                }
++            }
++        });
++    }
++    if matches!(op, Op::Release) {
++        let id = call.number(0)? as u64;
++        let removed = release(call, &store, id)?;
++        return call.push(Value::Boolean(removed));
++    }
++    let actor = table(call, arg(call, 0))?;
++    if !store.lock().unwrap().actors.contains_key(&actor) {
++        return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
++    }
++    let frame_method = matches!(
++        op,
++        Op::GetChildren
++            | Op::GetChild
++            | Op::GetNumChildren
++            | Op::Sort
++            | Op::OnChildren
++            | Op::OnLeaves
++            | Op::NamedChildren
++            | Op::NamedLeaves
++            | Op::Propagate
++    );
++    if frame_method && !is_frame(&store, actor) {
++        return Err(call.error(b"ActorFrame expected"));
++    }
++    match op {
++        Op::GetName => {
++            let name = store.lock().unwrap().actors[&actor].state.name.clone();
++            let name = call.try_intern(&name)?;
++            return call.push(name);
++        }
++        Op::Name => {
++            let name = bytes(call, arg(call, 1))?;
++            store
++                .lock()
++                .unwrap()
++                .actors
++                .get_mut(&actor)
++                .unwrap()
++                .state
++                .name = name;
++        }
++        Op::GetParent => {
++            let parent = store.lock().unwrap().actors[&actor].parent;
++            return call.push(parent.map_or(Value::Nil, Value::Table));
++        }
++        Op::GetNumChildren => {
++            return call.push(Value::Number(children(&store, actor).len() as f64));
++        }
++        Op::GetChild => {
++            let name = bytes(call, arg(call, 1))?;
++            let ids = children(&store, actor)
++                .into_iter()
++                .filter(|id| store.lock().unwrap().actors[id].state.name == name)
++                .collect::<Vec<_>>();
++            let value = group(call, &store, &ids)?;
++            return call.push(value);
++        }
++        Op::GetChildren => {
++            let result = Value::Table(call.try_new_table()?);
++            return call.with_roots(&[result], |call| {
++                let mut names: Vec<(Vec<u8>, Vec<TableId>)> = Vec::new();
++                for id in children(&store, actor) {
++                    let name = store.lock().unwrap().actors[&id].state.name.clone();
++                    if let Some((_, ids)) = names.iter_mut().find(|(n, _)| *n == name) {
++                        ids.push(id)
++                    } else {
++                        names.push((name, vec![id]));
++                    }
++                }
++                for (name, ids) in names {
++                    let value = group(call, &store, &ids)?;
++                    let key = call.try_intern(&name)?;
++                    call.raw_table_set(table(call, result)?, key, value)?;
++                }
++                call.push(result)
++            });
++        }
++        Op::Sort => sort(&store, actor),
++        Op::Propagate => {
++            store
++                .lock()
++                .unwrap()
++                .actors
++                .get_mut(&actor)
++                .unwrap()
++                .propagate = truthy_integer(call, 1)?;
++        }
++        Op::AddCommand | Op::GetCommand => {
++            let name = bytes(call, arg(call, 1))?;
++            if matches!(op, Op::GetCommand) {
++                let value = command(call, &store, actor, &name)?;
++                return call.push(value);
++            }
++            let name = name.strip_suffix(b"Message").unwrap_or(&name);
++            let key = call.try_intern(name)?;
++            let commands = store.lock().unwrap().actors[&actor].commands;
++            // AddCommand takes the last stack value, including extra arguments.
++            let value = call.arguments().last().copied().unwrap_or(Value::Nil);
++            call.raw_table_set(commands, key, value)?;
++        }
++        Op::PlayCommand => {
++            let name = bytes(call, arg(call, 1))?;
++            let params = arg(call, 2);
++            check_params(call, params)?;
++            play(call, &store, actor, &name, params, true)?;
++        }
++        Op::Recursive | Op::OnChildren | Op::OnLeaves | Op::NamedChildren | Op::NamedLeaves => {
++            let named = matches!(op, Op::NamedChildren | Op::NamedLeaves);
++            let function = if named {
++                let name = bytes(call, arg(call, 1))?;
++                command(call, &store, actor, &name)?
++            } else {
++                arg(call, 1)
++            };
++            let params = if matches!(op, Op::OnLeaves | Op::NamedChildren | Op::NamedLeaves) {
++                Value::Nil
++            } else {
++                arg(call, 2)
++            };
++            check_params(call, params)?;
++            if !named && !matches!(function, Value::Function(_) | Value::Native(_)) {
++                return Err(call.error(b"function expected"));
++            }
++            if function != Value::Nil {
++                call.with_roots(&[function, params], |call| match op {
++                    Op::Recursive => walk(call, &store, actor, function, params, false),
++                    Op::OnLeaves | Op::NamedLeaves => {
++                        walk(call, &store, actor, function, params, true)
++                    }
++                    _ => {
++                        for child in children(&store, actor) {
++                            run(call, &store, child, function, params)?;
++                        }
++                        Ok(())
++                    }
++                })?;
++            }
++        }
++        Op::Set(name) => set_scalar(call, &store, actor, name)?,
++        Op::Get(name) => return get_scalar(call, &store, actor, name),
++        Op::Instantiate | Op::Release => unreachable!(),
++    }
++    call.push(Value::Table(actor))
++}
++fn check_params(call: &HostCall<'_>, value: Value) -> Result<(), Error> {
++    if matches!(value, Value::Nil | Value::Table(_)) {
++        Ok(())
++    } else {
++        Err(call.error(b"table or nil expected"))
++    }
++}
++fn truthy_integer(call: &HostCall<'_>, i: usize) -> Result<bool, Error> {
++    match arg(call, i) {
++        Value::Boolean(b) => Ok(b),
++        Value::Number(n) => Ok(n as i64 != 0),
++        _ => Err(call.error(b"boolean expected")),
++    }
++}
++fn set_scalar(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    name: &str,
++) -> Result<(), Error> {
++    let first = if name == "visible" {
++        truthy_integer(call, 1)? as u8 as f32
++    } else {
++        call.number(1)? as f32
++    };
++    let second = if matches!(name, "xy" | "setsize") {
++        call.number(2)? as f32
++    } else {
++        0.
++    };
++    let mut store = store.lock().unwrap();
++    let s = &mut store.actors.get_mut(&actor).unwrap().state;
++    match name {
++        "x" => s.position[0] = first,
++        "y" => s.position[1] = first,
++        "z" => s.position[2] = first,
++        "xy" => {
++            s.position[0] = first;
++            s.position[1] = second;
++        }
++        "addx" => s.position[0] += first,
++        "addy" => s.position[1] += first,
++        "addz" => s.position[2] += first,
++        "zoom" => s.zoom = [first; 3],
++        "zoomx" => s.zoom[0] = first,
++        "zoomy" => s.zoom[1] = first,
++        "zoomz" => s.zoom[2] = first,
++        "rotationx" => s.rotation[0] = first,
++        "rotationy" => s.rotation[1] = first,
++        "rotationz" => s.rotation[2] = first,
++        "addrotationx" => s.rotation[0] += first,
++        "addrotationy" => s.rotation[1] += first,
++        "addrotationz" => s.rotation[2] += first,
++        "SetWidth" => s.size[0] = first,
++        "SetHeight" => s.size[1] = first,
++        "setsize" => s.size = [first, second],
++        "aux" => s.aux = first,
++        "visible" => s.visible = first != 0.,
++        "draworder" => s.draw_order = call.number(1)? as i32,
++        _ => unreachable!(),
++    }
++    Ok(())
++}
++fn get_scalar(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    name: &str,
++) -> Result<(), Error> {
++    let store = store.lock().unwrap();
++    let s = &store.actors[&actor].state;
++    let value = match name {
++        "GetX" | "GetDestX" => s.position[0],
++        "GetY" | "GetDestY" => s.position[1],
++        "GetZ" | "GetDestZ" => s.position[2],
++        "GetZoom" | "GetZoomX" => s.zoom[0],
++        "GetZoomY" => s.zoom[1],
++        "GetZoomZ" => s.zoom[2],
++        "GetRotationX" => s.rotation[0],
++        "GetRotationY" => s.rotation[1],
++        "GetRotationZ" => s.rotation[2],
++        "GetWidth" => s.size[0],
++        "GetHeight" => s.size[1],
++        "GetZoomedWidth" => s.size[0] * s.zoom[0],
++        "GetZoomedHeight" => s.size[1] * s.zoom[1],
++        "getaux" => s.aux,
++        "GetVisible" => return call.push(Value::Boolean(s.visible)),
++        _ => unreachable!(),
++    };
++    call.push(Value::Number(f64::from(value)))
++}
+--- /dev/null
++++ b/crates/deadsync-song-lua/src/rust_engine/actors.lua
+@@ -0,0 +1,69 @@
++-- Private structural helpers for the Rust actor host. Instance state and command
++-- execution live in actors.rs. Capture primitives before authored scripts run.
++local pairs, next, rawget = pairs, next, rawget
++local tonumber, tostring, type = tonumber, tostring, type
++local setmetatable, ipairs, error, sort = setmetatable, ipairs, error, table.sort
++
++return function(methods)
++    Actor = methods.Actor
++    ActorFrame = setmetatable(methods.ActorFrame, {__index=Actor, __metatable='(hidden)'})
++    Sprite = setmetatable({}, {__index=Actor, __metatable='(hidden)'})
++    setmetatable(Actor, {__metatable='(hidden)'})
++    local classes = {Actor=Actor, ActorFrame=ActorFrame, Quad=Sprite}
++    local metas = {}
++    for name, class in pairs(classes) do
++        metas[name] = {__index=class, __metatable='(hidden)'}
++    end
++    local function create(class, parent)
++        local ctx = {}
++        setmetatable(ctx, ctx)
++        if parent then ctx.__index = parent.ctx end
++        return setmetatable({ctx=ctx}, metas[class])
++    end
++    -- Snapshot the complete XNode-shaped input before running any Init callback.
++    -- Array entries precede next traversal; the native duplicate range counts
++    -- table entries, not array slots. Ancestors are skipped, shared siblings copied.
++    local function snapshot(source, active)
++        local attrs, entries, nodes = {}, {}, {}
++        local i = 1
++        while rawget(source, i) ~= nil do
++            local value = rawget(source, i)
++            if type(value) == 'table' then entries[#entries+1] = {tostring(i), value} end
++            i = i + 1
++        end
++        local prefix = #entries
++        for key, value in next, source do
++            if type(key) ~= 'string' and type(key) ~= 'number' then
++                error('actor declaration keys must be strings or numbers')
++            end
++            if type(value) == 'table' then
++                local index = tonumber(key)
++                if not (index and index >= 1 and index <= prefix and index % 1 == 0) then
++                    entries[#entries+1] = {tostring(key), value}
++                end
++            else
++                attrs[tostring(key)] = value
++            end
++        end
++        for _, entry in ipairs(entries) do
++            local key, value = entry[1], entry[2]
++            if not active[value] then
++                active[value] = true
++                nodes[#nodes+1] = {key, snapshot(value, active)}
++                active[value] = nil
++            end
++        end
++        return {attrs, nodes}
++    end
++    local function group(actors, class)
++        return setmetatable(actors, {__index=function(t, key)
++            if tonumber(key) then return rawget(t, key) end
++            -- Native duplicate-name groups use the last child's class method,
++            -- ignoring an instance override, and forward every result.
++            local method = class[key]
++            return function(self, ...) return method(self[#self], ...) end
++        end})
++    end
++    return create, function(source) return snapshot(source, {}) end, group, classes,
++        function(t) local keys={} for k in next,t do keys[#keys+1]=k end sort(keys) return keys end
++end
+--- /dev/null
++++ b/crates/deadsync-song-lua/tests/rust_actors.rs
+@@ -0,0 +1,278 @@
++use deadlib_lua::{Value, compile_named};
++use deadsync_song_lua::{
++    SongLuaCompileContext,
++    rust_engine::{ActorScene, RustSongRuntime},
++};
++
++fn runtime() -> RustSongRuntime {
++    RustSongRuntime::new(&SongLuaCompileContext::new(
++        std::path::Path::new("."),
++        "Rust actor instance tests",
++    ))
++    .unwrap()
++}
++fn execute(runtime: &mut RustSongRuntime, source: &str) -> Vec<Value> {
++    runtime
++        .vm_mut()
++        .execute(&compile_named(source.as_bytes(), b"@/fixture/actors.lua").unwrap())
++        .unwrap()
++        .to_vec()
++}
++fn instantiate(runtime: &mut RustSongRuntime, source: &str) -> ActorScene {
++    let definition = execute(runtime, source)[0];
++    let scene = runtime.instantiate_actor(definition).unwrap();
++    let root = runtime.actor_scene_root(scene).unwrap();
++    runtime.vm_mut().set_global(b"root", root).unwrap();
++    scene
++}
++fn assert_clean(runtime: &RustSongRuntime) {
++    assert_eq!(runtime.take_actor_diagnostics(), Vec::<String>::new());
++}
++
++#[test]
++fn instances_are_distinct_and_child_first_init_observes_native_loading_order() {
++    let mut r = runtime();
++    let scene = instantiate(
++        &mut r,
++        r#"
++        seen={}
++        local function observe(self,params)
++            assert(type(params)=='table' and next(params)==nil)
++            local parent=self:GetParent()
++            seen[#seen+1]=self:GetName()..':'..(parent and parent:GetName() or '-')..':'..(parent and parent:GetNumChildren() or self:GetNumChildren())
++        end
++        shared=Def.Quad{Name='same',InitCommand=function(self,p)
++            observe(self,p); self:GetParent():name('temporary'); self:draworder(-1)
++        end}
++        definition=Def.ActorFrame{Name='root', InitCommand=observe,
++            Def.Quad{Name='first', InitCommand=observe},shared,shared,
++            Def.Actor{Condition=false,InitCommand=function()error('excluded')end}}
++        return definition
++    "#,
++    );
++    execute(
++        &mut r,
++        r#"
++        assert(table.concat(seen,'|')=='first::0|same:temporary:1|same:temporary:2|root:-:3')
++        assert(root~=definition and root.Class==nil and root.Name==nil and root.InitCommand==nil)
++        assert(root:GetCommand('Init')==definition.InitCommand)
++        local group=root:GetChild('same')
++        assert(#group==2 and group[1]~=group[2] and group[1]~=shared)
++        assert(group[1].ctx~=group[2].ctx and getmetatable(group[1].ctx)==group[1].ctx)
++        root.ctx.answer={42}; assert(group[1].ctx.answer==root.ctx.answer)
++        root.Name='field'; assert(root:GetName()=='root')
++        assert(getmetatable(root)=='(hidden)' and not pcall(setmetatable,root,{}))
++    "#,
++    );
++    let state = r.actor_scene_snapshot(scene).unwrap();
++    assert_eq!(state.len(), 4);
++    assert_eq!(state[0].children, vec![2, 3, 1]);
++    assert_eq!(state[2].parent, Some(0));
++    assert_clean(&r);
++}
++
++#[test]
++fn full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues() {
++    let mut r = runtime();
++    instantiate(
++        &mut r,
++        r#"
++        local count=0
++        local next=Def.Quad{Name='before',InitCommand=function(self) count=count+1; self:aux(count) end}
++        return Def.ActorFrame{Def.Quad{InitCommand=function(self)
++            next.Name='after'; next.InitCommand=function()error('mutated declaration')end
++            collectgarbage()
++        end},next,next}
++    "#,
++    );
++    execute(
++        &mut r,
++        "local g=root:GetChild('before');assert(#g==2 and g[1]:getaux()==1 and g[2]:getaux()==2 and root:GetChild('after')==nil)",
++    );
++    assert_clean(&r);
++}
++
++#[test]
++fn commands_propagate_in_sorted_order_and_preserve_parameter_identity() {
++    let mut r = runtime();
++    instantiate(
++        &mut r,
++        r#"
++        log={}; params={}
++        local function command(self,p) assert(p==params); log[#log+1]=self:GetName() end
++        return Def.ActorFrame{Name='root',ProbeCommand=command,
++            Def.ActorFrame{Name='frame',ProbeCommand=command,Def.Quad{Name='leaf',ProbeCommand=command}},
++            Def.Quad{Name='first',InitCommand=function(self)self:draworder(-1)end,ProbeCommand=command}}
++    "#,
++    );
++    execute(
++        &mut r,
++        r#"
++        assert(root:playcommand('Probe',params)==root)
++        assert(table.concat(log,',')=='root,first,frame,leaf')
++        log={}; root:RunCommandsRecursively(function(self,p)assert(p==params);log[#log+1]=self:GetName()end,params)
++        assert(table.concat(log,',')=='first,leaf,frame,root')
++        log={}; root:RunCommandsOnChildren(function(self,p)assert(p==params);log[#log+1]=self:GetName()end,params)
++        assert(table.concat(log,',')=='first,frame')
++        log={}; root:runcommandsonleaves(function(self,p)assert(p==nil);log[#log+1]=self:GetName()end)
++        assert(table.concat(log,',')=='first,leaf')
++        local frame=root:GetChild('frame');frame:propagate(true)
++        log={};frame:playcommand('Probe',params)
++        assert(table.concat(log,',')=='leaf,leaf')
++    "#,
++    );
++    assert_clean(&r);
++}
++
++#[test]
++fn named_children_commands_use_the_parents_handler_and_empty_frames_are_not_leaves() {
++    let mut r = runtime();
++    instantiate(
++        &mut r,
++        r#"
++        log={}
++        return Def.ActorFrame{CustomCommand=function(self,p) assert(p==nil);log[#log+1]=self:GetName()end,
++            Def.ActorFrame{Name='empty'},Def.Quad{Name='leaf',CustomCommand=function()error('wrong handler')end}}
++    "#,
++    );
++    execute(
++        &mut r,
++        r#"
++        root:playcommandonchildren('Custom'); assert(table.concat(log,',')=='empty,leaf')
++        log={}; root:playcommandonleaves('Custom'); assert(table.concat(log,',')=='leaf')
++        root:GetChild('empty'):runcommandsonleaves(function()error('empty frame is not a leaf')end)
++        assert(not pcall(ActorFrame.GetChild,root:GetChild('leaf'),'x'))
++    "#,
++    );
++    assert_clean(&r);
++}
++
++#[test]
++fn duplicate_child_groups_are_snapshots_with_class_lookup_and_open_results() {
++    let mut r = runtime();
++    instantiate(
++        &mut r,
++        "return Def.ActorFrame{Def.Quad{Name='same'},Def.Quad{Name='same'}}",
++    );
++    execute(
++        &mut r,
++        r#"
++        local g=root:GetChild('same'); assert(#g==2 and g~=root:GetChild('same'))
++        assert(g:x(17)==g[2] and g[1]:GetX()==0 and g[2]:GetX()==17)
++        local getx=g.GetX; g[3]=g[1]; assert(getx(g)==0 and g['3']==nil)
++        g[2].GetX=function()return 999 end
++        assert(root:GetChild('same'):GetX()==17)
++        Actor.multi=function(self,...)return self,... end
++        local t={}; local a,b,c,d=root:GetChildren().same:multi(t,nil,42)
++        assert(a==g[2] and b==t and c==nil and d==42)
++        assert(select('#',root:GetChild('same'):multi(nil))==2)
++        g[1]:name('changed');assert(root:GetChild('changed')==g[1] and root:GetChild('same')==g[2])
++    "#,
++    );
++    assert_clean(&r);
++}
++
++#[test]
++fn scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles() {
++    let mut r = runtime();
++    let scene = instantiate(
++        &mut r,
++        r#"
++        weak=setmetatable({},{__mode='v'})
++        return Def.ActorFrame{InitCommand=function(self)weak[1]=self end,
++            Def.Quad{InitCommand=function(self)weak[2]=self;local cycle={self};self:addcommand('Cycle',function()return cycle end)end}}
++    "#,
++    );
++    execute(
++        &mut r,
++        "root=nil;collectgarbage();collectgarbage();assert(weak[1] and weak[2]);saved=weak[2]",
++    );
++    assert!(r.release_actor_scene(scene).unwrap());
++    assert!(!r.release_actor_scene(scene).unwrap());
++    assert!(r.actor_scene_root(scene).is_none());
++    execute(
++        &mut r,
++        "assert(not pcall(saved.GetName,saved));saved=nil;collectgarbage();collectgarbage();assert(weak[1]==nil and weak[2]==nil)",
++    );
++    assert_clean(&r);
++}
++
++#[test]
++fn failed_build_releases_partial_instances_and_later_scenes_remain_usable() {
++    let mut r = runtime();
++    let d = execute(
++        &mut r,
++        r#"
++        weak=setmetatable({},{__mode='v'})
++        return Def.ActorFrame{Def.Quad{InitCommand=function(self)weak[1]=self;weak[2]=self:GetParent()end},Def.Model{}}
++    "#,
++    )[0];
++    assert!(
++        r.instantiate_actor(d)
++            .unwrap_err()
++            .to_string()
++            .contains("no Rust instance implementation")
++    );
++    execute(
++        &mut r,
++        "collectgarbage();collectgarbage();assert(weak[1]==nil and weak[2]==nil)",
++    );
++    let scene = instantiate(&mut r, "return Def.Actor{Condition=false}");
++    assert_eq!(r.actor_scene_root(scene), Some(Value::Nil));
++    assert!(r.actor_scene_snapshot(scene).unwrap().is_empty());
++    let scene = instantiate(&mut r, "return Def.Quad{Name='healthy'}");
++    let mut other = runtime();
++    assert!(!other.release_actor_scene(scene).unwrap());
++    execute(&mut r, "assert(root:GetName()=='healthy')");
++    assert_clean(&r);
++}
++
++#[test]
++fn ordinary_command_errors_report_and_continue_while_fatal_limits_abort() {
++    let mut r = runtime();
++    instantiate(
++        &mut r,
++        "return Def.ActorFrame{ProbeCommand=function()error({reason='stop'})end,Def.Quad{ProbeCommand=function(self)self:x(42)end}}",
++    );
++    execute(
++        &mut r,
++        "assert(root:playcommand('Probe')==root);assert(root:GetChildren()['']:GetX()==42)",
++    );
++    assert_eq!(r.take_actor_diagnostics().len(), 1);
++    execute(
++        &mut r,
++        "root:addcommand('Forever',function()while true do end end)",
++    );
++    r.vm_mut().set_instruction_limit(Some(400));
++    let error = r
++        .vm_mut()
++        .execute(&compile_named(b"root:playcommand('Forever')", b"=limit").unwrap())
++        .unwrap_err();
++    assert_eq!(error.kind(), deadlib_lua::ErrorKind::Limit);
++    r.vm_mut().set_instruction_limit(None);
++    execute(&mut r, "assert(root:GetNumChildren()==1)");
++    assert_clean(&r);
++}
++
++#[test]
++fn scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state() {
++    let mut r = runtime();
++    let scene = instantiate(&mut r, "return Def.Quad{}");
++    execute(
++        &mut r,
++        r#"
++        assert(root:x('16777217')==root and root:GetX()==16777216)
++        root:addx(1); assert(root:GetX()==16777216)
++        root:xy(0.1,0.2):z(-3):zoom(2):zoomy(-4):rotationz(12):addrotationz(0.5):setsize(5,6):aux(7)
++        assert(root:GetZoomedWidth()==10 and root:GetZoomedHeight()==-24 and root:GetRotationZ()==12.5 and root:getaux()==7)
++        root.x='authored';assert(root:GetX()>0 and root.x=='authored');Actor.x(root,3);assert(root:GetX()==3)
++        root:visible(0.5);assert(not root:GetVisible());root:visible(true);assert(root:GetVisible())
++        assert(not pcall(root.visible,root,'1'))
++        root:draworder(16777217)
++    "#,
++    );
++    let s = &r.actor_scene_snapshot(scene).unwrap()[0];
++    assert_eq!(s.draw_order, 16777217);
++    assert_eq!(s.position[0], 3.);
++    assert_clean(&r);
++}

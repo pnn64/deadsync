@@ -1,0 +1,24 @@
+{
+  "command": [
+    "rustfmt",
+    "--edition",
+    "2024",
+    "--config",
+    "skip_children=true",
+    "--check",
+    "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/theme_preferences.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/option_rows.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/screen_helpers.rs",
+    "crates/deadsync-song-lua/tests/rust_screen_ui.rs"
+  ],
+  "exit_code": 0,
+  "files": {
+    "crates/deadsync-song-lua/src/rust_engine/managers.rs": "ae2277e281b6a5dd506a0b68cde19063625458efceaac2fa47d402d3043f64ef",
+    "crates/deadsync-song-lua/src/rust_engine/managers/theme_preferences.rs": "9b14d3ed45ba8bbb2bf60c4abea25380c8d0292ab1ee6c79abdd18f011d8dde4",
+    "crates/deadsync-song-lua/src/rust_engine/managers/option_rows.rs": "6047a1592910d93bcec67e5e96e832041f7759b3ea2c2673cc05d69541a6983b",
+    "crates/deadsync-song-lua/src/rust_engine/managers/screen_helpers.rs": "e2906149e92618765e758546c3c0f040be77ee25e50ae2183791a276a63c8fd5",
+    "crates/deadsync-song-lua/tests/rust_screen_ui.rs": "14c0f42f34fa91f72fb7c2c0596927ade9bfe49b93fbc19e54c4cbb4836ad60d"
+  },
+  "output": ""
+}

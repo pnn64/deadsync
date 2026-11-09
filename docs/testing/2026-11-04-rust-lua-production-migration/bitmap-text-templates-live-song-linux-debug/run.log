@@ -1,0 +1,31 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0061]: this function takes 6 arguments but 5 arguments were supplied
+   --> crates/deadsync-song-lua/src/rust_engine/actors/wrappers.rs:106:24
+    |
+106 | ...Ok(build(call...None)?.e...
+    |       ^^^^^-----...----- argument #6 of type `bool` is missing
+    |
+note: function defined here
+   --> crates/deadsync-song-lua/src/rust_engine/actors.rs:966:4
+    |
+966 | fn build(
+    |    ^^^^^
+...
+972 |     check... bool,
+    |     -----...-----
+help: provide the argument
+    |
+106 |                     Ok(build(call, store, scene, node, None, /* bool */)?.expect("wrapper class exists"))
+    |                                                            ++++++++++++
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error

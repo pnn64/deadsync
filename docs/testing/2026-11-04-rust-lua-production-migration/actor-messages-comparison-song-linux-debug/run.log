@@ -1,0 +1,115 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 21s
+     Running tests/rust_actors.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_actors-4388fa2e489c3f32)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.91s
+
+     Running tests/rust_messages.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_messages-522c9039fff91c30)
+
+running 10 tests
+test authored_and_theme_message_errors_restore_state_and_recover ... 
+thread 'authored_and_theme_message_errors_restore_state_and_recover' (2470525) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test broadcast_arity_identity_dynamic_fields_and_manager_call_styles ... 
+thread 'broadcast_arity_identity_dynamic_fields_and_manager_call_styles' (2470526) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 4
+ right: 3
+FAILED
+test broadcast_validation_suppression_history_and_logging_match_production ... 
+thread 'broadcast_validation_suppression_history_and_logging_match_production' (2470527) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 2
+ right: 1
+FAILED
+test fatal_broadcast_restores_scopes_and_guard_after_gc ... ok
+test judgment_normalization_retains_note_and_result_objects_across_gc ... 
+thread 'judgment_normalization_retains_note_and_result_objects_across_gc' (2470529) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 2
+ right: 1
+FAILED
+test listener_snapshot_reloads_handlers_and_defers_new_subscribers ... 
+thread 'listener_snapshot_reloads_handlers_and_defers_new_subscribers' (2470530) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 4
+ right: 3
+FAILED
+test native_messages_preserve_engine_params_and_omitted_arguments ... 
+thread 'native_messages_preserve_engine_params_and_omitted_arguments' (2470531) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 2
+ right: 1
+FAILED
+test natural_delivery_uses_vm_identities_and_release_removes_subscribers ... ok
+test queued_messages_use_empty_shared_params_and_frame_boundaries ... 
+thread 'queued_messages_use_empty_shared_params_and_frame_boundaries' (2470533) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 3
+ right: 2
+FAILED
+test same_message_reentry_preserves_direct_command_guard_and_scopes ... 
+thread 'same_message_reentry_preserves_direct_command_guard_and_scopes' (2470534) panicked at crates/deadsync-song-lua/tests/rust_messages.rs:52:9:
+assertion `left == right` failed
+  left: 3
+ right: 2
+FAILED
+
+failures:
+
+failures:
+    authored_and_theme_message_errors_restore_state_and_recover
+    broadcast_arity_identity_dynamic_fields_and_manager_call_styles
+    broadcast_validation_suppression_history_and_logging_match_production
+    judgment_normalization_retains_note_and_result_objects_across_gc
+    listener_snapshot_reloads_handlers_and_defers_new_subscribers
+    native_messages_preserve_engine_params_and_omitted_arguments
+    queued_messages_use_empty_shared_params_and_frame_boundaries
+    same_message_reentry_preserves_direct_command_guard_and_scopes
+
+test result: FAILED. 2 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_messages`

@@ -1,0 +1,44 @@
+warning: patch `rfd v0.17.2 (C:\GitHub\deadsync\vendor\rfd-win7)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: profile package spec `sha2` in profile `dev` did not match any packages
+
+help: a package with a similar name exists: `slab`
+warning: unused import: `SongLuaMessageEvent`
+  --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+   Compiling production-multitap-diagnostic v0.1.0 (C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-multitap-diagnostic-v1)
+    Finished `dev` profile [unoptimized] target(s) in 36.35s
+     Running `target/rust-adapters\debug\production-multitap-diagnostic.exe`
+CASE cyber live=false
+NATIVE [None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None]
+RUST [None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None]
+DIRECT OK [Table(TableId(4294969428))]
+CASE cyber live=true
+NATIVE [None, None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None, Some("ScreenGameplay")]
+WARN Failed to load song actor 'C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-multitap-diagnostic-v1\fixture\default.lua': DeadSync actor declaration bindings:113: assertion failed!; using native dummy Actor
+RUST [None, Some("ScreenGameplay")]
+DIRECT OK [Table(TableId(4294969140))]
+CASE cel live=false
+NATIVE [None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None]
+RUST [None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None]
+DIRECT OK [Table(TableId(4294969428))]
+CASE cel live=true
+NATIVE [None, None, Some("MultitapFrameP1"), Some("MultitapExplosionP1_1"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_2"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_3"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapExplosionP1_4"), None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some("MultitapP1_1"), Some("MultitapArrowP1_1"), Some("MultitapTextP1_1"), Some("MultitapP1_2"), Some("MultitapArrowP1_2"), Some("MultitapTextP1_2"), Some("MultitapP1_3"), Some("MultitapArrowP1_3"), Some("MultitapTextP1_3"), Some("MultitapP1_4"), Some("MultitapArrowP1_4"), Some("MultitapTextP1_4"), Some("Update"), None, Some("ScreenGameplay")]
+WARN Failed to load song actor 'C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-multitap-diagnostic-v1\fixture\default.lua': DeadSync actor declaration bindings:113: assertion failed!; using native dummy Actor
+RUST [None, Some("ScreenGameplay")]
+DIRECT OK [Table(TableId(4294969140))]

@@ -131,10 +131,11 @@ impl Vm {
         });
         // A fresh C message-handler closure is an allocation safe point before
         // lua_pcall installs that handler. Keep its failure outside protection.
-        if mode == EntryMode::Message {
-            self.maybe_gc();
-        }
-        let result = self.drive();
+        let result = if mode == EntryMode::Message {
+            self.maybe_gc().and_then(|()| self.drive())
+        } else {
+            self.drive()
+        };
         let handled = self
             .frames
             .get(1)
@@ -212,7 +213,7 @@ impl Vm {
                 ));
             }
             return if frame.pc == 1 {
-                Ok(self.return_frame(frame, 0, 0))
+                self.return_frame(frame, 0, 0)
             } else {
                 Ok(Some(0))
             };
@@ -224,7 +225,7 @@ impl Vm {
                 let value = self.registers[frame.vararg_start];
                 self.registers[base] = value;
                 if !matches!(value, Value::String(_) | Value::Number(_)) {
-                    return Ok(self.return_frame(frame, base, 1));
+                    return self.return_frame(frame, base, 1);
                 }
                 self.frames[owner].pc = 1;
                 let key = self.intern(b"debug");
@@ -232,7 +233,7 @@ impl Vm {
             }
             1 => {
                 if !matches!(self.registers[base + 1], Value::Table(_)) {
-                    return Ok(self.return_frame(frame, base, 1));
+                    return self.return_frame(frame, base, 1);
                 }
                 self.frames[owner].pc = 2;
                 let key = self.intern(b"traceback");
@@ -243,7 +244,7 @@ impl Vm {
                     self.registers[base + 2],
                     Value::Function(_) | Value::Native(_)
                 ) {
-                    return Ok(self.return_frame(frame, base, 1));
+                    return self.return_frame(frame, base, 1);
                 }
                 self.frames[owner].pc = 3;
                 self.registers[base + 3] = self.registers[base];
@@ -252,7 +253,7 @@ impl Vm {
                     self.finish_call(base + 2, actual, 1);
                 }
             }
-            3 => return Ok(self.return_frame(frame, base + 2, 1)),
+            3 => return self.return_frame(frame, base + 2, 1),
             _ => unreachable!("standalone traceback phase"),
         }
         Ok(None)

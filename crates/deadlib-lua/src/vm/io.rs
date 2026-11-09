@@ -1,15 +1,16 @@
 //! Lua 5.1 file userdata, shared I/O environments and native stream operations.
 use super::*;
-use std::{
-    cell::Cell as ErrnoCell,
-    fs::OpenOptions,
-    num::NonZeroU64,
-    sync::atomic::{AtomicU64, Ordering},
-};
-pub(crate) mod native;
+use crate::memory::fallible::{self, SliceExt, VecExt};
+use std::{cell::Cell as ErrnoCell, num::NonZeroU64};
+#[allow(unsafe_code)]
+pub(in crate::vm) mod input;
 mod number;
 mod output;
+#[allow(unsafe_code)]
+mod process;
 mod returns;
+#[allow(unsafe_code)]
+mod stdio;
 mod stream;
 use number::read_number;
 pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
@@ -17,19 +18,17 @@ pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
 }
 pub(super) use output::flush as stdout_flush;
 pub(super) fn stderr_write(bytes: &[u8]) {
-    use std::io::Write;
-    let mut stderr = std::io::stderr().lock();
     if cfg!(windows) {
         for part in bytes.split_inclusive(|&b| b == b'\n') {
             if let Some(line) = part.strip_suffix(b"\n") {
-                let _ = stderr.write_all(line);
-                let _ = stderr.write_all(b"\r\n");
+                let _ = stdio::write_all(2, line);
+                let _ = stdio::write_all(2, b"\r\n");
             } else {
-                let _ = stderr.write_all(part);
+                let _ = stdio::write_all(2, part);
             }
         }
     } else {
-        let _ = stderr.write_all(bytes);
+        let _ = stdio::write_all(2, bytes);
     }
 }
 pub(super) use stream::LINE_BUFFER;
@@ -72,11 +71,9 @@ pub(super) fn callback(id: u64) -> Option<HostFunction> {
     }
 }
 thread_local! { static ERRNO:ErrnoCell<i32>=const {ErrnoCell::new(0)}; }
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Default)]
 pub(super) struct Io {
-    pub backend: Option<Arc<dyn native::FileBackend>>,
     pub files: Arena<Stream>,
     pub file_tag: Option<StringId>,
     pub stdin: Option<NonZeroU64>,
@@ -94,129 +91,48 @@ impl Io {
             2 => (&mut self.stderr, Resource::Error, false, true),
             _ => unreachable!("standard stream kind"),
         };
-        if let Some(backend) = &self.backend {
-            let pointer = backend.standard(kind);
-            if let Some(key) = slot {
-                if !matches!(self.files[slot_index(key.get())].resource.as_ref(),Some(Resource::Native(file))if file.pointer()==pointer)
-                {
-                    self.files[slot_index(key.get())] = Stream::new(
-                        Resource::Native(backend.attach(pointer)),
-                        read,
-                        write,
-                        false,
-                    );
-                }
-            } else {
-                *slot = NonZeroU64::new(self.files.insert(Stream::new(
-                    Resource::Native(backend.attach(pointer)),
-                    read,
-                    write,
-                    false,
-                )));
-            }
-        }
         *slot.get_or_insert_with(|| {
             NonZeroU64::new(self.files.insert(Stream::new(resource, read, write, true)))
                 .expect("stream arena key")
         })
     }
     pub(in crate::vm) fn write_standard(&mut self, kind: usize, bytes: &[u8]) -> Result<(), i32> {
-        if self.backend.is_some() {
-            let key = self.standard_stream(kind);
-            self.files[slot_index(key.get())].write(bytes)
-        } else if kind == 1 {
+        if kind == 1 {
             stdout_write(bytes).map_err(errno)
         } else {
             stderr_write(bytes);
             Ok(())
         }
     }
-    pub(in crate::vm) fn flush_stdout(&mut self) -> Result<(), i32> {
-        if self.backend.is_some() {
-            let key = self.standard_stream(1);
-            self.files[slot_index(key.get())].flush()
-        } else {
-            stdout_flush().map_err(errno)
+    pub(in crate::vm) fn write_print(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        // Lua print ignores ordinary output-device errors. Allocation failure
+        // in our Rust buffer must still reach the protected memory boundary.
+        match self.write_standard(1, bytes) {
+            Err(12) => Err(Error::memory()),
+            _ => Ok(()),
         }
     }
+    pub(in crate::vm) fn flush_stdout(&mut self) -> Result<(), i32> {
+        stdout_flush().map_err(errno)
+    }
     fn is_stdout(&self, key: u64) -> bool {
-        if matches!(self.files[slot_index(key)].resource, Some(Resource::Output)) {
-            return true;
-        }
-        match (
-            self.files[slot_index(key)].resource.as_ref(),
-            self.backend.as_ref(),
-        ) {
-            (Some(Resource::Native(file)), Some(backend)) => file.pointer() == backend.standard(1),
-            _ => false,
-        }
+        matches!(self.files[slot_index(key)].resource, Some(Resource::Output))
     }
 }
 impl Vm {
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(in crate::vm) fn install_file_backend(
-        &mut self,
-        backend: Arc<dyn native::FileBackend>,
-    ) -> Result<(), Error> {
-        if self
-            .io
-            .backend
-            .as_ref()
-            .is_some_and(|old| old.identity() != backend.identity())
-        {
-            return Err(runtime("one Lua state cannot mix C API images"));
-        }
-        if self.io.backend.is_some() {
-            return Ok(());
-        }
-        self.io.backend = Some(backend);
-        for (kind, key) in [self.io.stdin, self.io.stdout, self.io.stderr]
-            .into_iter()
-            .enumerate()
-        {
-            if key.is_some() {
-                let key = self.io.standard_stream(kind).get();
-                let pointer = match self.io.files[slot_index(key)].resource.as_ref() {
-                    Some(Resource::Native(file)) => file.pointer(),
-                    _ => unreachable!(),
-                };
-                for user in self.userdata.iter_mut() {
-                    if !user.native_file && user.file.is_some_and(|file| file.get() == key) {
-                        user.bytes.as_mut()[..std::mem::size_of::<usize>()]
-                            .copy_from_slice(&pointer.to_ne_bytes());
-                        user.native_file = true;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    pub(in crate::vm) fn ensure_file_backend(&mut self) -> Result<(), Error> {
-        #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-        if self.io.backend.is_none() {
-            let backend = crate::native_abi::file_backend(self.native_library_loader.as_deref())
-                .map_err(|bytes| Error::from_bytes(ErrorKind::Runtime, 0, bytes.into_vec()))?;
-            self.install_file_backend(backend)?;
-        }
-        Ok(())
-    }
     fn open_stream(
         &mut self,
         path: Option<&[u8]>,
         mode: &[u8],
         pipe_file: bool,
     ) -> Result<Result<Stream, i32>, Error> {
-        self.ensure_file_backend()?;
-        if let Some(backend) = &self.io.backend {
-            return Ok(backend
-                .open(path, mode, pipe_file)
-                .map(|file| Stream::new(Resource::Native(file), true, true, false)));
-        }
-        Ok(match path {
-            None => temporary(),
+        match path {
+            None => input::temporary().map(|result| {
+                result.map(|file| Stream::new(Resource::File(file), true, true, false))
+            }),
             Some(path) if pipe_file => pipe(path, mode),
             Some(path) => open(path, mode),
-        })
+        }
     }
     pub(super) fn standard_stream(&mut self, kind: usize) -> NonZeroU64 {
         self.io.standard_stream(kind)
@@ -225,15 +141,9 @@ impl Vm {
         // Process exit flushes C streams without closing the Lua state or
         // invoking finalizers. Match that for the streams owned by this VM.
         for stream in self.io.files.iter_mut() {
-            // C exit flushes native FILEs in its own CRT. A C extension may
-            // already have closed a borrowed handle without another Lua call.
-            if !matches!(stream.resource, Some(Resource::Native(_))) {
-                let _ = stream.flush();
-            }
+            let _ = stream.flush();
         }
-        use std::io::Write;
         let _ = self.io.flush_stdout();
-        let _ = std::io::stderr().flush();
     }
 }
 pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
@@ -249,6 +159,7 @@ pub(super) fn integer(n: f64) -> i64 {
 pub(super) fn set_errno(code: i32) {
     ERRNO.set(code);
 }
+#[cfg(not(any(target_os = "linux", windows)))]
 pub(super) fn path(bytes: &[u8]) -> std::borrow::Cow<'_, std::path::Path> {
     let bytes = c_bytes(bytes);
     #[cfg(unix)]
@@ -266,13 +177,13 @@ pub(super) fn path(bytes: &[u8]) -> std::borrow::Cow<'_, std::path::Path> {
         }
     }
 }
-pub(super) fn message(code: i32) -> std::borrow::Cow<'static, [u8]> {
+pub(super) fn message(code: i32) -> Result<std::borrow::Cow<'static, [u8]>, Error> {
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     {
-        std::borrow::Cow::Owned(crate::locale::posix::error_message(code))
+        crate::locale::posix::error_message(code).map(std::borrow::Cow::Owned)
     }
     #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
-    std::borrow::Cow::Borrowed(match code {
+    Ok(std::borrow::Cow::Borrowed(match code {
         0 => b"No error",
         2 => b"No such file or directory",
         8 => b"Exec format error",
@@ -289,41 +200,34 @@ pub(super) fn message(code: i32) -> std::borrow::Cow<'static, [u8]> {
         34 => b"Result too large",
         41 => b"Directory not empty",
         _ => b"Input/output error",
-    })
+    }))
 }
-fn runtime(text: impl Into<Box<str>>) -> Error {
-    Error::new(ErrorKind::Runtime, 0, text)
+fn runtime(text: &'static str) -> Error {
+    Error::runtime_static(text)
 }
-pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
+pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Result<Stream, i32>, Error> {
     // MSVC fopen rejects the empty C-string as EINVAL, before opening a path.
     if cfg!(windows) && c_bytes(path).is_empty() {
-        return Err(22);
+        return Ok(Err(22));
     }
     let mode = c_bytes(mode);
-    let first = *mode.first().ok_or(22)?;
+    let Some(&first) = mode.first() else {
+        return Ok(Err(22));
+    };
     if !matches!(first, b'r' | b'w' | b'a')
         || mode[1..].iter().any(|b| !matches!(b, b'+' | b'b' | b't'))
     {
-        return Err(22);
+        return Ok(Err(22));
     }
     let update = mode.contains(&b'+');
     let read = first == b'r' || update;
     let write = first != b'r' || update;
-    let mut options = OpenOptions::new();
-    options
-        .read(read)
-        .write(write)
-        .create(first != b'r')
-        .truncate(first == b'w')
-        .append(first == b'a');
+    let file = match input::open(c_bytes(path), first, update)? {
+        Ok(file) => file,
+        Err(code) => return Ok(Err(code)),
+    };
     #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.share_mode(3);
-    }
-    let file = options.open(self::path(path)).map_err(stream::errno)?;
-    #[cfg(windows)]
-    let file = {
+    let file = match (|| -> Result<_, i32> {
         use std::io::{Read, Seek, SeekFrom};
         let mut file = file;
         if read && write && !mode.contains(&b'b') {
@@ -338,95 +242,52 @@ pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
             }
             file.seek(SeekFrom::Start(0)).map_err(stream::errno)?;
         }
-        file
+        Ok(file)
+    })() {
+        Ok(file) => file,
+        Err(code) => return Ok(Err(code)),
     };
-    Ok(Stream::new(
+    Ok(Ok(Stream::new(
         Resource::File(file),
         read,
         write,
         !mode.contains(&b'b'),
-    ))
+    )))
 }
-fn temporary() -> Result<Stream, i32> {
-    for _ in 0..64 {
-        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "deadsync-lua-{}-{nonce}-{}.tmp",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ));
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create_new(true);
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            options.custom_flags(0x04000000).attributes(0x100);
-        }
-        match options.open(&path) {
-            Ok(file) => {
-                #[cfg(not(windows))]
-                {
-                    let _ = std::fs::remove_file(path);
-                }
-                return Ok(Stream::new(Resource::File(file), true, true, false));
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(stream::errno(e)),
-        }
-    }
-    Err(17)
+pub(super) fn open_input(path: &[u8], binary: bool) -> Result<Result<Stream, i32>, Error> {
+    input::open(c_bytes(path), b'r', false)
+        .map(|result| result.map(|file| Stream::new(Resource::File(file), true, false, !binary)))
 }
-fn pipe(command: &[u8], mode: &[u8]) -> Result<Stream, i32> {
+fn pipe(command: &[u8], mode: &[u8]) -> Result<Result<Stream, i32>, Error> {
     let mode = c_bytes(mode);
-    let first = *mode.first().ok_or(22)?;
+    let Some(&first) = mode.first() else {
+        return Ok(Err(22));
+    };
     if !matches!(first, b'r' | b'w') || mode[1..].iter().any(|b| !matches!(b, b'b' | b't')) {
-        return Err(22);
+        return Ok(Err(22));
     }
-    #[cfg(windows)]
-    let mut process = {
-        use std::os::windows::process::CommandExt;
-        let mut p = std::process::Command::new(
-            std::env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into()),
-        );
-        p.arg("/c")
-            .raw_arg(String::from_utf8_lossy(c_bytes(command)).as_ref())
-            .creation_flags(0x08000000);
-        p
-    };
-    #[cfg(not(windows))]
-    let mut process = {
-        let mut p = std::process::Command::new("/bin/sh");
-        p.arg("-c")
-            .arg(String::from_utf8_lossy(c_bytes(command)).as_ref());
-        p
-    };
-    if first == b'r' {
-        process.stdout(std::process::Stdio::piped());
-    } else {
-        process.stdin(std::process::Stdio::piped());
-    }
-    Ok(Stream::new(
-        Resource::Pipe(process.spawn().map_err(stream::errno)?),
-        first == b'r',
-        first == b'w',
-        !mode.contains(&b'b'),
-    ))
+    process::open(c_bytes(command), first == b'r').map(|result| {
+        result.map(|pipe| {
+            Stream::new(
+                Resource::Pipe(pipe),
+                first == b'r',
+                first == b'w',
+                !mode.contains(&b'b'),
+            )
+        })
+    })
 }
 
 impl Vm {
-    pub(super) fn open_io(&mut self) {
-        let meta = self.new_table();
-        let Value::String(tag) = self.intern(b"FILE*") else {
+    pub(super) fn open_io(&mut self) -> Result<(), Error> {
+        let meta = self.try_new_table()?;
+        let Value::String(tag) = self.try_intern(b"FILE*")? else {
             unreachable!()
         };
         self.io.file_tag = Some(tag);
-        self.raw_set(self.registry, Value::String(tag), Value::Table(meta))
-            .unwrap();
-        let index = self.intern(b"__index");
-        self.raw_set(meta, index, Value::Table(meta)).unwrap();
+        self.raw_set(self.registry, Value::String(tag), Value::Table(meta))?;
+        let index = self.try_intern(b"__index")?;
+        self.raw_set(meta, index, Value::Table(meta))?;
         for (name, id) in [
             (b"close".as_slice(), FCLOSE),
             (b"flush", FFLUSH),
@@ -438,18 +299,17 @@ impl Vm {
             (b"__gc", GC),
             (b"__tostring", TO_STRING),
         ] {
-            let key = self.intern(name);
-            self.raw_set(meta, key, Value::Native(id)).unwrap();
+            let key = self.try_intern(name)?;
+            self.raw_set(meta, key, Value::Native(id))?;
         }
-        let env = self.new_table();
-        let key = self.intern(b"__close");
-        self.raw_set(env, key, Value::Native(REAL_CLOSE)).unwrap();
-        let standard = self.new_table();
-        self.raw_set(standard, key, Value::Native(NO_CLOSE))
-            .unwrap();
-        let popen = self.new_table();
-        self.raw_set(popen, key, Value::Native(PIPE_CLOSE)).unwrap();
-        let library = self.new_table();
+        let env = self.try_new_table()?;
+        let key = self.try_intern(b"__close")?;
+        self.raw_set(env, key, Value::Native(REAL_CLOSE))?;
+        let standard = self.try_new_table()?;
+        self.raw_set(standard, key, Value::Native(NO_CLOSE))?;
+        let popen = self.try_new_table()?;
+        self.raw_set(popen, key, Value::Native(PIPE_CLOSE))?;
+        let library = self.try_new_table()?;
         for (name, id) in [
             (b"close".as_slice(), CLOSE),
             (b"flush", FLUSH),
@@ -463,52 +323,48 @@ impl Vm {
             (b"type", TYPE),
             (b"write", WRITE),
         ] {
-            self.set_native_environment(id, if id == POPEN { popen } else { env });
-            let key = self.intern(name);
-            self.raw_set(library, key, Value::Native(id)).unwrap();
+            self.set_native_environment(id, if id == POPEN { popen } else { env })?;
+            let key = self.try_intern(name)?;
+            self.raw_set(library, key, Value::Native(id))?;
         }
         for (index, name, resource, read, write) in [
             (1, b"stdin".as_slice(), Resource::Input, true, false),
             (2, b"stdout", Resource::Output, false, true),
             (0, b"stderr", Resource::Error, false, true),
         ] {
-            let value = self.file_value(Stream::new(resource, read, write, true), standard);
+            let value = self.try_file_value(Stream::new(resource, read, write, true), standard)?;
             let key = self.file_key(value, false).and_then(NonZeroU64::new);
             match index {
                 1 => self.io.stdin = key,
                 2 => self.io.stdout = key,
                 _ => self.io.stderr = key,
             }
-            let name = self.intern(name);
-            self.raw_set(library, name, value).unwrap();
+            let name = self.try_intern(name)?;
+            self.raw_set(library, name, value)?;
             if index != 0 {
-                self.raw_set(env, Value::Number(index as f64), value)
-                    .unwrap();
+                self.raw_set(env, Value::Number(index as f64), value)?;
             }
         }
-        self.set_global(b"io", Value::Table(library)).unwrap();
+        self.set_global(b"io", Value::Table(library))?;
+        Ok(())
     }
-    fn file_value(&mut self, file: Stream, env: TableId) -> Value {
-        let id = self.allocate_userdata(std::mem::size_of::<usize>(), env);
-        let file = self.io.files.insert(file);
+    fn try_file_value(&mut self, file: Stream, env: TableId) -> Result<Value, Error> {
+        let id = self.try_allocate_userdata(std::mem::size_of::<usize>(), env)?;
         let metatable = self.file_metatable();
+        self.reserve_gc_metatable(Value::Userdata(id), metatable)?;
+        let file = self
+            .io
+            .files
+            .try_insert(file)
+            .map_err(|_| self.memory_failure())?;
         let user = &mut self.userdata[slot_index(id.0)];
         user.file = NonZeroU64::new(file);
         user.metatable = metatable;
         if let Some(table) = metatable {
             self.gc_barrier(Value::Userdata(id), Value::Table(table));
         }
-        self.publish_file(id, file);
-        Value::Userdata(id)
-    }
-    fn publish_file(&mut self, id: UserdataId, key: u64) {
-        if let Some(Resource::Native(file)) = self.io.files[slot_index(key)].resource.as_mut() {
-            let user = &mut self.userdata[slot_index(id.0)];
-            user.bytes.as_mut()[..std::mem::size_of::<usize>()]
-                .copy_from_slice(&file.pointer().to_ne_bytes());
-            user.native_file = true;
-            file.publish();
-        }
+
+        Ok(Value::Userdata(id))
     }
     pub(in crate::vm) fn file_key(&mut self, value: Value, check_meta: bool) -> Option<u64> {
         let Value::Userdata(id) = value else {
@@ -521,51 +377,7 @@ impl Vm {
                 return None;
             }
         }
-        if user.file.is_some() && !user.native_file {
-            return user.file.map(NonZeroU64::get);
-        }
-        let bytes = user.bytes.as_ref().get(..std::mem::size_of::<usize>())?;
-        let pointer = usize::from_ne_bytes(bytes.try_into().ok()?);
-        let key = user.file.map(NonZeroU64::get);
-        // Standard FILE buffers are shared in C, while each Lua FILE** can be
-        // independently cleared or replaced. Keep kernel readers/print separate.
-        let shared = key.is_some_and(|key| {
-            [self.io.stdin, self.io.stdout, self.io.stderr]
-                .into_iter()
-                .flatten()
-                .any(|standard| standard.get() == key)
-        });
-        let cached = key
-            .and_then(
-                |key| match self.io.files[slot_index(key)].resource.as_ref() {
-                    Some(Resource::Native(file)) => Some(file.pointer()),
-                    _ => None,
-                },
-            )
-            .unwrap_or(0);
-        if key.is_some() && cached == pointer && !shared {
-            return key;
-        }
-        let stream = if pointer == 0 {
-            Stream::closed()
-        } else {
-            Stream::new(
-                Resource::Native(self.io.backend.as_ref()?.attach(pointer)),
-                true,
-                true,
-                false,
-            )
-        };
-        let key = if let Some(key) = key.filter(|_| !shared) {
-            self.io.files[slot_index(key)] = stream;
-            key
-        } else {
-            self.io.files.insert(stream)
-        };
-        let user = &mut self.userdata[slot_index(id.0)];
-        user.file = NonZeroU64::new(key);
-        user.native_file = true;
-        Some(key)
+        user.file.map(NonZeroU64::get)
     }
     fn file_metatable(&self) -> Option<TableId> {
         let tag = self.io.file_tag.or_else(|| self.strings.find(b"FILE*"))?;
@@ -591,18 +403,17 @@ impl Vm {
         missing: bool,
     ) -> Result<u64, Error> {
         let key = self.file_key(value, check_meta).ok_or_else(|| {
-            self.argument_error(
-                0,
-                format!(
-                    "FILE* expected, got {}",
-                    if missing {
-                        "no value"
-                    } else {
-                        value.type_name()
-                    }
-                )
-                .as_bytes(),
-            )
+            match fallible::format(format_args!(
+                "FILE* expected, got {}",
+                if missing {
+                    "no value"
+                } else {
+                    value.type_name()
+                }
+            )) {
+                Ok(message) => self.argument_error(0, message.as_bytes()),
+                Err(error) => error,
+            }
         })?;
         if self.io.files[slot_index(key)].resource.is_none() {
             return Err(runtime("attempt to use a closed file"));
@@ -625,52 +436,57 @@ impl Vm {
         }
         Ok(value)
     }
-    pub(super) fn io_failure(&mut self, base: usize, code: i32, path: Option<&[u8]>) -> usize {
+    pub(super) fn io_failure(
+        &mut self,
+        base: usize,
+        code: i32,
+        path: Option<&[u8]>,
+    ) -> Result<usize, Error> {
         set_errno(code);
-        let mut bytes = self.take_buffer(64);
-        if let Some(path) = path {
-            bytes.extend_from_slice(c_bytes(path));
-            bytes.extend_from_slice(b": ");
+        if code == 12 {
+            return Err(self.memory_failure());
         }
-        bytes.extend_from_slice(&message(code));
-        let text = self.finish_buffer(bytes);
+        let mut bytes = self.try_take_buffer(64)?;
+        if let Some(path) = path {
+            bytes.try_extend_from_slice(c_bytes(path))?;
+            bytes.try_extend_from_slice(b": ")?;
+        }
+        bytes.try_extend_from_slice(&message(code)?)?;
+        let text = self.try_finish_buffer(bytes)?;
+        self.reserve_registers(base + 3)?;
         self.resize_registers(self.registers.len().max(base + 3));
         self.registers[base] = Value::Nil;
         self.registers[base + 1] = text;
         self.registers[base + 2] = Value::Number(f64::from(code));
-        3
+        Ok(3)
     }
     #[cold]
     fn file_argument_error(&self, path: &[u8], code: i32) -> Error {
-        let mut detail = c_bytes(path).to_vec();
-        detail.extend_from_slice(b": ");
-        detail.extend_from_slice(&message(code));
-        self.argument_error(0, &detail)
+        if code == 12 {
+            return self.memory_failure();
+        }
+        let detail = (|| -> Result<Vec<u8>, Error> {
+            let mut detail = c_bytes(path).try_to_vec()?;
+            detail.try_extend_from_slice(b": ")?;
+            detail.try_extend_from_slice(&message(code)?)?;
+            Ok(detail)
+        })();
+        match detail {
+            Ok(detail) => self.argument_error(0, &detail),
+            Err(error) => error,
+        }
     }
-    fn io_result(&mut self, base: usize, result: Result<(), i32>) -> usize {
+    fn io_result(&mut self, base: usize, result: Result<(), i32>) -> Result<usize, Error> {
         match result {
             Ok(()) => {
                 self.registers[base] = Value::Boolean(true);
-                1
+                Ok(1)
             }
             Err(code) => self.io_failure(base, code, None),
         }
     }
-    fn close_backend(&mut self, key: u64, base: usize, pipe: bool, value: Value) -> usize {
-        let result = if let Some(Resource::Native(file)) =
-            self.io.files[slot_index(key)].resource.as_mut()
-        {
-            let result = file.close(pipe);
-            self.io.files[slot_index(key)].resource = None;
-            if let Value::Userdata(id) = value {
-                self.userdata[slot_index(id.0)].bytes.as_mut()[..std::mem::size_of::<usize>()]
-                    .fill(0);
-            }
-            result.map(|()| None)
-        } else {
-            self.io.files[slot_index(key)].close()
-        };
-        match result {
+    fn close_stream(&mut self, key: u64, base: usize) -> Result<usize, Error> {
+        match self.io.files[slot_index(key)].close() {
             Ok(_) => self.io_result(base, Ok(())),
             Err(code) => self.io_failure(base, code, None),
         }
@@ -679,26 +495,29 @@ impl Vm {
         debug_assert!(callback(id).is_none());
         let arg = self.argument(base, count, 0);
         if id == NO_CLOSE {
+            self.reserve_registers(base + 2)?;
             self.resize_registers(self.registers.len().max(base + 2));
             self.registers[base] = Value::Nil;
-            self.registers[base + 1] = self.intern(b"cannot close standard file");
+            self.registers[base + 1] = self.try_intern(b"cannot close standard file")?;
             return Ok(2);
         }
-        self.ensure_file_backend()?;
+
         if matches!(id, REAL_CLOSE | PIPE_CLOSE) {
             let key = self.checked_file(arg, true)?;
-            return Ok(self.close_backend(key, base, id == PIPE_CLOSE, arg));
+            return self.close_stream(key, base);
         }
         if id == TYPE {
             if count == 0 {
                 return Err(self.argument_error(0, b"value expected"));
             }
             self.registers[base] = match self.file_key(arg, true) {
-                Some(key) => self.intern(if self.io.files[slot_index(key)].resource.is_some() {
-                    b"file"
-                } else {
-                    b"closed file"
-                }),
+                Some(key) => {
+                    self.try_intern(if self.io.files[slot_index(key)].resource.is_some() {
+                        b"file"
+                    } else {
+                        b"closed file"
+                    })?
+                }
                 None => Value::Nil,
             };
             return Ok(1);
@@ -708,17 +527,18 @@ impl Vm {
                 None
             } else {
                 let s = self.string_argument(base, count, 0)?;
-                Some(self.strings.bytes[slot_index(s.0)].to_vec())
+                Some(self.strings.bytes[slot_index(s.0)].try_to_vec()?)
             };
             let mode = if id == TMPFILE || self.argument(base, count, 1) == Value::Nil {
-                b"r".to_vec()
+                b"r".try_to_vec()?
             } else {
                 let s = self.string_argument(base, count, 1)?;
-                self.strings.bytes[slot_index(s.0)].to_vec()
+                self.strings.bytes[slot_index(s.0)].try_to_vec()?
             };
             // Lua roots a closed userdata before attempting the OS open.
-            let value = self.file_value(Stream::closed(), self.builtin_environment(id));
+            let value = self.try_file_value(Stream::closed(), self.builtin_environment(id))?;
             let pending = base + count.max(3) + 1;
+            self.reserve_registers(pending + 1)?;
             self.resize_registers(self.registers.len().max(pending + 1));
             self.registers[pending] = value;
             let result = self.open_stream(path.as_deref(), &mode, id == POPEN)?;
@@ -726,14 +546,10 @@ impl Vm {
                 Ok(file) => {
                     let key = self.file_key(value, false).expect("new file userdata");
                     self.io.files[slot_index(key)] = file;
-                    let Value::Userdata(id) = value else {
-                        unreachable!()
-                    };
-                    self.publish_file(id, key);
                     self.registers[base] = value;
                     1
                 }
-                Err(code) => self.io_failure(base, code, path.as_deref()),
+                Err(code) => self.io_failure(base, code, path.as_deref())?,
             });
         }
         if matches!(id, INPUT | OUTPUT) {
@@ -742,14 +558,14 @@ impl Vm {
             if arg != Value::Nil {
                 let value = if matches!(arg, Value::String(_) | Value::Number(_)) {
                     let s = self.string_argument(base, count, 0)?;
-                    let path = self.strings.bytes[slot_index(s.0)].to_vec();
+                    let path = self.strings.bytes[slot_index(s.0)].try_to_vec()?;
                     let file = self
                         .open_stream(Some(&path), if id == INPUT { b"r" } else { b"w" }, false)?
                         .map_err(|code| {
                             ERRNO.set(code);
                             self.file_argument_error(&path, code)
                         })?;
-                    self.file_value(file, env)
+                    self.try_file_value(file, env)?
                 } else {
                     self.checked_file(arg, true)?;
                     arg
@@ -761,14 +577,15 @@ impl Vm {
         }
         if id == LINES && arg != Value::Nil {
             let s = self.string_argument(base, count, 0)?;
-            let path = self.strings.bytes[slot_index(s.0)].to_vec();
+            let path = self.strings.bytes[slot_index(s.0)].try_to_vec()?;
             let file = self
                 .open_stream(Some(&path), b"r", false)?
                 .map_err(|code| {
                     ERRNO.set(code);
                     self.file_argument_error(&path, code)
                 })?;
-            let Value::Userdata(file) = self.file_value(file, self.builtin_environment(id)) else {
+            let Value::Userdata(file) = self.try_file_value(file, self.builtin_environment(id))?
+            else {
                 unreachable!()
             };
             self.registers[base] = self.new_native(
@@ -804,22 +621,16 @@ impl Vm {
         let result = (|| match id {
             TO_STRING => {
                 self.registers[base] = if self.io.files[slot].resource.is_none() {
-                    self.intern(b"file (closed)")
+                    self.try_intern(b"file (closed)")?
                 } else {
-                    let bytes = if let Some(Resource::Native(file)) =
-                        self.io.files[slot].resource.as_ref()
-                    {
-                        file.display()
-                    } else {
-                        format!("file ({key:016X})").into_bytes()
-                    };
-                    self.intern(&bytes)
+                    let bytes = fallible::format(format_args!("file ({key:016X})"))?.into_bytes();
+                    self.try_intern(&bytes)?
                 };
                 Ok(1)
             }
             FLUSH | FFLUSH => {
                 let result = self.io.files[slot].flush();
-                Ok(self.io_result(base, result))
+                self.io_result(base, result)
             }
             LINES | FLINES => {
                 let Value::Userdata(file) = value else {
@@ -870,7 +681,7 @@ impl Vm {
                             });
                         1
                     }
-                    Err(code) => self.io_failure(base, code, None),
+                    Err(code) => self.io_failure(base, code, None)?,
                 })
             }
             SETVBUF => {
@@ -893,17 +704,17 @@ impl Vm {
                     ) as usize,
                 };
                 if mode != 0 && !(2..=i32::MAX as usize).contains(&size) {
-                    return Ok(self.io_failure(base, 22, None));
+                    return self.io_failure(base, 22, None);
                 }
                 let result = self.io.files[slot].set_buffering(mode, size);
-                Ok(self.io_result(base, result))
+                self.io_result(base, result)
             }
             WRITE | FWRITE => {
                 let mut status = Ok(());
                 for index in first..count {
                     let value = self.argument(base, count, index);
                     let s = match value {
-                        Value::Number(n) => self.intern(super::native::format_number(n).as_slice()),
+                        Value::Number(n) => self.intern_number(n)?,
                         _ => Value::String(self.string_argument(base, count, index)?),
                     };
                     let Value::String(s) = s else { unreachable!() };
@@ -911,14 +722,14 @@ impl Vm {
                         if self.io.is_stdout(key)
                             && let Some(output) = self.output.as_mut()
                         {
-                            output.extend_from_slice(&self.strings.bytes[slot_index(s.0)]);
+                            output.try_extend_from_slice(&self.strings.bytes[slot_index(s.0)])?;
                         } else {
                             status =
                                 self.io.files[slot].write(&self.strings.bytes[slot_index(s.0)]);
                         }
                     }
                 }
-                Ok(self.io_result(base, status))
+                self.io_result(base, status)
             }
             READ | FREAD => {
                 // Lua 5.1 g_read calls clearerr; its line iterator does not.
@@ -926,7 +737,7 @@ impl Vm {
                 let formats = count.saturating_sub(first).max(1);
                 let mut results = 0;
                 for index in 0..formats {
-                    let mut bytes = self.take_buffer(128);
+                    let mut bytes = self.try_take_buffer(128)?;
                     let format = if count == first {
                         Value::Nil
                     } else {
@@ -944,11 +755,11 @@ impl Vm {
                         let text = if let Value::String(s) = format {
                             self.strings.bytes[slot_index(s.0)].as_ref()
                         } else {
-                            self.buffers.push(bytes);
+                            self.recycle_buffer(bytes);
                             return Err(self.argument_error(first + index, b"invalid option"));
                         };
                         if text.first() != Some(&b'*') {
-                            self.buffers.push(bytes);
+                            self.recycle_buffer(bytes);
                             return Err(self.argument_error(first + index, b"invalid option"));
                         }
                         match text.get(1) {
@@ -961,7 +772,7 @@ impl Vm {
                             Some(b'n') => read_number(&mut self.io.files[slot], &mut bytes)
                                 .map(|n| (n.is_some(), n)),
                             _ => {
-                                self.buffers.push(bytes);
+                                self.recycle_buffer(bytes);
                                 return Err(self.argument_error(first + index, b"invalid format"));
                             }
                         }
@@ -969,19 +780,20 @@ impl Vm {
                     let (ok, number) = match result {
                         Ok(r) => r,
                         Err(code) => {
-                            self.buffers.push(bytes);
-                            return Ok(self.io_failure(base, code, None));
+                            self.recycle_buffer(bytes);
+                            return self.io_failure(base, code, None);
                         }
                     };
                     let value = if !ok {
-                        self.buffers.push(bytes);
+                        self.recycle_buffer(bytes);
                         Value::Nil
                     } else if let Some(n) = number {
-                        self.buffers.push(bytes);
+                        self.recycle_buffer(bytes);
                         Value::Number(n)
                     } else {
-                        self.finish_buffer(bytes)
+                        self.try_finish_buffer(bytes)?
                     };
+                    self.reserve_registers(base + formats)?;
                     self.resize_registers(self.registers.len().max(base + formats));
                     self.registers[base + index] = value;
                     results += 1;

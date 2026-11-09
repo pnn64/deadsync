@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--test",
+    "production_routing",
+    "--test",
+    "actor_input",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 158.48578730016015,
+  "log_sha256": "92a4f560a6af6bc368594d05111b01f93707dcc50b813a1af5c8fbf22b4f6d9a",
+  "sources_unchanged": true,
+  "tests_passed": 19,
+  "tests_failed": 0
+}

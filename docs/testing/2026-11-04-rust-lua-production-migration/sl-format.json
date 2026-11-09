@@ -1,0 +1,32 @@
+{
+  "crates/deadsync-song-lua/src/rust_engine/managers.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "9264661e40c5c25644eca40b2858aae066939040ee6425076cd24b8eff85040f"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/test_support.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "d83a458b95368d6333b0c2af965925cc1293090b9b9a372311a79fb889713641"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/managers/fields.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "431e957e423dcf4ef27b412b2c1066bf59c1de20df069c8927a641334ee259ca"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/managers/sl.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "7f5543f64493268cb844468d5a2bdbd7cb67dbe23c81d485fc3d92bdd9277710"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/managers/theme_preferences.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "d6305202ebb79bb3a4dc2718f2274dcc530a35e47ef20b350b090ff99aa5aa81"
+  },
+  "crates/deadsync-song-lua/tests/rust_sl.rs": {
+    "exit_code": 0,
+    "output": "",
+    "sha256": "84e40830868880ed800daa54833189b112a168175249b3deaffe14671fc3b552"
+  }
+}

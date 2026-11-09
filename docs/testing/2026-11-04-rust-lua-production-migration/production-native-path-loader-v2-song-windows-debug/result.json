@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--test",
+    "rust_preparation",
+    "--features",
+    "legacy-oracle",
+    "--",
+    "preparation_loader_saved_callbacks_resolve_their_source_and_restore_failed_scopes",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 46.97829880006611,
+  "log_sha256": "8df5bebc17ea75faf3dd0f4a5f0f74def56e3f81ac85e9647a607d1f8527bcd5",
+  "sources_unchanged": true,
+  "tests_passed": 1,
+  "tests_failed": 0,
+  "check_only": false
+}

@@ -1,0 +1,41 @@
+{
+  "previous": "production-progress-checkpoint-2026-11-08-v19.json",
+  "goal_status": "active",
+  "runtime_source": "Window11 startup self-queue fix remains final; no runtime/library/test source changes afterward",
+  "full_song_command_correction": {
+    "failed_stage": "production-current-full-song-v2-song-windows-debug",
+    "result": "3503.154s,0 tests executed; compile failure in development example input_frames:src/input.rs cannot find crate::input_types; global guard false from independent notefield changes",
+    "reason": "I omitted --tests from the recorded original full command, accidentally compiling examples. Original command explicitly used --tests --features legacy-oracle --no-fail-fast.",
+    "fix": "Window12 adds only #[path=../src/input_types.rs] mod input_types to examples/input_frames.rs. Before bytes production-adapter-fixes-before-v12. Example is excluded from all then-active library/application/other-example targets; runtime/test source freeze retained. Broad source guards retain this third path difference rather than masking it.",
+    "example_check": "production-input-frame-example-check-v1: cargo check --example input_frames --features legacy-oracle passes,70.468s,strict source guard true; log6e1078be659aaa6a184f16fffb6cf07cbcee038d3d226f38f9e7712d132cdeab",
+    "format": "New two-line example module import passes rustfmt --check; original31 runtime files unchanged since format-v5"
+  },
+  "original_test_scope_recovery": {
+    "inventory": "production-current-regression-target-inventory-v1.json",
+    "scope": "Cargo metadata identifies88 eligible lib/integration test targets with legacy-oracle+test-support; exact same88 names as prior original full run, no additions/removals",
+    "84_built_targets": "run_built_regressions_v3.py executes verified binaries newer than the window11 full-build snapshot, exact features, all test cases/no filters/original ignore attributes. Hashes each binary before/after. Only original launch OSError740 permits byte-identical neutral-name copy; no elevation. All logs/results retained.",
+    "four_not_rebuilt_before_abort": ["rust_live_layers","rust_live_visuals","rust_render","rust_statistics"],
+    "four_followup": "production-current-remaining-test-targets-v4 uses original Cargo checks runner on all four, no-fail-fast. Overall coverage remains pending until84+4 complete.",
+    "source_qualification": "Only exact reviewed notefield identity optimization/conditional benchmark and the development-only input_frames import differ from build snapshot. Runtime/library/test Lua source exact; source proof records raw differences. No test assertions changed, no red tests retried as passes."
+  },
+  "new_completed_reports": {
+    "production_current_release_v3": "Normal cargo rustc release succeeds,strict source guard TRUE,1407.838s; artifact0d9fb234ca5780b385550a4ebc2e56a2c0f3ea0efcc2c392e1e753b33fc7e835; map54d75978c9bf25f7b3101372b779df1755b09dde22295a311715a13711f2d778; Rust symbols,no forbidden legacy. Completed before example import fix, so broad smoke manifest afterward differs only uncompiled example.",
+    "production_current_final_v3_tools": "All3 release builds succeed; driver fails broad guard only exact3 reviewed paths. live0fb8e267abd35084f2e6ccee43cc0b39c333af4e6fab8cb3a33fd3919d1bfce1; prep artifact SHA in results.json; comparator identical prior1fb94cadd7ed3223ebe04bed997012334a9cc3eeb66a4e241c2ea1d09e4caa9c",
+    "production_current_song_clippy_v4": "Only known frozen cmd.rs349 denied error,169 warnings; logc1c6a50d1b70a36594b5c1887a836c097dc9768f6e7eff5ba32259a7cdcce90a; broad source guard false, Lua source unchanged; no green Clippy claim",
+    "built_library_tests": "First completed target in direct execution:853 pass,0 failed,40 original ignored,353.79 test seconds"
+  },
+  "terminal_consumed_sessions": [53888,45785,83923,89954,75871,78503,59818,51374,78250],
+  "live_sessions": [
+    {"id":45193,"stage":"production-current-built-regressions-v3","state":"Executing84 fresh original test binaries; lib853 passed; targets.json and result.json retain complete counts/any failures"},
+    {"id":42523,"stage":"production-current-remaining-test-targets-v4-song-windows-debug","state":"Cargo rebuilding/running the remaining4 original test targets with current source"},
+    {"id":73592,"stage":"production-current-release-v4-application-windows-release","state":"Current complete source including fixed example import; despite same stable map argument this is recompiling root application, NOT a confirmed cache hit. Let finish; do not keep starting new app builds without actual source changes."},
+    {"id":33978,"stage":"production-current-final-v4-workloads-windows-release","state":"Current-source strict guarded tool build; first live tool succeeds13.246s with same0fb8... executable; prep then noteskin queued behind release application"}
+  ],
+  "source_freeze": "All runtime/library/test/example/manifests edits complete; no more watched changes while these4 runners live. Preserve independent notefield work, old reports and other processes.",
+  "next": [
+    "Consume all4 sessions. Merge84 direct targets plus4 Cargo targets as exact original88 coverage; retain/report frozen no-Lua mesh or allocation-sensitive diagnostics and any real new defects, never blanket-pass.",
+    "Use production-current-release-v4-application-windows-release for strict600-frame smoke via run_production_lua_smoke_v2.py; inspect screenshot and record visual-review. Do not accept stale broad manifest from v3 without qualification; v4 covers complete current source.",
+    "After own compilation finishes, matched_workloads.py STAGE --build-stage production-current-final-v4-workloads-windows-release; measure_noteskins.py STAGE --build-stage same. Report honest timings/cycles/whole-process RSS/commit, no JIT target; do not invent an external-idleness goal.",
+    "Final formatting32 migration files (31+example), applicable Clippy attribution/source qualification, accurate completion audit/active docs; original criteria only, then stop. Interpreter/C API remain closed."
+  ]
+}

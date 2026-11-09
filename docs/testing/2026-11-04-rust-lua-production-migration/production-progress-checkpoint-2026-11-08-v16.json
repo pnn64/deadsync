@@ -1,0 +1,25 @@
+{
+  "previous": "production-progress-checkpoint-2026-11-08-v15.json",
+  "goal_status": "active",
+  "accepted_current_source": {
+    "production-existing-bindings-v1-song-windows-debug": "46 pass, zero failures; rust_song_compiler28, rust_meshes9, rust_render9; source guard true; log1168b83e2b0e504e4c7cf653bd8141762ea4f8211cbb4f05e27b6aac9317ba83",
+    "production-existing-sharkmode-v1-downstream-windows-debug": "Original compiled direct/texture test passes unchanged,52.69 test seconds; source guard true; log105b1c60967b5ef6fc7a1fe9367e2868c4a29d175350ed8b41d95b312b19b75a",
+    "production-lua-graph-v3": "Normal and instrumented normal/build graphs399 packages each, no legacy runtime; input guard unchanged",
+    "format": "31 changed Rust files pass rustfmt --check; production-adapter-fixes-format-v4.json",
+    "clippy": "Latest v3 same known frozen cmd.rs349 denied lint; no new type errors; not a green lint claim"
+  },
+  "terminal_consumed_sessions": [40617, 17231, 47548],
+  "live_sessions": [
+    {"id": 2241, "stage": "production-original-semantic-regressions-v1-downstream-windows-debug", "description": "Original full401 semantic target, now executing"},
+    {"id": 14631, "stage": "production-existing-shell-v2-downstream-windows-debug", "description": "Original full shell lib target, now executing; verify former poison cascades disappear"}
+  ],
+  "source_freeze": "No watched Rust/Lua/manifests/tests edits until both runners terminal; no source edits since window10",
+  "measurement_review": "production-preparation-workload-source-review-v1.json corrects prior mistaken attribution: preparation example is exact baseline bytes, DREAMING registers input callbacks, one-live-scene assertion is appropriate; do not change policy or benchmark",
+  "measurement_tooling": "measure_noteskins.py now accepts --build-stage while preserving old default, to select the actual final-source preserved comparator artifact",
+  "remaining": [
+    "Consume two current original runners; fix genuine remaining alpha-loop or observation defects, if still present",
+    "Keep original conflicting setter-history and allocation-sensitive coverage-order assertions enabled; explain bounded incidental differences honestly, without C table/pointer layout work or blanket pass claims",
+    "Final-source applicable regressions, normal release build/link and rendered refresh, matched preparation/live/memory and bundled noteskin measurements, accurate completion docs"
+  ],
+  "limits": "Fixed attachment inventory only; interpreter/C API milestones closed; no new baking/JIT/ASM/parity or allocation-failure campaigns; stop at original completion criteria"
+}

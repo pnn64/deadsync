@@ -1,0 +1,240 @@
+{
+  "song": "Cursed Metamorph",
+  "source_simfile": "/mnt/c/GitHub/deadsync/target/debug/Songs/lua-songs/Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+  "retained_lua_vm": false,
+  "live_profile": null,
+  "execution_path": "application-gameplay-init-and-update",
+  "prepare_ms": 18984.208099,
+  "frames": 0,
+  "changed_visual_frames": 0,
+  "actor_sound_operations": 0,
+  "errors": [],
+  "initial_actors": [
+    {
+      "name": "xtl_actor_d",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 1.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": false,
+      "vertices": []
+    },
+    {
+      "name": "ScreenTex",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyUL",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyP1",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyP2",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyOL",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ScreenPixel",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": false,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    }
+  ],
+  "final_actors": [
+    {
+      "name": "xtl_actor_d",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 1.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": false,
+      "vertices": []
+    },
+    {
+      "name": "ScreenTex",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyUL",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyP1",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyP2",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ProxyOL",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": "ScreenPixel",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 427.0,
+      "y": 240.0,
+      "z": 0.0,
+      "visible": false,
+      "vertices": []
+    },
+    {
+      "name": null,
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "visible": true,
+      "vertices": []
+    }
+  ],
+  "startup_smoke_passed": false,
+  "native_parity_checked": false,
+  "pixel_parity_proven": false,
+  "benchmark": {
+    "warmup_frames": 60,
+    "samples": [],
+    "updates_per_second": null,
+    "cpu_cycles_per_update": null,
+    "cpu_cycle_source": "unavailable",
+    "debug_assertions": true,
+    "allocations_per_update": null,
+    "reallocations_per_update": null,
+    "allocated_bytes_per_update": null,
+    "visual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "measurement": "gameplay::update including live Lua and visual publication; no GPU/audio device; observation hashing excluded"
+  }
+}

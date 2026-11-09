@@ -1,0 +1,42 @@
+[
+  {
+    "name": "normal",
+    "command": [
+      "cargo",
+      "tree",
+      "--locked",
+      "-p",
+      "deadsync",
+      "--edges",
+      "normal,build",
+      "--prefix",
+      "none",
+      "--format",
+      "{p}"
+    ],
+    "package_names": 399,
+    "legacy_runtime_packages": [],
+    "stdout_sha256": "c634aae340fff8968f38c06567de67d63cf8145797029ad7aa05790f00318f9f"
+  },
+  {
+    "name": "instrumented",
+    "command": [
+      "cargo",
+      "tree",
+      "--locked",
+      "-p",
+      "deadsync",
+      "--edges",
+      "normal,build",
+      "--prefix",
+      "none",
+      "--format",
+      "{p}",
+      "--features",
+      "deadsync-song-lua/test-support"
+    ],
+    "package_names": 399,
+    "legacy_runtime_packages": [],
+    "stdout_sha256": "c634aae340fff8968f38c06567de67d63cf8145797029ad7aa05790f00318f9f"
+  }
+]

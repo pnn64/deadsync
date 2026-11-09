@@ -1,0 +1,31 @@
+{
+  "stage": "baseline-repaired",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--release",
+    "--features",
+    "test-support",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 951.4135165999178,
+  "log_sha256": "540a364d089721697a9aa596be269812ff3a9b12cc4b2512e86624b1ef473cb3",
+  "tests_passed": 0,
+  "test_results": [],
+  "sources_unchanged": false,
+  "environment": {
+    "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

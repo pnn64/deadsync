@@ -1,0 +1,69 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find value `call` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:195:27
+    |
+195 | ...en(call, s...
+    |       ^^^^ not found in this scope
+
+error[E0308]: mismatched types
+  --> crates/deadsync-song-lua/src/rust_engine/actors/graphs.rs:27:5
+   |
+13 | pub(super) fn install_helpers(vm: &mut Vm, actor: TableId, helpers: TableId) -> Resul...rror> {
+   |                                                                                 -----...----- expected `Result<(), Error>` because of return type
+...
+27 |     vm.un...root)
+   |     ^^^^^...^^^^^ expected `Result<(), Error>`, found `Result<Value, Error>`
+   |
+   = note: expected enum `Result<(), _>`
+              found enum `Result<deadlib_lua::Value, _>`
+   = note: the full name for the type has been written to '/var/tmp/deadsync-rust-adapters-target/debug/deps/deadsync_song_lua-6df91d7cecd21378.long-type-12669541111805840789.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0277]: the `?` operator can only be used in a function that returns `Result` or `Option` (or another type that implements `FromResidual`)
+   --> crates/deadsync-song-lua/src/rust_engine/actors/render.rs:195:46
+    |
+183 | fn de...ool>) {
+    | -----...----- this function should return `Result` or `Option` to accept `?`
+...
+195 |     for child in children(call, store, actor)? {
+    |                                              ^ cannot use the `?` operator in a function that returns `()`
+    |
+    = note: the full name for the type has been written to '/var/tmp/deadsync-rust-adapters-target/debug/deps/deadsync_song_lua-6df91d7cecd21378.long-type-8152233450224121816.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+help: consider adding return type
+    |
+183 | fn depth(store: &Shared, actor: TableId, test: Option<(bool, bool)>, write: Option<bool>) -> Result<(), Box<dyn std::error::Error>> {
+    |                                                                                           +++++++++++++++++++++++++++++++++++++++++
+
+error[E0499]: cannot borrow `*call` as mutable more than once at a time
+    --> crates/deadsync-song-lua/src/rust_engine/actors.rs:1523:53
+     |
+1523 | ...rn call.push(Value::Number(children(call, &...
+     |       ---- ----                        ^^^^ second mutable borrow occurs here
+     |       |    |
+     |       |    first borrow later used by call
+     |       first mutable borrow occurs here
+     |
+help: try adding a local storing this argument...
+    --> crates/deadsync-song-lua/src/rust_engine/actors.rs:1523:44
+     |
+1523 | ...er(child...ctor)?.l...
+     |       ^^^^^...^^^^^
+help: ...and then using that local as the argument to this call
+    --> crates/deadsync-song-lua/src/rust_engine/actors.rs:1523:20
+     |
+1523 | ...rn call....f64));
+     |       ^^^^^...^^^^^
+
+Some errors have detailed explanations: E0277, E0308, E0425, E0499.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `deadsync-song-lua` (lib) due to 4 previous errors

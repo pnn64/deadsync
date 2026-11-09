@@ -1,0 +1,48 @@
+{
+  "executable": "C:\\GitHub\\deadsync\\target\\rust-lua-migration-tools\\debug\\lua-migration-source-inventory.exe",
+  "executable_sha256": "97f751f15441064cd3e8c0929d1ed2b85cf30ebc4e3dd30b87cd6493555fa59a",
+  "runs": [
+    {
+      "phase": "current",
+      "package": "deadsync-song-lua",
+      "output": "current-deadsync-song-lua.json",
+      "stdout": "Inventoried 4129 items in 67 source files without modifying them.",
+      "sha256": "5449759f02f09b2b437ddf59f8238b9ae20d2192d3a8f14c65b758d53f62d805"
+    },
+    {
+      "phase": "current",
+      "package": "deadsync-noteskin",
+      "output": "current-deadsync-noteskin.json",
+      "stdout": "Inventoried 1014 items in 31 source files without modifying them.",
+      "sha256": "6c6992c9eb67df6a9de12c787b477c6e142fc82b9f6abc230b303ab9ef923e53"
+    },
+    {
+      "phase": "current",
+      "package": "deadsync-theme-simply-love",
+      "output": "current-deadsync-theme-simply-love.json",
+      "stdout": "Inventoried 9449 items in 270 source files without modifying them.",
+      "sha256": "a98edb4e7ff209cbd4680245a6de945a9760b31199bdc82623c516fbe9104014"
+    },
+    {
+      "phase": "frozen",
+      "package": "deadsync-song-lua",
+      "output": "frozen-deadsync-song-lua.json",
+      "stdout": "Inventoried 2929 items in 59 source files without modifying them.",
+      "sha256": "93b5db593b57b64f5dc1d8ecf7ad988be4e20123b56be79d61ede4aaad2f0b17"
+    },
+    {
+      "phase": "frozen",
+      "package": "deadsync-noteskin",
+      "output": "frozen-deadsync-noteskin.json",
+      "stdout": "Inventoried 1025 items in 30 source files without modifying them.",
+      "sha256": "0718e166a05add11e6b72b65ead4e7899ff6eba623057fe8008a22cc2f29bef2"
+    },
+    {
+      "phase": "frozen",
+      "package": "deadsync-theme-simply-love",
+      "output": "frozen-deadsync-theme-simply-love.json",
+      "stdout": "Inventoried 9423 items in 267 source files without modifying them.",
+      "sha256": "c755664057c0f6374ebabf76eeaf6d2fa33a2f8636253fc06670a187cd144265"
+    }
+  ]
+}

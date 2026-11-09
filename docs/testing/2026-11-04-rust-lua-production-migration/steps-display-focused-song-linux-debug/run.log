@@ -1,0 +1,85 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 37s
+     Running tests/rust_steps_displays.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_steps_displays-4020dbd95549931c)
+
+running 6 tests
+test game_state_route_uses_current_object_and_nil_preferred_difficulty ... ok
+test gameplay_initialization_keeps_metrics_player_order_and_real_commands ... 
+thread 'gameplay_initialization_keeps_metrics_player_order_and_real_commands' (2600004) panicked at crates/deadsync-song-lua/tests/rust_steps_displays.rs:74:33:
+Rust: 
+            assert(part:GetVisible() and part2:GetVisible())
+            assert(part[1]:GetZoomX()==1 and part2[1]:GetZoomX()==-1)
+            assert(part[1].LoadCommand==part2[1].LoadCommand)
+            assert(part[1].LoadCommand~=oldFrameLoad)
+            assert(not part[2]:GetVisible() and not part2[2]:GetVisible())
+            assert(part[3]:GetVisible() and not part2[3]:GetVisible())
+            assert(part[3].Text=='edit chart' and part2[3].Text=='Crazy')
+            assert(part[2].Text=='7' and part2[2].Text=='?')
+            for _,display in ipairs{part,part2}do
+                for _,c in ipairs(display)do pose(c)end
+                log(display[3]:GetHAlign(),display[3]:GetVAlign(),__songlua_side_effect_count)
+            end
+            oldFrameLoad=part[1].LoadCommand;GAMESTATE.GetCurrentSteps=function()return nil end
+        
+Error { kind: Runtime, line: 3, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(47244642059))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test getter_failures_preserve_partial_writes_and_reentrant_visibility ... ok
+test owned_children_defaults_class_overrides_and_typed_receivers_match ... ok
+test parameters_survive_gc_and_display_queues_advance_before_scene_release ... ok
+test setters_keep_parameter_identity_mapping_and_two_child_passes ... 
+thread 'setters_keep_parameter_identity_mapping_and_two_child_passes' (2600008) panicked at crates/deadsync-song-lua/tests/rust_steps_displays.rs:70:33:
+legacy: 
+            part:SetPropagateCommands(false)
+            function observe(self,p)
+                assert(p==current or current==nil);current=p;collectgarbage('collect')
+                log(self:GetName(),p.CustomDifficulty,p.DisplayDescription,p.Meter,p.StepsType,p.Steps==chosen,p.Trail==chosen,self:GetVisible(),part:GetVisible())
+                p.visits=(p.visits or 0)+1
+            end
+            part.SetCommand=observe;for _,c in ipairs(part)do c.SetCommand=observe end
+            for _,case in ipairs{
+                {'Difficulty_Hard','StepsType_Pump_Single','8.75','unused',true},
+                {'Difficulty_Medium','StepsType_Pump_Double',0,'unused',false},
+                {'Difficulty_Hard','StepsType_Pump_Double',9,'unused',0},
+                {'Difficulty_Medium','StepsType_Pump_Halfdouble',-3,'unused',nil},
+                {'Difficulty_Beginner','StepsType_Dance_Single',2,'unused',false},
+                {'Difficulty_Challenge','StepsType_Dance_Single',18,'unused',true},
+                {'Difficulty_Edit','StepsType_Dance_Single',10,'author description',true},
+                {'Difficulty_Invalid','StepsType_Invalid',0,'unused',false},
+            }do
+                for _,method in ipairs{'SetFromSteps','SetFromTrail'}do
+                    chosen=steps(unpack(case));current=nil
+                    assert(part[method](part,chosen)==part and part:GetVisible())
+                    assert(current.visits==(case[3]==0 and 8 or 9))
+                    log(part[2]:GetText(),part[3]:GetText(),part[4]:GetVisible(),__songlua_side_effect_count)
+                end
+            end
+            local original=part.SetFromSteps;assert(original(part2,steps('Hard','Other',4,'',true))==part2)
+            assert(part2[2]:GetText()=='4' and part2[3]:GetText()=='Hard')
+        
+runtime error: /fixture/steps_displays.lua:2: attempt to call method 'SetPropagateCommands' (a nil value)
+stack traceback:
+	[C]: in method 'SetPropagateCommands'
+	/fixture/steps_displays.lua:2: in main chunk
+FAILED
+
+failures:
+
+failures:
+    gameplay_initialization_keeps_metrics_player_order_and_real_commands
+    setters_keep_parameter_identity_mapping_and_two_child_passes
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.52s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_steps_displays`

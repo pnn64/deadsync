@@ -1,0 +1,54 @@
+{
+  "created_utc": "2026-11-08T09:20:24.691697+00:00",
+  "goal_status": "active",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "previous_goal_turn_classification": "no progress: acknowledgement only. Revalidated by reading the user objective and polling the original live session.",
+  "current_goal_turn_classification": "progress",
+  "progress": [
+    "Reviewed all 84 source files/5010 source references, 384 raw/identity, 949 handle and 528 state/GC inventory candidates; verified frozen hashes and actual current module/member guards.",
+    "Verified moved noteskin native helper bodies still match the frozen oracle audit and current oracle file hash.",
+    "Recorded noteskin 29->30 cache identity, in-memory song/GIF ownership, retained callback release/reentry/worker-transfer source paths and current 137-check runtime source identity.",
+    "Verified all 238 core source/test files match the successful 954-check Linux suite, with 72 CRLF-only differences; focused Windows checks remain pending.",
+    "Updated measurement build tooling to guard current/new source files and tolerate removed C API sources. Exercised its snapshot function twice: 2913 files, stable.",
+    "Ran a read-only formatting check across 1163 files; recorded frozen attribution and two migration files needing formatting after source freeze.",
+    "Added completion-audit.md mapping the same original objective to current evidence and remaining gates."
+  ],
+  "new_evidence": [
+    "production-inventory-audit-v1/reviewed-site-dispositions.json",
+    "production-cache-and-session-source-review-v1.json",
+    "production-core-source-identity-review-v1.json",
+    "production-format-audit-v1/result.json",
+    "production-format-audit-v1/attribution.json",
+    "completion-audit.md"
+  ],
+  "live_runner": {
+    "native_session_id": 94461,
+    "stage": "production-full-song-after-copy-v1-song-windows-debug",
+    "status": "Original handle confirmed live by direct write_stdin polls; compilation finished and tests executing. Re-poll before editing watched sources or starting Cargo.",
+    "partial_test_results": [
+      "test result: ok. 853 passed; 0 failed; 40 ignored; 0 measured; 0 filtered out; finished in 350.51s",
+      "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.60s",
+      "test result: ok. 20 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 8.18s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s",
+      "test result: FAILED. 214 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 143.93s"
+    ],
+    "partial_results_are_not_completion": true
+  },
+  "source_freeze": "Active: do not edit the seven watched crates/root manifests/config until runner is terminal. Docs/tooling under this evidence directory are outside the guard.",
+  "migration_format_cleanup": [
+    "crates/deadsync-song-lua/src/option_rows.rs",
+    "crates/deadsync-song-lua/src/rust_engine/compiler.rs"
+  ],
+  "unrelated_format_changes_to_preserve": [
+    "crates/deadsync-notefield/src/error_bar.rs",
+    "crates/deadsync-notefield/src/judgment_feedback.rs"
+  ],
+  "next_action": "Consume full song result; if Windows 740 launch-only failures occur, retry byte-identical neutral executable names using existing helper. Then apply migration-only formatting and finish the original core/noteskin/GIF/downstream/application/graph/link/measurement/Clippy/documentation gates.",
+  "known_preexisting_assertion": "playback::tests::song_lua_actor_multi_vertex_builds_textured_mesh_overlay; unchanged no-Lua mesh alpha mismatch, retained and separately audited.",
+  "completion": "Unproven. Scope remains objective.txt; no new language, C API, feature or performance target added."
+}

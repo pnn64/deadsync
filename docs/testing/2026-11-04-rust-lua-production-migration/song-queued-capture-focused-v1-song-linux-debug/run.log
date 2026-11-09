@@ -1,0 +1,78 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find function `raw_set` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_capture.rs:183:25
+    |
+183 | ...   raw_set(ca...
+    |       ^^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_activation.rs:475:1
+    |
+475 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::song_activation::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs:346:1
+    |
+346 | / fn r...
+347 | |     ...
+348 | |     ...
+349 | |     ...
+...   |
+353 | |     ...
+354 | | }
+    | |_^ `crate::rust_engine::actors::generated_players::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs:306:1
+    |
+306 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::song_layers::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs:53:1
+    |
+ 53 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::sprites::raw_set`: not accessible
+
+error[E0425]: cannot find function `raw_set` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_capture.rs:341:13
+    |
+341 | ...   raw_set(
+    |       ^^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_activation.rs:475:1
+    |
+475 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::song_activation::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs:346:1
+    |
+346 | / fn r...
+347 | |     ...
+348 | |     ...
+349 | |     ...
+...   |
+353 | |     ...
+354 | | }
+    | |_^ `crate::rust_engine::actors::generated_players::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs:306:1
+    |
+306 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::song_layers::raw_set`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs:53:1
+    |
+ 53 |   fn ra...rror> {
+    |   ^^^^^...^^^^^ `crate::rust_engine::actors::sprites::raw_set`: not accessible
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `deadsync-song-lua` (lib) due to 2 previous errors

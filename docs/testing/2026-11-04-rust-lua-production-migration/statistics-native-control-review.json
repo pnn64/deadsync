@@ -1,0 +1,10 @@
+{
+  "file": "crates/deadsync-song-lua/src/live.rs",
+  "original_sha256": "ad77a1ef2962ffba44a6c99cd052391245bbdb03eda506b9367a0e7c010bb8a2",
+  "original_bytes": 518434,
+  "original_prefix_unchanged": true,
+  "added_bytes": 938,
+  "added_cfg_test_support_helpers": 4,
+  "added_helpers_rustfmt_exit": 0,
+  "final_sha256": "260ee9cce2e22f219f0dd37f5b5fb90194034a877773606085fda372c15c8c62"
+}

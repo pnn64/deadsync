@@ -1,0 +1,52 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 31.61s
+     Running tests/rust_live_actors.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_actors-f9b2cfe60a949c9e)
+
+running 15 tests
+test entry_hook_precedes_inactivity_delta_selection_and_observes_player_feedback ... 
+thread 'entry_hook_precedes_inactivity_delta_selection_and_observes_player_feedback' (3041493) panicked at crates/deadsync-song-lua/tests/rust_live_actors.rs:475:14:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 1, message: "entry hook:1: assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589937115))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test failed_entry_callback_leaves_the_cached_plan_usable_on_the_next_frame ... ok
+test feedback_methods_modifiers_and_color_remain_rooted_across_replacement_gc ... ok
+test feedback_runs_for_hibernating_and_inactive_players ... 
+thread 'feedback_runs_for_hibernating_and_inactive_players' (3041496) panicked at crates/deadsync-song-lua/tests/rust_live_actors.rs:85:14:
+called `Result::unwrap()` on an `Err` value: RuntimeError("...rates/deadsync-song-lua/tests/rust_live_actors.rs:83:1: assertion failed!\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'assert'\n\t...rates/deadsync-song-lua/tests/rust_live_actors.rs:83:1: in main chunk")
+FAILED
+test foreign_retired_nonlive_and_unactivated_owners_are_rejected ... ok
+test held_let_go_missed_hold_and_duplicate_timestamp_queues_match ... ok
+test hold_callbacks_can_change_judgment_and_zoom_inputs_before_their_phases ... ok
+test judgment_frames_fa_plus_early_late_autoplay_and_tilt_match ... ok
+test live_screen_player_children_columns_song_and_final_screen_order ... 
+thread 'live_screen_player_children_columns_song_and_final_screen_order' (3041501) panicked at crates/deadsync-song-lua/tests/rust_live_actors.rs:85:14:
+called `Result::unwrap()` on an `Err` value: RuntimeError("...rates/deadsync-song-lua/tests/rust_live_actors.rs:83:7: attempt to call method 'SetUpdateFunction' (a nil value)\nstack traceback:\n\t[C]: in method 'SetUpdateFunction'\n\t...rates/deadsync-song-lua/tests/rust_live_actors.rs:83:7: in main chunk")
+FAILED
+test mini_zoom_uses_owned_current_options_after_player_update_before_song ... ok
+test ordinary_actor_callback_errors_report_once_without_stopping_song_callbacks ... ok
+test original_nonframe_update_setter_fixtures_are_rejected ... ok
+test prepared_frame_uses_refreshed_judgments_in_the_actor_feedback_phase ... ok
+test queued_commands_and_runtime_wrappers_invalidate_next_plan_without_losing_current_jobs ... ok
+test wrapper_rates_hibernation_and_column_input_delta_match ... ok
+
+failures:
+
+failures:
+    entry_hook_precedes_inactivity_delta_selection_and_observes_player_feedback
+    feedback_runs_for_hibernating_and_inactive_players
+    live_screen_player_children_columns_song_and_final_screen_order
+
+test result: FAILED. 12 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.06s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_live_actors`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_live_actors`

@@ -72,6 +72,56 @@ pub const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
 pub const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
 pub const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
 
+/// When song Lua executes. Baked playback can fall back to runtime for input callbacks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SongLuaMode {
+    #[default]
+    Baked,
+    Runtime,
+}
+
+impl SongLuaMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Baked => "Baked",
+            Self::Runtime => "Runtime",
+        }
+    }
+
+    #[must_use]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::Baked => 0,
+            Self::Runtime => 1,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_choice(index: usize) -> Self {
+        if index == 1 {
+            Self::Runtime
+        } else {
+            Self::Baked
+        }
+    }
+}
+
+impl FromStr for SongLuaMode {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let value = value.trim();
+        if value.eq_ignore_ascii_case("Baked") {
+            Ok(Self::Baked)
+        } else if value.eq_ignore_ascii_case("Runtime") {
+            Ok(Self::Runtime)
+        } else {
+            Err(())
+        }
+    }
+}
+
 #[must_use]
 pub const fn lights_driver_choice_index(driver: LightsDriverKind) -> usize {
     match driver {
@@ -261,6 +311,7 @@ pub struct SystemOptions {
     pub frame_stats_overlay_style: &'static str,
     pub translated_titles: bool,
     pub bg_brightness: f32,
+    pub song_lua_mode: SongLuaMode,
     pub center_1player_notefield: bool,
     pub center_image_translate_x: i32,
     pub center_image_translate_y: i32,
@@ -329,6 +380,7 @@ impl Default for SystemOptions {
             frame_stats_overlay_style: DEFAULT_FRAME_STATS_OVERLAY_STYLE,
             translated_titles: DEFAULT_TRANSLATED_TITLES,
             bg_brightness: DEFAULT_BG_BRIGHTNESS,
+            song_lua_mode: SongLuaMode::Baked,
             center_1player_notefield: DEFAULT_CENTER_1PLAYER_NOTEFIELD,
             center_image_translate_x: DEFAULT_CENTER_IMAGE_TRANSLATE_X,
             center_image_translate_y: DEFAULT_CENTER_IMAGE_TRANSLATE_Y,
@@ -684,6 +736,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "BGBrightness")
             .and_then(|value| value.parse::<f32>().ok())
             .map_or(default.bg_brightness, clamp_bg_brightness),
+        song_lua_mode: conf
+            .get("Options", "SongLuaMode")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(default.song_lua_mode),
         center_1player_notefield: conf
             .get("Options", "Center1Player")
             .or_else(|| conf.get("Options", "CenteredP1Notefield"))
@@ -824,12 +880,13 @@ pub fn push_system_download_option_lines(content: &mut String, options: SystemOp
     );
 }
 
-pub fn push_system_bg_brightness_option_lines(content: &mut String, options: SystemOptions) {
+pub fn push_system_gameplay_option_lines(content: &mut String, options: SystemOptions) {
     push_line(
         content,
         "BGBrightness",
         clamp_bg_brightness(options.bg_brightness),
     );
+    push_line(content, "SongLuaMode", options.song_lua_mode.as_str());
 }
 
 pub fn push_gameplay_bg_color_option_line(content: &mut String, color_hex: &str) {
@@ -2725,6 +2782,7 @@ mod tests {
             frame_stats_overlay_style: "detailed",
             translated_titles: false,
             bg_brightness: 0.7,
+            song_lua_mode: SongLuaMode::Baked,
             center_1player_notefield: false,
             center_image_translate_x: 0,
             center_image_translate_y: 0,
@@ -3378,7 +3436,7 @@ mod tests {
         options.mine_hit_sound = false;
         options.translated_titles = true;
 
-        push_system_bg_brightness_option_lines(&mut content, options);
+        push_system_gameplay_option_lines(&mut content, options);
         push_system_banner_cache_option_lines(&mut content, options);
         push_system_cdtitle_center_option_lines(&mut content, options);
         push_system_mine_hit_sound_option_lines(&mut content, options);
@@ -3388,6 +3446,7 @@ mod tests {
             content,
             concat!(
                 "BGBrightness=1\n",
+                "SongLuaMode=Baked\n",
                 "BannerCache=0\n",
                 "CDTitleCache=0\n",
                 "Center1Player=1\n",

@@ -1,0 +1,36 @@
+[
+  {
+    "original": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\rust_song_update_output-63e8f1b3acf29b19.exe",
+    "binary": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-output-control-v1.exe",
+    "binary_sha256": "acfe5d7f86a49a2f86dd838a3fb43a2a438304706c7065ad202f3354bf59702e",
+    "original_sha256": "acfe5d7f86a49a2f86dd838a3fb43a2a438304706c7065ad202f3354bf59702e",
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-output-control-v1.exe",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "launch_error": null,
+    "seconds": 8.69743279996328,
+    "tests_passed": 8,
+    "tests_failed": 0,
+    "sources_unchanged": true
+  },
+  {
+    "original": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\rust_song_updates-a42df165a1dd4456.exe",
+    "binary": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-phase-control-v1.exe",
+    "binary_sha256": "8dbb567921f395b9f628e5cbd3892852a6e795a2c8118c02c9a80b292465d5f3",
+    "original_sha256": "8dbb567921f395b9f628e5cbd3892852a6e795a2c8118c02c9a80b292465d5f3",
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-phase-control-v1.exe",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "launch_error": null,
+    "seconds": 11.930777200032026,
+    "tests_passed": 10,
+    "tests_failed": 0,
+    "sources_unchanged": true
+  }
+]

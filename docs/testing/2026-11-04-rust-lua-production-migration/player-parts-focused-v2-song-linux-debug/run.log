@@ -1,0 +1,53 @@
+   Compiling deadlib-render-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-core)
+   Compiling deadsync-rules v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-rules)
+   Compiling deadlib-audio-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-core)
+   Compiling deadsync-input v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-input)
+   Compiling deadlib-render-backend-vulkan v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-backend-vulkan)
+   Compiling deadlib-render-backend-gl v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-backend-gl)
+   Compiling deadsync-chart v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-chart)
+   Compiling deadlib-render-backend-wgpu v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-backend-wgpu)
+   Compiling deadlib-render-backend-software v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-backend-software)
+   Compiling deadsync-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-gameplay)
+   Compiling deadsync-score v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-score)
+   Compiling deadlib-present v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-present)
+   Compiling deadlib-render v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render)
+   Compiling deadlib-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-assets)
+   Compiling deadlib-audio-backend-alsa v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-alsa)
+   Compiling deadsync-theme v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-theme)
+   Compiling deadlib-audio-backend-pipewire v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-pipewire)
+   Compiling deadlib-audio-backend-pulse v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-pulse)
+   Compiling deadlib-audio-backend-jack v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio-backend-jack)
+   Compiling deadsync-smx v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-smx)
+   Compiling deadlib-audio v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-audio)
+   Compiling deadsync-lights v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-lights)
+   Compiling deadsync-notefield v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-notefield)
+   Compiling deadsync-audio-stream v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-audio-stream)
+   Compiling deadsync-config v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-config)
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling deadsync-simfile v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-simfile)
+   Compiling deadsync-profile v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile)
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+    Finished `test` profile [unoptimized] target(s) in 1m 48s
+     Running tests/rust_player_parts.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_player_parts-c0583068b7adcf31)
+
+running 7 tests
+test failed_hold_construction_releases_partial_scene_and_allows_later_construction ... ok
+test generated_child_lookup_keeps_aliases_and_group_forwarding_after_renames ... ok
+test hidden_or_empty_font_combo_is_the_existing_invisible_leaf ... ok
+test hold_texture_method_reenters_gc_once_per_player_and_uses_raw_modifiers ... ok
+test player_init_owns_ordered_children_and_shared_named_aliases ... ok
+test player_update_traversal_visits_each_part_once_and_columns_last ... ok
+test scene_release_collects_the_entire_generated_tree_and_keeps_other_player_alive ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.37s
+

@@ -13,7 +13,6 @@ fn console_write(io: &mut io::Io, output: &mut Option<Vec<u8>>, bytes: &[u8]) {
 
 impl Vm {
     pub(super) fn debug_console_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
-        self.ensure_file_backend()?;
         let base = frame.base;
         if frame.pc() == 2 {
             match self.registers[base + 1] {
@@ -39,17 +38,24 @@ impl Vm {
         let mut buffer = [0; 249];
         let len = self.console_read(&mut buffer);
         if len == 0 || io::c_bytes(&buffer[..len]) == b"cont\n" {
-            return Ok(self.return_frame(frame, base, 0));
+            return self.return_frame(frame, base, 0);
         }
         let source = io::c_bytes(&buffer[..len]);
         let name = b"=(debug command)";
-        match loads::compile(
-            source,
-            name,
-            usize::from(self.native_calls_for(self.thread, self.frames.len())),
-        ) {
-            Ok(program) => {
-                let function = self.load(&program);
+        match crate::memory::compilation::Workspace::new(self.registers.memory())
+            .and_then(|workspace| {
+                workspace.run(|| {
+                    loads::compile(
+                        source,
+                        name,
+                        usize::from(self.native_calls_for(self.thread, self.frames.len())),
+                    )
+                })
+            })
+            .and_then(|program| self.load(&program))
+        {
+            Ok(function) => {
+                self.reserve_registers(base + 1)?;
                 self.resize_registers(self.registers.len().max(base + 1));
                 self.registers[base] = Value::Function(function);
                 self.frames.last_mut().unwrap().pc = 1;
@@ -58,10 +64,16 @@ impl Vm {
                 }
             }
             Err(error) => {
-                let _ = self.io.write_standard(
-                    2,
-                    io::c_bytes(&loads::message(name, &error, source.first() == Some(&27))),
-                );
+                if error.kind() == ErrorKind::Memory {
+                    let _ = self.io.write_standard(2, error.message_bytes());
+                } else {
+                    let message = loads::message(name, &error, source.first() == Some(&27));
+                    let bytes = match &message {
+                        Ok(bytes) => io::c_bytes(bytes),
+                        Err(error) => error.message_bytes(),
+                    };
+                    let _ = self.io.write_standard(2, bytes);
+                }
                 let _ = self.io.write_standard(2, b"\n");
                 self.debug_console_clear(frame);
             }
@@ -146,17 +158,22 @@ impl Vm {
                             source.push(b'\n');
                             source.extend_from_slice(&line);
                         } else {
-                            report(&loads::message(
-                                b"=stdin",
-                                &error,
-                                source.first() == Some(&27),
-                            ));
+                            match loads::message(b"=stdin", &error, source.first() == Some(&27)) {
+                                Ok(message) => report(&message),
+                                Err(error) => report(error.message_bytes()),
+                            }
                             continue 'input;
                         }
                     }
                 }
             };
-            let function = self.load_program(&program);
+            let function = match self.try_load_program(&program) {
+                Ok(function) => function,
+                Err(error) => {
+                    report(error.message_bytes());
+                    continue;
+                }
+            };
             drop(program);
             match self.call(Value::Function(function), &[]) {
                 Ok(results) => values.extend_from_slice(results),
@@ -205,7 +222,6 @@ impl Vm {
     }
 
     fn console_line(&mut self, first: bool, line: &mut Vec<u8>) -> Result<bool, Error> {
-        self.ensure_file_backend()?;
         let prompt = self.get_global(if first { b"_PROMPT" } else { b"_PROMPT2" })?;
         match prompt {
             Value::String(id) => console_write(

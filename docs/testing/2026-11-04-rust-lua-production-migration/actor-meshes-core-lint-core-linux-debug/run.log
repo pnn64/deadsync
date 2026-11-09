@@ -1,0 +1,4 @@
+   Compiling deadlib-lua-legacy-sys v0.13.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua-legacy/mlua-sys)
+   Compiling deadlib-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua)
+    Checking deadlib-lua-legacy v0.12.2 (/mnt/c/GitHub/deadsync/crates/deadlib-lua-legacy)
+    Finished `dev` profile [unoptimized] target(s) in 21.17s

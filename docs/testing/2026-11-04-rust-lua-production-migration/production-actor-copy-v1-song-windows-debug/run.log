@@ -1,0 +1,42 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+error: float literals must have an integer part
+  --> crates\deadsync-song-lua\tests\rust_actor_copy.rs:97:18
+   |
+97 |     pair.advance(.25);
+   |                  ^^^
+   |
+help: must have an integer part
+   |
+97 |     pair.advance(0.25);
+   |                  +
+
+error: float literals must have an integer part
+   --> crates\deadsync-song-lua\tests\rust_actor_copy.rs:105:18
+    |
+105 |     pair.advance(.8);
+    |                  ^^
+    |
+help: must have an integer part
+    |
+105 |     pair.advance(0.8);
+    |                  +
+
+error: could not compile `deadsync-song-lua` (test "rust_actor_copy") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -1,4 +1,4 @@
-"""Measure direct Rust callbacks against the development Lua 5.1 C bridge."""
+"""Measure Rust callback workloads and allocation counts."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -20,9 +20,8 @@ def main() -> None:
     root=Path(__file__).resolve().parents[1];output=args.output.resolve();output.parent.mkdir(parents=True,exist_ok=True)
     sources=list((root/'crates/deadlib-lua').rglob('*.rs'))+[Path(__file__).resolve()]
     sources += [root/n for n in ('Cargo.toml','Cargo.lock','.cargo/config.toml','crates/deadlib-lua/Cargo.toml')]
-    reference=[p for p in (root/'vendor/lua-src/lua-5.1.5').iterdir()if p.suffix in ('.c','.h')]
     def hashes(paths):return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()for p in sorted(paths)}
-    before=hashes(sources);oracle=hashes(reference);started=time.time()
+    before=hashes(sources);started=time.time()
     command=['cargo','bench','-p','deadlib-lua','--bench','host_functions','--no-run','--message-format=json']
     build=subprocess.run(command,cwd=root,capture_output=True,text=True)
     output.with_suffix('.build.log').write_text(build.stderr,encoding='utf-8');output.with_suffix('.build.jsonl').write_text(build.stdout,encoding='utf-8');build.check_returncode()
@@ -44,7 +43,7 @@ def main() -> None:
         def ticks(value):return(value.dwHighDateTime<<32)|value.dwLowDateTime
         for fixture in ('add_lua_loop','reenter_add_lua_loop'):
             for sample in range(5):
-                for engine in (('rust','reference')if sample%2==0 else('reference','rust')):
+                for engine in ('rust',):
                     child_env=env.copy();child_env['DEADLIB_LUA_HOST_CPU']=engine;child_env['DEADLIB_LUA_HOST_CPU_FIXTURE']=fixture;begin=time.perf_counter_ns()
                     child=subprocess.Popen([str(binary)],cwd=root,env=child_env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=subprocess.CREATE_NO_WINDOW)
                     try:stdout,stderr=child.communicate(timeout=120)
@@ -57,7 +56,7 @@ def main() -> None:
                     if not get_cycles(wintypes.HANDLE(int(child._handle)),ctypes.byref(cycles)):raise ctypes.WinError(ctypes.get_last_error())
                     cpu_samples.append(dict(engine=engine,sample=sample,fixture=fixture,executions=400,callbacks=2_000_000,warmup_callbacks=5000,wall_ns=wall,
                         kernel_100ns=ticks(kernel),user_100ns=ticks(user),cpu_ns=(ticks(kernel)+ticks(user))*100,cpu_cycles=cycles.value))
-    assert hashes(sources)==before and hashes(reference)==oracle
+    assert hashes(sources)==before
     samples=[];layouts={};heaps={};metadata={}
     for line in run.stdout.splitlines():
         fields=line.split('\t')
@@ -68,25 +67,25 @@ def main() -> None:
         elif fields[0]=='layout':
             _,name,instructions,registers=fields;layouts[name]=dict(instructions=int(instructions),entry_registers=int(registers))
         elif fields[0]=='heap':
-            _,name,live,reserved,natives,reference_live=fields
-            heaps[name]=dict(rust_live_bytes=int(live),rust_reserved_bytes=int(reserved),rust_native_closures=int(natives),reference_lua_bytes=int(reference_live))
+            _,name,live,reserved,natives=fields
+            heaps[name]=dict(rust_live_bytes=int(live),rust_reserved_bytes=int(reserved),rust_native_closures=int(natives))
         elif fields[0]=='meta':
             _,name,value=fields;metadata[name]=value
-    ratios={}
-    for name in {x['workload']for x in samples}:
-        pairs={engine:{x['sample']:x for x in samples if x['workload']==name and x['engine']==engine}for engine in ('rust','reference')}
-        assert all(set(rows)==set(range(9))for rows in pairs.values())
-        assert all(pairs['rust'][i]['repeats']==pairs['reference'][i]['repeats']and pairs['rust'][i]['callbacks_per_iteration']==pairs['reference'][i]['callbacks_per_iteration']for i in range(9))
-        ratios[name]=statistics.median(pairs['rust'][i]['ns_per_iteration']/pairs['reference'][i]['ns_per_iteration']for i in range(9))
-    assert len(samples)==108 and len(layouts)==len(heaps)==5
+    medians={}
+    for name in {row['workload'] for row in samples}:
+        rows=[row for row in samples if row['workload']==name]
+        assert len(rows)==9 and {row['sample'] for row in rows}==set(range(9))
+        assert all(row['engine']=='rust' for row in rows)
+        medians[name]=statistics.median(row['ns_per_iteration'] for row in rows)
+    assert len(samples)==54 and len(medians)==6 and len(layouts)==len(heaps)==5
     assert all(x['allocations_total']==x['reallocations_total']==x['requested_bytes_total']==0 for x in samples if x['engine']=='rust')
-    result=dict(command=command,binary=str(binary),binary_sha256=binary_hash,source_hashes=before,reference_source_hashes=oracle,
+    result=dict(command=command,binary=str(binary),binary_sha256=binary_hash,source_hashes=before,
         utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),build_and_run_seconds=time.time()-started,platform=platform.platform(),processor=os.environ.get('PROCESSOR_IDENTIFIER',platform.processor()),
         rustc=subprocess.check_output(['rustc','-vV'],text=True),git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
-        protocol='Nine alternating pairs for five 5000-callback Lua loops and one direct Rust entry. Two loops enter a Rust callback which makes a protected nested Lua call, returning one or four values. Their C comparison uses a raw lua_CFunction copying the same three original arguments and lua_pcall(LUA_MULTRET), preserving the native argument slots. The other reference callbacks use typed development mlua bridges. Loop timings include interpreter execution and both callback boundaries, not isolated function-pointer cost. Reference captured state is a Rust closure rather than Lua upvalues. Direct Rust entry returns borrowed Values; the C binding decodes f64. Child functions are bound once before timing. Three warmups, setup, correctness, layouts and heap observations are outside timing. All warmed Rust paths assert zero System allocations/reallocations/requests. Reference counters exclude native C allocation calls. Five alternating CPU pairs for each of add_lua_loop and reenter_add_lua_loop include VM/setup/startup/cleanup, 5000 warmup callbacks and 2000000 workload callbacks per child; counter increments are disabled but the forwarding allocator remains.',
-        metadata=metadata,samples=samples,program_layouts=layouts,heap_estimates=heaps,median_paired_rust_over_reference=ratios,cpu_samples=cpu_samples,
-        missing_metrics=['exact allocator live/peak heap','process peak RSS','native C allocation counts','sampled CPU call stacks','registration time','yielding host callbacks'])
-    output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(ratios,indent=2))
+        protocol='Nine samples for five 5000-callback Lua loops and one direct Rust entry. Two loops reenter Lua through HostCall, returning one or four values. Child functions are bound before timing. Three warmups, literal result assertions, layouts and heap observations are outside timing. Warmed Rust paths assert zero System allocations, reallocations and requests. Optional CPU children perform 5000 warmup callbacks and 2000000 workload callbacks; counters include startup, setup and cleanup.',
+        metadata=metadata,samples=samples,program_layouts=layouts,heap_estimates=heaps,median_ns_per_iteration=medians,cpu_samples=cpu_samples,
+        missing_metrics=['exact allocator live/peak heap','process peak RSS','sampled CPU call stacks','registration time','yielding host callbacks'])
+    output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(medians,indent=2))
 
 
 if __name__=='__main__':main()

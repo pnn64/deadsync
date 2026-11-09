@@ -267,6 +267,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.frame_stats_overlay_style = loaded.frame_stats_overlay_style;
     cfg.translated_titles = loaded.translated_titles;
     cfg.bg_brightness = loaded.bg_brightness;
+    cfg.song_lua_mode = loaded.song_lua_mode;
     cfg.center_1player_notefield = loaded.center_1player_notefield;
     cfg.center_image_translate_x = loaded.center_image_translate_x;
     cfg.center_image_translate_y = loaded.center_image_translate_y;

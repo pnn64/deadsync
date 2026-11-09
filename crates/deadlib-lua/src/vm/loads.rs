@@ -1,13 +1,16 @@
 //! Resumable source/binary validation through protected loading frames.
 use super::*;
+use crate::memory::bytes::ByteOutput;
+use crate::memory::compilation::Workspace;
+use crate::memory::fallible::{self, SliceExt, VecExt};
 
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
 #[derive(Debug)]
 pub(super) struct ParserPrototype {
     pub(super) source: Value,
-    pub(super) constants: Vec<Value>,
-    pub(super) children: Vec<Value>,
-    pub(super) debug_strings: Vec<Value>,
+    pub(super) constants: Buffer<Value>,
+    pub(super) children: Buffer<Value>,
+    pub(super) debug_strings: Buffer<Value>,
 }
 impl ParserPrototype {
     pub(super) fn heap_bytes(&self) -> usize {
@@ -21,13 +24,20 @@ impl ParserPrototype {
             .chain(self.debug_strings.iter().copied())
     }
 }
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct NativeRoots {
-    pub active: Vec<(Option<TableId>, ParserPrototypeId)>,
+    pub active: Buffer<(Option<TableId>, ParserPrototypeId)>,
     pub started: bool,
-    pub prototypes: Vec<ParserPrototypeId>,
+    pub prototypes: Buffer<ParserPrototypeId>,
 }
 impl NativeRoots {
+    fn new_in(memory: Memory) -> Self {
+        Self {
+            active: Buffer::new_in(memory.clone()),
+            started: false,
+            prototypes: Buffer::new_in(memory),
+        }
+    }
     pub(super) fn storage_bytes(&self) -> usize {
         self.active.capacity() * size_of::<(Option<TableId>, ParserPrototypeId)>()
             + self.prototypes.capacity() * size_of::<ParserPrototypeId>()
@@ -38,7 +48,7 @@ pub(super) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<Progra
     if source.first() == Some(&27) {
         crate::chunk51::compile(source, name, depth)
     } else {
-        crate::parser::Parser::with_native_depth(depth)
+        crate::parser::Parser::with_native_depth(depth)?
             .resume(source, true)
             .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), name))
     }
@@ -70,7 +80,7 @@ impl FileReader {
         &mut self,
         stream: &mut io::Stream,
         name: &[u8],
-        prefix: &mut Vec<u8>,
+        prefix: &mut impl ByteOutput,
         binary: &mut bool,
     ) -> Result<bool, (i32, bool)> {
         if self.phase == 0 {
@@ -84,7 +94,7 @@ impl FileReader {
             for _ in 0..io::LINE_BUFFER {
                 if matches!(stream.get().map_err(|e| (e, false))?, None | Some(b'\n')) {
                     self.phase = 2;
-                    prefix.push(b'\n');
+                    prefix.extend_bytes(b"\n").map_err(|_| (12, false))?;
                     break;
                 }
             }
@@ -95,8 +105,10 @@ impl FileReader {
             if self.owned && *binary {
                 // Reopen raw bytes before locating a signature behind a header.
                 let _ = stream.close();
-                *stream = io::open(&name[1..], b"rb").map_err(|e| (e, true))?;
-                prefix.clear();
+                *stream = io::open_input(&name[1..], true)
+                    .map_err(|_| (12, true))?
+                    .map_err(|e| (e, true))?;
+                prefix.clear_bytes();
                 self.phase = 3;
             } else {
                 self.phase = 4;
@@ -125,11 +137,12 @@ impl FileReader {
 #[derive(Debug)]
 pub(super) struct Loading {
     pub owner: usize,
+    workspace: Workspace,
     pub(super) parser: crate::parser::Parser,
     pub(super) decoder: Option<Box<crate::chunk51::Decoder>>,
     native_depth: usize,
     pub(super) binary_mode: bool,
-    source: Vec<u8>,
+    source: Buffer<u8>,
     pub(super) name: Box<[u8]>,
     awaiting: bool,
     closed: bool,
@@ -137,7 +150,7 @@ pub(super) struct Loading {
     pub native: Option<NativeRoots>,
     pub file: Option<FileReader>,
 }
-pub(super) fn storage_bytes(jobs: &Vec<Loading>) -> usize {
+pub(super) fn storage_bytes(jobs: &Buffer<Loading>) -> usize {
     jobs.capacity() * std::mem::size_of::<Loading>()
         + jobs
             .iter()
@@ -156,14 +169,20 @@ pub(super) fn storage_bytes(jobs: &Vec<Loading>) -> usize {
             .sum::<usize>()
 }
 
-pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Vec<u8> {
-    if binary {
-        return error.message_bytes().to_vec();
+pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Result<Vec<u8>, Error> {
+    if error.kind() == ErrorKind::Memory {
+        return Err(Error::memory());
     }
-    let mut message = crate::bytecode::chunk_id_limit(name, 80);
-    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-    message.extend_from_slice(error.message_bytes());
+    if binary {
+        return error.message_bytes().try_to_vec();
+    }
+    let mut chunk = [0; 80];
+    let used = crate::bytecode::chunk_id_into(name, &mut chunk);
+    let mut message = chunk[..used].try_to_vec()?;
     message
+        .try_extend_from_slice(fallible::format(format_args!(":{}: ", error.line()))?.as_bytes())?;
+    message.try_extend_from_slice(error.message_bytes())?;
+    Ok(message)
 }
 impl Loading {
     pub(super) fn shift_native_depth(&mut self, change: u16) {
@@ -192,19 +211,23 @@ impl Loading {
                 .map_or(0, |d| std::mem::size_of_val(d.as_ref()) + d.heap_bytes())
     }
     fn resume(&mut self) -> Result<Option<Program>, Error> {
+        self.workspace.clone().run(|| self.resume_inner())
+    }
+    fn resume_inner(&mut self) -> Result<Option<Program>, Error> {
         if self.binary_mode {
             let native = self.native.is_some();
-            let decoder = self.decoder.get_or_insert_with(|| {
-                let mut decoder = crate::chunk51::Decoder::new(self.native_depth);
+            if self.decoder.is_none() {
+                let mut decoder = crate::chunk51::Decoder::try_new(self.native_depth)?;
                 if native {
                     decoder.enable_native_roots();
                 }
-                Box::new(decoder)
-            });
+                self.decoder = Some(crate::memory::fallible::boxed(decoder)?);
+            }
+            let decoder = self.decoder.as_mut().unwrap();
             return match decoder.resume(&self.source, self.closed) {
                 Ok(false) => Ok(None),
                 Ok(true) => decoder.program(&self.name).map(Some),
-                Err(why) => Err(crate::chunk51::diagnostic(&self.name, why)),
+                Err(error) => Err(crate::chunk51::named_error(&self.name, error)),
             };
         }
         // An empty initial lookahead makes luaX_setinput request another block
@@ -221,6 +244,9 @@ impl Loading {
             .transpose()
     }
     fn read_file(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
+        self.workspace.clone().run(|| self.read_file_inner(stream))
+    }
+    fn read_file_inner(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
         let file = self.file.as_mut().expect("active file reader");
         if !file.prepare(stream, &self.name, &mut self.source, &mut self.binary_mode)? {
             return Ok(());
@@ -241,32 +267,53 @@ impl Vm {
         name: &[u8],
         depth: usize,
         file: Option<FileReader>,
-    ) -> usize {
+    ) -> Result<usize, Error> {
         let index = self.loads.len();
         let capacity = self.loads.capacity();
-        let source = self.take_buffer(0);
-        let mut parser = crate::parser::Parser::with_native_depth(depth);
-        parser.enable_native_roots();
-        self.loads.push(Loading {
-            owner,
-            parser,
-            decoder: None,
-            native_depth: depth,
-            binary_mode: false,
-            source,
-            name: name.into(),
-            awaiting: false,
-            closed: false,
-            probed: false,
-            native: Some(NativeRoots::default()),
-            file,
-        });
-        self.gc_note_control(
-            (self.loads.capacity() - capacity) * std::mem::size_of::<Loading>() + name.len(),
-        );
-        index
+        let prepared = (|| -> Result<Loading, Error> {
+            let workspace = Workspace::new(self.registers.memory())?;
+            workspace.run(|| {
+                self.loads
+                    .try_reserve(1)
+                    .map_err(|_| self.memory_failure())?;
+                let mut parser = crate::parser::Parser::with_native_depth(depth)?;
+                parser.enable_native_roots()?;
+                Ok(Loading {
+                    owner,
+                    workspace: workspace.clone(),
+                    parser,
+                    decoder: None,
+                    native_depth: depth,
+                    binary_mode: false,
+                    source: self.try_take_buffer(0)?,
+                    name: name.try_boxed()?,
+                    awaiting: false,
+                    closed: false,
+                    probed: false,
+                    native: Some(NativeRoots::new_in(self.registers.memory().clone())),
+                    file,
+                })
+            })
+        })();
+        self.gc_note_control((self.loads.capacity() - capacity) * std::mem::size_of::<Loading>());
+        let job = match prepared {
+            Ok(job) => job,
+            Err(error) => {
+                if let Some(file) = file {
+                    self.close_file_reader(file);
+                }
+                return Err(error);
+            }
+        };
+        self.loads.push(job);
+        self.gc_note_control(name.len());
+        Ok(index)
     }
-    pub(super) fn feed_native_load(&mut self, index: usize, bytes: Option<&[u8]>) -> bool {
+    pub(super) fn feed_native_load(
+        &mut self,
+        index: usize,
+        bytes: Option<&[u8]>,
+    ) -> Result<bool, Error> {
         let job = &mut self.loads[index];
         let first = !job.probed;
         job.probed = true;
@@ -277,10 +324,11 @@ impl Vm {
             job.closed = true;
         }
         let capacity = job.source.capacity();
-        job.source.extend_from_slice(bytes);
+        job.workspace
+            .run(|| job.source.try_extend_from_slice(bytes))?;
         let growth = job.source.capacity() - capacity;
         self.gc_note_control(growth);
-        first
+        Ok(first)
     }
     pub(super) fn resume_native_load(&mut self, index: usize) -> Result<Option<Program>, Error> {
         let job = &mut self.loads[index];
@@ -290,12 +338,18 @@ impl Vm {
         self.gc_note_control(growth);
         result
     }
-    pub(super) fn native_load_message(&self, index: usize, error: &Error) -> Vec<u8> {
+    pub(super) fn native_load_message(
+        &self,
+        index: usize,
+        error: &Error,
+    ) -> Result<Vec<u8>, Error> {
         let job = &self.loads[index];
         message(&job.name, error, job.binary_mode)
     }
     pub(super) fn end_native_load(&mut self, owner: usize) {
-        if let Some(job) = self.loads.pop_if(|job| job.owner == owner) {
+        if let Some(job) = self.loads.pop_if(|job| job.owner == owner)
+            && self.buffers.len() < self.buffers.capacity()
+        {
             self.buffers.push(job.source);
         }
     }
@@ -309,10 +363,11 @@ impl Vm {
     /// # Errors
     /// Returns the loader's error object for file, syntax or bytecode errors.
     pub fn load_file(&mut self, path: Option<&[u8]>) -> Result<FunctionId, Error> {
-        let argument = path.map(|p| self.intern(p));
+        let argument = path.map(|p| self.try_intern(p)).transpose()?;
         // Host loading is a parser operation, not an observable Lua builtin
         // invocation. The ordinary global loadfile still delivers its hooks.
-        let hooks = std::mem::take(&mut self.hooks);
+        let empty = hooks::Hooks::new_in(self.registers.memory().clone());
+        let hooks = std::mem::replace(&mut self.hooks, empty);
         let result = self
             .call_unprotected(Value::Native(LOAD_FILE), argument.as_slice())
             .map(|_| ());
@@ -322,27 +377,26 @@ impl Vm {
             Value::Function(function) => Ok(function),
             Value::Nil => {
                 let value = self.registers[1];
-                let Value::String(id) = value else {
+                let Value::String(_) = value else {
                     unreachable!("file loader returns a string diagnostic")
                 };
-                Err(Error::from_bytes(
-                    ErrorKind::Runtime,
-                    0,
-                    self.string_bytes(id).unwrap().to_vec(),
-                )
-                .with_value(value))
+                Err(self.host_error(value))
             }
             _ => unreachable!("file loader returns a function or nil"),
         }
     }
 
     fn file_load_raise(&self, value: Value) -> Error {
-        let message = if let Value::String(id) = value {
-            String::from_utf8_lossy(&self.strings.bytes[slot_index(id.0)]).into_owned()
+        // dofile calls lua_error on loadfile's diagnostic: that is a runtime
+        // raise, including after a protected parser returned LUA_ERRMEM.
+        if value == Value::String(self.memory_error) {
+            return Error::raised_static(value, "not enough memory");
+        }
+        if matches!(value, Value::String(_)) {
+            self.host_error(value)
         } else {
-            "Lua error".into()
-        };
-        Error::raised(value, message)
+            Error::raised_static(value, "Lua error")
+        }
     }
     fn file_load_result(
         &mut self,
@@ -353,10 +407,11 @@ impl Vm {
         let base = frame.base + frame.argc();
         match result {
             Ok(function) => {
+                self.reserve_registers(base + 1)?;
                 self.resize_registers(self.registers.len().max(base + 1));
                 self.registers[base] = Value::Function(function);
                 if id == LOAD_FILE {
-                    return Ok(self.return_frame(frame, base, 1));
+                    return self.return_frame(frame, base, 1);
                 }
                 self.frames.last_mut().expect("active dofile").pc = 4;
                 if let Some(actual) = self.start_call(base, 0, OPEN, false)? {
@@ -369,42 +424,66 @@ impl Vm {
                 Err(self.file_load_raise(value))
             }
             Err(value) => {
+                self.reserve_registers(base + 2)?;
                 self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Nil;
                 self.registers[base + 1] = value;
-                Ok(self.return_frame(frame, base, 2))
+                self.return_frame(frame, base, 2)
             }
         }
     }
-    pub(super) fn file_load_error(&mut self, name: &[u8], what: &[u8], code: i32) -> Value {
-        let mut bytes = self.take_buffer(name.len() + 64);
-        bytes.extend_from_slice(b"cannot ");
-        bytes.extend_from_slice(what);
-        bytes.push(b' ');
-        bytes.extend_from_slice(name.get(1..).unwrap_or_default());
-        bytes.extend_from_slice(b": ");
-        bytes.extend_from_slice(&io::message(code));
-        self.finish_buffer(bytes)
+    pub(super) fn file_load_error(
+        &mut self,
+        name: &[u8],
+        what: &[u8],
+        code: i32,
+    ) -> Result<Value, Error> {
+        if code == 12 {
+            return Err(self.memory_failure());
+        }
+        let mut bytes = self.try_take_buffer(name.len() + 64)?;
+        bytes.try_extend_from_slice(b"cannot ")?;
+        bytes.try_extend_from_slice(what)?;
+        bytes.try_push(b' ')?;
+        bytes.try_extend_from_slice(name.get(1..).unwrap_or_default())?;
+        bytes.try_extend_from_slice(b": ")?;
+        bytes.try_extend_from_slice(&io::message(code)?)?;
+        self.try_finish_buffer(bytes)
     }
     fn finish_file_load(&mut self) {
         let job = self.loads.pop().expect("completed file reader");
         if let Some(file) = job.file {
             self.close_file_reader(file);
         }
-        self.buffers.push(job.source);
+        if self.buffers.len() < self.buffers.capacity() {
+            self.buffers.push(job.source);
+        }
     }
-    pub(super) fn open_file_reader(&mut self, path: Option<&[u8]>) -> Result<FileReader, i32> {
+    pub(super) fn open_file_reader(
+        &mut self,
+        path: Option<&[u8]>,
+    ) -> Result<Result<FileReader, i32>, Error> {
         match path {
-            None => Ok(FileReader {
+            None => Ok(Ok(FileReader {
                 key: self.standard_stream(0).get(),
                 owned: false,
                 phase: 0,
-            }),
-            Some(path) => io::open(io::c_bytes(path), b"r").map(|stream| FileReader {
-                key: self.io.files.insert(stream),
-                owned: true,
-                phase: 0,
-            }),
+            })),
+            Some(path) => match io::open_input(path, false)? {
+                Ok(stream) => {
+                    let key = self
+                        .io
+                        .files
+                        .try_insert(stream)
+                        .map_err(|_| self.memory_failure())?;
+                    Ok(Ok(FileReader {
+                        key,
+                        owned: true,
+                        phase: 0,
+                    }))
+                }
+                Err(code) => Ok(Err(code)),
+            },
         }
     }
     pub(super) fn close_file_reader(&mut self, file: FileReader) {
@@ -455,27 +534,29 @@ impl Vm {
             if id == DO_FILE {
                 return Err(self.file_load_raise(self.registers[frame.base + 1]));
             }
-            return Ok(self.return_frame(frame, frame.base, 2));
+            return self.return_frame(frame, frame.base, 2);
         }
         if frame.pc == 4 {
             let base = frame.base + frame.argc();
-            return Ok(self.return_frame(frame, base, self.top - base));
+            return self.return_frame(frame, base, self.top - base);
         }
         if frame.pc == 0 {
             let args = frame.vararg_start - 1;
-            let (name, opened) = if self.argument(args, frame.argc(), 0) == Value::Nil {
-                self.ensure_file_backend()?;
-                (b"=stdin".to_vec(), self.open_file_reader(None))
-            } else {
-                let path = self.string_argument(args, frame.argc(), 0)?;
-                self.registers[frame.vararg_start] = Value::String(path);
-                let path = io::c_bytes(&self.strings.bytes[slot_index(path.0)]);
-                let mut name = Vec::with_capacity(path.len() + 1);
-                name.push(b'@');
-                name.extend_from_slice(path);
-                let opened = self.open_file_reader(Some(&name[1..]));
-                (name, opened)
-            };
+            let workspace = Workspace::new(self.registers.memory())?;
+            let (name, opened) = workspace.run(|| -> Result<_, Error> {
+                Ok(if self.argument(args, frame.argc(), 0) == Value::Nil {
+                    (b"=stdin".try_to_vec()?, self.open_file_reader(None)?)
+                } else {
+                    let path = self.string_argument(args, frame.argc(), 0)?;
+                    self.registers[frame.vararg_start] = Value::String(path);
+                    let path = io::c_bytes(&self.strings.bytes[slot_index(path.0)]);
+                    let mut name = fallible::with_capacity(path.len() + 1)?;
+                    name.try_push(b'@')?;
+                    name.try_extend_from_slice(path)?;
+                    let opened = self.open_file_reader(Some(&name[1..]))?;
+                    (name, opened)
+                })
+            })?;
             // Preserve all original arguments while the loaded chunk executes.
             self.registers.copy_within(
                 frame.vararg_start..frame.vararg_start + frame.argc(),
@@ -487,27 +568,39 @@ impl Vm {
             let file = match opened {
                 Ok(file) => file,
                 Err(code) => {
-                    let value = self.file_load_error(&name, b"open", code);
+                    let value = self.file_load_error(&name, b"open", code)?;
                     return self.file_load_result(id, frame, Err(value));
                 }
             };
-            let source = self.take_buffer(0);
             let before = self.loads.capacity();
-            self.loads.push(Loading {
-                owner,
-                parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1)),
-                decoder: None,
-                native_depth: self.native_depth(owner + 1),
-                binary_mode: false,
-                source,
-                name: name.into_boxed_slice(),
-                awaiting: false,
-                closed: false,
-                probed: false,
-                native: None,
-                file: Some(file),
+            let prepared = workspace.run(|| -> Result<Loading, Error> {
+                self.loads
+                    .try_reserve(1)
+                    .map_err(|_| self.memory_failure())?;
+                Ok(Loading {
+                    owner,
+                    workspace: workspace.clone(),
+                    parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1))?,
+                    decoder: None,
+                    native_depth: self.native_depth(owner + 1),
+                    binary_mode: false,
+                    source: self.try_take_buffer(0)?,
+                    name: name.try_into_boxed_slice()?,
+                    awaiting: false,
+                    closed: false,
+                    probed: false,
+                    native: None,
+                    file: Some(file),
+                })
             });
             self.gc_note_control((self.loads.capacity() - before) * std::mem::size_of::<Loading>());
+            match prepared {
+                Ok(job) => self.loads.push(job),
+                Err(error) => {
+                    self.close_file_reader(file);
+                    return Err(error);
+                }
+            }
         }
         let index = self.loads.len() - 1;
         debug_assert_eq!(self.loads[index].owner, owner);
@@ -520,10 +613,10 @@ impl Vm {
         self.io.files.note_alloc(growth);
         self.gc_note_control(self.loads[index].source.capacity() - source_before);
         if let Err((code, reopen)) = read {
-            let name = self.loads[index].name.clone();
+            let name = self.loads[index].name.try_to_vec()?;
             let value = self.file_load_error(&name, if reopen { b"reopen" } else { b"read" }, code);
             self.finish_file_load();
-            return self.file_load_result(id, frame, Err(value));
+            return self.file_load_result(id, frame, Err(value?));
         }
         if matches!(self.loads[index].file.expect("file reader").phase, 1 | 3) {
             return Ok(None);
@@ -540,14 +633,22 @@ impl Vm {
         };
         if let Some(compiled) = compiled {
             let result = match compiled {
-                Ok(program) => Ok(self.load(&program)),
+                Ok(program) => self.load(&program).map_err(|error| {
+                    error
+                        .value()
+                        .expect("binding failure has fixed Lua diagnostic")
+                }),
                 Err(error) => {
-                    let message = message(
-                        &self.loads[index].name,
-                        &error,
-                        self.loads[index].binary_mode,
-                    );
-                    Err(self.intern(&message))
+                    if error.kind() == ErrorKind::Memory {
+                        Err(Value::String(self.memory_error))
+                    } else {
+                        let message = message(
+                            &self.loads[index].name,
+                            &error,
+                            self.loads[index].binary_mode,
+                        )?;
+                        Err(self.try_intern(&message)?)
+                    }
                 }
             };
             self.finish_file_load();
@@ -556,26 +657,22 @@ impl Vm {
         Ok(None)
     }
     pub(super) fn trim_loads(&mut self) {
-        self.trim_library_loads();
-        let active: Vec<_> = self
-            .frames
-            .iter()
-            .enumerate()
-            .filter_map(|(i, f)| {
-                (protected(self.body_kind(i, f.function)) && matches!(f.pc, 1 | 3)).then_some(i)
-            })
-            .collect();
-        let files = &mut self.io.files;
-        self.loads.retain(|j| {
-            let keep = active.contains(&j.owner);
+        // Cleanup also runs while reporting an allocation failure. Keep the
+        // existing control storage and inspect each owner's frame directly.
+        let mut jobs = std::mem::take(&mut self.loads);
+        jobs.retain(|j| {
+            let keep = self.frames.get(j.owner).is_some_and(|frame| {
+                protected(self.body_kind(j.owner, frame.function)) && matches!(frame.pc, 1 | 3)
+            });
             if !keep
                 && let Some(file) = j.file
                 && file.owned
             {
-                files.remove(file.key);
+                self.io.files.remove(file.key);
             }
             keep
         });
+        self.loads = jobs;
     }
     pub(super) fn parser_nesting_for(&self, thread: ThreadId, end: usize) -> usize {
         let loads = if thread == self.thread {
@@ -597,24 +694,27 @@ impl Vm {
         let owner = self.frames.len() - 1;
         let base = frame.base;
         if frame.pc == 2 {
-            return Ok(self.return_frame(frame, base + 3, 2));
+            return self.return_frame(frame, base + 3, 2);
         }
         if frame.pc == 0 {
             let args = frame.vararg_start - 1;
-            let name = match self.argument(args, frame.argc(), 1) {
-                Value::Nil => b"=(load)".to_vec(),
-                _ => {
-                    let id = self.string_argument(args, frame.argc(), 1)?;
-                    self.strings.bytes[slot_index(id.0)].to_vec()
-                }
-            };
+            let workspace = Workspace::new(self.registers.memory())?;
+            let name = workspace.run(|| -> Result<_, Error> {
+                Ok(match self.argument(args, frame.argc(), 1) {
+                    Value::Nil => b"=(load)".try_to_vec()?,
+                    _ => {
+                        let id = self.string_argument(args, frame.argc(), 1)?;
+                        self.strings.bytes[slot_index(id.0)].try_to_vec()?
+                    }
+                })
+            })?;
             let reader = self.argument(args, frame.argc(), 0);
             if !matches!(reader, Value::Function(_) | Value::Native(_)) {
                 return Err(self.argument_type_error(args, frame.argc(), 0, "function"));
             }
             let supplied_name = self.argument(args, frame.argc(), 1);
             let supplied_name = match supplied_name {
-                Value::Number(n) => self.intern(format_number(n).as_slice()),
+                Value::Number(n) => self.intern_number(n)?,
                 v => v,
             };
             // lua_settop(3) retains an already supplied third argument until
@@ -628,28 +728,7 @@ impl Vm {
             frame.vararg_count = 3;
             frame.pc = 1;
             self.frames[owner] = frame;
-            let source = self.take_buffer(0);
-            let before = self.loads.capacity();
-            self.loads.push(Loading {
-                owner,
-                parser: {
-                    let mut parser =
-                        crate::parser::Parser::with_native_depth(self.native_depth(owner + 1));
-                    parser.enable_native_roots();
-                    parser
-                },
-                decoder: None,
-                native_depth: self.native_depth(owner + 1),
-                binary_mode: false,
-                source,
-                name: name.into_boxed_slice(),
-                awaiting: false,
-                closed: false,
-                probed: false,
-                native: Some(NativeRoots::default()),
-                file: None,
-            });
-            self.gc_note_control((self.loads.capacity() - before) * std::mem::size_of::<Loading>());
+            self.start_native_load(owner, &name, self.native_depth(owner + 1), None)?;
         }
         let index = self.loads.len() - 1;
         debug_assert_eq!(self.loads[index].owner, owner);
@@ -661,7 +740,7 @@ impl Vm {
             self.loads[index].probed = true;
             let result = self.registers[base + frame.argc()];
             let result = if let Value::Number(n) = result {
-                self.intern(format_number(n).as_slice())
+                self.intern_number(n)?
             } else {
                 result
             };
@@ -679,7 +758,8 @@ impl Vm {
                         job.binary_mode = bytes.first() == Some(&27);
                     }
                     let capacity = job.source.capacity();
-                    job.source.extend_from_slice(bytes);
+                    job.workspace
+                        .run(|| job.source.try_extend_from_slice(bytes))?;
                     if bytes.is_empty() && !first {
                         job.closed = true;
                     }
@@ -687,9 +767,7 @@ impl Vm {
                     self.gc_note_control(growth);
                 }
                 _ => {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
+                    return Err(Error::runtime_static(
                         "reader function must return a string",
                     ));
                 }
@@ -713,24 +791,30 @@ impl Vm {
         if let Some(compiled) = compiled {
             match compiled {
                 Ok(program) => {
-                    let function = self.load(&program);
-                    self.retain_load_prototypes(index, function);
+                    let function = self.load(&program)?;
+                    self.retain_load_prototypes(index, function)?;
                     let job = self.loads.pop().expect("completed reader job");
-                    self.buffers.push(job.source);
+                    if self.buffers.len() < self.buffers.capacity() {
+                        self.buffers.push(job.source);
+                    }
                     let result = base + frame.argc();
+                    self.reserve_registers(result + 1)?;
                     self.resize_registers(self.registers.len().max(result + 1));
                     self.registers[result] = Value::Function(function);
                     frame.vararg_count += 1;
                     self.frames[owner] = frame;
-                    return Ok(self.return_frame(frame, result, 1));
+                    return self.return_frame(frame, result, 1);
                 }
                 Err(error) => {
+                    if error.kind() == ErrorKind::Memory {
+                        return Err(self.memory_failure());
+                    }
                     let message = message(
                         &self.loads[index].name,
                         &error,
                         self.loads[index].binary_mode,
-                    );
-                    let value = self.intern(&message);
+                    )?;
+                    let value = self.try_intern(&message)?;
                     self.protected_failure(owner, value);
                     return Ok(None);
                 }
@@ -739,6 +823,7 @@ impl Vm {
         self.check_c_call()?;
         self.loads[index].awaiting = true;
         let call = base + frame.argc();
+        self.reserve_registers(call + 1)?;
         self.resize_registers(self.registers.len().max(call + 1));
         self.registers[call] = self.registers[base];
         if let Some(actual) = self.start_call(call, 0, 1, false)? {
@@ -746,9 +831,17 @@ impl Vm {
         }
         Ok(None)
     }
-    pub(super) fn retain_load_prototypes(&mut self, index: usize, function: FunctionId) {
-        let prototypes = std::mem::take(&mut self.loads[index].native.as_mut().unwrap().prototypes)
-            .into_boxed_slice();
+    pub(super) fn retain_load_prototypes(
+        &mut self,
+        index: usize,
+        function: FunctionId,
+    ) -> Result<(), Error> {
+        let mut prototypes = Buffer::new_in(self.programs.memory().clone());
+        let parsed = &self.loads[index].native.as_ref().unwrap().prototypes;
+        prototypes
+            .try_reserve_exact(parsed.len())
+            .map_err(|_| self.memory_failure())?;
+        prototypes.extend_from_slice(parsed);
         let closure = &self.functions[slot_index(function.0)];
         let entry = closure.prototype;
         let loaded = closure.program;
@@ -757,9 +850,20 @@ impl Vm {
             self.programs[loaded].data.prototypes.len()
         );
         let root = prototypes[entry];
+        self.reserve_gc_value(Value::ParserPrototype(root))?;
         self.programs
-            .note_alloc(std::mem::size_of_val(prototypes.as_ref()));
+            .note_alloc(prototypes.capacity() * size_of::<ParserPrototypeId>());
         self.programs[loaded].parser_prototypes = prototypes;
+        self.loads[index]
+            .native
+            .as_mut()
+            .unwrap()
+            .prototypes
+            .clear();
         self.gc_new_value(Value::ParserPrototype(root));
+        Ok(())
     }
 }
+
+#[cfg(test)]
+mod allocation_tests;

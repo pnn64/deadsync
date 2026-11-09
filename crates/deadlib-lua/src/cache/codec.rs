@@ -1,6 +1,6 @@
 //! Little-endian, bounded serialization of the shared compiler representation.
 use crate::{Program, bytecode::*, chunk51::Wire};
-use std::{mem::size_of, sync::Arc};
+use std::mem::size_of;
 
 // Bump for a wire-layout change. Cargo's build identity also invalidates entries
 // after compiler/runtime changes without depending on the package version.
@@ -578,15 +578,13 @@ pub(super) fn decode(
             return None;
         }
     }
-    let program = Program {
-        lifetime: Arc::new(()),
-        data: Arc::new(ProgramData {
-            prototypes,
-            entry,
-            name: program_name,
-            sources,
-        }),
-    };
+    let program = Program::try_from_data(ProgramData {
+        prototypes,
+        entry,
+        name: program_name,
+        sources,
+    })
+    .ok()?;
     program.verify().ok()?;
     Some(program)
 }

@@ -1,0 +1,2368 @@
+    Blocking waiting for file lock on build directory
+    Checking deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+    Checking deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+    Checking deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+    Checking deadsync-theme v0.1.0 (C:\GitHub\deadsync\crates\deadsync-theme)
+    Checking deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+    Checking deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: empty line after doc comment
+  --> crates\deadsync-song-lua\src\actor_input.rs:22:1
+   |
+22 | / /// Other scene lifecycle work is not part of this input-only snapshot.
+23 | |
+   | |_^
+24 |   pub struct SongLuaCompiledActorInputs {
+   |   ------------------------------------- the comment documents this struct
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#empty_line_after_doc_comments
+   = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+   = help: if the empty line is unintentional, remove it
+
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:187:1
+    |
+187 | / fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
+188 | |     song_title: &str,
+189 | |     path: &Path,
+190 | |     start_beat: f32,
+...   |
+198 | |     ) -> Result<CompiledSongLua<S>, String>,
+199 | | ) -> Option<GameplaySongLuaLayer<S>> {
+    | |____________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:301:5
+    |
+301 | /     data.compile_succeeded = targets.len()
+302 | |         == song.background_lua_changes.len() + song.foreground_lua_changes.len()
+303 | |         && compiled.iter().all(|compiled| {
+304 | |             let info = &compiled.info;
+...   |
+311 | |                 && info.skipped_message_command_captures.is_empty()
+312 | |         });
+    | |___________^
+    |
+note: consider initializing the variable with `PreparedGameplaySongLua::<S> { compile_succeeded: targets.len()
+              == song.background_lua_changes.len() + song.foreground_lua_changes.len()
+              && compiled.iter().all(|compiled| {
+                  let info = &compiled.info;
+                  info.unsupported_perframes == 0
+                      && info.unsupported_function_eases == 0
+                      && info.unsupported_function_actions == 0
+                      && info.unsupported_perframe_captures.is_empty()
+                      && info.unsupported_function_ease_captures.is_empty()
+                      && info.unsupported_function_action_captures.is_empty()
+                      && info.skipped_message_command_captures.is_empty()
+              }), ..Default::default() }` and removing relevant reassignments
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:300:5
+    |
+300 |     let mut data = PreparedGameplaySongLua::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#field_reassign_with_default
+    = note: `#[warn(clippy::field_reassign_with_default)]` on by default
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:484:55
+    |
+484 |             || compile_song_lua_without_primary(song, &context, &compile_song_lua),
+    |                                                       ^^^^^^^^ help: change this to: `context`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrow
+    = note: `#[warn(clippy::needless_borrow)]` on by default
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:485:72
+    |
+485 |             |primary_ix| compile_song_lua_separately(song, primary_ix, &context, &compile_song_lua),
+    |                                                                        ^^^^^^^^ help: change this to: `context`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrow
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:703:1
+    |
+703 | / fn log_song_lua_runtime_debug<S: Clone + std::fmt::Debug>(
+704 | |     song_title: &str,
+705 | |     compiled: &CompiledSongLua<S>,
+706 | |     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+...   |
+712 | |     unsupported_targets: usize,
+713 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-song-lua\src\playback\prepare.rs:871:1
+    |
+871 | / fn log_song_lua_runtime_summary<S: Clone + std::fmt::Debug>(
+872 | |     song_title: &str,
+873 | |     compiled: &CompiledSongLua<S>,
+874 | |     overlay_ease_count: usize,
+...   |
+880 | |     runtime_ms: f64,
+881 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `player` is used to index `note_hides`
+    --> crates\deadsync-song-lua\src\playback\prepare.rs:1185:23
+     |
+1185 |         for player in 0..params.num_players {
+     |                       ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+     = note: `#[warn(clippy::needless_range_loop)]` on by default
+help: consider using an iterator and enumerate()
+     |
+1185 -         for player in 0..params.num_players {
+1185 +         for (player, <item>) in note_hides.iter_mut().enumerate().take(params.num_players) {
+     |
+
+warning: the use of negated comparison operators on partially ordered types produces code that is hard to read and refactor, please consider using the `partial_cmp` method instead, to make it clear that the two values could be incomparable
+    --> crates\deadsync-song-lua\src\playback.rs:1570:41
+     |
+1570 |                         .filter(|layer| !(now < layer.start_second))
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_cmp_op_on_partial_ord
+     = note: `#[warn(clippy::neg_cmp_op_on_partial_ord)]` on by default
+
+warning: the use of negated comparison operators on partially ordered types produces code that is hard to read and refactor, please consider using the `partial_cmp` method instead, to make it clear that the two values could be incomparable
+    --> crates\deadsync-song-lua\src\playback.rs:1576:41
+     |
+1576 |                         .filter(|layer| !(now < layer.start_second))
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_cmp_op_on_partial_ord
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-song-lua\src\playback.rs:2048:1
+     |
+2048 | / fn song_lua_overlay_local_states_into<S: NoteskinSlot + Clone>(
+2049 | |     now: f32,
+2050 | |     overlays: &[SongLuaOverlayActor<S>],
+2051 | |     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+...    |
+2060 | |     out: &mut Vec<SongLuaOverlayState>,
+2061 | | ) -> bool {
+     | |_________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-song-lua\src\playback.rs:2229:1
+     |
+2229 | / fn song_lua_overlay_state_sets_from_into<S: NoteskinSlot + Clone>(
+2230 | |     now: f32,
+2231 | |     overlays: &[SongLuaOverlayActor<S>],
+2232 | |     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+...    |
+2241 | |     clock: [f32; 2],
+2242 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-song-lua\src\playback.rs:2265:1
+     |
+2265 | / fn song_lua_overlay_state_sets_active_into<S: NoteskinSlot + Clone>(
+2266 | |     now: f32,
+2267 | |     overlays: &[SongLuaOverlayActor<S>],
+2268 | |     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+...    |
+2277 | |     clock: [f32; 2],
+2278 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+    --> crates\deadsync-song-lua\src\playback.rs:2325:1
+     |
+2325 | / fn apply_song_lua_taps<S: NoteskinSlot + Clone>(
+2326 | |     feedback: &deadsync_gameplay::GameplayVisualFeedbackState,
+2327 | |     cols_per_player: usize,
+2328 | |     now: f32,
+...    |
+2335 | |     clock: [f32; 2],
+2336 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+    --> crates\deadsync-song-lua\src\playback.rs:3221:13
+     |
+3221 |     meshes: Vec<Box<[Option<Arc<[TexturedMeshVertex]>>]>>,
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+     = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:3486:1
+     |
+3486 | / fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
+3487 | |     overlays: &[SongLuaOverlayActor<S>],
+3488 | |     topology: &SongLuaOverlayTopologyIndex,
+3489 | |     op: &SongLuaDrawOp,
+...    |
+3494 | |     z: i16,
+3495 | | ) -> Option<Actor> {
+     | |__________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:3598:1
+     |
+3598 | / fn append_manual_player(
+3599 | |     out: &mut Vec<Actor>,
+3600 | |     source: &SongLuaManualPlayerSource,
+3601 | |     state: SongLuaOverlayState,
+...    |
+3606 | |     z: i16,
+3607 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:3668:1
+     |
+3668 | / fn append_manual_screen(
+3669 | |     out: &mut Vec<Actor>,
+3670 | |     source: SongLuaProxySource<'_>,
+3671 | |     state: SongLuaOverlayState,
+...    |
+3676 | |     z: i16,
+3677 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (14/7)
+    --> crates\deadsync-song-lua\src\playback.rs:3715:1
+     |
+3715 | / fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
+3716 | |     out: &mut Vec<Actor>,
+3717 | |     targets: &mut Vec<deadlib_present::actors::RenderTarget>,
+3718 | |     overlays: &[SongLuaOverlayActor<S>],
+...    |
+3729 | |     z: i16,
+3730 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: derefed type is same as origin
+    --> crates\deadsync-song-lua\src\playback.rs:3873:29
+     |
+3873 | ...                   mesh.as_deref_mut(),
+     |                       ^^^^^^^^^^^^^^^^^^^ help: try: `mesh`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_option_as_deref
+     = note: `#[warn(clippy::needless_option_as_deref)]` on by default
+
+warning: derefed type is same as origin
+    --> crates\deadsync-song-lua\src\playback.rs:5377:24
+     |
+5377 |           let children = scratch
+     |  ________________________^
+5378 | |             .as_deref_mut()
+     | |___________________________^ help: try: `scratch`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_option_as_deref
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\playback.rs:5754:1
+     |
+5754 | / fn song_lua_capture_overlay_states_into_scratch<S: NoteskinSlot + Clone>(
+5755 | |     overlays: &[SongLuaOverlayActor<S>],
+5756 | |     overlay_states: &[SongLuaOverlayState],
+5757 | |     local_overlay_states: &[SongLuaOverlayState],
+...    |
+5763 | |     clock: [f32; 2],
+5764 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\playback.rs:5781:1
+     |
+5781 | / fn song_lua_fill_capture_overlay_states<S: NoteskinSlot + Clone>(
+5782 | |     overlays: &[SongLuaOverlayActor<S>],
+5783 | |     overlay_states: &[SongLuaOverlayState],
+5784 | |     local_overlay_states: &[SongLuaOverlayState],
+...    |
+5790 | |     clock: [f32; 2],
+5791 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:5810:1
+     |
+5810 | / fn song_lua_capture_overlay_child_states<S: NoteskinSlot + Clone>(
+5811 | |     overlays: &[SongLuaOverlayActor<S>],
+5812 | |     local_overlay_states: &[SongLuaOverlayState],
+5813 | |     order_cache: &SongLuaOverlayOrderCache,
+...    |
+5818 | |     clock: [f32; 2],
+5819 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (18/7)
+    --> crates\deadsync-song-lua\src\playback.rs:6068:1
+     |
+6068 | / fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
+6069 | |     out: &mut Vec<Actor>,
+6070 | |     overlays: &[SongLuaOverlayActor<S>],
+6071 | |     overlay_states: &[SongLuaOverlayState],
+...    |
+6086 | |     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
+6087 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (11/7)
+    --> crates\deadsync-song-lua\src\playback.rs:6700:1
+     |
+6700 | / fn song_lua_overlay_render_state_from<S: NoteskinSlot + Clone>(
+6701 | |     now: f32,
+6702 | |     overlay_index: usize,
+6703 | |     overlay: &SongLuaOverlayActor<S>,
+...    |
+6711 | |     message_cache: &mut SongLuaMessageStateCache,
+6712 | | ) -> SongLuaOverlayState {
+     | |________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (11/7)
+    --> crates\deadsync-song-lua\src\playback.rs:6737:1
+     |
+6737 | / fn song_lua_overlay_render_state_dynamic<S: NoteskinSlot + Clone>(
+6738 | |     now: f32,
+6739 | |     overlay_index: usize,
+6740 | |     overlay: &SongLuaOverlayActor<S>,
+...    |
+6748 | |     message_cache: &mut SongLuaMessageStateCache,
+6749 | | ) -> SongLuaOverlayState {
+     | |________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: struct update has no effect, all the fields in the struct have already been specified
+    --> crates\deadsync-song-lua\src\playback.rs:7268:11
+     |
+7268 |         ..deadlib_present::anim::EffectState::default()
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_update
+     = note: `#[warn(clippy::needless_update)]` on by default
+
+warning: the loop variable `axis` is used to index `target`
+    --> crates\deadsync-song-lua\src\playback.rs:7360:17
+     |
+7360 |     for axis in 0..3 {
+     |                 ^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+7360 -     for axis in 0..3 {
+7360 +     for (axis, <item>) in target.iter_mut().enumerate().take(3) {
+     |
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\playback.rs:7537:1
+     |
+7537 | / fn song_lua_apply_overlay_effect(
+7538 | |     state: SongLuaOverlayState,
+7539 | |     effect_time: f32,
+7540 | |     effect_beat: f32,
+...    |
+7546 | |     rot_deg: &mut [f32; 3],
+7547 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `axis` is used to index `rot_deg`
+    --> crates\deadsync-song-lua\src\playback.rs:7575:21
+     |
+7575 |         for axis in 0..3 {
+     |                     ^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+7575 -         for axis in 0..3 {
+7575 +         for (axis, <item>) in rot_deg.iter_mut().enumerate().take(3) {
+     |
+
+warning: clamp-like pattern without using clamp function
+    --> crates\deadsync-song-lua\src\playback.rs:7600:17
+     |
+7600 |     offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `offset[0].clamp(-1_000_000.0, 1_000_000.0)`
+     |
+     = note: clamp will panic if max < min, min.is_nan(), or max.is_nan()
+     = note: clamp returns NaN if the input is NaN
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_clamp
+     = note: `#[warn(clippy::manual_clamp)]` on by default
+
+warning: clamp-like pattern without using clamp function
+    --> crates\deadsync-song-lua\src\playback.rs:7601:17
+     |
+7601 |     offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `offset[1].clamp(-1_000_000.0, 1_000_000.0)`
+     |
+     = note: clamp will panic if max < min, min.is_nan(), or max.is_nan()
+     = note: clamp returns NaN if the input is NaN
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_clamp
+
+warning: clamp-like pattern without using clamp function
+    --> crates\deadsync-song-lua\src\playback.rs:7602:17
+     |
+7602 |     offset[2] = offset[2].max(-1_000_000.0).min(1_000_000.0);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `offset[2].clamp(-1_000_000.0, 1_000_000.0)`
+     |
+     = note: clamp will panic if max < min, min.is_nan(), or max.is_nan()
+     = note: clamp returns NaN if the input is NaN
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_clamp
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:7937:1
+     |
+7937 | / fn song_lua_actor_multi_vertex_mesh(
+7938 | |     vertices: &Arc<[SongLuaOverlayMeshVertex]>,
+7939 | |     tint: [f32; 4],
+7940 | |     x_scale: f32,
+...    |
+7945 | |     skew: [f32; 2],
+7946 | | ) -> Arc<[MeshVertex]> {
+     | |______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `axis` is used to index `offset`
+    --> crates\deadsync-song-lua\src\playback.rs:8338:21
+     |
+8338 |         for axis in 0..2 {
+     |                     ^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+8338 -         for axis in 0..2 {
+8338 +         for (axis, <item>) in offset.iter().enumerate() {
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\playback.rs:8547:13
+     |
+8547 | /             if slot.model().is_some() {
+8548 | |                 if let Actor::TexturedMesh {
+8549 | |                     local_transform,
+8550 | |                     environment,
+...    |
+8586 | |             }
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+     = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+     |
+8547 ~             if slot.model().is_some()
+8548 ~                 && let Actor::TexturedMesh {
+8549 |                     local_transform,
+ ...
+8584 |                         Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
+8585 ~                 }
+     |
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\playback.rs:8747:1
+     |
+8747 | / fn song_lua_noteskin_sprite_actor<S: NoteskinSlot + Clone>(
+8748 | |     slot: &S,
+8749 | |     draw: ModelDrawState,
+8750 | |     center: [f32; 2],
+...    |
+8756 | |     z: i16,
+8757 | | ) -> Option<Actor> {
+     | |__________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:8819:1
+     |
+8819 | / fn song_lua_model_local_transform(
+8820 | |     model_size: [f32; 2],
+8821 | |     draw: SongLuaOverlayModelDraw,
+8822 | |     x_scale: f32,
+...    |
+8827 | |     skew: [f32; 2],
+8828 | | ) -> Matrix4 {
+     | |____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\playback.rs:8852:1
+     |
+8852 | / fn song_lua_song_meter_actor(
+8853 | |     state: SongLuaOverlayState,
+8854 | |     stream_state: SongLuaOverlayState,
+8855 | |     stream_width: f32,
+...    |
+8860 | |     total_elapsed: f32,
+8861 | | ) -> Option<Actor> {
+     | |__________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (13/7)
+    --> crates\deadsync-song-lua\src\playback.rs:9799:1
+     |
+9799 | / fn song_lua_flat_skewed_overlay_actor(
+9800 | |     texture: Arc<str>,
+9801 | |     tint: [f32; 4],
+9802 | |     blend: BlendMode,
+...    |
+9812 | |     scratch: Option<&mut SongLuaProjectedMeshScratch>,
+9813 | | ) -> Option<Actor> {
+     | |__________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+    --> crates\deadsync-song-lua\src\playback.rs:9880:1
+     |
+9880 | / fn song_lua_projected_overlay_actor(
+9881 | |     texture: Arc<str>,
+9882 | |     tint: [f32; 4],
+9883 | |     blend: BlendMode,
+...    |
+9892 | |     scratch: Option<&mut SongLuaProjectedMeshScratch>,
+9893 | | ) -> Option<Actor> {
+     | |__________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (12/7)
+     --> crates\deadsync-song-lua\src\playback.rs:10222:1
+      |
+10222 | / fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
+10223 | |     overlay: &SongLuaOverlayActor<S>,
+10224 | |     state: SongLuaOverlayState,
+10225 | |     camera_state: Option<SongLuaOverlayState>,
+...     |
+10234 | |     mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
+10235 | | ) -> Option<SongLuaActorList> {
+      | |_____________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: derefed type is same as origin
+     --> crates\deadsync-song-lua\src\playback.rs:11240:17
+      |
+11240 |                 projected_mesh_scratch.as_deref_mut(),
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `projected_mesh_scratch`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_option_as_deref
+
+warning: this function has too many arguments (10/7)
+     --> crates\deadsync-song-lua\src\playback.rs:11247:1
+      |
+11247 | / fn build_song_lua_overlay_actor<S: NoteskinSlot + Clone>(
+11248 | |     overlay: &SongLuaOverlayActor<S>,
+11249 | |     state: SongLuaOverlayState,
+11250 | |     camera_state: Option<SongLuaOverlayState>,
+...     |
+11257 | |     total_elapsed: f32,
+11258 | | ) -> Option<SongLuaActorList> {
+      | |_____________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: derefed type is same as origin
+     --> crates\deadsync-song-lua\src\playback.rs:11663:33
+      |
+11663 |             let glow_vertices = scratch.as_deref_mut().map_or_else(
+      |                                 ^^^^^^^^^^^^^^^^^^^^^^ help: try: `scratch`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_option_as_deref
+
+warning: this function has too many arguments (8/7)
+     --> crates\deadsync-song-lua\src\playback.rs:12727:1
+      |
+12727 | / fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
+12728 | |     out: &mut Vec<Actor>,
+12729 | |     overlays: &[SongLuaOverlayActor<S>],
+12730 | |     overlay_states: &[SongLuaOverlayState],
+...     |
+12735 | |     depth: SongLuaLayerDepth,
+12736 | | ) -> Option<SongLuaLayerDepth> {
+      | |______________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+     --> crates\deadsync-song-lua\src\playback.rs:12753:1
+      |
+12753 | / fn prepare_active_song_lua_layer<S: NoteskinSlot + Clone>(
+12754 | |     out: &mut Vec<Actor>,
+12755 | |     overlays: &[SongLuaOverlayActor<S>],
+12756 | |     overlay_states: &[SongLuaOverlayState],
+...     |
+12761 | |     depth: SongLuaLayerDepth,
+12762 | | ) -> SongLuaLayerDepth {
+      | |______________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (24/7)
+     --> crates\deadsync-song-lua\src\playback.rs:12777:1
+      |
+12777 | / fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
+12778 | |     out: &mut Vec<Actor>,
+12779 | |     targets: &mut Vec<deadlib_present::actors::RenderTarget>,
+12780 | |     overlays: &[SongLuaOverlayActor<S>],
+...     |
+12801 | |     depth: SongLuaLayerDepth,
+12802 | | ) {
+      | |_^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+     --> crates\deadsync-song-lua\src\playback.rs:13733:1
+      |
+13733 | / pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot + Clone>(
+13734 | |     actors: &mut Vec<Actor>,
+13735 | |     state: &GameplayCoreState<P, S>,
+13736 | |     media: &SongMedia,
+...     |
+13748 | |     ) -> deadsync_notefield::BuiltNotefield,
+13749 | | ) -> GameplayActorSegments {
+      | |__________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> crates\deadsync-song-lua\src\playback.rs:14659:8
+      |
+14659 |       ): (
+      |  ________^
+14660 | |         bool,
+14661 | |         Option<PreparedProxySource>,
+14662 | |         Option<PreparedProxySource>,
+...     |
+14678 | |         [(usize, f32); 2],
+14679 | |     ) = match play_style {
+      | |_____^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: the function `push_song_lua_layer_actors` doesn't need a mutable reference
+     --> crates\deadsync-song-lua\src\playback.rs:14998:13
+      |
+14998 |             &mut song_lua_proxy_request_index.topology,
+      |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unnecessary_mut_passed
+      = note: `#[warn(clippy::unnecessary_mut_passed)]` on by default
+help: remove this `mut`
+      |
+14998 -             &mut song_lua_proxy_request_index.topology,
+14998 +             &song_lua_proxy_request_index.topology,
+      |
+
+warning: the function `push_song_lua_layer_actors` doesn't need a mutable reference
+     --> crates\deadsync-song-lua\src\playback.rs:15064:13
+      |
+15064 |             &mut topology_index.topology,
+      |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unnecessary_mut_passed
+help: remove this `mut`
+      |
+15064 -             &mut topology_index.topology,
+15064 +             &topology_index.topology,
+      |
+
+warning: this function has too many arguments (8/7)
+  --> crates\deadsync-song-lua\src\playback\actor_conformance.rs:83:1
+   |
+83 | / pub fn sprite_matrix(
+84 | |     position: [f32; 3],
+85 | |     rotation: [f32; 3],
+86 | |     base_rotation: [f32; 3],
+...  |
+91 | |     skew: [f32; 2],
+92 | | ) -> [[f32; 4]; 4] {
+   | |__________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\playback\actor_conformance.rs:413:10
+    |
+413 |     ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\playback\actor_conformance.rs:466:10
+    |
+466 |     ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-song-lua\src\playback\actor_conformance.rs:463:5
+    |
+463 | /     fn render_recorded_index<S: NoteskinSlot + Clone>(
+464 | |         &mut self, overlays: &[SongLuaOverlayActor<S>], states: &[SongLuaOverlayState],
+465 | |         screen: [f32; 2], seconds: f32, beat: f32, index: usize, simple: bool,
+466 | |     ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
+    | |___________________________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-song-lua\src\playback\actor_conformance.rs:548:5
+    |
+548 | /     pub fn render_screen_overlay<S: NoteskinSlot + Clone>(
+549 | |         &mut self,
+550 | |         overlays: &[SongLuaOverlayActor<S>],
+551 | |         states: &[SongLuaOverlayState],
+...   |
+556 | |         screen_state: Option<SongLuaOverlayState>,
+557 | |     ) -> deadlib_render_core::RenderFrame {
+    | |_________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: for loop over a single element
+   --> crates\deadsync-song-lua\src\actor_classes.rs:370:5
+    |
+370 | /     for method in ["propagatecommand"] {
+371 | |         forward(lua, &class, method)?;
+372 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#single_element_loop
+    = note: `#[warn(clippy::single_element_loop)]` on by default
+help: try
+    |
+370 ~     {
+371 +         let method = "propagatecommand";
+372 +         forward(lua, &class, method)?;
+373 +     }
+    |
+
+error: variables in the condition are not mutated in the loop body
+   --> crates\deadsync-song-lua\src\cmd.rs:349:11
+    |
+349 |     while suffixes {
+    |           ^^^^^^^^
+    |
+    = note: this may lead to an infinite or to a never running loop
+    = note: this loop contains `return`s or `break`s
+    = help: rewrite it as `if cond { loop { } }`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#while_immutable_condition
+    = note: `#[deny(clippy::while_immutable_condition)]` on by default
+
+warning: manual implementation of `.is_multiple_of()`
+   --> crates\deadsync-song-lua\src\compat.rs:873:26
+    |
+873 |                     ^ if pair % 2 == 0 { 0 } else { 0x9908_b0df };
+    |                          ^^^^^^^^^^^^^ help: replace with: `pair.is_multiple_of(2)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_is_multiple_of
+    = note: `#[warn(clippy::manual_is_multiple_of)]` on by default
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+  --> crates\deadsync-song-lua\src\compile.rs:46:23
+   |
+46 |     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+  --> crates\deadsync-song-lua\src\compile.rs:49:6
+   |
+49 |   ) -> Result<
+   |  ______^
+50 | |     CompiledSongLua<
+51 | |         SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+52 | |     >,
+53 | |     String,
+54 | | >
+   | |_^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+  --> crates\deadsync-song-lua\src\compile.rs:86:23
+   |
+86 |     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\compile.rs:119:23
+    |
+119 |     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\compile.rs:378:23
+    |
+378 |     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\compile.rs:381:6
+    |
+381 |   ) -> Result<
+    |  ______^
+382 | |     CompiledSongLua<
+383 | |         SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+384 | |     >,
+385 | |     String,
+386 | | >
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-song-lua\src\compile.rs:371:1
+    |
+371 | / pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+372 | |     entry_path: &Path,
+373 | |     context: &SongLuaCompileContext,
+374 | |     noteskin_resolver: SongLuaNoteskinResolver,
+...   |
+393 | |         SongLuaOverlayState,
+394 | |     )>,
+    | |_______^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\compile.rs:423:23
+    |
+423 |     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (11/7)
+   --> crates\deadsync-song-lua\src\compile.rs:414:1
+    |
+414 | / pub fn compile_song_lua_layers_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+415 | |     entry_paths: &[&Path],
+416 | |     primary_index: usize,
+417 | |     context: &SongLuaCompileContext,
+...   |
+433 | |         SongLuaOverlayState,
+434 | |     )>,
+    | |_______^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: use of `unwrap_or_else` to construct default value
+   --> crates\deadsync-song-lua\src\compile.rs:475:28
+    |
+475 |     let lua = retained_lua.unwrap_or_else(Lua::new);
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `unwrap_or_default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unwrap_or_default
+    = note: `#[warn(clippy::unwrap_or_default)]` on by default
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\compile.rs:1642:13
+     |
+1642 | /             if let Some((events, remaining)) = groups.get_mut(player) {
+1643 | |                 if *remaining != 0 {
+1644 | |                     events.push(texture);
+1645 | |                 }
+1646 | |             }
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1642 ~             if let Some((events, remaining)) = groups.get_mut(player)
+1643 ~                 && *remaining != 0 {
+1644 |                     events.push(texture);
+1645 ~                 }
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\compile.rs:1754:13
+     |
+1754 | /             if target_hidden {
+1755 | |                 if let Some(hidden) = hidden_players.get_mut(player_index) {
+1756 | |                     *hidden = true;
+1757 | |                 }
+1758 | |             }
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1754 ~             if target_hidden
+1755 ~                 && let Some(hidden) = hidden_players.get_mut(player_index) {
+1756 |                     *hidden = true;
+1757 ~                 }
+     |
+
+warning: deref which would be done by auto-deref
+  --> crates\deadsync-song-lua\src\compiled_layers.rs:33:46
+   |
+33 |         beats.sort_by(|a, b| (**a).total_cmp(&**b));
+   |                                              ^^^^ help: try: `b`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#explicit_auto_deref
+   = note: `#[warn(clippy::explicit_auto_deref)]` on by default
+
+warning: this `if` statement can be collapsed
+  --> crates\deadsync-song-lua\src\draw_capture.rs:63:5
+   |
+63 | /     if let Some(mut capture) = lua.app_data_mut::<Capture>() {
+64 | |         if let Some(prior) = capture.context.take() {
+65 | |             let owner = prior.owner;
+66 | |             capture.targets.push((pointer, prior));
+...  |
+72 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+   |
+63 ~     if let Some(mut capture) = lua.app_data_mut::<Capture>()
+64 ~         && let Some(prior) = capture.context.take() {
+65 |             let owner = prior.owner;
+...
+70 |             });
+71 ~         }
+   |
+
+warning: this `if` statement can be collapsed
+  --> crates\deadsync-song-lua\src\draw_capture.rs:79:5
+   |
+79 | /     if let Some(capture) = lua.app_data_ref::<Capture>() {
+80 | |         if capture.context.is_some()
+81 | |             && capture
+82 | |                 .targets
+...  |
+90 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+   |
+79 ~     if let Some(capture) = lua.app_data_ref::<Capture>()
+80 ~         && capture.context.is_some()
+81 |             && capture
+...
+88 |             ));
+89 ~         }
+   |
+
+warning: this `if` statement can be collapsed
+  --> crates\deadsync-song-lua\src\draw_capture.rs:92:5
+   |
+92 | /     if let Some(mut capture) = lua.app_data_mut::<Capture>() {
+93 | |         if let Some((_, prior)) = capture.targets.pop() {
+94 | |             capture.context = Some(prior);
+95 | |         }
+96 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+   |
+92 ~     if let Some(mut capture) = lua.app_data_mut::<Capture>()
+93 ~         && let Some((_, prior)) = capture.targets.pop() {
+94 |             capture.context = Some(prior);
+95 ~         }
+   |
+
+warning: this `if` statement can be collapsed
+   --> crates\deadsync-song-lua\src\draw_capture.rs:295:21
+    |
+295 | /                     if let Some(mut capture) = lua.app_data_mut::<Capture>() {
+296 | |                         if !capture.labels.contains_key(&pointer) {
+297 | |                             let name = actor.raw_get::<Option<String>>("Name")?.unwrap_or_default();
+298 | |                             let child = actor
+...   |
+311 | |                     }
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+295 ~                     if let Some(mut capture) = lua.app_data_mut::<Capture>()
+296 ~                         && !capture.labels.contains_key(&pointer) {
+297 |                             let name = actor.raw_get::<Option<String>>("Name")?.unwrap_or_default();
+...
+309 |                             capture.labels.insert(pointer, label);
+310 ~                         }
+    |
+
+warning: large size difference between variants
+  --> crates\deadsync-song-lua\src\draw_commands.rs:17:1
+   |
+17 | /   pub enum DrawOp {
+18 | | /     Begin {
+19 | | |         capture: usize,
+20 | | |         preserve: bool,
+21 | | |     },
+   | | |_____- the second-largest variant contains at least 9 bytes
+...  |
+25 | | /     Draw {
+26 | | |         source: DrawSource,
+27 | | |         state: SongLuaOverlayState,
+28 | | |         /// Caller draw stack, outermost first; BeginRenderingTo resets it.
+...  | |
+31 | | |         vertices: Option<Arc<[SongLuaOverlayMeshVertex]>>,
+32 | | |     },
+   | | |_____- the largest variant contains at least 1232 bytes
+33 | |   }
+   | |___^ the entire enum is at least 1232 bytes
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#large_enum_variant
+   = note: `-W clippy::large-enum-variant` implied by `-W clippy::perf`
+   = help: to override `-W clippy::perf` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+   |
+27 ~         state: Box<SongLuaOverlayState>,
+28 |         /// Caller draw stack, outermost first; BeginRenderingTo resets it.
+29 |         parents: Arc<[SongLuaOverlayState]>,
+30 ~         camera: Box<Option<SongLuaOverlayState>>,
+   |
+
+warning: large size difference between variants
+  --> crates\deadsync-song-lua\src\draw_commands.rs:54:1
+   |
+54 | /  pub(crate) enum RawOp {
+55 | |      Begin(usize, bool),
+   | |      ------------------ the second-largest variant contains at least 9 bytes
+56 | |      Finish(usize),
+57 | |/     Draw(
+58 | ||         usize,
+59 | ||         SongLuaOverlayState,
+60 | ||         Context,
+61 | ||         Option<Arc<[SongLuaOverlayMeshVertex]>>,
+62 | ||     ),
+   | ||_____- the largest variant contains at least 1232 bytes
+63 | |  }
+   | |__^ the entire enum is at least 1232 bytes
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#large_enum_variant
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+   |
+59 ~         Box<SongLuaOverlayState>,
+60 ~         Box<Context>,
+   |
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\deadsync-song-lua\src\eases.rs:227:6
+    |
+227 |   ) -> Result<
+    |  ______^
+228 | |     (
+229 | |         Vec<SongLuaEaseWindow>,
+230 | |         Vec<SongLuaOverlayEase>,
+...   |
+234 | |     String,
+235 | | > {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this multiplication by -1 can be written more succinctly
+    --> crates\deadsync-song-lua\src\host.rs:1537:33
+     |
+1537 |                     let value = (phase - 0.2) * -1.0 / (0.5 - 0.2) + 1.0;
+     |                                 ^^^^^^^^^^^^^^^^^^^^ help: consider using: `-(phase - 0.2)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_multiply
+     = note: `#[warn(clippy::neg_multiply)]` on by default
+
+warning: manually reimplementing `div_ceil`
+    --> crates\deadsync-song-lua\src\host.rs:1583:34
+     |
+1583 |                 else if local >= (per_side + 1) / 2 { ((per_side + 1) / 2, per_side - 1) }
+     |                                  ^^^^^^^^^^^^^^^^^^ help: consider using `.div_ceil()`: `per_side.div_ceil(2)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_div_ceil
+     = note: `#[warn(clippy::manual_div_ceil)]` on by default
+
+warning: manually reimplementing `div_ceil`
+    --> crates\deadsync-song-lua\src\host.rs:1583:56
+     |
+1583 |                 else if local >= (per_side + 1) / 2 { ((per_side + 1) / 2, per_side - 1) }
+     |                                                        ^^^^^^^^^^^^^^^^^^ help: consider using `.div_ceil()`: `per_side.div_ceil(2)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_div_ceil
+
+warning: this multiplication by -1 can be written more succinctly
+    --> crates\deadsync-song-lua\src\host.rs:1627:28
+     |
+1627 |         else { let value = (phase - 0.2) * -1.0 / (0.5 - 0.2) + 1.0;
+     |                            ^^^^^^^^^^^^^^^^^^^^ help: consider using: `-(phase - 0.2)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_multiply
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\host.rs:1635:5
+     |
+1635 | /     if y >= 0.0 {
+1636 | |         if let Some(options) = arrow_effects_player_options(lua, args)? {
+1637 | |             if let Some(state) = options.raw_get::<Option<Table>>("__songlua_player_option_state")? {
+1638 | |                 let wave = state.raw_get::<Option<f32>>("wave")?.unwrap_or(0.0);
+...    |
+1645 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1635 ~     if y >= 0.0
+1636 ~         && let Some(options) = arrow_effects_player_options(lua, args)? {
+1637 |             if let Some(state) = options.raw_get::<Option<Table>>("__songlua_player_option_state")? {
+ ...
+1643 |             }
+1644 ~         }
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\host.rs:1636:9
+     |
+1636 | /         if let Some(options) = arrow_effects_player_options(lua, args)? {
+1637 | |             if let Some(state) = options.raw_get::<Option<Table>>("__songlua_player_option_state")? {
+1638 | |                 let wave = state.raw_get::<Option<f32>>("wave")?.unwrap_or(0.0);
+1639 | |                 if wave != 0.0 {
+...    |
+1644 | |         }
+     | |_________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1636 ~         if let Some(options) = arrow_effects_player_options(lua, args)?
+1637 ~             && let Some(state) = options.raw_get::<Option<Table>>("__songlua_player_option_state")? {
+1638 |                 let wave = state.raw_get::<Option<f32>>("wave")?.unwrap_or(0.0);
+ ...
+1642 |                 }
+1643 ~             }
+     |
+
+warning: this multiplication by -1 can be written more succinctly
+    --> crates\deadsync-song-lua\src\host.rs:1978:19
+     |
+1978 |         return Ok((y - full_alpha_y) / (draw_distance - full_alpha_y) * -1.0 + 1.0);
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `-((y - full_alpha_y) / (draw_distance - full_alpha_y))`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_multiply
+
+warning: this `if` statement can be collapsed
+  --> crates\deadsync-song-lua\src\clock_inputs.rs:26:5
+   |
+26 | /     if let Some((_, relative)) = source.split_once("Themes/") {
+27 | |         if let Some((_, relative)) = relative.split_once('/') {
+28 | |             return format!("theme:/{relative}");
+29 | |         }
+30 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+   |
+26 ~     if let Some((_, relative)) = source.split_once("Themes/")
+27 ~         && let Some((_, relative)) = relative.split_once('/') {
+28 |             return format!("theme:/{relative}");
+29 ~         }
+   |
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-song-lua\src\lua_util.rs:462:5
+    |
+462 | /     fn record_stateful_message(
+463 | |         &mut self,
+464 | |         actor: &Table,
+465 | |         beat: f32,
+...   |
+471 | |         opt1: Option<f32>,
+472 | |     ) -> Option<usize> {
+    | |______________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this block may be rewritten with the `?` operator
+   --> crates\deadsync-song-lua\src\lua_util.rs:473:9
+    |
+473 | /         if self.active_broadcast.is_none() {
+474 | |             return None;
+475 | |         }
+    | |_________^ help: replace it with: `self.active_broadcast.as_ref()?;`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#question_mark
+    = note: `#[warn(clippy::question_mark)]` on by default
+
+warning: this function has too many arguments (9/7)
+   --> crates\deadsync-song-lua\src\lua_util.rs:575:5
+    |
+575 | /     fn record_scheduled(
+576 | |         &mut self,
+577 | |         actor: &Table,
+578 | |         beat: f32,
+...   |
+584 | |         value: SongLuaOverlayUpdateValue,
+585 | |     ) -> bool {
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this `if` statement can be collapsed
+   --> crates\deadsync-song-lua\src\lua_util.rs:830:9
+    |
+830 | /         if let Some(overlay) = overlays.get_mut(*index) {
+831 | |             if let Some(command) = overlay
+832 | |                 .actor
+833 | |                 .message_commands
+...   |
+839 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+830 ~         if let Some(overlay) = overlays.get_mut(*index)
+831 ~             && let Some(command) = overlay
+832 |                 .actor
+...
+837 |                 command.frame_advance = *advance;
+838 ~             }
+    |
+
+warning: this `if` statement can be collapsed
+   --> crates\deadsync-song-lua\src\lua_util.rs:912:5
+    |
+912 | /     if lua
+913 | |         .app_data_ref::<SongLuaCompileUpdatePhase>()
+914 | |         .is_some_and(|phase| {
+915 | |             phase.active && queue_actor_order(lua, actor.to_pointer() as usize) > phase.order
+...   |
+927 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+916 ~         })
+917 ~         && let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() {
+918 |             if let Some(position) = capture
+...
+924 |             }
+925 ~         }
+    |
+
+warning: this `if` statement can be collapsed
+   --> crates\deadsync-song-lua\src\lua_util.rs:918:9
+    |
+918 | /         if let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() {
+919 | |             if let Some(position) = capture
+920 | |                 .actor_indices
+921 | |                 .get(&(actor.to_pointer() as usize))
+...   |
+926 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+918 ~         if let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>()
+919 ~             && let Some(position) = capture
+920 |                 .actor_indices
+...
+924 |                 return Ok(position[axis]);
+925 ~             }
+    |
+
+warning: unnecessary closure used to substitute value for `Option::None`
+   --> crates\deadsync-song-lua\src\lua_util.rs:956:20
+    |
+956 |           let from = destinations[axis]
+    |  ____________________^
+957 | |             .or_else(|| match update.initial_value {
+958 | |                 Some(SongLuaOverlayUpdateValue::F32(value)) => Some(value),
+959 | |                 _ => None,
+960 | |             })
+    | |______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unnecessary_lazy_evaluations
+    = note: `#[warn(clippy::unnecessary_lazy_evaluations)]` on by default
+help: use `or` instead
+    |
+957 ~             .or(match update.initial_value {
+958 +                 Some(SongLuaOverlayUpdateValue::F32(value)) => Some(value),
+959 +                 _ => None,
+960 +             })
+    |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:2182:9
+     |
+2182 | /         if let Value::String(name) = &key {
+2183 | |             if name.to_str()? != "children" { actor.raw_set(key, value)?; }
+2184 | |         }
+     | |_________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+2182 ~         if let Value::String(name) = &key
+2183 ~             && name.to_str()? != "children" { actor.raw_set(key, value)?; }
+     |
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+    --> crates\deadsync-song-lua\src\lua_util.rs:2209:6
+     |
+2209 | ) -> mlua::Result<(Table, smallvec::SmallVec<[(Value, Table); 16]>)> {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:3050:5
+     |
+3050 | /     if key == "__songlua_wrappers" {
+3051 | |         if let Value::Table(wrappers) = value {
+...    |
+3060 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+3050 ~     if key == "__songlua_wrappers"
+3051 ~         && let Value::Table(wrappers) = value {
+3052 |             // Copy membership, retaining the live Actor identities and method
+ ...
+3058 |             return Ok(Value::Table(copy));
+3059 ~         }
+     |
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+    --> crates\deadsync-song-lua\src\lua_util.rs:3232:6
+     |
+3232 | ) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:4617:13
+     |
+4617 | /             if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
+4618 | |                 if let Some(clock) = frames.clocks.get_mut(&(actor.to_pointer() as usize)) {
+4619 | |                     clock.recurring_frame = Some(frame);
+4620 | |                 }
+4621 | |             }
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+4617 ~             if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>()
+4618 ~                 && let Some(clock) = frames.clocks.get_mut(&(actor.to_pointer() as usize)) {
+4619 |                     clock.recurring_frame = Some(frame);
+4620 ~                 }
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:5264:13
+     |
+5264 | /             if key != "aux"
+5265 | |                 && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+5266 | |             {
+5267 | |                 if let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) {
+...    |
+5276 | |             }
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+5265 ~                 && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+5266 ~                 && let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) {
+5267 |                     if let Some(position) = &mut capture.prior_positions[index] {
+ ...
+5273 |                     }
+5274 ~                 }
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:5267:17
+     |
+5267 | /                 if let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) {
+5268 | |                     if let Some(position) = &mut capture.prior_positions[index] {
+5269 | |                         position[match key {
+5270 | |                             "x" => 0,
+...    |
+5275 | |                 }
+     | |_________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+5267 ~                 if let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize))
+5268 ~                     && let Some(position) = &mut capture.prior_positions[index] {
+5269 |                         position[match key {
+ ...
+5273 |                         }] = value;
+5274 ~                     }
+     |
+
+warning: this function has too many arguments (10/7)
+    --> crates\deadsync-song-lua\src\lua_util.rs:6804:1
+     |
+6804 | / pub fn install_texture_proxy_methods(
+6805 | |     lua: &Lua,
+6806 | |     texture: &Table,
+6807 | |     actor: &Table,
+...    |
+6814 | |     frame_count: u32,
+6815 | | ) -> mlua::Result<()> {
+     | |_____________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:7011:17
+     |
+7011 | /                 if let Some((previous, length)) = cached.as_ref() {
+7012 | |                     if previous == &file {
+7013 | |                         return Ok(*length);
+7014 | |                     }
+7015 | |                 }
+     | |_________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+7011 ~                 if let Some((previous, length)) = cached.as_ref()
+7012 ~                     && previous == &file {
+7013 |                         return Ok(*length);
+7014 ~                     }
+     |
+
+warning: enclosing `Ok` and `?` operator are unneeded
+    --> crates\deadsync-song-lua\src\lua_util.rs:9096:17
+     |
+9096 |                 Ok(actor.get::<Option<String>>("__songlua_draw_state_mode")?)
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_question_mark
+     = note: `#[warn(clippy::needless_question_mark)]` on by default
+help: remove the enclosing `Ok` and `?` operator
+     |
+9096 -                 Ok(actor.get::<Option<String>>("__songlua_draw_state_mode")?)
+9096 +                 actor.get::<Option<String>>("__songlua_draw_state_mode")
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\lua_util.rs:9105:17
+     |
+9105 | /                 if let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32) {
+9106 | |                     if width >= 0.0 {
+9107 | |                         actor.set("__songlua_line_width", width)?;
+9108 | |                     }
+9109 | |                 }
+     | |_________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+9105 ~                 if let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32)
+9106 ~                     && width >= 0.0 {
+9107 |                         actor.set("__songlua_line_width", width)?;
+9108 ~                     }
+     |
+
+warning: useless conversion to the same type: `i64`
+     --> crates\deadsync-song-lua\src\lua_util.rs:11056:51
+      |
+11056 |                     Value::Integer(value) => Some(i64::from(value)),
+      |                                                   ^^^^^^^^^^^^^^^^ help: consider removing `i64::from()`: `value`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#useless_conversion
+      = note: `#[warn(clippy::useless_conversion)]` on by default
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:14367:5
+      |
+14367 | /     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+14368 | |         if let Some(index) = capture
+14369 | |             .actor_indices
+14370 | |             .get(&(actor.to_pointer() as usize))
+...     |
+14386 | |     }
+      | |_____^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+14367 ~     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+14368 ~         && let Some(index) = capture
+14369 |             .actor_indices
+  ...
+14384 |             }
+14385 ~         }
+      |
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:14368:9
+      |
+14368 | /         if let Some(index) = capture
+14369 | |             .actor_indices
+14370 | |             .get(&(actor.to_pointer() as usize))
+14371 | |             .copied()
+...     |
+14385 | |         }
+      | |_________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+14371 ~             .copied()
+14372 ~             && let Some(message) = capture.active_broadcast.as_deref() {
+14373 |                 if !capture
+  ...
+14382 |                 }
+14383 ~             }
+      |
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:14373:13
+      |
+14373 | /             if let Some(message) = capture.active_broadcast.as_deref() {
+14374 | |                 if !capture
+14375 | |                     .message_advances
+14376 | |                     .iter()
+...     |
+14384 | |             }
+      | |_____________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+14373 ~             if let Some(message) = capture.active_broadcast.as_deref()
+14374 ~                 && !capture
+14375 |                     .message_advances
+  ...
+14382 |                     capture.message_advances.insert((index, message), advance);
+14383 ~                 }
+      |
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:14575:21
+      |
+14575 | /                     if ready {
+14576 | |                         if let Err(err) = drain_actor_command_queue(lua, actor) {
+14577 | |                             report_update_error(
+14578 | |                                 lua,
+...     |
+14585 | |                     }
+      | |_____________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+14575 ~                     if ready
+14576 ~                         && let Err(err) = drain_actor_command_queue(lua, actor) {
+14577 |                             report_update_error(
+  ...
+14583 |                             )?;
+14584 ~                         }
+      |
+
+warning: the borrowed expression implements the required traits
+     --> crates\deadsync-song-lua\src\lua_util.rs:14664:22
+      |
+14664 |         .is_some_and(&chunk_has_name)
+      |                      ^^^^^^^^^^^^^^^ help: change this to: `chunk_has_name`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrows_for_generic_args
+      = note: `#[warn(clippy::needless_borrows_for_generic_args)]` on by default
+
+warning: the borrowed expression implements the required traits
+     --> crates\deadsync-song-lua\src\lua_util.rs:14668:26
+      |
+14668 |             .is_some_and(&chunk_has_name)
+      |                          ^^^^^^^^^^^^^^^ help: change this to: `chunk_has_name`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrows_for_generic_args
+
+warning: called `unwrap` on `value` after checking its variant with `is_some`
+     --> crates\deadsync-song-lua\src\lua_util.rs:15551:21
+      |
+15550 |     let description = if !trail && short == "Edit" && value.is_some() {
+      |                                                       --------------- the check is happening here
+15551 |         let steps = value.as_ref().unwrap();
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: try using `if let` or `match`
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unnecessary_unwrap
+      = note: `#[warn(clippy::unnecessary_unwrap)]` on by default
+
+warning: this function has too many arguments (12/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:18207:1
+      |
+18207 | / pub fn compile_note_column_pos_function_ease(
+18208 | |     lua: &Lua,
+18209 | |     function: &Function,
+18210 | |     unit: SongLuaTimeUnit,
+...     |
+18219 | |     opt2: Option<f32>,
+18220 | | ) -> Result<Vec<SongLuaColumnOffsetWindow>, String> {
+      | |___________________________________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> crates\deadsync-song-lua\src\lua_util.rs:19037:6
+      |
+19037 | ) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
+      |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (14/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:19155:1
+      |
+19155 | / pub fn capture_overlay_function_eases(
+19156 | |     lua: &Lua,
+19157 | |     overlays: &[(usize, Table)],
+19158 | |     function: &Function,
+...     |
+19169 | |     probe_actor_ptrs: &[usize],
+19170 | | ) -> Result<Vec<SongLuaOverlayEase>, String> {
+      | |____________________________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (14/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:19231:1
+      |
+19231 | / pub fn capture_overlay_compile_actor_function_eases<Kind>(
+19232 | |     lua: &Lua,
+19233 | |     overlays: &[SongLuaOverlayCompileActor<Kind>],
+19234 | |     function: &Function,
+...     |
+19245 | |     probe_actor_ptrs: &[usize],
+19246 | | ) -> Result<Vec<SongLuaOverlayEase>, String> {
+      | |____________________________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:19881:1
+      |
+19881 | / pub fn compile_overlay_compile_actor_function_action<Kind>(
+19882 | |     lua: &Lua,
+19883 | |     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+19884 | |     tracked_actors: &mut [SongLuaTrackedActor],
+...     |
+19890 | |     sound_events: &mut Vec<SongLuaSoundEvent>,
+19891 | | ) -> Result<bool, String> {
+      | |_________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+     --> crates\deadsync-song-lua\src\lua_util.rs:19918:87
+      |
+19918 |             if overlay_compile_actors_have_message_listener(overlays, tracked_actors, &message) {
+      |                                                                                       ^^^^^^^^ help: change this to: `message`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrow
+
+warning: this function has too many arguments (8/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:19969:1
+      |
+19969 | / pub fn read_overlay_compile_actor_actions<Kind>(
+19970 | |     lua: &Lua,
+19971 | |     table: Option<Table>,
+19972 | |     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+...     |
+19977 | |     info: &mut SongLuaCompileInfo,
+19978 | | ) -> Result<(), String> {
+      | |_______________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `index` is used to index `numbers`
+     --> crates\deadsync-song-lua\src\lua_util.rs:20987:30
+      |
+20987 |                 for index in 0..ActorNumberField::KEYS.len() {
+      |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+      |
+20987 -                 for index in 0..ActorNumberField::KEYS.len() {
+20987 +                 for (index, <item>) in numbers.iter_mut().enumerate().take(ActorNumberField::KEYS.len()) {
+      |
+
+warning: the loop variable `index` is used to index `flags`
+     --> crates\deadsync-song-lua\src\lua_util.rs:21002:30
+      |
+21002 |                 for index in 0..ActorFlagField::KEYS.len() {
+      |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+      |
+21002 -                 for index in 0..ActorFlagField::KEYS.len() {
+21002 +                 for (index, <item>) in flags.iter_mut().enumerate().take(ActorFlagField::KEYS.len()) {
+      |
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> crates\deadsync-song-lua\src\lua_util.rs:22619:6
+      |
+22619 |   ) -> Result<
+      |  ______^
+22620 | |     Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>>,
+22621 | |     String,
+22622 | | >
+      | |_^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (10/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:22673:1
+      |
+22673 | / fn read_overlay_compile_actors_from_table<
+22674 | |     NoteskinSlot,
+22675 | |     ModelVertex,
+22676 | |     ReadModel,
+...     |
+22695 | |     ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
+22696 | |     OnSkipped: FnMut(String),
+      | |_____________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> crates\deadsync-song-lua\src\lua_util.rs:22776:6
+      |
+22776 |   ) -> Result<
+      |  ______^
+22777 | |     Option<
+22778 | |         SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+22779 | |     >,
+22780 | |     String,
+22781 | | >
+      | |_^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (9/7)
+     --> crates\deadsync-song-lua\src\lua_util.rs:22766:1
+      |
+22766 | / fn read_overlay_compile_actor<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
+22767 | |     lua: &Lua,
+22768 | |     actor: &Table,
+22769 | |     parent_index: Option<usize>,
+...     |
+22784 | |     ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
+22785 | |     OnSkipped: FnMut(String),
+      | |_____________________________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:24326:5
+      |
+24326 | /     if let Some(command) = actor
+24327 | |         .get::<Option<String>>("__songlua_recurring_update_command")
+24328 | |         .map_err(|err| err.to_string())?
+...     |
+24341 | |     }
+      | |_____^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+24328 ~         .map_err(|err| err.to_string())?
+24329 ~         && let Some(update) = actor
+24330 |             .get::<Option<Function>>(command)
+  ...
+24338 |             )?);
+24339 ~         }
+      |
+
+warning: this `if` statement can be collapsed
+     --> crates\deadsync-song-lua\src\lua_util.rs:24372:5
+      |
+24372 | /     if let Some(command) = actor
+24373 | |         .get::<Option<String>>("__songlua_recurring_update_command")
+24374 | |         .map_err(|err| err.to_string())?
+...     |
+24388 | |     }
+      | |_____^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+      |
+24374 ~         .map_err(|err| err.to_string())?
+24375 ~         && let Some(update) = actor
+24376 |             .get::<Option<Function>>(command)
+  ...
+24385 |             )?);
+24386 ~         }
+      |
+
+warning: useless conversion to the same type: `i64`
+     --> crates\deadsync-song-lua\src\lua_util.rs:24518:47
+      |
+24518 |                 Value::Integer(value) => Some(i64::from(value)),
+      |                                               ^^^^^^^^^^^^^^^^ help: consider removing `i64::from()`: `value`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#useless_conversion
+
+warning: this `if` statement can be collapsed
+   --> crates\deadsync-song-lua\src\live.rs:932:5
+    |
+932 | /     if let Some(value) = values.front() {
+933 | |         if let Some(column) = lua.coerce_number(value.clone())? {
+934 | |             // Native subtracts one before truncating the floating Lua number.
+935 | |             let column = (column - 1.0).trunc();
+...   |
+944 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+932 ~     if let Some(value) = values.front()
+933 ~         && let Some(column) = lua.coerce_number(value.clone())? {
+934 |             // Native subtracts one before truncating the floating Lua number.
+...
+942 |             }
+943 ~         }
+    |
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\live.rs:1205:5
+     |
+1205 | /     pub(crate) fn new(
+1206 | |         lua: Lua,
+1207 | |         root: Value,
+1208 | |         context: SongLuaCompileContext,
+...    |
+1213 | |         mut startup_broadcasts: Vec<(f32, String, bool)>,
+1214 | |     ) -> mlua::Result<Self> {
+     | |___________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `player` is used to index `attack_positions`
+    --> crates\deadsync-song-lua\src\live.rs:1419:23
+     |
+1419 |         for player in 0..LUA_PLAYERS {
+     |                       ^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+1419 -         for player in 0..LUA_PLAYERS {
+1419 +         for (player, <item>) in attack_positions.iter_mut().enumerate().take(LUA_PLAYERS) {
+     |
+
+warning: casting to the same type is unnecessary (`u32` -> `u32`)
+    --> crates\deadsync-song-lua\src\live.rs:1657:22
+     |
+1657 |                     (frame.players[tap.player].combo as u32 > bright_combo_threshold
+     |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `frame.players[tap.player].combo`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#unnecessary_cast
+     = note: `#[warn(clippy::unnecessary_cast)]` on by default
+
+warning: this function has too many arguments (14/7)
+   --> crates\deadsync-song-lua\src\multitap.rs:240:1
+    |
+240 | / pub fn push_multitap_actor_eases(
+241 | |     out: &mut Vec<SongLuaOverlayEase>,
+242 | |     frame_index: usize,
+243 | |     frame_baseline: SongLuaOverlayState,
+...   |
+254 | |     numbered: bool,
+255 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: enum `SongLuaOptionValues` has a public `len` method, but no `is_empty` method
+  --> crates\deadsync-song-lua\src\option_rows.rs:31:5
+   |
+31 |     pub const fn len(self) -> usize {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#len_without_is_empty
+   = note: `#[warn(clippy::len_without_is_empty)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> crates\deadsync-song-lua\src\frame_capture.rs:117:1
+    |
+117 | / pub(crate) fn push_update_overlay_value(
+118 | |     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+119 | |     track_indices: &mut std::collections::HashMap<
+120 | |         (usize, crate::SongLuaOverlayUpdateTarget),
+...   |
+129 | |     next: crate::SongLuaOverlayUpdateValue,
+130 | | ) -> usize {
+    | |__________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1144:1
+     |
+1144 | / pub fn push_perframe_player_target(
+1145 | |     out: &mut Vec<SongLuaEaseWindow>,
+1146 | |     start: f32,
+1147 | |     end: f32,
+...    |
+1153 | |     player: usize,
+1154 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1326:1
+     |
+1326 | / pub fn push_update_mod_targets(
+1327 | |     out: &mut Vec<SongLuaEaseWindow>,
+1328 | |     start: f32,
+1329 | |     end: f32,
+...    |
+1334 | |     last_windows: &mut BTreeMap<(usize, String), usize>,
+1335 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (11/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1351:1
+     |
+1351 | / pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
+1352 | |     out: &mut Vec<SongLuaEaseWindow>,
+1353 | |     start: f32,
+1354 | |     end: f32,
+...    |
+1362 | |     unit: SongLuaTimeUnit,
+1363 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1455:1
+     |
+1455 | / pub fn push_perframe_static_targets(
+1456 | |     out_eases: &mut Vec<SongLuaEaseWindow>,
+1457 | |     out_overlay_eases: &mut Vec<SongLuaOverlayEase>,
+1458 | |     start: f32,
+...    |
+1463 | |     baseline_overlays: &[SongLuaOverlayState],
+1464 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1484:1
+     |
+1484 | / pub fn push_sampled_perframe_targets(
+1485 | |     out_eases: &mut Vec<SongLuaEaseWindow>,
+1486 | |     out_overlay_eases: &mut Vec<SongLuaOverlayEase>,
+1487 | |     end: f32,
+...    |
+1492 | |     baseline_overlays: &[SongLuaOverlayState],
+1493 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (15/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1539:1
+     |
+1539 | / fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
+1540 | |     lua: &Lua,
+1541 | |     context: &SongLuaCompileContext,
+1542 | |     overlays: &[Actor],
+...    |
+1558 | |     scratch: &mut OverlaySampleScratch,
+1559 | | ) -> Result<(), String> {
+     | |_______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+    --> crates\deadsync-song-lua\src\perframe.rs:1983:6
+     |
+1983 |   ) -> Result<
+     |  ______^
+1984 | |     (
+1985 | |         Vec<SongLuaEaseWindow>,
+1986 | |         Vec<SongLuaOverlayEase>,
+...    |
+1992 | |     String,
+1993 | | > {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+
+warning: this function has too many arguments (11/7)
+    --> crates\deadsync-song-lua\src\perframe.rs:1969:1
+     |
+1969 | / pub fn compile_update_functions<Slot, Vertex, Attribute>(
+1970 | |     lua: &Lua,
+1971 | |     root: &Value,
+1972 | |     context: &SongLuaCompileContext,
+...    |
+1992 | |     String,
+1993 | | > {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: the loop variable `player` is used to index `from_mods`
+    --> crates\deadsync-song-lua\src\perframe.rs:2586:23
+     |
+2586 |         for player in 0..LUA_PLAYERS {
+     |                       ^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+2586 -         for player in 0..LUA_PLAYERS {
+2586 +         for (player, <item>) in from_mods.iter().enumerate().take(LUA_PLAYERS) {
+     |
+
+warning: this `if` statement can be collapsed
+  --> crates\deadsync-song-lua\src\rage_file.rs:80:9
+   |
+80 | /         if let Some(writes) = lua.app_data_ref::<FileWrites>() {
+81 | |             if let Some(bytes) = writes.get(&self.path) {
+...  |
+87 | |         }
+   | |_________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+   |
+80 ~         if let Some(writes) = lua.app_data_ref::<FileWrites>()
+81 ~             && let Some(bytes) = writes.get(&self.path) {
+82 |                 // Each handle still owns a snapshot. Reopening can reuse its
+...
+85 |                 return Ok(());
+86 ~             }
+   |
+
+warning: this OR pattern can be rewritten using a range
+   --> crates\deadsync-song-lua\src\rust_engine\input\program\compile.rs:531:13
+    |
+531 |             7 | 8 | 9 => {
+    |             ^^^^^^^^^ help: try: `7..=9`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#manual_range_patterns
+    = note: `#[warn(clippy::manual_range_patterns)]` on by default
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadsync-song-lua\src\rust_engine\input\program\decode.rs:54:31
+   |
+54 |             words: self.bytes.chunks_exact(4),
+   |                               ^^^^^^^^^^^^^^^
+   |
+help: consider using `as_chunks::<4>()` instead
+  --> crates\deadsync-song-lua\src\rust_engine\input\program\decode.rs:54:31
+   |
+54 |             words: self.bytes.chunks_exact(4),
+   |                               ^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+   = note: `#[warn(clippy::chunks_exact_to_as_chunks)]` on by default
+
+warning: using `chunks_exact` with a constant chunk size
+  --> crates\deadsync-song-lua\src\rust_engine\managers\compat.rs:97:10
+   |
+97 |         .chunks_exact(2)
+   |          ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<2>().0.iter()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: the use of negated comparison operators on partially ordered types produces code that is hard to read and refactor, please consider using the `partial_cmp` method instead, to make it clear that the two values could be incomparable
+   --> crates\deadsync-song-lua\src\song_tables.rs:150:8
+    |
+150 |     if !(amount >= 0.0) {
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#neg_cmp_op_on_partial_ord
+
+warning: the loop variable `index` is used to index `levels`
+   --> crates\deadsync-song-lua\src\song_tables.rs:541:18
+    |
+541 |     for index in 0..4 {
+    |                  ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+    |
+541 -     for index in 0..4 {
+541 +     for (index, <item>) in levels.iter().enumerate().take(4) {
+    |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\song_tables.rs:1806:5
+     |
+1806 | /     if let Some(skin) = skin {
+1807 | |         if !owner
+1808 | |             .raw_get::<String>("__songlua_noteskin_name")?
+1809 | |             .eq_ignore_ascii_case(&skin)
+...    |
+1813 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1806 ~     if let Some(skin) = skin
+1807 ~         && !owner
+1808 |             .raw_get::<String>("__songlua_noteskin_name")?
+ ...
+1811 |             return Ok(false);
+1812 ~         }
+     |
+
+warning: this `if` statement can be collapsed
+    --> crates\deadsync-song-lua\src\song_tables.rs:1823:9
+     |
+1823 | /         if let Some(expected) = requested.raw_get::<Option<f32>>(field)? {
+1824 | |             if owner.raw_get::<Option<f32>>(field)?.unwrap_or(default) != expected {
+1825 | |                 return Ok(false);
+1826 | |             }
+1827 | |         }
+     | |_________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1823 ~         if let Some(expected) = requested.raw_get::<Option<f32>>(field)?
+1824 ~             && owner.raw_get::<Option<f32>>(field)?.unwrap_or(default) != expected {
+1825 |                 return Ok(false);
+1826 ~             }
+     |
+
+warning: redundant redefinition of a binding `current_course_dir`
+    --> crates\deadsync-song-lua\src\song_tables.rs:2688:13
+     |
+2688 |             let current_course_dir = current_course_dir;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: `current_course_dir` is initially defined here
+    --> crates\deadsync-song-lua\src\song_tables.rs:2645:9
+     |
+2645 |     let current_course_dir = file_path_string(context.song_dir.join("compat-course.crs").as_path());
+     |         ^^^^^^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#redundant_locals
+     = note: `#[warn(clippy::redundant_locals)]` on by default
+
+warning: redundant redefinition of a binding `current_dir`
+    --> crates\deadsync-song-lua\src\song_tables.rs:2689:13
+     |
+2689 |             let current_dir = current_dir;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: `current_dir` is initially defined here
+    --> crates\deadsync-song-lua\src\song_tables.rs:2644:9
+     |
+2644 |     let current_dir = song_dir_string(context.song_dir.as_path());
+     |         ^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#redundant_locals
+
+warning: redundant redefinition of a binding `current_title`
+    --> crates\deadsync-song-lua\src\song_tables.rs:2691:13
+     |
+2691 |             let current_title = current_title;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: `current_title` is initially defined here
+    --> crates\deadsync-song-lua\src\song_tables.rs:2643:9
+     |
+2643 |     let current_title = context.main_title.clone();
+     |         ^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#redundant_locals
+
+warning: redundant redefinition of a binding `current_group`
+    --> crates\deadsync-song-lua\src\song_tables.rs:2859:13
+     |
+2859 |             let current_group = current_group;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: `current_group` is initially defined here
+    --> crates\deadsync-song-lua\src\song_tables.rs:2642:9
+     |
+2642 |     let current_group = song_group_name(&context.song_dir);
+     |         ^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#redundant_locals
+
+warning: the borrowed expression implements the required traits
+    --> crates\deadsync-song-lua\src\song_tables.rs:2999:24
+     |
+2999 |             .max().map(&beat).transpose()?.unwrap_or(0.0);
+     |                        ^^^^^ help: change this to: `beat`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_borrows_for_generic_args
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\tables.rs:1936:1
+     |
+1936 | / pub fn create_prefsmgr_table(
+1937 | |     lua: &Lua,
+1938 | |     global_offset_seconds: f32,
+1939 | |     display_aspect_ratio: f32,
+...    |
+1944 | |     event_mode: bool,
+1945 | | ) -> mlua::Result<Table> {
+     | |________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\tables.rs:2053:1
+     |
+2053 | / pub fn prefsmgr_default_value(
+2054 | |     lua: &Lua,
+2055 | |     key: &str,
+2056 | |     global_offset_seconds: f32,
+...    |
+2061 | |     last_seen_video_driver: &str,
+2062 | | ) -> mlua::Result<Value> {
+     | |________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> crates\deadsync-song-lua\src\tables.rs:2095:1
+     |
+2095 | / fn prefsmgr_default_value_normalized(
+2096 | |     lua: &Lua,
+2097 | |     lower: &str,
+2098 | |     global_offset_seconds: f32,
+...    |
+2103 | |     last_seen_video_driver: &str,
+2104 | | ) -> mlua::Result<Value> {
+     | |________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: using `chunks_exact_mut` with a constant chunk size
+   --> crates\deadsync-song-lua\src\theme_colors.rs:267:34
+    |
+267 |     for (output, value) in bytes.chunks_exact_mut(2).zip(color) {
+    |                                  ^^^^^^^^^^^^^^^^^^^ help: consider using `as_chunks_mut` instead: `as_chunks_mut::<2>().0.iter_mut()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: useless conversion to the same type: `i64`
+   --> crates\deadsync-song-lua\src\theme_colors.rs:959:39
+    |
+959 |         Value::Integer(value) => Some(i64::from(value)),
+    |                                       ^^^^^^^^^^^^^^^^ help: consider removing `i64::from()`: `value`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#useless_conversion
+
+warning: using `chunks_exact_mut` with a constant chunk size
+   --> crates\deadsync-song-lua\src\values.rs:180:32
+    |
+180 |     for (output, &byte) in out.chunks_exact_mut(2).zip(bytes.iter()) {
+    |                                ^^^^^^^^^^^^^^^^^^^ help: consider using `as_chunks_mut` instead: `as_chunks_mut::<2>().0.iter_mut()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\lib.rs:2763:1
+     |
+2763 | / pub fn record_unsupported_function_ease_capture(
+2764 | |     info: &mut SongLuaCompileInfo,
+2765 | |     unit: SongLuaTimeUnit,
+2766 | |     start: f32,
+...    |
+2772 | |     probe_methods: &[String],
+2773 | | ) -> String {
+     | |___________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (9/7)
+    --> crates\deadsync-song-lua\src\lib.rs:3211:5
+     |
+3211 | /     pub fn new(
+3212 | |         texture_key: Arc<str>,
+3213 | |         vertices: Arc<[Vertex]>,
+3214 | |         model_size: [f32; 2],
+...    |
+3220 | |         draw: SongLuaOverlayModelDraw,
+3221 | |     ) -> Self {
+     | |_____________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_arguments
+
+warning: `deadsync-song-lua` (lib) generated 169 warnings
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error; 169 warnings emitted

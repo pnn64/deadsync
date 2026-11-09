@@ -128,7 +128,10 @@ mod resume;
 pub(crate) use resume::Parser;
 
 pub(crate) fn parse(source: &[u8]) -> Result<Ast, Error> {
-    Parser::default()
+    Parser::try_new()?
         .resume(source, true)
         .map(|ast| ast.expect("closed source cannot request additional input"))
 }
+
+#[cfg(test)]
+mod allocation_tests;

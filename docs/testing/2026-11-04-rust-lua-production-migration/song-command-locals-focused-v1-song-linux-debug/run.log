@@ -1,0 +1,29 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+error[E0277]: the `?` operator can only be used on `Result`s, not `Option`s, in a function that returns `Result`
+    --> crates/deadsync-song-lua/tests/rust_song_activation.rs:4987:59
+     |
+4978 | / fn rust_command_script(
+4979 | |     runtime: &mut RustSongRuntime,
+4980 | |     source: &str,
+4981 | | ) -> Result<String, deadlib_lua::Error> {
+     | |_______________________________________- this function returns a `Result`
+...
+4987 |       Ok(String::from_utf8(runtime.vm_mut().string_bytes(id)?.to...
+     |                                                             ^ use `.ok_or(...)?` to provide an error compatible with `Result<String, Error>`
+     |
+     = note: the full name for the type has been written to '/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36.long-type-12102513096688616321.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `deadsync-song-lua` (test "rust_song_activation") due to 1 previous error

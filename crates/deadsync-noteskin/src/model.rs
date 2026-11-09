@@ -64,7 +64,10 @@ impl ItgResolvedModelTexture {
             sphere_mapped: texture_path.to_string_lossy().contains("sphere"),
             texture_path,
             animation: None,
-            states: Arc::from([ItgTextureState { delay: 1.0, translation: [0.0; 2] }]),
+            states: Arc::from([ItgTextureState {
+                delay: 1.0,
+                translation: [0.0; 2],
+            }]),
             tex: ItgModelTexturePath::default(),
         }
     }
@@ -1187,32 +1190,52 @@ mod tests {
     fn mesh_sections_accept_optional_comment_headers() {
         let root = temp_model_root("mesh-optional-header");
         let path = root.join("model.txt");
-        let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"));
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"
+        ));
         let source = source.replace("\r\n", "\n");
-        let data = noteskin_itg::NoteskinData { name:"fixture".into(), overrides:vec![],
-            metrics:noteskin_itg::IniData::default(), search_dirs:vec![root.clone()] };
+        let data = noteskin_itg::NoteskinData {
+            name: "fixture".into(),
+            overrides: vec![],
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
         fs::write(&path, &source).unwrap();
         let canonical = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
         assert_eq!(canonical.len(), 2);
-        assert_eq!(canonical.iter().map(|layer| layer.mesh.vertices.len()).collect::<Vec<_>>(), [6,3]);
-        assert_eq!(canonical[0].mesh.bounds, [0.0,0.0,0.0,40.0,20.0,5.0]);
-        assert_eq!(canonical[0].mesh.vertices[1].pos, [10.0,0.0,0.0]);
-        assert_eq!(canonical[0].mesh.vertices[1].uv, [1.0,0.0]);
-        assert_eq!(canonical[0].mesh.vertices[1].normal, [0.0,0.0,1.0]);
+        assert_eq!(
+            canonical
+                .iter()
+                .map(|layer| layer.mesh.vertices.len())
+                .collect::<Vec<_>>(),
+            [6, 3]
+        );
+        assert_eq!(canonical[0].mesh.bounds, [0.0, 0.0, 0.0, 40.0, 20.0, 5.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].pos, [10.0, 0.0, 0.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].uv, [1.0, 0.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].normal, [0.0, 0.0, 1.0]);
         assert!(canonical[0].mesh.material.is_some());
         assert_eq!(canonical[0].bone_index, None);
         let body = source.strip_prefix("// MilkShape 3D ASCII\n").unwrap();
-        for header in ["", "// TPose model version\n// Custom rig export\n",
-            "// Generated mesh data\nFrames: 30\nFrame: 1\n"] {
+        for header in [
+            "",
+            "// TPose model version\n// Custom rig export\n",
+            "// Generated mesh data\nFrames: 30\nFrame: 1\n",
+        ] {
             fs::write(&path, format!("{header}{body}")).unwrap();
             let layers = itg_parse_milkshape_model_layers(&data, &path, &path)
                 .expect("native mesh sections do not require a signature comment");
-            assert_eq!(format!("{layers:?}"), format!("{canonical:?}"),
-                "the complete geometry, material, texture and bone data must survive header changes");
+            assert_eq!(
+                format!("{layers:?}"),
+                format!("{canonical:?}"),
+                "the complete geometry, material, texture and bone data must survive header changes"
+            );
         }
-        for malformed in ["// Custom header\nMaterials: 0\nBones: 0\n",
-            "Meshes: 1\n\"broken\" 0 0\n3\n"] {
+        for malformed in [
+            "// Custom header\nMaterials: 0\nBones: 0\n",
+            "Meshes: 1\n\"broken\" 0 0\n3\n",
+        ] {
             fs::write(&path, malformed).unwrap();
             assert!(itg_parse_milkshape_model_layers(&data, &path, &path).is_none());
         }
@@ -1605,25 +1628,43 @@ Materials: 1
         let root = temp_model_root("repeated-image-states");
         fs::write(root.join("same.png"), []).unwrap();
         let path = root.join("texture.ini");
-        fs::write(&path, "[AnimatedTexture]\n\
+        fs::write(
+            &path,
+            "[AnimatedTexture]\n\
             TexVelocityX=0.5\nTexOffsetY=0.25\n\
             Frame0000=same.png\nDelay0000=0.75\nTranslateX0000=0.125\nTranslateY0000=-0.25\n\
-            Frame0001=same.png\nDelay0001=1.25\nTranslateX0001=-0.375\nTranslateY0001=0.5\n")
-            .unwrap();
+            Frame0001=same.png\nDelay0001=1.25\nTranslateX0001=-0.375\nTranslateY0001=0.5\n",
+        )
+        .unwrap();
         let data = noteskin_itg::NoteskinData {
-            overrides: Vec::new(), name: "test".to_string(),
-            metrics: noteskin_itg::IniData::default(), search_dirs: vec![root.clone()],
+            overrides: Vec::new(),
+            name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
         };
-        let texture = itg_resolve_animated_texture_ini(&data, &path).expect("native repeated states");
-        assert!(texture.animation.is_none(), "one image needs no duplicate atlas tiles");
+        let texture =
+            itg_resolve_animated_texture_ini(&data, &path).expect("native repeated states");
+        assert!(
+            texture.animation.is_none(),
+            "one image needs no duplicate atlas tiles"
+        );
         assert_eq!(texture.texture_path, root.join("same.png"));
         assert_eq!(texture.tex.uv_cycle_seconds, Some(2.0));
         assert_eq!(texture.tex.uv_velocity, [0.5, 0.0]);
         assert_eq!(texture.tex.uv_offset, [0.0, 0.25]);
-        assert_eq!(&*texture.states, &[
-            ItgTextureState { delay: 0.75, translation: [0.125, -0.25] },
-            ItgTextureState { delay: 1.25, translation: [-0.375, 0.5] },
-        ]);
+        assert_eq!(
+            &*texture.states,
+            &[
+                ItgTextureState {
+                    delay: 0.75,
+                    translation: [0.125, -0.25]
+                },
+                ItgTextureState {
+                    delay: 1.25,
+                    translation: [-0.375, 0.5]
+                },
+            ]
+        );
         for name in ["same.png", "texture.ini"] {
             fs::remove_file(root.join(name)).unwrap();
         }

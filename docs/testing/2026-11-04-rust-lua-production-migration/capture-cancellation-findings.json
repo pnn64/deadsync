@@ -1,0 +1,74 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: constructor capture regression and replay handoff were implemented and verified; its final review was revalidated before this work",
+  "scope": "Constructor capture cancellation and time scaling before compiler frame scheduling; production migration remains incomplete",
+  "changes": [
+    "Stop retains blocks with tween_step == 0 and duration == 0, removes the remaining captured blocks, and discards pending commands",
+    "Finish merges command deltas in order, clears timing and pending callbacks, and preserves native current getter behavior",
+    "Hurry scales capture blocks and pending tween durations while keeping queued dispatch starts and hibernation separate",
+    "Zero-duration current-position/aux setters retain their native immediate getter behavior",
+    "Overflow uses pending capture steps and preserves the self-queue recursion branch",
+    "Spin selection initializes a separate capture rotation queue; stopping a non-spin actor keeps its raw destination rotation",
+    "Hibernate resets the theme sleep flag through raw assignment and records its immediate hibernating delta"
+  ],
+  "oracle_phase": "The existing actor control normally installs CompileFrames for replay comparisons. New constructor controls remove those frames before building the part, matching production install_compile_host. Existing tests and native production implementations are unchanged.",
+  "first_run": {
+    "directory": "capture-cancellation-focused-song-linux-debug",
+    "passed": 16,
+    "failed": 3,
+    "findings": [
+      "Missing captured hibernation flag",
+      "Stop incorrectly restored rotation when no spin queue existed; raw destination rotation must remain",
+      "The same raw-rotation distinction affected zero-duration cancellation"
+    ]
+  },
+  "second_run": {
+    "directory": "capture-cancellation-focused-v2-song-linux-debug",
+    "passed": 22,
+    "failed": 0
+  },
+  "coverage": [
+    "Existing 14 transition/capture tests retained",
+    "Full typed capture output and getter traces for Stop/Finish/Hurry",
+    "Queued callback cancellation with explicit shared-state assertions",
+    "Tiny and zero durations, queue boundaries 50/51/52/104 and self-queued discovery",
+    "Parent Finish/Hurry propagation versus local Stop",
+    "Detached immediate-block cache and changes in queued scope",
+    "Spin initialization order and cancellation getters; complete effect capture remains pending"
+  ],
+  "remaining": [
+    "Full compiler startup barrier/frame clocks and recurring callbacks",
+    "Remaining capture channels and existing baking/live/fallback integration",
+    "Remaining screen/theme trees and unconditional production cutover",
+    "Final application/rendering, dependency/link, fixture and workload performance evidence"
+  ],
+  "final_validation": {
+    "focused": {
+      "exit_code": 0,
+      "seconds": 234.05011662491597,
+      "tests_passed": 22,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "d21f1724ad69b240b578a80b96937fe45bd0be2f19a68c42c4ee7f034aee2524"
+    },
+    "adapters": {
+      "exit_code": 0,
+      "seconds": 517.4844142179936,
+      "tests_passed": 460,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "77f2355a46ca86308b7de933ad6edcf3ace868e270908b5edb3aba48a0ff4ce8"
+    },
+    "lint": {
+      "exit_code": 101,
+      "seconds": 227.05437375581823,
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true,
+      "log_sha256": "047d0ffecdcbbfbd980aecba87e667cdaf3b4e5634af093d6486cad2e944c654"
+    },
+    "audit": "capture-cancellation-review.json",
+    "formatting": "passed for all six changed Rust files",
+    "lint_baseline": "166 existing warnings and the existing cmd.rs:349 error; diagnostic messages and source files unchanged"
+  }
+}

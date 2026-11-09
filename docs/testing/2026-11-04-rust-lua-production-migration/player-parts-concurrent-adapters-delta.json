@@ -1,0 +1,7 @@
+[
+  {
+    "path": "crates/deadsync-theme-simply-love/src/screens/select_music.rs",
+    "before": "35e08a8e9930bbb54d5e5c6de283321ed4c188cc1a300bb845c73f924cf1e24f",
+    "after": "e40a6b96aaa532bc6effb2e31b48b326d9b8666e58afa9dc932160ef70d2d550"
+  }
+]

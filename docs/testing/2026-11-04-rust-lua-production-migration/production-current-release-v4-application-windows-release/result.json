@@ -1,0 +1,34 @@
+{
+  "command": [
+    "cargo",
+    "rustc",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--bin",
+    "deadsync",
+    "--release",
+    "--",
+    "-C",
+    "link-arg=/MAP:C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\production-current-application.map"
+  ],
+  "exit_code": 0,
+  "seconds": 1103.8217946998775,
+  "log_sha256": "f5c9b4740fa00f34de900a5c87cae01a628ce81226a3b160623c7fab361e0fa6",
+  "sources_unchanged": false,
+  "changed_sources": [
+    "crates/deadlib-audio-decode/src/resample.rs",
+    "crates/deadlib-audio-decode/src/resample_conversion_tests.rs"
+  ],
+  "artifact": {
+    "path": "C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\deadsync.exe",
+    "sha256": "5d9a4fe987ee68e97b222cf289e7206b35c9a1bbe39b6eb6899a22dd75a9c36f"
+  },
+  "link_map": {
+    "exists": true,
+    "sha256": "ca536df3caaec23b467f9c1b23ea2f9a0ed25808cc64ad6e7ee1a16f4d3755f7",
+    "rust_engine_symbols_found": true,
+    "forbidden_lines": [],
+    "validation_passed": true
+  }
+}

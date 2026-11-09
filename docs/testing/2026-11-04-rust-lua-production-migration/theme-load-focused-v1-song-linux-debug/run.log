@@ -1,0 +1,63 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find function `truthy` in this scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs:151:28
+    |
+151 | ...|| truthy(hi...
+    |       ^^^^^^ not found in this scope
+    |
+note: these functions exist but are inaccessible
+   --> crates/deadsync-song-lua/src/rust_engine/actors/banners.rs:37:1
+    |
+ 37 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::banners::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/draw.rs:24:1
+    |
+ 24 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::draw::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/steps_displays.rs:121:1
+    |
+121 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::actors::steps_displays::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/game_state.rs:75:1
+    |
+ 75 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::game_state::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/option_rows.rs:109:1
+    |
+109 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::option_rows::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/player_options.rs:253:1
+    |
+253 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::player_options::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs:127:1
+    |
+127 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::song_options::truthy`: not accessible
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/managers/statistics.rs:373:1
+    |
+373 | fn tr... bool {
+    | ^^^^^...^^^^^ `crate::rust_engine::managers::statistics::truthy`: not accessible
+help: consider importing this function through its public re-export
+    |
+  2 + use crate::truthy;
+    |
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error
