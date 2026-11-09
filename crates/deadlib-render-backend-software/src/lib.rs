@@ -3218,6 +3218,8 @@ fn blend_color(dst: [f32; 4], src: [f32; 4], mode: BlendMode) -> [f32; 4] {
 }
 
 fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    // Keep blending and quantization inside the caller's CPU-feature context.
+    #[inline(always)]
     move |index, color, mode| {
         if mode == BlendMode::Alpha && color[3] >= 1.0 {
             buffer[index] = pack_rgba([color[0], color[1], color[2], 1.0]);
@@ -6158,3 +6160,6 @@ mod environment_performance;
 
 #[cfg(test)]
 mod color_raster_performance;
+
+#[cfg(test)]
+mod byte_writer_performance;
