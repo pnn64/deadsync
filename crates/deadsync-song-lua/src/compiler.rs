@@ -36,6 +36,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         return Err("finite song preparation requires an offline context".into());
     }
     let mut timer = SongLuaCompileTimer::start();
+    context.report_bake_progress(0.01);
     let plan = SongLayerPlan::new(paths, primary, context)?;
     let paths = plan.paths().map(Path::to_path_buf).collect::<Vec<_>>();
     let trace = paths
@@ -54,6 +55,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .load_gameplay_theme(screen, &selected)
         .map_err(|e| e.to_string())?;
     timer.push_stage("host");
+    context.report_bake_progress(0.05);
     #[cfg(feature = "test-support")]
     runtime.observations.start();
     let mut reloads = 0;
@@ -101,6 +103,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         break (root, activation);
     };
     timer.push_stage("startup_commands");
+    context.report_bake_progress(0.10);
     runtime.require_input_offline_compatible()?;
     runtime
         .discover_song_startup_commands(screen, &activation)
@@ -129,6 +132,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         crate::perframe::reference_actor_frames(&selected).as_deref(),
     );
     timer.push_stage("update_functions");
+    context.report_bake_progress(0.20);
     runtime
         .actors
         .compiler_read(&mut runtime.vm, root, Query::Draw)
@@ -248,6 +252,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         );
     }
     timer.push_stage("read_overlays");
+    context.report_bake_progress(0.25);
     let mut tracked = runtime
         .read_song_tracked_actors(screen)
         .map_err(|e| format!("failed to read tracked actors: {e}"))?
@@ -313,6 +318,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
     out.overlay_eases.extend(overlay_eases);
     crate::merge_compile_info(&mut out.info, info);
     timer.push_stage("perframes");
+    context.report_bake_progress(0.45);
     out.note_hides = runtime.read_song_note_column_zoom_hides()?;
     timer.push_stage("note_hides");
     let update = runtime.compile_song_update_stage(
@@ -368,6 +374,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         crate::push_unique_compile_detail(&mut out.info.unsupported_perframe_captures, detail);
     }
     timer.push_stage("update_overlays");
+    context.report_bake_progress(0.95);
     let mut targets = runtime.compiler_targets(&mut rows)?;
     let mut tracked_targets = runtime.compiler_tracked_targets(&mut tracked)?;
     let deferred = runtime.capture_song_deferred_messages(
@@ -534,6 +541,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .release_song_tracked_actors(&mut tracked)
         .map_err(|e| e.to_string())?;
     timer.push_stage("finalize");
+    context.report_bake_progress(0.99);
     crate::log_song_lua_compile_timing(&trace, &timer);
     crate::compiled_layers::split_compiled_song_lua(out, tags, &paths, primary)
 }

@@ -495,6 +495,11 @@ impl SongRuntime {
             let mut overlay_ms = 0.;
             let mut frame_count = 0;
             for (frame, (exact_beat, delta)) in frames.into_iter().enumerate().skip(1) {
+                if frame & 63 == 0 {
+                    context.report_bake_progress(
+                        0.45 + 0.50 * frame as f32 / sample_count.max(1) as f32,
+                    );
+                }
                 let next_beat = exact_beat as f32;
                 let prior_time = frame_time(beat, seconds);
                 seconds += delta;

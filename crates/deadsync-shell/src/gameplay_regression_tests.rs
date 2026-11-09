@@ -789,6 +789,7 @@ pub(crate) mod tests {
                 } else {
                     deadsync_config::options::SongLuaMode::Baked
                 },
+                None,
             )
         } else {
             let mut context = crate::gameplay_entry::song_lua_context(

@@ -145,6 +145,8 @@ impl SongRuntime {
         let mut active_messages = vec![None; overlays.len()];
         let mut output = (Vec::new(), Vec::new(), SongLuaCompileInfo::default());
         let mut side_effect = false;
+        let first = boundaries[0];
+        let last = boundaries[boundaries.len() - 1];
         for window in boundaries.windows(2) {
             let [start, end] = [window[0], window[1]];
             if end <= start {
@@ -171,7 +173,12 @@ impl SongRuntime {
                 continue;
             }
             let mut has_previous = false;
-            for sample in crate::perframe::perframe_sample_iter(start, end) {
+            for (index, sample) in crate::perframe::perframe_sample_iter(start, end).enumerate() {
+                if index & 63 == 0 {
+                    context.report_bake_progress(
+                        0.25 + 0.20 * (sample.eval_beat - first) / (last - first),
+                    );
+                }
                 let delta = span(
                     context,
                     sample.eval_beat - sample.delta_beats,

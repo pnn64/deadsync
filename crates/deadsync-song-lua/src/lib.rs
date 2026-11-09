@@ -96,6 +96,8 @@ use crate::{
 };
 use deadlib_lua::{Error, HostCall, Root, TableId, Value, Vm};
 mod actors;
+mod bake_progress;
+pub use bake_progress::SongLuaBakeProgress;
 #[path = "input/program/mod.rs"]
 pub mod baked_program;
 mod compiler;
@@ -2458,6 +2460,8 @@ pub struct SongLuaHostClockInput {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
+    /// Optional worker progress; never changes script execution or output.
+    pub bake_progress: Option<SongLuaBakeProgress>,
     /// Retain the initialized scene for actual gameplay instead of probing
     /// future callbacks on the load worker.
     pub live: bool,
@@ -2555,6 +2559,12 @@ pub struct SongLuaCompileContext {
 }
 
 impl SongLuaCompileContext {
+    pub(crate) fn report_bake_progress(&self, fraction: f32) {
+        if !self.live && let Some(progress) = &self.bake_progress {
+            progress.report(fraction);
+        }
+    }
+
     pub fn new(song_dir: impl Into<PathBuf>, main_title: impl Into<String>) -> Self {
         // LoadActor stores resolved media paths. Resolve the entry directory
         // once so a relative song root is not prepended again when a nested
@@ -2563,6 +2573,7 @@ impl SongLuaCompileContext {
         let song_dir = std::path::absolute(&song_dir).unwrap_or(song_dir);
         Self {
             background_layer_count: 0,
+            bake_progress: None,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
             background_upper_left_colors: Vec::new(),

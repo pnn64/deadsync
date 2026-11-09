@@ -361,12 +361,13 @@ pub fn prepare_song_lua(
     video_renderer: &str,
     random_seed: u32,
     mode: deadsync_config::options::SongLuaMode,
+    bake_progress: Option<deadsync_song_lua::SongLuaBakeProgress>,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
     let live = mode == deadsync_config::options::SongLuaMode::Runtime;
-    let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
+    let mut context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
         config, video_renderer, random_seed, live) {
         Ok(context) => context,
@@ -375,10 +376,15 @@ pub fn prepare_song_lua(
             return PreparedGameplaySongLua::default();
         }
     };
-    deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
+    context.bake_progress = bake_progress.clone().filter(|_| !live);
+    let prepared = deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
         song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
-    )
+    );
+    if !live && let Some(progress) = bake_progress {
+        progress.complete();
+    }
+    prepared
 }
 
 #[cfg(test)]
@@ -467,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_mode_selects_baked_or_runtime_and_preserves_input_fallback() {
+    fn song_lua_mode_selects_execution_and_reports_bake_progress() {
         use deadsync_config::options::SongLuaMode;
 
         crate::tests::init_paths();
@@ -498,7 +504,7 @@ mod tests {
             global_offset_seconds: 0.0,
             ..Default::default()
         };
-        let prepare = |song: &SongData, mode| {
+        let prepare = |song: &SongData, mode, progress| {
             prepare_song_lua(
                 song,
                 &charts,
@@ -515,10 +521,13 @@ mod tests {
                 "Software",
                 1,
                 mode,
+                progress,
             )
         };
         for (mode, live) in [(SongLuaMode::Baked, false), (SongLuaMode::Runtime, true)] {
-            let mut prepared = prepare(&song, mode);
+            let progress = deadsync_song_lua::SongLuaBakeProgress::default();
+            let mut prepared = prepare(&song, mode, Some(progress.clone()));
+            assert_eq!(progress.fraction(), if live { 0.0 } else { 1.0 });
             assert!(prepared.compile_succeeded(), "{mode:?} compilation");
             assert!(
                 prepared
@@ -534,7 +543,7 @@ mod tests {
         }
 
         std::fs::write(&source, "SCREENMAN:GetTopScreen():AddInputCallback(function(event) return false end)\nreturn Def.Actor {}").unwrap();
-        let mut interactive = prepare(&song, SongLuaMode::Baked);
+        let mut interactive = prepare(&song, SongLuaMode::Baked, None);
         assert!(interactive.compile_succeeded());
         assert!(
             interactive.take_live_scene().unwrap().is_some(),
@@ -545,7 +554,7 @@ mod tests {
         ordinary.foreground_lua_changes.clear();
         ordinary.has_lua = false;
         for mode in [SongLuaMode::Baked, SongLuaMode::Runtime] {
-            let mut prepared = prepare(&ordinary, mode);
+            let mut prepared = prepare(&ordinary, mode, None);
             assert!(prepared.compiled_layers().next().is_none());
             assert!(
                 prepared.take_live_scene().unwrap().is_none(),
