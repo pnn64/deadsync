@@ -6,6 +6,10 @@ use std::path::Path;
 #[path = "wav_performance.rs"]
 mod performance;
 
+#[cfg(test)]
+#[path = "wav_float_performance.rs"]
+mod float_performance;
+
 const WAV_PACKET_FRAMES: usize = 4096;
 const WAVE_FORMAT_PCM: u16 = 0x0001;
 const WAVE_FORMAT_IEEE_FLOAT: u16 = 0x0003;
@@ -368,22 +372,33 @@ fn decode_packet_into(
                 .iter()
                 .map(|sample| (i32::from_le_bytes(*sample) >> 16) as i16),
         ),
-        Encoding::Float32 => out.extend(
-            bytes
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|sample| float32_to_i16(f32::from_le_bytes(*sample))),
-        ),
-        Encoding::Float64 => out.extend(
-            bytes
-                .as_chunks::<8>()
-                .0
-                .iter()
-                .map(|sample| float_to_i16(f64::from_le_bytes(*sample))),
-        ),
+        Encoding::Float32 => decode_float32_packet(bytes, out),
+        Encoding::Float64 => decode_float64_packet(bytes, out),
     }
     Ok(())
+}
+
+// Keep the vectorized float loops out of the integer decoder's prologue.
+#[inline(never)]
+fn decode_float32_packet(bytes: &[u8], out: &mut Vec<i16>) {
+    out.extend(
+        bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|sample| float32_to_i16(f32::from_le_bytes(*sample))),
+    );
+}
+
+#[inline(never)]
+fn decode_float64_packet(bytes: &[u8], out: &mut Vec<i16>) {
+    out.extend(
+        bytes
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|sample| float_to_i16(f64::from_le_bytes(*sample))),
+    );
 }
 
 #[inline(always)]
@@ -398,6 +413,18 @@ const fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
 }
 
 #[inline(always)]
+#[allow(
+    clippy::manual_clamp,
+    reason = "clamp preserves NaN, which cannot be converted unchecked"
+)]
+fn bounded_i16(value: f64) -> i16 {
+    let value = value.max(-32768.0).min(32767.0);
+    // SAFETY: min/max also replace NaN and infinities, so the result is
+    // always finite and in the i16 range, which is representable in i32.
+    unsafe { value.to_int_unchecked::<i32>() as i16 }
+}
+
+#[inline(always)]
 fn float_to_i16(value: f64) -> i16 {
     let scaled = value * 32767.0;
     if !value.is_finite() || scaled.abs() < 0.5 {
@@ -405,7 +432,7 @@ fn float_to_i16(value: f64) -> i16 {
     }
     // Below one half, adding a half could round up to one. Above that guard,
     // the bias cannot round across an integer boundary in the i16 range.
-    (scaled + 0.5f64.copysign(value)) as i16
+    bounded_i16(scaled + 0.5f64.copysign(value))
 }
 
 #[inline(always)]
@@ -416,7 +443,7 @@ fn float32_to_i16(value: f32) -> i16 {
     let value = f64::from(value);
     // The 24-bit input times a 15-bit integer is exact in f64. Near the
     // i16 range, adding a signed half cannot cross a rounding boundary.
-    (value * 32767.0 + 0.5f64.copysign(value)) as i16
+    bounded_i16(value * 32767.0 + 0.5f64.copysign(value))
 }
 
 fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {

@@ -23,13 +23,30 @@ use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
+use deadsync_input::fsr::{
+    BackendKind, ButtonLabel, ButtonView, HostPadAction, PadDeviceId, PadView, SensorView,
+    ValueCurve,
+};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
 use std::time::Duration;
 
+mod host;
+mod paging;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadCommand {
+    SensorThresholdPair {
+        device: PadDeviceId,
+        button: usize,
+        sensor: usize,
+        press: u16,
+        release: u16,
+    },
+    HostControl {
+        device: PadDeviceId,
+        action: HostPadAction,
+    },
     Threshold {
         device: PadDeviceId,
         button: usize,
@@ -63,7 +80,9 @@ impl PadCommand {
     #[must_use]
     pub const fn device(self) -> PadDeviceId {
         match self {
-            Self::Threshold { device, .. }
+            Self::SensorThresholdPair { device, .. }
+            | Self::HostControl { device, .. }
+            | Self::Threshold { device, .. }
             | Self::ThresholdPair { device, .. }
             | Self::SensorEnabled { device, .. }
             | Self::AutoRecalibration { device, .. }
@@ -183,6 +202,7 @@ const MAX_PROFILE_NAME_LEN: usize = 24;
 
 #[derive(Default)]
 pub struct State {
+    calibration_armed: Option<PadDeviceId>,
     pub active_color_index: i32,
     fsr_enabled: bool,
     pads: Vec<PadView>,
@@ -271,6 +291,7 @@ pub fn init() -> State {
 pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
     state.fsr_enabled = enabled;
     if !enabled {
+        state.calibration_armed = None;
         clear_hold(state);
     }
 }
@@ -278,8 +299,16 @@ pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
 /// Replace the live pad snapshot (called by the app loop each frame while this
 /// screen is active), applying the active pad filter. Keeps selections in range.
 pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
+    let had_serial_pad = has_serial_pad(state);
     pads.retain(|p| match state.filter {
         PadFilter::All => true,
+        // FSRio has no player-side assignment; its placeholder side must not
+        // hide connected controllers when only P2 is joined.
+        PadFilter::Sides { .. }
+            if !matches!(p.device_id.backend, BackendKind::Smx | BackendKind::Reflex) =>
+        {
+            true
+        }
         PadFilter::Sides { p1, p2 } => {
             if p.is_p2_side {
                 p2
@@ -289,6 +318,9 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
         }
     });
     state.pads = pads;
+    if had_serial_pad != has_serial_pad(state) {
+        clear_hold(state);
+    }
 
     let total = total_bars(state);
     if total == 0 {
@@ -407,13 +439,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
 pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult {
     // Only keyboard or dedicated menu controls drive the UI; ignore raw pad
     // panels so testing a sensor doesn't move the cursor or change values.
-    if ev.source == InputSource::Gamepad && !is_menu_control(ev.action) {
+    if (ev.source == InputSource::Gamepad || has_serial_pad(state)) && !is_menu_control(ev.action) {
         return EditResult::Handled;
     }
     if !ev.pressed {
         note_release(state, ev.action);
         return EditResult::Handled;
     }
+    state.calibration_armed = None;
 
     // Name-entry box for saving the selected pad as a profile (text comes via
     // the raw-key path; here we handle the menu controls).
@@ -608,10 +641,19 @@ fn tare_focused(state: &mut State) -> bool {
     if state.saving.is_some() || state.profiles_mode {
         return false;
     }
+    if selected_device(state)
+        .and_then(|dev| pad_by_device(state, dev))
+        .is_some_and(|pad| !pad.thresholds_editable)
+    {
+        return false;
+    }
     let original_pair = state.tare_pair.take();
     if let Some(dev) = state.advanced {
         let targets = advanced_targets(state);
-        let Some(&AdvTarget::Sensor { button, sensor }) = targets.get(state.adv_sel) else {
+        let Some(
+            &(AdvTarget::Sensor { button, sensor } | AdvTarget::SensorRelease { button, sensor }),
+        ) = targets.get(state.adv_sel)
+        else {
             return false;
         };
         let Some(sv) = pad_by_device(state, dev)
@@ -621,10 +663,24 @@ fn tare_focused(state: &mut State) -> bool {
         else {
             return false;
         };
-        let current = current_sensor_threshold(state, dev, button, sv.firmware_index)
-            .unwrap_or(sv.raw_threshold);
-        let delta = i32::from(sv.raw_value) - i32::from(current);
-        adjust_sensor_threshold(state, dev, button, sensor, delta);
+        if matches!(targets[state.adv_sel], AdvTarget::SensorRelease { .. }) {
+            let Some((_, release)) = host::sensor_pair(state, dev, button, sv.firmware_index)
+            else {
+                return false;
+            };
+            host::adjust_release(
+                state,
+                dev,
+                button,
+                sensor,
+                i32::from(sv.raw_value) - i32::from(release),
+            );
+        } else {
+            let current = current_sensor_threshold(state, dev, button, sv.firmware_index)
+                .unwrap_or(sv.raw_threshold);
+            let delta = i32::from(sv.raw_value) - i32::from(current);
+            adjust_sensor_threshold(state, dev, button, sensor, delta);
+        }
         state.held = None;
         return true;
     }
@@ -699,6 +755,59 @@ fn tare_focused(state: &mut State) -> bool {
 /// keyboard users who'd rather not chord. Returns whether the key was
 /// consumed.
 pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> bool {
+    handle_raw_key_event_with_modifiers(state, key, false)
+}
+
+fn has_serial_pad(state: &State) -> bool {
+    state
+        .pads
+        .iter()
+        .any(|pad| pad.device_id.backend == BackendKind::Teejusb)
+}
+
+pub fn handle_raw_key_event_with_modifiers(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    fine: bool,
+) -> bool {
+    if host::handle_key(state, key) {
+        return true;
+    }
+    if state.fsr_enabled && has_serial_pad(state) && !state.profiles_mode && state.saving.is_none()
+    {
+        // Upstream Arduino firmware emits letter keys. Consume gameplay keys
+        // before keymap translation, and use physical arrows for editor control.
+        // Keyboard events do not carry a USB device ID, so virtual lane actions
+        // alone cannot distinguish a pad from the user's keyboard.
+        let action = match key.code {
+            KeyCode::ArrowLeft => Some(VirtualAction::p1_menu_left),
+            KeyCode::ArrowRight => Some(VirtualAction::p1_menu_right),
+            KeyCode::ArrowUp => Some(VirtualAction::p1_menu_up),
+            KeyCode::ArrowDown => Some(VirtualAction::p1_menu_down),
+            _ => None,
+        };
+        if let Some(action) = action {
+            if !key.pressed {
+                note_release(state, action);
+            } else if !key.repeat {
+                apply_direction_press(state, ui_action(action).unwrap(), fine);
+            }
+            return true;
+        }
+        if !matches!(
+            key.code,
+            KeyCode::Enter
+                | KeyCode::NumpadEnter
+                | KeyCode::Escape
+                | KeyCode::Tab
+                | KeyCode::ShiftLeft
+                | KeyCode::ShiftRight
+                | KeyCode::Digit0
+                | KeyCode::Numpad0
+        ) {
+            return true;
+        }
+    }
     state.fsr_enabled
         && key.pressed
         && !key.repeat
@@ -1033,7 +1142,11 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     // save/profile flow (`!as_overlay`); the Advanced view's top area is too packed
     // to fit this without clipping the pad name, and you always reach Advanced from
     // the simple view anyway, so only caption the simple view (`advanced_pad.is_none()`).
-    if !as_overlay && state.managed_active && advanced_pad.is_none() {
+    if !as_overlay
+        && state.managed_active
+        && advanced_pad.is_none()
+        && selected_device(state).is_some_and(|device| device.backend == BackendKind::Smx)
+    {
         actors.push(act!(text:
             font("miso"):
             settext(crate::i18n::tr("PadConfig", "TemporaryEdits")):
@@ -1066,6 +1179,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     if let Some(draft) = &state.saving {
         push_save_box(actors, state, draft, zb);
     }
+    host::push_controls(actors, state, zb);
 }
 
 pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
@@ -1266,6 +1380,12 @@ fn button_label_text(label: ButtonLabel) -> TextContent {
         ButtonLabel::Named(name) => TextContent::Static(name),
         ButtonLabel::Hid(number) => TextContent::inline_format(format_args!("Button {number}"))
             .expect("a u8 HID button label fits inline text"),
+        ButtonLabel::Sensor(number) => {
+            TextContent::inline_format(format_args!("Sensor {number}")).unwrap()
+        }
+        ButtonLabel::Group(number) => {
+            TextContent::inline_format(format_args!("Group {number}")).unwrap()
+        }
     }
 }
 
@@ -1278,18 +1398,16 @@ fn simple_group_width(buttons: usize, bar_w: f32, gap: f32) -> f32 {
 
 fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overlay: bool, zb: f32) {
     let selected_cursor = selected_slot(state);
-    let natural_panel_widths: SmallVec<[f32; 4]> = state
-        .pads
+    let (visible, page, pages) = paging::simple_page(state);
+    paging::push_page_indicator(actors, page, pages, 76.0, zb);
+    let natural_panel_widths: SmallVec<[f32; 4]> = visible
         .iter()
-        .map(|pad| {
-            PANEL_PAD_X.mul_add(
-                2.0,
-                simple_group_width(pad.buttons.len(), BAR_WIDTH, BAR_GAP),
-            )
+        .map(|(_, range)| {
+            PANEL_PAD_X.mul_add(2.0, simple_group_width(range.len(), BAR_WIDTH, BAR_GAP))
         })
         .collect();
     let natural_w = PAD_GAP.mul_add(
-        state.pads.len().saturating_sub(1) as f32,
+        visible.len().saturating_sub(1) as f32,
         natural_panel_widths.iter().sum::<f32>(),
     );
     let scale = (SCREEN_PAD_X.mul_add(-2.0, screen_width()) / natural_w.max(1.0)).min(1.0);
@@ -1298,20 +1416,21 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
     let pad_gap = PAD_GAP * scale;
     let panel_pad = PANEL_PAD_X * scale;
     let label_zoom = scale.clamp(0.45, 1.0);
-    let panel_widths: SmallVec<[f32; 4]> = state
-        .pads
+    let panel_widths: SmallVec<[f32; 4]> = visible
         .iter()
-        .map(|pad| simple_group_width(pad.buttons.len(), bar_w, bar_gap) + panel_pad * 2.0)
+        .map(|(_, range)| simple_group_width(range.len(), bar_w, bar_gap) + panel_pad * 2.0)
         .collect();
     let total_w =
-        panel_widths.iter().sum::<f32>() + pad_gap * state.pads.len().saturating_sub(1) as f32;
+        panel_widths.iter().sum::<f32>() + pad_gap * visible.len().saturating_sub(1) as f32;
     let panel_h = BAR_HEIGHT + 140.0;
     // Nudge up so the 4-line footer ("...Select Panel") never clips the boxes.
     let top_y = screen_center_y() - panel_h * 0.5 - 14.0;
     let mut panel_left = screen_center_x() - total_w * 0.5;
 
-    for (pad_idx, pad) in state.pads.iter().enumerate() {
-        let panel_w = panel_widths[pad_idx];
+    for (visible_index, (pad_idx, range)) in visible.iter().enumerate() {
+        let pad_idx = *pad_idx;
+        let pad = &state.pads[pad_idx];
+        let panel_w = panel_widths[visible_index];
         let panel_cx = panel_w.mul_add(0.5, panel_left);
         push_frame(
             actors,
@@ -1333,11 +1452,16 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
             z(12.0 + zb)
         ));
 
+        if selected_cursor.is_some_and(|slot| slot.pad == pad_idx) {
+            paging::push_status(actors, pad, screen_center_x(), screen_height() - 117.0, zb);
+        }
+
         let track_y = top_y + 84.0;
-        let group_w = simple_group_width(pad.buttons.len(), bar_w, bar_gap);
+        let group_w = simple_group_width(range.len(), bar_w, bar_gap);
         let left = panel_cx - group_w * 0.5 + bar_w * 0.5;
-        for (btn_idx, button) in pad.buttons.iter().enumerate() {
-            let x = (btn_idx as f32).mul_add(bar_w + bar_gap, left);
+        for (visible_button, btn_idx) in range.clone().enumerate() {
+            let button = &pad.buttons[btn_idx];
+            let x = (visible_button as f32).mul_add(bar_w + bar_gap, left);
             // The focused threshold of this button, if the cursor is on it
             // (dual-threshold buttons hold two cursor stops).
             let focused_kind = selected_cursor
@@ -1463,6 +1587,10 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     let device = pad.device_id;
     let targets = advanced_targets(state);
     let focused = targets.get(state.adv_sel).copied();
+    let (visible, page, pages) =
+        paging::advanced_page(pad, focused, screen_width() - SCREEN_PAD_X * 2.0);
+    paging::push_page_indicator(actors, page, pages, 88.0, zb);
+    paging::push_status(actors, pad, screen_center_x(), screen_height() - 117.0, zb);
 
     actors.push(act!(text:
         font("miso"):
@@ -1476,12 +1604,11 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     ));
 
     // Total width across the (variable-width) button groups.
-    let group_widths: SmallVec<[f32; 16]> = pad
-        .buttons
+    let group_widths: SmallVec<[f32; 16]> = visible
         .iter()
-        .map(|button| group_width(button.sensors.len()))
+        .map(|(_, range)| group_width(range.len()))
         .collect();
-    let gaps = pad.buttons.len().saturating_sub(1);
+    let gaps = visible.len().saturating_sub(1);
     let bars_w = group_widths.iter().sum::<f32>();
     let group_gap = if gaps == 0 {
         0.0
@@ -1493,8 +1620,10 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     let mut group_left = screen_center_x() - total_w * 0.5;
     let top_y = ADV_TOP_Y;
 
-    for (btn_idx, button) in pad.buttons.iter().enumerate() {
-        let gw = group_widths[btn_idx];
+    for (visible_index, (btn_idx, range)) in visible.iter().enumerate() {
+        let btn_idx = *btn_idx;
+        let button = &pad.buttons[btn_idx];
+        let gw = group_widths[visible_index];
         let group_cx = gw.mul_add(0.5, group_left);
         // Button label above its sensor group.
         actors.push(act!(text:
@@ -1508,18 +1637,16 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
             z(22.0 + zb)
         ));
 
-        for (s, sensor) in button.sensors.iter().enumerate() {
-            let x = (s as f32).mul_add(ADV_BAR_W + ADV_BAR_GAP, ADV_BAR_W.mul_add(0.5, group_left));
+        for (visible_sensor, s) in range.clone().enumerate() {
+            let sensor = &button.sensors[s];
+            let x = (visible_sensor as f32)
+                .mul_add(ADV_BAR_W + ADV_BAR_GAP, ADV_BAR_W.mul_add(0.5, group_left));
             let fw = sensor.firmware_index;
             let pending = current_sensor_threshold(state, device, btn_idx, fw);
             let (threshold, threshold_norm) =
                 sensor_threshold_view(sensor, button.value_curve, pending);
             let enabled = current_sensor_enabled(state, device, btn_idx, fw, sensor.enabled);
-            let is_focused = focused
-                == Some(AdvTarget::Sensor {
-                    button: btn_idx,
-                    sensor: s,
-                });
+            let is_focused = matches!(focused, Some(AdvTarget::Sensor { button, sensor } | AdvTarget::SensorRelease { button, sensor }) if button==btn_idx && sensor==s);
             let bar_label = sensor.label.map_or_else(
                 || sensor_index_text(sensor.firmware_index),
                 TextContent::Static,
@@ -1539,6 +1666,22 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 is_focused,
                 theme,
                 23.0 + zb,
+            );
+            host::push_release_line(
+                actors,
+                state,
+                device,
+                btn_idx,
+                sensor,
+                x,
+                top_y,
+                button.value_curve,
+                focused
+                    == Some(AdvTarget::SensorRelease {
+                        button: btn_idx,
+                        sensor: s,
+                    }),
+                zb,
             );
         }
         group_left += gw + group_gap;
@@ -1773,6 +1916,7 @@ enum UiAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AdvTarget {
     Sensor { button: usize, sensor: usize },
+    SensorRelease { button: usize, sensor: usize },
     AutoRecal,
     Debounce,
 }
@@ -1809,6 +1953,12 @@ fn advanced_targets(state: &State) -> SmallVec<[AdvTarget; 18]> {
                 button: b,
                 sensor: s,
             });
+            if button.sensors[s].release_threshold.is_some() {
+                targets.push(AdvTarget::SensorRelease {
+                    button: b,
+                    sensor: s,
+                });
+            }
         }
     }
     if pad.auto_recalibration.is_some() {
@@ -1854,6 +2004,10 @@ fn perform_advanced_ui_action(state: &mut State, dev: PadDeviceId, ui: UiAction,
 
 fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool, fine: bool) {
     match target {
+        AdvTarget::SensorRelease { button, sensor } => {
+            let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
+            host::adjust_release(state, dev, button, sensor, if up { step } else { -step });
+        }
         AdvTarget::Sensor { button, sensor } => {
             let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
             adjust_sensor_threshold(state, dev, button, sensor, if up { step } else { -step });
@@ -1896,6 +2050,9 @@ fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool
 
 fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
     match target {
+        AdvTarget::SensorRelease { button, sensor } => {
+            toggle_focused(state, dev, AdvTarget::Sensor { button, sensor });
+        }
         AdvTarget::Sensor {
             button,
             sensor: disp,
@@ -1946,6 +2103,9 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     let Some(pad) = state.pads.get(slot.pad) else {
         return;
     };
+    if !pad.thresholds_editable {
+        return;
+    }
     let button = slot.button;
     let bar = &pad.buttons[button];
     let device = pad.device_id;
@@ -2068,6 +2228,9 @@ fn adjust_sensor_threshold(
     let Some(pad) = pad_by_device(state, dev) else {
         return;
     };
+    if !pad.thresholds_editable {
+        return;
+    }
     let Some(bar) = pad.buttons.get(button) else {
         return;
     };
@@ -2100,6 +2263,20 @@ fn set_sensor_threshold(
     if next == current {
         return;
     }
+    if let Some(release) = host::sensor_pair(state, dev, button, fw).map(|(_, release)| release) {
+        let gap = current.saturating_sub(release).max(1);
+        queue_unique(
+            state,
+            PadCommand::SensorThresholdPair {
+                device: dev,
+                button,
+                sensor: fw,
+                press: next,
+                release: next.saturating_sub(gap),
+            },
+        );
+        return;
+    }
     queue_unique(
         state,
         PadCommand::Threshold {
@@ -2121,6 +2298,30 @@ fn queue_unique(state: &mut State, cmd: PadCommand) {
 fn same_target(a: &PadCommand, b: &PadCommand) -> bool {
     use PadCommand::*;
     match (a, b) {
+        (
+            SensorThresholdPair {
+                device: d1,
+                button: b1,
+                sensor: s1,
+                ..
+            },
+            SensorThresholdPair {
+                device: d2,
+                button: b2,
+                sensor: s2,
+                ..
+            },
+        ) => d1 == d2 && b1 == b2 && s1 == s2,
+        (
+            HostControl {
+                device: d1,
+                action: a1,
+            },
+            HostControl {
+                device: d2,
+                action: a2,
+            },
+        ) => d1 == d2 && a1 == a2,
         (
             Threshold {
                 device: d1,
@@ -2203,6 +2404,13 @@ fn current_sensor_threshold(
     sensor: usize,
 ) -> Option<u16> {
     state.pending.iter().rev().find_map(|c| match *c {
+        PadCommand::SensorThresholdPair {
+            device: d,
+            button: b,
+            sensor: s,
+            press,
+            ..
+        } if d == device && b == button && s == sensor => Some(press),
         PadCommand::Threshold {
             device: d,
             button: b,
@@ -2488,7 +2696,11 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             save_available,
             threshold_lock,
         } => {
-            line(actors, crate::i18n::tr("PadConfig", "SelectPanelHint"), bottom - 94.0);
+            line(
+                actors,
+                crate::i18n::tr("PadConfig", "SelectPanelHint"),
+                bottom - 94.0,
+            );
             // Kept static for the frame path; the regression test below binds
             // the embedded numbers to the edit constants.
             line(
@@ -2500,18 +2712,10 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             // load-cell pads) + Save on one line; Save only when the cursor pad
             // has a profile to save to (in-session, local profile).
             let action_line = match (threshold_lock, advanced_available, save_available) {
-                (Some(true), _, true) => Some(
-                    crate::i18n::tr("PadConfig", "LockOnProfilesHint"),
-                ),
-                (Some(false), _, true) => Some(
-                    crate::i18n::tr("PadConfig", "LockOffProfilesHint"),
-                ),
-                (Some(true), _, false) => {
-                    Some(crate::i18n::tr("PadConfig", "LockOnHint"))
-                }
-                (Some(false), _, false) => {
-                    Some(crate::i18n::tr("PadConfig", "LockOffHint"))
-                }
+                (Some(true), _, true) => Some(crate::i18n::tr("PadConfig", "LockOnProfilesHint")),
+                (Some(false), _, true) => Some(crate::i18n::tr("PadConfig", "LockOffProfilesHint")),
+                (Some(true), _, false) => Some(crate::i18n::tr("PadConfig", "LockOnHint")),
+                (Some(false), _, false) => Some(crate::i18n::tr("PadConfig", "LockOffHint")),
                 (None, true, true) => Some(crate::i18n::tr("PadConfig", "AdvancedProfilesHint")),
                 (None, false, true) => Some(crate::i18n::tr("PadConfig", "ProfilesHint")),
                 (None, true, false) => Some(crate::i18n::tr("PadConfig", "AdvancedHint")),
@@ -2969,7 +3173,6 @@ fn push_bar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::fsr::BackendKind;
     use std::time::Instant;
 
     // ── Event + pad fixtures ──
@@ -2992,8 +3195,10 @@ mod tests {
         }
     }
 
-    fn mk_sensor(fw: usize, threshold: u16) -> SensorView {
+    pub(super) fn mk_sensor(fw: usize, threshold: u16) -> SensorView {
         SensorView {
+            release_threshold: None,
+            baseline: None,
             firmware_index: fw,
             label: None,
             raw_value: 0,
@@ -3051,11 +3256,14 @@ mod tests {
     /// A 4-sensor-per-panel FSR-style SMX pad (Advanced + per-sensor toggle).
     fn smx_pad(index: usize, is_p2_side: bool) -> PadView {
         PadView {
+            host_controls: None,
             device_id: PadDeviceId {
                 backend: BackendKind::Smx,
                 index,
             },
             device_name: format!("SMX {index}").into(),
+            thresholds_editable: true,
+            status: None,
             is_p2_side,
             buttons: [
                 mk_button("L", 30),
@@ -3093,13 +3301,16 @@ mod tests {
         p
     }
 
-    fn fsrio_pad(buttons: &[u8]) -> PadView {
+    pub(super) fn fsrio_pad(buttons: &[u8]) -> PadView {
         PadView {
+            host_controls: None,
             device_id: PadDeviceId {
                 backend: BackendKind::Fsrio,
                 index: 0,
             },
             device_name: "FSRIO".into(),
+            thresholds_editable: true,
+            status: None,
             is_p2_side: false,
             buttons: buttons
                 .iter()
@@ -3124,6 +3335,152 @@ mod tests {
         let mut s = init();
         set_pads(&mut s, vec![smx_pad(0, false)]);
         s
+    }
+
+    fn serial_pad(count: usize) -> PadView {
+        let mut pad = fsrio_pad(&[]);
+        pad.device_id.backend = BackendKind::Teejusb;
+        pad.device_name = "Serial FSR".into();
+        pad.buttons = (0..count)
+            .map(|index| {
+                let mut button = mk_button("", 500);
+                button.label = ButtonLabel::Sensor((index + 1) as u16);
+                button.sensors = [mk_sensor(index, 500)].into_iter().collect();
+                button.min_raw_threshold = 0;
+                button.max_raw_threshold = 1023;
+                button.value_curve = ValueCurve::linear(1023);
+                button
+            })
+            .collect();
+        pad
+    }
+
+    #[test]
+    fn serial_keyboard_panels_cannot_operate_editor_but_physical_arrows_can() {
+        let mut state = init();
+        set_fsr_enabled(&mut state, true);
+        set_filter(
+            &mut state,
+            PadFilter::Sides {
+                p1: false,
+                p2: true,
+            },
+        );
+        set_pads(&mut state, vec![serial_pad(5)]);
+        assert_eq!(state.pads.len(), 1); // serial devices have no player-side identity
+        apply_edit(&mut state, &ev(VirtualAction::p1_up), false);
+        assert!(take_commands(&mut state).is_empty());
+        let key = |code, pressed| RawKeyboardEvent {
+            code,
+            pressed,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+        assert!(handle_raw_key_event(&mut state, &key(KeyCode::KeyD, true)));
+        assert!(take_commands(&mut state).is_empty());
+        assert!(handle_raw_key_event_with_modifiers(
+            &mut state,
+            &key(KeyCode::ArrowUp, true),
+            true
+        ));
+        let commands = take_commands(&mut state);
+        assert!(matches!(
+            commands.as_slice(),
+            [PadCommand::Threshold {
+                value: 501,
+                sensor: Some(0),
+                ..
+            }]
+        ));
+        assert!(handle_raw_key_event(
+            &mut state,
+            &key(KeyCode::ArrowUp, false)
+        ));
+        assert!(state.held.is_none());
+        assert!(!handle_raw_key_event(
+            &mut state,
+            &key(KeyCode::Escape, true)
+        ));
+    }
+
+    #[test]
+    fn unidentified_serial_firmware_is_visible_but_cannot_be_edited_or_tared() {
+        let mut state = init();
+        let mut pad = serial_pad(4);
+        pad.thresholds_editable = false;
+        pad.status = Some("Firmware not identified".into());
+        set_pads(&mut state, vec![pad]);
+        adjust_simple_threshold(&mut state, 5);
+        assert!(!tare_focused(&mut state));
+        enter_advanced(&mut state);
+        let device = state.advanced.unwrap();
+        adjust_sensor_threshold(&mut state, device, 0, 0, 5);
+        assert!(take_commands(&mut state).is_empty());
+    }
+
+    #[test]
+    fn serial_pages_keep_the_selected_sensor_visible_and_edits_address_firmware_index() {
+        let mut state = init();
+        set_pads(&mut state, vec![serial_pad(32)]);
+        state.selected = 24;
+        let (visible, page, pages) = paging::simple_page(&state);
+        assert_eq!((page, pages), (3, 4));
+        assert_eq!(visible.as_slice(), &[(0, 24..32)]);
+        adjust_simple_threshold(&mut state, 5);
+        assert!(matches!(
+            take_commands(&mut state).as_slice(),
+            [PadCommand::Threshold {
+                sensor: Some(24),
+                value: 505,
+                ..
+            }]
+        ));
+        // A single group larger than FSRio's former twelve-sensor capacity.
+        state.pads[0].buttons[0].sensors = (0..64).map(|i| mk_sensor(i, 500)).collect();
+        state.pads[0].buttons.truncate(1);
+        for sensor in 0..64 {
+            let focus = Some(AdvTarget::Sensor { button: 0, sensor });
+            let (groups, _, pages) = paging::advanced_page(&state.pads[0], focus, 600.0);
+            assert!(pages > 1);
+            assert!(
+                groups
+                    .iter()
+                    .any(|(button, range)| *button == 0 && range.contains(&sensor))
+            );
+            let width = groups
+                .iter()
+                .map(|(_, range)| group_width(range.len()))
+                .sum::<f32>()
+                + groups.len().saturating_sub(1) as f32 * ADV_GROUP_GAP;
+            assert!(width <= 600.0);
+        }
+    }
+
+    #[test]
+    fn grouped_serial_simple_adjustments_preserve_individual_offsets() {
+        let mut state = init();
+        let mut pad = serial_pad(1);
+        pad.buttons[0].sensors = [mk_sensor(9, 100), mk_sensor(2, 200)].into_iter().collect();
+        set_pads(&mut state, vec![pad]);
+        adjust_simple_threshold(&mut state, 5);
+        let commands = take_commands(&mut state);
+        assert!(matches!(
+            commands[0],
+            PadCommand::Threshold {
+                sensor: Some(9),
+                value: 105,
+                ..
+            }
+        ));
+        assert!(matches!(
+            commands[1],
+            PadCommand::Threshold {
+                sensor: Some(2),
+                value: 205,
+                ..
+            }
+        ));
     }
 
     // ── Simple-view navigation + editing ──
@@ -3288,17 +3645,46 @@ mod tests {
 
     #[test]
     fn set_pads_filters_by_side() {
-        let mut s = init();
-        set_filter(
-            &mut s,
-            PadFilter::Sides {
-                p1: true,
-                p2: false,
-            },
-        );
-        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
-        assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT); // only the P1 pad survives
-        assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+        for (p1, p2, index) in [(true, false, 0), (false, true, 1)] {
+            let mut s = init();
+            set_filter(&mut s, PadFilter::Sides { p1, p2 });
+            set_pads(
+                &mut s,
+                vec![smx_pad(0, false), smx_pad(1, true), fsrio_pad(&[1, 3])],
+            );
+            assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT + 2);
+            assert_eq!(selected_device(&s).map(|d| d.index), Some(index));
+            assert_eq!(s.pads.len(), 2);
+            assert_eq!(s.pads[0].device_id.backend, BackendKind::Smx);
+            assert_eq!(s.pads[1].device_id.backend, BackendKind::Fsrio);
+        }
+    }
+
+    #[test]
+    fn fsrio_thresholds_are_editable_for_either_player_side() {
+        for (p1, p2, action) in [
+            (true, false, VirtualAction::p1_up),
+            (false, true, VirtualAction::p2_up),
+        ] {
+            let mut s = init();
+            set_filter(&mut s, PadFilter::Sides { p1, p2 });
+            let pad = fsrio_pad(&[1, 3]);
+            let device = pad.device_id;
+            set_pads(&mut s, vec![pad]);
+
+            assert_eq!(selected_device(&s), Some(device));
+            assert_eq!(total_bars(&s), 2);
+            apply_edit(&mut s, &ev(action), false);
+            assert_eq!(
+                take_commands(&mut s),
+                vec![PadCommand::Threshold {
+                    device,
+                    button: 0,
+                    sensor: Some(0),
+                    value: 35,
+                }]
+            );
+        }
     }
 
     #[test]
@@ -3474,6 +3860,8 @@ mod tests {
     fn fsrio_threshold_uses_the_sensor_display_curve() {
         let curve = ValueCurve::quartic_blend(850, 0.9, 0.1);
         let sensor = SensorView {
+            release_threshold: None,
+            baseline: None,
             firmware_index: 0,
             label: None,
             raw_value: 195,
@@ -3505,11 +3893,21 @@ mod tests {
         );
         assert_eq!(
             "&START; Press/Release lock: ON (keeps them 10 apart)",
-            crate::i18n::tr_fmt("PadConfig", "LockOn", &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]).to_string()
+            crate::i18n::tr_fmt(
+                "PadConfig",
+                "LockOn",
+                &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]
+            )
+            .to_string()
         );
         assert_eq!(
             "&START; Press/Release lock: OFF (keeps them 10 apart)",
-            crate::i18n::tr_fmt("PadConfig", "LockOff", &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]).to_string()
+            crate::i18n::tr_fmt(
+                "PadConfig",
+                "LockOff",
+                &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]
+            )
+            .to_string()
         );
     }
 

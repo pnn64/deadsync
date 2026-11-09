@@ -353,10 +353,13 @@ impl App {
         })
     }
 
-    pub(super) fn sync_select_music_runtime_view(&mut self, policy: SelectMusicFramePolicy) {
+    pub(super) fn sync_select_music_runtime_view(&mut self, mut policy: SelectMusicFramePolicy) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
+        // Device hotplug can enable the shared pad editor without changing the
+        // cached configuration policy or requiring the FSR option.
+        policy.view.fsr_profiles |= deadsync_reflex::connected();
         let now = Instant::now();
         let lobby = self.select_music_lobby.refresh_if_dirty(now);
         let downloads_visible =

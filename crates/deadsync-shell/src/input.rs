@@ -237,6 +237,7 @@ const fn pad_backend_name(backend: PadBackend) -> &'static str {
         #[cfg(target_os = "macos")]
         PadBackend::MacOsIohid => "macOS IOHID",
         PadBackend::Smx => "StepManiaX",
+        PadBackend::Reflex => "RE:Flex",
     }
 }
 

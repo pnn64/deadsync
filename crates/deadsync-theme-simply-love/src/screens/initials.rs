@@ -603,7 +603,7 @@ pub fn set_highscore_lists(state: &mut State, stages: &[stage_stats::StageSummar
 fn player_entry_for(player: &PostSongPlayerView) -> PlayerEntry {
     let joined = player.joined;
     let persistent = joined && !player.guest;
-    let can_enter = persistent;
+    let can_enter = persistent && player.name_entry_eligible;
 
     let name = if persistent {
         sanitize_name(&player.player_initials)
@@ -749,6 +749,9 @@ fn start_finish(state: &mut State) -> ThemeEffect {
 
 pub fn update(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.elapsed = (state.elapsed + dt).max(0.0);
+    if all_done(state) && state.finish_hold_elapsed.is_none() {
+        effects.push(start_finish(state));
+    }
 
     for p in &mut state.players {
         if state.finish_hold_elapsed.is_none() && update_hold_scroll(p) {
@@ -1380,6 +1383,7 @@ mod tests {
 
         let mut runtime = PostSongRuntimeView::default();
         runtime.players[0].joined = true;
+        runtime.players[0].name_entry_eligible = true;
         let state = init(runtime);
         let metrics = Metrics::centered(854.0, 480.0);
 
@@ -1462,6 +1466,31 @@ mod tests {
     }
 
     #[test]
+    fn initials_require_an_eligible_record_and_skip_when_neither_player_qualifies() {
+        let mut runtime = PostSongRuntimeView::default();
+        runtime.players[0].joined = true;
+        runtime.players[0].player_initials = "LIS".into();
+        let mut state = init(runtime.clone());
+        assert!(!state.players[0].can_enter);
+        assert!(state.players[0].done);
+        let mut effects = Vec::new();
+        update(&mut state, WHEEL_HIDE_FADE_SECONDS, &mut effects);
+        assert!(
+            effects
+                .iter()
+                .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::GameOver)))
+        );
+
+        runtime.players[0].name_entry_eligible = true;
+        let state = init(runtime.clone());
+        assert!(state.players[0].can_enter);
+        assert!(!state.players[0].done);
+
+        runtime.players[0].guest = true;
+        assert!(!init(runtime).players[0].can_enter);
+    }
+
+    #[test]
     fn player_entry_sanitizes_initials_for_inline_actor_text() {
         let mut player = PostSongPlayerView {
             joined: true,
@@ -1493,6 +1522,7 @@ mod tests {
     fn finishing_name_entry_requests_audio_before_profile_persistence() {
         let mut runtime = PostSongRuntimeView::default();
         runtime.players[0].joined = true;
+        runtime.players[0].name_entry_eligible = true;
         runtime.players[0].player_initials = "ABC".to_owned();
         let mut state = init(runtime);
         let now = Instant::now();

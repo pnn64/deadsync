@@ -687,6 +687,12 @@ impl Manager {
         self.last_sent.unwrap_or_default()
     }
 
+    /// Chart pulses before physical input is merged into the cabinet state.
+    /// Native pad lighting can select chart mode independently of the cabinet.
+    pub fn chart_directions(&self) -> [[bool; 4]; PLAYER_COUNT] {
+        std::array::from_fn(|p| std::array::from_fn(|b| self.button_blink[p][b] > 0.0))
+    }
+
     pub const fn set_test_auto_cycle(&mut self) {
         self.mode = Mode::TestAutoCycle;
         self.test_auto_seconds = 0.0;
@@ -1309,6 +1315,10 @@ mod tests {
         let input = lights.build_state(0.0);
         assert!(input.button(Player::P1, ButtonLight::Left));
         assert!(!input.button(Player::P1, ButtonLight::Right));
+        assert_eq!(
+            lights.chart_directions(),
+            [[false, false, false, true], [false; 4]]
+        );
 
         lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
         let chart = lights.build_state(0.0);

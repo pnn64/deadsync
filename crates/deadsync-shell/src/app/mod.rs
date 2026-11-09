@@ -7,12 +7,15 @@ mod audio_requests;
 mod browser_skin;
 mod commands;
 mod config_requests;
+#[cfg(test)]
+mod course_transition_tests;
 mod evaluation_views;
 mod graphics;
 mod input_routing;
 mod live_case;
 mod lobby_views;
 mod option_previews;
+mod reflex_runtime;
 mod screen_nav;
 mod screenshot;
 mod select_music_views;
@@ -3110,11 +3113,40 @@ impl App {
 
     fn fail_gameplay_init(&mut self, error: String) {
         self.pending_gameplay_init = None;
+        if self.interrupt_course_loading(&error) {
+            self.handle_navigation_action(CurrentScreen::Evaluation);
+            return;
+        }
         error!("Unable to prepare gameplay: {error}");
         self.state.shell.interaction.show_message(
             "Unable to prepare gameplay".to_string(), Instant::now(),
         );
         self.handle_navigation_action(CurrentScreen::SelectMusic);
+    }
+
+    /// A failed next-stage load has no gameplay result of its own. Keep the
+    /// completed songs and finish the course through the evaluation lifecycle.
+    fn interrupt_course_loading(&mut self, error: &str) -> bool {
+        let Some(course) = self.state.session.course_run.as_mut() else {
+            return false;
+        };
+        if course.stage_summaries.is_empty() {
+            return false;
+        }
+        course.interrupted = true;
+        error!("Unable to prepare next course stage: {error}");
+        self.state.shell.interaction.show_message(
+            "Unable to prepare next course stage".to_string(),
+            Instant::now(),
+        );
+        self.state.screens.player_options_state = None;
+        self.pending_gameplay_init = None;
+        // A failed Lua screen replacement can still have an unfinished stage.
+        // Only completed, already recorded songs belong in this result.
+        if let Some(mut gameplay) = self.state.screens.gameplay_state.take() {
+            crate::gameplay_runtime::exit(&mut gameplay);
+        }
+        true
     }
 
     /// Apply a window focus change to all subsystems that care about it.
@@ -3164,7 +3196,7 @@ impl App {
             policy.driver,
             policy.smx_input,
             policy.smx_panel_lights,
-        );
+        ) || deadsync_reflex::connected();
         if !active {
             if self.lighting_active {
                 self.deactivate_lighting(policy.theme_index);
@@ -3173,6 +3205,7 @@ impl App {
             return;
         }
         self.lighting_active = true;
+        self.sync_reflex_mappings();
         self.lights
             .set_gameplay_pad_lights(policy.gameplay_pad_lights);
         let plan = lighting_frame_plan(
@@ -3228,6 +3261,7 @@ impl App {
                 ));
         }
         self.lights.tick(delta_time, elapsed_seconds);
+        self.sync_reflex_lights(session.player_side);
     }
 
     fn deactivate_lighting(&mut self, theme_index: i32) {
@@ -5262,7 +5296,7 @@ impl App {
             backend: None,
             backend_type,
             _idle_inhibitor: deadlib_platform::idle_inhibit::IdleInhibitor::acquire(),
-            fsr_monitor: fsr_input::Monitor::new(),
+            fsr_monitor: fsr_input::Monitor::with_data_dir(&dirs.data_dir),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(
@@ -6796,32 +6830,6 @@ impl App {
         color_index: i32,
         prewarm_noteskin_catalog: bool,
     ) -> bool {
-        let reroll_endless = self
-            .state
-            .session
-            .course_run
-            .as_ref()
-            .is_some_and(|course| {
-                course.course_type == deadsync_theme::views::CourseTypeView::Endless
-                    && course.next_stage_index == course.stages.len()
-            });
-        if reroll_endless {
-            let selection = select_course::reroll_selected_endless_plan(
-                &self.state.screens.select_course_state,
-            )
-            .or_else(|| {
-                select_course::selected_course_plan(&self.state.screens.select_course_state)
-            });
-            if let Some(selection) = selection
-                && let Some(course) = self.state.session.course_run.as_mut()
-            {
-                let _ = append_endless_cycle(
-                    course,
-                    selection,
-                    profile::get_session_play_style().chart_type(),
-                );
-            }
-        }
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
@@ -7216,6 +7224,13 @@ impl App {
             }
         }
         self.state.session.record_stage_result(stage);
+        self.finish_course_result(failed)
+    }
+
+    fn finish_course_result(
+        &mut self,
+        failed: bool,
+    ) -> Option<(CourseRunState, stage_stats::StageSummary)> {
         let course = self.state.session.take_final_course(failed)?;
         let summary = build_course_summary_stage(&course)?;
         let routine_shared =
@@ -8692,9 +8707,10 @@ impl App {
             }
             RawKeyScreenRoute::ConfigurePads => {
                 // `0` tares the focused threshold(s) to the live reading.
-                if screens::pad_config::handle_raw_key_event(
+                if screens::pad_config::handle_raw_key_event_with_modifiers(
                     &mut self.state.screens.pad_config_state,
                     &raw_key,
+                    shift_held,
                 ) {
                     return true;
                 }
@@ -9242,7 +9258,7 @@ impl App {
         } else if target == CurrentScreen::ConfigurePads {
             screens::pad_config::set_fsr_enabled(
                 &mut self.state.screens.pad_config_state,
-                config::runtime::get().use_fsrs,
+                config::runtime::get().use_fsrs || deadsync_reflex::connected(),
             );
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
@@ -9563,9 +9579,7 @@ impl App {
                 .screens
                 .gameplay_state
                 .as_ref()
-                .is_some_and(|gameplay| {
-                    gameplay.song_completed_naturally() || gameplay.all_joined_players_failed()
-                })
+                .is_some_and(|gameplay| gameplay.should_finalize_stage_result())
             && let Some(mut gameplay) = self.state.screens.gameplay_state.take()
         {
             crate::gameplay_runtime::exit(&mut gameplay);
@@ -10071,6 +10085,12 @@ impl App {
                         ) {
                             Ok(gameplay_song) => gameplay_song,
                             Err(e) => {
+                                if self.interrupt_course_loading(&e) {
+                                    commands.extend(
+                                        self.prepare_global_fade_entry(CurrentScreen::Evaluation).1,
+                                    );
+                                    return commands;
+                                }
                                 error!(
                                     "Failed to load gameplay payload for '{}': {}",
                                     song_arc.title, e
@@ -10316,7 +10336,15 @@ impl App {
                 } else {
                     match init() {
                         Ok(gs) => commands.extend(self.finish_gameplay_init(gs, &finish)),
-                        Err(error) => self.fail_gameplay_init(error),
+                        Err(error) => {
+                            if self.interrupt_course_loading(&error) {
+                                commands.extend(
+                                    self.prepare_global_fade_entry(CurrentScreen::Evaluation).1,
+                                );
+                            } else {
+                                self.fail_gameplay_init(error);
+                            }
+                        }
                     }
                 }
             } else {
@@ -10359,7 +10387,11 @@ impl App {
                     completed,
                 )
             } else {
-                (EvaluationInitView::default(), false, None)
+                let completed = self.finish_course_result(false);
+                if completed.is_some() {
+                    self.state.coin.record_course_stage();
+                }
+                (EvaluationInitView::default(), false, completed)
             };
             self.state.screens.evaluation_state = evaluation::init(init_view);
             self.state.screens.evaluation_state.active_color_index = color_idx;
@@ -10375,7 +10407,7 @@ impl App {
                 session_elapsed,
                 gameplay_elapsed,
             );
-            if in_course_run {
+            if in_course_run && gameplay_results.is_some() {
                 self.state
                     .session
                     .course_stage_eval_pages
@@ -10840,6 +10872,15 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::GamepadSystem(ev) => {
+                if matches!(
+                    &ev,
+                    deadlib_input_native::GpSystemEvent::Connected {
+                        backend: deadlib_input_native::PadBackend::Reflex,
+                        ..
+                    }
+                ) {
+                    self.sync_reflex_mappings();
+                }
                 let plan = gamepad_system_event_plan(self.state.screens.current_screen, &ev);
                 if plan.forward_to_sandbox {
                     let view = gamepad_system_view(&ev);
@@ -11104,6 +11145,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.apply_pending_pad_config_commands();
         self.fsr_monitor.flush_pending_saves();
+        deadsync_reflex::shutdown();
         if let Err(error) = self.state.shell.fullscreen_state.restore() {
             warn!("Failed to restore desktop on exit: {error}");
         }
@@ -11189,6 +11231,7 @@ pub fn run(
         launch_input_backends(
             proxy,
             InputBackendConfig {
+                data_dir: app.dirs.data_dir.clone(),
                 #[cfg(target_os = "windows")]
                 windows_pad_backend: config.windows_gamepad_backend,
                 smx_input: config.smx_input,
@@ -12081,6 +12124,7 @@ mod tests {
             stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
             course_display_totals,
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: vec![stage_stats::StageSummary {
                 song: song_a,
                 music_rate: 1.0,
@@ -12167,6 +12211,7 @@ mod tests {
                 },
             ],
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: vec![stage],
         };
         let summary = build_course_summary_stage(&course).expect("course summary");
@@ -12289,6 +12334,7 @@ mod tests {
             stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
             course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: Vec::new(),
         };
         let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);

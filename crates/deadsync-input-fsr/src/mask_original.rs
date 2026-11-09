@@ -68,6 +68,8 @@ pub(super) fn button_views(config: &ConfigReport, input: &InputReport) -> Button
         button.aggregate_value = button.aggregate_value.max(raw_value);
         button.aggregate_threshold = button.aggregate_threshold.max(raw_threshold);
         button.sensors.push(SensorView {
+            release_threshold: None,
+            baseline: None,
             firmware_index: index,
             label: None,
             raw_value,

@@ -114,11 +114,14 @@ impl Monitor {
                 .collect();
             let fsr = pad.kind == MockKind::Fsr;
             PadView {
+                host_controls: None,
                 device_id: PadDeviceId {
                     backend: BackendKind::Smx,
                     index: i,
                 },
                 device_name: Arc::clone(&pad.device_name),
+                thresholds_editable: true,
+                status: None,
                 is_p2_side: i == 1,
                 buttons,
                 supports_advanced: fsr,

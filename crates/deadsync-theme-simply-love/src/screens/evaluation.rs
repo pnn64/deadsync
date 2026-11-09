@@ -6128,7 +6128,7 @@ pub fn push_actors(
                         .unwrap_or_else(|| cached_str_ref(simple))
                 };
 
-                {
+                if !breakdown_text.trim().is_empty() {
                     let x = breakdown_x;
                     let y = if policy.zmod_rating_box_text {
                         cy - 97.0

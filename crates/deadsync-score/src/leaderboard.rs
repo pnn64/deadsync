@@ -432,6 +432,7 @@ pub fn machine_leaderboard_entries(
     mut plays: Vec<MachineLeaderboardPlay>,
     max_entries: usize,
 ) -> Vec<LeaderboardEntry> {
+    plays.retain(|play| !play.is_fail);
     plays.sort_by(|a, b| {
         b.score_percent
             .partial_cmp(&a.score_percent)

@@ -118,11 +118,14 @@ impl Monitor {
             // Load-cell pads are Simple-only (no per-sensor config); they show
             // their four corner readings as separate bars but share one threshold.
             pads.push(PadView {
+                host_controls: None,
                 device_id: PadDeviceId {
                     backend: BackendKind::Smx,
                     index: pad,
                 },
                 device_name,
+                thresholds_editable: true,
+                status: None,
                 is_p2_side: pad == 1,
                 buttons,
                 supports_advanced: fsr,
@@ -464,6 +467,8 @@ pub fn fsr_button_view(
             aggregate_value = aggregate_value.max(r.value);
             aggregate_threshold = aggregate_threshold.max(r.threshold);
             SensorView {
+                release_threshold: None,
+                baseline: None,
                 firmware_index: r.firmware_index,
                 label: r.label,
                 raw_value: r.value,
@@ -505,6 +510,8 @@ pub fn load_cell_button_view(
         .map(|(s, &raw_value)| {
             aggregate_value = aggregate_value.max(raw_value);
             SensorView {
+                release_threshold: None,
+                baseline: None,
                 firmware_index: s,
                 label: None, // corners, not edges -> numbered 1-4 in the UI
                 raw_value,

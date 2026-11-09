@@ -5,6 +5,7 @@ use winit::event_loop::EventLoopProxy;
 
 /// Startup settings for the platform and `StepManiaX` input backends.
 pub struct InputBackendConfig {
+    pub data_dir: std::path::PathBuf,
     #[cfg(windows)]
     pub windows_pad_backend: WindowsPadBackend,
     pub smx_input: bool,
@@ -115,13 +116,27 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
         });
     }
 
+    let _ = deadsync_input::set_button_labeler(|id, code| {
+        deadsync_reflex::trigger_label(id, code).or_else(|| deadsync_smx::trigger_label(id, code))
+    });
+    let reflex_pad = proxy.clone();
+    let reflex_sys = proxy.clone();
+    deadsync_reflex::start(
+        &config.data_dir,
+        move |event| {
+            let _ = reflex_pad.send_event(UserEvent::Pad(event));
+        },
+        move |event| {
+            let _ = reflex_sys.send_event(UserEvent::GamepadSystem(event));
+        },
+    );
+
     if config.smx_input
         && deadsync_smx::init(deadsync_smx::InitConfig {
             p1_serial: config.smx_p1_serial,
             p2_serial: config.smx_p2_serial,
         })
     {
-        let _ = deadsync_input::set_button_labeler(deadsync_smx::trigger_label);
         let proxy_pad = proxy.clone();
         deadsync_smx::add_input_listener(Box::new(move |event| {
             let _ = proxy_pad.send_event(UserEvent::Pad(event));

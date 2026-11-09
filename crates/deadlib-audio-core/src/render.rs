@@ -1,7 +1,7 @@
 use crate::ring::{AudioRenderHandle, MusicBlock};
 use crate::{
     ActiveSfx, CallbackClockSource, MAX_ACTIVE_SFX, MixControls, MusicMapSeg, QueuedSfx,
-    f32_to_i16, i16_to_f32, mark_music_track_started, mix_active_sfx, music_gain_snap_generation,
+    i16_to_f32, mark_music_track_started, mix_active_sfx, music_gain_snap_generation,
     music_map_generation, music_target_gain, music_total_frames, music_track_active_relaxed,
     music_track_has_started, music_track_start_frame, note_timing_diag_callback_gap,
     publish_callback_window_end, publish_callback_window_start_nanos, push_queued_sfx,
@@ -158,13 +158,22 @@ fn convert_music_chunk(
 }
 
 #[inline]
+#[allow(
+    unsafe_code,
+    reason = "PCM conversion is explicitly bounded and NaN-free"
+)]
 fn write_i16_samples(src: &[f32], dst: &mut [i16], has_audio: bool) {
     if !has_audio {
         dst.fill(0);
         return;
     }
+    // Explicit saturation lets LLVM use packed float-to-integer conversions.
     for (dst, &src) in dst.iter_mut().zip(src) {
-        *dst = f32_to_i16(src);
+        let scaled = (src * 32768.0).clamp(-32768.0, 32767.0);
+        let bounded = if scaled.is_nan() { 0.0 } else { scaled };
+        // SAFETY: clamping maps infinities and out-of-range values to i16 bounds;
+        // the explicit NaN case leaves only finite, representable values.
+        *dst = unsafe { bounded.to_int_unchecked::<i16>() };
     }
 }
 
@@ -987,3 +996,7 @@ mod tests {
 #[cfg(test)]
 #[path = "render_perf_tests.rs"]
 mod perf_tests;
+
+#[cfg(test)]
+#[path = "pcm_conversion_tests.rs"]
+mod pcm_conversion_tests;

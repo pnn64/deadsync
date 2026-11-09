@@ -13,6 +13,7 @@ fn player_view(side: PlayerSide) -> PostSongPlayerView {
     PostSongPlayerView {
         joined: profile::is_session_side_joined(side),
         guest: profile::is_session_side_guest(side),
+        name_entry_eligible: false,
         display_name: player.display_name,
         player_initials: player.player_initials,
         avatar_texture_key: player.avatar_texture_key,
@@ -60,6 +61,54 @@ pub(crate) fn initials_runtime_view(stages: &[StageSummary]) -> PostSongRuntimeV
         view.machine_leaderboards
             .entry(hash.to_owned())
             .or_insert_with(|| scores::get_machine_leaderboard_local(hash, usize::MAX));
+    }
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = deadsync_profile::player_side_index(side);
+        let player = &view.players[side_idx];
+        if !player.joined || player.guest {
+            continue;
+        }
+        view.players[side_idx].name_entry_eligible = stages.iter().any(|stage| {
+            let Some(player) = stage.players[side_idx].as_ref() else {
+                return false;
+            };
+            let mut score = player.score_percent;
+            let mut valid = player.score_valid && !player.disqualified;
+            let mut failed = player.grade == deadsync_score::Grade::Failed;
+            if view.play_style.is_routine() {
+                // Routine saves the shared result under the master player.
+                if side_idx != 0 {
+                    return false;
+                }
+                let Some(partner) = stage.players[1].as_ref() else {
+                    return false;
+                };
+                valid &= partner.score_valid && !partner.disqualified;
+                failed |= partner.grade == deadsync_score::Grade::Failed;
+                score = deadsync_rules::judgment::calculate_itg_score_percent_from_points(
+                    player
+                        .earned_grade_points
+                        .saturating_add(partner.earned_grade_points),
+                    player
+                        .possible_grade_points
+                        .saturating_add(partner.possible_grade_points),
+                );
+            }
+            if !valid || !score.is_finite() || score < 0.01 {
+                return false;
+            }
+            let hash = player.chart.short_hash.as_str();
+            let machine_rank = (!failed || hash.starts_with("course-"))
+                .then(|| view.machine_leaderboards.get(hash))
+                .flatten()
+                .and_then(|entries| deadsync_score::leaderboard_rank_for_score(entries, score));
+            let personal = scores::get_personal_leaderboard_local_for_side(hash, side, usize::MAX);
+            deadsync_score::name_entry_record_eligible(
+                score,
+                machine_rank,
+                deadsync_score::leaderboard_rank_for_score(&personal, score),
+            )
+        });
     }
     view
 }

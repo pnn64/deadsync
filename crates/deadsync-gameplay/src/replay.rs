@@ -257,6 +257,7 @@ impl GameplayToggleFlashState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GameplayStageRuntimeState {
     pub song_completed_naturally: bool,
+    pub cancelled: bool,
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
     pub score_valid: [bool; MAX_PLAYERS],
@@ -274,6 +275,7 @@ impl GameplayStageRuntimeState {
     ) -> Self {
         Self {
             song_completed_naturally: false,
+            cancelled: false,
             autoplay_enabled,
             autoplay_used,
             score_valid,
@@ -289,6 +291,7 @@ impl GameplayStageRuntimeState {
     #[inline(always)]
     pub const fn reset_for_practice(&mut self) {
         self.song_completed_naturally = false;
+        self.cancelled = false;
         self.autoplay_used = false;
     }
 }

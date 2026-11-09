@@ -7,6 +7,8 @@ pub(super) fn fsr_button_view(
     let sensors: SensorViews = readings
         .iter()
         .map(|r| SensorView {
+            release_threshold: None,
+            baseline: None,
             firmware_index: r.firmware_index,
             label: r.label,
             raw_value: r.value,
@@ -43,6 +45,8 @@ pub(super) fn load_cell_button_view(
         .iter()
         .enumerate()
         .map(|(s, &raw_value)| SensorView {
+            release_threshold: None,
+            baseline: None,
             firmware_index: s,
             label: None, // corners, not edges -> numbered 1-4 in the UI
             raw_value,

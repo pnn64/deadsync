@@ -41,6 +41,8 @@ pub enum PadBackend {
     MacOsIohid,
     /// `StepManiaX` pad via the `RustManiaX` SDK (all platforms).
     Smx,
+    /// RE:Flex v2 vendor HID with host-side sensor detection.
+    Reflex,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

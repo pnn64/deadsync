@@ -11085,7 +11085,7 @@ fn handle_raw_key_event_impl(
         }
         // `0` tares the focused threshold(s) to the live reading, like Up+Down.
         if let Some(k) = key
-            && pad_config::handle_raw_key_event(&mut state.pad_config_overlay, k)
+            && pad_config::handle_raw_key_event_with_modifiers(&mut state.pad_config_overlay, k, shift_held)
         {
             return ThemeInputResult::consumed(ThemeEffect::None);
         }

@@ -421,6 +421,46 @@ pub fn apply_fade_envelope(
         return;
     }
     let frames_f = frames as f32;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if frames >= 4 && std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: CPU and OS support for FMA is established before entry.
+        unsafe { fade_samples_fma(samples, channels, frames_f, start_volume, end_volume) };
+        return;
+    }
+    fade_samples(samples, channels, frames_f, start_volume, end_volume);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn fade_samples_fma(
+    samples: &mut [i16],
+    channels: usize,
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    fade_samples(samples, channels, frames_f, start_volume, end_volume);
+}
+
+// The entry point supplies finite endpoints in [0, 1] and nonzero frame/channel counts.
+#[inline(always)]
+fn fade_samples(
+    samples: &mut [i16],
+    channels: usize,
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    // Keep skipping near-unity frames when most of a buffer may be unchanged.
+    // Otherwise fixed layouts let LLVM interpolate several frames together.
+    if channels == 1 && start_volume.max(end_volume) <= 0.9999 {
+        fade_fixed::<1>(samples, frames_f, start_volume, end_volume);
+        return;
+    }
+    if channels == 2 && start_volume.max(end_volume) <= 0.9999 {
+        fade_fixed::<2>(samples, frames_f, start_volume, end_volume);
+        return;
+    }
     // Both endpoints and t are in [0, 1], so the fused interpolation stays in
     // that range without another clamp for every frame.
     for (frame, samples) in samples.chunks_exact_mut(channels).enumerate() {
@@ -433,7 +473,38 @@ pub fn apply_fade_envelope(
             // Widen the original f32 product before adding the half bias so
             // values just below a rounding boundary cannot cross it early.
             let scaled = f64::from(f32::from(*sample) * volume);
-            *sample = (scaled + 0.5f64.copysign(scaled)) as i16;
+            // SAFETY: volume is finite in [0, 1], so the biased i16 product
+            // is finite in [-32768.5, 32767.5], well within the i32 range.
+            *sample = unsafe { (scaled + 0.5f64.copysign(scaled)).to_int_unchecked::<i32>() } as i16;
+        }
+    }
+}
+
+#[inline(always)]
+fn fade_fixed<const CHANNELS: usize>(
+    samples: &mut [i16],
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    // Both endpoints and t are in [0, 1], so the fused interpolation stays in
+    // that range without another clamp for every frame.
+    for (frame, samples) in samples.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
+        let t = frame as f32 / frames_f;
+        let volume = (end_volume - start_volume).mul_add(t, start_volume);
+        // Unit gain leaves every i16 unchanged, including the rounding step.
+        let volume = if (volume - 1.0).abs() < 0.0001 {
+            1.0
+        } else {
+            volume
+        };
+        for sample in samples {
+            // Widen the original f32 product before adding the half bias so
+            // values just below a rounding boundary cannot cross it early.
+            let scaled = f64::from(f32::from(*sample) * volume);
+            // SAFETY: volume is finite in [0, 1], so the biased i16 product
+            // is finite in [-32768.5, 32767.5], well within the i32 range.
+            *sample = unsafe { (scaled + 0.5f64.copysign(scaled)).to_int_unchecked::<i32>() } as i16;
         }
     }
 }
@@ -471,15 +542,13 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 
 #[inline(always)]
 fn sample_to_i16(sample: f32) -> i16 {
-    let scaled = sample * 32767.0;
-    // Truncation leaves an exact fraction in (-1, 1) for in-range values.
-    // Correct half ties away from zero without calling round per sample.
-    // Saturated values can only move outward; NaN casts to zero and neither
-    // comparison succeeds. The final clamp therefore preserves both cases.
-    let whole = scaled as i16;
-    let fraction = scaled - f32::from(whole);
-    (i32::from(whole) + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5))
-        .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+    let scaled = (sample * 32767.0).clamp(-32768.0, 32767.0);
+    let bounded = if scaled.is_nan() { 0.0 } else { scaled };
+    // SAFETY: bounded is finite and lies within the i16 range.
+    let whole = unsafe { bounded.to_int_unchecked::<i32>() };
+    let fraction = bounded - whole as f32;
+    // Clamp before rounding so correcting half ties cannot leave the i16 range.
+    (whole + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5)) as i16
 }
 
 #[cfg(test)]
@@ -653,3 +722,15 @@ mod tests {
 #[cfg(test)]
 #[path = "resample_perf_tests.rs"]
 mod perf_tests;
+
+#[cfg(test)]
+#[path = "resample_conversion_tests.rs"]
+mod conversion_tests;
+
+#[cfg(test)]
+#[path = "fade_performance.rs"]
+mod fade_performance;
+
+#[cfg(test)]
+#[path = "../../../tests/support/kernel_bench.rs"]
+mod kernel_bench;

@@ -302,11 +302,14 @@ mod imp {
 
     fn pad_view(device: &Device) -> PadView {
         PadView {
+            host_controls: None,
             device_id: PadDeviceId {
                 backend: BackendKind::Fsrio,
                 index: device.id,
             },
             device_name: Arc::clone(&device.name),
+            thresholds_editable: true,
+            status: None,
             is_p2_side: false,
             buttons: button_views(&device.config.report, &device.input),
             supports_advanced: true,
@@ -347,6 +350,8 @@ mod imp {
             button.aggregate_value = button.aggregate_value.max(raw_value);
             button.aggregate_threshold = button.aggregate_threshold.max(raw_threshold);
             button.sensors.push(SensorView {
+                release_threshold: None,
+                baseline: None,
                 firmware_index: index,
                 label: None,
                 raw_value,

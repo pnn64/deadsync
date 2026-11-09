@@ -2652,6 +2652,13 @@ where
         self.control.exit_input.exit_transition.is_some()
     }
 
+    pub fn should_finalize_stage_result(&self) -> bool {
+        // ScreenGameplay::StageFinished cancels a backed-out stage before
+        // finalizing scores, even when every player had already failed.
+        !self.progress.stage.cancelled
+            && (self.song_completed_naturally() || self.all_joined_players_failed())
+    }
+
     #[inline(always)]
     pub const fn exit_prompt_state(&self) -> GameplayExitPromptState {
         self.control.exit_input.prompt_state()
@@ -3330,6 +3337,11 @@ where
     pub fn begin_exit_transition(&mut self, kind: ExitTransitionKind) -> bool {
         if !self.control.exit_input.begin_exit(kind, Instant::now()) {
             return false;
+        }
+        if kind == ExitTransitionKind::Cancel {
+            // The animation state is cleared before navigation reaches the
+            // shell; retain cancellation as part of the stage outcome.
+            self.progress.stage.cancelled = true;
         }
         self.push_audio_command(GameplayAudioCommand::StopMusic);
         true
