@@ -6,7 +6,6 @@ use chrono::{Datelike, Local};
 use deadlib_present::actors::{TextAlign, TextAttribute};
 use deadlib_present::anim::{EffectClock, EffectMode};
 use std::{
-    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -19,7 +18,7 @@ fn test_compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<TestCompiledSongLua, String> {
-    compile_song_lua_with_default_host(
+    compile_song_lua(
         entry_path,
         context,
         SongLuaNoteskinResolver::default(),
@@ -33,7 +32,7 @@ fn test_compile_song_lua_layers(
     primary_index: usize,
     context: &SongLuaCompileContext,
 ) -> Result<Vec<TestCompiledSongLua>, String> {
-    compile_song_lua_layers_with_default_host(
+    compile_song_lua_layers(
         entry_paths,
         primary_index,
         context,
@@ -83,51 +82,6 @@ fn test_read_model_slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, Stri
 
 fn test_model_layer_from_slot(_: &()) -> Option<SongLuaOverlayModelLayer<()>> {
     None
-}
-
-fn mod_window(start: f32, limit: f32, mods: &str) -> SongLuaModWindow {
-    SongLuaModWindow {
-        unit: SongLuaTimeUnit::Beat,
-        start,
-        limit,
-        span_mode: SongLuaSpanMode::Len,
-        mods: mods.to_string(),
-        player: None,
-    }
-}
-
-fn ease_window(start: f32, limit: f32) -> SongLuaEaseWindow {
-    SongLuaEaseWindow {
-        approach_speed: None,
-        unit: SongLuaTimeUnit::Beat,
-        start,
-        limit,
-        span_mode: SongLuaSpanMode::Len,
-        from: 0.0,
-        to: 1.0,
-        target: SongLuaEaseTarget::PlayerX,
-        easing: None,
-        player: None,
-        sustain: None,
-        opt1: None,
-        opt2: None,
-    }
-}
-
-fn overlay_ease(overlay_index: usize, start: f32, limit: f32) -> SongLuaOverlayEase {
-    SongLuaOverlayEase {
-        overlay_index,
-        unit: SongLuaTimeUnit::Beat,
-        start,
-        limit,
-        span_mode: SongLuaSpanMode::Len,
-        from: SongLuaOverlayStateDelta::default(),
-        to: SongLuaOverlayStateDelta::default(),
-        easing: None,
-        sustain: None,
-        opt1: None,
-        opt2: None,
-    }
 }
 
 fn test_song_steps() -> Vec<crate::SongLuaStep> {
@@ -19639,10 +19593,9 @@ fn loadactor_redirects() {
     fs::write(parts.join("ambiguous.redir"), "variant").unwrap();
     fs::write(parts.join("variant1.lua"), "return {}").unwrap();
     fs::write(parts.join("variant2.lua"), "return {}").unwrap();
-    let mut host = deadsync_song_lua::rust_engine::RustSongRuntime::new(
-        &SongLuaCompileContext::new(&song_dir, "Redirects"),
-    )
-    .unwrap();
+    let mut host =
+        deadsync_song_lua::SongRuntime::new(&SongLuaCompileContext::new(&song_dir, "Redirects"))
+            .unwrap();
     // The retired resolve_load_actor_path helper invented an "empty redirect"
     // error. The frozen native ActorUtil control resolves it to an empty path;
     // LoadActor then rejects that path using its ordinary invalid-file policy.

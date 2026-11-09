@@ -1,9 +1,3 @@
-#[cfg(any(test, feature = "legacy-oracle"))]
-use mlua::Value;
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-use crate::{read_f32, truthy};
-
 pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W1",
     "TimingWindow_W2",
@@ -11,50 +5,6 @@ pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W4",
     "TimingWindow_W5",
 ];
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn timing_window_arg_index(value: Value) -> Option<i32> {
-    match value {
-        Value::Integer(value) => Some(value.clamp(i32::MIN.into(), i32::MAX.into()) as i32),
-        Value::Number(value) if value.is_finite() => Some(
-            value
-                .round()
-                .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32,
-        ),
-        Value::String(text) => {
-            let text = text.to_str().ok()?;
-            let trimmed = text.trim();
-            trimmed
-                .parse::<i32>()
-                .ok()
-                .or_else(|| {
-                    trimmed
-                        .parse::<f32>()
-                        .ok()
-                        .map(|value| value.round() as i32)
-                })
-                .or_else(|| {
-                    let (_, suffix) = text.rsplit_once('W')?;
-                    suffix.parse::<i32>().ok()
-                })
-        }
-        _ => None,
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn timing_window_name(value: Value) -> Option<&'static str> {
-    // GameConstantsAndTypes::TimingWindow is zero-based. GetDisabledTimingWindows
-    // only lists W1..W5, but the native bitset accepts every TimingWindow.
-    const NAMES: [&str; 10] = [
-        "TimingWindow_W1", "TimingWindow_W2", "TimingWindow_W3",
-        "TimingWindow_W4", "TimingWindow_W5", "TimingWindow_Mine",
-        "TimingWindow_Attack", "TimingWindow_Hold", "TimingWindow_Roll",
-        "TimingWindow_Checkpoint",
-    ];
-    crate::song_tables::option_enum(Some(&value), &NAMES, "TimingWindow")
-        .ok().map(|index| NAMES[index])
-}
 
 #[must_use]
 pub fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
@@ -70,47 +20,6 @@ pub fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
     windows[index] + 0.0015
 }
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn worst_judgment_from_offsets(value: Value) -> i32 {
-    let Value::Table(offsets) = value else {
-        return 1;
-    };
-    let mut worst = 1;
-    for pair in offsets.sequence_values::<Value>() {
-        let Ok(value) = pair else {
-            continue;
-        };
-        for offset in timing_offsets_from_value(value) {
-            let abs = offset.abs();
-            let judgment = (1..=5)
-                .find(|window| abs <= timing_window_seconds(*window, "", false))
-                .unwrap_or(5);
-            worst = worst.max(judgment);
-        }
-    }
-    worst
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-fn timing_offsets_from_value(value: Value) -> impl Iterator<Item = f32> {
-    let Value::Table(table) = value else {
-        return [read_f32(value), None].into_iter().flatten();
-    };
-    let mut offsets = [None, None];
-    if let Ok(value) = table.raw_get::<Value>(2)
-        && let Some(offset) = read_f32(value)
-    {
-        offsets[0] = Some(offset);
-    }
-    if matches!(table.raw_get::<Value>(6), Ok(value) if truthy(&value))
-        && let Ok(value) = table.raw_get::<Value>(7)
-        && let Some(offset) = read_f32(value)
-    {
-        offsets[1] = Some(offset);
-    }
-    offsets.into_iter().flatten()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +32,4 @@ mod tests {
         assert!((timing_window_seconds(1, "FA+", true) - 0.010).abs() <= 1e-6);
         assert!((timing_window_seconds(99, "", false) - 0.1815).abs() <= 1e-6);
     }
-
-    
 }

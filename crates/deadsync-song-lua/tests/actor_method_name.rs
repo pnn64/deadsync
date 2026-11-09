@@ -1,6 +1,6 @@
 //! Binary method keys, UTF-8 errors and pinned-string lifetime in the Rust VM.
 use deadlib_lua::{Value, Vm, compile};
-use deadsync_song_lua::rust_engine::test_support;
+use deadsync_song_lua::test_support;
 
 #[test]
 fn method_name_flags_preserve_binary_keys_utf8_errors_and_gc_roots() {

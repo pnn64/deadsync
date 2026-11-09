@@ -1,6 +1,7 @@
 //! Loading policy for authored callbacks that cannot use offline playback.
 use crate::SongLuaCompileContext;
-use crate::input_types::RUNTIME_REQUIRED as REQUIRED;
+pub(crate) const REQUIRED: &str =
+    "song Lua registers input callbacks and requires runtime Lua (context.live = true)";
 
 pub(crate) fn compile<T>(
     context: &SongLuaCompileContext,

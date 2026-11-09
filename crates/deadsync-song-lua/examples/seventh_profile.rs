@@ -29,7 +29,7 @@ fn main() {
     type Compiled = CompiledSongLua<
         SongLuaOverlayActor<SongLuaOverlayKind<(), (), deadlib_present::actors::TextAttribute>>,
     >;
-    let mut compiled: Compiled = compile_song_lua_with_default_host(
+    let mut compiled: Compiled = compile_song_lua(
         &dir.join("lua/default.lua"),
         &context,
         SongLuaNoteskinResolver::default(),

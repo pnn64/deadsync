@@ -1,10 +1,3 @@
-#[cfg(any(test, feature = "legacy-oracle"))]
-use mlua::{MultiValue, Value};
-
-use crate::SONG_LUA_PRODUCT_VERSION;
-#[cfg(any(test, feature = "legacy-oracle"))]
-use crate::read_f32;
-
 pub fn version_parts(version: &str) -> [i64; 3] {
     let mut parts = [0_i64; 3];
     for (index, part) in version.trim().split('.').take(3).enumerate() {
@@ -12,96 +5,6 @@ pub fn version_parts(version: &str) -> [i64; 3] {
         parts[index] = part[..digits].parse::<i64>().unwrap_or(0);
     }
     parts
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[must_use]
-pub fn version_args(args: &MultiValue) -> Vec<i64> {
-    if let Some(Value::String(version)) = args.front()
-        && let Ok(version) = version.to_str()
-    {
-        return version_parts(version.as_ref()).into_iter().collect();
-    }
-    args.iter()
-        .filter_map(|value| read_f32(value.clone()))
-        .map(|value| value.round() as i64)
-        .collect()
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[must_use]
-pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
-    let mut expected = version_values(args);
-    let Some(first) = expected.next() else {
-        return false;
-    };
-    let product = version_parts(product_version);
-    product[0] == first
-        && expected
-            .enumerate()
-            .all(|(index, value)| product.get(index + 1).is_some_and(|part| *part == value))
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[must_use]
-pub fn song_lua_is_product_version(args: &MultiValue) -> bool {
-    is_product_version(SONG_LUA_PRODUCT_VERSION, args)
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[must_use]
-pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> bool {
-    let mut expected = version_values(args);
-    let Some(first) = expected.next() else {
-        return true;
-    };
-    let product = version_parts(product_version);
-    if product[0] != first {
-        return product[0] > first;
-    }
-    for (index, expected) in expected.enumerate() {
-        let product = product.get(index + 1).copied().unwrap_or(0);
-        if product != expected {
-            return product > expected;
-        }
-    }
-    true
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[must_use]
-pub fn song_lua_is_minimum_product_version(args: &MultiValue) -> bool {
-    is_minimum_product_version(SONG_LUA_PRODUCT_VERSION, args)
-}
-
-// Keep the string-first three-part rule while streaming numeric arguments.
-#[cfg(any(test, feature = "legacy-oracle"))]
-enum VersionValues<'a> {
-    Parts(std::array::IntoIter<i64, 3>),
-    Numbers(std::collections::vec_deque::Iter<'a, Value>),
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-impl Iterator for VersionValues<'_> {
-    type Item = i64;
-    fn next(&mut self) -> Option<i64> {
-        match self {
-            Self::Parts(parts) => parts.next(),
-            Self::Numbers(values) => {
-                values.find_map(|value| read_f32(value.clone()).map(|value| value.round() as i64))
-            }
-        }
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-fn version_values(args: &MultiValue) -> VersionValues<'_> {
-    if let Some(Value::String(version)) = args.front()
-        && let Ok(version) = version.to_str()
-    {
-        return VersionValues::Parts(version_parts(version.as_ref()).into_iter());
-    }
-    VersionValues::Numbers(args.iter())
 }
 
 #[cfg(test)]

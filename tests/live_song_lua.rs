@@ -1,5 +1,10 @@
 //! Replay native observations through gameplay. `--production` exercises normal
 //! preparation and the shared Lua scene used by interactive song scripts.
+#[expect(
+    dead_code,
+    unused_imports,
+    reason = "the replay CLI uses a subset of the shared regression controls"
+)]
 #[path = "song_lua_itgmania_semantic_parity/native_gameplay.rs"]
 mod native_gameplay;
 #[path = "support/paths.rs"]

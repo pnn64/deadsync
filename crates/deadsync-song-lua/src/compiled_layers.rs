@@ -1,11 +1,11 @@
 //! Shared message merging and compiled layer ownership, independent of a VM.
 use crate::{
-    CompiledSongLuaData, SongLuaMessageEvent, SongLuaOverlayActor, SongLuaOverlayKind,
+    CompiledSongLua, SongLuaMessageEvent, SongLuaOverlayActor, SongLuaOverlayKind,
     sort_compiled_song_lua,
 };
 use deadlib_present::actors::TextAttribute;
-type DefaultCompiledSongLua<S, V, L> =
-    CompiledSongLuaData<SongLuaOverlayActor<SongLuaOverlayKind<S, V, TextAttribute>>, L>;
+type DefaultCompiledSongLua<S, V> =
+    CompiledSongLua<SongLuaOverlayActor<SongLuaOverlayKind<S, V, TextAttribute>>>;
 
 pub(crate) fn merge_runtime_messages(
     messages: &mut Vec<SongLuaMessageEvent>,
@@ -187,12 +187,12 @@ pub(crate) fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
     Ok(order)
 }
 
-pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex, LiveScene>(
-    mut compiled: DefaultCompiledSongLua<NoteskinSlot, ModelVertex, LiveScene>,
+pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
+    mut compiled: DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
     overlay_layers: Vec<usize>,
     entry_paths: &[std::path::PathBuf],
     primary_index: usize,
-) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex, LiveScene>>, String> {
+) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String> {
     if overlay_layers.len() != compiled.overlays.len() {
         return Err("song lua overlay ownership did not match compiled overlays".to_string());
     }

@@ -7,16 +7,6 @@ pub enum SongLuaInputType {
     Release,
 }
 
-impl SongLuaInputType {
-    pub(crate) fn native_name(self) -> &'static str {
-        match self {
-            Self::FirstPress => "InputEventType_FirstPress",
-            Self::Repeat => "InputEventType_Repeat",
-            Self::Release => "InputEventType_Release",
-        }
-    }
-}
-
 /// Inputs supplied by the input owner, never inferred from expected Lua output.
 #[derive(Clone, Debug)]
 pub struct SongLuaInputEvent<'a> {
@@ -34,9 +24,6 @@ pub struct SongLuaInputEvent<'a> {
     pub is_joystick: bool,
     pub is_mouse: bool,
 }
-
-pub(crate) const RUNTIME_REQUIRED: &str =
-    "song Lua registers input callbacks and requires runtime Lua (context.live = true)";
 
 /// An authored native actor write, in callback execution order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

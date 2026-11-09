@@ -2,11 +2,11 @@
 //! The full host installs these documented fallback helpers immediately; the
 //! frozen inventories predate that phase. Every other actual class key remains.
 use deadlib_lua::compile_named;
-use deadsync_song_lua::{SongLuaCompileContext, rust_engine::RustSongRuntime};
+use deadsync_song_lua::{SongLuaCompileContext, SongRuntime};
 
-pub fn runtime() -> RustSongRuntime {
+pub fn runtime() -> SongRuntime {
     let mut host =
-        RustSongRuntime::new(&SongLuaCompileContext::new(".", "native method inventory")).unwrap();
+        SongRuntime::new(&SongLuaCompileContext::new(".", "native method inventory")).unwrap();
     execute(
         &mut host,
         r#"
@@ -28,7 +28,7 @@ end
     host
 }
 
-pub fn execute(host: &mut RustSongRuntime, source: impl AsRef<[u8]>) {
+pub fn execute(host: &mut SongRuntime, source: impl AsRef<[u8]>) {
     let code = compile_named(source.as_ref(), b"=frozen native class inventory").unwrap();
     host.vm_mut().execute(&code).unwrap();
 }

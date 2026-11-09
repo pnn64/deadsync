@@ -1,29 +1,25 @@
 //! Original private host fixtures, using the current native operations.
 use deadlib_lua::{Error, HostCall, NativeCallStatus, Root, Value};
 use deadsync_song_lua::{
-    SongLuaActorMultiVertexPoint as Point, SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaActorMultiVertexPoint as Point, SongLuaCompileContext, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
 #[path = "support/baked_program.rs"]
 mod api;
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "host state unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "host state unit")).unwrap()
 }
-fn construct(
-    host: &mut RustSongRuntime,
-    source: &str,
-) -> (deadsync_song_lua::rust_engine::ActorScene, Value) {
+fn construct(host: &mut SongRuntime, source: &str) -> (deadsync_song_lua::ActorScene, Value) {
     let declaration = api::eval(host.vm_mut(), source)[0];
     let scene = host.instantiate_actor(declaration).unwrap();
     (scene, host.actor_scene_root(scene).unwrap())
 }
-fn call_root(host: &mut RustSongRuntime, f: Root) -> Result<(), Error> {
+fn call_root(host: &mut SongRuntime, f: Root) -> Result<(), Error> {
     let vm = host.vm_mut();
     let f = vm.rooted(f)?;
     vm.call(f, &[]).map(|_| ())
 }
-fn events(host: &mut RustSongRuntime) -> Vec<f64> {
+fn events(host: &mut SongRuntime) -> Vec<f64> {
     let table = host.vm_mut().get_global(b"events").unwrap();
     let Value::Table(table) = table else {
         panic!("events table")

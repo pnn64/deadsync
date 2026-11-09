@@ -20,7 +20,7 @@ fn main() {
     context.players[0].enabled = true;
     context.players[1].enabled = false;
     context.music_length_seconds = 4.0;
-    let mut compiled = compile_song_lua_layers_with_default_host(
+    let mut compiled = compile_song_lua_layers(
         &[path],
         0,
         &context,

@@ -598,9 +598,3 @@ fn lua_long_string_end(source: &str, index: usize, open_end: usize) -> Result<us
     }
     Err("unterminated Lua long string".to_string())
 }
-
-
-
-
-
-

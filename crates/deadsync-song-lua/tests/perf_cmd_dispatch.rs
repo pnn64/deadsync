@@ -1,11 +1,15 @@
 //! Original streamed command/scanner fixtures over the Rust compiler and VM.
 use deadlib_lua::{Value, Vm, compile_named};
 use deadsync_song_lua::preprocess_lua_cmd_syntax;
-use deadsync_song_lua::rust_engine::test_support::{
+use deadsync_song_lua::test_support::{
     cmd_append_newlines as append_lua_newlines, cmd_commands as lua_cmd_commands,
     cmd_newline_count as lua_newline_count, cmd_preprocess_cow as preprocess_lua_cmd_syntax_cow,
     cmd_quoted_end as lua_quoted_end,
 };
+#[expect(
+    dead_code,
+    reason = "this fixture uses scoped measurement from the shared allocation API"
+)]
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/bench_clock.rs"]

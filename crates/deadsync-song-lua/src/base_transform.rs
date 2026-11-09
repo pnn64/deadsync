@@ -1,7 +1,3 @@
-//! Base scale and alignment are immediate properties, outside Actor's tween state.
-#[cfg(any(test, feature = "legacy-oracle"))]
-use mlua::{Table, Value};
-
 macro_rules! base_fields {
     ($($field:ident => $key:ident),* $(,)?) => {
         #[derive(Clone, Copy)]
@@ -42,17 +38,6 @@ pub(crate) struct BaseTransform {
 }
 
 impl BaseTransform {
-    #[cfg(any(test, feature = "legacy-oracle"))]
-    pub fn read(actor: &Table) -> mlua::Result<Self> {
-        let mut state = Self::default();
-        for field in BaseField::ALL {
-            if let Some(value) = actor.raw_get::<Option<f32>>(field.state_key())? {
-                state.set(field, value);
-            }
-        }
-        Ok(state)
-    }
-
     pub fn get(self, field: BaseField) -> Option<f32> {
         (self.present & (1 << field as u8) != 0).then_some(self.values[field as usize])
     }
@@ -61,24 +46,4 @@ impl BaseTransform {
         self.values[field as usize] = value;
         self.present |= 1 << field as u8;
     }
-
-    #[cfg(any(test, feature = "legacy-oracle"))]
-    pub fn zoom_axis(self, field: BaseField) -> f32 {
-        // Preserve the table representation's distinction between an absent
-        // axis and an explicitly authored 1.0 (including snapshot exports).
-        self.get(field).or(self.get(BaseField::Zoom)).unwrap_or(1.0)
-    }
-
-    #[cfg(any(test, feature = "legacy-oracle"))]
-    pub fn snapshot(self) -> impl Iterator<Item = (&'static str, Value)> {
-        BaseField::ALL.into_iter().map(move |field| {
-            (
-                field.state_key(),
-                self.get(field)
-                    .map_or(Value::Nil, |v| Value::Number(v.into())),
-            )
-        })
-    }
 }
-
-

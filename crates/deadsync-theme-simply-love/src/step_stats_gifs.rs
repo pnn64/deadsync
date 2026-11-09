@@ -7,7 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 use std::{fmt, ptr};
 
-mod rust_engine;
+mod capture;
 
 const GIF_FOLDER: &str = "step_stats_gifs";
 const MAX_GIFS: usize = 256;
@@ -519,7 +519,7 @@ fn capture_script(
 ) -> Result<CapturedGif, String> {
     let mut vm = deadlib_lua::Vm::try_new_with_memory_limit(MAX_LUA_MEMORY)
         .map_err(|error| format!("failed to initialize bounded Lua VM: {error}"))?;
-    rust_engine::capture(&mut vm, content, source, side, wide)
+    capture::capture(&mut vm, content, source, side, wide)
 }
 
 fn numbered_key(key: &str, prefix: &str) -> Option<usize> {

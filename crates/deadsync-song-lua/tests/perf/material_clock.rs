@@ -1,3 +1,11 @@
+#[path = "../../../../tests/support/perf.rs"]
+#[expect(
+    dead_code,
+    reason = "this benchmark uses only scoped allocation measurement"
+)]
+mod allocations;
+#[path = "../support/bench_clock.rs"]
+mod bench_clock;
 use super::*;
 #[path = "material_clock_before.rs"]
 mod before;
@@ -87,7 +95,6 @@ fn material_prefixes_preserve_updates_setstate_and_float_order() {
 
 #[test]
 fn additive_state_clocks_preserve_uv_and_initialization_churn() {
-    use crate::draw_capture::perf::allocations;
     let data = frames(
         &(0..64)
             .map(|i| (i % 7 + 1) as f32 * 0.01)
@@ -110,7 +117,7 @@ fn additive_state_clocks_preserve_uv_and_initialization_churn() {
 #[test]
 #[ignore = "release performance measurement; run alone with --nocapture"]
 fn benchmark_material_clock() {
-    use crate::draw_capture::perf::{allocations, cycles, pin_cpu2};
+    use bench_clock::{cycles, pin_cpu2};
     use std::{hint::black_box, time::Instant};
     let _affinity = pin_cpu2();
     let reverse = std::env::var_os("DEADSYNC_PERF_REVERSE").is_some();

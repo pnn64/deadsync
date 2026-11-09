@@ -1,6 +1,6 @@
 //! Original environment lookup comparison using the Rust loader.
 use deadlib_lua::{Value, Vm};
-use deadsync_song_lua::{SongLuaCompileContext, rust_engine::RustSongRuntime};
+use deadsync_song_lua::{SongLuaCompileContext, SongRuntime};
 #[path = "support/baked_program.rs"]
 mod api;
 
@@ -41,7 +41,7 @@ fn chunk_environment_reads_preserve_rebinding_metamethods_false_and_errors() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("environment.lua");
     std::fs::write(&path, b"return __songlua_current_chunk_env").unwrap();
-    let mut host = RustSongRuntime::new(&SongLuaCompileContext::new(
+    let mut host = SongRuntime::new(&SongLuaCompileContext::new(
         dir.path(),
         "environment lookup unit",
     ))

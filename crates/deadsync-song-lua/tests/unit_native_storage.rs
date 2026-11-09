@@ -1,24 +1,23 @@
 //! Native state promotion and allocation contracts from the original host units.
 use deadlib_lua::{Error, HostCall, Root, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext, SongLuaOverlayState,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, SongLuaOverlayState, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
 mod api;
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "native storage unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "native storage unit")).unwrap()
 }
-fn instantiate(host: &mut RustSongRuntime, source: &str) -> Value {
+fn instantiate(host: &mut SongRuntime, source: &str) -> Value {
     let declaration = api::eval(host.vm_mut(), source)[0];
     let scene = host.instantiate_actor(declaration).unwrap();
     host.actor_scene_root(scene).unwrap()
 }
 fn read(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     reader: Root,
     output: &test_support::FixtureStateOutput,
 ) -> SongLuaOverlayState {
@@ -215,7 +214,7 @@ fn vector_reader<const N: usize>(call: &mut HostCall<'_>) -> Result<(), Error> {
     *output.lock().unwrap() = Some(result);
     Ok(())
 }
-fn vector_probe<const N: usize>(host: &mut RustSongRuntime) -> (Value, VectorOutput<N>) {
+fn vector_probe<const N: usize>(host: &mut SongRuntime) -> (Value, VectorOutput<N>) {
     let output = Arc::new(Mutex::new(None));
     let owner = api::table(host.vm_mut());
     let root = test_support::prepare_actor_reader(host, owner, vector_reader::<N>, output.clone())
@@ -223,7 +222,7 @@ fn vector_probe<const N: usize>(host: &mut RustSongRuntime) -> (Value, VectorOut
     (host.vm_mut().rooted(root).unwrap(), output)
 }
 fn vector<const N: usize>(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     f: Value,
     out: &VectorOutput<N>,
     value: Value,
@@ -391,12 +390,12 @@ fn native_vectors_reuse_slots_and_snapshot_independently() {
     );
 }
 
-fn observed_vertices(host: &RustSongRuntime) -> Arc<[[f32; 4]; 4]> {
+fn observed_vertices(host: &SongRuntime) -> Arc<[[f32; 4]; 4]> {
     let (len, value) = test_support::observed_vertex_sample(host);
     assert_eq!(len, 1);
     value.expect("owned vertex color observation")
 }
-fn write_vertices(host: &mut RustSongRuntime, value: f32) {
+fn write_vertices(host: &mut SongRuntime, value: f32) {
     api::eval(
         host.vm_mut(),
         &format!(

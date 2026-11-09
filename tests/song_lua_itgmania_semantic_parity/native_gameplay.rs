@@ -709,7 +709,7 @@ return Def.ActorFrame {{
     #[test]
     fn option_trace_keeps_native_returns_and_strings() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
-            compile_song_lua_with_default_host};
+            compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(2_000_000).expect("install option trace");
         let dir = std::env::temp_dir().join(format!("deadsync-option-call-trace-{}", std::process::id()));
@@ -731,7 +731,7 @@ return Def.ActorFrame{}
 "#).expect("write real option calls");
         let mut context = SongLuaCompileContext::new(&dir, "option trace control");
         context.live = true;
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+        let compiled = compile_song_lua::<(), (), _>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None, |_, _| None).expect("compile real option operations");
         assert!(compiled.live_scene.is_some());
@@ -912,7 +912,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn native_overlay_preserves_theme_tree_and_capture_probe_input() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-overlay-tree-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("tree.lua");
@@ -936,7 +936,7 @@ end }
             context.live = true;
             context.players[1].enabled = false;
             context.capture_overlay_probe = captured;
-            let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
                 SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
                 |_| None, |_,_| None).unwrap();
             let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -948,7 +948,7 @@ end }
 
     #[test]
     fn native_gameplay_decorations_retain_children_while_hibernating() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-decorations-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("decorations.lua");
@@ -975,7 +975,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native decorations");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -985,7 +985,7 @@ end }
 
     #[test]
     fn native_plain_actor_draws_do_not_consume_geometry_budget() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-plain-actor-draws-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("draws.lua");
@@ -1006,7 +1006,7 @@ return root
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "plain Actor draws");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -1019,7 +1019,7 @@ return root
 
     #[test]
     fn native_live_draw_payload_can_exceed_the_baked_operation_count() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-live-draw-payload-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("draws.lua");
@@ -1035,7 +1035,7 @@ return Def.ActorFrame {
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "live draw payload");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -1048,7 +1048,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_finish_tweening_propagates_and_source_broadcasts_keep_callback_scope() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-finish-tree-scope-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("commands.lua");
@@ -1074,7 +1074,7 @@ return Def.ActorFrame {
         let mut context = SongLuaCompileContext::new(&dir, "finish tree and source scope");
         context.live = true;
         context.defer_initial_live_update = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let scene = compiled.live_scene.as_mut().unwrap();
@@ -1092,7 +1092,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_failed_exit_records_history_without_emptying_the_meter() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-exit-life-record-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("history.lua");
@@ -1100,7 +1100,7 @@ return Def.ActorFrame {
         let mut context = SongLuaCompileContext::new(&dir, "failed exit life history");
         context.live = true;
         context.players[1].enabled = false;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let scene = compiled.live_scene.as_mut().unwrap();
@@ -1126,7 +1126,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_event_mode_reads_the_owned_preference_without_nested_api_calls() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         super::start_call_log(2_000_000).unwrap();
         let dir = std::env::temp_dir().join(format!("deadsync-event-mode-owner-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1141,7 +1141,7 @@ return Def.ActorFrame {}
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "event mode preference owner");
         context.live = true;
-        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
@@ -1153,7 +1153,7 @@ return Def.ActorFrame {}
 
     #[test]
     fn native_gameplay_transitions_retain_their_loaded_auto_actors() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-transition-children-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("transitions.lua");
@@ -1187,7 +1187,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native transition children");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -1197,7 +1197,7 @@ end }
 
     #[test]
     fn native_background_retains_borders_and_duplicate_brightness_quads() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-background-children-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("background.lua");
@@ -1225,7 +1225,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native background children");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -1235,7 +1235,7 @@ end }
 
     #[test]
     fn native_current_background_helper_keeps_its_theme_query_caller() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         super::start_call_log(2_000_000).unwrap();
         let dir = std::env::temp_dir().join(format!("deadsync-background-helper-caller-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1243,7 +1243,7 @@ end }
         std::fs::write(&entry, "return Def.Sprite { InitCommand=function(self) assert(self:LoadFromCurrentSongBackground() == self) end }").unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native background helper caller");
         context.live = true;
-        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
@@ -1275,7 +1275,7 @@ end }
 
     #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(2_000_000).unwrap();
         let dir=std::env::temp_dir().join(format!("deadsync-theme-call-scope-{}",std::process::id()));
@@ -1285,7 +1285,7 @@ local nested=assert(loadstring("return function() return GAMESTATE:GetSongOption
 return Def.ActorFrame { OnCommand=function(self) assert(nested()==1) end }
 "#).unwrap();
         let mut context=SongLuaCompileContext::new(&dir,"theme call scope");context.live=true;
-        let compiled=compile_song_lua_with_default_host::<(),(),_>(&entry,&context,SongLuaNoteskinResolver::default(),
+        let compiled=compile_song_lua::<(),(),_>(&entry,&context,SongLuaNoteskinResolver::default(),
             |_,_,_|Ok(Arc::<[()]>::from([])), |_|None, |_,_|None).unwrap();
         assert!(compiled.live_scene.is_some());
         let events=super::CALL_EVENTS.with_borrow(|capture|capture.events.clone());
@@ -2785,7 +2785,7 @@ return Def.ActorFrame {
     #[test]
     fn arrow_effects_reads_owned_style_without_extra_lua_queries() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
-            compile_song_lua_with_default_host};
+            compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(10_000).expect("observational logger");
         let dir = std::env::temp_dir().join(format!("deadsync-arrow-style-{}", std::process::id()));
@@ -2801,7 +2801,7 @@ return Def.Actor {}
 "#).expect("style control");
         let mut context = SongLuaCompileContext::new(&dir, "owned style");
         context.live = true;
-        compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+        compile_song_lua::<(), (), _>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None, |_, _| None).expect("native column positions after style mutation");
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
@@ -2817,7 +2817,7 @@ return Def.Actor {}
 
     fn dynamic_command_observations(enabled: bool) -> Vec<serde_json::Value> {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame,
-            SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+            SongLuaNoteskinResolver, compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(10_000).expect("observational logger");
         let dir = std::env::temp_dir().join(format!("deadsync-dynamic-trace-{}-{enabled}", std::process::id()));
@@ -2838,7 +2838,7 @@ return Def.Actor {
         let mut context = SongLuaCompileContext::new(&dir, "dynamic observer");
         context.live = true;
         context.trace_dynamic_commands = enabled;
-        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let mut compiled = compile_song_lua::<(), (), _>(
             &entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -2874,7 +2874,7 @@ return Def.Actor {
     #[test]
     fn native_multivertex_texture_getter_preserves_runtime_and_observation_scope() {
         use deadsync_song_lua::{
-            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host,
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua,
         };
         use std::{fs, sync::Arc};
         super::start_call_log(250_000).expect("install observational logger");
@@ -2914,7 +2914,7 @@ return Def.ActorFrame {
 "#).expect("write texture trace control");
         let mut context = SongLuaCompileContext::new(&dir, "native texture class observations");
         context.live = true;
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let compiled = compile_song_lua::<(), (), _>(
             &entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
         ).expect("compile real texture getter control");
@@ -2941,7 +2941,7 @@ return Def.ActorFrame {
         use super::start_call_log;
         use deadsync_song_lua::{
             SongLuaCompileContext, SongLuaDifficulty, SongLuaNoteskinResolver, SongLuaStep,
-            compile_song_lua_with_default_host,
+            compile_song_lua,
         };
         use std::{fs, sync::Arc};
         start_call_log(250_000).expect("install observational logger");
@@ -2979,7 +2979,7 @@ return Def.ActorFrame {
             })
             .collect();
         context.player_step_indices[0] = Some(1);
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let compiled = compile_song_lua::<(), (), _>(
             &entry,
             &context,
             SongLuaNoteskinResolver::default(),
@@ -3109,7 +3109,7 @@ end}
         context.display_height = 0.0;
         context.render_to_texture = false;
         context.players[1].enabled = false;
-        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let mut compiled = compile_song_lua::<(), (), _>(
             &entry,
             &context,
             SongLuaNoteskinResolver::default(),

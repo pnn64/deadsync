@@ -1,45 +1,44 @@
 //! Original screen input unit fixtures over the Rust-owned callback registry.
 use deadlib_lua::{NativeHook, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext, SongLuaInputEvent, SongLuaInputType,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, SongLuaInputEvent, SongLuaInputType, {SongRuntime, test_support},
 };
 #[path = "support/baked_program.rs"]
 mod api;
-fn setup() -> RustSongRuntime {
+fn setup() -> SongRuntime {
     let context = SongLuaCompileContext::new(".", "input unit fixtures");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let screen = api::table(host.vm_mut());
     host.vm_mut().set_global(b"SCREEN", screen).unwrap();
     host.bind_screen_input(screen).unwrap();
     test_support::install_input_controls(&mut host, &event(SongLuaInputType::Repeat)).unwrap();
     host
 }
-fn execute(host: &mut RustSongRuntime, source: impl AsRef<[u8]>) -> Vec<Value> {
+fn execute(host: &mut SongRuntime, source: impl AsRef<[u8]>) -> Vec<Value> {
     api::eval(host.vm_mut(), source)
 }
-fn number(host: &mut RustSongRuntime, source: &str) -> f64 {
+fn number(host: &mut SongRuntime, source: &str) -> f64 {
     api::as_number(execute(host, source)[0])
 }
-fn boolean(host: &mut RustSongRuntime, source: &str) -> bool {
+fn boolean(host: &mut SongRuntime, source: &str) -> bool {
     api::as_bool(execute(host, source)[0])
 }
-fn put(host: &mut RustSongRuntime, name: &[u8], value: Value) {
+fn put(host: &mut SongRuntime, name: &[u8], value: Value) {
     host.vm_mut().set_global(name, value).unwrap();
 }
-fn identity(host: &mut RustSongRuntime, value: Value) -> usize {
+fn identity(host: &mut SongRuntime, value: Value) -> usize {
     host.vm_mut().object_pointer(value).unwrap() as usize
 }
-fn register(host: &mut RustSongRuntime, function: Value) {
+fn register(host: &mut SongRuntime, function: Value) {
     let vm = host.vm_mut();
     let screen = vm.get_global(b"SCREEN").unwrap();
     let add = api::get(vm, screen, b"AddInputCallback");
     api::call(vm, add, &[screen, function]);
 }
-fn interpreted_count(host: &RustSongRuntime) -> usize {
+fn interpreted_count(host: &SongRuntime) -> usize {
     test_support::input_functions(host).unwrap().len() - test_support::input_compiled_count(host)
 }
-fn seen(host: &mut RustSongRuntime) -> Vec<usize> {
+fn seen(host: &mut SongRuntime) -> Vec<usize> {
     let vm = host.vm_mut();
     let Value::Table(table) = vm.get_global(b"SEEN").unwrap() else {
         panic!("seen table")

@@ -6,8 +6,6 @@ license = "GPL-3.0"
 
 [features]
 test-support = []
-# Development comparisons only; production always uses the Rust facade.
-legacy-oracle = ["test-support"]
 performance = []
 
 [dependencies]
@@ -52,302 +50,302 @@ deadlib-render = { path = "../deadlib-render" }
 winit = "0.30.13"
 
 [[test]]
-name = "rust_live_gameplay"
+name = "live_gameplay"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_arrows"
+name = "arrows"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_visuals"
+name = "live_visuals"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_clock"
+name = "clock"
 
 [[test]]
-name = "rust_random"
+name = "random"
 
 [[test]]
-name = "rust_loader"
+name = "loader"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_definitions"
+name = "definitions"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_actors"
+name = "actors"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_messages"
+name = "messages"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_render"
+name = "render"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_effects"
+name = "effects"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_wrappers"
+name = "wrappers"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_sound"
+name = "sound"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_sprites"
+name = "sprites"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_meshes"
+name = "meshes"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_proxies"
+name = "proxies"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_framebuffers"
+name = "framebuffers"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_draw"
+name = "draw"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_bitmap_text"
+name = "bitmap_text"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_text_displays"
+name = "text_displays"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_banners"
+name = "banners"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_graphs"
+name = "graphs"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_meters"
+name = "song_meters"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_courses"
+name = "courses"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_models"
+name = "models"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_preferences_display"
+name = "preferences_display"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_theme"
+name = "theme"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_sl"
+name = "sl"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_catalog"
+name = "catalog"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_options"
+name = "song_options"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_utility_managers"
+name = "utility_managers"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_player_options"
+name = "player_options"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_player_state"
+name = "player_state"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_game_state"
+name = "game_state"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_noteskin"
+name = "noteskin"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_profiles"
+name = "profiles"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_statistics"
+name = "statistics"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_screen_ui"
+name = "screen_ui"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_input"
+name = "input"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_baked_program"
+name = "baked_program"
 required-features = []
 
 [[test]]
-name = "rust_baked_program_tables"
+name = "baked_program_tables"
 required-features = []
 
 [[test]]
-name = "rust_screen_manager"
+name = "screen_manager"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_generated_players"
+name = "generated_players"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_notefields"
+name = "notefields"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_player_parts"
+name = "player_parts"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_screen_parts"
+name = "screen_parts"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_steps_displays"
+name = "steps_displays"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_transitions"
+name = "transitions"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_preparation"
+name = "preparation"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_top_screen"
+name = "top_screen"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_files"
+name = "files"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_screen_assembly"
+name = "screen_assembly"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_gameplay_theme"
+name = "gameplay_theme"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_gameplay_underlay"
+name = "gameplay_underlay"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_gameplay_overlay"
+name = "gameplay_overlay"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_gameplay_reload"
-path = "tests/rust_gameplay_reload.rs"
+name = "gameplay_reload"
+path = "tests/gameplay_reload.rs"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_scene_retirement"
+name = "scene_retirement"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_layers"
+name = "song_layers"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_activation"
+name = "song_activation"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_column_output"
+name = "song_column_output"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_update_output"
+name = "song_update_output"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_frame_capture"
+name = "song_frame_capture"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_updates"
+name = "song_updates"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_multitap"
+name = "song_multitap"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_compiler"
+name = "song_compiler"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_diagnostics"
+name = "song_diagnostics"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_song_observations"
+name = "song_observations"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_frames"
+name = "live_frames"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_actors"
+name = "live_actors"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_layers"
+name = "live_layers"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_scene"
+name = "live_scene"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_live_compiler"
+name = "live_compiler"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_actor_setters"
+name = "actor_setters"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_actor_inputs"
+name = "actor_inputs"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_actor_input_contract"
+name = "actor_input_contract"
 required-features = ["test-support"]
 
 [[test]]
@@ -363,11 +361,11 @@ name = "actor_method_name"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_compat_globals"
+name = "compat_globals"
 required-features = ["test-support"]
 
 [[test]]
-name = "rust_actor_copy"
+name = "actor_copy"
 required-features = ["test-support"]
 
 [[test]]

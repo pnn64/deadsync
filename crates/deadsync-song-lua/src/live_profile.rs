@@ -4,18 +4,10 @@ use std::{cell::Cell, time::Instant};
 
 #[derive(Clone, Copy)]
 pub(crate) enum Phase {
-    ActorUpdate,
-    ActorDraw,
-    StateRead,
     VisualPublication,
 }
 
-const NAMES: [&str; 4] = [
-    "actor_update",
-    "actor_draw",
-    "state_read",
-    "visual_publication",
-];
+const NAMES: [&str; 1] = ["visual_publication"];
 
 #[derive(Clone, Copy, Default)]
 struct Sample {
@@ -25,7 +17,7 @@ struct Sample {
 }
 
 thread_local! {
-    static TOTALS: Cell<[Sample; 4]> = const { Cell::new([Sample { calls: 0, cycles: 0, nanos: 0 }; 4]) };
+    static TOTALS: Cell<[Sample; 1]> = const { Cell::new([Sample { calls: 0, cycles: 0, nanos: 0 }; 1]) };
 }
 
 #[cfg(windows)]
@@ -81,7 +73,7 @@ impl Drop for Scope {
 
 /// Clear this thread's counters outside any measured phase, after warmup.
 pub fn reset_live_profile() {
-    TOTALS.with(|totals| totals.set([Sample::default(); 4]));
+    TOTALS.with(|totals| totals.set([Sample::default(); 1]));
 }
 
 /// Read aggregate phase costs. These include timer overhead, exclude allocation

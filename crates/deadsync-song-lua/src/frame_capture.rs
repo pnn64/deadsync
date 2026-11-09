@@ -5,7 +5,7 @@ use crate::{
     song_beat_at_elapsed_seconds,
 };
 
-/// Owned startup queue output shared by preparation adapters and the oracle.
+/// Owned startup queue output shared by preparation and regression fixtures.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StartupState {
     pub initial: crate::SongLuaOverlayState,

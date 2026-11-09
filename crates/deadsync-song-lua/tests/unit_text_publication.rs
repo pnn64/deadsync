@@ -2,10 +2,13 @@
 use deadlib_lua::{Error, HostCall, Root, Value};
 use deadlib_present::actors::TextAttribute;
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
+#[expect(
+    dead_code,
+    reason = "this fixture uses scoped measurement from the shared allocation API"
+)]
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
@@ -29,7 +32,7 @@ struct Binding {
     output: Arc<Mutex<Option<Output>>>,
 }
 struct TextFixture {
-    host: RustSongRuntime,
+    host: SongRuntime,
     actor: Value,
     functions: [Root; 5],
     output: Arc<Mutex<Option<Output>>>,
@@ -65,7 +68,7 @@ fn reader(call: &mut HostCall<'_>) -> Result<(), Error> {
     result
 }
 impl TextFixture {
-    fn new(mut host: RustSongRuntime, actor: Value) -> Self {
+    fn new(mut host: SongRuntime, actor: Value) -> Self {
         let output = Arc::new(Mutex::new(Some(Output {
             text: Arc::from(""),
             attributes: Arc::from([]),
@@ -118,8 +121,8 @@ impl Drop for TextFixture {
         }
     }
 }
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "text publication unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "text publication unit")).unwrap()
 }
 fn fixture(source: &str) -> TextFixture {
     let mut host = runtime();

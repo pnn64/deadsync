@@ -1,8 +1,17 @@
+//! Song Lua compilation, host bindings, and playback.
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "unit tests build actor math without the playback renderer"
+    )
+)]
 mod actor_quaternion;
 pub mod gameplay;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
 // Playback is tested with concrete asset fixtures by tests/playback.rs.
+
 #[cfg(not(test))]
 pub mod playback;
 use std::collections::{HashMap, HashSet};
@@ -12,68 +21,54 @@ use std::sync::Arc;
 use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
 
-mod actions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod actor_classes;
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod actor_input;
 mod input_types;
-pub use input_types::{SongLuaActorInputAction, SongLuaInputScalar, SongLuaInputEvent, SongLuaInputType};
-#[cfg(test)]
-pub use actor_input::{SongLuaCompiledActorInputs, SongLuaCompiledActorInteractions};
-#[cfg(not(test))]
-pub use rust_engine::{CompiledActorInputs as SongLuaCompiledActorInputs, CompiledActorInteractions as SongLuaCompiledActorInteractions};
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod actor_methods;
-mod actor_method_name;
-mod callback_args;
+pub use input_types::{
+    SongLuaActorInputAction, SongLuaInputEvent, SongLuaInputScalar, SongLuaInputType,
+};
+
+pub use actors::{
+    CompiledActorInputs as SongLuaCompiledActorInputs,
+    CompiledActorInteractions as SongLuaCompiledActorInteractions,
+};
+
 mod cmd;
 mod compat;
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod compile;
+
 mod compiled_layers;
-#[cfg(not(test))]
-mod facade;
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[cfg(any(test, feature = "test-support"))]
-pub mod legacy;
+
 mod compile_timing;
-mod crypto;
-mod draw_capture;
-mod draw_commands;
+
 mod bitmap_font;
 mod blank_texture;
-pub use draw_capture::{
+mod draw_commands;
+pub use draw_commands::{
     DrawFrame as SongLuaDrawFrame, DrawOp as SongLuaDrawOp, DrawSource as SongLuaDrawSource,
 };
+#[cfg(feature = "test-support")]
+mod clock_inputs;
 mod eases;
 mod files;
 mod host;
-#[cfg(feature = "test-support")]
-mod clock_inputs;
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod input;
-#[cfg(test)]
-pub use input::SongLuaCompiledInput;
-#[cfg(not(test))]
-pub use rust_engine::CompiledInput as SongLuaCompiledInput;
-mod json;
+
+pub use input::CompiledInput as SongLuaCompiledInput;
+
 mod lua_util;
-#[cfg(any(test, feature = "legacy-oracle"))]
-mod raw_vm;
+
 mod live;
 #[cfg(feature = "performance")]
 mod live_profile;
+pub use live::{
+    SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput,
+    SongLuaLivePlayer, SongLuaLivePlayerWrite, SongLuaLiveRequest, SongLuaLiveSourceRequest,
+    SongLuaLiveTarget,
+};
 #[cfg(feature = "performance")]
 pub use live_profile::{live_profile_report, reset_live_profile};
-pub use live::{SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLivePlayerWrite, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
-#[cfg(test)]
-pub use live::SongLuaLiveScene;
-#[cfg(not(test))]
-pub use rust_engine::SongLiveScene as SongLuaLiveScene;
+
 #[cfg(feature = "test-support")]
 pub use live::SongLuaOverlayStageObservation;
-mod mod_windows;
+pub use live_scene::SongLiveScene as SongLuaLiveScene;
+
 mod model_texture;
 #[cfg(feature = "test-support")]
 pub use model_texture::replay_model_texture;
@@ -81,79 +76,1096 @@ pub use model_texture::{
     SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
 };
 mod multitap;
-mod native_vector;
-mod render_flags;
+
 mod base_transform;
-mod tween_pose;
 mod net;
-mod noteskin;
-mod option_rows;
+mod render_flags;
+mod tween_pose;
+
 mod frame_capture;
+mod option_rows;
 mod perframe;
 mod player_options;
 mod rage_file;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use rage_file::create_rage_file_util_table;
-mod runtime;
-pub mod rust_engine;
+
+use crate::{
+    SONG_LUA_RUNTIME_BEAT_KEY as BEAT, SONG_LUA_RUNTIME_BPS_KEY as BPS,
+    SONG_LUA_RUNTIME_DELTA_BEAT_KEY as DELTA_BEAT,
+    SONG_LUA_RUNTIME_DELTA_SECONDS_KEY as DELTA_SECONDS, SONG_LUA_RUNTIME_RATE_KEY as RATE,
+    SONG_LUA_RUNTIME_SECONDS_KEY as SECONDS,
+};
+use deadlib_lua::{Error, HostCall, Root, TableId, Value, Vm};
+mod actors;
+#[path = "input/program/mod.rs"]
+pub mod baked_program;
+mod compiler;
+pub use compiler::{
+    compile_prepared_song_lua_layers, compile_song_lua, compile_song_lua_layers, reload_song_lua,
+};
+mod compiler_debug;
+mod definitions;
+mod function_snapshot;
+mod gameplay_screen;
+mod song_action;
+mod song_action_compile;
+pub use song_action_compile::SongActionOutput;
+mod song_callback_tables;
+mod song_column_eases;
+mod song_column_output;
+pub use song_column_output::SongColumnSplineCapture;
+mod song_compiler_roots;
+mod song_mod_tables;
+mod song_multitap;
+mod song_perframes;
+mod song_update_output;
+mod song_updates;
+pub use song_update_output::SongStaticUpdateOutput;
+pub use song_updates::SongUpdateOutput;
+mod song_frame_capture;
+pub use song_frame_capture::{
+    SongFrameCaptureClock, SongFrameCaptureStates, SongOverlayFrameCapture,
+};
+mod song_prepare_globals;
+mod song_static_schedule;
+mod song_xero;
+pub use song_callback_tables::SongCallbackTables;
+pub use song_static_schedule::{SongStaticInputs, SongStaticSchedule, SongStaticTables};
+mod song_ease_probe;
+mod song_easing;
+pub use song_ease_probe::SongFunctionEaseProbe;
+mod song_easing_reader;
+pub use song_easing_reader::{SongEasingNames, SongFunctionEaseInput};
+mod song_tree;
+pub use song_tree::{SongOverlayActor, SongOverlayActors};
+mod song_activation;
+mod song_discovery;
+mod song_message_retry;
+mod song_messages;
+pub use song_message_retry::SongMessageTarget;
+mod song_output;
+pub use song_output::{
+    SongActorFunctionBlocks, SongOverlayKindInputs, SongTrackedActor, SongTrackedActors,
+};
+mod song_layers;
+pub use song_activation::{SongActivation, SongStartupState};
+pub use song_discovery::{
+    SongReplayImmediateUpdates, SongReplayPropertyUpdates, SongReplayScheduledUpdate,
+    SongTweenReplay,
+};
+pub use song_layers::{SongInitialStates, SongLayerPlan};
+mod arrows;
+mod host_clocks;
+mod input;
+pub use actors::{
+    ActorCommandCapture, ActorMesh, ActorScene, ActorSnapshot, BitmapText, CompiledActorInputs,
+    CompiledActorInteractions, FrameTexture, GraphDisplay, SongMeterDisplay,
+};
+pub use input::CompiledInput;
+mod live_actors;
+mod live_layers;
+pub use live_layers::SongLiveLayers;
+mod live_scene;
+pub use live_scene::{SongLiveScene, SongLiveSceneBindings};
+mod live_runtime;
+pub use live_runtime::SongLiveRuntime;
+mod live_frames;
+pub use live_frames::SongLiveFrames;
+mod loader;
+mod managers;
+mod options;
+mod statistics;
+
+pub use options::PlayerStateStatus;
+mod random;
+pub use random::RandomSnapshot;
+#[cfg(feature = "test-support")]
+pub mod test_support;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, Ordering},
+};
+
+const FREEZE: &str = "__songlua_freeze";
+const DELAY: &str = "__songlua_delay";
+const BPMS: &str = "__songlua_timing_bpms";
+const PLAYERS: &str = PLAYER_SONG_POSITIONS_KEY;
+
+#[derive(Default)]
+struct Clock {
+    timing: Option<deadsync_rules::timing::TimingData>,
+    no_offset: Option<deadsync_rules::timing::TimingData>,
+    live: AtomicBool,
+}
+
+#[derive(Clone, Copy)]
+enum Operation {
+    Float(&'static str),
+    Boolean(&'static str),
+    MusicSeconds,
+    Values(bool),
+    SetValues(bool),
+    SetBeat,
+    Reset,
+}
+
+#[derive(Clone)]
+struct Binding {
+    clock: Arc<Clock>,
+    operation: Operation,
+}
+
+#[cfg(feature = "test-support")]
+mod observations;
+
+/// An independent Rust VM with the song clock's Rust host bindings installed.
+/// All retained Lua objects are explicit roots or traced callback captures.
+/// Separate instances have separate heaps and clock state.
+pub struct SongRuntime {
+    #[cfg(feature = "test-support")]
+    observations: observations::Observations,
+    vm: Vm,
+    arrows: arrows::Arrows,
+    compiler_globals_installed: bool,
+    random: random::RandomState,
+    loader: Root,
+    actor_loader: definitions::Loader,
+    actors: actors::Actors,
+    catalog: Root,
+    player_status: Arc<Mutex<[PlayerStateStatus; LUA_PLAYERS]>>,
+    statistics: Arc<Mutex<statistics::State>>,
+    input: input::Input,
+    screen: managers::screen::Screen,
+    clock: Arc<Clock>,
+    runtime: Root,
+    position: Root,
+    players: Vec<Root>,
+    operations: [Root; 6],
+}
+
+impl SongRuntime {
+    /// Enter compiler preparation before loading declarations. New actors capture
+    /// writes; the first Init pass holds queues across subsequent layers and On.
+    /// Returns false if preparation already began or this is a playback runtime.
+    pub fn begin_actor_preparation(&mut self) -> Result<bool, Error> {
+        let began = self.actors.begin_preparation(&mut self.vm)?;
+        if began {
+            let function = self.vm.get_global(b"LoadActor")?;
+            self.actor_loader.set_function(&mut self.vm, function)?;
+        }
+        Ok(began)
+    }
+
+    /// Release the Init/On barrier after the compiler has captured startup state
+    /// and run Update(0). Discover zero-time commands; delayed commands and queued
+    /// messages stay pending for chronological frame replay. This does not rewind
+    /// script state or install that replay; those are separate compiler phases.
+    pub fn discover_actor_startup_commands(&mut self) -> Result<(), Error> {
+        self.actors.discover_startup(&mut self.vm)
+    }
+
+    /// Copy the actor's captured writes and unconsumed command/tween metadata.
+    pub fn actor_command_capture(&self, actor: Value) -> Option<ActorCommandCapture> {
+        self.actors.command_capture(actor)
+    }
+
+    pub fn new(context: &SongLuaCompileContext) -> Result<Self, Error> {
+        Self::new_with_noteskin_resolver(context, crate::SongLuaNoteskinResolver::default())
+    }
+
+    /// Bind the application's existing skin resolver to this isolated song VM.
+    pub fn new_with_noteskin_resolver(
+        context: &SongLuaCompileContext,
+        noteskins: crate::SongLuaNoteskinResolver,
+    ) -> Result<Self, Error> {
+        #[cfg(feature = "test-support")]
+        let observations = observations::Observations::default();
+        let mut vm = Vm::new();
+        #[cfg(feature = "test-support")]
+        if context.initial_lua_gc_stopped {
+            vm.with_native_stack(|stack| stack.gc(deadlib_lua::GcOperation::Stop).map(|_| ()))?;
+        }
+        let source_loader = vm.get_global(b"loadstring")?;
+        let source_loader_root = vm.pin(source_loader)?;
+        let random = random::install(&mut vm, context.random_seed)?;
+        let loader = loader::install(&mut vm, &context.song_dir)?;
+        let actor_loader = definitions::install(&mut vm)?;
+        let clock = Arc::new(Clock {
+            timing: context.song_timing.clone(),
+            no_offset: context.song_timing.clone().map(|mut timing| {
+                timing.set_global_offset_seconds(0.0);
+                timing
+            }),
+            live: AtomicBool::new(context.live),
+        });
+        let actors = actors::Actors::install(
+            &mut vm,
+            clock.clone(),
+            crate::song_lua_human_player_count(context),
+            #[cfg(feature = "test-support")]
+            observations.clone(),
+        )?;
+        actors.install_sound_manager(&mut vm, &context.song_dir)?;
+        let actor_file_loader = vm.rooted(loader)?;
+        actors.bind_source_loader(&mut vm, actor_file_loader, &context.song_dir)?;
+        let catalog = managers::install(
+            &mut vm,
+            context,
+            #[cfg(feature = "test-support")]
+            observations.clone(),
+        )?;
+        actors.install_host_compat(&mut vm)?;
+        let input = input::install(&mut vm)?;
+        let screen = managers::screen::install(
+            &mut vm,
+            #[cfg(feature = "test-support")]
+            observations.clone(),
+        )?;
+        let runtime = vm.try_new_table()?;
+        let runtime_root = vm.pin(Value::Table(runtime))?;
+        for key in [BEAT, SECONDS, DELTA_BEAT, DELTA_SECONDS] {
+            put(&mut vm, runtime, key, Value::Number(0.0))?;
+        }
+        put(
+            &mut vm,
+            runtime,
+            BPS,
+            number(if context.live {
+                10.0
+            } else {
+                song_display_bps(context)
+            }),
+        )?;
+        put(&mut vm, runtime, RATE, number(song_music_rate(context)))?;
+        put(&mut vm, runtime, FREEZE, Value::Boolean(false))?;
+        put(&mut vm, runtime, DELAY, Value::Boolean(false))?;
+        let tonumber = vm.get_global(b"tonumber")?;
+        // Keep the original primitive conversion even if a script replaces it.
+        let tonumber_root = vm.pin(tonumber)?;
+        let song_position = position(&mut vm, &clock, runtime, tonumber)?;
+        let mut players = Vec::new();
+        if context.live {
+            let positions = vm.try_new_table()?;
+            put(&mut vm, runtime, PLAYERS, Value::Table(positions))?;
+            for index in 1..=LUA_PLAYERS {
+                let player = vm.try_new_table()?;
+                vm.raw_table_set(positions, Value::Number(index as f64), Value::Table(player))?;
+                for key in [BEAT, SECONDS, BPS, RATE, FREEZE, DELAY] {
+                    let key = vm.try_intern(key.as_bytes())?;
+                    let value = vm.raw_table_get(runtime, key)?;
+                    vm.raw_table_set(player, key, value)?;
+                }
+                players.push(position(&mut vm, &clock, player, tonumber)?);
+            }
+        }
+        let bpms = vm.try_new_table()?;
+        put(&mut vm, runtime, BPMS, Value::Table(bpms))?;
+        for (index, &(beat, bpm)) in context.song_timing_bpms.iter().enumerate() {
+            let segment = vm.try_new_table()?;
+            vm.raw_table_set(
+                bpms,
+                Value::Number((index + 1) as f64),
+                Value::Table(segment),
+            )?;
+            for (slot, value) in [
+                beat,
+                bpm,
+                song_elapsed_seconds_at(beat, context) * song_music_rate(context),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                vm.raw_table_set(segment, Value::Number((slot + 1) as f64), number(value))?;
+            }
+        }
+        let mut roots = Vec::new();
+        for operation in [
+            Operation::Values(false),
+            Operation::Values(true),
+            Operation::SetValues(false),
+            Operation::SetValues(true),
+            Operation::SetBeat,
+            Operation::Reset,
+        ] {
+            let function = vm.new_host_function_with_data(
+                callback,
+                &[tonumber],
+                Binding {
+                    clock: clock.clone(),
+                    operation,
+                },
+            )?;
+            roots.push(vm.pin(function)?);
+        }
+        vm.set_global(SONG_LUA_RUNTIME_KEY.as_bytes(), Value::Table(runtime))?;
+        host_clocks::install(&mut vm, clock.clone(), context)?;
+        let player_status = Arc::new(Mutex::new([PlayerStateStatus::default(); LUA_PLAYERS]));
+        // Preparation has distinct PlayerState position wrappers over the shared
+        // clock. Live wrappers instead retain each player's original backing.
+        let mut preparation_positions = Vec::new();
+        if !context.live {
+            for _ in 0..LUA_PLAYERS {
+                preparation_positions.push(position(&mut vm, &clock, runtime, tonumber)?);
+            }
+        }
+        let positions = if context.live {
+            &players
+        } else {
+            &preparation_positions
+        };
+        let positions = [vm.rooted(positions[0])?, vm.rooted(positions[1])?];
+        let catalog_value = vm.rooted(catalog)?;
+        managers::install_player_states(
+            &mut vm,
+            catalog_value,
+            positions,
+            context,
+            player_status.clone(),
+            #[cfg(feature = "test-support")]
+            observations.clone(),
+        )?;
+        let position_value = vm.rooted(song_position)?;
+        let messages = actors.host_messages(&vm)?;
+        managers::install_game_state(
+            &mut vm,
+            catalog_value,
+            Value::Table(runtime),
+            position_value,
+            messages,
+            context,
+            #[cfg(feature = "test-support")]
+            observations.clone(),
+        )?;
+        let statistics = Arc::new(Mutex::new(statistics::State::default()));
+        managers::statistics::install(
+            &mut vm,
+            catalog_value,
+            context,
+            statistics.clone(),
+            clock.clone(),
+        )?;
+        let file_loader = vm.rooted(loader)?;
+        let arrows = arrows::install(&mut vm, catalog_value, clock.clone(), context)?;
+        let template = actors.host_template(&vm)?;
+        managers::install_noteskin(
+            &mut vm,
+            context,
+            noteskins,
+            file_loader,
+            source_loader,
+            template,
+        )?;
+        vm.unpin(source_loader_root)?;
+        for root in preparation_positions {
+            vm.unpin(root)?;
+        }
+        vm.unpin(tonumber_root)?;
+        Ok(Self {
+            #[cfg(feature = "test-support")]
+            observations,
+            vm,
+            arrows,
+            compiler_globals_installed: false,
+            random,
+            loader,
+            actor_loader,
+            actors,
+            catalog,
+            player_status,
+            statistics,
+            input,
+            screen,
+            clock,
+            runtime: runtime_root,
+            position: song_position,
+            players,
+            operations: roots.try_into().expect("six clock operations"),
+        })
+    }
+
+    /// Register additional song bindings or execute scripts in this same VM.
+    /// Values obtained here follow `deadlib-lua`'s ordinary rooting contract.
+    pub fn vm_mut(&mut self) -> &mut Vm {
+        &mut self.vm
+    }
+
+    /// Materialize an actor declaration in this song's VM and run its Init commands.
+    /// Unsupported classes return an explicit error until their bindings are migrated.
+    pub fn instantiate_actor(&mut self, declaration: Value) -> Result<ActorScene, Error> {
+        self.actors.instantiate(&mut self.vm, declaration)
+    }
+
+    /// Construct and own the complete actor graph without running Init. The
+    /// compiler assigns its external parent and captures initial state next.
+    pub fn construct_actor(&mut self, declaration: Value) -> Result<ActorScene, Error> {
+        self.actors.construct(&mut self.vm, declaration)
+    }
+
+    /// Run child-first Init once. An error retains partial state and ownership
+    /// so the caller can inspect, retry or explicitly release the scene.
+    pub fn initialize_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.initialize(&mut self.vm, scene)
+    }
+
+    /// Set the root's parent without adding it to the parent's child list.
+    /// Keep the parent's scene owned through Init and subsequent attachment.
+    pub fn set_actor_scene_parent(
+        &mut self,
+        scene: ActorScene,
+        parent: Option<Value>,
+    ) -> Result<bool, Error> {
+        self.actors.parent(&mut self.vm, scene, parent, false)
+    }
+
+    /// Append the initialized root once, sharing its subtree with the parent's
+    /// scene owners. Releasing this scene then leaves the attached actors alive.
+    pub fn append_actor_scene(&mut self, scene: ActorScene, parent: Value) -> Result<bool, Error> {
+        self.actors.parent(&mut self.vm, scene, Some(parent), true)
+    }
+
+    pub fn actor_scene_root(&self, scene: ActorScene) -> Option<Value> {
+        self.actors.root(scene)
+    }
+
+    pub fn actor_scene_snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
+        self.actors.snapshot(scene)
+    }
+
+    /// Local render states with the retained effect phase and native spin flag.
+    /// `frame_clock` is [music seconds, song beat] at the sampling boundary.
+    pub fn actor_scene_render_states(
+        &self,
+        scene: ActorScene,
+        frame_clock: [f32; 2],
+    ) -> Option<Vec<crate::SongLuaOverlayState>> {
+        self.actors.render_states(scene, frame_clock)
+    }
+
+    /// Deliver Begin and On to this actor subtree once. Screen activation and
+    /// its initial zero-delta update are separate host phases.
+    pub fn start_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.start(&mut self.vm, scene)
+    }
+
+    /// Enter retained playback after preparation/startup. This preserves the
+    /// production boundary for publishing cached rotation getters on writes.
+    pub fn begin_actor_playback(&self) {
+        self.actors.begin_playback();
+    }
+
+    /// Advance the subtree's existing queues and callbacks in native order.
+    pub fn advance_actor_scene(&mut self, scene: ActorScene, delta: f64) -> Result<bool, Error> {
+        self.actors.advance(&mut self.vm, scene, delta)
+    }
+
+    /// Capture the scene's custom draw callbacks at its current clock and pose.
+    /// Run after Update. Live capture replaces the previous ordinary frame,
+    /// retaining immediate command submissions until the caller consumes them.
+    pub fn draw_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.draw(&mut self.vm, scene)
+    }
+
+    /// Resolve captured actor identities to the compiler/playback source map,
+    /// consuming the pending immutable frames. Unmapped references are errors.
+    pub fn take_actor_draw_frames(
+        &mut self,
+        sources: &[(Value, crate::SongLuaDrawSource)],
+    ) -> Result<Vec<(usize, crate::SongLuaDrawFrame)>, String> {
+        self.actors.take_draw_frames(&mut self.vm, sources)
+    }
+
+    /// End an owned screen tree once: detach its top-screen global, deliver End
+    /// to descendants of its synthetic root, then stop its sounds. End does not
+    /// advance queued work or release Lua instances. An ended tree cannot advance.
+    /// Returns false for an already ended, released or foreign scene.
+    pub fn end_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.end(&mut self.vm, scene)
+    }
+
+    /// Retire native actors and release their Lua roots. Native scene operations
+    /// and renderer reads reject retired actors; retained Lua resource handles
+    /// keep their captured values until those handles are collected.
+    pub fn release_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.release(&mut self.vm, scene)
+    }
+
+    /// Relinquish a screen's ownership after End, retaining Lua-visible actor
+    /// state until the outgoing graph becomes unreachable. The scene handle
+    /// stops accepting host operations immediately; saved Lua actors remain usable.
+    pub fn retire_actor_scene(&mut self, scene: ActorScene) -> Result<bool, Error> {
+        self.actors.retire(&mut self.vm, scene)
+    }
+
+    pub fn take_actor_diagnostics(&self) -> Vec<String> {
+        self.actors.take_diagnostics()
+    }
+
+    /// Read copied mesh vertices and their texture using the actor's current
+    /// draw range. Authored field getters may execute Lua during this boundary.
+    pub fn actor_multi_vertex_mesh(&mut self, actor: Value) -> Result<Option<ActorMesh>, Error> {
+        self.actors.mesh(&mut self.vm, actor)
+    }
+    /// Read an owned text/font/attribute snapshot. Authored getters may execute Lua;
+    /// the returned payload keeps no VM handles and survives scene retirement.
+    pub fn actor_bitmap_text(&mut self, actor: Value) -> Result<BitmapText, Error> {
+        self.actors.bitmap_text(&mut self.vm, actor)
+    }
+
+    /// Copy graph samples and body/line styles into an owned renderer payload.
+    /// The returned snapshot contains no Lua handles and survives scene retirement.
+    pub fn actor_graph_display(&mut self, actor: Value) -> Result<GraphDisplay, Error> {
+        self.actors.graph(&mut self.vm, actor)
+    }
+    /// Resolve Model Meshes/Materials/Bones using the actor's current path fields.
+    pub fn actor_model_paths(
+        &mut self,
+        actor: Value,
+    ) -> Result<Option<[std::path::PathBuf; 3]>, Error> {
+        self.actors.model_paths(&mut self.vm, actor)
+    }
+
+    /// Read prepared model layers with the application's existing model loader.
+    pub fn actor_model_layers<S, V>(
+        &mut self,
+        actor: Value,
+        read_slots: impl Fn(
+            &std::path::Path,
+            &std::path::Path,
+            &std::path::Path,
+        ) -> Result<Arc<[S]>, String>,
+        read_layer: impl Fn(&S) -> Option<crate::SongLuaOverlayModelLayer<V>>,
+    ) -> Result<Option<Arc<[crate::SongLuaOverlayModelLayer<V>]>>, String> {
+        let Some(paths) = self.actor_model_paths(actor).map_err(|e| e.to_string())? else {
+            return Ok(None);
+        };
+        let slots = read_slots(&paths[0], &paths[1], &paths[2])?;
+        Ok(crate::lua_util::overlay_model_layers_from_slots(
+            &slots, read_layer,
+        ))
+    }
+
+    /// Start the existing preparation material clocks for one actor's layers.
+    /// This also accepts model-backed noteskin actors. Static layers retain their
+    /// indices with empty sample tracks. Reinstallation starts a fresh capture.
+    pub fn install_actor_model_materials<V>(
+        &mut self,
+        actor: Value,
+        layers: &[crate::SongLuaOverlayModelLayer<V>],
+    ) -> Result<(), String> {
+        self.actors.install_model_materials(actor, layers)
+    }
+
+    /// Record a preparation frame after advancing the scene. The compiler owns
+    /// the finite frame schedule and transfers these samples to immutable output.
+    pub fn sample_model_materials(&mut self, second: f32) {
+        self.actors.sample_model_materials(second);
+    }
+
+    /// Finish and detach material capture for this actor, retaining layer order.
+    pub fn take_actor_model_material_samples(
+        &mut self,
+        actor: Value,
+    ) -> Result<Vec<Arc<[crate::SongLuaTextureSample]>>, String> {
+        self.actors.take_model_material_samples(actor)
+    }
+
+    /// Read the existing meter stream width and owned render state, if drawable.
+    pub fn actor_song_meter_display(
+        &mut self,
+        actor: Value,
+    ) -> Result<Option<SongMeterDisplay>, Error> {
+        self.actors.song_meter(&mut self.vm, actor)
+    }
+
+    /// Read allocation settings, or current requests before successful creation.
+    pub fn actor_frame_texture(&mut self, actor: Value) -> Result<FrameTexture, Error> {
+        self.actors.framebuffer(&mut self.vm, actor)
+    }
+
+    /// Read the current proxy target, including authored classification fields.
+    /// Actor identities remain runtime-local until resolved to overlay indices.
+    pub fn actor_proxy_target(
+        &mut self,
+        actor: Value,
+    ) -> Result<Option<crate::SongLuaProxyTarget>, Error> {
+        self.actors.proxy(&mut self.vm, actor)
+    }
+
+    /// Drain immediate sound commands, retaining each native actor identity.
+    pub fn take_actor_sounds(&self) -> Vec<crate::SongLuaActorSound> {
+        self.actors.take_sounds()
+    }
+
+    /// Begin the compiler's media-capture phase. This does not advance time or
+    /// execute queued commands. A new phase clears its previous captured events.
+    pub fn begin_actor_capture(&self, queued_startup: bool) {
+        self.actors.begin_sound_capture(queued_startup);
+    }
+    pub fn take_prepared_sounds(&self) -> Vec<crate::SongLuaSoundEvent> {
+        self.actors.take_prepared_sounds()
+    }
+    pub fn take_sprite_textures(&self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
+        self.actors.take_sprite_textures()
+    }
+    pub fn take_judgment_textures(&self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
+        self.actors.take_judgment_textures()
+    }
+    pub fn end_actor_capture(&self) {
+        self.actors.end_sound_capture();
+    }
+
+    /// Deliver a host message with the existing authored-message normalization.
+    /// Omitted and explicit nil parameters preserve their different arities.
+    pub fn broadcast_message(&mut self, name: &str, params: Option<Value>) -> Result<(), Error> {
+        self.actors.broadcast(&mut self.vm, name, params, true)
+    }
+
+    /// Engine events already carry native note objects and optional fields;
+    /// deliver those values without filling authored Judgment defaults.
+    pub fn broadcast_native_message(
+        &mut self,
+        name: &str,
+        params: Option<Value>,
+    ) -> Result<(), Error> {
+        self.actors.broadcast(&mut self.vm, name, params, false)
+    }
+
+    /// Imported subscriber identity ranks for differential controls only.
+    #[cfg(feature = "test-support")]
+    pub fn set_actor_message_ranks(&self, scene: ActorScene, ranks: &[usize]) -> bool {
+        self.actors.set_message_ranks(scene, ranks)
+    }
+
+    #[cfg(feature = "test-support")]
+    pub fn set_actor_message_identity(&self, actor: Value, rank: usize) -> bool {
+        self.actors.set_message_identity(actor, rank)
+    }
+
+    /// Load a song script with cmd preprocessing and its file environment.
+    /// Store or pin the returned function before another VM entry or collection.
+    pub fn load_file(&mut self, path: &std::path::Path) -> Result<Value, Error> {
+        let path = self.vm.try_intern(path.to_string_lossy().as_bytes())?;
+        let loader = self.vm.rooted(self.loader)?;
+        Ok(self.vm.call(loader, &[path])?[0])
+    }
+
+    /// Load an actor declaration or Lua-returned template with native LoadActor
+    /// semantics. Preparation loaders return constructed media/font instances
+    /// or the first Lua-file result; Init remains a separate host phase.
+    /// Relative entry paths are resolved against the process working directory;
+    /// Lua callers resolve relative paths against their own source file.
+    pub fn load_actor(
+        &mut self,
+        path: &std::path::Path,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        let mut roots = Vec::with_capacity(arguments.len());
+        let inputs = (|| {
+            for &value in arguments {
+                roots.push(self.vm.pin(value)?);
+            }
+            let path = self.vm.try_intern(path.to_string_lossy().as_bytes())?;
+            let mut inputs = Vec::with_capacity(arguments.len() + 1);
+            inputs.push(path);
+            inputs.extend_from_slice(arguments);
+            Ok::<_, Error>(inputs)
+        })();
+        for root in roots {
+            self.vm.unpin(root)?;
+        }
+        let loader = self.vm.rooted(self.actor_loader.entry)?;
+        self.vm.call(loader, &inputs?)
+    }
+
+    /// Execute a song file with arguments, preserving every returned value.
+    /// This loads code into the existing session; it does not construct a scene.
+    pub fn execute_file(
+        &mut self,
+        path: &std::path::Path,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        let mut roots = Vec::with_capacity(arguments.len());
+        let function = (|| {
+            for &value in arguments {
+                roots.push(self.vm.pin(value)?);
+            }
+            self.load_file(path)
+        })();
+        for root in roots {
+            self.vm.unpin(root)?;
+        }
+        self.vm.call(function?, arguments)
+    }
+
+    /// Preserve this song's random stream across a baking/analysis probe.
+    pub fn preserve_random(&self) -> RandomSnapshot {
+        self.random.preserve()
+    }
+
+    pub fn runtime_table(&self) -> Result<Value, Error> {
+        self.vm.rooted(self.runtime)
+    }
+    pub fn song_position(&self) -> Result<Value, Error> {
+        self.vm.rooted(self.position)
+    }
+
+    /// Zero-based player index. Player positions exist for live contexts only.
+    pub fn player_position(&self, index: usize) -> Result<Option<Value>, Error> {
+        self.players
+            .get(index)
+            .map(|&root| self.vm.rooted(root))
+            .transpose()
+    }
+
+    /// Live frames contain audio music time; preparation uses elapsed wall time.
+    /// This changes clock interpretation without replacing captured Lua tables.
+    /// Entering live playback discards preparation-only queue forecasts.
+    pub fn set_live(&mut self, live: bool) {
+        self.clock.live.store(live, Ordering::Relaxed);
+        if live {
+            self.actors.discard_song_replay_clock();
+        }
+    }
+
+    pub fn values(&mut self) -> Result<(f32, f32), Error> {
+        self.read_values(0)
+    }
+    pub fn delta_values(&mut self) -> Result<(f32, f32), Error> {
+        self.read_values(1)
+    }
+    pub fn set_values(&mut self, beat: f32, seconds: f32) -> Result<(), Error> {
+        self.run(2, &[number(beat), number(seconds)]).map(|_| ())
+    }
+    pub fn set_delta_values(&mut self, beat: f32, seconds: f32) -> Result<(), Error> {
+        self.run(3, &[number(beat), number(seconds)]).map(|_| ())
+    }
+    pub fn set_beat(&mut self, beat: f32) -> Result<(), Error> {
+        self.run(4, &[number(beat)]).map(|_| ())
+    }
+    pub fn reset(&mut self) -> Result<(), Error> {
+        self.run(5, &[]).map(|_| ())
+    }
+
+    fn read_values(&mut self, operation: usize) -> Result<(f32, f32), Error> {
+        let [Value::Number(a), Value::Number(b)] = self.run(operation, &[])? else {
+            unreachable!("clock getters return two numbers")
+        };
+        Ok((*a as f32, *b as f32))
+    }
+
+    fn run(&mut self, operation: usize, args: &[Value]) -> Result<&[Value], Error> {
+        let function = self.vm.rooted(self.operations[operation])?;
+        // Match legacy helpers: look up the current runtime, while SongPosition
+        // closures retain the table they were originally constructed with.
+        let runtime = self.vm.get_global(SONG_LUA_RUNTIME_KEY.as_bytes())?;
+        let mut arguments = vec![runtime];
+        arguments.extend_from_slice(args);
+        self.vm.call(function, &arguments)
+    }
+}
+
+fn number(value: f32) -> Value {
+    Value::Number(f64::from(value))
+}
+
+fn put(vm: &mut Vm, table: TableId, key: &str, value: Value) -> Result<(), Error> {
+    let key = vm.try_intern(key.as_bytes())?;
+    vm.raw_table_set(table, key, value)
+}
+
+fn position(
+    vm: &mut Vm,
+    clock: &Arc<Clock>,
+    runtime: TableId,
+    tonumber: Value,
+) -> Result<Root, Error> {
+    let table = vm.try_new_table()?;
+    let root = vm.pin(Value::Table(table))?;
+    for (name, operation) in [
+        ("GetSongBeat", Operation::Float(BEAT)),
+        ("GetSongBeatVisible", Operation::Float(BEAT)),
+        ("GetMusicSeconds", Operation::MusicSeconds),
+        ("GetMusicSecondsVisible", Operation::MusicSeconds),
+        ("GetCurBPS", Operation::Float(BPS)),
+        ("GetFreeze", Operation::Boolean(FREEZE)),
+        ("GetDelay", Operation::Boolean(DELAY)),
+    ] {
+        let function = vm.new_host_function_with_data(
+            callback,
+            &[tonumber, Value::Table(runtime)],
+            Binding {
+                clock: clock.clone(),
+                operation,
+            },
+        )?;
+        put(vm, table, name, function)?;
+    }
+    Ok(root)
+}
+
+fn field(call: &mut HostCall<'_>, table: Value, key: &str) -> Result<Value, Error> {
+    let key = call.try_intern(key.as_bytes())?;
+    call.table_get(table, key)
+}
+
+fn set(call: &mut HostCall<'_>, table: Value, key: &str, value: Value) -> Result<(), Error> {
+    let key = call.try_intern(key.as_bytes())?;
+    call.table_set(table, key, value)
+}
+
+fn numeric(call: &mut HostCall<'_>, value: Value) -> Result<f64, Error> {
+    if let Value::Number(number) = value {
+        return Ok(number);
+    }
+    let tonumber = call.captures()[0];
+    match call.call(tonumber, &[value])?.first().copied() {
+        Some(Value::Number(number)) => Ok(number),
+        _ => Err(call.error(b"expected number or string coercible to number")),
+    }
+}
+
+fn float(call: &mut HostCall<'_>, table: Value, key: &str) -> Result<f32, Error> {
+    let value = field(call, table, key)?;
+    Ok(numeric(call, value)? as f32)
+}
+
+fn optional_float(
+    call: &mut HostCall<'_>,
+    table: Value,
+    key: &str,
+    default: f32,
+) -> Result<f32, Error> {
+    let value = field(call, table, key)?;
+    if value == Value::Nil {
+        Ok(default)
+    } else {
+        Ok(numeric(call, value)? as f32)
+    }
+}
+
+fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Binding { clock, operation } = call
+        .function_data::<Binding>()
+        .expect("clock binding")
+        .clone();
+    let table = call
+        .captures()
+        .get(1)
+        .copied()
+        .unwrap_or_else(|| call.arguments()[0]);
+    if !matches!(table, Value::Table(_)) {
+        return Err(call.error(b"expected song runtime table"));
+    }
+    match operation {
+        Operation::Float(key) => {
+            let value = float(call, table, key)?;
+            call.push(number(value))
+        }
+        Operation::Boolean(key) => {
+            let value = field(call, table, key)?;
+            call.push(Value::Boolean(value.is_truthy()))
+        }
+        Operation::MusicSeconds => {
+            let elapsed = field(call, table, SECONDS)?;
+            let elapsed = numeric(call, elapsed)?;
+            let rate = float(call, table, RATE)?;
+            let seconds = if clock.live.load(Ordering::Relaxed) {
+                elapsed as f32
+            } else {
+                (elapsed * f64::from(rate)) as f32
+                    + clock
+                        .timing
+                        .as_ref()
+                        .map_or(0.0, |clock| clock.get_time_for_beat_exact(0.0))
+            };
+            // Match the legacy whole-float integer path, including -0 -> +0.
+            let seconds = if seconds.fract() == 0.0 && seconds.abs() < 1e14 {
+                (seconds as i64) as f64
+            } else {
+                f64::from(seconds)
+            };
+            call.push(Value::Number(seconds))
+        }
+        Operation::Values(delta) => {
+            let (a, b) = if delta {
+                (DELTA_BEAT, DELTA_SECONDS)
+            } else {
+                (BEAT, SECONDS)
+            };
+            let a = float(call, table, a)?;
+            let b = float(call, table, b)?;
+            call.push(number(a))?;
+            call.push(number(b))
+        }
+        Operation::SetValues(delta) => {
+            let (a, b) = if delta {
+                (DELTA_BEAT, DELTA_SECONDS)
+            } else {
+                (BEAT, SECONDS)
+            };
+            let first = call.arguments()[1];
+            let second = call.arguments()[2];
+            set(call, table, a, first)?;
+            set(call, table, b, second)
+        }
+        Operation::SetBeat => {
+            let beat = call.number(1)? as f32;
+            let mut bps = optional_float(call, table, BPS, 1.0)?;
+            let rate = optional_float(call, table, RATE, 1.0)?;
+            if let Some(clock) = &clock.timing {
+                let seconds = clock.get_time_for_beat_exact(beat);
+                let position = clock.get_song_position(seconds);
+                set(call, table, BEAT, number(beat))?;
+                set(
+                    call,
+                    table,
+                    SECONDS,
+                    number((seconds - clock.get_time_for_beat_exact(0.0)) / rate.max(f32::EPSILON)),
+                )?;
+                set(call, table, FREEZE, Value::Boolean(position.is_in_freeze))?;
+                set(call, table, DELAY, Value::Boolean(position.is_in_delay))?;
+                return set(call, table, BPS, number(position.bpm / 60.0));
+            }
+            let mut segment_beat = 0.0;
+            let mut segment_seconds = 0.0;
+            let bpms = field(call, table, BPMS)?;
+            if bpms != Value::Nil {
+                // The nested argument window roots even a table synthesized by
+                // __index while numeric conversion can reenter the collector.
+                let tonumber = call.captures()[0];
+                let reader = call.new_host_function(read_segments, &[tonumber])?;
+                let values = call.call(reader, &[bpms, number(beat), number(bps)])?;
+                let [Value::Number(a), Value::Number(b), Value::Number(c)] = values else {
+                    unreachable!("segment tuple")
+                };
+                segment_beat = *a as f32;
+                bps = *b as f32;
+                segment_seconds = *c as f32;
+            }
+            set(call, table, BEAT, number(beat))?;
+            set(
+                call,
+                table,
+                SECONDS,
+                number(
+                    (segment_seconds + (beat - segment_beat) / bps.max(f32::EPSILON))
+                        / rate.max(f32::EPSILON),
+                ),
+            )?;
+            set(call, table, BPS, number(bps))
+        }
+        Operation::Reset => {
+            let reset = call.new_host_function(reset_position, &[])?;
+            call.call(reset, &[table])?;
+            set(call, table, DELTA_BEAT, number(0.0))?;
+            set(call, table, DELTA_SECONDS, number(0.0))?;
+            let key = call.try_intern(PLAYERS.as_bytes())?;
+            let Value::Table(table) = table else {
+                return Err(call.error(b"expected song runtime table"));
+            };
+            let players = call.raw_table_get(table, key)?;
+            if players != Value::Nil {
+                let reset = call.new_host_function(reset_players, &[])?;
+                call.call(reset, &[players])?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn read_segments(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(bpms) = call.arguments()[0] else {
+        return Err(call.error(b"expected timing BPM table"));
+    };
+    let beat = call.number(1)? as f32;
+    let mut bps = call.number(2)? as f32;
+    let mut segment_beat = 0.0;
+    let mut seconds = 0.0;
+    for index in 1.. {
+        let segment = call.raw_table_get(bpms, Value::Number(index as f64))?;
+        if segment == Value::Nil {
+            break;
+        }
+        let Value::Table(segment) = segment else {
+            return Err(call.error(b"expected BPM segment table"));
+        };
+        let value = call.raw_table_get(segment, Value::Number(1.0))?;
+        let next = numeric(call, value)? as f32;
+        if next > beat {
+            break;
+        }
+        segment_beat = next;
+        let value = call.raw_table_get(segment, Value::Number(2.0))?;
+        bps = numeric(call, value)? as f32 / 60.0;
+        let value = call.raw_table_get(segment, Value::Number(3.0))?;
+        seconds = numeric(call, value)? as f32;
+    }
+    for value in [segment_beat, bps, seconds] {
+        call.push(number(value))?;
+    }
+    Ok(())
+}
+
+fn reset_players(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(players) = call.arguments()[0] else {
+        return Err(call.error(b"expected player positions table"));
+    };
+    for index in 1.. {
+        let player = call.raw_table_get(players, Value::Number(index as f64))?;
+        if player == Value::Nil {
+            break;
+        }
+        // Each player's table stays alive if its setters detach it from the
+        // runtime and collect before the rest of its fields have been reset.
+        let reset = call.new_host_function(reset_position, &[])?;
+        call.call(reset, &[player])?;
+    }
+    Ok(())
+}
+
+fn reset_position(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let table = call.arguments()[0];
+    if !matches!(table, Value::Table(_)) {
+        return Err(call.error(b"expected song position table"));
+    }
+    for (key, value) in [
+        (BEAT, number(0.0)),
+        (SECONDS, number(0.0)),
+        (BPS, number(10.0)),
+        (FREEZE, Value::Boolean(false)),
+        (DELAY, Value::Boolean(false)),
+    ] {
+        set(call, table, key, value)?;
+    }
+    Ok(())
+}
+
 mod runtime_fallback;
 mod runtime_mod;
 mod sl;
-mod song_tables;
-mod string_args;
+
 mod tables;
-mod text_publication;
 mod theme_colors;
 mod timing;
 mod top_screen;
 mod values;
 mod version;
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use actions::{SongLuaFunctionActionInput, read_actions_with_function_capture};
 pub use cmd::preprocess_lua_cmd_syntax;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_stdlib_compat};
-#[cfg(test)]
-pub use compile::{
-    compile_song_lua_layers_with_actors, compile_song_lua_layers_with_default_host,
-    compile_song_lua_with_actors, compile_song_lua_with_default_host,
-    reload_song_lua_with_default_host,
-};
-#[cfg(not(test))]
-pub use facade::{compile_song_lua_layers_with_default_host, compile_song_lua_with_default_host, reload_song_lua_with_default_host};
+
 pub use compile_timing::{
     SongLuaCompileTimer, log_song_lua_compile_timing, song_lua_compile_stage_summary,
 };
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use crypto::create_cryptman_table;
+
 pub use deadlib_assets::parse_sprite_sheet_dims;
 pub use eases::SongLuaFunctionEaseDecision;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use eases::SongLuaFunctionEaseInput;
+
 pub use eases::SongLuaFunctionEaseResult;
 pub use eases::SongLuaReadEasesResult;
 pub use eases::SongLuaReadEasesStats;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use eases::read_eases_for_overlay_actors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use eases::read_eases_with_function_capture;
+
 pub use files::actor_util_class_registered;
 pub use files::actor_util_file_type;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::call_with_chunk_env;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::call_with_script_dir;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::call_with_script_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::create_actor_util_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::create_fileman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::create_find_files_function;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::create_lua_compat_table;
+
 pub use files::entry_file_path;
 pub use files::file_path_string;
 pub use files::fileman_dir_listing;
@@ -164,15 +1176,9 @@ pub use files::is_song_lua_media_path;
 pub use files::is_song_lua_simfile_path;
 pub use files::is_song_lua_video_path;
 pub use files::path_basename;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::register_loader_env;
+
 pub use files::resolve_compat_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::resolve_load_actor_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::resolve_script_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use files::retarget_loader_env;
+
 pub use files::song_dir_string;
 pub use files::song_group_name;
 pub use files::song_lookup_matches;
@@ -183,663 +1189,35 @@ pub use files::strip_sprite_hints;
 pub use files::theme_path;
 pub use files::wildcard_matches;
 pub use host::SONG_LUA_STARTUP_MESSAGE;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::SongLuaCompileGlobals;
+
 pub use host::SongLuaDateGlobals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::SongLuaGameStateGlobals;
-pub use host::SongLuaHostState;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::clone_lua_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::create_arrow_effects_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::create_chunk_env_proxy;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::initial_chunk_environment;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_basic_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_cmd_helpers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_compile_host;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_core_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_date_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_game_state_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_late_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_manager_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_message_manager_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_screen_manager_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_screen_string_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_screen_utility_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::install_sound_globals;
+
 pub use host::is_compile_global_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::register_loaded_easing_names;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::restore_compile_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use host::snapshot_compile_globals;
+
 pub use host::song_lua_local_date_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use json::{json_to_lua_value, lua_to_json_value};
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::SongLuaActionCaptureScope;
+
 pub use lua_util::SongLuaCapturedMessageCommands;
 pub use lua_util::SongLuaFunctionActionCapture;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::SongLuaNoteColumnHandlerSnapshot;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::SongLuaNoteFieldColumnSnapshot;
+
 pub use lua_util::SongLuaNoteskinTapActorModel;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::SongLuaOverlayCompileActor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::TopScreenLuaTables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_active_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_aft_capture_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_base_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_base_size_with_image;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_command_queue;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_crop_source_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_current_capture_block;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_debug_label;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_decode_movie;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_diffuse;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_direct_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_effect_magnitude;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_glow;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_halign;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_image_frame_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_image_texture_size;
+
 pub use lua_util::actor_indices_for_pointers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_is_bitmap_text;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_is_child_group;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_named_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_overlay_initial_state;
+
 pub use lua_util::actor_pointers_touch_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_runs_startup_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_shadow_len;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_sprite_frame_count;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_sprite_sheet_dims;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_table_has_update_functions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_texture_is_video;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_texture_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_texture_rect;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_tree_has_update_functions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_tween_time_left;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_type_is;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_update_text_pre_zoom_flags;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_valign;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_vertex_colors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_wrappers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::actor_zoom_axis;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::add_actor_child_from_path;
+
 pub use lua_util::banner_sort_order_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::begin_action_capture_scope;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::broadcast_song_lua_message;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::call_actor_function;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::call_table_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::can_create_named_child_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_actor_command_preserving_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_actor_message_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_actor_text_attribute;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_actor_vertex_diffuse;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_bool;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_color;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_f32;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_i32;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_stretch;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_string;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_u32;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_vec2;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_vec3;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_vec4;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_vec5;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_vertex_colors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_block_set_zoom_axes;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_function_action_blocks;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_graph_display_values;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_indexed_actor_function_blocks;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_overlay_compile_actor_function_action_blocks;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_overlay_compile_actor_function_eases;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_overlay_function_eases;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_scope_actor_pointers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_scope_actor_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_scope_snapshots;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_stable_cross_actor_message_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::capture_texture_rect;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::classify_function_ease_probe;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::collect_aft_capture_names;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::collect_indexed_actor_capture_blocks;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::collect_tracked_capture_blocks_for_indices;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::compile_note_column_pos_function_ease;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::compile_overlay_compile_actor_function_action;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::copy_dummy_actor_tags;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_actor_child_group;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_bool_array;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_color_constants_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_debug_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_dummy_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_life_meter_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_loader_function;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_media_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_music_wheel_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_named_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_named_child_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_named_text_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_note_column_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_note_column_spline_handler;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_note_field_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_option_row_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_owned_string_array;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_score_display_percent_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_score_percent_text_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_screen_timer_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_string_array;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_texture_proxy;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_theme_path_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_top_screen_player_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_top_screen_score_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_top_screen_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_top_screen_theme_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::create_underlay_theme_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::crop_actor_to;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::crop_actor_to_source_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::current_gamestate_player_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::current_gamestate_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::current_song_lua_style_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::current_song_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::current_steps_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::default_message_command_params;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::drain_actor_command_queue;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::execute_script_file;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::finish_actor_tweening;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::flush_actor_capture;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::function_named_upvalue_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::hurry_actor_tweening;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::inherit_actor_dirs;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_basic_getter_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_child_command_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_child_query_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_command_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_crop_shadow_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_display_state_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_effect_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_effect_time_getter_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_extra_transform_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_image_coord_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_metatable;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_parent_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_path_child_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_render_compat_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_runtime_child_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_scale_size_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_size_getter_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_sprite_animation_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_tap_note_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_texture_load_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_texture_proxy_getter_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_transform_getter_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_transform_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_visual_text_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_actor_wrapper_query_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_course_contents_list_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_def_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_file_loader_globals;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_song_meter_display_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_texture_proxy_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_top_screen_theme_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::install_underlay_theme_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::load_actor_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::load_script_file;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::lua_format_text;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::lua_text_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_add_f32_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_capture_f32_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_chain_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_finish_tweening_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_set_size_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_stop_tweening_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_tween_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_actor_wrap_width_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_color_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::make_vertex_color_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::method_arg;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::method_arg_offset;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::nested_function_named_upvalue_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::normalize_broadcast_params;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::note_column_pos_offset_y;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::note_field_column_actors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::note_field_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::note_zoom_point_hides;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::offset_actor_texture_rect;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::overlay_compile_actor_tables_for_indices;
+
 pub use lua_util::overlay_model_layers_from_slots;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::populate_course_contents_display;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::position_scroller_items;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::prepare_capture_scope_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::probe_actor_pointers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::probe_call_names;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::probe_function_ease_target;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::probe_target_kind;
+
 pub use lua_util::push_note_hide_window;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::push_sequence_child_once;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::push_unique_actor_child;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_capture_blocks;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_color_field;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_model_layers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_multi_vertex_mesh;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_multi_vertex_texture_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_actor_semantic_state_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_bitmap_font;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_bitmap_text_attributes;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_color_args;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_color_call;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_color_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_global_function_nested_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_graph_display_body_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_graph_display_line_state;
+
 pub use lua_util::read_graph_display_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_graph_display_values;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_model_paths;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_pos_samples;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_pos_samples_for_fields;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_transform_samples;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_transform_samples_for_fields;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_zoom_hides;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_note_column_zoom_hides_for_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_noteskin_tap_actor_model;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_noteskin_tap_actor_slots;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_overlay_compile_actor_actions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_overlay_compile_actors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_proxy_target_kind;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_song_lua_sound_paths;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_song_meter_display_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_tracked_compile_actors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_update_function_nested_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_update_function_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::read_vertex_colors_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::record_probe_method_call;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::register_song_lua_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::remove_actor_child;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::remove_all_actor_children;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::reset_actor_capture;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::reset_actor_capture_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::reset_indexed_actor_capture_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::reset_overlay_compile_actor_capture_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::reset_tracked_capture_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::resolve_actor_asset_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::restore_action_capture_scope;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::restore_actor_mutable_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::restore_actors_semantic_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::restore_note_column_handlers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::restore_note_field_columns;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::rolling_numbers_text;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_draw_functions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_draw_functions_for_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_init_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_init_commands_for_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_named_command;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_named_command_with_drain;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_named_command_with_drain_and_params;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_startup_commands_for_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_update_functions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_update_functions_for_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_actor_update_functions_with_delta;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_added_actor_child_commands;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_command_on_leaves;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_named_command_on_children_recursively;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::run_named_command_on_leaves;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::scale_actor_to_rect_with_base_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_decode_movie_for_texture;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_effect_defaults;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_effect_mode;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_overlay_getter_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_seconds_into_animation;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_sound_file_from_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_sprite_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_texture_from_path;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_texture_from_path_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_texture_from_path_methods_or_fallback;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_actor_texture_from_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_proxy_target_fields;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::set_rolling_numbers_metric;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::snapshot_actor_mutable_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::snapshot_actor_semantic_state_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::snapshot_actors_semantic_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::snapshot_note_column_handlers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::snapshot_note_field_columns;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::song_lua_actor_registry;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::song_lua_screen_center;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::song_lua_screen_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::stateful_message_captures;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_bool_field;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_f32_field;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_i32_field;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_string_field;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_vec2;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_vec3;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_vec4;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_vec5;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::table_vertex_colors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::text_attribute_matches;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::text_attribute_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::texture_source_size;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::tracked_indices_for_actor_pointers;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::tracked_song_lua_actor;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use lua_util::update_tree_reads_global;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use mod_windows::read_mod_windows;
+
 pub use multitap::MULTITAP_PREVISIBLE_BEATS;
 pub use multitap::MultitapDesc;
 pub use multitap::MultitapPhase;
 pub use multitap::calc_multitap_phase;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use multitap::compile_multitap_update_overlays_for_actors;
+
 pub use multitap::multitap_deco_child_state;
 pub use multitap::multitap_deco_state;
 pub use multitap::multitap_explosion_state;
@@ -849,244 +1227,79 @@ pub use multitap::push_multitap_actor_eases;
 pub use multitap::push_multitap_arrow_sample;
 pub use multitap::push_multitap_explosion_eases;
 pub use multitap::push_overlay_sample_eases;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use multitap::read_multitap_descs;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use net::create_network_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use net::encode_query_params;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use net::query_value_text;
+
 pub use net::url_encode_component;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use noteskin::{SongLuaActorFactory, create_noteskin_table};
+
 pub use option_rows::SongLuaNamedOptionRowSpec;
 pub use option_rows::SongLuaOperatorOptionRowSpec;
 pub use option_rows::SongLuaOptionRowSpec;
 pub use option_rows::SongLuaOptionValues;
 pub use option_rows::THEME_PREF_ROW_NAMES;
 pub use option_rows::conf_option_row_spec;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_conf_option_row;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_custom_option_row;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_operator_menu_option_rows_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_sl_custom_prefs_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_theme_prefs_rows_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use option_rows::create_theme_prefs_table;
+
 pub use option_rows::custom_option_default_text;
 pub use option_rows::custom_option_row_spec;
 pub use option_rows::operator_menu_option_row_spec;
 pub use option_rows::option_value_text;
 pub use option_rows::theme_pref_row_spec;
 pub use perframe::SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::SongLuaPerframeEntry;
+
 pub use perframe::SongLuaPerframePlayerState;
 pub use perframe::SongLuaPerframeSample;
 pub use perframe::SongLuaUpdateModState;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::active_perframe_entries;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::actor_perframe_player_state;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::call_perframe_entry;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::call_update_functions_at;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::compile_perframes;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::compile_update_functions;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::current_overlay_compile_actor_states;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::current_perframe_player_states;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::current_update_mod_states;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::perframe_boundaries;
+
 pub use perframe::perframe_delta_seconds;
 pub use perframe::perframe_samples;
 pub use perframe::perframe_segment_step;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::player_option_sample;
+
 pub use perframe::push_perframe_overlay_targets;
 pub use perframe::push_perframe_player_target;
 pub use perframe::push_perframe_player_targets;
 pub use perframe::push_perframe_static_targets;
 pub use perframe::push_sampled_perframe_targets;
 pub use perframe::push_update_mod_targets;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::read_perframe_entries;
+
 pub use perframe::relative_player_target;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::tracked_player_tables;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::unsupported_perframe_info;
+
 pub use perframe::update_function_end_beat;
 pub use perframe::update_function_sample_step;
 pub use perframe::update_function_samples;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use perframe::update_player_option_tables;
+
 pub use player_options::SONG_LUA_PLAYER_OPTION_CAPABILITIES;
 pub use player_options::SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use player_options::default_player_option_value;
+
 pub use player_options::is_player_option_method_name;
 pub use player_options::normalize_player_option_key;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use player_options::normalize_player_option_value;
+
 pub use player_options::parse_player_option_amount;
 pub use player_options::parse_player_speed_option;
 pub use player_options::player_option_default_string;
 pub use player_options::player_option_uses_bool;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use player_options::song_lua_speedmod_value;
+
 pub use player_options::strip_player_option_prefix;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime::{
-    compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
-    create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
-    record_song_lua_broadcast, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
-    song_lua_runtime_number, song_lua_side_effect_count,
-};
+
 pub use runtime_mod::RuntimeModEaseEntry;
 pub use runtime_mod::RuntimeOverlayCaptureKey;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::XeroRuntimeModEaseEntry;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::XeroRuntimeOverlayFunctionEntry;
+
 pub use runtime_mod::extend_runtime_mod_sustains;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::read_runtime_mod_ease_entry;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::read_runtime_mod_eases;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::read_xero_runtime_mod_eases_for_overlay_actors;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::read_xero_runtime_mod_eases_with_overlay_capture;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::read_xero_runtime_mod_entries;
+
 pub use runtime_mod::record_unsupported_xero_overlay_function_ease;
 pub use runtime_mod::runtime_mod_end_value;
 pub use runtime_mod::runtime_mod_entry_players;
 pub use runtime_mod::runtime_mod_key;
 pub use runtime_mod::runtime_mod_start_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use runtime_mod::runtime_overlay_capture_key;
+
 pub use runtime_mod::runtime_player_option_ease_target;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use song_tables::{
-    PlayerLuaTables, create_course_table, create_enabled_players_table, create_player_tables,
-    create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
-    create_steps_table, create_trail_table,
-};
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_author_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_background_filter_values;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_branch_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_charman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_credits_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_difficulty_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_display_bpms_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_display_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_ex_judgment_counts;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_game_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_gameman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_gameplay_layout;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_hooks_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_index_array;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_ini_file_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_life_record_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_memcardman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_network_response_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_other_player_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_player_number_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_prefsmgr_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_profileman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_radar_values_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_range_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_screen_system_layer_helpers_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_screen_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_single_value_array;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_song_group_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_split_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_statsman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_string_enum_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_style_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_theme_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_timing_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_unlockman_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_version_parts_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::create_websocket_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::deduplicate_lua_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::display_bpms_for_args;
+
 pub use tables::format_number_and_suffix;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::lua_table_to_string;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::map_lua_table;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::prefsmgr_default_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::rotate_lua_table;
+
 pub use tables::scale_value;
 pub use tables::seconds_to_hhmmss;
 pub use tables::seconds_to_mmss;
 pub use tables::seconds_to_mmss_ms_ms;
 pub use tables::seconds_to_mss;
 pub use tables::seconds_to_mss_ms_ms;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::set_path_methods;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::set_string_method;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use tables::stringify_lua_table;
+
 pub use theme_colors::DDR_DIFF_COLORS;
 pub use theme_colors::ITG_DIFF_COLORS;
 pub use theme_colors::SL_COLORS;
@@ -1097,8 +1310,7 @@ pub use theme_colors::SONG_LUA_ACTIVE_COLOR_INDEX;
 pub use theme_colors::blend_color;
 pub use theme_colors::color_to_hex;
 pub use theme_colors::custom_difficulty_color;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use theme_colors::install_theme_color_helpers;
+
 pub use theme_colors::judgment_line_color;
 pub use theme_colors::light_color;
 pub use theme_colors::palette_color;
@@ -1112,13 +1324,9 @@ pub use theme_colors::song_lua_player_score_color;
 pub use theme_colors::stage_color;
 pub use theme_colors::tone_color;
 pub use timing::SONG_LUA_TIMING_WINDOW_NAMES;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use timing::timing_window_arg_index;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use timing::timing_window_name;
+
 pub use timing::timing_window_seconds;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use timing::worst_judgment_from_offsets;
+
 pub use top_screen::SONG_LUA_TOP_SCREEN_OPTION_ROWS;
 pub use top_screen::TOP_SCREEN_THEME_CHILD_NAMES;
 pub use top_screen::UNDERLAY_THEME_CHILD_NAMES;
@@ -1127,8 +1335,7 @@ pub use top_screen::player_child_proxy_name;
 pub use top_screen::top_screen_danger_index;
 pub use top_screen::top_screen_life_meter_index;
 pub use top_screen::top_screen_life_meter_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use top_screen::top_screen_option_row_name;
+
 pub use top_screen::top_screen_option_row_name_at;
 pub use top_screen::top_screen_player_index;
 pub use top_screen::top_screen_player_name;
@@ -1140,43 +1347,9 @@ pub use top_screen::top_screen_steps_display_index;
 pub use top_screen::underlay_score_index;
 pub use top_screen::underlay_score_name;
 pub use values::SONG_LUA_EASING_NAME_KEY;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::lua_binary_to_hex;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::lua_values_equal;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::player_index_from_value;
+
 pub use values::player_number_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_boolish;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_easing_name;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_f32;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_f64;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_i32_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_player;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_span_mode;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_string;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::read_u32_value;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use values::truthy;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use version::is_minimum_product_version;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use version::is_product_version;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use version::song_lua_is_minimum_product_version;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use version::song_lua_is_product_version;
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub use version::version_args;
+
 pub use version::version_parts;
 
 pub const LUA_PLAYERS: usize = 2;
@@ -1263,7 +1436,9 @@ const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.
 const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
     [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
 const SONG_LUA_PUMP_COLUMN_X: [f32; 5] = [-96.0, -48.0, 0.0, 48.0, 96.0];
-const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [-220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0];
+const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [
+    -220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0,
+];
 const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1314,27 +1489,76 @@ fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
     // GameManager.cpp dance/pump style metadata; Style::GetWidth uses the
     // span plus average column spacing, including the pump center gap.
     let (name, steps_type, style_type, x_offsets): (_, _, _, &'static [f32]) = match normalized {
-        "double" | "dancedouble" | "stepstypedancedouble" =>
-            ("double", "StepsType_Dance_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_DOUBLE_COLUMN_X),
-        "versus" => ("versus", "StepsType_Dance_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
-        "couple" | "dancecouple" | "stepstypedancecouple" =>
-            ("couple", "StepsType_Dance_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
-        "routine" | "danceroutine" | "stepstypedanceroutine" =>
-            ("routine", "StepsType_Dance_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_DOUBLE_COLUMN_X),
-        "pumpsingle" | "stepstypepumpsingle" =>
-            ("single", "StepsType_Pump_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_PUMP_COLUMN_X),
-        "pumpversus" => ("versus", "StepsType_Pump_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
-        "pumpdouble" | "stepstypepumpdouble" =>
-            ("double", "StepsType_Pump_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_PUMP_DOUBLE_X),
-        "pumpcouple" | "stepstypepumpcouple" =>
-            ("couple", "StepsType_Pump_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
-        "pumproutine" | "stepstypepumproutine" =>
-            ("routine", "StepsType_Pump_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_PUMP_DOUBLE_X),
-        _ => ("single", "StepsType_Dance_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_COLUMN_X),
+        "double" | "dancedouble" | "stepstypedancedouble" => (
+            "double",
+            "StepsType_Dance_Double",
+            "StyleType_OnePlayerTwoSides",
+            &SONG_LUA_DOUBLE_COLUMN_X,
+        ),
+        "versus" => (
+            "versus",
+            "StepsType_Dance_Single",
+            "StyleType_TwoPlayersTwoSides",
+            &SONG_LUA_COLUMN_X,
+        ),
+        "couple" | "dancecouple" | "stepstypedancecouple" => (
+            "couple",
+            "StepsType_Dance_Couple",
+            "StyleType_TwoPlayersTwoSides",
+            &SONG_LUA_COLUMN_X,
+        ),
+        "routine" | "danceroutine" | "stepstypedanceroutine" => (
+            "routine",
+            "StepsType_Dance_Routine",
+            "StyleType_TwoPlayersSharedSides",
+            &SONG_LUA_DOUBLE_COLUMN_X,
+        ),
+        "pumpsingle" | "stepstypepumpsingle" => (
+            "single",
+            "StepsType_Pump_Single",
+            "StyleType_OnePlayerOneSide",
+            &SONG_LUA_PUMP_COLUMN_X,
+        ),
+        "pumpversus" => (
+            "versus",
+            "StepsType_Pump_Single",
+            "StyleType_TwoPlayersTwoSides",
+            &SONG_LUA_PUMP_COLUMN_X,
+        ),
+        "pumpdouble" | "stepstypepumpdouble" => (
+            "double",
+            "StepsType_Pump_Double",
+            "StyleType_OnePlayerTwoSides",
+            &SONG_LUA_PUMP_DOUBLE_X,
+        ),
+        "pumpcouple" | "stepstypepumpcouple" => (
+            "couple",
+            "StepsType_Pump_Couple",
+            "StyleType_TwoPlayersTwoSides",
+            &SONG_LUA_PUMP_COLUMN_X,
+        ),
+        "pumproutine" | "stepstypepumproutine" => (
+            "routine",
+            "StepsType_Pump_Routine",
+            "StyleType_TwoPlayersSharedSides",
+            &SONG_LUA_PUMP_DOUBLE_X,
+        ),
+        _ => (
+            "single",
+            "StepsType_Dance_Single",
+            "StyleType_OnePlayerOneSide",
+            &SONG_LUA_COLUMN_X,
+        ),
     };
     let span = x_offsets[x_offsets.len() - 1] - x_offsets[0];
-    SongLuaStyleInfo { name, steps_type, style_type, columns: x_offsets.len(),
-        width: span + span / (x_offsets.len() - 1) as f32, x_offsets }
+    SongLuaStyleInfo {
+        name,
+        steps_type,
+        style_type,
+        columns: x_offsets.len(),
+        width: span + span / (x_offsets.len() - 1) as f32,
+        x_offsets,
+    }
 }
 
 #[inline(always)]
@@ -1410,24 +1634,6 @@ impl SongLuaDifficulty {
     }
 }
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDifficulty> {
-    if matches!(value, mlua::Value::Integer(_) | mlua::Value::Number(_)) {
-        let index = song_tables::option_enum(Some(&value), &[
-            "Difficulty_Beginner", "Difficulty_Easy", "Difficulty_Medium",
-            "Difficulty_Hard", "Difficulty_Challenge", "Difficulty_Edit",
-        ], "Difficulty").ok()?;
-        return Some([SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy,
-            SongLuaDifficulty::Medium, SongLuaDifficulty::Hard,
-            SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit][index]);
-    }
-    let mlua::Value::String(value) = value else {
-        return None;
-    };
-    let raw = value.to_str().ok()?;
-    with_compact_ascii_lowercase_song_key(raw.as_ref(), song_lua_difficulty_from_normalized)
-}
-
 fn song_lua_difficulty_from_normalized(normalized: &str) -> Option<SongLuaDifficulty> {
     let raw = normalized.strip_prefix("difficulty").unwrap_or(normalized);
     match raw {
@@ -1439,27 +1645,6 @@ fn song_lua_difficulty_from_normalized(normalized: &str) -> Option<SongLuaDiffic
         "edit" => Some(SongLuaDifficulty::Edit),
         _ => None,
     }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn song_lua_steps_type_is_dance_single(value: mlua::Value) -> bool {
-    let mlua::Value::String(value) = value else {
-        return false;
-    };
-    let Ok(raw) = value.to_str() else {
-        return false;
-    };
-    with_compact_ascii_lowercase_song_key(
-        raw.as_ref(),
-        song_lua_steps_type_is_dance_single_normalized,
-    )
-}
-
-fn song_lua_steps_type_is_dance_single_normalized(normalized: &str) -> bool {
-    matches!(
-        normalized,
-        "stepstypedancesingle" | "dancesingle" | "single"
-    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1762,41 +1947,6 @@ const SONG_LUA_SCREEN_TOURNAMENT_MODE_OPTIONS_LINE_NAMES: &str =
 const SONG_LUA_SCREEN_GROOVE_STATS_OPTIONS_LINE_NAMES: &str =
     "EnableGrooveStats,AutoDownloadUnlocks,SeparateUnlocksByPlayer,QRLogin,EnableOnlineLobbies";
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn theme_metric_value_for_human_players(
-    lua: &mlua::Lua,
-    group: &str,
-    name: &str,
-    human_player_count: usize,
-    screen_width: f32,
-    screen_height: f32,
-) -> mlua::Result<mlua::Value> {
-    if let Some(value) = sl::read_sl_metric(lua, group, name)? {
-        return Ok(value);
-    }
-    if let Some(value) =
-        theme_metric_number_for_screen(group, name, human_player_count, screen_width, screen_height)
-    {
-        return Ok(mlua::Value::Number(f64::from(value)));
-    }
-    if let Some(value) = theme_metric_string(group, name) {
-        return Ok(mlua::Value::String(lua.create_string(&value)?));
-    }
-    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("DefaultNoteSkinName") {
-        return Ok(mlua::Value::String(lua.create_string(SONG_LUA_DEFAULT_NOTESKIN_NAME)?));
-    }
-    if name.eq_ignore_ascii_case("Class") {
-        return Ok(mlua::Value::String(lua.create_string(group)?));
-    }
-    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("AutoSetStyle")
-        || group.eq_ignore_ascii_case("ScreenHeartEntry")
-            && name.eq_ignore_ascii_case("HeartEntryEnabled")
-    {
-        return Ok(mlua::Value::Boolean(false));
-    }
-    Ok(mlua::Value::Nil)
-}
-
 fn theme_metric_string(group: &str, name: &str) -> Option<String> {
     if name.eq_ignore_ascii_case("LineNames") {
         return theme_line_names(group).map(str::to_string);
@@ -1904,22 +2054,18 @@ fn theme_screen_fallback_normalized(key: &str) -> Option<&'static str> {
     }
 }
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn theme_metric_bool(value: mlua::Value) -> bool {
-    match value {
-        mlua::Value::Boolean(value) => value,
-        mlua::Value::Integer(value) => value != 0,
-        mlua::Value::Number(value) => value != 0.0,
-        mlua::Value::String(value) => !value.to_str().is_ok_and(|text| text.is_empty()),
-        _ => false,
-    }
-}
-
 pub fn theme_metric_names(group: &str) -> Vec<String> {
     let mut names = Vec::new();
     if group.eq_ignore_ascii_case("ScreenGameplay") {
-        names.extend(["MinSecondsToStep", "MinSecondsToMusic", "MinSecondsToStepNextSong"]
-            .into_iter().map(str::to_string));
+        names.extend(
+            [
+                "MinSecondsToStep",
+                "MinSecondsToMusic",
+                "MinSecondsToStepNextSong",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        );
         for player in 1..=2 {
             names.extend(THEME_PLAYER_X_STYLES.map(|style| format!("PlayerP{player}{style}X")));
         }
@@ -1974,7 +2120,16 @@ pub fn theme_metric_names(group: &str) -> Vec<String> {
         for prefix in ["PercentScoreWeight", "GradeWeight"] {
             names.extend(
                 [
-                    "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine", "CheckpointHit",
+                    "W1",
+                    "W2",
+                    "W3",
+                    "W4",
+                    "W5",
+                    "Miss",
+                    "LetGo",
+                    "Held",
+                    "HitMine",
+                    "CheckpointHit",
                 ]
                 .map(|judgment| format!("{prefix}{judgment}")),
             );
@@ -2046,7 +2201,9 @@ pub fn theme_string(section: &str, name: &str) -> String {
     if section == "ScreenGameplay" && name == "HeaderText" {
         return String::new();
     }
-    if section == "OptionTitles" && name == "MusicRateMultiplier" { return "x rate".into(); }
+    if section == "OptionTitles" && name == "MusicRateMultiplier" {
+        return "x rate".into();
+    }
     if section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")
     {
@@ -2121,65 +2278,6 @@ pub fn custom_multi_modifier_key(option_name: &str, choice: &str) -> String {
     } else {
         choice.to_string()
     }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Value> {
-    with_ascii_lowercase_overlay_key(name, |key| theme_pref_default_normalized(lua, key))
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-fn theme_pref_default_normalized(lua: &mlua::Lua, key: &str) -> mlua::Result<mlua::Value> {
-    if matches!(
-        key,
-        "casualmaxmeter"
-            | "numberofcontinuesallowed"
-            | "screenselectmusicmenutimer"
-            | "screenselectmusiccasualmenutimer"
-            | "screenplayeroptionsmenutimer"
-            | "screenevaluationmenutimer"
-            | "screenevaluationnonstopmenutimer"
-            | "screenevaluationsummarymenutimer"
-            | "screennameentrymenutimer"
-            | "screengroovestatsloginmenutimer"
-            | "simplylovecolor"
-            | "nice"
-    ) {
-        return Ok(mlua::Value::Integer(match key {
-            "casualmaxmeter" => 12,
-            "simplylovecolor" => 1,
-            _ => 0,
-        }));
-    }
-    if matches!(
-        key,
-        "visualstyle"
-            | "lastactiveevent"
-            | "musicwheelstyle"
-            | "themefont"
-            | "defaultgamemode"
-            | "autostyle"
-            | "songselectbg"
-            | "resultsbg"
-            | "scoringsystem"
-            | "stepstats"
-            | "editmodelastseensong"
-            | "editmodelastseendifficulty"
-            | "editmodelastseenstepstype"
-            | "editmodelastseenstyletype"
-    ) {
-        let value = match key {
-            "visualstyle" => "Technique",
-            "themefont" => "Common",
-            "defaultgamemode" => "Dance",
-            "songselectbg" | "resultsbg" => "Off",
-            "musicwheelstyle" => "Default",
-            "autostyle" => "Default",
-            _ => "",
-        };
-        return Ok(mlua::Value::String(lua.create_string(value)?));
-    }
-    Ok(mlua::Value::Boolean(matches!(key, "useimagecache")))
 }
 
 pub type SongLuaNoteskinPathResolver = fn(&str, &str, &str) -> Option<PathBuf>;
@@ -2316,17 +2414,28 @@ pub struct SongLuaStep {
 
 impl From<&deadsync_chart::ChartData> for SongLuaStep {
     fn from(chart: &deadsync_chart::ChartData) -> Self {
-        let steps_type = chart.chart_type.split('-').map(|part| {
-            let mut chars = part.chars();
-            chars.next().map_or_else(String::new, |first| {
-                format!("{}{rest}", first.to_ascii_uppercase(), rest = chars.as_str())
+        let steps_type = chart
+            .chart_type
+            .split('-')
+            .map(|part| {
+                let mut chars = part.chars();
+                chars.next().map_or_else(String::new, |first| {
+                    format!(
+                        "{}{rest}",
+                        first.to_ascii_uppercase(),
+                        rest = chars.as_str()
+                    )
+                })
             })
-        }).collect::<Vec<_>>().join("_");
+            .collect::<Vec<_>>()
+            .join("_");
         Self {
             steps_type: format!("StepsType_{steps_type}"),
             difficulty: with_compact_ascii_lowercase_song_key(
-                &chart.difficulty, song_lua_difficulty_from_normalized,
-            ).unwrap_or(SongLuaDifficulty::Edit),
+                &chart.difficulty,
+                song_lua_difficulty_from_normalized,
+            )
+            .unwrap_or(SongLuaDifficulty::Edit),
             description: chart.description.clone(),
             chart_name: chart.chart_name.clone(),
             credit: chart.step_artist.clone(),
@@ -2869,11 +2978,9 @@ pub struct SongLuaStateCall {
     pub args: Vec<serde_json::Value>,
 }
 
-pub type CompiledSongLua<OverlayActor> = CompiledSongLuaData<OverlayActor, SongLuaLiveScene>;
-
-/// Shared compiled payload with an engine-owned live scene.
-pub struct CompiledSongLuaData<OverlayActor, LiveScene> {
-    pub live_scene: Option<LiveScene>,
+/// Compiled song output and its optional retained live scene.
+pub struct CompiledSongLua<OverlayActor> {
+    pub live_scene: Option<SongLuaLiveScene>,
     /// Retained scene positions corresponding to this layer's overlays.
     pub live_indices: Vec<usize>,
     /// Charts whose note fields were constructed after startup reloads.
@@ -2922,7 +3029,7 @@ pub struct CompiledSongLuaData<OverlayActor, LiveScene> {
     pub info: SongLuaCompileInfo,
 }
 
-impl<A: std::fmt::Debug, L: std::fmt::Debug> std::fmt::Debug for CompiledSongLuaData<A, L> {
+impl<A: std::fmt::Debug> std::fmt::Debug for CompiledSongLua<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = f.debug_struct("CompiledSongLua");
         out.field("live_scene", &self.live_scene);
@@ -2969,12 +3076,14 @@ impl<A: std::fmt::Debug, L: std::fmt::Debug> std::fmt::Debug for CompiledSongLua
     }
 }
 
-impl<OverlayActor, LiveScene> CompiledSongLuaData<OverlayActor, LiveScene> {
+impl<OverlayActor> CompiledSongLua<OverlayActor> {
     /// Positions in the retained scene, in this layer's overlay order.
-    pub fn live_actor_indices(&self) -> &[usize] { &self.live_indices }
+    pub fn live_actor_indices(&self) -> &[usize] {
+        &self.live_indices
+    }
 }
 
-impl<OverlayActor, LiveScene> Default for CompiledSongLuaData<OverlayActor, LiveScene> {
+impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
             live_scene: None,
@@ -3042,16 +3151,13 @@ pub fn push_startup_message_if_listened<'a>(
     }
 }
 
-pub fn sort_compiled_song_lua<OverlayActor, LiveScene>(
-    compiled: &mut CompiledSongLuaData<OverlayActor, LiveScene>,
-) {
+pub fn sort_compiled_song_lua<OverlayActor>(compiled: &mut CompiledSongLua<OverlayActor>) {
     compiled.beat_mods.sort_by(mod_window_cmp);
     compiled.time_mods.sort_by(mod_window_cmp);
     compiled.eases.sort_by(ease_window_cmp);
     compiled.overlay_eases.sort_by(overlay_ease_cmp);
     compiled.messages.sort_by(message_event_cmp);
 }
-
 
 pub fn runtime_static_overlay_index_by_path<'a>(
     len: usize,
@@ -3064,20 +3170,6 @@ pub fn runtime_static_overlay_index_by_path<'a>(
                     .eq_ignore_ascii_case("_static 4x1.png")
             })
         })
-    })
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn runtime_static_overlay_index_for_actors<NoteskinSlot, ModelVertex, TextAttribute>(
-    overlays: &[SongLuaOverlayCompileActor<
-        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
-    >],
-) -> Option<usize> {
-    runtime_static_overlay_index_by_path(overlays.len(), |index| {
-        let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlays[index].actor.kind else {
-            return None;
-        };
-        Some(texture_path.as_path())
     })
 }
 
@@ -3599,40 +3691,6 @@ pub fn sprite_image_frame_size(
     Some((width, height))
 }
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn song_lua_halign_value(value: &mlua::Value) -> Option<f32> {
-    song_lua_alignment_value(value, "left", "right")
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn song_lua_valign_value(value: &mlua::Value) -> Option<f32> {
-    song_lua_alignment_value(value, "top", "bottom")
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-fn song_lua_alignment_value(value: &mlua::Value, near: &str, far: &str) -> Option<f32> {
-    let mlua::Value::String(text) = value else {
-        return match value {
-            mlua::Value::Integer(_) | mlua::Value::Number(_) => read_f32(value.clone()),
-            _ => None,
-        };
-    };
-    let text = text.to_str().ok()?;
-    if let Ok(number) = text.trim().parse::<f32>() {
-        return Some(number);
-    }
-    let text = borrowed_alignment_token(&text);
-    if text.eq_ignore_ascii_case(near) {
-        Some(0.0)
-    } else if text.eq_ignore_ascii_case("center") || text.eq_ignore_ascii_case("middle") {
-        Some(0.5)
-    } else if text.eq_ignore_ascii_case(far) {
-        Some(1.0)
-    } else {
-        None
-    }
-}
-
 fn borrowed_alignment_token(raw: &str) -> &str {
     let mut token = raw.trim().trim_matches('"').trim_matches('\'');
     // Match the original repeated-prefix stripping order without case-folding
@@ -3657,14 +3715,6 @@ pub fn song_lua_align_token(raw: &str) -> String {
         .trim_start_matches("horizalign_")
         .trim_start_matches("vertalign_")
         .to_string()
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn song_lua_text_align_value(value: &mlua::Value) -> Option<TextAlign> {
-    let mlua::Value::String(text) = value else {
-        return None;
-    };
-    parse_overlay_text_align(&text.to_str().ok()?)
 }
 
 #[must_use]
@@ -4739,8 +4789,12 @@ pub const fn apply_overlay_delta(
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
-    if let Some(value) = delta.quaternion { state.quaternion = value; }
-    if let Some(value) = delta.base_alpha { state.base_alpha = value; }
+    if let Some(value) = delta.quaternion {
+        state.quaternion = value;
+    }
+    if let Some(value) = delta.base_alpha {
+        state.base_alpha = value;
+    }
     if let Some(value) = delta.base_rotation {
         state.base_rotation = value;
     }
@@ -5044,8 +5098,12 @@ pub fn overlay_state_lerp(
     if let Some(to) = delta.rot_z_deg {
         from.rot_z_deg = actor_lerp(from.rot_z_deg, to, t);
     }
-    if let Some(to) = delta.quaternion { from.quaternion = crate::actor_quaternion::slerp(from.quaternion, to, t); }
-    if let Some(to) = delta.base_alpha { from.base_alpha = to; }
+    if let Some(to) = delta.quaternion {
+        from.quaternion = crate::actor_quaternion::slerp(from.quaternion, to, t);
+    }
+    if let Some(to) = delta.base_alpha {
+        from.base_alpha = to;
+    }
     if let Some(to) = delta.base_rotation {
         from.base_rotation = to;
     }
@@ -5529,8 +5587,12 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     if from.rot_z_deg.is_some() {
         into.rot_z_deg = from.rot_z_deg;
     }
-    if from.quaternion.is_some() { into.quaternion = from.quaternion; }
-    if from.base_alpha.is_some() { into.base_alpha = from.base_alpha; }
+    if from.quaternion.is_some() {
+        into.quaternion = from.quaternion;
+    }
+    if from.base_alpha.is_some() {
+        into.base_alpha = from.base_alpha;
+    }
     if from.base_rotation.is_some() {
         into.base_rotation = from.base_rotation;
     }
@@ -5994,78 +6056,6 @@ pub fn overlay_descendants_by_parent(
     out
 }
 
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn overlay_actor_tree_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
-    overlays: &[SongLuaOverlayCompileActor<
-        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
-    >],
-    root_index: usize,
-) -> bool {
-    overlay_actor_has_visual(&overlays[root_index].actor)
-        || overlays.iter().any(|overlay| {
-            if !overlay_actor_has_visual(&overlay.actor) {
-                return false;
-            }
-            let mut parent = overlay.actor.parent_index;
-            while let Some(index) = parent {
-                if index == root_index {
-                    return true;
-                }
-                parent = overlays
-                    .get(index)
-                    .and_then(|overlay| overlay.actor.parent_index);
-            }
-            false
-        })
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub fn ensure_overlay_arrow_visual<NoteskinSlot, ModelVertex, TextAttr>(
-    lua: &mlua::Lua,
-    overlays: &mut Vec<
-        SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttr>>,
-    >,
-    arrow_index: usize,
-    noteskin: &str,
-    create_dummy_actor: fn(&mlua::Lua, &'static str) -> mlua::Result<mlua::Table>,
-    visual_spec: impl FnOnce(
-        &str,
-    ) -> Option<(
-        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttr>,
-        SongLuaOverlayState,
-    )>,
-) -> Result<(), String> {
-    if overlay_actor_tree_has_visual(overlays, arrow_index) {
-        return Ok(());
-    }
-    let Some((kind, initial_state)) = visual_spec(noteskin) else {
-        return Ok(());
-    };
-    overlays.push(SongLuaOverlayCompileActor {
-        table: create_dummy_actor(lua, "Model").map_err(|err| err.to_string())?,
-        message_sounds: Vec::new(),
-        actor: SongLuaOverlayActor {
-            kind,
-            name: None,
-            parent_index: Some(arrow_index),
-            initial_state,
-            message_commands: Vec::new(),
-        },
-    });
-    Ok(())
-}
-
-const fn overlay_actor_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
-    actor: &SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
-) -> bool {
-    matches!(
-        actor.kind,
-        SongLuaOverlayKind::Sprite { .. }
-            | SongLuaOverlayKind::Model { .. }
-            | SongLuaOverlayKind::NoteskinActor { .. }
-    )
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayEase {
     pub overlay_index: usize,
@@ -6220,7 +6210,9 @@ impl SongLuaOverlayUpdateValue {
             (Self::Vec3(from), Self::Vec3(to)) => {
                 Self::Vec3(std::array::from_fn(|i| mix(from[i], to[i])))
             }
-            (Self::Quaternion(from), Self::Quaternion(to)) => Self::Quaternion(crate::actor_quaternion::slerp(*from, *to, t)),
+            (Self::Quaternion(from), Self::Quaternion(to)) => {
+                Self::Quaternion(crate::actor_quaternion::slerp(*from, *to, t))
+            }
             (Self::Vec4(from), Self::Vec4(to)) => {
                 Self::Vec4(std::array::from_fn(|i| mix(from[i], to[i])))
             }
@@ -6334,13 +6326,6 @@ pub enum SongLuaTrackedActorTarget {
     PlayerCombo(usize),
     SongForeground,
     ScreenLayer(usize),
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub struct SongLuaTrackedActor {
-    pub table: mlua::Table,
-    pub actor: SongLuaCapturedActor,
-    pub target: SongLuaTrackedActorTarget,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -6789,25 +6774,6 @@ mod tests {
             }
         }
     }
-
-    #[test]
-    fn steps_type_policy_accepts_dance_single_aliases() {
-        assert!(with_compact_ascii_lowercase_song_key(
-            "StepsType_Dance_Single",
-            song_lua_steps_type_is_dance_single_normalized
-        ));
-        assert!(with_compact_ascii_lowercase_song_key(
-            "single",
-            song_lua_steps_type_is_dance_single_normalized
-        ));
-        assert!(!with_compact_ascii_lowercase_song_key(
-            "StepsType_Dance_Double",
-            song_lua_steps_type_is_dance_single_normalized
-        ));
-    }
 }
 
-
-mod method_args;
-
-mod state_text;
+pub(crate) const PLAYER_SONG_POSITIONS_KEY: &str = "__songlua_player_positions";

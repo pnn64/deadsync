@@ -1,8 +1,7 @@
 //! Existing standalone host unit fixtures, authored on the Rust VM.
 use deadlib_lua::{Value, Vm, compile_named};
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -13,8 +12,8 @@ fn execute(vm: &mut Vm, source: impl AsRef<[u8]>) -> Vec<Value> {
     let code = compile_named(source.as_ref(), b"=standalone host unit fixture").unwrap();
     vm.execute(&code).unwrap().to_vec()
 }
-fn runtime(path: &Path) -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(
+fn runtime(path: &Path) -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(
         path,
         "standalone host unit fixture",
     ))
@@ -195,7 +194,7 @@ fn mode_tables_match_simply_love_source() {
         include_str!("../../../tests/fixtures/itgmania-song-lua-micro/simply-love-mode-tables.lua");
     for rescore in [false, true] {
         let context = SongLuaCompileContext::new(Path::new("."), "Mode Tables");
-        let mut host = RustSongRuntime::new(&context).unwrap();
+        let mut host = SongRuntime::new(&context).unwrap();
         execute(
             host.vm_mut(),
             format!("ThemePrefs.Set('RescoreEarlyHits',{rescore})"),
@@ -281,7 +280,7 @@ fn song_steps_use_metadata() {
     context.song_steps[2].description = "Mirror".into();
     context.song_steps[2].meter = 17;
     context.player_step_indices = [Some(2), Some(0)];
-    let mut host = RustSongRuntime::new(&context).expect("song metadata and selected players");
+    let mut host = SongRuntime::new(&context).expect("song metadata and selected players");
     execute(
         host.vm_mut(),
         "song=GAMESTATE:GetCurrentSong();p1=GAMESTATE:GetCurrentSteps(PLAYER_1)",
@@ -311,7 +310,7 @@ fn player_judgment_has_replaceable_sprite_child() {
     let texture = song_dir.join("Judgment label 2x6.png");
     image::RgbaImage::new(128, 384).save(&texture).unwrap();
     let mut context = SongLuaCompileContext::new(&song_dir, "judgment sprite child");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     for player_index in 0..2 {
         context.players[player_index] = SongLuaPlayerContext {
             judgment_texture: (player_index == 0).then(|| texture.clone()),
@@ -393,7 +392,7 @@ return Def.ActorFrame {
     .expect("live session source");
     let (mut host, scene) = std::thread::spawn(move || {
         let context = SongLuaCompileContext::new(&dir, "Transferred Lua session");
-        let mut host = RustSongRuntime::new(&context).expect("worker-owned Lua host");
+        let mut host = SongRuntime::new(&context).expect("worker-owned Lua host");
         let declaration = host
             .execute_file(&lua_path, &[])
             .expect("worker loads source")[0];
@@ -438,20 +437,20 @@ fn update_fixture(
     compiled: bool,
     child: bool,
 ) -> (
-    RustSongRuntime,
-    deadsync_song_lua::rust_engine::ActorScene,
+    SongRuntime,
+    deadsync_song_lua::ActorScene,
     SongLuaCompileContext,
 ) {
     let mut context = SongLuaCompileContext::new(".", "update traversal fixture");
     context.live = !compiled;
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let screen = if compiled {
         host.begin_song_compilation().unwrap();
         let (screen, selected) = host.construct_gameplay_screen(&context).unwrap();
         host.load_gameplay_theme(screen, &selected).unwrap();
         context = selected;
         host.begin_actor_preparation().unwrap();
-        let plan = deadsync_song_lua::rust_engine::SongLayerPlan::new(&[], 0, &context).unwrap();
+        let plan = deadsync_song_lua::SongLayerPlan::new(&[], 0, &context).unwrap();
         host.initialize_song_layers(screen, &plan).unwrap();
         Some(screen)
     } else {
@@ -481,8 +480,8 @@ fn update_fixture(
     (host, scene, context)
 }
 fn prepare_update_fixture(
-    host: &mut RustSongRuntime,
-    scene: deadsync_song_lua::rust_engine::ActorScene,
+    host: &mut SongRuntime,
+    scene: deadsync_song_lua::ActorScene,
     context: &SongLuaCompileContext,
     compiled: bool,
 ) {
@@ -495,8 +494,8 @@ fn prepare_update_fixture(
     }
 }
 fn advance_update_fixture(
-    host: &mut RustSongRuntime,
-    scene: deadsync_song_lua::rust_engine::ActorScene,
+    host: &mut SongRuntime,
+    scene: deadsync_song_lua::ActorScene,
     compiled: bool,
     seconds: &mut f64,
     delta: f64,
@@ -621,15 +620,9 @@ fn set_index(vm: &mut Vm, owner: Value, index: usize, value: Value) {
     vm.raw_table_set(table, Value::Number(index as f64), value)
         .unwrap();
 }
-fn capture_fixture(
-    count: usize,
-) -> (
-    RustSongRuntime,
-    deadsync_song_lua::rust_engine::ActorScene,
-    Vec<Value>,
-) {
+fn capture_fixture(count: usize) -> (SongRuntime, deadsync_song_lua::ActorScene, Vec<Value>) {
     let context = SongLuaCompileContext::new(".", "source unit capture fixture");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     host.begin_actor_preparation().unwrap();
     let children = std::iter::repeat_n("Def.Quad{}", count)
         .collect::<Vec<_>>()
@@ -651,7 +644,7 @@ fn capture_fixture(
         .collect();
     (host, scene, actors)
 }
-fn capture_actor_global(host: &mut RustSongRuntime, name: &[u8], actor: Value) {
+fn capture_actor_global(host: &mut SongRuntime, name: &[u8], actor: Value) {
     host.vm_mut().set_global(name, actor).unwrap();
 }
 #[test]
@@ -1037,7 +1030,7 @@ fn update_function_table_scans_find_direct_nested_and_global_upvalues() {
 fn difficulty_from_value_accepts_stepmania_names() {
     let mut context = SongLuaCompileContext::new(".", "difficulty conversion");
     context.song_steps = test_song_steps();
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let selector = api::eval(
         host.vm_mut(),
         "return function(value)local step=GAMESTATE:GetCurrentSong():GetOneSteps('StepsType_Dance_Single',value);if step then return step:GetDifficulty() end end",
@@ -1182,7 +1175,7 @@ fn ensure_overlay_arrow_visual_adds_missing_child_visual() {
     use deadsync_song_lua::{SongLuaOverlayKind, SongLuaOverlayState};
     use std::sync::Arc;
     let context = SongLuaCompileContext::new(".", "arrow visual insertion");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     host.begin_actor_preparation().unwrap();
     let declaration = api::eval(host.vm_mut(), "return Def.ActorFrame{Name='ArrowFrame'}")[0];
     let scene = host.instantiate_actor(declaration).unwrap();
@@ -1232,7 +1225,7 @@ fn get_index(vm: &Vm, owner: Value, index: usize) -> Value {
     vm.raw_table_get(table, Value::Number(index as f64))
         .unwrap()
 }
-fn column_fixture() -> (RustSongRuntime, Value) {
+fn column_fixture() -> (SongRuntime, Value) {
     let mut host = runtime(Path::new("."));
     let scene = test_support::note_field(&mut host, 0, "dance-single").unwrap();
     let field = host.actor_scene_root(scene).unwrap();
@@ -1257,11 +1250,11 @@ fn update_capture_preserves_shared_actor_indices() {
     std::fs::write(&entry, "return Def.ActorFrame{InitCommand=function(self)root=self end,Def.ActorFrame{InitCommand=function(self)child=self end}}")
         .unwrap();
     let context = SongLuaCompileContext::new(directory.path(), "shared capture indices");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     host.begin_song_compilation().unwrap();
     let (screen, context) = host.construct_gameplay_screen(&context).unwrap();
     host.load_gameplay_theme(screen, &context).unwrap();
-    let plan = deadsync_song_lua::rust_engine::SongLayerPlan::new(&[&entry], 0, &context).unwrap();
+    let plan = deadsync_song_lua::SongLayerPlan::new(&[&entry], 0, &context).unwrap();
     host.initialize_song_layers(screen, &plan).unwrap().unwrap();
     let shared = host.vm_mut().get_global(b"root").unwrap();
     let other = host.vm_mut().get_global(b"child").unwrap();
@@ -1375,7 +1368,7 @@ fn spline_storage_matches_native_layout() {
                 :GetSpline():SetSize(8):SetPoint(8, {"9"}):Solve()
         "#,
     );
-    let mut capture = deadsync_song_lua::rust_engine::SongColumnSplineCapture::default();
+    let mut capture = deadsync_song_lua::SongColumnSplineCapture::default();
     host.capture_song_column_splines(&mut capture, 0.).unwrap();
     execute(
         host.vm_mut(),
@@ -1427,7 +1420,7 @@ fn spline_witness_edits() {
             spline:SetPoint(8, {-1, 0, 0})
         "#,
     );
-    let zoom = |host: &mut RustSongRuntime| {
+    let zoom = |host: &mut SongRuntime| {
         host.read_song_note_column_transform_samples_for_fields(&[field])
             .unwrap()
             .into_iter()
@@ -1460,7 +1453,7 @@ fn spline_witness_edits() {
 }
 
 fn unit_clock_set(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     owner: Value,
     key: &str,
     value: f64,
@@ -1492,7 +1485,7 @@ fn music_seconds_preserves_offset_and_rate() {
             },
             &[],
         ));
-        let mut host = RustSongRuntime::new(&context).unwrap();
+        let mut host = SongRuntime::new(&context).unwrap();
         let runtime = host.runtime_table().expect("song runtime");
         let position = host.song_position().expect("song position");
         assert_eq!(
@@ -1599,7 +1592,7 @@ fn arrow_offset_uses_native_music_clock() {
             context.player_timing[0] = Some(timing.clone());
             context.player_timing[1] = Some(timing.clone());
             context.song_music_rate = rate;
-            let mut host = RustSongRuntime::new(&context).expect("native song metadata");
+            let mut host = SongRuntime::new(&context).expect("native song metadata");
             let runtime = host.runtime_table().expect("song runtime");
             let players = api::eval(
                 host.vm_mut(),
@@ -1695,7 +1688,7 @@ fn broadcast_params_match_native() {
 }
 
 fn unit_table_set(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     owner: Value,
     key: &[u8],
     value: Value,
@@ -1704,7 +1697,7 @@ fn unit_table_set(
     Ok(())
 }
 fn unit_index_set(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     owner: Value,
     index: usize,
     value: Value,
@@ -1713,20 +1706,20 @@ fn unit_index_set(
     Ok(())
 }
 fn unit_read_sprite_states(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     actor: Value,
 ) -> Result<Vec<deadsync_song_lua::SongLuaSpriteState>, String> {
     test_support::read_sprite_states(host, actor).map_err(|error| error.to_string())
 }
 fn unit_sync_sprite_states(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     actor: Value,
     states: &mut std::sync::Arc<[deadsync_song_lua::SongLuaSpriteState]>,
 ) -> Result<(), String> {
     test_support::sync_sprite_states(host, actor, states).map_err(|error| error.to_string())
 }
 fn unit_assert_fresh_sprite(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     actor: Value,
     states: &mut std::sync::Arc<[deadsync_song_lua::SongLuaSpriteState]>,
 ) {
@@ -1915,7 +1908,7 @@ fn native_sprite_publication_compares_delay_bits() {
 #[test]
 fn date_globals_expose_native_zero_based_day_of_year() {
     let context = SongLuaCompileContext::new(".", "calendar globals");
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     for (year, month, day, expected) in [
         (2026, 0, 1, 0),
         (2026, 0, 18, 17),

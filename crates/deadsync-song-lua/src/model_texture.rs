@@ -6,10 +6,8 @@
 //! grows, reads files or evicts samples. The song releases them on transition.
 //! Native controls and full-song diagnostics check the recorded UV parameters.
 
-use crate::{SongLuaOverlayKind, SongLuaOverlayModelLayer};
-#[cfg(any(test, feature = "legacy-oracle"))]
-use mlua::{Lua, Table};
-use rustc_hash::FxHashMap;
+use crate::SongLuaOverlayModelLayer;
+
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -134,7 +132,7 @@ impl MaterialClock {
 pub(crate) struct Clock {
     diffuse: MaterialClock,
     additive: Option<MaterialClock>,
-    delta: Option<f32>,
+
     samples: Vec<SongLuaTextureSample>,
 }
 
@@ -168,7 +166,6 @@ impl Clock {
             diffuse: MaterialClock::new(frames, layer.uv_velocity),
             additive: (!layer.additive_frames.is_empty())
                 .then(|| MaterialClock::state_only(Arc::clone(&layer.additive_frames))),
-            delta: None,
             samples: Vec::new(),
         };
         clock.sample(0.0);
@@ -236,131 +233,6 @@ mod perf {
     include!("../tests/perf/material_clock.rs");
 }
 
-struct Capture(FxHashMap<usize, Vec<Option<Clock>>>);
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn install<S, V, A>(
-    lua: &Lua,
-    overlays: &[crate::SongLuaOverlayCompileActor<SongLuaOverlayKind<S, V, A>>],
-    read_layer: fn(&S) -> Option<SongLuaOverlayModelLayer<V>>,
-) {
-    let actors = overlays
-        .iter()
-        .filter_map(|overlay| {
-            let initial = overlay.actor.initial_state.sprite_state_index;
-            let clocks = match &overlay.actor.kind {
-                SongLuaOverlayKind::Model { layers } => layers
-                    .iter()
-                    .map(|layer| Clock::with_initial_state(layer, initial))
-                    .collect::<Vec<_>>(),
-                SongLuaOverlayKind::NoteskinActor { slots, .. } => slots
-                    .iter()
-                    .map(|slot| {
-                        read_layer(slot)
-                            .as_ref()
-                            .and_then(|layer| Clock::with_initial_state(layer, initial))
-                    })
-                    .collect(),
-                _ => return None,
-            };
-            clocks
-                .iter()
-                .any(Option::is_some)
-                .then_some((overlay.table.to_pointer() as usize, clocks))
-        })
-        .collect();
-    lua.set_app_data(Capture(actors));
-    crate::lua_util::invalidate_compile_update_plan(lua);
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn active(lua: &Lua) -> bool {
-    lua.app_data_ref::<Capture>()
-        .is_some_and(|capture| !capture.0.is_empty())
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn contains(lua: &Lua, actor: &Table) -> bool {
-    lua.app_data_ref::<Capture>()
-        .is_some_and(|capture| capture.0.contains_key(&(actor.to_pointer() as usize)))
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn begin(lua: &Lua, actor: &Table, delta: Option<f64>) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            clock.delta = delta.map(|delta| delta as f32);
-        }
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn update(lua: &Lua, actor: &Table) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            if let Some(delta) = clock.delta.take() {
-                clock.update(delta);
-            }
-        }
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn set_state(lua: &Lua, actor: &Table, state: i32) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>()
-        && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
-    {
-        for clock in clocks.iter_mut().flatten() {
-            clock.set_state(state);
-        }
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn sample(lua: &Lua, second: f32) {
-    if let Some(mut capture) = lua.app_data_mut::<Capture>() {
-        for clocks in capture.0.values_mut() {
-            for clock in clocks.iter_mut().flatten() {
-                clock.sample(second);
-            }
-        }
-    }
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-pub(crate) fn take<S, V, A>(
-    lua: &Lua,
-    overlays: &mut [crate::SongLuaOverlayCompileActor<SongLuaOverlayKind<S, V, A>>],
-) {
-    let Some(mut capture) = lua.remove_app_data::<Capture>() else {
-        return;
-    };
-    for overlay in overlays {
-        let Some(clocks) = capture.0.remove(&(overlay.table.to_pointer() as usize)) else {
-            continue;
-        };
-        let samples = clocks
-            .into_iter()
-            .map(|clock| clock.map_or_else(|| Arc::from([]), Clock::finish))
-            .collect::<Vec<_>>();
-        match &mut overlay.actor.kind {
-            SongLuaOverlayKind::Model { layers } => {
-                for (layer, samples) in Arc::make_mut(layers).iter_mut().zip(samples) {
-                    layer.texture_samples = samples;
-                }
-            }
-            SongLuaOverlayKind::NoteskinActor {
-                texture_samples, ..
-            } => *texture_samples = samples.into(),
-            _ => {}
-        }
-    }
-}
-
 pub fn model_texture_at(
     samples: &[SongLuaTextureSample],
     second: f32,
@@ -388,42 +260,4 @@ pub fn replay_model_texture<V>(
         clock.sample(second);
     }
     clock.finish()
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[cfg(feature = "test-support")]
-pub(crate) fn migration_install_materials<V>(
-    lua: &Lua,
-    actor: &Table,
-    layers: &[SongLuaOverlayModelLayer<V>],
-) -> mlua::Result<()> {
-    let initial = actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?;
-    let clocks = layers
-        .iter()
-        .map(|layer| Clock::with_initial_state(layer, initial))
-        .collect();
-    if let Some(mut capture) = lua.app_data_mut::<Capture>() {
-        capture.0.insert(actor.to_pointer() as usize, clocks);
-    } else {
-        lua.set_app_data(Capture(FxHashMap::from_iter([(
-            actor.to_pointer() as usize,
-            clocks,
-        )])));
-    }
-    crate::lua_util::invalidate_compile_update_plan(lua);
-    Ok(())
-}
-
-#[cfg(any(test, feature = "legacy-oracle"))]
-#[cfg(feature = "test-support")]
-pub(crate) fn migration_take_materials(
-    lua: &Lua,
-    actor: &Table,
-) -> Vec<Arc<[SongLuaTextureSample]>> {
-    lua.app_data_mut::<Capture>()
-        .and_then(|mut capture| capture.0.remove(&(actor.to_pointer() as usize)))
-        .unwrap_or_default()
-        .into_iter()
-        .map(|clock| clock.map_or_else(|| Arc::from([]), Clock::finish))
-        .collect()
 }

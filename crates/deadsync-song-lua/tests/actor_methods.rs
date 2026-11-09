@@ -2,8 +2,8 @@
 use deadlib_lua::{Value, compile};
 use deadsync_song_lua::{
     SongLuaCompileContext,
-    rust_engine::{
-        ActorScene, RustSongRuntime,
+    {
+        ActorScene, SongRuntime,
         test_support::{self, ActorMethodIdentity as Method},
     },
 };
@@ -19,7 +19,7 @@ impl Drop for Dropped {
     }
 }
 
-fn execute(runtime: &mut RustSongRuntime, source: &str) -> Vec<Value> {
+fn execute(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
     runtime
         .vm_mut()
         .execute(&compile(source.as_bytes()).unwrap())
@@ -27,9 +27,9 @@ fn execute(runtime: &mut RustSongRuntime, source: &str) -> Vec<Value> {
         .to_vec()
 }
 
-fn scene() -> (RustSongRuntime, ActorScene, deadlib_lua::TableId) {
+fn scene() -> (SongRuntime, ActorScene, deadlib_lua::TableId) {
     let context = SongLuaCompileContext::new(".", "method identity fixtures");
-    let mut runtime = RustSongRuntime::new(&context).unwrap();
+    let mut runtime = SongRuntime::new(&context).unwrap();
     let value = execute(&mut runtime, "return Def.ActorFrame{Def.Quad{}}")[0];
     let scene = runtime.instantiate_actor(value).unwrap();
     let root = runtime.actor_scene_root(scene).unwrap();

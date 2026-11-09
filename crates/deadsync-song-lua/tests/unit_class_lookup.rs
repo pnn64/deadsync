@@ -1,6 +1,6 @@
 //! Original class-lookup differential fixture on the Rust VM.
 use deadlib_lua::{Error, HostCall, Value, Vm};
-use deadsync_song_lua::{SongLuaCompileContext, rust_engine::RustSongRuntime};
+use deadsync_song_lua::{SongLuaCompileContext, SongRuntime};
 #[path = "support/baked_program.rs"]
 mod api;
 fn raw(call: &mut HostCall<'_>, owner: deadlib_lua::TableId, name: &str) -> Result<Value, Error> {
@@ -90,8 +90,7 @@ fn compare(vm: &mut Vm, original: Value, lookup: Value, actor: Value, key: Value
 }
 #[test]
 fn class_name_reads_preserve_lookup_hooks_identity_and_errors() {
-    let mut host =
-        RustSongRuntime::new(&SongLuaCompileContext::new(".", "class lookup unit")).unwrap();
+    let mut host = SongRuntime::new(&SongLuaCompileContext::new(".", "class lookup unit")).unwrap();
     let declaration = api::eval(host.vm_mut(), "return Def.Actor{}")[0];
     let scene = host.instantiate_actor(declaration).unwrap();
     let instance = host.actor_scene_root(scene).unwrap();
@@ -103,8 +102,8 @@ fn class_name_reads_preserve_lookup_hooks_identity_and_errors() {
         "return getmetatable(_CLASS_LOOKUP_INSTANCE).__index",
     )[0];
     assert_eq!(
-        deadsync_song_lua::rust_engine::test_support::actor_method_identity(&host, lookup),
-        Some(deadsync_song_lua::rust_engine::test_support::ActorMethodIdentity::Lookup)
+        deadsync_song_lua::test_support::actor_method_identity(&host, lookup),
+        Some(deadsync_song_lua::test_support::ActorMethodIdentity::Lookup)
     );
     let vm = host.vm_mut();
     let globals = vm.get_global(b"_G").unwrap();

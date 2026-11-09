@@ -1,34 +1,37 @@
 //! Original state-reader fixtures, with independent fixed native observations.
 use deadlib_lua::{Error, HostCall, NativeCallStatus, Root, Value, compile_named};
 use deadsync_song_lua::{
-    SongLuaCompileContext, SongLuaOverlayState,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, SongLuaOverlayState, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
 #[path = "support/baked_program.rs"]
 mod api;
 #[path = "support/state_reader_errors.rs"]
 mod errors;
+#[expect(
+    dead_code,
+    reason = "this fixture uses a subset of the shared snapshot API"
+)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "state reader unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "state reader unit")).unwrap()
 }
 struct StateReader {
     function: Root,
     output: test_support::FixtureStateOutput,
 }
-fn state_reader(host: &mut RustSongRuntime, actor: Value, live: bool) -> StateReader {
+fn state_reader(host: &mut SongRuntime, actor: Value, live: bool) -> StateReader {
     let (function, output) = test_support::prepare_actor_state_reader(host, actor, live).unwrap();
     StateReader { function, output }
 }
-fn read(host: &mut RustSongRuntime, reader: &StateReader) -> Result<SongLuaOverlayState, String> {
+fn read(host: &mut SongRuntime, reader: &StateReader) -> Result<SongLuaOverlayState, String> {
     let vm = host.vm_mut();
     let function = vm.rooted(reader.function).unwrap();
     vm.call(function, &[]).unwrap();
     reader.output.lock().unwrap().take().unwrap()
 }
-fn set(host: &mut RustSongRuntime, actor: Value, key: &str, value: Value) {
+fn set(host: &mut SongRuntime, actor: Value, key: &str, value: Value) {
     api::set(host.vm_mut(), actor, key.as_bytes(), value)
 }
 type TextOutput = Arc<Mutex<Option<Result<Option<String>, String>>>>;
@@ -54,13 +57,13 @@ fn text_reader(call: &mut HostCall<'_>) -> Result<(), Error> {
     *output.lock().unwrap() = Some(result.map_err(|error| error.to_string()));
     Ok(())
 }
-fn named_actor(host: &mut RustSongRuntime, source: &str) -> Value {
+fn named_actor(host: &mut SongRuntime, source: &str) -> Value {
     let code = compile_named(source.as_bytes(), b"texture-mutation").unwrap();
     let actor = host.vm_mut().execute(&code).unwrap()[0];
     host.vm_mut().pin(actor).unwrap();
     actor
 }
-fn continuation(host: &mut RustSongRuntime) -> u32 {
+fn continuation(host: &mut SongRuntime) -> u32 {
     api::as_number(api::eval(host.vm_mut(), "return 6*7")[0]) as u32
 }
 
@@ -413,7 +416,7 @@ const OVERLAY_KEYS: &[&str] = &[
 // The old raw C decoder accepted loading tables. The Rust live reader uses
 // owned actors, so initialize native pose state before attaching the exact
 // authored getter and its raw metadata. Each original actor still reads once.
-fn owned_mutation_actor(host: &mut RustSongRuntime, source: &str) -> Value {
+fn owned_mutation_actor(host: &mut SongRuntime, source: &str) -> Value {
     let declaration = api::eval(
         host.vm_mut(),
         "return Def.Actor{InitCommand=function(self) self:x(7) end}",

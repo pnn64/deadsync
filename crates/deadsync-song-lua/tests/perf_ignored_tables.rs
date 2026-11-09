@@ -1,9 +1,13 @@
 //! Original style callback argument fixtures on actual current catalog objects.
 use deadlib_lua::Value;
 use deadsync_song_lua::{
-    SongLuaCompileContext, rust_engine::RustSongRuntime, song_lua_style_column_name,
-    song_lua_style_column_x, song_lua_style_info,
+    SongLuaCompileContext, SongRuntime, song_lua_style_column_name, song_lua_style_column_x,
+    song_lua_style_info,
 };
+#[expect(
+    dead_code,
+    reason = "this fixture uses scoped measurement from the shared allocation API"
+)]
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
@@ -12,10 +16,10 @@ mod api;
 mod bench_clock;
 #[path = "support/ignored_callback.rs"]
 mod ignored_callback;
-fn style(name: &str) -> (RustSongRuntime, Value) {
+fn style(name: &str) -> (SongRuntime, Value) {
     let mut context = SongLuaCompileContext::new(".", "ignored style callback");
     context.style_name = name.into();
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let style = api::eval(host.vm_mut(), "return GAMESTATE:GetCurrentStyle()")[0];
     (host, style)
 }

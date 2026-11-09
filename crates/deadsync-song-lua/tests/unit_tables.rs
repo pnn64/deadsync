@@ -1,23 +1,22 @@
 //! Original table and timing units on the Rust interpreter and native host.
 use deadlib_lua::{Error, HostCall, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
 use std::path::Path;
 #[path = "support/baked_program.rs"]
 mod api;
 
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "table unit fixture")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "table unit fixture")).unwrap()
 }
-fn eval(host: &mut RustSongRuntime, source: &str) -> Value {
+fn eval(host: &mut SongRuntime, source: &str) -> Value {
     api::eval(host.vm_mut(), source)[0]
 }
-fn field(host: &mut RustSongRuntime, owner: Value, name: &str) -> Value {
+fn field(host: &mut SongRuntime, owner: Value, name: &str) -> Value {
     api::get(host.vm_mut(), owner, name.as_bytes())
 }
-fn index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value {
+fn index(host: &mut SongRuntime, owner: Value, index: usize) -> Value {
     let Value::Table(owner) = owner else {
         panic!("fixture table expected")
     };
@@ -28,27 +27,27 @@ fn index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value {
 fn number(value: Value) -> f32 {
     api::as_number(value) as f32
 }
-fn text(host: &mut RustSongRuntime, value: Value) -> String {
+fn text(host: &mut SongRuntime, value: Value) -> String {
     String::from_utf8(api::bytes(host.vm_mut(), value)).unwrap()
 }
-fn length(host: &mut RustSongRuntime, value: Value) -> usize {
+fn length(host: &mut SongRuntime, value: Value) -> usize {
     let Value::Table(value) = value else {
         panic!("fixture table expected")
     };
     host.vm_mut().raw_table_len(value).unwrap()
 }
-fn invoke(host: &mut RustSongRuntime, owner: Value, name: &str, args: &[Value]) -> Value {
+fn invoke(host: &mut SongRuntime, owner: Value, name: &str, args: &[Value]) -> Value {
     let function = field(host, owner, name);
     api::call_one(host.vm_mut(), function, args)
 }
-fn timing_runtime(bpms: [f32; 2], data: &deadsync_rules::timing::TimingData) -> RustSongRuntime {
+fn timing_runtime(bpms: [f32; 2], data: &deadsync_rules::timing::TimingData) -> SongRuntime {
     let mut context = SongLuaCompileContext::new(".", "table timing unit fixture");
     context.song_display_bpms = bpms;
     context.song_timing = Some(data.clone());
-    RustSongRuntime::new(&context).unwrap()
+    SongRuntime::new(&context).unwrap()
 }
 fn fixture_table(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     callback: fn(&mut HostCall<'_>) -> Result<(), Error>,
     args: &[Value],
 ) -> Value {
@@ -106,7 +105,7 @@ fn lua_table_to_string_reports_sequence_length() {
 fn gameplay_layout_places_reverse_slots() {
     let mut context = SongLuaCompileContext::new(".", "layout unit");
     context.screen_height = 480.;
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let layout = eval(&mut host, "return GetGameplayLayout(nil,true)");
     let combo = field(&mut host, layout, "Combo");
     let error_bar = field(&mut host, layout, "ErrorBar");
@@ -385,7 +384,7 @@ fn timing_table_exposes_bpm_policy() {
 fn style_table_exposes_column_info() {
     let mut context = SongLuaCompileContext::new(".", "style table unit");
     context.style_name = "double".into();
-    let mut host = RustSongRuntime::new(&context).unwrap();
+    let mut host = SongRuntime::new(&context).unwrap();
     let style = eval(&mut host, "return GAMESTATE:GetCurrentStyle()");
     let info = invoke(
         &mut host,

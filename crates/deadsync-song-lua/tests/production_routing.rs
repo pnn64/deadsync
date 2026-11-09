@@ -1,4 +1,4 @@
-//! The public application facade needs no engine-selection feature.
+//! Public compiler entry points share the production runtime.
 use deadsync_song_lua::{self as song, *};
 use std::{path::Path, sync::Arc};
 type Kind = SongLuaOverlayKind<(), (), deadlib_present::actors::TextAttribute>;
@@ -16,7 +16,7 @@ fn compile(
     let mut context = SongLuaCompileContext::new(dir.path(), "Production Rust routing");
     context.live = live;
     context.music_length_seconds = 0.1;
-    let output = compile_song_lua_with_default_host(
+    let output = compile_song_lua(
         &path,
         &context,
         Default::default(),
@@ -29,7 +29,7 @@ fn compile(
 }
 
 #[test]
-fn preparation_and_live_public_entry_points_use_the_rust_engine() {
+fn preparation_and_live_public_entry_points_use_the_runtime() {
     let source = "return Def.Quad{InitCommand=function(self) self:xy(7,9):zoomto(3,4) end}";
     let (prepared, _dir) = compile(source, false);
     assert!(prepared.live_scene.is_none());
@@ -37,8 +37,8 @@ fn preparation_and_live_public_entry_points_use_the_rust_engine() {
     assert_eq!(prepared.overlays[0].initial_state.x, 7.);
     let (mut live, _dir) = compile(source, true);
     let mut scene = live.live_scene.take().unwrap();
-    fn require_rust_scene(_: &song::rust_engine::SongLiveScene) {}
-    require_rust_scene(&scene);
+    fn require_runtime_scene(_: &song::SongLiveScene) {}
+    require_runtime_scene(&scene);
     assert_eq!(scene.states()[0].x, 7.);
     assert_eq!(scene.states()[0].y, 9.);
     assert!(

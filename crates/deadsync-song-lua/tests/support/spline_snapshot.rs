@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use deadsync_gameplay::{SongLuaColumnSplineTrack, SongLuaSplineData};
-use deadsync_song_lua::{SongLuaUpdateModState, rust_engine::SongStaticUpdateOutput};
+use deadsync_song_lua::{SongLuaUpdateModState, SongStaticUpdateOutput};
 use std::sync::Arc;
 
 #[derive(Debug)]

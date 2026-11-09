@@ -1686,7 +1686,7 @@ pub struct State {
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
     /// Per-side scorebox cycle clocks, restarted when a side's boards change.
-    pub scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
+    pub(crate) scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
     /// Per-side online fetch timeline on the selection-animation clock.
     scorebox_fetch_phase: [crate::scorebox::ScoreboxFetchPhase; 2],
     pub wheel_offset_from_selection: f32,

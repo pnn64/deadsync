@@ -1,8 +1,8 @@
 use deadlib_lua::{Value, compile};
-use deadsync_song_lua::{SongLuaCompileContext, rust_engine::RustSongRuntime};
+use deadsync_song_lua::{SongLuaCompileContext, SongRuntime};
 
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(
         ".",
         "integer boundary fixtures",
     ))

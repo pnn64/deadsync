@@ -1,14 +1,10 @@
 //! Original VM-free data/helper unit fixtures against the public library.
 use super::*;
 use deadlib_present::{
-    actors::{TextAlign, TextAttribute},
+    actors::TextAttribute,
     anim::{EffectClock, EffectMode},
 };
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 type TestOverlayKind = SongLuaOverlayKind<(), (), TextAttribute>;
 type TestOverlayActor = SongLuaOverlayActor<TestOverlayKind>;
 type TestCompiledSongLua = CompiledSongLua<TestOverlayActor>;

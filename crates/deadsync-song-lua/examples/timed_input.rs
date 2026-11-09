@@ -23,7 +23,7 @@ fn load(path: &Path) -> SongLuaLiveScene {
     let mut context = SongLuaCompileContext::new(path.parent().unwrap(), "timed input benchmark");
     context.live = true;
     context.music_length_seconds = 1_000_000.0;
-    let mut compiled = compile_song_lua_layers_with_default_host(
+    let mut compiled = compile_song_lua_layers(
         &[path],
         0,
         &context,

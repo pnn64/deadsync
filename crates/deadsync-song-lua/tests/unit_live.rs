@@ -20,7 +20,7 @@ fn compile_with_context(
     context.live = true;
     context.music_length_seconds = 60.0;
     configure(&mut context);
-    song::compile_song_lua_with_default_host(
+    song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -1191,11 +1191,10 @@ end }
         scene.selected_context().unwrap().player_step_indices,
         [Some(2), Some(4)]
     );
-    let mut layers = song::reload_song_lua_with_default_host(
+    let mut layers = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .unwrap();
     let mut replacement = layers[0].live_scene.take().unwrap();
@@ -1252,7 +1251,7 @@ return Def.ActorFrame {
     .unwrap();
     let mut context = SongLuaCompileContext::new(&dir, "callback relative actor");
     context.live = true;
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -1386,7 +1385,7 @@ fn live_relative_and_canonical_nested_media_keep_hidden_sprite_slots() {
     for root in [&dir, &canonical] {
         let mut context = song::SongLuaCompileContext::new(root, "relative media");
         context.live = true;
-        let compiled: Compiled = song::compile_song_lua_with_default_host(
+        let compiled: Compiled = song::compile_song_lua(
             &root.join("entry.lua"),
             &context,
             SongLuaNoteskinResolver::default(),
@@ -1635,7 +1634,7 @@ return Def.ActorFrame {
     context.live = true;
     context.song_display_bpms = [120.0; 2];
     context.layer_start_beats = vec![2.0, 4.0];
-    let mut compiled: Vec<Compiled> = song::compile_song_lua_layers_with_default_host(
+    let mut compiled: Vec<Compiled> = song::compile_song_lua_layers(
         &[&early, &late],
         0,
         &context,
@@ -1728,7 +1727,7 @@ return Def.ActorFrame {
     context.song_display_bpms = [120.0; 2];
     context.background_layer_count = 1;
     context.layer_start_beats = vec![2.0];
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -1809,7 +1808,7 @@ return Def.ActorFrame {
     context.live = true;
     context.song_display_bpms = [120.0; 2];
     context.layer_start_beats = vec![2.0];
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -1865,7 +1864,7 @@ return Def.ActorFrame {
     context.live = true;
     context.song_display_bpms = [120.0; 2];
     context.layer_start_beats = vec![2.0];
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -1954,11 +1953,10 @@ fn live_end_output() {
             ..Default::default()
         })
         .expect("old frame");
-    let mut compiled = song::reload_song_lua_with_default_host(
+    let mut compiled = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .expect("same-VM reload");
     let mut scene = compiled[0].live_scene.take().expect("replacement");
@@ -2028,7 +2026,7 @@ end }
     let mut context = SongLuaCompileContext::new(&dir, "shared layers");
     context.live = true;
     context.background_layer_count = 1;
-    let mut layers = song::compile_song_lua_layers_with_default_host(
+    let mut layers = song::compile_song_lua_layers(
         &[&background, &foreground],
         1,
         &context,
@@ -2203,7 +2201,7 @@ return Def.ActorFrame {
             .map(|(path, rank)| (path.into(), rank))
             .collect();
     }
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -2515,11 +2513,10 @@ return Def.Actor {
         output.request,
         Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into()))
     );
-    let mut layers = song::reload_song_lua_with_default_host(
+    let mut layers = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .expect("native gameplay Init copies human Steps to the nonhuman player");
     let mut scene = layers[0]
@@ -2678,13 +2675,9 @@ return Def.ActorFrame {{
         }
         let at = requested_at.expect("Lua timer requested a screen reload");
         assert!((at - (delay + duration)).abs() <= 0.25, "timer at {at}");
-        let mut layers = song::reload_song_lua_with_default_host::<(), (), _>(
-            scene,
-            |_, _, _| Ok(Arc::<[()]>::from([])),
-            |_| None,
-            |_, _| None,
-        )
-        .unwrap();
+        let mut layers =
+            song::reload_song_lua::<(), ()>(scene, |_, _, _| Ok(Arc::<[()]>::from([])), |_| None)
+                .unwrap();
         let scene = layers
             .iter_mut()
             .find_map(|layer| layer.live_scene.take())
@@ -3316,7 +3309,7 @@ end }
     context.live = true;
     context.layer_start_beats = vec![0.0; 3];
     context.foreground_names = vec!["first".into(), "active".into(), "last".into()];
-    let mut layers: Vec<Compiled> = song::compile_song_lua_layers_with_default_host(
+    let mut layers: Vec<Compiled> = song::compile_song_lua_layers(
         &[&blank, &active, &blank],
         0,
         &context,
@@ -3416,15 +3409,7 @@ fn scene_method_string(
 ) -> Result<String, Error> {
     scene_table_read(scene, owner, name, TableRead::Method, fixture_string)
 }
-fn scene_method_bool(
-    scene: &SongLuaLiveScene,
-    owner: Root,
-    name: impl AsRef<[u8]>,
-) -> Result<bool, Error> {
-    scene_table_read(scene, owner, name, TableRead::Method, |_, value| {
-        Ok(!matches!(value, Value::Nil | Value::Boolean(false)))
-    })
-}
+
 fn scene_method_is_table(
     scene: &SongLuaLiveScene,
     owner: Root,
@@ -3434,15 +3419,7 @@ fn scene_method_is_table(
         Ok(matches!(value, Value::Table(_)))
     })
 }
-fn scene_method_is_nil(
-    scene: &SongLuaLiveScene,
-    owner: Root,
-    name: impl AsRef<[u8]>,
-) -> Result<bool, Error> {
-    scene_table_read(scene, owner, name, TableRead::Method, |_, value| {
-        Ok(value == Value::Nil)
-    })
-}
+
 fn scene_field_number(
     scene: &SongLuaLiveScene,
     owner: Root,
@@ -4070,11 +4047,10 @@ return Def.ActorFrame {
         output.request,
         Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into()))
     );
-    let mut layers = song::reload_song_lua_with_default_host(
+    let mut layers = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .expect("replacement constructors");
     let mut scene = layers[0].live_scene.take().expect("replacement scene");
@@ -4654,7 +4630,7 @@ fn scene_set_bools(
 fn scene_state(scene: &SongLuaLiveScene, actor: Root) -> Result<SongLuaOverlayState, Error> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(actor)?;
-    song::rust_engine::test_support::read_live_actor_state(&mut runtime, value)
+    song::test_support::read_live_actor_state(&mut runtime, value)
 }
 fn scene_has_function(
     scene: &SongLuaLiveScene,
@@ -5626,7 +5602,7 @@ end }
     let mut context = SongLuaCompileContext::new(&dir, "first input clock");
     context.live = true;
     context.defer_initial_live_update = true;
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -6557,7 +6533,7 @@ PS:GetPlayerOptions('ModsLevel_Song'):Tipsy(0,10000)
 fn scene_direct_children(scene: &SongLuaLiveScene, owner: Root) -> Result<Vec<Root>, Error> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(owner)?;
-    let children = song::rust_engine::test_support::actor_direct_children(&mut runtime, value)?;
+    let children = song::test_support::actor_direct_children(&mut runtime, value)?;
     children
         .into_iter()
         .map(|value| runtime.vm_mut().pin(value))
@@ -6569,12 +6545,12 @@ fn scene_sprite_states(
 ) -> Result<Vec<SongLuaSpriteState>, Error> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(owner)?;
-    song::rust_engine::test_support::read_sprite_states(&mut runtime, value)
+    song::test_support::read_sprite_states(&mut runtime, value)
 }
 fn scene_init_state(scene: &SongLuaLiveScene, owner: Root) -> Result<(), Error> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(owner)?;
-    song::rust_engine::test_support::init_actor_native_state(&mut runtime, value)
+    song::test_support::init_actor_native_state(&mut runtime, value)
 }
 fn scene_method_table(
     scene: &SongLuaLiveScene,
@@ -6669,7 +6645,7 @@ fn scene_texture_path(
 fn scene_start_transition(scene: &SongLuaLiveScene, owner: Root) -> Result<(), Error> {
     let mut runtime = scene.runtime();
     let actor = runtime.vm_mut().rooted(owner)?;
-    song::rust_engine::test_support::start_actor_transition(&mut runtime, actor)
+    song::test_support::start_actor_transition(&mut runtime, actor)
 }
 fn scene_field_function(scene: &SongLuaLiveScene, owner: Root, name: &str) -> Result<Root, Error> {
     scene_table_read(scene, owner, name, TableRead::Raw, |vm, value| {
@@ -6739,7 +6715,7 @@ fn scene_two_numbers_bool(
     ))
 }
 fn scene_entry_root(scene: &SongLuaLiveScene) -> Result<Root, Error> {
-    let (roots, _) = song::rust_engine::test_support::live_scene_actor_handles(scene)?;
+    let (roots, _) = song::test_support::live_scene_actor_handles(scene)?;
     let mut runtime = scene.runtime();
     let vm = runtime.vm_mut();
     let Value::Table(roots) = roots else {
@@ -7952,7 +7928,7 @@ return Def.Actor { OnCommand = on }
         context.live = true;
         context.foreground_names = vec![name.into()];
         context.layer_start_beats = vec![0.0];
-        let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+        let mut compiled: Compiled = song::compile_song_lua(
             &physical_entry,
             &context,
             SongLuaNoteskinResolver::default(),
@@ -8009,7 +7985,7 @@ return Def.Actor { OnCommand = function(self) self:aux(19) end }
     .expect("actor path aliases");
     let mut context = SongLuaCompileContext::new(&dir, "actor path collapse");
     context.live = true;
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -8127,7 +8103,7 @@ fn live_reload() {
         .iter()
         .position(|steps| steps.difficulty == SongLuaDifficulty::Challenge);
     context.players[0].difficulty = SongLuaDifficulty::Challenge;
-    let mut compiled = song::compile_song_lua_with_default_host(
+    let mut compiled = song::compile_song_lua(
         &fixtures.join("startup-reload.lua"),
         &context,
         SongLuaNoteskinResolver::default(),
@@ -8194,7 +8170,7 @@ fn live_reload_updates() {
     let mut context = SongLuaCompileContext::new(&dir, "reload updates");
     context.live = true;
     context.layer_start_beats = vec![0.0];
-    let mut compiled = song::compile_song_lua_with_default_host(
+    let mut compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -8220,11 +8196,10 @@ fn live_reload_updates() {
         output.request,
         Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into()))
     );
-    let mut layers = song::reload_song_lua_with_default_host(
+    let mut layers = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .expect("replacement screen");
     let mut scene = layers[0].live_scene.take().expect("replacement scene");
@@ -8298,7 +8273,7 @@ end }
     context.players[0].screen_x = 231.25;
     context.players[0].screen_y = 199.0;
     context.players[1].screen_x = 620.0;
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -8391,7 +8366,7 @@ return Def.ActorFrame{
     context.layer_start_beats = vec![0.0];
     context.foreground_names = vec!["scripts".into()];
     context.music_length_seconds = 60.0;
-    let mut compiled: Compiled = song::compile_song_lua_with_default_host(
+    let mut compiled: Compiled = song::compile_song_lua(
         &entry,
         &context,
         SongLuaNoteskinResolver::default(),
@@ -8541,11 +8516,11 @@ end)
 fn scene_named_children(scene: &SongLuaLiveScene, owner: Root) -> Result<Root, Error> {
     let mut runtime = scene.runtime();
     let actor = runtime.vm_mut().rooted(owner)?;
-    song::rust_engine::test_support::actor_named_children(&mut runtime, actor)
+    song::test_support::actor_named_children(&mut runtime, actor)
 }
 
 fn scene_actor_at(scene: &SongLuaLiveScene, index: usize) -> Result<Root, Error> {
-    let (_, actors) = song::rust_engine::test_support::live_scene_actor_handles(scene)?;
+    let (_, actors) = song::test_support::live_scene_actor_handles(scene)?;
     let value = actors[index];
     scene.runtime().vm_mut().pin(value)
 }
@@ -8559,7 +8534,7 @@ fn scene_sync_visual<N, M>(
         .vm_mut()
         .rooted(owner)
         .map_err(|error| error.to_string())?;
-    song::rust_engine::test_support::publish_live_visual_content(&mut runtime, actor, kind)
+    song::test_support::publish_live_visual_content(&mut runtime, actor, kind)
 }
 fn scene_write_root(
     scene: &SongLuaLiveScene,
@@ -9077,7 +9052,7 @@ return Def.ActorFrame {
     );
 }
 
-fn fixture_runtime_bps(runtime: &mut song::rust_engine::RustSongRuntime) -> Result<f64, Error> {
+fn fixture_runtime_bps(runtime: &mut song::SongRuntime) -> Result<f64, Error> {
     let vm = runtime.vm_mut();
     let Value::Table(table) = vm.get_global(song::SONG_LUA_RUNTIME_KEY.as_bytes())? else {
         panic!("runtime fixture table")
@@ -9113,7 +9088,7 @@ fn scene_trace_messages(
     vm.set_global(b"Trace", callback)
 }
 fn scene_update_only(scene: &SongLuaLiveScene) -> Result<bool, Error> {
-    let (root, _) = song::rust_engine::test_support::live_scene_actor_handles(scene)?;
+    let (root, _) = song::test_support::live_scene_actor_handles(scene)?;
     scene.runtime().song_multitap_update_only(root)
 }
 fn scene_empty_update(scene: &SongLuaLiveScene, owner: Root) -> Result<(), Error> {
@@ -9326,7 +9301,7 @@ return Def.ActorFrame {
 
     let mut preview = SongLuaCompileContext::new(".", "preview BPS");
     preview.song_display_bpms = [135.0; 2];
-    let mut runtime = song::rust_engine::RustSongRuntime::new(&preview).unwrap();
+    let mut runtime = song::SongRuntime::new(&preview).unwrap();
     assert_eq!(
         fixture_runtime_bps(&mut runtime).unwrap(),
         2.25,
@@ -9589,7 +9564,7 @@ fn scene_query_value(
 ) -> Result<serde_json::Value, Error> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(root)?;
-    song::rust_engine::test_support::live_query_value(&mut runtime, value, depth)
+    song::test_support::live_query_value(&mut runtime, value, depth)
 }
 fn scene_seed_queries(scene: &SongLuaLiveScene, objects: &[(Root, serde_json::Value)]) {
     let mut runtime = scene.runtime();
@@ -9597,7 +9572,7 @@ fn scene_seed_queries(scene: &SongLuaLiveScene, objects: &[(Root, serde_json::Va
         .iter()
         .map(|(root, label)| (runtime.vm_mut().rooted(*root).unwrap(), label.clone()))
         .collect::<Vec<_>>();
-    song::rust_engine::test_support::seed_live_query_objects(&runtime, &values)
+    song::test_support::seed_live_query_objects(&runtime, &values)
 }
 fn scene_hook_query(
     scene: &SongLuaLiveScene,
@@ -9607,11 +9582,11 @@ fn scene_hook_query(
 ) -> Result<(), Error> {
     let mut runtime = scene.runtime();
     let owner = runtime.vm_mut().rooted(root)?;
-    song::rust_engine::test_support::hook_live_query(&mut runtime, owner, class, name)
+    song::test_support::hook_live_query(&mut runtime, owner, class, name)
 }
 fn scene_query_hooks(scene: &SongLuaLiveScene) -> Result<Vec<(Root, String)>, Error> {
     let mut runtime = scene.runtime();
-    let hooks = song::rust_engine::test_support::live_query_hooks(&runtime);
+    let hooks = song::test_support::live_query_hooks(&runtime);
     hooks
         .into_iter()
         .map(|(owner, name)| runtime.vm_mut().pin(owner).map(|root| (root, name)))
@@ -9964,10 +9939,10 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
 }
 
 fn scene_initial_context(scene: &SongLuaLiveScene) -> &SongLuaCompileContext {
-    song::rust_engine::test_support::live_scene_initial_context(scene)
+    song::test_support::live_scene_initial_context(scene)
 }
 fn scene_take_output(scene: &mut SongLuaLiveScene) -> Result<SongLuaLiveOutput, Error> {
-    song::rust_engine::test_support::take_live_scene_output(scene)
+    song::test_support::take_live_scene_output(scene)
 }
 fn scene_three_numbers(scene: &SongLuaLiveScene, source: &str) -> Result<(f32, f32, f32), Error> {
     let mut runtime = scene.runtime();
@@ -10118,7 +10093,7 @@ fn live_scheduled_reload() {
         .iter()
         .position(|steps| steps.difficulty == SongLuaDifficulty::Challenge);
     context.players[0].difficulty = SongLuaDifficulty::Challenge;
-    let mut compiled = song::compile_song_lua_with_default_host(
+    let mut compiled = song::compile_song_lua(
         &fixtures.join("startup-reload.lua"),
         &context,
         SongLuaNoteskinResolver::default(),
@@ -10183,11 +10158,10 @@ fn live_scheduled_reload() {
         output.request,
         Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into()))
     );
-    let mut layers = song::reload_song_lua_with_default_host(
+    let mut layers = song::reload_song_lua(
         scene,
         |_, _, _| Ok(Arc::<[()]>::from([])),
         |_| None::<song::SongLuaOverlayModelLayer<()>>,
-        |_, _| None,
     )
     .expect("runtime reload");
     let mut scene = layers[0].live_scene.take().expect("replacement scene");
@@ -10281,7 +10255,7 @@ end}
     context.background_layer_count = 1;
     context.layer_start_beats = vec![4.0, 0.0, 0.0];
     context.foreground_names = vec!["foreground".into(), "invalid".into()];
-    let mut layers: Vec<Compiled> = song::compile_song_lua_layers_with_default_host(
+    let mut layers: Vec<Compiled> = song::compile_song_lua_layers(
         &[&background, &foreground, &invalid],
         1,
         &context,
@@ -10336,13 +10310,9 @@ assert(children.invalid.__songlua_actor_type == 'Actor')
         output.request,
         Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into()))
     );
-    let mut layers: Vec<Compiled> = song::reload_song_lua_with_default_host(
-        scene,
-        |_, _, _| Ok(Arc::<[()]>::from([])),
-        |_| None,
-        |_, _| None,
-    )
-    .expect("reload same process VM");
+    let mut layers: Vec<Compiled> =
+        song::reload_song_lua(scene, |_, _, _| Ok(Arc::<[()]>::from([])), |_| None)
+            .expect("reload same process VM");
     let mut scene = layers[1]
         .live_scene
         .take()
@@ -10444,7 +10414,7 @@ fn scene_replay_pose(
 ) -> bool {
     let mut runtime = scene.runtime();
     let actor = runtime.vm_mut().rooted(owner).unwrap();
-    song::rust_engine::test_support::read_live_tween_pose(&runtime, actor, state)
+    song::test_support::read_live_tween_pose(&runtime, actor, state)
 }
 
 #[test]
@@ -10488,7 +10458,7 @@ return Def.ActorFrame { proxy, Def.ActorProxy {
     context.background_layer_count = 1;
     context.layer_start_beats = vec![0.0, 0.0];
     context.foreground_names = vec!["foreground".into()];
-    let mut layers: Vec<Compiled> = song::compile_song_lua_layers_with_default_host(
+    let mut layers: Vec<Compiled> = song::compile_song_lua_layers(
         &[&background, &foreground],
         1,
         &context,
@@ -11693,14 +11663,14 @@ assert(ROOT:GetDestX()==99 and ROOT:GetDestY()==30)
 
 fn scene_registry(scene: &SongLuaLiveScene) -> Result<Vec<Root>, Error> {
     let mut runtime = scene.runtime();
-    let values = song::rust_engine::test_support::live_actor_registry(&runtime);
+    let values = song::test_support::live_actor_registry(&runtime);
     values
         .into_iter()
         .map(|value| runtime.vm_mut().pin(value))
         .collect()
 }
 fn scene_draw_storage(scene: &SongLuaLiveScene) -> (usize, usize, usize) {
-    song::rust_engine::test_support::live_draw_storage(&scene.runtime())
+    song::test_support::live_draw_storage(&scene.runtime())
 }
 fn scene_bool(scene: &SongLuaLiveScene, source: impl AsRef<str>) -> Result<bool, Error> {
     let mut runtime = scene.runtime();
@@ -11717,21 +11687,21 @@ fn scene_bool(scene: &SongLuaLiveScene, source: impl AsRef<str>) -> Result<bool,
 fn scene_advance_actor(scene: &SongLuaLiveScene, root: Root, delta: f32) -> Result<(), Error> {
     let mut runtime = scene.runtime();
     let actor = runtime.vm_mut().rooted(root)?;
-    song::rust_engine::test_support::advance_live_actor(&mut runtime, actor, delta)
+    song::test_support::advance_live_actor(&mut runtime, actor, delta)
 }
 fn scene_initial_state(scene: &SongLuaLiveScene, root: Root) -> Result<SongLuaOverlayState, Error> {
     let mut runtime = scene.runtime();
     let actor = runtime.vm_mut().rooted(root)?;
-    song::rust_engine::test_support::read_actor_initial_state(&mut runtime, actor)
+    song::test_support::read_actor_initial_state(&mut runtime, actor)
 }
 fn scene_command_depth(scene: &SongLuaLiveScene) -> usize {
-    song::rust_engine::test_support::live_command_depth(&scene.runtime())
+    song::test_support::live_command_depth(&scene.runtime())
 }
 fn scene_set_command_depth(scene: &SongLuaLiveScene, depth: usize) {
-    song::rust_engine::test_support::set_live_command_depth(&scene.runtime(), depth)
+    song::test_support::set_live_command_depth(&scene.runtime(), depth)
 }
 fn scene_install_command_depth(scene: &SongLuaLiveScene) -> Result<(), Error> {
-    song::rust_engine::test_support::install_live_command_depth_probe(&mut scene.runtime())
+    song::test_support::install_live_command_depth_probe(&mut scene.runtime())
 }
 fn scene_expression_function(
     scene: &SongLuaLiveScene,
@@ -11757,13 +11727,7 @@ fn scene_tap_callback(
     let mut runtime = scene.runtime();
     let field = runtime.vm_mut().rooted(field)?;
     let callback = runtime.vm_mut().rooted(callback)?;
-    song::rust_engine::test_support::invoke_live_tap_callback(
-        &mut runtime,
-        field,
-        callback,
-        tap,
-        columns,
-    )
+    song::test_support::invoke_live_tap_callback(&mut runtime, field, callback, tap, columns)
 }
 
 #[cfg(feature = "test-support")]
@@ -12380,18 +12344,18 @@ fn scene_copy_pose(scene: &SongLuaLiveScene, source: Root, into: Root) -> Result
     let mut runtime = scene.runtime();
     let source = runtime.vm_mut().rooted(source)?;
     let into = runtime.vm_mut().rooted(into)?;
-    song::rust_engine::test_support::copy_live_actor_pose(&mut runtime, source, into)
+    song::test_support::copy_live_actor_pose(&mut runtime, source, into)
 }
 fn scene_snapshot(scene: &SongLuaLiveScene, source: Root, mutable: bool) -> Result<Root, Error> {
     let mut runtime = scene.runtime();
     let source = runtime.vm_mut().rooted(source)?;
-    song::rust_engine::test_support::export_live_actor_state(&mut runtime, source, mutable)
+    song::test_support::export_live_actor_state(&mut runtime, source, mutable)
 }
 fn scene_restore_snapshot(scene: &SongLuaLiveScene, into: Root, saved: Root) -> Result<(), Error> {
     let mut runtime = scene.runtime();
     let into = runtime.vm_mut().rooted(into)?;
     let saved = runtime.vm_mut().rooted(saved)?;
-    song::rust_engine::test_support::restore_live_actor_state(&mut runtime, into, saved)
+    song::test_support::restore_live_actor_state(&mut runtime, into, saved)
 }
 fn scene_destination_vertices(
     scene: &SongLuaLiveScene,
@@ -12400,7 +12364,7 @@ fn scene_destination_vertices(
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(actor)?;
     Ok(
-        song::rust_engine::test_support::live_destination_vertices(&runtime, value)
+        song::test_support::live_destination_vertices(&runtime, value)
             .expect("owned native corner colors"),
     )
 }
@@ -12410,7 +12374,7 @@ fn scene_value(scene: &SongLuaLiveScene, root: Root) -> Value {
 fn scene_owned_color(scene: &SongLuaLiveScene, root: Root) -> Option<(usize, [f32; 4], [f32; 4])> {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(root).unwrap();
-    song::rust_engine::test_support::live_color_storage(&runtime, value)
+    song::test_support::live_color_storage(&runtime, value)
 }
 fn scene_set_index_number(
     scene: &SongLuaLiveScene,
@@ -12732,7 +12696,7 @@ Q:diffusetopedge()
 
     // Measure the production mutation path, without the optional observer's owned samples.
     // Its observation semantics are checked separately in lua_util.
-    song::rust_engine::test_support::end_live_update_capture(&scene);
+    song::test_support::end_live_update_capture(&scene);
     let args = [
         scene_value(&scene, actor),
         Value::Number(1.0),
@@ -12887,10 +12851,14 @@ assert(ROOT:GetX()==40 and ROOT.authored.retained)
     });
 }
 
+#[expect(
+    dead_code,
+    reason = "this fixture uses a subset of the shared snapshot API"
+)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;
 fn scene_actor_roots(scene: &SongLuaLiveScene) -> Result<Vec<Root>, Error> {
-    let (_, actors) = song::rust_engine::test_support::live_scene_actor_handles(scene)?;
+    let (_, actors) = song::test_support::live_scene_actor_handles(scene)?;
     let mut runtime = scene.runtime();
     actors
         .into_iter()
@@ -12900,7 +12868,7 @@ fn scene_actor_roots(scene: &SongLuaLiveScene) -> Result<Vec<Root>, Error> {
 fn scene_has_motion(scene: &SongLuaLiveScene, root: Root) -> bool {
     let mut runtime = scene.runtime();
     let value = runtime.vm_mut().rooted(root).unwrap();
-    song::rust_engine::test_support::live_actor_has_motion(&runtime, value)
+    song::test_support::live_actor_has_motion(&runtime, value)
 }
 
 #[test]
@@ -12991,7 +12959,7 @@ return Def.ActorFrame {
             &(actual.draw_frames),
         );
         for actor in registry(&live) {
-            for field in song::rust_engine::test_support::base_transform_state_keys() {
+            for field in song::test_support::base_transform_state_keys() {
                 assert!(
                     (scene_field_value(&live, actor, field, true).unwrap() == Value::Nil),
                     "native base transforms must not maintain Lua mirrors"
@@ -13145,7 +13113,7 @@ return Def.ActorFrame {
         assert!(state.depth_test && state.depth_test_on_fail && !state.depth_write);
         assert!(state.mask_source && state.mask_dest && state.texture_filtering);
         for actor in registry(&live) {
-            for flag in song::rust_engine::test_support::render_flag_state_keys() {
+            for flag in song::test_support::render_flag_state_keys() {
                 assert!(
                     (scene_field_value(&live, actor, flag, true).unwrap() == Value::Nil),
                     "native render flags must not maintain Lua mirrors"
@@ -13287,7 +13255,7 @@ return root
         );
     }
     let actors = registry(&native);
-    let key = "__songlua_state_motion_clock";
+    let _key = "__songlua_state_motion_clock";
     assert!(actors.iter().any(|actor| scene_has_motion(&native, *actor)));
     for actor in actors {
         scene_init_state(&native, actor).unwrap();

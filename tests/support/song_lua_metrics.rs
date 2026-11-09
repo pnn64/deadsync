@@ -148,6 +148,6 @@ impl Measurement {
             "thread_cpu_cycles":cycles,
             "allocations":ALLOCS.load(Relaxed),"reallocations":REALLOCS.load(Relaxed),
             "allocated_bytes":BYTES.load(Relaxed),
-            "allocation_scope":"current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"})
+            "allocation_scope":"current process, all threads; Rust GlobalAlloc; native malloc excluded"})
     }
 }

@@ -1,6 +1,6 @@
 //! Compiled predicates against ordinary authored Lua in the Rust interpreter.
 use deadlib_lua::{HostCall, TableId, Value, Vm, compile};
-use deadsync_song_lua::{SongLuaInputEvent, SongLuaInputType, rust_engine::CompiledInput};
+use deadsync_song_lua::{CompiledInput, SongLuaInputEvent, SongLuaInputType};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering::Relaxed},

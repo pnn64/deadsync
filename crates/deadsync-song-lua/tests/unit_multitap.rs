@@ -1,8 +1,7 @@
 //! Original multitap travel unit on the Rust VM.
 use deadlib_lua::Value;
 use deadsync_song_lua::{
-    SongLuaCompileContext, SongLuaSpeedMod,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, SongLuaSpeedMod, {SongRuntime, test_support},
 };
 #[path = "support/baked_program.rs"]
 mod api;
@@ -56,7 +55,7 @@ fn multitap_travel_obeys_chart_timing_and_speedmod() {
         context.players[0].speedmod = speed;
         context.song_music_rate = rate;
         assert!((test_support::multitap_y_offset(&context, 0, 6.0, 4.0) - expected).abs() < 0.001);
-        let mut host = RustSongRuntime::new(&context).unwrap();
+        let mut host = SongRuntime::new(&context).unwrap();
         host.set_values(6.0, 3.0 / rate).unwrap();
         let (method, value) = match speed {
             SongLuaSpeedMod::X(value) => ("XMod", value),

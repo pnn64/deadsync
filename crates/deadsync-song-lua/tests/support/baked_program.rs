@@ -2,7 +2,7 @@
 //! Compiled programs own bytecode and bindings, without retaining the authoring VM.
 #![allow(dead_code)]
 use deadlib_lua::{HostCall, Value as LuaValue, Vm, compile_named};
-pub use deadsync_song_lua::rust_engine::baked_program::*;
+pub use deadsync_song_lua::baked_program::*;
 
 fn retain(vm: &mut Vm, values: &[LuaValue]) {
     for &value in values {

@@ -1,9 +1,12 @@
 //! Original ScreenManager ignored-argument fixtures on the current Rust host.
 use deadlib_lua::Value;
 use deadsync_song_lua::{
-    SONG_LUA_SIDE_EFFECT_COUNT_KEY, SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SONG_LUA_SIDE_EFFECT_COUNT_KEY, SongLuaCompileContext, {SongRuntime, test_support},
 };
+#[expect(
+    dead_code,
+    reason = "this fixture uses scoped measurement from the shared allocation API"
+)]
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
@@ -12,9 +15,9 @@ mod api;
 mod bench_clock;
 #[path = "support/ignored_callback.rs"]
 mod ignored_callback;
-fn manager(current: bool) -> (RustSongRuntime, Value, Value) {
+fn manager(current: bool) -> (SongRuntime, Value, Value) {
     let mut host =
-        RustSongRuntime::new(&SongLuaCompileContext::new(".", "ignored host callback")).unwrap();
+        SongRuntime::new(&SongLuaCompileContext::new(".", "ignored host callback")).unwrap();
     let screen = api::table(host.vm_mut());
     let players = [api::table(host.vm_mut()), api::table(host.vm_mut())];
     test_support::expose_screen_publication(&mut host).unwrap();
@@ -35,7 +38,7 @@ fn manager(current: bool) -> (RustSongRuntime, Value, Value) {
     )[0];
     (host, model, screen)
 }
-fn count(host: &mut RustSongRuntime) -> f64 {
+fn count(host: &mut SongRuntime) -> f64 {
     match host
         .vm_mut()
         .get_global(SONG_LUA_SIDE_EFFECT_COUNT_KEY.as_bytes())

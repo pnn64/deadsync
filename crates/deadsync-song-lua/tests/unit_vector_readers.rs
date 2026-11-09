@@ -1,8 +1,7 @@
 //! Original vector batch comparisons on native Rust readers and ordinary Lua raw reads.
 use deadlib_lua::{Error, HostCall, NativeCallStatus, Root, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
 #[path = "support/baked_program.rs"]
@@ -15,8 +14,8 @@ struct Vectors {
     v5: Option<[u32; 5]>,
 }
 type VertexBits = Option<[[u32; 4]; 4]>;
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "vector reader unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "vector reader unit")).unwrap()
 }
 fn vectors_reader(call: &mut HostCall<'_>) -> Result<(), Error> {
     let output = call
@@ -48,7 +47,7 @@ fn colors_reader(call: &mut HostCall<'_>) -> Result<(), Error> {
     *output.lock().unwrap() = Some(value);
     Ok(())
 }
-fn model(host: &mut RustSongRuntime) -> Value {
+fn model(host: &mut SongRuntime) -> Value {
     api::eval(
         host.vm_mut(),
         r#"return function(t,n)
@@ -58,7 +57,7 @@ fn model(host: &mut RustSongRuntime) -> Value {
 end"#,
     )[0]
 }
-fn index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value {
+fn index(host: &mut SongRuntime, owner: Value, index: usize) -> Value {
     let Value::Table(t) = owner else {
         panic!("fixture table expected")
     };
@@ -69,7 +68,7 @@ fn index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value {
     host.vm_mut().pin(value).unwrap();
     value
 }
-fn set_index(host: &mut RustSongRuntime, owner: Value, index: usize, value: Value) {
+fn set_index(host: &mut SongRuntime, owner: Value, index: usize, value: Value) {
     let Value::Table(t) = owner else {
         panic!("fixture table expected")
     };
@@ -78,7 +77,7 @@ fn set_index(host: &mut RustSongRuntime, owner: Value, index: usize, value: Valu
         .unwrap();
 }
 fn model_components<const N: usize>(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     model: Value,
     table: Value,
 ) -> Option<[u32; N]> {
@@ -90,7 +89,7 @@ fn model_components<const N: usize>(
         (api::as_number(index(host, value, i + 1)) as f32).to_bits()
     }))
 }
-fn expected_vectors(host: &mut RustSongRuntime, model: Value, table: Value) -> Vectors {
+fn expected_vectors(host: &mut SongRuntime, model: Value, table: Value) -> Vectors {
     Vectors {
         v2: model_components(host, model, table),
         v3: model_components(host, model, table),
@@ -98,7 +97,7 @@ fn expected_vectors(host: &mut RustSongRuntime, model: Value, table: Value) -> V
         v5: model_components(host, model, table),
     }
 }
-fn expected_colors(host: &mut RustSongRuntime, model: Value, colors: Value) -> VertexBits {
+fn expected_colors(host: &mut SongRuntime, model: Value, colors: Value) -> VertexBits {
     let mut out = [[0; 4]; 4];
     for (i, row) in out.iter_mut().enumerate() {
         let value = index(host, colors, i + 1);
@@ -109,13 +108,13 @@ fn expected_colors(host: &mut RustSongRuntime, model: Value, colors: Value) -> V
     }
     Some(out)
 }
-fn native(host: &mut RustSongRuntime, function: Root) {
+fn native(host: &mut SongRuntime, function: Root) {
     let vm = host.vm_mut();
     let function = vm.rooted(function).unwrap();
     vm.call(function, &[]).unwrap();
 }
 fn compare_vectors(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     function: Root,
     output: &Arc<Mutex<Option<Vectors>>>,
     model: Value,
@@ -126,7 +125,7 @@ fn compare_vectors(
     assert_eq!(output.lock().unwrap().unwrap(), expected);
 }
 fn compare_colors(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     function: Root,
     output: &Arc<Mutex<Option<VertexBits>>>,
     model: Value,
@@ -136,16 +135,13 @@ fn compare_colors(
     native(host, function);
     assert_eq!(output.lock().unwrap().unwrap(), expected);
 }
-fn vector_probe(host: &mut RustSongRuntime, table: Value) -> (Root, Arc<Mutex<Option<Vectors>>>) {
+fn vector_probe(host: &mut SongRuntime, table: Value) -> (Root, Arc<Mutex<Option<Vectors>>>) {
     let output = Arc::new(Mutex::new(None));
     let function =
         test_support::prepare_actor_reader(host, table, vectors_reader, output.clone()).unwrap();
     (function, output)
 }
-fn colors_probe(
-    host: &mut RustSongRuntime,
-    table: Value,
-) -> (Root, Arc<Mutex<Option<VertexBits>>>) {
+fn colors_probe(host: &mut SongRuntime, table: Value) -> (Root, Arc<Mutex<Option<VertexBits>>>) {
     let output = Arc::new(Mutex::new(None));
     let function =
         test_support::prepare_actor_reader(host, table, colors_reader, output.clone()).unwrap();

@@ -1,9 +1,12 @@
 //! Original loading size-getter argument fixtures on actual native readers.
 use deadlib_lua::{Root, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
+#[expect(
+    dead_code,
+    reason = "this fixture uses scoped measurement from the shared allocation API"
+)]
 #[path = "../../../tests/support/perf.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
@@ -13,9 +16,9 @@ mod bench_clock;
 #[path = "support/ignored_callback.rs"]
 mod ignored_callback;
 const ACTOR: &str = "{__songlua_actor_type='Quad',__songlua_state_size={12,24},__songlua_state_zoom=2,__songlua_state_zoom_x=3}";
-fn fixture() -> (RustSongRuntime, Value, Value) {
+fn fixture() -> (SongRuntime, Value, Value) {
     let mut host =
-        RustSongRuntime::new(&SongLuaCompileContext::new(".", "loading getter arguments")).unwrap();
+        SongRuntime::new(&SongLuaCompileContext::new(".", "loading getter arguments")).unwrap();
     let original = api::eval(host.vm_mut(), &format!("return {ACTOR}"))[0];
     host.vm_mut()
         .set_global(b"ORIGINAL_ACTOR", original)
@@ -28,11 +31,11 @@ fn fixture() -> (RustSongRuntime, Value, Value) {
     api::eval(host.vm_mut(), "ACTOR:zoom(2):zoomx(3)");
     (host, actor, original)
 }
-fn native(host: &mut RustSongRuntime, actor: Value, name: &'static str) -> Value {
+fn native(host: &mut SongRuntime, actor: Value, name: &'static str) -> Value {
     let root: Root = test_support::prepare_loading_size_getter(host, actor, name).unwrap();
     host.vm_mut().rooted(root).unwrap()
 }
-fn baseline(host: &mut RustSongRuntime, actor: Value, name: &str) -> Value {
+fn baseline(host: &mut SongRuntime, actor: Value, name: &str) -> Value {
     let factory = api::eval(
         host.vm_mut(),
         r#"return function(actor,name)
@@ -55,7 +58,7 @@ end"#,
     let name = api::string(host.vm_mut(), name);
     api::call_one(host.vm_mut(), factory, &[actor, name])
 }
-fn outcome(host: &mut RustSongRuntime, f: Value) -> Result<Vec<Value>, String> {
+fn outcome(host: &mut SongRuntime, f: Value) -> Result<Vec<Value>, String> {
     host.vm_mut().call(f, &[]).map(|v| v.to_vec()).map_err(|e| {
         let error = e.to_string();
         let first = error.lines().next().unwrap_or(&error);

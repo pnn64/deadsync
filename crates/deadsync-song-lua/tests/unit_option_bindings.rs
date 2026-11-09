@@ -1,19 +1,17 @@
 //! Original option binding microfixtures driven by the Rust interpreter.
 use deadlib_lua::{Error, Value, compile_named};
 use deadsync_song_lua::{
-    self as song,
-    rust_engine::{RustSongRuntime, test_support},
-    *,
+    *, {SongRuntime, test_support},
 };
 use std::path::Path;
 #[path = "support/baked_program.rs"]
 mod api;
-fn option_exec(host: &mut RustSongRuntime, source: impl AsRef<str>) -> Result<Vec<Value>, Error> {
+fn option_exec(host: &mut SongRuntime, source: impl AsRef<str>) -> Result<Vec<Value>, Error> {
     let code = compile_named(source.as_ref().as_bytes(), b"=original option unit fixture")?;
     host.vm_mut().execute(&code).map(|values| values.to_vec())
 }
-fn option_fixture(context: &SongLuaCompileContext) -> RustSongRuntime {
-    let mut host = RustSongRuntime::new(context).unwrap();
+fn option_fixture(context: &SongLuaCompileContext) -> SongRuntime {
+    let mut host = SongRuntime::new(context).unwrap();
     test_support::expose_catalog(&mut host).unwrap();
     option_exec(
         &mut host,
@@ -26,10 +24,10 @@ NOTESKIN={DoesNoteSkinExist=function()return false end,GetNoteSkinNames=function
     .unwrap();
     host
 }
-fn option_value(host: &mut RustSongRuntime) -> Value {
+fn option_value(host: &mut SongRuntime) -> Value {
     host.vm_mut().get_global(b"o").unwrap()
 }
-fn install_option_control_adapter(host: &mut RustSongRuntime) {
+fn install_option_control_adapter(host: &mut SongRuntime) {
     option_exec(
         host,
         r#"
@@ -45,13 +43,13 @@ function _ITG_OPTIONS_ADVANCE(seconds,scaled)groups:Advance(seconds)end
     )
     .unwrap();
 }
-fn option_function(host: &mut RustSongRuntime, options: Value, name: &str) -> Value {
+fn option_function(host: &mut SongRuntime, options: Value, name: &str) -> Value {
     let vm = host.vm_mut();
     let lookup = api::eval(vm, b"return function(owner, key) return owner[key] end")[0];
     let key = api::string(vm, name.as_bytes());
     api::call_one(vm, lookup, &[options, key])
 }
-fn option_raw(host: &mut RustSongRuntime, owner: Value, key: &str) -> Value {
+fn option_raw(host: &mut SongRuntime, owner: Value, key: &str) -> Value {
     let vm = host.vm_mut();
     let Value::Table(table) = owner else {
         panic!("option fixture table")
@@ -59,19 +57,11 @@ fn option_raw(host: &mut RustSongRuntime, owner: Value, key: &str) -> Value {
     let key = vm.try_intern(key.as_bytes()).unwrap();
     vm.raw_table_get(table, key).unwrap()
 }
-fn option_state_value(
-    host: &mut RustSongRuntime,
-    options: Value,
-    key: &str,
-) -> Result<Value, Error> {
+fn option_state_value(host: &mut SongRuntime, options: Value, key: &str) -> Result<Value, Error> {
     let state = option_raw(host, options, "__songlua_player_option_state");
     Ok(option_raw(host, state, key))
 }
-fn option_speed(
-    host: &mut RustSongRuntime,
-    options: Value,
-    key: &str,
-) -> Result<Option<f32>, Error> {
+fn option_speed(host: &mut SongRuntime, options: Value, key: &str) -> Result<Option<f32>, Error> {
     let speeds = option_raw(host, options, "__songlua_player_option_speeds");
     if speeds == Value::Nil {
         return Ok(None);
@@ -85,7 +75,7 @@ fn option_speed(
     }
 }
 fn option_call_one(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     function: Value,
     args: &[Value],
 ) -> Result<Value, Error> {
@@ -97,7 +87,7 @@ fn option_call_one(
         .unwrap_or(Value::Nil))
 }
 fn option_query_number(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     function: Value,
     owner: Value,
     index: f64,
@@ -111,7 +101,7 @@ fn option_query_number(
     }
 }
 fn option_query_optional(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     function: Value,
     owner: Value,
     index: f64,
@@ -252,7 +242,7 @@ fn timer_binding_matches_native_enum_and_float_protocol() {
         Path::new("."),
         "option unit fixture",
     ));
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(
         &mut host,
         r#"
@@ -293,7 +283,7 @@ fn perspective_methods_keep_native_truthiness_chaining_and_error_order() {
         Path::new("."),
         "option unit fixture",
     ));
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(
         &mut host,
         r#"
@@ -330,7 +320,7 @@ fn perspective_getters_select_one_speed_correction_in_any_order() {
         Path::new("."),
         "option unit fixture",
     ));
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(&mut host,r#"
 -- Sharkmode queries all four aliases in a pairs loop. Only the active alias
 -- may be truthy; otherwise hash iteration changes the chosen correction.
@@ -351,7 +341,7 @@ end
 fn repeated_state_option_replacement_releases_temporary_values() {
     let context = SongLuaCompileContext::new(Path::new("."), "Repeated option assignment");
     let mut host = option_fixture(&context);
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(
         &mut host,
         r#"
@@ -484,7 +474,7 @@ fn modifier_prefix_order_matches_native() {
         Path::new("."),
         "option unit fixture",
     ));
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(
         &mut host,
         r#"
@@ -591,7 +581,7 @@ fn boolean_option_strings_use_native_half_threshold() {
         Path::new("."),
         "option unit fixture",
     ));
-    let options = option_value(&mut host);
+    let _options = option_value(&mut host);
     option_exec(
         &mut host,
         r#"
@@ -662,7 +652,7 @@ fn speedmod_value_matches_requested_variant() {
     let value = option_exec(&mut host, "o:XMod(1.5);return o:CMod()").unwrap()[0];
     assert_eq!(value, Value::Nil);
 }
-fn selected_window(host: &mut RustSongRuntime, select: Value, value: Value) -> Option<String> {
+fn selected_window(host: &mut SongRuntime, select: Value, value: Value) -> Option<String> {
     let value = api::call_one(host.vm_mut(), select, &[value]);
     if value == Value::Nil {
         None

@@ -1,15 +1,14 @@
 //! Original standalone actor runtime fixtures on deadlib-lua.
 use deadlib_lua::{Root, Value};
 use deadsync_song_lua::{
-    SongLuaCompileContext,
-    rust_engine::{RustSongRuntime, test_support},
+    SongLuaCompileContext, {SongRuntime, test_support},
 };
 #[path = "support/baked_program.rs"]
 mod api;
-fn runtime() -> RustSongRuntime {
-    RustSongRuntime::new(&SongLuaCompileContext::new(".", "actor runtime unit")).unwrap()
+fn runtime() -> SongRuntime {
+    SongRuntime::new(&SongLuaCompileContext::new(".", "actor runtime unit")).unwrap()
 }
-fn table_index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value {
+fn table_index(host: &mut SongRuntime, owner: Value, index: usize) -> Value {
     let Value::Table(owner) = owner else {
         panic!("table expected")
     };
@@ -22,7 +21,7 @@ fn table_index(host: &mut RustSongRuntime, owner: Value, index: usize) -> Value 
     }
     value
 }
-fn set_index(host: &mut RustSongRuntime, owner: Value, index: usize, value: Value) {
+fn set_index(host: &mut SongRuntime, owner: Value, index: usize, value: Value) {
     let Value::Table(owner) = owner else {
         panic!("table expected")
     };
@@ -30,21 +29,21 @@ fn set_index(host: &mut RustSongRuntime, owner: Value, index: usize, value: Valu
         .raw_table_set(owner, Value::Number(index as f64), value)
         .unwrap();
 }
-fn length(host: &mut RustSongRuntime, table: Value) -> usize {
+fn length(host: &mut SongRuntime, table: Value) -> usize {
     let Value::Table(table) = table else {
         panic!("table expected")
     };
     host.vm_mut().raw_table_len(table).unwrap()
 }
-fn pointer(host: &mut RustSongRuntime, value: Value) -> usize {
+fn pointer(host: &mut SongRuntime, value: Value) -> usize {
     host.vm_mut().object_pointer(value).unwrap()
 }
-fn instantiate(host: &mut RustSongRuntime, source: &str) -> Value {
+fn instantiate(host: &mut SongRuntime, source: &str) -> Value {
     let declaration = api::eval(host.vm_mut(), source)[0];
     let scene = host.instantiate_actor(declaration).unwrap();
     host.actor_scene_root(scene).unwrap()
 }
-fn call_root(host: &mut RustSongRuntime, function: Root, args: &[Value]) {
+fn call_root(host: &mut SongRuntime, function: Root, args: &[Value]) {
     let vm = host.vm_mut();
     let function = vm.rooted(function).unwrap();
     vm.call(function, args).unwrap();
@@ -194,11 +193,11 @@ return {mutate, verify}
 "#;
 
 fn large_owned_tree(
-    host: &mut RustSongRuntime,
+    host: &mut SongRuntime,
     count: usize,
     command_name: &str,
     command_source: &str,
-) -> (deadsync_song_lua::rust_engine::ActorScene, Vec<Value>) {
+) -> (deadsync_song_lua::ActorScene, Vec<Value>) {
     let command = api::eval(host.vm_mut(), command_source)[0];
     host.vm_mut().set_global(b"TREE_COMMAND", command).unwrap();
     let name = api::string(host.vm_mut(), command_name);

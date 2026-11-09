@@ -30,7 +30,7 @@ pub fn fetch_player_leaderboards(
     show_ex_score: bool,
     max_entries: usize,
 ) -> Result<groovestats::FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
-    let mut combined = groovestats::fetch_validated_combined_player_leaderboards(
+    let combined = groovestats::fetch_validated_combined_player_leaderboards(
         service,
         api_key,
         username,

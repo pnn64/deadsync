@@ -29,24 +29,22 @@ library-unit-test type-identity cycle through the asset crate. Full-frame gamepl
 and practice regressions live with the shell orchestration. Native ITGmania actor
 and Lua-semantic fixtures remain in the workspace tests.
 
-## Production engine
+## Runtime
 
 The public song compiler, preparation, live scene, reload and fallback paths use
-`deadlib-lua` unconditionally. No engine-selection feature is required; the former
-`rust-engine` feature has been removed. The core owns parsing, bytecode, GC,
+`deadlib-lua` directly. The core owns parsing, bytecode, GC,
 standard libraries and the Rust host API. This crate owns song/actor bindings,
 commands, managers, timing/RNG, input/messages, media and renderer-facing output.
 
-Application callers use `compile_song_lua_with_default_host`,
-`compile_song_lua_layers_with_default_host`, `reload_song_lua_with_default_host`
-and the shared `playback` entry points. `rust_engine::RustSongRuntime` exposes the
-lower-level Rust adapter. Preparation can emit owned native data or retain a live
-scene; reloads keep the song's VM and shared state. Existing fallback stays on
-the Rust engine.
+Application callers use `compile_song_lua`,
+`compile_song_lua_layers`, `reload_song_lua`
+and the shared `playback` entry points. `SongRuntime` owns the song VM and host
+bindings. Preparation can emit owned native data or retain a live scene;
+reloads keep the song's VM and shared state. Fallback uses the same compiler.
 
 ## Ownership and lifetime
 
-A retained song session owns one `RustSongRuntime` through `SongLiveRuntime`.
+A retained song session owns one `SongRuntime` through `SongLiveRuntime`.
 Gameplay callers release its mutex guard before applying writes that may invoke
 another callback. Host callbacks use `HostCall` for nested Lua execution.
 
@@ -64,14 +62,13 @@ whose compiler identity changed from 29 to 30 for the engine cutover.
 
 ## Regression controls
 
-A normal library/application build has no legacy Lua runtime dependency. Native
-controls are isolated to unit tests or the explicit `legacy-oracle` feature and
-`legacy` namespace. Enabling that feature does not select the production backend;
-`test-support` alone does not enable the native oracle.
+The compiler and live-runtime tests exercise the same implementation as the
+application. `test-support` exposes fixture controls and observations. Native
+ITGmania snapshots provide independent regression expectations.
 
 ```sh
 cargo test --locked -p deadsync-song-lua --test production_routing
-cargo test --locked -p deadsync-song-lua --tests --features legacy-oracle --no-fail-fast -- --test-threads=1
+cargo test --locked -p deadsync-song-lua --tests --features test-support --no-fail-fast -- --test-threads=1
 ```
 
 The [production migration objective](../../docs/testing/2026-11-04-rust-lua-production-migration/objective.txt)

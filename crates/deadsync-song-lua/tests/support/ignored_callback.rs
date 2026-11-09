@@ -43,13 +43,7 @@ pub fn owned_forward(vm: &mut Vm, getter: Value) -> Value {
 #[cfg(windows)]
 pub fn measure_calls(
     name: &str,
-    prepare: impl Fn(
-        bool,
-    ) -> (
-        deadsync_song_lua::rust_engine::RustSongRuntime,
-        Value,
-        Value,
-    ),
+    prepare: impl Fn(bool) -> (deadsync_song_lua::SongRuntime, Value, Value),
 ) {
     use super::{
         allocations,
