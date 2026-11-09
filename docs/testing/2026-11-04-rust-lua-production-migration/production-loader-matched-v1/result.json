@@ -1,0 +1,74 @@
+{
+  "environment": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "machine": "AMD64",
+    "concurrent_compilation_allowed": true,
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "order": "native, Rust, Rust, native for each workload; preparation uses 3 iterations per process; live uses 481 frames/60 warmup",
+    "timing_scope": "Original complete preparation and gameplay-update tools; no GPU/audio device. Compilation checked before and after each run. Ordinary system load remains uncontrolled."
+  },
+  "summary": {
+    "prepare": {
+      "native": {
+        "processes": 2,
+        "samples": 6,
+        "median_sample_seconds": 1.34013845,
+        "mean_sample_seconds": 1.3734911,
+        "mean_thread_cycles": 2960375569.1666665,
+        "median_process_peak_rss_bytes": 80578560.0,
+        "median_process_peak_commit_bytes": 71561216.0
+      },
+      "rust": {
+        "processes": 2,
+        "samples": 6,
+        "median_sample_seconds": 0.6111827000000001,
+        "mean_sample_seconds": 0.6181239833333333,
+        "mean_thread_cycles": 1350749040.0,
+        "median_process_peak_rss_bytes": 34570240.0,
+        "median_process_peak_commit_bytes": 26994688.0
+      },
+      "rust_over_native": {
+        "median_sample_seconds": 0.45605937207457936,
+        "mean_sample_seconds": 0.4500385793059258,
+        "mean_thread_cycles": 0.4562762421324232,
+        "median_process_peak_rss_bytes": 0.42902528910916254,
+        "median_process_peak_commit_bytes": 0.3772251159063591
+      }
+    },
+    "live": {
+      "native": {
+        "processes": 2,
+        "samples": 842,
+        "median_sample_seconds": 0.01685295,
+        "mean_sample_seconds": 0.017177162232779097,
+        "mean_thread_cycles": 37166356.824228026,
+        "median_process_peak_rss_bytes": 91590656.0,
+        "median_process_peak_commit_bytes": 110401536.0
+      },
+      "rust": {
+        "processes": 2,
+        "samples": 842,
+        "median_sample_seconds": 0.0163757,
+        "mean_sample_seconds": 0.016649345249406176,
+        "mean_thread_cycles": 36014664.239904985,
+        "median_process_peak_rss_bytes": 56084480.0,
+        "median_process_peak_commit_bytes": 74749952.0
+      },
+      "rust_over_native": {
+        "median_sample_seconds": 0.971681515699032,
+        "mean_sample_seconds": 0.9692721663671726,
+        "mean_thread_cycles": 0.9690124972493329,
+        "median_process_peak_rss_bytes": 0.6123384464022181,
+        "median_process_peak_commit_bytes": 0.6770734783979817
+      }
+    }
+  },
+  "compilation_detected_at_bounds": true,
+  "limitations": [
+    "When compilation is recorded at run boundaries, results are qualified observations under background build load, not a controlled performance comparison.",
+    "Application snapshots include preserved unrelated work; these measurements do not isolate every change to the VM.",
+    "Process memory includes the complete tool and assets. Native malloc is excluded from legacy Rust GlobalAlloc counters, so allocation-count ratios are not reported.",
+    "The unchanged native visual hash varies across processes through allocation-identity message ordering; raw hashes are retained, not forced equal.",
+    "This reports representative before/after costs without a LuaJIT or optimization target."
+  ]
+}

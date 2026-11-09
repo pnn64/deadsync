@@ -1,5 +1,7 @@
 //! Actor method-key policy, using a rooted safe Lua byte view.
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::Lua;
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn flags(lua: &Lua, name: &mlua::LuaString) -> mlua::Result<(bool, bool)> {
     name.inspect_bytes(lua, |bytes| {
         let text =

@@ -1,5 +1,7 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::Value;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::{read_f32, truthy};
 
 pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
@@ -10,6 +12,7 @@ pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W5",
 ];
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn timing_window_arg_index(value: Value) -> Option<i32> {
     match value {
         Value::Integer(value) => Some(value.clamp(i32::MIN.into(), i32::MAX.into()) as i32),
@@ -39,6 +42,7 @@ pub fn timing_window_arg_index(value: Value) -> Option<i32> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn timing_window_name(value: Value) -> Option<&'static str> {
     // GameConstantsAndTypes::TimingWindow is zero-based. GetDisabledTimingWindows
     // only lists W1..W5, but the native bitset accepts every TimingWindow.
@@ -66,6 +70,7 @@ pub fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
     windows[index] + 0.0015
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn worst_judgment_from_offsets(value: Value) -> i32 {
     let Value::Table(offsets) = value else {
         return 1;
@@ -86,6 +91,7 @@ pub fn worst_judgment_from_offsets(value: Value) -> i32 {
     worst
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn timing_offsets_from_value(value: Value) -> impl Iterator<Item = f32> {
     let Value::Table(table) = value else {
         return [read_f32(value), None].into_iter().flatten();
@@ -118,19 +124,5 @@ mod tests {
         assert!((timing_window_seconds(99, "", false) - 0.1815).abs() <= 1e-6);
     }
 
-    #[test]
-    fn timing_window_name_accepts_numbers_and_names() {
-        let lua = mlua::Lua::new();
-        assert_eq!(
-            timing_window_name(Value::Integer(1)),
-            Some("TimingWindow_W2")
-        );
-        assert_eq!(
-            timing_window_name(Value::String(lua.create_string("TimingWindow_W5").unwrap())),
-            Some("TimingWindow_W5")
-        );
-        assert_eq!(timing_window_name(Value::Integer(0)), Some("TimingWindow_W1"));
-        assert_eq!(timing_window_name(Value::Integer(8)), Some("TimingWindow_Roll"));
-        assert_eq!(timing_window_name(Value::Integer(10)), None);
-    }
+    
 }

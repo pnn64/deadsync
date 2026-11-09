@@ -1,40 +1,5 @@
 use deadlib_lua::{Error, ErrorKind, HostCall, Value, Vm, compile};
-use lua_reference::{Lua, ffi};
-use std::ffi::c_void;
 
-unsafe extern "C-unwind" fn record(
-    _: *mut ffi::lua_State,
-    bytes: *const c_void,
-    length: usize,
-    data: *mut c_void,
-) -> i32 {
-    // SAFETY: reference_blocks lends one exclusive recorder through lua_dump.
-    // This callback performs no Lua operation and cannot raise a Lua error.
-    let parts = unsafe { &mut *data.cast::<Vec<Vec<u8>>>() };
-    let bytes = if length == 0 {
-        &[]
-    } else {
-        // SAFETY: the official writer ABI lends exactly length live bytes.
-        unsafe { std::slice::from_raw_parts(bytes.cast(), length) }
-    };
-    parts.push(bytes.to_vec());
-    0
-}
-fn reference_blocks(lua: &Lua, function: lua_reference::Function) -> Vec<Vec<u8>> {
-    let mut parts = Vec::<Vec<u8>>::new();
-    // SAFETY: the function is rooted on this locked state's stack. The writer
-    // only copies borrowed bytes into parts and never enters/raises from Lua.
-    unsafe {
-        lua.exec_raw::<()>(function, |state| {
-            assert_eq!(
-                ffi::lua_dump(state, record, (&mut parts as *mut Vec<Vec<u8>>).cast(), 0),
-                0
-            );
-        })
-        .unwrap();
-    }
-    parts
-}
 fn run(vm: &mut Vm, source: &[u8]) -> Vec<Value> {
     vm.execute(&compile(source).unwrap()).unwrap().to_vec()
 }
@@ -142,28 +107,25 @@ fn imported_writer_blocks_match_the_official_c_writer_including_empty_vectors() 
         assert_eq!(index, expected.len());
         stack.finish(1)
     }
-    let lua = Lua::new();
+
     for source in [
         "return",
         "local a,b=17,'a\\000z';return function(x,...)return a,b,x,... end",
         "local t={};for i=1,17 do t[i]=i end;return t",
     ] {
         for empty_lines in [false, true] {
-            let f = lua
-                .load(source)
-                .set_name("=writer fixture")
-                .into_function()
-                .unwrap();
-            let mut binary = f.dump(false);
+            let mut binary = reference_test::native_chunk(
+                "tests/native_dump.rs::imported_writer_blocks_match_the_official_c_writer_including_empty_vectors::chunk0",
+                &(source),
+            );
             if empty_lines {
                 binary = without_line_info(&binary);
             }
-            let loaded = lua
-                .load(&binary)
-                .set_name("=writer input")
-                .into_function()
-                .unwrap();
-            let expected = reference_blocks(&lua, loaded);
+
+            let expected = reference_test::native_writer_blocks(
+                "tests/native_dump.rs::reference_blocks::blocks",
+                &(source),
+            );
             if empty_lines {
                 assert!(expected.iter().any(Vec::is_empty));
             }
@@ -203,14 +165,15 @@ fn every_writer_failure_boundary_returns_the_original_signed_status() {
         stack.push_integer(count as isize)?;
         stack.finish(2)
     }
-    let lua = Lua::new();
-    let f = lua
-        .load("local a=17;return function()return a,'binary\\000text' end")
-        .set_name("=writer stops")
-        .into_function()
-        .unwrap();
-    let binary = f.dump(false);
-    let expected = reference_blocks(&lua, f);
+
+    let binary = reference_test::native_chunk(
+        "tests/native_dump.rs::every_writer_failure_boundary_returns_the_original_signed_status::chunk0",
+        &("local a=17;return function()return a,'binary\\000text' end"),
+    );
+    let expected = reference_test::native_writer_blocks(
+        "tests/native_dump.rs::reference_blocks::blocks",
+        &("local a=17;return function()return a,'binary\\000text' end"),
+    );
     let count = expected.len();
     let mut vm = Vm::new();
     let host = vm
@@ -343,3 +306,7 @@ fn native_and_nonfunction_values_return_one_without_calling_the_writer() {
     install(&mut vm, callback);
     run(&mut vm,b"for _,v in ipairs{false,17,'bytes',{},print,newproxy(),coroutine.create(function()end)}do assert(host(v)==v)end;assert(host(nil)==nil)");
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -1,0 +1,15 @@
+
+running 10 tests
+test end_callbacks_precede_owner_stops_without_advancing_queued_work ... ok
+test failed_end_keeps_partial_effects_and_is_not_retried ... ok
+test immediate_sound_order_is_independent_of_tweens_and_keeps_actor_identity ... ok
+test preparation_capture_preserves_beat_message_scope_and_startup_phase ... ok
+test preparation_errors_retain_emitted_events_and_restore_broadcast_scope ... ok
+test retiring_scene_stops_sound_owners_and_retained_handles_keep_metadata ... ok
+test sound_file_getters_reenter_collect_and_preserve_error_recovery ... ok
+test sound_handles_parameters_and_borrowed_methods_match_production ... ok
+test sound_length_cache_uses_file_text_and_retains_failed_prefix_probes ... ok
+test sound_paths_prefix_selection_and_metadata_cache_match_production ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+

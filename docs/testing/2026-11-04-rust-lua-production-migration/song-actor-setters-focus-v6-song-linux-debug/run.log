@@ -1,0 +1,29 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 36s
+     Running tests/rust_actor_setters.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_actor_setters-4955e7c4d7206408)
+
+running 10 tests
+test assigned_and_raw_copied_setters_return_the_captured_actor_for_chaining ... ok
+test bound_setters_keep_their_target_and_consume_the_second_argument ... ok
+test cloned_templates_get_fresh_setters_for_the_new_actor ... ok
+test constructor_method_attributes_match_native_installation ... ok
+test custom_assignment_hooks_observe_writes_to_the_captured_target ... ok
+test lookup_uses_current_raw_kind_and_missing_public_class_falls_back_to_bound ... ok
+test missing_public_classes_preserve_other_existing_methods ... ok
+test public_forwarders_observe_bound_overrides_and_preserve_all_results ... ok
+test saved_bound_setter_roots_retired_target_then_releases_the_scene ... ok
+test sound_initialization_preserves_common_actor_setters_and_sound_methods ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.10s
+

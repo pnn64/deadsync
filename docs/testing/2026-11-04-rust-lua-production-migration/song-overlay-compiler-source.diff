@@ -1,0 +1,1168 @@
+--- crates/deadsync-song-lua/src/rust_engine.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine.rs
+@@ -21,6 +21,9 @@
+ mod function_snapshot;
+ mod gameplay;
+ mod song_action;
++mod song_easing;
++mod song_tree;
++pub use song_tree::{SongOverlayActor, SongOverlayActors};
+ mod song_activation;
+ mod song_discovery;
+ mod song_message_retry;
+--- crates/deadsync-song-lua/src/rust_engine/actors.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -60,6 +60,7 @@
+ mod song_output;
+ mod song_pose;
+ mod song_properties;
++pub(super) mod song_tree;
+ mod sound;
+ mod sound_manager;
+ mod sprites;
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1812,3 +1812,54 @@
+     }
+     result
+ }
++
++pub fn legacy_capture_overlay_function_eases(
++    lua: &mlua::Lua,
++    overlays: &[(usize, mlua::Table)],
++    function: &mlua::Function,
++    params: crate::SongLuaOverlayEaseBuildParams,
++    endpoints: [f32; 2],
++    probe_actors: &[mlua::Table],
++) -> Result<Vec<crate::SongLuaOverlayEase>, String> {
++    crate::lua_util::capture_overlay_function_eases(
++        lua,
++        overlays,
++        function,
++        params.unit,
++        params.start,
++        params.limit,
++        params.span_mode,
++        endpoints[0],
++        endpoints[1],
++        params.easing,
++        params.sustain,
++        params.opt1,
++        params.opt2,
++        &probe_actors
++            .iter()
++            .map(|a| a.to_pointer() as usize)
++            .collect::<Vec<_>>(),
++    )
++}
++
++pub fn legacy_read_song_overlay_tree<S, V>(
++    lua: &mlua::Lua,
++    root: mlua::Table,
++    context: &crate::SongLuaCompileContext,
++    slots: impl Fn(
++        &std::path::Path,
++        &std::path::Path,
++        &std::path::Path,
++    ) -> Result<std::sync::Arc<[S]>, String>,
++    layer: impl Fn(&S) -> Option<crate::SongLuaOverlayModelLayer<V>>,
++    skipped: impl FnMut(String),
++) -> Result<LegacySongOverlayActors<S, V>, String> {
++    crate::lua_util::read_overlay_compile_actors(
++        lua,
++        &mlua::Value::Table(root),
++        context,
++        |actor| crate::lua_util::read_actor_model_layers(actor, &slots, &layer),
++        |actor, _| crate::lua_util::read_noteskin_tap_actor_slots(actor, &slots),
++        skipped,
++    )
++}
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs (before)
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -6969,3 +6969,419 @@
+     )
+     .unwrap();
+ }
++
++fn overlay_ease_params() -> deadsync_song_lua::SongLuaOverlayEaseBuildParams {
++    deadsync_song_lua::SongLuaOverlayEaseBuildParams {
++        unit: deadsync_song_lua::SongLuaTimeUnit::Second,
++        start: 3.,
++        limit: 2.,
++        span_mode: deadsync_song_lua::SongLuaSpanMode::Len,
++        easing: Some("smooth".into()),
++        sustain: Some(0.25),
++        opt1: Some(0.4),
++        opt2: Some(0.6),
++    }
++}
++fn compare_overlay_ease(
++    pair: &mut Pair,
++    overlays: &[(usize, &str)],
++    probes: &[&str],
++    params: deadsync_song_lua::SongLuaOverlayEaseBuildParams,
++) -> Result<Vec<deadsync_song_lua::SongLuaOverlayEase>, (String, String)> {
++    let (mut a, mut b, mut x, mut y) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
++    for &(i, key) in overlays {
++        let (n, r) = saved_pair(pair, key);
++        a.push((i, n));
++        b.push((i, Value::Table(r)));
++    }
++    for key in probes {
++        let (n, r) = saved_pair(pair, key);
++        x.push(n);
++        y.push(Value::Table(r));
++    }
++    let f: mlua::Function = pair.native.globals().get("ease_probe").unwrap();
++    let g = pair.rust.vm_mut().get_global(b"ease_probe").unwrap();
++    let expected = test_support::legacy_capture_overlay_function_eases(
++        &pair.native,
++        &a,
++        &f,
++        params.clone(),
++        [2., 6.],
++        &x,
++    );
++    let actual = pair
++        .rust
++        .capture_song_overlay_function_eases(&b, g, params, [2., 6.], &y);
++    assert_eq!(
++        actual.is_err(),
++        expected.is_err(),
++        "native={expected:?}, Rust={actual:?}"
++    );
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    pair.compare();
++    match (expected, actual) {
++        (Ok(a), Ok(b)) => {
++            assert_eq!(a, b);
++            Ok(b)
++        }
++        (Err(a), Err(b)) => Err((a, b)),
++        _ => unreachable!(),
++    }
++}
++#[test]
++fn overlay_compiler_ease_endpoints_keep_intersection_metadata_and_clamped_clocks() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    pair.script("ease_probe=function(v)local beat=GAMESTATE:GetSongBeat();saved.a:x(v+beat):diffusealpha(v/10);if v==2 then saved.a:y(8)end end");
++    for mode in [
++        deadsync_song_lua::SongLuaSpanMode::Len,
++        deadsync_song_lua::SongLuaSpanMode::End,
++    ] {
++        let mut p = overlay_ease_params();
++        p.span_mode = mode;
++        p.limit = -2.;
++        let out = compare_overlay_ease(&mut pair, &[(0, "a")], &["a"], p).unwrap();
++        assert_eq!(out.len(), 1);
++        assert_eq!(out[0].from.x, Some(5.));
++        assert_eq!(out[0].to.x, Some(9.));
++        assert_eq!(out[0].from.y, None);
++        assert_eq!(out[0].sustain, Some(0.25));
++    }
++    pair.script("assert(saved.a:GetX()==0 and saved.a:GetY()==0)");
++}
++#[test]
++fn overlay_compiler_ease_known_and_unknown_probes_keep_native_rewind_boundaries() {
++    for indexed in [false, true] {
++        let (_dir, mut pair) = command_scope_pair(
++            "return Def.ActorFrame{Def.Quad{InitCommand=function(self)saved.a=self end},Def.Quad{InitCommand=function(self)saved.b=self end},Def.Quad{InitCommand=function(self)saved.other=self end}}",
++        );
++        pair.script("local n=0;ease_peek=function()return n end;ease_probe=function(v)n=n+1;saved.a:x(v);saved.b:y(n)end");
++        let out = compare_overlay_ease(
++            &mut pair,
++            &[(0, "a"), (1, "b")],
++            if indexed { &["a"] } else { &["other"] },
++            overlay_ease_params(),
++        )
++        .unwrap();
++        assert_eq!(out.len(), if indexed { 1 } else { 2 });
++        pair.script(if indexed {
++            "assert(ease_peek()==2 and saved.a:GetX()==0 and saved.b:GetY()==2)"
++        } else {
++            "assert(ease_peek()==2 and saved.a:GetX()==0 and saved.b:GetY()==0)"
++        });
++    }
++}
++#[test]
++fn overlay_compiler_ease_duplicate_indices_empty_output_and_error_recovery_match_native() {
++    let (_dir, mut pair) = command_scope_pair(
++        "return Def.ActorFrame{Def.Quad{InitCommand=function(self)saved.a=self end},Def.Quad{InitCommand=function(self)saved.b=self end}}",
++    );
++    pair.script("ease_probe=function(v)saved.a:x(v);saved.b:x(v*10)end");
++    let rows = compare_overlay_ease(
++        &mut pair,
++        &[(0, "a"), (0, "b"), (8, "a")],
++        &[],
++        overlay_ease_params(),
++    )
++    .unwrap();
++    assert_eq!(rows.len(), 1);
++    assert_eq!(rows[0].from.x, Some(20.));
++    pair.script("calls=0;ease_probe=function(v)calls=calls+1 end");
++    assert!(
++        compare_overlay_ease(&mut pair, &[(0, "a")], &[], overlay_ease_params())
++            .unwrap()
++            .is_empty()
++    );
++    pair.script("assert(calls==2)");
++    for fail in [2, 6] {
++        pair.script(&format!("calls=0;ease_probe=function(v)calls=calls+1;saved.a:x(99);if v=={fail} then error('endpoint failure')end end"));
++        assert!(
++            compare_overlay_ease(&mut pair, &[(0, "a")], &["a"], overlay_ease_params()).is_err()
++        );
++        pair.script(&format!(
++            "assert(calls=={} and saved.a:GetX()==0)",
++            if fail == 2 { 1 } else { 2 }
++        ));
++    }
++    pair.script("ease_probe=function(v)saved.a:x(v)end");
++    assert_eq!(
++        compare_overlay_ease(&mut pair, &[(0, "a")], &[], overlay_ease_params())
++            .unwrap()
++            .len(),
++        1
++    );
++}
++#[test]
++fn overlay_compiler_ease_retains_detached_function_through_both_endpoints_and_releases_it() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    pair.script("local retained={v=7};ease_probe=function(v)assert(retained.v==7);ease_probe=nil;collectgarbage();saved.a:x(v)end;ease_weak=setmetatable({ease_probe,retained},{__mode='v'})");
++    assert_eq!(
++        compare_overlay_ease(&mut pair, &[(0, "a")], &[], overlay_ease_params())
++            .unwrap()
++            .len(),
++        1
++    );
++    pair.script(
++        "collectgarbage();collectgarbage();assert(ease_weak[1]==nil and ease_weak[2]==nil)",
++    );
++}
++
++fn standalone_overlay_pair(source: &str) -> (tempfile::TempDir, Pair) {
++    let dir = tempfile::tempdir().unwrap();
++    let context = SongLuaCompileContext::new(dir.path(), "overlay compiler tree");
++    let native = test_support::legacy_preparation_actor_scene(source, &context).unwrap();
++    let mut rust = RustSongRuntime::new(&context).unwrap();
++    rust.begin_song_compilation().unwrap();
++    rust.begin_actor_preparation().unwrap();
++    let declaration = rust
++        .vm_mut()
++        .execute(&compile_named(source.as_bytes(), b"=overlay tree").unwrap())
++        .unwrap()[0];
++    let scene = rust.instantiate_actor(declaration).unwrap();
++    let root = rust.actor_scene_root(scene).unwrap();
++    rust.vm_mut().set_global(b"root", root).unwrap();
++    let mut pair = Pair {
++        native,
++        rust,
++        scene,
++        context,
++    };
++    pair.script("prepared_root=nil;__songlua_top_screen=nil;events={};saved={root=root};function log(...)local t={};for i=1,select('#',...)do t[i]=tostring(select(i,...))end;events[#events+1]=table.concat(t,',')end");
++    (dir, pair)
++}
++fn compare_overlay_tree(
++    pair: &mut Pair,
++    hide_root: bool,
++) -> Result<deadsync_song_lua::rust_engine::SongOverlayActors<OutputKind>, (String, String)> {
++    let (a, b) = saved_pair(pair, "root");
++    if hide_root {
++        pair.script("saved.root=nil;root=nil");
++    }
++    let context = pair.context.clone();
++    let (mut ns, mut rs) = (Vec::new(), Vec::new());
++    let expected = test_support::legacy_read_song_overlay_tree(
++        &pair.native,
++        a,
++        &context,
++        |_, _, _| Ok(std::sync::Arc::from([7u32, 0u32])),
++        output_kind_layer,
++        |d| ns.push(d),
++    );
++    let actual = pair.rust.read_song_overlay_actors(
++        Value::Table(b),
++        &context,
++        |_, _, _| Ok(std::sync::Arc::from([7u32, 0u32])),
++        output_kind_layer,
++        |d| rs.push(d),
++    );
++    assert_eq!(
++        actual.is_err(),
++        expected.is_err(),
++        "native={:?}, Rust={:?}",
++        expected.as_ref().err(),
++        actual.as_ref().err()
++    );
++    assert_eq!(ns.len(), rs.len());
++    pair.compare();
++    match (expected, actual) {
++        (Ok(a), Ok(b)) => {
++            assert_eq!(
++                a.len(),
++                b.actors.len(),
++                "native={:?}, Rust={:?}",
++                a.iter().map(|r| &r.actor).collect::<Vec<_>>(),
++                b.actors.iter().map(|r| &r.actor).collect::<Vec<_>>()
++            );
++            for (a, b) in a.iter().zip(&b.actors) {
++                assert_eq!(format!("{:?}", a.actor), format!("{:?}", b.actor));
++                assert_eq!(a.message_sounds, b.message_sounds);
++            }
++            Ok(b)
++        }
++        (Err(a), Err(b)) => Err((a, b)),
++        _ => unreachable!(),
++    }
++}
++#[test]
++fn overlay_compiler_tree_keeps_wrapper_order_parents_and_excludes_wrapper_children() {
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.ActorFrame{Name='root',Def.Quad{Name='body'},Def.ActorFrame{Name='nested',Def.Quad{Name='leaf'}}}",
++    );
++    pair.script("local a=root[1];local inner=a:AddWrapperState():x(1);inner.Name='inner';local outer=a:AddWrapperState():y(2);outer.Name='outer';local hidden=Def.Quad{Name='wrapper-child'};a:GetWrapperState(1)[1]=hidden");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(
++        rows.actors
++            .iter()
++            .filter_map(|r| r.actor.name.as_deref())
++            .collect::<Vec<_>>(),
++        ["root", "outer", "inner", "body", "nested", "leaf"]
++    );
++    assert_eq!(rows.actors[3].actor.parent_index, Some(2));
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++#[test]
++fn overlay_compiler_tree_plain_elision_uses_only_two_global_table_levels_and_values() {
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.ActorFrame{Def.Actor{},Def.Actor{},Def.Actor{},Def.Actor{},Def.Actor{},Def.ActorFrame{Def.Quad{Name='child'}}}",
++    );
++    pair.script("direct=root[1];one={value=root[2]};deep={one={value=root[3]}};key_only={[root[4]]=true};root[5]:x(4);root[6]:x(1);root[6][1]:y(2)");
++    let mut rows = compare_overlay_tree(&mut pair, true).unwrap();
++    assert_eq!(rows.actors.len(), 5);
++    assert_eq!(rows.actors[0].actor.name, None);
++    assert_eq!(rows.actors[2].actor.initial_state.x, 4.);
++    assert_eq!(rows.actors[3].actor.parent_index, None);
++    assert_eq!(rows.actors[4].actor.parent_index, Some(3));
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++#[test]
++fn overlay_compiler_tree_forward_aft_names_and_generic_proxy_targets_remap_after_elision() {
++    use deadsync_song_lua::{SongLuaOverlayKind as K, SongLuaProxyTarget as P};
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.ActorFrame{Name='root',Def.Actor{},Def.Sprite{Name='capture',Texture='tree-capture'},Def.ActorFrameTexture{Name='aft'},Def.Quad{Name='target'},Def.ActorProxy{Name='proxy'},Def.ActorProxy{Name='missing'}}",
++    );
++    pair.script("root[3]:SetTextureName('tree-capture'):setsize(8,9):EnableAlphaBuffer(true):Create();root[5]:SetTarget(root[4]);root[6]:SetTarget(root[1])");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert!(
++        matches!(&rows.actors[1].actor.kind,K::AftSprite{capture_name}if capture_name=="tree-capture")
++    );
++    let target = rows
++        .actors
++        .iter()
++        .position(|r| r.actor.name.as_deref() == Some("target"))
++        .unwrap();
++    assert!(rows.actors.iter().any(|r|r.actor.name.as_deref()==Some("proxy")&&matches!(r.actor.kind,K::ActorProxy{target:P::Actor{overlay_index}}if overlay_index==target)));
++    assert!(
++        rows.actors
++            .iter()
++            .any(|r| r.actor.name.as_deref() == Some("missing")
++                && matches!(
++                    r.actor.kind,
++                    K::ActorProxy {
++                        target: P::Actor {
++                            overlay_index: usize::MAX
++                        }
++                    }
++                ))
++    );
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++#[test]
++fn overlay_compiler_tree_messages_keep_preprobe_state_postprobe_name_and_changed_children() {
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.ActorFrame{Name='before',RenameMessageCommand=function(self)self.Name='after';self:name('semantic name');self:x(99);self[2]=nil end,Def.Actor{FailMessageCommand=function()error('deferred tree source')end},Def.Quad{Name='removed'}}",
++    );
++    pair.script("root:x(4)");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(rows.actors.len(), 2);
++    assert_eq!(rows.actors[0].actor.name.as_deref(), Some("after"));
++    assert_eq!(rows.actors[0].actor.initial_state.x, 4.);
++    assert_eq!(rows.actors[0].actor.message_commands.len(), 1);
++    assert_eq!(
++        test_support::rust_deferred_actor_messages(&pair.rust).len(),
++        1
++    );
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++#[test]
++fn overlay_compiler_tree_getter_errors_keep_partial_state_release_roots_and_allow_recovery() {
++    let (_dir, mut pair) =
++        standalone_overlay_pair("return Def.ActorFrame{Name='root',Def.Quad{Name='child'}}");
++    pair.script("root[1].Name=nil;setmetatable(root[1],{__index=function(t,k)if k=='Name'then log('name error');collectgarbage();error('tree name failure')end end})");
++    assert!(compare_overlay_tree(&mut pair, false).is_err());
++    pair.script("setmetatable(root[1],nil);root[1].Name='recovered'");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(rows.actors.len(), 2);
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++#[test]
++fn overlay_compiler_tree_batch_roots_survive_retirement_and_reject_foreign_or_released_rows() {
++    let (_dir, mut pair) = standalone_overlay_pair("return Def.Quad{Name='owned'}");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    let copy = rows.actors[0].clone();
++    let mut foreign = RustSongRuntime::new(&pair.context).unwrap();
++    assert!(foreign.song_overlay_actor_value(&copy).is_err());
++    assert!(foreign.release_song_overlay_actors(&mut rows).is_err());
++    pair.script("tree_weak=setmetatable({root},{__mode='v'});root=nil;saved.root=nil");
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    rust_command_script(
++        &mut pair.rust,
++        "collectgarbage();collectgarbage();assert(tree_weak[1]);return ''",
++    )
++    .unwrap();
++    assert!(matches!(
++        pair.rust.song_overlay_actor_value(&copy).unwrap(),
++        Value::Table(_)
++    ));
++    assert!(pair.rust.release_song_overlay_actors(&mut rows).unwrap());
++    assert!(!pair.rust.release_song_overlay_actors(&mut rows).unwrap());
++    assert!(pair.rust.song_overlay_actor_value(&copy).is_err());
++    rust_command_script(
++        &mut pair.rust,
++        "collectgarbage();collectgarbage();assert(tree_weak[1]==nil);return ''",
++    )
++    .unwrap();
++    assert_eq!(copy.actor.name.as_deref(), Some("owned"));
++}
++
++#[test]
++fn overlay_compiler_tree_live_mode_keeps_unnamed_default_actors_without_message_probes() {
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.Actor{ProbeMessageCommand=function()error('live extraction must skip this')end}",
++    );
++    let (native, rust) = saved_pair(&mut pair, "root");
++    pair.context.live = true;
++    pair.rust.set_live(true);
++    test_support::legacy_message_capture_live(&pair.native, true);
++    let mut rows = compare_overlay_tree(&mut pair, true).unwrap();
++    assert_eq!(rows.actors.len(), 1);
++    assert!(rows.actors[0].actor.message_commands.is_empty());
++    assert!(test_support::rust_deferred_actor_messages(&pair.rust).is_empty());
++    assert!(pair.rust.release_song_overlay_actors(&mut rows).unwrap());
++    pair.native.globals().set("root", native).unwrap();
++    pair.rust
++        .vm_mut()
++        .set_global(b"root", Value::Table(rust))
++        .unwrap();
++    pair.script("saved.root=root;root.ProbeMessageCommand=nil");
++    pair.context.live = false;
++    pair.rust.set_live(false);
++    test_support::legacy_message_capture_live(&pair.native, false);
++    let mut rows = compare_overlay_tree(&mut pair, true).unwrap();
++    assert!(rows.actors.is_empty());
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
++
++#[test]
++fn overlay_compiler_tree_detached_transient_child_survives_getter_gc_only_until_batch_release() {
++    let (_dir, mut pair) = standalone_overlay_pair("return Def.ActorFrame{Name='root'}");
++    pair.script("root[1]=setmetatable({__songlua_actor_type='Quad',__songlua_state_x=12},{__index=function(t,k)if k=='Name'then root[1]=nil;collectgarbage();return 'detached'end end});tree_weak=setmetatable({root[1]},{__mode='v'})");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(rows.actors.len(), 2);
++    assert_eq!(rows.actors[1].actor.name.as_deref(), Some("detached"));
++    assert_eq!(rows.actors[1].actor.initial_state.x, 12.);
++    rust_command_script(
++        &mut pair.rust,
++        "collectgarbage();collectgarbage();assert(tree_weak[1]);return ''",
++    )
++    .unwrap();
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++    pair.script("collectgarbage();collectgarbage();assert(tree_weak[1]==nil)");
++}
++#[test]
++fn overlay_compiler_tree_authored_registry_membership_controls_reference_elision() {
++    let (_dir, mut pair) = standalone_overlay_pair(
++        "return Def.ActorFrame{Name='root',Def.Actor{},Def.Quad{Name='quad'}}",
++    );
++    pair.script("external=root[1];local a=root[1];registry_keep=function()__songlua_actor_registry={a}end;__songlua_actor_registry={}");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(rows.actors.len(), 2);
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++    pair.script("registry_keep()");
++    let mut rows = compare_overlay_tree(&mut pair, false).unwrap();
++    assert_eq!(rows.actors.len(), 3);
++    pair.rust.release_song_overlay_actors(&mut rows).unwrap();
++}
+--- crates/deadsync-song-lua/src/rust_engine/song_easing.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/song_easing.rs
+@@ -0,0 +1,64 @@
++//! Endpoint capture for the existing compiler's function easing entries.
++use super::*;
++
++impl RustSongRuntime {
++    /// Probe the existing from/to endpoints. Known actor identities use indexed
++    /// capture; an empty or unknown selection uses lazy touched capture. Shared
++    /// script state belongs to the caller's outer compiler snapshot, as native.
++    pub fn capture_song_overlay_function_eases(
++        &mut self,
++        overlays: &[(usize, Value)],
++        function: Value,
++        params: crate::SongLuaOverlayEaseBuildParams,
++        endpoints: [f32; 2],
++        probe_actors: &[Value],
++    ) -> Result<Vec<crate::SongLuaOverlayEase>, String> {
++        let mut pins = Vec::new();
++        let result = (|| {
++            for value in std::iter::once(function)
++                .chain(overlays.iter().map(|r| r.1))
++                .chain(probe_actors.iter().copied())
++            {
++                pins.push(self.vm.pin(value).map_err(|e| e.to_string())?);
++            }
++            let selected = overlays
++                .iter()
++                .filter(|(_, actor)| {
++                    matches!(actor, Value::Table(_)) && probe_actors.contains(actor)
++                })
++                .copied()
++                .collect::<Vec<_>>();
++            let end = crate::song_lua_span_end(params.start, params.limit, params.span_mode)
++                .max(params.start);
++            let capture = |runtime: &mut Self, value, beat| {
++                if selected.is_empty() {
++                    runtime.capture_song_touched_actor_function(
++                        overlays,
++                        function,
++                        Some(value),
++                        Some(beat),
++                    )
++                } else {
++                    runtime.capture_song_actor_function(
++                        &selected,
++                        function,
++                        Some(value),
++                        Some(beat),
++                    )
++                }
++            };
++            let from = capture(self, endpoints[0], params.start)?;
++            let to = capture(self, endpoints[1], end)?;
++            Ok(crate::overlay_eases_from_captures(
++                overlays.len(),
++                &from,
++                &to,
++                params,
++            ))
++        })();
++        for pin in pins {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        result
++    }
++}
+--- crates/deadsync-song-lua/src/rust_engine/song_tree.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/song_tree.rs
+@@ -0,0 +1,327 @@
++//! Rooted compiler overlay rows in the existing native draw-tree order.
++use super::*;
++use crate::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaProxyTarget};
++use actors::song_tree::{Answer, Query, Tree};
++use std::{
++    collections::{HashMap, HashSet},
++    path::{Path, PathBuf},
++    sync::Arc,
++};
++
++#[derive(Clone)]
++pub struct SongOverlayActor<Kind> {
++    pub actor: SongLuaOverlayActor<Kind>,
++    pub message_sounds: Vec<(String, PathBuf)>,
++    owner: Root,
++    slot: usize,
++}
++pub struct SongOverlayActors<Kind> {
++    pub actors: Vec<SongOverlayActor<Kind>>,
++    owner: Option<Root>,
++}
++type Kind<S, V> = SongLuaOverlayKind<S, V, deadlib_present::actors::TextAttribute>;
++struct Row<K> {
++    value: Value,
++    identity: usize,
++    actor: SongLuaOverlayActor<K>,
++    sounds: Vec<(String, PathBuf)>,
++}
++struct Build<'a, S, V, F, G, H> {
++    tree: &'a Tree,
++    context: &'a SongLuaCompileContext,
++    aft_names: HashSet<String>,
++    referenced: HashSet<TableId>,
++    rows: Vec<Row<Kind<S, V>>>,
++    output_pins: &'a mut Vec<Root>,
++    slots: F,
++    layer: G,
++    skipped: H,
++}
++impl<S, V, F, G, H> Build<'_, S, V, F, G, H>
++where
++    F: Fn(&Path, &Path, &Path) -> Result<Arc<[S]>, String>,
++    G: Fn(&S) -> Option<crate::SongLuaOverlayModelLayer<V>>,
++    H: FnMut(String),
++{
++    fn query(
++        &self,
++        runtime: &mut RustSongRuntime,
++        actor: Value,
++        query: Query,
++    ) -> Result<Answer, String> {
++        let observation = self
++            .tree
++            .query(&mut runtime.vm, actor, query)
++            .map_err(|e| e.to_string())?;
++        // Metadata observations have no cursor handle.
++        Ok(observation.answer)
++    }
++    fn visit(
++        &mut self,
++        runtime: &mut RustSongRuntime,
++        actor: Value,
++        parent: Option<usize>,
++    ) -> Result<(), String> {
++        let mut parent = parent;
++        let wrappers = self
++            .tree
++            .query(&mut runtime.vm, actor, Query::Wrappers)
++            .map_err(|e| e.to_string())?;
++        let result: Result<(), String> = (|| {
++            let Answer::Wrappers(entries) = &wrappers.answer else {
++                unreachable!()
++            };
++            if let Some((array, len)) = *entries {
++                for index in (1..=len).rev() {
++                    let entry = self
++                        .tree
++                        .query(&mut runtime.vm, array, Query::Index(index, true))
++                        .map_err(|e| e.to_string())?;
++                    let Answer::Value(wrapper) = &entry.answer else {
++                        unreachable!()
++                    };
++                    let wrapper = *wrapper;
++                    let result = self.visit(runtime, wrapper, parent);
++                    entry.release(&mut runtime.vm).map_err(|e| e.to_string())?;
++                    result?;
++                    parent = Some(
++                        self.rows
++                            .len()
++                            .checked_sub(1)
++                            .ok_or_else(|| "wrapper did not produce an overlay".to_owned())?,
++                    );
++                }
++            }
++            Ok(())
++        })();
++        wrappers
++            .release(&mut runtime.vm)
++            .map_err(|e| e.to_string())?;
++        result?;
++        let next = if let Some(row) = self.row(runtime, actor, parent)? {
++            let i = self.rows.len();
++            self.output_pins
++                .push(runtime.vm.pin(row.value).map_err(|e| e.to_string())?);
++            self.rows.push(row);
++            Some(i)
++        } else {
++            parent
++        };
++        let Answer::Flag(wrapper) = self.query(runtime, actor, Query::Wrapper)? else {
++            unreachable!()
++        };
++        if wrapper {
++            return Ok(());
++        }
++        let mut index = 1;
++        loop {
++            let entry = self
++                .tree
++                .query(&mut runtime.vm, actor, Query::Index(index, false))
++                .map_err(|e| e.to_string())?;
++            let Answer::Value(child) = &entry.answer else {
++                unreachable!()
++            };
++            let child = *child;
++            let result = if matches!(child, Value::Table(_)) {
++                self.visit(runtime, child, next)
++            } else {
++                Ok(())
++            };
++            entry.release(&mut runtime.vm).map_err(|e| e.to_string())?;
++            result?;
++            if child == Value::Nil {
++                break;
++            }
++            index += 1;
++        }
++        Ok(())
++    }
++    fn row(
++        &mut self,
++        runtime: &mut RustSongRuntime,
++        actor: Value,
++        parent: Option<usize>,
++    ) -> Result<Option<Row<Kind<S, V>>>, String> {
++        let Answer::Header(header) = self.query(runtime, actor, Query::Header)? else {
++            unreachable!()
++        };
++        let Some(header) = header else {
++            return Ok(None);
++        };
++        let (class, initial, identity) = *header;
++        let commands = runtime.capture_song_actor_message_commands(actor)?;
++        for detail in commands.skipped {
++            (self.skipped)(detail);
++        }
++        let Answer::Name(name) = self.query(runtime, actor, Query::Name)? else {
++            unreachable!()
++        };
++        let draw = if class.eq_ignore_ascii_case("ActorFrame") {
++            let Answer::Flag(draw) = self.query(runtime, actor, Query::Draw)? else {
++                unreachable!()
++            };
++            draw
++        } else {
++            false
++        };
++        let plain = class.eq_ignore_ascii_case("Actor");
++        let frame = class.eq_ignore_ascii_case("ActorFrame") && parent.is_none();
++        if (plain || frame)
++            && !self.context.live
++            && name.is_none()
++            && initial == crate::SongLuaOverlayState::default()
++            && commands.commands.is_empty()
++            && commands.sounds.is_empty()
++            && !self.tree.deferred(actor)
++            && !draw
++            && !matches!(actor,Value::Table(id)if self.referenced.contains(&id))
++        {
++            return Ok(None);
++        }
++        let Some(kind) = runtime.read_song_overlay_kind(
++            actor,
++            SongOverlayKindInputs {
++                actor_type: &class,
++                initial_state: initial,
++                context: self.context,
++                aft_capture_names: &self.aft_names,
++            },
++            &self.slots,
++            &self.layer,
++        )?
++        else {
++            return Ok(None);
++        };
++        Ok(Some(Row {
++            value: actor,
++            identity,
++            actor: SongLuaOverlayActor {
++                kind,
++                name,
++                parent_index: parent,
++                initial_state: initial,
++                message_commands: commands.commands,
++            },
++            sounds: commands.sounds,
++        }))
++    }
++}
++impl RustSongRuntime {
++    /// Collect the existing renderer tree, including wrappers, source messages,
++    /// AFT-name prepass, plain-actor elision and final generic-proxy remapping.
++    /// Release the returned batch after all compiler/session Lua use completes.
++    pub fn read_song_overlay_actors<S, V>(
++        &mut self,
++        root: Value,
++        context: &SongLuaCompileContext,
++        slots: impl Fn(&Path, &Path, &Path) -> Result<Arc<[S]>, String>,
++        layer: impl Fn(&S) -> Option<crate::SongLuaOverlayModelLayer<V>>,
++        skipped: impl FnMut(String),
++    ) -> Result<SongOverlayActors<Kind<S, V>>, String> {
++        if !matches!(root, Value::Table(_)) {
++            return Ok(SongOverlayActors {
++                actors: Vec::new(),
++                owner: None,
++            });
++        }
++        let input = self.vm.pin(root).map_err(|e| e.to_string())?;
++        let tree = self.actors.overlay_tree();
++        let mut owner = None;
++        let mut output_pins = Vec::new();
++        let result = (|| {
++            let Answer::Names(aft_names) = tree
++                .query(&mut self.vm, root, Query::AftNames)
++                .map_err(|e| e.to_string())?
++                .answer
++            else {
++                unreachable!()
++            };
++            let Answer::References(referenced) = tree
++                .query(&mut self.vm, root, Query::References)
++                .map_err(|e| e.to_string())?
++                .answer
++            else {
++                unreachable!()
++            };
++            let mut build = Build {
++                tree: &tree,
++                context,
++                aft_names,
++                referenced,
++                rows: Vec::new(),
++                output_pins: &mut output_pins,
++                slots,
++                layer,
++                skipped,
++            };
++            build.visit(self, root, None)?;
++            let identities = build
++                .rows
++                .iter()
++                .enumerate()
++                .map(|(i, r)| (r.identity, i))
++                .collect::<HashMap<_, _>>();
++            for row in &mut build.rows {
++                if let SongLuaOverlayKind::ActorProxy {
++                    target: SongLuaProxyTarget::Actor { overlay_index },
++                } = &mut row.actor.kind
++                {
++                    *overlay_index = identities.get(overlay_index).copied().unwrap_or(usize::MAX);
++                }
++            }
++            // Only collected output rows acquire the returned batch lifetime.
++            let table = self.vm.try_new_table().map_err(|e| e.to_string())?;
++            let pin = self
++                .vm
++                .pin(Value::Table(table))
++                .map_err(|e| e.to_string())?;
++            owner = Some(pin);
++            let mut actors = Vec::new();
++            for (index, row) in build.rows.into_iter().enumerate() {
++                let slot = index + 1;
++                self.vm
++                    .raw_table_set(table, Value::Number(slot as f64), row.value)
++                    .map_err(|e| e.to_string())?;
++                actors.push(SongOverlayActor {
++                    actor: row.actor,
++                    message_sounds: row.sounds,
++                    owner: pin,
++                    slot,
++                });
++            }
++            Ok(actors)
++        })();
++        for pin in output_pins {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        self.vm.unpin(input).map_err(|e| e.to_string())?;
++        match result {
++            Ok(actors) => Ok(SongOverlayActors { actors, owner }),
++            Err(error) => {
++                if let Some(owner) = owner {
++                    self.vm.unpin(owner).map_err(|e| e.to_string())?;
++                }
++                Err(error)
++            }
++        }
++    }
++    pub fn song_overlay_actor_value<K>(&self, actor: &SongOverlayActor<K>) -> Result<Value, Error> {
++        let Value::Table(owner) = self.vm.rooted(actor.owner)? else {
++            unreachable!()
++        };
++        self.vm
++            .raw_table_get(owner, Value::Number(actor.slot as f64))
++    }
++    pub fn release_song_overlay_actors<K>(
++        &mut self,
++        actors: &mut SongOverlayActors<K>,
++    ) -> Result<bool, Error> {
++        let Some(owner) = actors.owner else {
++            return Ok(false);
++        };
++        self.vm.unpin(owner)?;
++        actors.owner = None;
++        Ok(true)
++    }
++}
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_tree.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_tree.rs
+@@ -0,0 +1,267 @@
++//! Lua observations for the existing overlay draw-tree collector.
++use super::*;
++use crate::SongLuaOverlayState;
++
++#[derive(Clone)]
++pub(in crate::rust_engine) enum Query {
++    AftNames,
++    References,
++    Wrappers,
++    Index(usize, bool),
++    Header,
++    Name,
++    Draw,
++    Wrapper,
++}
++pub(in crate::rust_engine) enum Answer {
++    Names(HashSet<String>),
++    References(HashSet<TableId>),
++    Wrappers(Option<(Value, usize)>),
++    Value(Value),
++    Header(Option<Box<(String, SongLuaOverlayState, usize)>>),
++    Name(Option<String>),
++    Flag(bool),
++}
++pub(in crate::rust_engine) struct Observation {
++    pub answer: Answer,
++    pin: Option<Root>,
++}
++impl Observation {
++    pub fn release(self, vm: &mut Vm) -> Result<(), Error> {
++        if let Some(pin) = self.pin {
++            vm.unpin(pin)?;
++        }
++        Ok(())
++    }
++}
++type Output = Arc<Mutex<Option<Answer>>>;
++#[derive(Clone)]
++struct Read {
++    store: Shared,
++    query: Query,
++    output: Output,
++}
++pub(in crate::rust_engine) struct Tree {
++    registry: TableId,
++    helpers: TableId,
++    store: Shared,
++}
++impl Actors {
++    pub(in crate::rust_engine) fn overlay_tree(&self) -> Tree {
++        Tree {
++            registry: self.registry,
++            helpers: self.helpers,
++            store: self.store.clone(),
++        }
++    }
++}
++impl Tree {
++    pub fn query(&self, vm: &mut Vm, actor: Value, query: Query) -> Result<Observation, Error> {
++        let output = Arc::new(Mutex::new(None));
++        let function = vm.new_host_function_with_data(
++            read,
++            &[
++                Value::Table(self.registry),
++                Value::Table(self.helpers),
++                actor,
++            ],
++            Read {
++                store: self.store.clone(),
++                query,
++                output: output.clone(),
++            },
++        )?;
++        let value = vm.call(function, &[])?[0];
++        let answer = output.lock().unwrap().take().unwrap();
++        // The callback returns a cursor handle on the VM stack. Pin it before
++        // any subsequent Lua operation, then release at the native cursor scope.
++        let pin = if matches!(answer, Answer::Value(_) | Answer::Wrappers(Some(_))) {
++            Some(vm.pin(value)?)
++        } else {
++            None
++        };
++        Ok(Observation { answer, pin })
++    }
++    pub fn deferred(&self, actor: Value) -> bool {
++        self.store
++            .lock()
++            .unwrap()
++            .deferred_messages
++            .iter()
++            .any(|r| Value::Table(r.actor) == actor)
++    }
++}
++fn text(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<String>, Error> {
++    let value = sprites::field(call, actor, key)?;
++    initial_state::value_text(call, value)
++}
++fn aft_names(
++    call: &mut HostCall<'_>,
++    actor: TableId,
++    out: &mut HashSet<String>,
++) -> Result<(), Error> {
++    if text(call, actor, "__songlua_actor_type")?
++        .is_some_and(|c| c.eq_ignore_ascii_case("ActorFrameTexture"))
++    {
++        let allocation = get(call, actor, b"__songlua_aft_allocation")?;
++        if allocation != Value::Nil {
++            table(call, allocation)?;
++            if let Some(name) = framebuffers::capture_name(call, actor)? {
++                out.insert(name);
++            }
++        }
++    }
++    let mut i = 1;
++    loop {
++        let value = call.raw_table_get(actor, Value::Number(i as f64))?;
++        if value == Value::Nil {
++            break;
++        }
++        if let Value::Table(child) = value {
++            call.with_roots(&[value], |call| aft_names(call, child, out))?;
++        }
++        i += 1;
++    }
++    Ok(())
++}
++fn references(call: &mut HostCall<'_>, data: &Read) -> Result<HashSet<TableId>, Error> {
++    let globals = helper(call, 5)?;
++    let public_registry = sprites::field(call, table(call, globals)?, "__songlua_actor_registry")?;
++    let known = if public_registry == Value::Nil {
++        data.store
++            .lock()
++            .unwrap()
++            .actor_order
++            .iter()
++            .copied()
++            .collect::<HashSet<_>>()
++    } else {
++        let registry = table(call, public_registry)?;
++        let mut known = HashSet::new();
++        let mut index = 1;
++        loop {
++            let value = call.raw_table_get(registry, Value::Number(index as f64))?;
++            if value == Value::Nil {
++                break;
++            }
++            known.insert(table(call, value)?);
++            index += 1;
++        }
++        known
++    };
++    let mut stack = call.native_stack()?;
++    stack.push(globals)?;
++    let outer = stack.top_offset();
++    stack.push(Value::Nil)?;
++    let mut referenced = HashSet::new();
++    while stack.next_table(outer)? {
++        if let Some(value @ Value::Table(id)) = stack.value(-1) {
++            if known.contains(&id) {
++                referenced.insert(id);
++            } else if value != globals && value != public_registry {
++                stack.push(value)?;
++                let inner = stack.top_offset();
++                stack.push(Value::Nil)?;
++                while stack.next_table(inner)? {
++                    if let Some(Value::Table(id)) = stack.value(-1)
++                        && known.contains(&id)
++                    {
++                        referenced.insert(id);
++                    }
++                    stack.set_top(stack.top() - 1)?;
++                }
++                stack.set_top(stack.top() - 1)?;
++            }
++        }
++        stack.set_top(stack.top() - 1)?;
++    }
++    Ok(referenced)
++}
++fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let data = call.function_data::<Read>().unwrap().clone();
++    let actor = table(call, call.captures()[2])?;
++    let answer = match data.query {
++        Query::AftNames => {
++            let mut names = HashSet::new();
++            aft_names(call, actor, &mut names)?;
++            Answer::Names(names)
++        }
++        Query::References => Answer::References(references(call, &data)?),
++        Query::Wrappers => {
++            let raw = get(call, actor, b"__songlua_wrappers")?;
++            let owned = if raw == Value::Nil {
++                data.store
++                    .lock()
++                    .unwrap()
++                    .actors
++                    .get(&actor)
++                    .map(|a| a.wrappers.clone())
++                    .unwrap_or_default()
++            } else {
++                Vec::new()
++            };
++            let value = if !owned.is_empty() {
++                // The Rust binding keeps the native default wrapper list in
++                // actor metadata. An authored Lua list still takes precedence.
++                let array = call.try_new_table()?;
++                call.with_roots(&[Value::Table(array)], |call| {
++                    for (i, wrapper) in owned.into_iter().enumerate() {
++                        call.raw_table_set(
++                            array,
++                            Value::Number((i + 1) as f64),
++                            Value::Table(wrapper),
++                        )?;
++                    }
++                    Ok(())
++                })?;
++                Value::Table(array)
++            } else {
++                sprites::field(call, actor, "__songlua_wrappers")?
++            };
++            let value = if value == Value::Nil {
++                None
++            } else {
++                let wrappers = table(call, value)?;
++                Some((value, call.raw_table_len(wrappers)?))
++            };
++            Answer::Wrappers(value)
++        }
++        Query::Index(i, required) => {
++            let value = call.raw_table_get(actor, Value::Number(i as f64))?;
++            if required {
++                table(call, value)?;
++            }
++            Answer::Value(value)
++        }
++        Query::Header => {
++            let class = text(call, actor, "__songlua_actor_type")?;
++            Answer::Header(if let Some(class) = class {
++                let initial = initial_state::read(call, &data.store, actor)?;
++                let initial = crate::overlay_state_after_blocks(initial, &[], 0.);
++                let identity = call.object_pointer(Value::Table(actor)).unwrap();
++                Some(Box::new((class, initial, identity)))
++            } else {
++                None
++            })
++        }
++        Query::Name => Answer::Name(text(call, actor, "Name")?),
++        Query::Draw => {
++            let value = sprites::field(call, actor, "__songlua_draw_function")?;
++            if !matches!(value, Value::Nil | Value::Function(_) | Value::Native(_)) {
++                return Err(call.error(b"draw function expected"));
++            }
++            Answer::Flag(value != Value::Nil)
++        }
++        Query::Wrapper => Answer::Flag(
++            text(call, actor, "__songlua_actor_type")?
++                .is_some_and(|c| c.eq_ignore_ascii_case("WrapperState")),
++        ),
++    };
++    let returned = match &answer {
++        Answer::Value(value) => *value,
++        Answer::Wrappers(Some((value, _))) => *value,
++        _ => Value::Nil,
++    };
++    *data.output.lock().unwrap() = Some(answer);
++    call.push(returned)
++}

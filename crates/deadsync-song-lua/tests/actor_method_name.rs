@@ -1,39 +1,49 @@
-//! Safe method-key classification against the frozen stack-reading implementation.
-#[path = "support/method_name_before.rs"]
-mod before;
-#[path = "../src/actor_method_name.rs"]
-mod current;
-#[path = "../src/raw_vm.rs"]
-mod raw_vm;
+//! Binary method keys, UTF-8 errors and pinned-string lifetime in the Rust VM.
+use deadlib_lua::{Value, Vm, compile};
+use deadsync_song_lua::rust_engine::test_support;
 
 #[test]
 fn method_name_flags_preserve_binary_keys_utf8_errors_and_gc_roots() {
-    let lua = mlua::Lua::new();
-    for bytes in [
-        b"x".to_vec(),
-        b"visible".to_vec(),
-        b"__songlua_private".to_vec(),
-        b"OnCommand".to_vec(),
-        b"SetUpdateFunction".to_vec(),
-        b"SetDrawFunction".to_vec(),
-        b"GetDrawFunction".to_vec(),
-        b"OnCommand\0suffix".to_vec(),
-        "long".repeat(256).into_bytes(),
-        vec![255, 0],
+    let mut vm = Vm::new();
+    let classify = test_support::actor_method_flags_probe(&mut vm).unwrap();
+    let function_root = vm.pin(classify).unwrap();
+    for (bytes, expected) in [
+        (b"x".to_vec(), Some((true, false))),
+        (b"visible".to_vec(), Some((true, false))),
+        (b"__songlua_private".to_vec(), Some((false, false))),
+        (b"OnCommand".to_vec(), Some((false, false))),
+        (b"SetUpdateFunction".to_vec(), Some((true, true))),
+        (b"SetDrawFunction".to_vec(), Some((true, true))),
+        (b"GetDrawFunction".to_vec(), Some((true, true))),
+        (b"OnCommand\0suffix".to_vec(), Some((true, false))),
+        ("long".repeat(256).into_bytes(), Some((true, false))),
+        (vec![255, 0], None),
     ] {
-        let name = lua.create_string(bytes).unwrap();
-        let expected = before::flags(&lua, &name).map_err(|e| e.to_string());
+        let name = vm.intern(&bytes);
+        let key_root = vm.pin(name).unwrap();
         for _ in 0..4 {
-            lua.gc_collect().unwrap();
+            vm.collect_garbage().unwrap();
+            match expected {
+                Some((public, frame)) => assert_eq!(
+                    vm.call(classify, &[name]).unwrap(),
+                    &[Value::Boolean(public), Value::Boolean(frame)]
+                ),
+                None => {
+                    let error = vm.call(classify, &[name]).unwrap_err();
+                    let expected = std::str::from_utf8(&bytes).unwrap_err().to_string();
+                    assert!(error.message().contains(&expected), "{error:?}");
+                }
+            }
+            let function = vm
+                .execute(&compile(b"return function(a,b)return a,b end").unwrap())
+                .unwrap()[0];
             assert_eq!(
-                current::flags(&lua, &name).map_err(|e| e.to_string()),
-                expected
+                vm.call(function, &[Value::Number(17.), Value::Number(29.)])
+                    .unwrap(),
+                &[Value::Number(17.), Value::Number(29.)]
             );
-            let function: mlua::Function = lua
-                .load("return function(a,b)return a,b end")
-                .eval()
-                .unwrap();
-            assert_eq!(function.call::<(i32, i32)>((17, 29)).unwrap(), (17, 29));
         }
+        vm.unpin(key_root).unwrap();
     }
+    vm.unpin(function_root).unwrap();
 }

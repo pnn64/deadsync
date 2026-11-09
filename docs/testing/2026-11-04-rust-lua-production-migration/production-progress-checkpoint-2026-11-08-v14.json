@@ -1,0 +1,73 @@
+{
+  "created_utc": "2026-11-08T15:12:56.015207+00:00",
+  "goal_status": "active",
+  "previous": "production-progress-checkpoint-2026-11-08-v13.json",
+  "new_accepted_results": {
+    "stage": "production-preparation-capture-v1-song-windows-debug",
+    "passed": 259,
+    "failed": 2,
+    "sources_unchanged": true,
+    "log_sha256": "b3544f7d0710dce80a2bb6f0e053656f685931fef0fdd4fd9cc62aa25ba10987",
+    "details": [
+      "All25 compiler tests pass, including all9 complete existing microfixture payload comparisons and300actor GC/native control. Effect clocks, speculative startup broadcasts and actual deferred retries are fixed in that snapshot.",
+      "212/213 activation tests pass. The new mode guard incorrectly rejected already-observed rows while a replay frame was active; moved guard after observed/runtime-covered-row consumption in the current source. Pending verification.",
+      "22/23 retained scene tests pass; sole failure reverses two unranked coverage diagnostics. Original assertions remain unchanged. Same prior binary produced21/23 and22/23 on full repeats, all4 isolated controls pass. No normalization or classification-as-pass applied."
+    ]
+  },
+  "current_source_window8_and9": [
+    "Integrated actors/live_trace.rs and .lua with exact selected native query hook inventory, retained object labels, multivalue/error forwarding, nested-query suppression and first-Lua caller metadata. Installed after five theme phases; load generation controls scene readiness. No new core/VM/C API facilities.",
+    "Original scalar forward closures retain authenticated identities; scalar_methods::forward routes only its existing bound-function invocation through observations when trace logging is enabled.",
+    "Command begin/end observations use existing observed callback scope; dynamic profile and @theme source rules preserved. Update callbacks keep scope without command events. Draw callbacks now have matching source scope without changing command-local capture.",
+    "Added one complete final payload control for the original native-table-order.lua fixture after its final XMod(4). Original application54-call/intermediate-field assertions remain enabled and unchanged. No broader pairs/C-table-layout work.",
+    "Before bytes in production-adapter-fixes-before-v8 and-v9. D/implementation-drafts records the provisional observer draft; active implementation is in crates/deadsync-song-lua/src/rust_engine/actors."
+  ],
+  "typecheck": {
+    "v1": "Borrow-check failure in new string encoder; preserved failed evidence and fixed with explicit match. No tests ran.",
+    "v2": "No Rust type errors; sole denied Clippy error is the already-recorded frozen cmd.rs349 while_immutable_condition. No live_trace warnings reported.169 existing warnings in legacy-oracle lib check.",
+    "report": "production-live-observer-typecheck-v2-song-windows-debug/result.json",
+    "log_sha256": "b7a3090085edb20c4a4399c833223200ff2a69cae9793578ebb8d3c0c715f15b"
+  },
+  "live_runners": [
+    {
+      "session_id": 57908,
+      "stage": "production-live-observer-regressions-v1-song-windows-debug",
+      "targets": [
+        "rust_song_compiler",
+        "rust_song_activation",
+        "rust_live_scene",
+        "rust_input",
+        "rust_draw",
+        "rust_live_compiler"
+      ]
+    },
+    {
+      "session_id": 78743,
+      "stage": "production-live-observer-gameplay-v1-downstream-windows-debug",
+      "targets": [
+        "original native_gameplay::tests:: prefix"
+      ]
+    },
+    {
+      "session_id": 51424,
+      "stage": "production-sharkmode-diagnostic-v1",
+      "description": "Separate workspace oracle helper; same committed archive selected as original shell test, four-second representative context to expose initialization error. Not original shell regression/performance acceptance. Cargo lock copied from root; log0.4.35 and serde_json1.0.154 pinned to avoid previous helper version duplication."
+    }
+  ],
+  "source_freeze": "Do not edit watched Rust/Lua/manifests/tests until all three original sessions terminal. Docs/tools/drafts excluded from runtime guard.",
+  "terminal_consumed_sessions": [
+    76941,
+    60874,
+    48668
+  ],
+  "investigation_notes": [
+    "Potential observer follow-up: remember() currently emits Steps index/meter using f64 call.number inside json. Native labels use integer types; root exact JSON assertions may expose1.0-vs1 distinction. Verify results; encode with number() if needed.",
+    "Native trace_method chooses caller/clock/eligibility before evaluating details(). Current query computes details eagerly before method() eligibility; adjust to preserve lazy details and clock order when source gate releases. Keep original result-stack prefix restored on diagnostic errors.",
+    "Sharkmode exact input review: archiveb05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b verified. Scripts in production-sharkmode-input-review-v1/inputs/song. default.lua Init loads core/main; dynamic ScreenReady sets update and draw only after players/scanner/FBO callbacks. Check helper output.json/run.log for real error. No source patches yet."
+  ],
+  "remaining": [
+    "Consume original sessions and correct genuine observer/preparation regressions.",
+    "Original root microfixture regressions against fixed payloads; Sharkmode bake, alpha-loop, native-table-order bounded final behavior review.",
+    "Final-source full relevant regressions/build/link/graph/rendered refresh; matched representative preparation/live/memory and noteskin timings; formatting/Clippy attribution and completion docs."
+  ],
+  "limits": "Fixed attachment objective only. Interpreter/C API closed. No new baking/JIT/ASM/parity campaign, subagents, commits or resets. Preserve unrelated work/external processes/historical reports."
+}

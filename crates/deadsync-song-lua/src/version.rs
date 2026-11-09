@@ -1,6 +1,9 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{MultiValue, Value};
 
-use crate::{SONG_LUA_PRODUCT_VERSION, read_f32};
+use crate::SONG_LUA_PRODUCT_VERSION;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
 
 pub fn version_parts(version: &str) -> [i64; 3] {
     let mut parts = [0_i64; 3];
@@ -11,6 +14,7 @@ pub fn version_parts(version: &str) -> [i64; 3] {
     parts
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[must_use]
 pub fn version_args(args: &MultiValue) -> Vec<i64> {
     if let Some(Value::String(version)) = args.front()
@@ -24,6 +28,7 @@ pub fn version_args(args: &MultiValue) -> Vec<i64> {
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[must_use]
 pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
     let mut expected = version_values(args);
@@ -37,11 +42,13 @@ pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
             .all(|(index, value)| product.get(index + 1).is_some_and(|part| *part == value))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[must_use]
 pub fn song_lua_is_product_version(args: &MultiValue) -> bool {
     is_product_version(SONG_LUA_PRODUCT_VERSION, args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[must_use]
 pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> bool {
     let mut expected = version_values(args);
@@ -61,17 +68,20 @@ pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> b
     true
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[must_use]
 pub fn song_lua_is_minimum_product_version(args: &MultiValue) -> bool {
     is_minimum_product_version(SONG_LUA_PRODUCT_VERSION, args)
 }
 
 // Keep the string-first three-part rule while streaming numeric arguments.
+#[cfg(any(test, feature = "legacy-oracle"))]
 enum VersionValues<'a> {
     Parts(std::array::IntoIter<i64, 3>),
     Numbers(std::collections::vec_deque::Iter<'a, Value>),
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl Iterator for VersionValues<'_> {
     type Item = i64;
     fn next(&mut self) -> Option<i64> {
@@ -84,6 +94,7 @@ impl Iterator for VersionValues<'_> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn version_values(args: &MultiValue) -> VersionValues<'_> {
     if let Some(Value::String(version)) = args.front()
         && let Ok(version) = version.to_str()

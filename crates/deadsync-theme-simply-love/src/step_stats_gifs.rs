@@ -1,12 +1,13 @@
 use deadlib_present::anim::EffectClock;
 use deadsync_profile::{PlayerSide, StepStatsExtra};
 use log::{info, warn};
-use mlua::{HookTriggers, Lua, LuaOptions, MultiValue, StdLib, Table, Value, VmState};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 use std::{fmt, ptr};
+
+mod rust_engine;
 
 const GIF_FOLDER: &str = "step_stats_gifs";
 const MAX_GIFS: usize = 256;
@@ -516,182 +517,9 @@ fn capture_script(
     side: PlayerSide,
     wide: bool,
 ) -> Result<CapturedGif, String> {
-    let libs = StdLib::TABLE | StdLib::STRING | StdLib::MATH;
-    let lua = Lua::new_with(libs, LuaOptions::default()).map_err(|error| error.to_string())?;
-    lua.set_memory_limit(MAX_LUA_MEMORY)
-        .map_err(|error| format!("failed to limit Lua memory: {error}"))?;
-    lua.set_app_data(0_u32);
-    lua.set_hook(
-        HookTriggers::new().every_nth_instruction(LUA_HOOK_INTERVAL),
-        |lua, _| {
-            let mut instructions = lua.app_data_mut::<u32>()
-                .ok_or_else(|| mlua::Error::runtime("missing GIF instruction count"))?;
-            *instructions += LUA_HOOK_INTERVAL;
-            let next = *instructions;
-            if next > MAX_LUA_INSTRUCTIONS {
-                return Err(mlua::Error::runtime(
-                    "Step Stats GIF script exceeded its instruction limit",
-                ));
-            }
-            Ok(VmState::Continue)
-        },
-    )
-    .map_err(|error| format!("failed to limit Lua execution: {error}"))?;
-    install_capture_host(&lua, wide).map_err(|error| error.to_string())?;
-    let function = lua
-        .load(content)
-        .set_name(source)
-        .into_function()
-        .map_err(|error| format!("Lua compile failed: {error}"))?;
-    let player = match side {
-        PlayerSide::P1 => "PlayerNumber_P1",
-        PlayerSide::P2 => "PlayerNumber_P2",
-    };
-    let root = function
-        .call::<Value>(player)
-        .map_err(|error| format!("Lua execution failed: {error}"))?;
-    let mut sprites = Vec::new();
-    collect_sprite_tables(root, &mut sprites).map_err(|error| error.to_string())?;
-    if sprites.len() != 1 {
-        return Err(format!(
-            "expected exactly one Def.Sprite, found {}",
-            sprites.len()
-        ));
-    }
-    capture_sprite(&lua, sprites.pop().expect("one sprite captured"))
-        .map_err(|error| error.to_string())
-}
-
-fn install_capture_host(lua: &Lua, wide: bool) -> mlua::Result<()> {
-    let globals = lua.globals();
-    let def = lua.create_table()?;
-    def.set(
-        "ActorFrame",
-        lua.create_function(|_, table: Table| Ok(table))?,
-    )?;
-    def.set(
-        "Sprite",
-        lua.create_function(|_, table: Table| {
-            table.set("__deadsync_sprite", true)?;
-            Ok(table)
-        })?,
-    )?;
-    globals.set("Def", def)?;
-    globals.set(
-        "IsUsingWideScreen",
-        lua.create_function(move |_, _args: MultiValue| Ok(wide))?,
-    )?;
-
-    let sprite = lua.create_table()?;
-    sprite.set(
-        "LinearFrames",
-        lua.create_function(|lua, (count, seconds): (usize, f32)| {
-            let frames = lua.create_table()?;
-            frames.set("__deadsync_count", count.max(1))?;
-            frames.set("__deadsync_seconds", seconds.max(0.0))?;
-            Ok(frames)
-        })?,
-    )?;
-    globals.set("Sprite", sprite)?;
-    Ok(())
-}
-
-fn collect_sprite_tables(value: Value, out: &mut Vec<Table>) -> mlua::Result<()> {
-    let Value::Table(table) = value else {
-        return Ok(());
-    };
-    if table.get::<bool>("__deadsync_sprite").unwrap_or(false) {
-        out.push(table);
-        return Ok(());
-    }
-    for child in table.sequence_values::<Value>() {
-        collect_sprite_tables(child?, out)?;
-    }
-    Ok(())
-}
-
-fn capture_sprite(lua: &Lua, sprite: Table) -> mlua::Result<CapturedGif> {
-    let texture = sprite.get::<String>("Texture")?;
-    let (frames, delays) = capture_frames(&sprite)?;
-    let state = lua.create_any_userdata(GifStyle::default())?;
-    let actor = lua.create_table()?;
-    let metatable = lua.create_table()?;
-    let method_state = state.clone();
-    metatable.set(
-        "__index",
-        lua.create_function(move |lua, (_actor, method): (Table, String)| {
-            let method_state = method_state.clone();
-            lua.create_function(move |_, (actor, args): (Table, MultiValue)| {
-                apply_actor_command(&mut *method_state.borrow_mut::<GifStyle>()?, &method, &args);
-                Ok(actor)
-            })
-        })?,
-    )?;
-    actor.set_metatable(Some(metatable))?;
-    for command_name in ["InitCommand", "OnCommand"] {
-        if let Value::Function(command) = sprite.get::<Value>(command_name)? {
-            command.call::<()>(actor.clone())?;
-        }
-    }
-    let style = *state.borrow::<GifStyle>()?;
-    Ok(CapturedGif {
-        texture,
-        frames,
-        delays,
-        style,
-    })
-}
-
-fn capture_frames(sprite: &Table) -> mlua::Result<(Vec<u32>, Vec<f32>)> {
-    let mut frames = BTreeMap::new();
-    let mut delays = BTreeMap::new();
-    for pair in sprite.clone().pairs::<Value, Value>() {
-        let (key, value) = pair?;
-        let Value::String(key) = key else {
-            continue;
-        };
-        let key = key.to_str()?;
-        if let Some(index) = numbered_key(key.as_ref(), "frame")
-            && let Some(frame) = value_u32(&value)
-        {
-            frames.insert(index, frame);
-        } else if let Some(index) = numbered_key(key.as_ref(), "delay")
-            && let Some(delay) = value_f32(&value)
-        {
-            delays.insert(index, delay.max(0.0));
-        }
-    }
-
-    if frames.is_empty()
-        && let Value::Table(linear) = sprite.get::<Value>("Frames")?
-    {
-        let count = linear.get::<usize>("__deadsync_count")?.min(MAX_FRAMES);
-        let seconds = linear.get::<f32>("__deadsync_seconds")?;
-        let delay = seconds / count.max(1) as f32;
-        return Ok(((0..count as u32).collect(), vec![delay; count]));
-    }
-
-    let count = frames
-        .last_key_value()
-        .map(|(&index, _)| index + 1)
-        .unwrap_or(1);
-    if count > MAX_FRAMES {
-        return Err(mlua::Error::runtime(format!(
-            "animation has {count} frames; limit is {MAX_FRAMES}"
-        )));
-    }
-    let mut out_frames = Vec::with_capacity(count);
-    let mut out_delays = Vec::with_capacity(count);
-    let mut last_frame = 0;
-    let default_delay = delays.get(&0).copied().unwrap_or(1.0);
-    for index in 0..count {
-        if let Some(&frame) = frames.get(&index) {
-            last_frame = frame;
-        }
-        out_frames.push(last_frame);
-        out_delays.push(delays.get(&index).copied().unwrap_or(default_delay));
-    }
-    Ok((out_frames, out_delays))
+    let mut vm = deadlib_lua::Vm::try_new_with_memory_limit(MAX_LUA_MEMORY)
+        .map_err(|error| format!("failed to initialize bounded Lua VM: {error}"))?;
+    rust_engine::capture(&mut vm, content, source, side, wide)
 }
 
 fn numbered_key(key: &str, prefix: &str) -> Option<usize> {
@@ -700,32 +528,6 @@ fn numbered_key(key: &str, prefix: &str) -> Option<usize> {
         return None;
     }
     key.get(prefix.len()..)?.parse().ok()
-}
-
-fn value_f32(value: &Value) -> Option<f32> {
-    let value = match value {
-        Value::Integer(value) => Some(*value as f32),
-        Value::Number(value) => Some(*value as f32),
-        Value::String(value) => value.to_str().ok()?.parse().ok(),
-        _ => None,
-    }?;
-    value.is_finite().then_some(value)
-}
-
-fn value_u32(value: &Value) -> Option<u32> {
-    match value {
-        Value::Integer(value) => u32::try_from(*value).ok(),
-        Value::Number(value) if *value >= 0.0 => Some(*value as u32),
-        Value::String(value) => value.to_str().ok()?.parse().ok(),
-        _ => None,
-    }
-}
-
-fn value_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(value) => Some(value.to_str().ok()?.to_string()),
-        _ => None,
-    }
 }
 
 fn alignment_name_lower(value: &str) -> Option<f32> {
@@ -749,17 +551,6 @@ fn alignment_name(value: &str) -> Option<f32> {
             None
         }
     })
-}
-
-fn align_value(value: &Value) -> Option<f32> {
-    if let Some(value) = value_f32(value) {
-        return Some(value);
-    }
-    let Value::String(value) = value else {
-        return None;
-    };
-    let value = value.to_str().ok()?;
-    alignment_name(value.as_ref())
 }
 
 #[derive(Clone, Copy)]
@@ -831,50 +622,6 @@ fn actor_command(method: &str) -> Option<GifActorCommand> {
             None
         }
     })
-}
-
-fn apply_actor_command(style: &mut GifStyle, method: &str, args: &MultiValue) {
-    let first = args.front();
-    match actor_command(method) {
-        Some(GifActorCommand::EffectClock) => {
-            if let Some(clock) = first.and_then(value_string) {
-                style.effect_clock = match clock.to_ascii_lowercase().as_str() {
-                    "beat" | "beatnooffset" | "bgm" => EffectClock::Beat,
-                    _ => EffectClock::Time,
-                };
-            }
-        }
-        Some(GifActorCommand::X) => style.x = first.and_then(value_f32).unwrap_or(style.x),
-        Some(GifActorCommand::Y) => style.y = first.and_then(value_f32).unwrap_or(style.y),
-        Some(GifActorCommand::Xy) => {
-            style.x = first.and_then(value_f32).unwrap_or(style.x);
-            style.y = args.get(1).and_then(value_f32).unwrap_or(style.y);
-        }
-        Some(GifActorCommand::AddX) => style.x += first.and_then(value_f32).unwrap_or(0.0),
-        Some(GifActorCommand::AddY) => style.y += first.and_then(value_f32).unwrap_or(0.0),
-        Some(GifActorCommand::Zoom) => {
-            style.zoom = first.and_then(value_f32).unwrap_or(style.zoom);
-        }
-        Some(GifActorCommand::HAlign) => {
-            style.align_x = first.and_then(align_value).unwrap_or(style.align_x);
-        }
-        Some(GifActorCommand::Align) => {
-            style.align_x = first.and_then(align_value).unwrap_or(style.align_x);
-        }
-        Some(GifActorCommand::CropLeft) => {
-            style.crop[0] = first.and_then(value_f32).unwrap_or(style.crop[0]);
-        }
-        Some(GifActorCommand::CropRight) => {
-            style.crop[1] = first.and_then(value_f32).unwrap_or(style.crop[1]);
-        }
-        Some(GifActorCommand::CropTop) => {
-            style.crop[2] = first.and_then(value_f32).unwrap_or(style.crop[2]);
-        }
-        Some(GifActorCommand::CropBottom) => {
-            style.crop[3] = first.and_then(value_f32).unwrap_or(style.crop[3]);
-        }
-        None => {}
-    }
 }
 
 #[cfg(test)]

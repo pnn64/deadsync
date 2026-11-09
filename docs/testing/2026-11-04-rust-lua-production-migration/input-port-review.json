@@ -1,0 +1,64 @@
+{
+  "crates/deadsync-song-lua/src/rust_engine/input/program/mod.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/mod.rs",
+    "original_sha256": "2880274b7398c38cd309048e3ac148e84c8789adcea9cd88ad78e26e80e9ad1c",
+    "sha256": "ce0f16d2f35bb89a85ff7ce7d44bd19817fe69a3723fc9fb698f319cde230e02",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/compile.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/compile.rs",
+    "original_sha256": "62ac3628153c02a52f5f87a107fecec42dbf58bcacae2a56a226be250bdd5f41",
+    "sha256": "ae0dcca553021e2f7a38932e5d791f481133dadaab72ed253efdcab5ece29cb4",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/decode.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/decode.rs",
+    "original_sha256": "65b9cfc9c45885cc13b81127d50935933b85279dc5440d717feb6c691e11db3e",
+    "sha256": "9ab19de11ed87e5ce206d4e92837422712a7aa8234ab53164b87fa5317a1e409",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/batch.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/batch.rs",
+    "original_sha256": "cc60190b5464046028d17afcc0472526248efb513d39b8eae1712ab4514f8d19",
+    "sha256": "e593d12fbf78841f46a8269af874f8cb6e6b5be81a4fdf4f78ec5b3a40bebe88",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/dedup.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/dedup.rs",
+    "original_sha256": "3390c3b2b5faf84a0a9e97a85f5d1bb2a4a4ee213624de23be02373581883e61",
+    "sha256": "bc9c80fdd0486b80000438abe84855434f83383ca7e0e9f5e3ceb56f95b14640",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/strings.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/strings.rs",
+    "original_sha256": "ce81c21cf8c483a63cea1912b07816087efdd0f5c16e9d57ff646ffff9bf3af8",
+    "sha256": "34979fe251ebd4f02769738b80d9a3834ea9a60ea6dc2b409bd3ea4c2aabe96d",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/program/tables.rs": {
+    "original": "crates/deadlib-lua-legacy/src/program/tables.rs",
+    "original_sha256": "b755a7249eae561a5a25623b474aa23c10fea078cc320505278fd099b1e63ab7",
+    "sha256": "f73dafff817d147448e3822d76064c8ede75c5f931c835566df841878a5deb9d",
+    "verified_transform": "remove legacy closure/dump wrappers and their scratch buffer; format; bytecode compiler and evaluator unchanged"
+  },
+  "crates/deadsync-song-lua/tests/rust_baked_program.rs": {
+    "original": "crates/deadlib-lua-legacy/tests/program.rs",
+    "original_sha256": "9273281c0bb2729393b11c90a011bd6bb6dbbb53cebe4b1eb69fcf7f513ebc3a",
+    "sha256": "35be8e48e53d982662314c5ef67410540560f384932f5bc3ab32454df5818c0d",
+    "verified_transform": "route all existing test bodies unchanged to the Rust bytecode compiler via test-only dumping helpers",
+    "test_count": 27
+  },
+  "crates/deadsync-song-lua/tests/rust_baked_program_tables.rs": {
+    "original": "crates/deadlib-lua-legacy/tests/program_tables.rs",
+    "original_sha256": "267d02793a8df481a7212f6ac4d7303b75f1897a0d114b20a930c92fd554c877",
+    "sha256": "8bb4714ccfba5340fdafccc5e27dd60179df262290292e317f460106102597f1",
+    "verified_transform": "route all existing test bodies unchanged to the Rust bytecode compiler via test-only dumping helpers",
+    "test_count": 4
+  },
+  "crates/deadsync-song-lua/src/rust_engine/input/predicate.rs": {
+    "original": "crates/deadsync-song-lua/src/input/compiled.rs",
+    "original_sha256": "437fb76facdc9e9e6b9da4b716f404e3734358619cba743279710554add8b10f",
+    "sha256": "c3c6e02ce55ac9480e2a35606a8095fa4d43f35cb6a839d3b2dd11b5dc4230a2",
+    "verified_transform": "replace closure input with bytecode; use shared event-kind mapping; unchanged field schema and evaluation"
+  }
+}

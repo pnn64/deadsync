@@ -1,0 +1,30 @@
+{
+  "stage": "production-loader-song-clippy-v5",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--no-deps",
+    "--lib"
+  ],
+  "exit_code": 101,
+  "seconds": 95.4949492001906,
+  "log_sha256": "54b0d064d981f9c53b4cafb7ef6ded521644a24ea745a281186bdd9ec050fc4f",
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "test_results": [],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

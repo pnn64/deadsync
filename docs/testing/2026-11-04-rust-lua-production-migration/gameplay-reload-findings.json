@@ -1,0 +1,82 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: overlay/decorations adapter verified by 537 tests and source audit",
+  "baseline": "theme-overlay-review.json",
+  "remaining_scope": "Keep full saved migration objective; current work connects retained selections and existing screen reconstruction/load phases. Compiler/session retirement and output/cutover remain required.",
+  "failed_runs_retained": [
+    {
+      "stage": "gameplay-reload-focused-v1",
+      "exit_code": 101,
+      "tests_passed": 5,
+      "tests_failed": 1,
+      "seconds": 130.61033262405545,
+      "log_sha256": "755ea39f461cbbf874ac5337ee50c7b881c076c338ec63648acb88fb5cfb5d15",
+      "sources_unchanged": true,
+      "findings": [
+        "Initial statistics must be created after base screen publication with the seeded selection context; Rust retained the original context and gave the disabled player the wrong possible points.",
+        "Style getter fixture originally supplied a table to SetCurrentStyle, whose existing implementation accepts a name string and substitutes single; direct retained style-slot replacement now exercises collecting reentry and exact chart-before-style read order."
+      ]
+    },
+    {
+      "stage": "gameplay-reload-focused-v2",
+      "exit_code": 101,
+      "tests_passed": 7,
+      "tests_failed": 1,
+      "seconds": 147.57486142287962,
+      "log_sha256": "282d557ee55ea37f2ae2ca8d8571248e3e7d72d925ac764471533847976f9380",
+      "sources_unchanged": true,
+      "findings": [
+        "The repeated-root-collection fixture omitted the native End boundary. lua_util::end_actor_scene clears SongLuaStartupQueues before replacement. Both engines now run their actual End walkers; the weak-root collection assertion remains, with an additional outgoing-clock/order assertion."
+      ]
+    },
+    {
+      "stage": "gameplay-reload-focused-v3",
+      "exit_code": 101,
+      "tests_passed": 7,
+      "tests_failed": 1,
+      "seconds": 42.13459782395512,
+      "log_sha256": "380911f2de1304da42e59bcd456955111edd1c9d1101c57e5383b597724372d9",
+      "sources_unchanged": true,
+      "findings": [
+        "Native root still retained after its actual End walker; inspect the owning path rather than assume the queue omission explains all retention. Run Rust collection assertion independently before diagnosing the native retained reference."
+      ]
+    },
+    {
+      "stage": "gameplay-reload-focused-v4",
+      "exit_code": 101,
+      "tests_passed": 0,
+      "tests_failed": 1,
+      "seconds": 12.070617469958961,
+      "log_sha256": "72c248ce0a9d5b8a9518664a100b896d74e0ef781fad6e01d363e6c29f2b836a",
+      "sources_unchanged": true,
+      "findings": [
+        "The independent Rust old-screen collection assertion passed. Unchanged native preparation retained the old screen outside the traversable strong global graph even after End and replacement. The native control has no operation equivalent to explicit Rust scene release.",
+        "Keep strict Rust weak-root collection assertions in both modes and both repeated replacements; native End/reconstruction effects remain compared. The mistaken cross-engine collection assumption remains recorded in checkpoints and failed logs. No test is disabled and no Rust cleanup assertion is weakened."
+      ]
+    },
+    {
+      "stage": "gameplay-reload-focused-v5",
+      "exit_code": 101,
+      "tests_passed": 7,
+      "tests_failed": 1,
+      "seconds": 38.743418369907886,
+      "log_sha256": "663d10b4c8eabe254d76ad40bf2e2daa4ffeaa34eeea3bbe530687c6637f3059",
+      "sources_unchanged": true,
+      "findings": [
+        "The independent Rust old-screen collection assertion passed. Unchanged native preparation retained the old screen outside the traversable strong global graph even after End and replacement. The native control has no operation equivalent to explicit Rust scene release.",
+        "Keep strict Rust weak-root collection assertions in both modes and both repeated replacements; native End/reconstruction effects remain compared. The mistaken cross-engine collection assumption remains recorded in checkpoints and failed logs. No test is disabled and no Rust cleanup assertion is weakened.",
+        "A formatting-sensitive text edit failed before mutation; v5 inadvertently reran unchanged v4 sources. This duplicate failed run is retained explicitly."
+      ]
+    }
+  ],
+  "verified_checkpoint": {
+    "focused_stage": "gameplay-reload-focused-v6",
+    "full_stage": "gameplay-reload-adapters-v1",
+    "tests_passed": 545,
+    "rust_adapter_targets": 53,
+    "source_count": 1184,
+    "audit": "gameplay-reload-review.json",
+    "lint": "same 166 warnings and cmd.rs:349 error; diagnostic messages/files unchanged",
+    "goal_complete": false
+  }
+}

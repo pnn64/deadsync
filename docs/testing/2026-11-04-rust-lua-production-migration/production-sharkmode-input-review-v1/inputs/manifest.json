@@ -1,0 +1,245 @@
+{
+  "archive_schema_version": 1,
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 3,
+  "harness_version": "0.1.31",
+  "itgmania": {
+    "source_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "chart": {
+    "title": "280|MODS|[MASTER] Sharkmode",
+    "source_path": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+    "simfile": "song/Sharkmode.ssc",
+    "trace": "trace/semantic.json"
+  },
+  "runtime": {
+    "display": {
+      "width": 854.0,
+      "height": 480.0,
+      "logical_width": 854.0,
+      "logical_height": 480.0
+    },
+    "update_hz": 60.0,
+    "random_state": {
+      "source": "ITGmania MersenneTwister",
+      "seed": 1,
+      "reproducible": true,
+      "reseeds": []
+    }
+  },
+  "lua_closure": {
+    "strategy": "executed-sources-plus-static-loads",
+    "files": [
+      "song/code/draw.lua",
+      "song/code/update.lua",
+      "song/default.lua",
+      "song/sm5/core/constants.lua",
+      "song/sm5/core/import.lua",
+      "song/sm5/core/main.lua",
+      "song/sm5/core/modparser.lua",
+      "song/sm5/core/players.lua",
+      "song/sm5/modules/draw.lua",
+      "song/sm5/modules/eases.lua",
+      "song/sm5/modules/grabactors.lua",
+      "song/sm5/modules/helpers.lua",
+      "song/sm5/modules/multipliers.lua",
+      "song/sm5/modules/scanactors.lua",
+      "song/sm5/modules/speedmods.lua"
+    ],
+    "external_references": [
+      ".lua",
+      "NoteSkins/common/common/Fallback Receptor.lua",
+      "NoteSkins/common/common/Fallback Tap Mine.lua",
+      "NoteSkins/common/common/_Tap Lead-in Receptor.lua",
+      "NoteSkins/common/common/_Tap Press.lua",
+      "NoteSkins/common/common/_Tap Receptor.lua",
+      "NoteSkins/dance/cyber/Down Receptor.lua",
+      "NoteSkins/dance/cyber/Down Roll Body active.lua",
+      "NoteSkins/dance/cyber/Down Roll BottomCap active.lua",
+      "NoteSkins/dance/cyber/Down Tap Lift.lua",
+      "NoteSkins/dance/cyber/Down Tap Mine.lua",
+      "NoteSkins/dance/cyber/Down Tap Note.lua",
+      "NoteSkins/dance/cyber/Fallback Explosion.lua",
+      "NoteSkins/dance/cyber/NoteSkin.lua",
+      "Scripts/01 IniFile.lua",
+      "Scripts/02 Colors.lua",
+      "Scripts/02 Sprite.lua",
+      "Scripts/02 ThemePrefs.lua",
+      "Scripts/02 Utilities.lua",
+      "common/common/Fallback Receptor.lua",
+      "common/common/Fallback Tap Mine.lua",
+      "common/common/_Tap Lead-in Receptor.lua",
+      "common/common/_Tap Press.lua",
+      "common/common/_Tap Receptor.lua",
+      "dance/cyber/Down Receptor.lua",
+      "dance/cyber/Down Roll Body active.lua",
+      "dance/cyber/Down Roll BottomCap active.lua",
+      "dance/cyber/Down Tap Lift.lua",
+      "dance/cyber/Down Tap Mine.lua",
+      "dance/cyber/Down Tap Note.lua",
+      "dance/cyber/Fallback Explosion.lua",
+      "dance/cyber/NoteSkin.lua"
+    ]
+  },
+  "textures": [
+    {
+      "reference": "song:/sharkmode-bg.png",
+      "width": 1280,
+      "height": 720,
+      "frames": null,
+      "local_path": "sharkmode-bg.png",
+      "source_sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2"
+    }
+  ],
+  "required_assets": [
+    {
+      "reference": "song:/code/draw.lua",
+      "kind": "other",
+      "local_path": "code/draw.lua",
+      "exists": true
+    },
+    {
+      "reference": "song:/sharkmode-bg.png",
+      "kind": "texture",
+      "local_path": "sharkmode-bg.png",
+      "exists": true
+    },
+    {
+      "reference": "song:/sm5/core/players.lua",
+      "kind": "other",
+      "local_path": "sm5/core/players.lua",
+      "exists": true
+    },
+    {
+      "reference": "song:/sm5/modules/conversions.lua",
+      "kind": "other",
+      "local_path": "sm5/modules/conversions.lua",
+      "exists": true
+    },
+    {
+      "reference": "song:/sm5/modules/multipliers.lua",
+      "kind": "other",
+      "local_path": "sm5/modules/multipliers.lua",
+      "exists": true
+    }
+  ],
+  "files": [
+    {
+      "path": "song/Sharkmode.ssc",
+      "role": "simfile",
+      "bytes": 15946,
+      "sha256": "c14dd67edb5ce1322ed37d8a5f9f72908dc1416a7011642cfcb8eed17215ee71"
+    },
+    {
+      "path": "song/code/draw.lua",
+      "role": "required-asset",
+      "bytes": 26239,
+      "sha256": "5fb737b2b13ade1449550490d1ba53db328cae96226772db7e88eedc102c9ef6"
+    },
+    {
+      "path": "song/code/update.lua",
+      "role": "lua-dependency",
+      "bytes": 12640,
+      "sha256": "45f61ecb879e762a92131234f910d03c793b3d791cf0cf01580b579a1b684984"
+    },
+    {
+      "path": "song/default.lua",
+      "role": "lua-dependency",
+      "bytes": 2137,
+      "sha256": "500fc3f94b28c76d96ebba3e6c660ab78cce538d2bc650adeb0f6563f9daf26d"
+    },
+    {
+      "path": "song/sharkmode-bg.png",
+      "role": "required-asset",
+      "bytes": 1058414,
+      "sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2"
+    },
+    {
+      "path": "song/sm5/core/constants.lua",
+      "role": "lua-dependency",
+      "bytes": 1136,
+      "sha256": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb"
+    },
+    {
+      "path": "song/sm5/core/import.lua",
+      "role": "lua-dependency",
+      "bytes": 235,
+      "sha256": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c"
+    },
+    {
+      "path": "song/sm5/core/main.lua",
+      "role": "lua-dependency",
+      "bytes": 3006,
+      "sha256": "e0ff7ba0ee4c33a685a92a802b3237e48f942c4ee810ccc7cfffcad16a773703"
+    },
+    {
+      "path": "song/sm5/core/modparser.lua",
+      "role": "lua-dependency",
+      "bytes": 977,
+      "sha256": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96"
+    },
+    {
+      "path": "song/sm5/core/players.lua",
+      "role": "required-asset",
+      "bytes": 4338,
+      "sha256": "fad50389bdced4f8312542b4d03ca002514e6a55925af071474c68969fd70b1d"
+    },
+    {
+      "path": "song/sm5/modules/conversions.lua",
+      "role": "required-asset",
+      "bytes": 2054,
+      "sha256": "4bcdb1b4a175d07a5eb403c27bca0c8b0a0f1a77f4c5b7616bccbb73083ac17c"
+    },
+    {
+      "path": "song/sm5/modules/draw.lua",
+      "role": "lua-dependency",
+      "bytes": 1902,
+      "sha256": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c"
+    },
+    {
+      "path": "song/sm5/modules/eases.lua",
+      "role": "lua-dependency",
+      "bytes": 3316,
+      "sha256": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068"
+    },
+    {
+      "path": "song/sm5/modules/grabactors.lua",
+      "role": "lua-dependency",
+      "bytes": 1547,
+      "sha256": "0294e1a4e0ad38f36fbb23bd8db1f30b1993d9667f47a32e6a33def8029d56ba"
+    },
+    {
+      "path": "song/sm5/modules/helpers.lua",
+      "role": "lua-dependency",
+      "bytes": 9223,
+      "sha256": "40d8883835415e589cf27cc534d857ccf63f264191cc94d848551efcc8625f97"
+    },
+    {
+      "path": "song/sm5/modules/multipliers.lua",
+      "role": "required-asset",
+      "bytes": 726,
+      "sha256": "35d698a0f8211d148b39046701f97a2063575152aa56f99db2381236f3601ec9"
+    },
+    {
+      "path": "song/sm5/modules/scanactors.lua",
+      "role": "lua-dependency",
+      "bytes": 1475,
+      "sha256": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf"
+    },
+    {
+      "path": "song/sm5/modules/speedmods.lua",
+      "role": "lua-dependency",
+      "bytes": 1623,
+      "sha256": "3038b831549aeb5dfd5c13664941337406cf621a85774b663dc543057da9f79c"
+    },
+    {
+      "path": "trace/semantic.json",
+      "role": "semantic-render-trace",
+      "bytes": 53813174,
+      "sha256": "34b8bacd8e1932d65677f9cfaf65b099a53c64b2e9c1100721bc4585419a5013"
+    }
+  ]
+}

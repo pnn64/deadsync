@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as RefValue};
 
 #[derive(Debug, PartialEq)]
 enum Observed {
@@ -30,23 +29,7 @@ fn check(source: &[u8]) {
             _ => panic!("expose identity through Lua predicates"),
         })
         .collect();
-    let lua = Lua::new();
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            RefValue::Nil => Observed::Nil,
-            RefValue::Boolean(v) => Observed::Boolean(v),
-            RefValue::Number(v) => number(v),
-            RefValue::Integer(v) => number(v as f64),
-            RefValue::String(v) => Observed::Bytes(v.as_bytes().to_vec()),
-            _ => panic!("unexpected reference result"),
-        })
-        .collect();
-    assert_eq!(got, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/constant_pool.rs::check::expected", &got);
 }
 fn quoted(bytes: &[u8]) -> String {
     let mut text = String::from("'");
@@ -116,3 +99,7 @@ fn nested_function_pools_keep_captures_methods_and_local_constants_independent()
     source.push_str("local n=0;for i=1,64 do n=n+funcs[i](i)end;return n");
     check(source.as_bytes());
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

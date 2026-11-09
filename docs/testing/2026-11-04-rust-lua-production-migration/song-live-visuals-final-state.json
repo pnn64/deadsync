@@ -1,0 +1,32 @@
+{
+    "goal_status":  "active",
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "final_application_validation":  false,
+    "source_count":  1298,
+    "tests_passed":  684,
+    "test_targets":  41,
+    "library_tests":  11,
+    "visual_cases":  10,
+    "focused_tests":  42,
+    "engine_unchanged":  true,
+    "native_algorithms_byte_unchanged":  true,
+    "existing_tests_byte_unchanged":  true,
+    "reader_refactors_verified":  true,
+    "formatting_passed":  true,
+    "clippy_diagnostics_match_prior_baseline":  true,
+    "without_test_support_compiles":  true,
+    "reentry_guard_verified":  true,
+    "pre_reentry_regression_count":  683,
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "previous_goal_turn":  "progress: ArrowEffects, post-health cache and ownership; 658 tests across 38 targets",
+    "current_goal_turn":  "progress: live visual/content publication",
+    "documents":  {
+                      "docs/lua-architecture.md":  "a828173d374484d0acac4019def803d6d9d98ad89e9f538a5bf5f7be1b26ab68",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "2ebd03c1de075c9d93273e784eecdd53d460a28206ddc9341db10d450735cff1",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/review_song_live_visuals.py":  "4e09c31797b604c73f3a53d3f834a17180d554cac07f5d2702c97de7d7f47e82",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/song-live-visuals-review.json":  "27e80eec42f7ae3a5d8488f8fdeb882d037373d1a2a7b6da60003a9dd50a89d3",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/document_song_live_visuals.py":  "260cf41b19738a9449377bafef4177fa3c208dedcc2ef9c573e87d938bbdf7d2",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/audit_song_live_visuals.ps1":  "fc309b7cd5c48a8baa51311a8e85ddadbc817ef11bcec8abb8324e37c13116d1"
+                  }
+}

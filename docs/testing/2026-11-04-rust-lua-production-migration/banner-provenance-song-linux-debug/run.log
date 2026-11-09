@@ -1,0 +1,57 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 50s
+     Running tests/rust_banners.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_banners-2b946be6f93bdd61)
+
+running 6 tests
+test banner_construction_inheritance_and_scrolling_match_production ... ok
+test banner_live_texture_events_animation_and_retained_handles ... ok
+test banner_path_queries_and_fallbacks_preserve_load_distinctions ... ok
+test banner_song_loader_uses_real_blank_bitmap_and_lossy_song_paths ... ok
+test current_background_helper_keeps_dynamic_calls_and_theme_provenance ... ok
+test group_sort_and_reentrant_path_getters_match_error_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/rust_draw.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_draw-474e6d7f443ad59c)
+
+running 12 tests
+test callbacks_keep_partial_draws_report_once_and_defer_queued_commands ... ok
+test draw_function_binding_validation_and_mesh_payloads_match ... ok
+test draw_samples_tween_and_spin_state_at_each_update_boundary ... ok
+test frame_traversal_wrappers_visibility_and_proxy_leaves_match ... ok
+test immediate_draws_preserve_call_time_pose_and_live_frames_replace_only_ordinary_frames ... ok
+test nested_targets_restore_caller_stacks_and_freeze_each_submission ... ok
+test preparation_operation_limit_and_live_high_draw_count_match ... ok
+test preparation_preserves_all_owners_and_quiet_tails ... ok
+test traced_callbacks_and_textures_survive_reentry_then_collect ... ok
+test transition_coercion_and_binary_sprite_predicates_preserve_native_reads ... ok
+test unbalanced_and_mismatched_targets_keep_errors_and_recover_next_live_frame ... ok
+test unmapped_sources_fail_conversion_then_allow_new_capture ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests/rust_sprites.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_sprites-53f971e361a68f17)
+
+running 8 tests
+test load_and_settexture_preserve_their_distinct_state_and_return_rules ... ok
+test retained_texture_metadata_survives_owner_retirement_and_releases_cycles ... ok
+test sprite_animation_and_uv_properties_remain_immediate_across_tweens ... ok
+test sprite_geometry_uses_image_frames_and_retained_handle_dimensions ... ok
+test sprite_loading_and_retained_texture_metadata_match_production ... ok
+test texture_capture_errors_keep_prior_mutations_and_recover ... ok
+test texture_capture_preserves_epochs_frame_sheets_states_and_startup_suppression ... ok
+test texture_lookups_survive_reentry_gc_and_recover_after_errors ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+

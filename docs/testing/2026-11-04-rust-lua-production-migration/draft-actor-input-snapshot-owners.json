@@ -1,0 +1,17 @@
+{
+  "state": "draft only; no production snapshot factory yet",
+  "native_owner_sources": {
+    "crates/deadsync-song-lua/src/actor_input.rs": "be0cb950787c7c18eac88c36fa63a06c85bbcb17b7827e438e11725c2bf065b9",
+    "crates/deadsync-song-lua/src/actor_input/update.rs": "ec874613ca86cbf50ab58b81e23b72002a85c0df08fb8ad842dd8015e4e86a3b"
+  },
+  "drafts": {
+    "draft-actor-input-snapshot-owner.rs.txt": {
+      "lines": 153,
+      "sha256": "9026ac44f6aa45f3d8e78ae7cbaffb346caa90baac41e8a87a31d515b3e659ff"
+    },
+    "draft-actor-input-snapshot-update-owner.rs.txt": {
+      "lines": 130,
+      "sha256": "7244f6dbba2c16675f39a8669e4284a50dfad931103b4cb9a4dd9ecb8bf30e20"
+    }
+  }
+}

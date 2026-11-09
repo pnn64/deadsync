@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "name": "lua-migration-baseline-dreaming",
+  "data_dir": "C:\\GitHub\\deadsync\\target\\rust-lua-production-before\\render-baseline\\data",
+  "artifact_dir": "C:\\GitHub\\deadsync\\target\\rust-lua-production-before\\render-baseline\\attempt-3",
+  "config_sha256": "bf1de5f3ac5fa141a85a013891c035e42027f57f4176ce0cebd29ad3f6c86869",
+  "simfile": "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+  "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+  "music_sha256": "d26d4891eb89282ea71b08f085862886138788a4fb81826687d5da236490ef29",
+  "play_style": "single",
+  "player_side": "p1",
+  "joined": [
+    true,
+    false
+  ],
+  "chart_difficulties": [
+    "Challenge",
+    "Challenge"
+  ],
+  "chart_hashes": [
+    "2f76e1ebbb68262e",
+    "2f76e1ebbb68262e"
+  ],
+  "music_rate": 1.0,
+  "autoplay": true,
+  "warmup_frames": 120,
+  "measured_frames": 480,
+  "expected_runtime": {
+    "renderer": "OpenGL",
+    "vsync": false,
+    "max_fps": 60,
+    "present_mode": "immediate",
+    "display_mode": "Windowed",
+    "display_monitor": 0,
+    "display_name": "\\\\.\\DISPLAY1",
+    "display_width": 1280,
+    "display_height": 720,
+    "display_refresh_millihertz": 240000,
+    "audio_device_index": null,
+    "audio_output_mode": "Auto",
+    "audio_sample_rate_hz": null,
+    "audio_backend": "wasapi-shared",
+    "audio_fallback_from_native": false
+  }
+}

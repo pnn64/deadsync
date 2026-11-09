@@ -1,0 +1,2 @@
+error: target `rust_song_compiler` in package `deadsync-song-lua` requires the features: `test-support`, `legacy-oracle`
+Consider enabling them by passing, e.g., `--features="test-support legacy-oracle"`

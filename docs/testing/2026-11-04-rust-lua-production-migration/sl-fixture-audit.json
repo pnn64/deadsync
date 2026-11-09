@@ -1,0 +1,6 @@
+{
+  "tests/fixtures/itgmania-song-lua-micro/simply-love-mode-tables.lua": {
+    "baseline": "b2deb4b44288b47bd17d9ae96c8aa553ada8bec18ba51e1fe2f335ff0dbeb1d4",
+    "current": "b2deb4b44288b47bd17d9ae96c8aa553ada8bec18ba51e1fe2f335ff0dbeb1d4"
+  }
+}

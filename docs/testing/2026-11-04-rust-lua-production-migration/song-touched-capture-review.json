@@ -1,0 +1,65 @@
+{
+  "goal_complete": false,
+  "source_count": 1217,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/effects.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/meshes.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/render.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sound.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/text.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/wrappers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_output.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "native_change": "test-support-only oracle appended; existing production bytes unchanged",
+  "native_oracle_formatting_passed": true,
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs"
+  ],
+  "other_source_changes_preserved": [
+    "crates/deadsync-shell/src/app/course_transition_tests.rs",
+    "crates/deadsync-shell/src/app/mod.rs",
+    "crates/deadsync-shell/src/app/screen_nav.rs",
+    "crates/deadsync-shell/src/course.rs",
+    "crates/deadsync-shell/src/course/partner_tests.rs",
+    "crates/deadsync-shell/src/gameplay_regression_tests.rs"
+  ],
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-touched-capture-regressions-v1-song-linux-debug": [],
+    "song-touched-capture-lint-v1-song-linux-debug": []
+  },
+  "earlier_93_activation_tests_unchanged": true,
+  "new_cases": 11,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-touched-capture-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 391.53915316192433,
+      "log_sha256": "7aebaf719f26c95b86759e2c6d667b6b46f8b9acc2c4db0d7192fbea5ba59663",
+      "tests_passed": 326,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-touched-capture-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 31.544781579170376,
+      "log_sha256": "1478af1927dc9a12e65016b830c374199056efd88e7d997c940de2a1adab7d5d",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

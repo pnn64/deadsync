@@ -1,0 +1,25 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\rust-lua-production-baseline\\artifacts\\windows\\release\\song_lua_performance.exe",
+    "--compile",
+    "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+    "--report",
+    "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\baseline-prepare-dreaming-windows-release\\output.json",
+    "--iterations",
+    "3"
+  ],
+  "binary_sha256": "e7acc03a9eda9b65ac53e66b87146ca766581ffd5d0b547987e8c64d2089b976",
+  "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+  "exit_code": 0,
+  "seconds": 5.337480300106108,
+  "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+  "log_sha256": "3dd7857c8028757ff757f9226713181122b1240275b7e704b86be07fafab3d17",
+  "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+  "peak_rss_bytes": 80695296,
+  "peak_commit_bytes": 71442432,
+  "sampled_peak_private_bytes": 69824512,
+  "memory_samples": 44,
+  "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+  "inputs_unchanged": true,
+  "output_sha256": "4dbd42127f99a5aaae468b65fd0c4c0fd0e2d7d05d9bfc5452aaace1936aaf28"
+}

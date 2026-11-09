@@ -1,0 +1,11 @@
+{
+  "native_input_executable_bodies_preserved": true,
+  "native_compiler_bodies_preserved": true,
+  "shared_layer_helper_bodies_preserved": true,
+  "changes": "Native input formatting plus the previously reviewed oracle cfg substitution; a test-only helper import; crate visibility for the extracted pure wrapper-order helper.",
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/input.rs": "a017147def98e427f66e69a63f790d27a41798a9a5b97be33c1bda7f6ab5b51b",
+    "crates/deadsync-song-lua/src/compile.rs": "490620dd285833007482bb35d531af7b652d8f5219982d9fc95bb31f3f791eac",
+    "crates/deadsync-song-lua/src/compiled_layers.rs": "81d0eca973a6aafe55998af327206f613066f567e9a0eeb28bf7099c2ec0f295"
+  }
+}

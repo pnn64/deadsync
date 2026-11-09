@@ -1,0 +1,331 @@
+[
+  {
+    "stage": "production-loader-matched-v1-prepare-0-native",
+    "kind": "prepare",
+    "backend": "native",
+    "seconds": 5.509841600200161,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-baseline\\artifacts\\windows\\release\\song_lua_performance.exe",
+        "--compile",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "--report",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-prepare-0-native\\output.json",
+        "--iterations",
+        "3"
+      ],
+      "binary_sha256": "e7acc03a9eda9b65ac53e66b87146ca766581ffd5d0b547987e8c64d2089b976",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 5.134500900050625,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "e2c4f711809d572cbd58687251f5c725b9ead0bba36761f2586426115ce33532",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 80728064,
+      "peak_commit_bytes": 71503872,
+      "sampled_peak_private_bytes": 69533696,
+      "memory_samples": 44,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "8c5e0bd631e51b8d91f2e5a7eb7c7ad8f6f35c07c6b5c71fec71ed5143bbd7e9"
+    },
+    "output_sha256": "8c5e0bd631e51b8d91f2e5a7eb7c7ad8f6f35c07c6b5c71fec71ed5143bbd7e9",
+    "compilation_before": [],
+    "compilation_after": []
+  },
+  {
+    "stage": "production-loader-matched-v1-prepare-1-rust",
+    "kind": "prepare",
+    "backend": "rust",
+    "seconds": 3.214331100229174,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-loader-final-v5\\artifacts\\windows\\release\\song_lua_performance.exe",
+        "--compile",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "--report",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-prepare-1-rust\\output.json",
+        "--iterations",
+        "3"
+      ],
+      "binary_sha256": "cc38b26e7238e66b7ed7fb0e355cb3e3445f7582bc0eff79434db9b8116206c3",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 2.9592955000698566,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "216993cea32c1b31634fb133a32286721f56556a4b0ce70a87ddbec2951ac68e",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 34594816,
+      "peak_commit_bytes": 27258880,
+      "sampled_peak_private_bytes": 24367104,
+      "memory_samples": 20,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "0cc03706868aed60a9f09312a2926b8748726167ef4ebc8faa02b0de8687f989"
+    },
+    "output_sha256": "0cc03706868aed60a9f09312a2926b8748726167ef4ebc8faa02b0de8687f989",
+    "compilation_before": [],
+    "compilation_after": []
+  },
+  {
+    "stage": "production-loader-matched-v1-prepare-2-rust",
+    "kind": "prepare",
+    "backend": "rust",
+    "seconds": 2.4987497001420707,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-loader-final-v5\\artifacts\\windows\\release\\song_lua_performance.exe",
+        "--compile",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "--report",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-prepare-2-rust\\output.json",
+        "--iterations",
+        "3"
+      ],
+      "binary_sha256": "cc38b26e7238e66b7ed7fb0e355cb3e3445f7582bc0eff79434db9b8116206c3",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 2.0949112998787314,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "8e2f2bb5a2a221bad2bb2b99c95bc953d67e24222d7e320c5b94818617c45918",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 34545664,
+      "peak_commit_bytes": 26730496,
+      "sampled_peak_private_bytes": 25104384,
+      "memory_samples": 21,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "934a27e8c40b890006ece56940c82801345d0bc39d3acaac8ac754fed7f19b02"
+    },
+    "output_sha256": "934a27e8c40b890006ece56940c82801345d0bc39d3acaac8ac754fed7f19b02",
+    "compilation_before": [],
+    "compilation_after": []
+  },
+  {
+    "stage": "production-loader-matched-v1-prepare-3-native",
+    "kind": "prepare",
+    "backend": "native",
+    "seconds": 5.052271200111136,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-baseline\\artifacts\\windows\\release\\song_lua_performance.exe",
+        "--compile",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "--report",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-prepare-3-native\\output.json",
+        "--iterations",
+        "3"
+      ],
+      "binary_sha256": "e7acc03a9eda9b65ac53e66b87146ca766581ffd5d0b547987e8c64d2089b976",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 4.774567400105298,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "f693bc2a931dd43f45211e3b373f24b816f649fd4a8d4e882fdbf1bb652d3e69",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 80429056,
+      "peak_commit_bytes": 71618560,
+      "sampled_peak_private_bytes": 71618560,
+      "memory_samples": 46,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "0af116fb647a8e7b7bac81445ee4ae8a991c4d8d5a2a89f87ec8d2929234ca99"
+    },
+    "output_sha256": "0af116fb647a8e7b7bac81445ee4ae8a991c4d8d5a2a89f87ec8d2929234ca99",
+    "compilation_before": [],
+    "compilation_after": []
+  },
+  {
+    "stage": "production-loader-matched-v1-live-0-native",
+    "kind": "live",
+    "backend": "native",
+    "seconds": 13.634505700087175,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-baseline\\artifacts\\windows\\release\\song_lua_execution.exe",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-live-0-native\\output.json",
+        "--benchmark",
+        "481"
+      ],
+      "binary_sha256": "245bd406798ae4e35421d2066f166aef516f86375cfd51ca6facb59989a1b88c",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 13.391230899840593,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "7878f347ad092a323380bc9b649b8f5e950b15483cecc289f984d6f28912a208",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 91590656,
+      "peak_commit_bytes": 110362624,
+      "sampled_peak_private_bytes": 110362624,
+      "memory_samples": 126,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "a854b2cd440e990b7c91139db9be0204d18387cb56f3abaca3918b6c1457fb0d"
+    },
+    "output_sha256": "a854b2cd440e990b7c91139db9be0204d18387cb56f3abaca3918b6c1457fb0d",
+    "compilation_before": [],
+    "compilation_after": []
+  },
+  {
+    "stage": "production-loader-matched-v1-live-1-rust",
+    "kind": "live",
+    "backend": "rust",
+    "seconds": 12.742940300144255,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-loader-final-v5\\artifacts\\windows\\release\\song_lua_execution.exe",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-live-1-rust\\output.json",
+        "--benchmark",
+        "481"
+      ],
+      "binary_sha256": "b5c9d3df0bef74b0d2c729409042c7df9dda36a22309ef9b0b50d3f8ef0bc089",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 12.49363030004315,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "7878f347ad092a323380bc9b649b8f5e950b15483cecc289f984d6f28912a208",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 56377344,
+      "peak_commit_bytes": 74731520,
+      "sampled_peak_private_bytes": 74289152,
+      "memory_samples": 114,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "fadb6219633b228626d97d6b0ae66da27731993401a2dc623b8caa4fce00d67b"
+    },
+    "output_sha256": "fadb6219633b228626d97d6b0ae66da27731993401a2dc623b8caa4fce00d67b",
+    "compilation_before": [],
+    "compilation_after": [
+      {
+        "ProcessId": 34840,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 29592,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 9180,
+        "Name": "rustc.exe"
+      }
+    ]
+  },
+  {
+    "stage": "production-loader-matched-v1-live-2-rust",
+    "kind": "live",
+    "backend": "rust",
+    "seconds": 11.789778799982741,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-production-loader-final-v5\\artifacts\\windows\\release\\song_lua_execution.exe",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-live-2-rust\\output.json",
+        "--benchmark",
+        "481"
+      ],
+      "binary_sha256": "b5c9d3df0bef74b0d2c729409042c7df9dda36a22309ef9b0b50d3f8ef0bc089",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 11.542094400152564,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "7878f347ad092a323380bc9b649b8f5e950b15483cecc289f984d6f28912a208",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 55791616,
+      "peak_commit_bytes": 74768384,
+      "sampled_peak_private_bytes": 74678272,
+      "memory_samples": 115,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "fe84a173df9ba7272548bc5825eb58e0a34d4982cf7defbd8f2f2a40b2bc7549"
+    },
+    "output_sha256": "fe84a173df9ba7272548bc5825eb58e0a34d4982cf7defbd8f2f2a40b2bc7549",
+    "compilation_before": [
+      {
+        "ProcessId": 34840,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 29592,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 9180,
+        "Name": "rustc.exe"
+      }
+    ],
+    "compilation_after": [
+      {
+        "ProcessId": 34840,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 29592,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 9180,
+        "Name": "rustc.exe"
+      }
+    ]
+  },
+  {
+    "stage": "production-loader-matched-v1-live-3-native",
+    "kind": "live",
+    "backend": "native",
+    "seconds": 13.062316399998963,
+    "record": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\rust-lua-production-baseline\\artifacts\\windows\\release\\song_lua_execution.exe",
+        "C:\\GitHub\\deadsync\\target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\DREAMING-ING!!.ssc",
+        "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-loader-matched-v1-live-3-native\\output.json",
+        "--benchmark",
+        "481"
+      ],
+      "binary_sha256": "245bd406798ae4e35421d2066f166aef516f86375cfd51ca6facb59989a1b88c",
+      "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
+      "exit_code": 0,
+      "seconds": 12.815320700174198,
+      "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+      "log_sha256": "7878f347ad092a323380bc9b649b8f5e950b15483cecc289f984d6f28912a208",
+      "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+      "peak_rss_bytes": 91590656,
+      "peak_commit_bytes": 110440448,
+      "sampled_peak_private_bytes": 110440448,
+      "memory_samples": 126,
+      "memory_method": "Windows GetProcessMemoryInfo; OS high-water working set/commit and 100ms private-byte samples",
+      "inputs_unchanged": true,
+      "output_sha256": "890a6f85f3da78c2bdd46074cd8968cd52251312da678eaa4c1151a03a9fc6cf"
+    },
+    "output_sha256": "890a6f85f3da78c2bdd46074cd8968cd52251312da678eaa4c1151a03a9fc6cf",
+    "compilation_before": [
+      {
+        "ProcessId": 34840,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 29592,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 9180,
+        "Name": "rustc.exe"
+      }
+    ],
+    "compilation_after": [
+      {
+        "ProcessId": 34840,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 29592,
+        "Name": "cargo.exe"
+      },
+      {
+        "ProcessId": 25944,
+        "Name": "rustc.exe"
+      }
+    ]
+  }
+]

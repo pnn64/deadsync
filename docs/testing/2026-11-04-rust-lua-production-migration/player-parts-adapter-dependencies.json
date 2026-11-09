@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "tree",
+    "--locked",
+    "--offline",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--edges",
+    "normal,build,dev",
+    "--prefix",
+    "none"
+  ],
+  "exit_code": 0,
+  "log_sha256": "9968bb6a6460eb4e8a75872dc9ecf82a6454fd1fbd07bf9a71fe017bc74f9f3e",
+  "changed_non_dependency": "crates/deadsync-theme-simply-love/src/screens/select_music.rs",
+  "deadsync_theme_simply_love_in_test_dependency_graph": false
+}

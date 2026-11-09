@@ -1,0 +1,10 @@
+{
+  "original_sha256": "44d5bea989b2b16d151c19d2219591f8c4690a41a972099dbc381034f3437161",
+  "oracle_sha256": "3ed7be0d7aac69d25265f97a71f6e5887b7f1addebf945d5c44ba304ee73a9d8",
+  "transformations": [
+    "strip inactive rust-engine module/re-export",
+    "exclude original inline tests (retained in production compiler)",
+    "add provenance comment"
+  ],
+  "compiler_version": 29
+}

@@ -1,0 +1,26 @@
+
+running 21 tests
+test input::tests::additions_on_both_sides_of_current_callback_keep_native_identity_order ... ok
+test input::tests::closed_callbacks_use_native_dispatch_and_debug_hooks_keep_lua_execution ... ok
+test input::tests::compiled_registry_keeps_function_identity_rooted_until_removal ... ok
+test input::tests::mixed_callbacks_see_mutated_events_and_removals_restore_native_eligibility ... ok
+test input::tests::native_prefix_stopping_preserves_later_lua_action_order ... ok
+test input::tests::nested_dispatch_removing_earlier_entries_repairs_outer_position ... ok
+test input::tests::reentrant_dispatch_keeps_existing_pending_removal_protocol ... ok
+test input::tests::screen_callbacks_defer_removals_share_event_and_use_lua_truthiness ... ok
+test input::tests::screen_callbacks_receive_press_repeat_release_and_deduplicate_registration ... ok
+test renderer::native_actor_inputs_preserve_gameplay_frame_bits_and_opengl_pixels ... ignored, requires a local OpenGL device and a hidden window
+test renderer::prepare::submission_tests::lua_submission_allows_a_successful_runtime_compilation ... ok
+test renderer::prepare::submission_tests::lua_submission_approval_requires_the_current_complete_compilation ... ok
+test renderer::prepare::submission_tests::lua_submission_rejects_a_failed_shared_session_even_if_layers_recover ... ok
+test renderer::prepare::submission_tests::lua_submission_rejects_captured_callback_errors ... ok
+test renderer::prepare::tests::song_lua_sound_crossing_keeps_zero_and_forward_edge_semantics ... ok
+test renderer::prepare::tests::song_lua_sound_schedule_advances_without_revisiting_old_events ... ok
+test renderer::prepare::tests::song_lua_sound_schedule_rewinds_after_a_backward_seek ... ok
+test runtime_fallback::tests::retry_errors_remain_visible ... ok
+test runtime_fallback::tests::runtime_rejection_retries_with_loading_and_clock_handoff ... ok
+test runtime_fallback::tests::successful_compilation_keeps_the_requested_mode ... ok
+test runtime_fallback::tests::unrelated_errors_and_live_rejections_are_not_retried ... ok
+
+test result: ok. 20 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.28s
+

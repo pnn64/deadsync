@@ -1,13 +1,6 @@
-//! Test the production input module without building the Song --lib harness.
-#[path = "../src/input.rs"]
-mod screen_input;
-use screen_input as input;
-pub use deadsync_song_lua::SongLuaCompileContext;
-#[path = "../src/runtime_fallback.rs"]
-mod runtime_fallback;
-
-use deadsync_song_lua::{SongLuaCompiledInput, SongLuaInputEvent, SongLuaInputType};
-use mlua::{Function, Lua, Value};
+//! Compiled predicates against ordinary authored Lua in the Rust interpreter.
+use deadlib_lua::{HostCall, TableId, Value, Vm, compile};
+use deadsync_song_lua::{SongLuaInputEvent, SongLuaInputType, rust_engine::CompiledInput};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering::Relaxed},
@@ -38,6 +31,77 @@ impl Drop for Dropped {
     }
 }
 
+fn callback(vm: &mut Vm, source: &str) -> Value {
+    vm.execute(&compile(source.as_bytes()).unwrap()).unwrap()[0]
+}
+
+fn dump(vm: &mut Vm, function: Value) -> Vec<u8> {
+    vm.set_global(b"fixture_callback", function).unwrap();
+    let Value::String(bytes) = callback(vm, "return string.dump(fixture_callback)") else {
+        panic!("dumped callback bytes")
+    };
+    vm.string_bytes(bytes).unwrap().to_vec()
+}
+
+// Construct the authored-Lua reference event independently of the predicate's
+// flattened input bindings. In particular, nested DeviceInput is an actual
+// table, optional player/controller values remain nil, and strings are bytes.
+fn authored_event(vm: &mut Vm, input: &SongLuaInputEvent<'_>) -> Value {
+    fn put(vm: &mut Vm, owner: TableId, name: &[u8], value: Value) {
+        let key = vm.intern(name);
+        vm.raw_table_set(owner, key, value).unwrap();
+    }
+    fn text(vm: &mut Vm, owner: TableId, name: &[u8], value: &str) {
+        let value = vm.intern(value.as_bytes());
+        put(vm, owner, name, value);
+    }
+    let event = vm.try_new_table().unwrap();
+    let device = vm.try_new_table().unwrap();
+    text(vm, device, b"device", input.device);
+    text(vm, device, b"button", input.device_button);
+    put(vm, device, b"level", Value::Number(input.level.into()));
+    put(vm, device, b"z", Value::Number(input.z.into()));
+    put(vm, device, b"down", Value::Boolean(input.down));
+    put(vm, device, b"ago", Value::Number(input.ago));
+    put(
+        vm,
+        device,
+        b"is_joystick",
+        Value::Boolean(input.is_joystick),
+    );
+    put(vm, device, b"is_mouse", Value::Boolean(input.is_mouse));
+    put(vm, event, b"DeviceInput", Value::Table(device));
+    text(vm, event, b"button", input.button);
+    text(vm, event, b"GameButton", input.game_button);
+    text(
+        vm,
+        event,
+        b"type",
+        match input.kind {
+            SongLuaInputType::FirstPress => "InputEventType_FirstPress",
+            SongLuaInputType::Repeat => "InputEventType_Repeat",
+            SongLuaInputType::Release => "InputEventType_Release",
+        },
+    );
+    if let Some(player) = input.player {
+        text(
+            vm,
+            event,
+            b"PlayerNumber",
+            &format!("PlayerNumber_P{}", player + 1),
+        );
+    }
+    if let Some(controller) = input.controller {
+        text(
+            vm,
+            event,
+            b"controller",
+            &format!("GameController_{}", controller + 1),
+        );
+    }
+    Value::Table(event)
+}
+
 #[test]
 fn automatic_input_binding_matches_authored_lua_then_runs_without_its_vm() {
     let bodies = [
@@ -60,13 +124,18 @@ fn automatic_input_binding_matches_authored_lua_then_runs_without_its_vm() {
     for body in bodies {
         let dropped = Arc::new(AtomicBool::new(false));
         let (mut program, sequence, expected) = {
-            let lua = Lua::new();
-            lua.set_app_data(Dropped(dropped.clone()));
-            let f: Function = lua
-                .load(format!("return function(e) {body} end"))
-                .eval()
+            let mut vm = Vm::new();
+            let marker = vm
+                .new_host_function_with_data(
+                    |_: &mut HostCall<'_>| Ok(()),
+                    &[],
+                    Dropped(dropped.clone()),
+                )
                 .unwrap();
-            let program = SongLuaCompiledInput::compile(&f).expect(body);
+            vm.set_global(b"fixture_lifetime", marker).unwrap();
+            let f = callback(&mut vm, &format!("return function(e) {body} end"));
+            let bytes = dump(&mut vm, f);
+            let program = CompiledInput::compile(&bytes).expect(body);
             let mut sequence = Vec::new();
             let mut expected = Vec::new();
             for repeat in 0..3 {
@@ -90,29 +159,13 @@ fn automatic_input_binding_matches_authored_lua_then_runs_without_its_vm() {
                     input.z = index as i32 - 2;
                     input.is_joystick = index == 1;
                     input.is_mouse = index == 2;
-                    let native_input = screen_input::SongLuaInputEvent {
-                        player: input.player,
-                        controller: input.controller,
-                        button: input.button,
-                        game_button: input.game_button,
-                        kind: match input.kind {
-                            SongLuaInputType::FirstPress => {
-                                screen_input::SongLuaInputType::FirstPress
-                            }
-                            SongLuaInputType::Repeat => screen_input::SongLuaInputType::Repeat,
-                            SongLuaInputType::Release => screen_input::SongLuaInputType::Release,
-                        },
-                        device: input.device,
-                        device_button: input.device_button,
-                        level: input.level,
-                        z: input.z,
-                        down: input.down,
-                        ago: input.ago,
-                        is_joystick: input.is_joystick,
-                        is_mouse: input.is_mouse,
-                    };
-                    let event = screen_input::create_event(&lua, &native_input).unwrap();
-                    let value = f.call::<Value>(event).unwrap();
+                    let event = authored_event(&mut vm, &input);
+                    let value = vm
+                        .call(f, &[event])
+                        .unwrap()
+                        .first()
+                        .copied()
+                        .unwrap_or(Value::Nil);
                     expected.push(!matches!(value, Value::Nil | Value::Boolean(false)));
                     sequence.push(input);
                 }
@@ -121,7 +174,7 @@ fn automatic_input_binding_matches_authored_lua_then_runs_without_its_vm() {
         };
         assert!(
             dropped.load(Relaxed),
-            "native input binding retained its loading VM"
+            "compiled input binding retained its loading VM"
         );
         for (input, expected) in sequence.iter().zip(expected) {
             assert_eq!(program.evaluate(input), expected, "{body}");
@@ -131,7 +184,7 @@ fn automatic_input_binding_matches_authored_lua_then_runs_without_its_vm() {
 
 #[test]
 fn unsupported_state_calls_coercions_and_event_mutation_keep_fallback() {
-    let lua = Lua::new();
+    let mut vm = Vm::new();
     for source in [
         "local held=false;return function(e) held=not held;return held end",
         "return function(e) e.button='other';return true end",
@@ -140,7 +193,8 @@ fn unsupported_state_calls_coercions_and_event_mutation_keep_fallback() {
         "return function(e) return e.DeviceInput==e.DeviceInput end",
         "return function(e) while e.button=='Right' do end end",
     ] {
-        let f: Function = lua.load(source).eval().unwrap();
-        assert!(SongLuaCompiledInput::compile(&f).is_none(), "{source}");
+        let f = callback(&mut vm, source);
+        let bytes = dump(&mut vm, f);
+        assert!(CompiledInput::compile(&bytes).is_none(), "{source}");
     }
 }

@@ -1,0 +1,30 @@
+{
+  "stage": "production-final-song-clippy-v1",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support",
+    "--no-deps",
+    "--lib"
+  ],
+  "exit_code": 101,
+  "seconds": 675.7720743000973,
+  "log_sha256": "ff3059180dfa6902782a8ef094bf32b370fe8966978ae034d0534b12712e20a9",
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "test_results": [],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-lua-final-core",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

@@ -1,7 +1,11 @@
 //! Register instructions and structural verification of immutable compiled programs.
 
+use crate::memory::{
+    Memory, Shared,
+    fallible::{SliceExt, VecExt},
+};
 use crate::{Error, ErrorKind};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub(crate) const OPEN: u32 = u32::MAX;
 pub(crate) const OPEN_ARGS: u16 = u16::MAX;
@@ -16,18 +20,34 @@ pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn chunk_id_limit(name: &[u8], size: usize) -> Vec<u8> {
+    let mut out = vec![0; size];
+    let len = chunk_id_into(name, &mut out);
+    out.truncate(len);
+    out
+}
+
+/// Format the bounded Lua chunk identifier without allocating temporary storage.
+pub(crate) fn chunk_id_into(name: &[u8], out: &mut [u8]) -> usize {
+    let size = out.len();
+    let mut used = 0;
+    let mut append = |bytes: &[u8]| {
+        out[used..used + bytes.len()].copy_from_slice(bytes);
+        used += bytes.len();
+    };
     let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
     if let Some(name) = name.strip_prefix(b"=") {
-        return name[..name.len().min(size - 1)].to_vec();
+        append(&name[..name.len().min(size - 1)]);
+        return used;
     }
     if let Some(name) = name.strip_prefix(b"@") {
         let limit = size - b" '...' \0".len();
         if name.len() > limit {
-            let mut out = b"...".to_vec();
-            out.extend_from_slice(&name[name.len() - limit..]);
-            return out;
+            append(b"...");
+            append(&name[name.len() - limit..]);
+            return used;
         }
-        return name.to_vec();
+        append(name);
+        return used;
     }
     let limit = size - b" [string \"...\"] \0".len();
     let len = name
@@ -35,13 +55,13 @@ pub(crate) fn chunk_id_limit(name: &[u8], size: usize) -> Vec<u8> {
         .position(|&b| matches!(b, b'\n' | b'\r'))
         .unwrap_or(name.len())
         .min(limit);
-    let mut out = b"[string \"".to_vec();
-    out.extend_from_slice(&name[..len]);
+    append(b"[string \"");
+    append(&name[..len]);
     if len < name.len() {
-        out.extend_from_slice(b"...");
+        append(b"...");
     }
-    out.extend_from_slice(b"\"]");
-    out
+    append(b"\"]");
+    used
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -242,6 +262,45 @@ pub(crate) struct ProgramData {
 }
 
 impl ProgramData {
+    /// Sizes of all owned boxed payloads, excluding the containing shared block.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        let mut bytes = self.name.len()
+            + std::mem::size_of_val(self.sources.as_ref())
+            + self
+                .sources
+                .iter()
+                .map(|source| source.len())
+                .sum::<usize>()
+            + std::mem::size_of_val(self.prototypes.as_ref());
+        for prototype in &self.prototypes {
+            bytes += std::mem::size_of_val(prototype.code.as_ref())
+                + prototype.debug.heap_bytes()
+                + std::mem::size_of_val(prototype.lines.as_ref())
+                + std::mem::size_of_val(prototype.gc_live.as_ref())
+                + std::mem::size_of_val(prototype.gc_maps.as_ref())
+                + std::mem::size_of_val(prototype.upvalues.as_ref())
+                + std::mem::size_of_val(prototype.bindings.as_ref())
+                + prototype
+                    .bindings
+                    .iter()
+                    .map(|binding| std::mem::size_of_val(binding.upvalues.as_ref()))
+                    .sum::<usize>()
+                + std::mem::size_of_val(prototype.constants.as_ref())
+                + prototype
+                    .constants
+                    .iter()
+                    .map(|constant| {
+                        if let Constant::String(bytes) = constant {
+                            bytes.len()
+                        } else {
+                            0
+                        }
+                    })
+                    .sum::<usize>();
+        }
+        bytes
+    }
+
     pub fn source(&self, prototype: &Prototype) -> &[u8] {
         match prototype.debug.native.as_ref().map_or(0, |n| n.source) {
             0 => &self.name,
@@ -255,14 +314,37 @@ impl ProgramData {
 /// While the host holds a program or its clones, each VM that loaded it retains
 /// its entry closure and function environment. Dropping the last host copy makes
 /// those bindings collectible; escaped Lua closures still retain their code.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Program {
-    pub(crate) data: Arc<ProgramData>,
-    // Runtime code owners do not keep the host's VM binding alive.
-    pub(crate) lifetime: Arc<()>,
+    pub(crate) data: Shared<ProgramData>,
+    // Counts host Program instances separately from runtime code owners. VMs
+    // retain this counter without incrementing it, so the last host drop still
+    // makes their entry bindings collectible while escaped closures keep code.
+    pub(crate) lifetime: Shared<AtomicUsize>,
+}
+
+impl Clone for Program {
+    fn clone(&self) -> Self {
+        if self.lifetime.fetch_add(1, Ordering::Relaxed) >= isize::MAX as usize {
+            std::process::abort();
+        }
+        Self {
+            data: self.data.clone(),
+            lifetime: self.lifetime.clone(),
+        }
+    }
+}
+impl Drop for Program {
+    fn drop(&mut self) {
+        self.lifetime.fetch_sub(1, Ordering::Release);
+    }
 }
 
 impl Program {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        self.data.heap_bytes() + self.lifetime.heap_bytes() + ProgramData::heap_bytes(&self.data)
+    }
+
     /// Return the number of register instructions.
     pub fn instruction_count(&self) -> usize {
         self.data.prototypes.iter().map(|p| p.code.len()).sum()
@@ -273,16 +355,24 @@ impl Program {
         self.data.prototypes[self.data.entry as usize].registers
     }
 
-    pub(crate) fn new(prototypes: Vec<Prototype>, entry: u32, name: &[u8]) -> Self {
-        Self {
-            lifetime: Arc::new(()),
-            data: Arc::new(ProgramData {
-                prototypes: prototypes.into_boxed_slice(),
-                entry,
-                name: name.into(),
-                sources: Box::default(),
-            }),
-        }
+    pub(crate) fn try_new(
+        prototypes: Vec<Prototype>,
+        entry: u32,
+        name: &[u8],
+    ) -> Result<Self, Error> {
+        Self::try_from_data(ProgramData {
+            prototypes: prototypes.try_into_boxed_slice()?,
+            entry,
+            name: name.try_boxed()?,
+            sources: Box::default(),
+        })
+    }
+
+    pub(crate) fn try_from_data(data: ProgramData) -> Result<Self, Error> {
+        Ok(Self {
+            data: Shared::try_new_in(data, Memory::default())?,
+            lifetime: Shared::try_new_in(AtomicUsize::new(1), Memory::default())?,
+        })
     }
 
     /// Verify operands, register ranges, constants, and control flow targets.
@@ -296,7 +386,7 @@ impl Program {
             .get(self.data.entry as usize)
             .is_none_or(|p| !p.upvalues.is_empty() && p.debug.native.is_none())
         {
-            return Err(Error::new(
+            return Err(Error::new_static(
                 ErrorKind::Bytecode,
                 0,
                 "invalid entry prototype",
@@ -309,7 +399,11 @@ impl Program {
                 .as_ref()
                 .is_some_and(|n| n.source as usize > self.data.sources.len())
             {
-                return Err(Error::new(ErrorKind::Bytecode, 0, "invalid source index"));
+                return Err(Error::new_static(
+                    ErrorKind::Bytecode,
+                    0,
+                    "invalid source index",
+                ));
             }
             prototype.verify(&self.data.prototypes)?;
         }
@@ -338,8 +432,8 @@ impl Prototype {
     }
 
     fn verify(&self, prototypes: &[Prototype]) -> Result<(), Error> {
-        let fail = |pc: usize, message: &str| {
-            Error::new(
+        let fail = |pc: usize, message: &'static str| {
+            Error::new_static(
                 ErrorKind::Bytecode,
                 self.lines.get(pc).copied().unwrap_or(0),
                 message,
@@ -641,7 +735,7 @@ mod tests {
         let good = crate::compile(b"local x=1; if x<3 then x=x+1 end;return x==2").unwrap();
         for corrupt in 0..4 {
             let mut p = good.clone();
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             let proto = &mut data.prototypes[data.entry as usize];
             let boolean = proto.code.iter().position(|i| i.op == Op::Bool).unwrap();
             match corrupt {
@@ -666,7 +760,7 @@ mod tests {
         let good = crate::compile(b"local x = 1; while x < 3 do x = x + 1 end; return x").unwrap();
         for pc in 0..good.instruction_count() {
             let mut p = good.clone();
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             let prototype = &mut data.prototypes[data.entry as usize];
             prototype.code[pc] = Instruction {
                 op: Op::Jump,
@@ -675,7 +769,7 @@ mod tests {
                 c: u32::MAX,
             };
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             data.prototypes[data.entry as usize].code[pc] = Instruction {
                 op: Op::Load,
                 a: 0,
@@ -683,7 +777,7 @@ mod tests {
                 c: u32::MAX,
             };
             assert!(p.verify().is_err());
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             data.prototypes[data.entry as usize].code[pc] = Instruction {
                 op: Op::Move,
                 a: 0,
@@ -699,7 +793,7 @@ mod tests {
         let good = crate::compile(b"local a,b,c=2,3,false;return not((a<b)or c)").unwrap();
         for corrupt in 0..7 {
             let mut p = good.clone();
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             let proto = &mut data.prototypes[data.entry as usize];
             let branch = proto
                 .code
@@ -742,7 +836,7 @@ mod tests {
         );
         for corrupt in 0..4 {
             let mut bad = good.clone();
-            let data = Arc::make_mut(&mut bad.data);
+            let data = Shared::make_mut(&mut bad.data);
             let p = &mut data.prototypes[data.entry as usize];
             let count = p.constants.len() as u32;
             match corrupt {
@@ -760,7 +854,7 @@ mod tests {
         let good = crate::compile(b"local t={};return t").unwrap();
         for corrupt in 0..3 {
             let mut p = good.clone();
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             let prototype = &mut data.prototypes[data.entry as usize];
             match corrupt {
                 0 => prototype.gc_live = Box::new([]),
@@ -777,7 +871,7 @@ mod tests {
             crate::compile(b"local x=1;local function f()return x end;f();return f()").unwrap();
         for corrupt in 0..10 {
             let mut p = good.clone();
-            let data = Arc::make_mut(&mut p.data);
+            let data = Shared::make_mut(&mut p.data);
             let proto = &mut data.prototypes[data.entry as usize];
             match corrupt {
                 0 => proto.debug.locals[0].start = u32::MAX,

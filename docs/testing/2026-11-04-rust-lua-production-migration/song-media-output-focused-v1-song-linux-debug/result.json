@@ -1,0 +1,40 @@
+{
+  "stage": "song-media-output-focused-v1",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--test",
+    "rust_song_activation",
+    "--no-fail-fast",
+    "media_output",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 148.62268377887085,
+  "log_sha256": "e3e3d315a151ed6e172b2324a167ecaf3dd4537ff13ec2e11f7a3d595ac86813",
+  "tests_passed": 3,
+  "tests_failed": 1,
+  "test_results": [
+    "test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 59 filtered out; finished in 3.75s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "/var/tmp/deadsync-rust-adapters-target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "PKG_CONFIG_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/pkgconfig:/var/tmp/deadsync-rust-adapters-native-deps/root/usr/share/pkgconfig",
+    "CPATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include",
+    "LD_LIBRARY_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu:"
+  }
+}

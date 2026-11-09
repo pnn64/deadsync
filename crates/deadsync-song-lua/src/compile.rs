@@ -1,3 +1,6 @@
+pub(crate) use crate::compiled_layers::{merge_runtime_messages, split_compiled_song_lua};
+#[cfg(test)]
+use crate::compiled_layers::wrapper_overlay_order;
 use crate::lua_util::run_actor_startup_commands;
 use deadlib_present::actors::TextAttribute;
 use mlua::{Lua, Table, Value};
@@ -5,7 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    CompiledSongLua, SongLuaCapturedChildActor, SongLuaCompileContext, SongLuaCompileTimer,
+    SongLuaCapturedChildActor, SongLuaCompileContext, SongLuaCompileTimer,
     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
     SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayMessageCommand,
     SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaTimeUnit,
@@ -30,8 +33,10 @@ use crate::{
 
 const COMPILE_LAYER_KEY: &str = "__songlua_compile_layer";
 
-type DefaultCompiledSongLua<NoteskinSlot, ModelVertex> = CompiledSongLua<
+type CompiledSongLua<A> = crate::CompiledSongLuaData<A, crate::live::SongLuaLiveScene>;
+type DefaultCompiledSongLua<NoteskinSlot, ModelVertex, LiveScene = crate::live::SongLuaLiveScene> = crate::CompiledSongLuaData<
     SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+    LiveScene,
 >;
 
 pub fn compile_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
@@ -110,7 +115,7 @@ where
 /// This is load-time work: callers must rebuild the domain and prewarm the
 /// returned resources before resuming updates, just as at initial entry.
 pub fn reload_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
-    mut scene: crate::SongLuaLiveScene,
+    mut scene: crate::live::SongLuaLiveScene,
     read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
     multitap_arrow_visual_spec: MultitapArrowVisualSpec,
@@ -134,7 +139,7 @@ where
     Ok(compiled)
 }
 
-fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
+pub(crate) fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
     create_host_named_child_actor(
         lua,
         parent,
@@ -148,7 +153,7 @@ fn default_note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Resu
     host_note_field_column_actors(lua, note_field, create_default_dummy_actor)
 }
 
-fn create_default_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
+pub(crate) fn create_default_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
     create_host_dummy_actor(lua, actor_type, install_default_actor_methods)
 }
 
@@ -166,6 +171,202 @@ fn install_default_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 fn add_default_actor_child_from_path(lua: &Lua, actor: &Table, path: &str) -> mlua::Result<()> {
     add_host_actor_child_from_path(lua, actor, path, create_default_dummy_actor)
 }
+
+/// Reuse the production root ownership and clone installer in migration controls.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_own_actor_root(lua: &Lua, root: Value) -> mlua::Result<Value> {
+    crate::lua_util::own_actor_root(lua, root, install_default_actor_methods)
+}
+
+/// Exercise the production actor constructor/Init path without loading a whole
+/// gameplay screen. Used only as the migration's legacy behavior control.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_actor_control(source: &str) -> mlua::Result<Lua> {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "actor migration control");
+    context.live = true;
+    migration_actor_control_with_context(source, &context)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_actor_control_with_context(source: &str, context: &SongLuaCompileContext) -> mlua::Result<Lua> {
+    migration_actor_control_with_setup(source, context, |_| Ok(()))
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_actor_control_with_setup(
+    source: &str,
+    context: &SongLuaCompileContext,
+    setup: impl FnOnce(&Lua) -> mlua::Result<()>,
+) -> mlua::Result<Lua> {
+    let lua = Lua::new();
+    crate::lua_util::begin_live_runtime(&lua)?;
+    if !context.live { lua.remove_app_data::<crate::live::LiveMode>(); }
+    crate::install_default_stdlib_compat(&lua, &context.song_dir)?;
+    crate::host::install_message_manager_globals(&lua, crate::lua_util::broadcast_song_lua_message)?;
+    lua.globals().set(crate::SONG_LUA_SIDE_EFFECT_COUNT_KEY, 0)?;
+    let clock = crate::create_song_runtime_table(&lua, context)?;
+    lua.globals().set(crate::SONG_LUA_RUNTIME_KEY, clock)?;
+    crate::install_def_globals(&lua, crate::song_lua_human_player_count(context), create_default_dummy_actor, install_default_actor_methods)?;
+    setup(&lua)?;
+    let declaration = lua.load(source).set_name("@/fixture/actors.lua").eval()?;
+    let root = crate::lua_util::own_actor_root(&lua, declaration, install_default_actor_methods)?;
+    if !context.live {
+        // This control compares native tween replay in both clock modes. The
+        // live constructor registers replay automatically; preparation normally
+        // installs it later from captured startup states. Populate that same
+        // native storage here before Init so these local lifecycle comparisons
+        // do not accidentally compare raw capture destinations with replay poses.
+        // Full preparation/capture/baking requires the compiler-path controls.
+        let mut pending = if let Value::Table(actor) = &root { vec![actor.clone()] } else { Vec::new() };
+        while let Some(actor) = pending.pop() {
+            crate::lua_util::ensure_tween_replay(&lua, &actor)?;
+            pending.extend(crate::lua_util::actor_direct_children(&lua, &actor)?);
+        }
+    }
+    lua.globals().set("root", root.clone())?;
+    crate::run_actor_init_commands(&lua, &root)?;
+    Ok(lua)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_null_actor_control(lua: &Lua) -> mlua::Result<Table> {
+    crate::install_def_globals(lua, 1, create_default_dummy_actor, install_default_actor_methods)?;
+    lua.globals().get("NullActor")
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_install_file_loaders(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
+    crate::install_file_loader_globals(lua, song_dir.to_owned(), create_default_dummy_actor)
+}
+
+/// Actual production base constructor, excluding subsequent theme-file loads.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_screen(
+    context: &SongLuaCompileContext,
+    setup: impl FnOnce(&Lua) -> mlua::Result<()>,
+) -> mlua::Result<Lua> {
+    let lua = Lua::new();
+    if context.live {
+        crate::lua_util::begin_live_runtime(&lua)?;
+    }
+    crate::install_default_stdlib_compat(&lua, &context.song_dir)?;
+    crate::clock_inputs::install(&lua, context);
+    let math: Table = lua.globals().get("math")?;
+    math.get::<mlua::Function>("randomseed")?
+        .call::<()>(context.random_seed as i32)?;
+    let state = crate::install_core_globals(
+        &lua,
+        context,
+        crate::song_lua_local_date_globals(),
+        crate::create_noteskin_table(
+            &lua,
+            context,
+            SongLuaNoteskinResolver::default(),
+            create_default_dummy_actor,
+        )?,
+        crate::current_song_lua_style_name,
+    )?;
+    lua.set_app_data(state.clone());
+    lua.globals()
+        .set("SL", crate::create_sl_table(&lua, context)?)?;
+    setup(&lua)?;
+    let screen = crate::create_top_screen_table(
+        &lua,
+        context,
+        state.current_sort_order,
+        state.current_song,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+    )?;
+    crate::install_screen_manager_globals(&lua, screen.top_screen, screen.players)?;
+    crate::install_sound_globals(&lua, &context.song_dir)?;
+    crate::install_message_manager_globals(&lua, crate::broadcast_song_lua_message)?;
+    crate::install_late_globals(&lua, context)?;
+    Ok(lua)
+}
+
+/// The existing bundled-theme phases, isolated from the unported phases.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_theme_definitions(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<()> {
+    crate::install_cmd_helpers(lua)?;
+    crate::install_def_globals(
+        lua,
+        crate::song_lua_human_player_count(context),
+        create_default_dummy_actor,
+        install_default_actor_methods,
+    )?;
+    crate::install_file_loader_globals(lua, context.song_dir.clone(), create_default_dummy_actor)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_combo(lua: &Lua) -> mlua::Result<()> {
+    crate::lua_util::install_native_gameplay_combo(lua, Some(install_default_actor_methods))
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_transitions(lua: &Lua) -> mlua::Result<()> {
+    crate::lua_util::install_native_gameplay_transitions(lua, Some(install_default_actor_methods))
+}
+
+/// Existing underlay phase, using its production actor method installer.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_underlay(lua: &Lua) -> mlua::Result<()> {
+    crate::lua_util::install_native_gameplay_underlay(lua, Some(install_default_actor_methods))
+}
+
+/// Existing overlay and decoration phases, with their production actor installer.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_overlay(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<()> {
+    crate::lua_util::install_native_gameplay_overlay(
+        lua,
+        Some(install_default_actor_methods),
+        context,
+    )
+}
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_decorations(lua: &Lua) -> mlua::Result<()> {
+    crate::lua_util::install_native_gameplay_decorations(lua, Some(install_default_actor_methods))
+}
+
+/// Actual retained-VM screen replacement, used by migration comparisons.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_reconstruct_gameplay_screen(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<()> {
+    crate::host::replace_gameplay_screen(
+        lua,
+        context,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+        install_default_actor_methods,
+    )
+}
+
+/// Full production host, used as the screen-controls migration oracle.
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_top_screen(context: &SongLuaCompileContext) -> mlua::Result<Lua> {
+    let lua = Lua::new();
+    if context.live {
+        crate::lua_util::begin_live_runtime(&lua)?;
+    }
+    install_compile_host(
+        &lua,
+        context,
+        SongLuaNoteskinResolver::default(),
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+        install_default_actor_methods,
+    )?;
+    Ok(lua)
+}
+
 
 pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
     entry_path: &Path,
@@ -266,6 +467,11 @@ where
     let trace_entry_path = entry_paths.get(primary_index).cloned()
         .unwrap_or_else(|| context.song_dir.clone());
     let reloaded = retained_lua.is_some();
+    // The oracle supplies an empty VM only to retain observations after failure.
+    // Exercise the ordinary first-load branch on its first compiler invocation.
+    #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+    let reloaded = reloaded && !retained_lua.as_ref().is_some_and(|lua|
+        lua.remove_app_data::<MigrationFreshCompile>().is_some());
     let lua = retained_lua.unwrap_or_else(Lua::new);
     #[cfg(feature = "test-support")]
     if !reloaded && context.initial_lua_gc_stopped {
@@ -331,6 +537,8 @@ where
             crate::lua_util::collect_initial_states(&Value::Table(actor), &mut initial_actor_states)
                 .map_err(|err| err.to_string())?;
         }
+        #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+        migration_record_initial(&lua, &initial_actor_states, &screen_layer_states);
         for (index, entry_path) in entry_paths.iter().enumerate() {
             // Foreground::LoadFromSong concatenates the raw authored name.
             // Its directory default.lua and direct-file fallback both retain
@@ -405,6 +613,8 @@ where
             };
             crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
                 .map_err(|err| err.to_string())?;
+            #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+            migration_record_initial(&lua, &initial_actor_states, &screen_layer_states);
             run_actor_init_commands(&lua, &root).map_err(|err| {
                 format!(
                     "failed to run actor init commands for '{}': {err}",
@@ -462,6 +672,15 @@ where
             .globals()
             .get::<Option<Table>>("mods_ease")
             .map_err(|err| err.to_string())?;
+        #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+        if let Some(mut probe) = lua.app_data_mut::<MigrationActivationProbe>() {
+            probe.initialized = [
+                initialized_global_actions.clone(),
+                initialized_global_perframes.clone(),
+                initialized_global_mods.clone(),
+                initialized_global_mod_eases.clone(),
+            ];
+        }
         compile_timer.push_stage("execute_init");
         let root = Value::Table(roots);
         // Startup queues and the initial update can consume one-shot broadcasts
@@ -591,7 +810,7 @@ where
                 TrackedCompileActorTarget::ScreenLayer(index) => out.screen_layers[index].initial_state = state,
             }
         }
-        out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context,
+        out.live_scene = Some(crate::live::SongLuaLiveScene::new(lua, root, scene_context,
             entry_paths.clone(), primary_index, tables, tracked_tables, initial_broadcasts)
             .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
@@ -917,6 +1136,61 @@ where
     // changes nested tables, upvalues and random state; emitting named actions
     // speculatively also plays schedules the reader never reaches.
     compile_timer.push_stage("global_actions");
+    #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+    if lua
+        .remove_app_data::<crate::rust_engine::test_support::StaticScheduleProbe>()
+        .is_some()
+    {
+        // Observe the real production stage while its lexical Lua handles are
+        // still retained. This branch is absent from normal application builds.
+        if let Some(check) = globals
+            .get::<Option<mlua::Function>>("__migration_static_boundary")
+            .map_err(|err| err.to_string())?
+        {
+            check.call::<()>(()).map_err(|err| err.to_string())?;
+        }
+        lua.set_app_data(crate::rust_engine::test_support::LegacyStaticSchedule {
+            output: crate::rust_engine::SongStaticSchedule {
+                beat_mods: out.beat_mods.clone(),
+                time_mods: out.time_mods.clone(),
+                eases: out.eases.clone(),
+                overlay_eases: out.overlay_eases.clone(),
+                column_offsets: out.column_offsets.clone(),
+                messages: out.messages.clone(),
+                sound_events: sound_events.clone(),
+                info: out.info.clone(),
+                counter: overlay_trigger_counter,
+            },
+            overlay_commands: overlays
+                .iter()
+                .map(|r| r.actor.message_commands.clone())
+                .collect(),
+            tracked_commands: tracked_actors
+                .iter()
+                .map(|r| r.actor.message_commands.clone())
+                .collect(),
+            ownership: [
+                prefix_is_runtime,
+                global_perframes_are_runtime,
+                global_mods_are_runtime,
+                global_mod_eases_are_runtime,
+                global_actions_are_runtime,
+            ],
+            perframes: [
+                if prefix_is_runtime {
+                    None
+                } else {
+                    prefix_perframes.clone()
+                },
+                if global_perframes_are_runtime {
+                    None
+                } else {
+                    global_perframes.clone()
+                },
+            ],
+        });
+        return Err("migration static schedule boundary reached".into());
+    }
     crate::perframe::apply_startup_states(
         context,
         &mut overlays,
@@ -1404,87 +1678,9 @@ fn finalize_tracked_actors<NoteskinSlot, ModelVertex>(
     }
 }
 
-fn merge_runtime_messages(
-    messages: &mut Vec<SongLuaMessageEvent>,
-    action_start: usize,
-    runtime_broadcasts: &[(f32, String, bool)],
-) {
-    if runtime_broadcasts.is_empty() {
-        return;
-    }
-    let action_end = messages.len();
-    if action_end - action_start < 32 || runtime_broadcasts.len() < 16 {
-        return merge_runtime_messages_linear(messages, action_start, runtime_broadcasts);
-    }
-    let mut by_name = rustc_hash::FxHashMap::<&str, Vec<&mut f32>>::default();
-    for event in &mut messages[action_start..action_end] {
-        if !event.message.starts_with("__songlua_overlay_fn_action_") && !event.beat.is_nan() {
-            by_name
-                .entry(event.message.as_str())
-                .or_default()
-                .push(&mut event.beat);
-        }
-    }
-    for beats in by_name.values_mut() {
-        // Stable sorting leaves the last original index last when beats tie.
-        beats.sort_by(|a, b| (**a).total_cmp(&**b));
-    }
-    let mut missing = Vec::new();
-    for (beat, name, _) in runtime_broadcasts {
-        if let Some(beats) = by_name.get_mut(name.as_str()) {
-            let end = beats.partition_point(|scheduled| **scheduled <= *beat + f32::EPSILON);
-            if end != 0 {
-                *beats.remove(end - 1) = *beat;
-                continue;
-            }
-        }
-        missing.push(SongLuaMessageEvent {
-            beat: *beat,
-            message: name.clone(),
-            persists: false,
-        });
-    }
-    // Appended events never participate in the original action window.
-    drop(by_name);
-    messages.extend(missing);
-}
 
-fn merge_runtime_messages_linear(
-    messages: &mut Vec<SongLuaMessageEvent>,
-    action_start: usize,
-    runtime_broadcasts: &[(f32, String, bool)],
-) {
-    let action_end = messages.len();
-    let mut matched = vec![false; action_end - action_start];
-    for (runtime_beat, runtime_message, _) in runtime_broadcasts {
-        let Some(index) = messages
-            .iter()
-            .enumerate()
-            .take(action_end)
-            .skip(action_start)
-            .filter(|(index, event)| {
-                !matched[*index - action_start]
-                    && !event.message.starts_with("__songlua_overlay_fn_action_")
-                    && event.message == *runtime_message
-                    && event.beat <= *runtime_beat + f32::EPSILON
-            })
-            .max_by(|(_, left), (_, right)| left.beat.total_cmp(&right.beat))
-            .map(|(index, _)| index)
-        else {
-            // MessageManager::Broadcast dispatches every runtime call, including
-            // schedules stored under local or chart-specific table names. The
-            // sampled tracks retain parameter-dependent listener writes.
-            messages.push(SongLuaMessageEvent {
-                beat: *runtime_beat,
-                message: runtime_message.clone(),
-                persists: false,
-            });
-            continue;
-        };
-        messages[index].beat = *runtime_beat;
-        matched[index - action_start] = true;
-    }
-}
+
+
 
 fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
     overlays: &mut [crate::SongLuaOverlayCompileActor<
@@ -1592,316 +1788,9 @@ fn mark_actor_layer(actor: &Value, index: usize) -> mlua::Result<()> {
     Ok(())
 }
 
-// Preserve an actor's original sibling position when later wrappers surround it.
-// This load-time traversal emits parents first, as composition and camera scopes
-// require, and rejects cycles instead of leaving forward parents unresolved.
-fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
-    overlays: &[SongLuaOverlayActor<
-        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
-    >],
-) -> Result<Vec<usize>, String> {
-    if overlays
-        .iter()
-        .enumerate()
-        .all(|(index, overlay)| overlay.parent_index.is_none_or(|parent| parent < index))
-    {
-        return Ok((0..overlays.len()).collect());
-    }
-    let count = overlays.len();
-    // Parent zero is the root list; parent i + 1 owns actor i.
-    // Keep all child lists in one buffer instead of allocating a Vec per parent.
-    let mut offsets = vec![0usize; count + 2];
-    for overlay in overlays {
-        let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
-        let Some(size) = offsets.get_mut(parent + 1) else {
-            return Err("Runtime wrapper has an invalid parent".into());
-        };
-        *size += 1;
-    }
-    for index in 1..offsets.len() {
-        offsets[index] += offsets[index - 1];
-    }
-    let mut children = vec![0usize; count];
-    // Fill from the end so each list retains original sibling order.
-    // Consumed ends become starts; shift them back to the parent-key positions.
-    for (index, overlay) in overlays.iter().enumerate().rev() {
-        let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
-        offsets[parent + 1] -= 1;
-        children[offsets[parent + 1]] = index;
-    }
-    for parent in 0..=count {
-        offsets[parent] = offsets[parent + 1];
-    }
-    offsets[count + 1] = count;
-    let mut source = overlays
-        .iter()
-        .enumerate()
-        .map(|(index, overlay)| {
-            if matches!(overlay.kind, SongLuaOverlayKind::WrapperState) {
-                usize::MAX
-            } else {
-                index
-            }
-        })
-        .collect::<Vec<_>>();
-    let mut chain = Vec::new();
-    for index in 0..count {
-        chain.clear();
-        let mut next = index;
-        while source[next] == usize::MAX {
-            if chain.len() >= count {
-                return Err("Cycle in runtime wrapper ownership".into());
-            }
-            chain.push(next);
-            let Some(&child) = children[offsets[next + 1]..offsets[next + 2]].first() else {
-                source[next] = next;
-                break;
-            };
-            next = child;
-        }
-        for index in chain.drain(..) {
-            source[index] = source[next];
-        }
-    }
-    for parent in 0..=count {
-        children[offsets[parent]..offsets[parent + 1]].sort_by_key(|&index| source[index]);
-    }
-    let mut order = Vec::with_capacity(count);
-    let mut pending = children[offsets[0]..offsets[1]]
-        .iter()
-        .rev()
-        .copied()
-        .collect::<Vec<_>>();
-    while let Some(index) = pending.pop() {
-        if order.len() >= count {
-            return Err("Cycle in runtime wrapper hierarchy".into());
-        }
-        order.push(index);
-        pending.extend(
-            children[offsets[index + 1]..offsets[index + 2]]
-                .iter()
-                .rev()
-                .copied(),
-        );
-    }
-    if order.len() != count {
-        return Err("Runtime wrapper hierarchy has no reachable root".into());
-    }
-    Ok(order)
-}
 
-fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
-    mut compiled: DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
-    overlay_layers: Vec<usize>,
-    entry_paths: &[std::path::PathBuf],
-    primary_index: usize,
-) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String> {
-    if overlay_layers.len() != compiled.overlays.len() {
-        return Err("song lua overlay ownership did not match compiled overlays".to_string());
-    }
-    let overlay_order = wrapper_overlay_order(&compiled.overlays)?;
-    let mut local_counts = vec![0usize; entry_paths.len()];
-    let mut overlay_map = vec![(0usize, 0usize); compiled.overlays.len()];
-    for &index in &overlay_order {
-        let layer = overlay_layers[index];
-        if layer >= local_counts.len() {
-            return Err(format!("song lua overlay has invalid layer index {layer}"));
-        }
-        overlay_map[index] = (layer, local_counts[layer]);
-        local_counts[layer] += 1;
-    }
-    let mut outputs = entry_paths
-        .iter()
-        .enumerate()
-        .map(|(layer, entry_path)| DefaultCompiledSongLua {
-            overlays: Vec::with_capacity(local_counts[layer]),
-            live_indices: if compiled.live_scene.is_some() {
-                Vec::with_capacity(local_counts[layer])
-            } else {
-                Vec::new()
-            },
-            entry_path: entry_path.clone(),
-            loaded_steps: compiled.loaded_steps,
-            loaded_style: if layer + 1 == entry_paths.len() {
-                compiled.loaded_style.take()
-            } else {
-                compiled.loaded_style.clone()
-            },
-            startup_reloads: compiled.startup_reloads,
-            screen_width: compiled.screen_width,
-            screen_height: compiled.screen_height,
-            overlay_update_unit: compiled.overlay_update_unit,
-            messages: if layer + 1 == entry_paths.len() {
-                std::mem::take(&mut compiled.messages)
-            } else {
-                compiled.messages.clone()
-            },
-            sound_paths: if layer + 1 == entry_paths.len() {
-                std::mem::take(&mut compiled.sound_paths)
-            } else {
-                compiled.sound_paths.clone()
-            },
-            ..DefaultCompiledSongLua::default()
-        })
-        .collect::<Vec<_>>();
 
-    if let Some(index) = compiled.screen_overlay_index {
-        let (layer, local) = overlay_map[index];
-        outputs[layer].screen_overlay_index = Some(local);
-    }
 
-    for mut frame in compiled.draw_frames.drain(..) {
-        let owner = *frame
-            .owners
-            .first()
-            .ok_or("custom draw frame has no owner")?;
-        let (layer, _) = overlay_map[owner];
-        let remap = |index: &mut usize| -> Result<(), String> {
-            let &(target_layer, local) = overlay_map
-                .get(*index)
-                .ok_or("custom draw has an invalid overlay index")?;
-            if target_layer != layer {
-                return Err("custom draw crosses separately played song layers".to_owned());
-            }
-            *index = local;
-            Ok(())
-        };
-        for owner in &mut frame.owners {
-            remap(owner)?;
-        }
-        for op in &mut frame.ops {
-            match op {
-                crate::SongLuaDrawOp::Begin { capture, .. }
-                | crate::SongLuaDrawOp::Finish { capture } => remap(capture)?,
-                crate::SongLuaDrawOp::Draw {
-                    source: crate::SongLuaDrawSource::Overlay(index),
-                    ..
-                } => remap(index)?,
-                _ => {}
-            }
-        }
-        let frames = &mut outputs[layer].draw_frames;
-        // Repeated immediate Draw calls may have the same owner and clock;
-        // keep each submission independent rather than merging owner batches.
-        if let Some(last) = frames
-            .last_mut()
-            .filter(|last| !frame.immediate && !last.immediate && last.second == frame.second)
-        {
-            last.owner_ends
-                .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
-            last.owners.extend(frame.owners);
-            last.ops.extend(frame.ops);
-        } else {
-            frames.push(frame);
-        }
-    }
-
-    let mut overlays = compiled.overlays.drain(..).map(Some).collect::<Vec<_>>();
-    for global_index in overlay_order {
-        // The validated traversal visits each owned node exactly once.
-        let mut overlay = overlays[global_index]
-            .take()
-            .expect("unique overlay traversal");
-        let (layer, _) = overlay_map[global_index];
-        overlay.parent_index = overlay.parent_index.and_then(|parent| {
-            overlay_map
-                .get(parent)
-                .filter(|(parent_layer, _)| *parent_layer == layer)
-                .map(|(_, local)| *local)
-        });
-        if let SongLuaOverlayKind::ActorProxy {
-            target: crate::SongLuaProxyTarget::Actor { overlay_index },
-        } = &mut overlay.kind
-        {
-            *overlay_index = overlay_map
-                .get(*overlay_index)
-                .filter(|(target_layer, _)| *target_layer == layer)
-                .map_or(usize::MAX, |(_, local)| *local);
-        }
-        outputs[layer].overlays.push(overlay);
-        if compiled.live_scene.is_some() {
-            outputs[layer].live_indices.push(global_index);
-        }
-    }
-    for mut ease in compiled.overlay_eases.drain(..) {
-        let Some(&(layer, local)) = overlay_map.get(ease.overlay_index) else {
-            continue;
-        };
-        ease.overlay_index = local;
-        outputs[layer].overlay_eases.push(ease);
-    }
-    for mut update in compiled.overlay_updates.drain(..) {
-        let Some(&(layer, local)) = overlay_map.get(update.overlay_index) else {
-            continue;
-        };
-        update.overlay_index = local;
-        outputs[layer].overlay_updates.push(update);
-    }
-    #[cfg(feature = "test-support")]
-    for mut write in compiled.overlay_writes.drain(..) {
-        let Some(&(layer, local)) = overlay_map.get(write.overlay_index) else {
-            continue;
-        };
-        write.overlay_index = local;
-        outputs[layer].overlay_writes.push(write);
-    }
-    for capture in compiled.stateful_message_captures.drain(..) {
-        let mut targets_by_layer = vec![Vec::new(); outputs.len()];
-        for (global, targets) in capture.overlay_targets {
-            let Some(&(layer, local)) = overlay_map.get(global) else {
-                continue;
-            };
-            targets_by_layer[layer].push((local, targets));
-        }
-        let mut writes_by_layer = vec![Vec::new(); outputs.len()];
-        for mut write in capture.writes {
-            let Some(&(layer, local)) = overlay_map.get(write.overlay_index) else {
-                continue;
-            };
-            write.overlay_index = local;
-            writes_by_layer[layer].push(write);
-        }
-        for (layer, overlay_targets) in targets_by_layer.into_iter().enumerate() {
-            if overlay_targets.is_empty() {
-                continue;
-            }
-            outputs[layer]
-                .stateful_message_captures
-                .push(crate::SongLuaStatefulMessageCapture {
-                    message: capture.message.clone(),
-                    overlay_targets,
-                    writes: std::mem::take(&mut writes_by_layer[layer]),
-                });
-        }
-    }
-
-    let primary = &mut outputs[primary_index];
-    primary.live_scene = compiled.live_scene.take();
-    #[cfg(feature = "test-support")]
-    {
-        primary.boolean_writes = compiled.boolean_writes;
-        primary.speed_writes = compiled.speed_writes;
-        primary.state_calls = compiled.state_calls;
-        primary.noteskin_writes = compiled.noteskin_writes;
-    }
-    primary.startup = compiled.startup;
-    primary.beat_mods = compiled.beat_mods;
-    primary.time_mods = compiled.time_mods;
-    primary.eases = compiled.eases;
-    primary.player_actors = compiled.player_actors;
-    primary.song_foreground = compiled.song_foreground;
-    primary.screen_layers = compiled.screen_layers;
-    primary.hidden_players = compiled.hidden_players;
-    primary.note_hides = compiled.note_hides;
-    primary.column_offsets = compiled.column_offsets;
-    primary.column_splines = compiled.column_splines;
-    primary.column_spline_origin = compiled.column_spline_origin;
-    primary.info = compiled.info;
-    for output in &mut outputs {
-        sort_compiled_song_lua(output);
-    }
-    Ok(outputs)
-}
 
 #[cfg(test)]
 #[path = "../tests/perf/compile_finalize.rs"]
@@ -1914,3 +1803,148 @@ mod finalization_events_perf;
 #[cfg(test)]
 #[path = "../tests/perf/reload_inputs.rs"]
 mod reload_inputs_perf;
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_install_noteskin(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    resolver: SongLuaNoteskinResolver,
+) -> mlua::Result<()> {
+    lua.globals().set(
+        "NOTESKIN",
+        crate::create_noteskin_table(lua, context, resolver, create_default_dummy_actor)?,
+    )
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_player_base(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    index: usize,
+) -> mlua::Result<Table> {
+    let meter = crate::lua_util::create_life_meter_table(
+        lua,
+        if index == 0 { "LifeP1" } else { "LifeP2" },
+        create_default_dummy_actor,
+    )?;
+    let player = crate::lua_util::create_top_screen_player_actor(
+        lua,
+        context.players[index].clone(),
+        index,
+        &context.style_name,
+        create_default_dummy_actor,
+    )?;
+    player.raw_set("__songlua_life_meter", meter)?;
+    Ok(player)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_note_field(lua: &Lua, player: usize, style: &str) -> mlua::Result<Table> {
+    crate::lua_util::create_note_field_actor(lua, player, style, create_default_dummy_actor)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_gameplay_player(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    index: usize,
+) -> mlua::Result<Table> {
+    let player = migration_player_base(lua, context, index)?;
+    crate::lua_util::migration_player_parts(
+        lua,
+        &player,
+        index,
+        &context.style_name,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+    )?;
+    Ok(player)
+}
+
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_screen_part(lua: &Lua, name: &str) -> mlua::Result<Table> {
+    if name.eq_ignore_ascii_case("Timer") {
+        let actor = crate::lua_util::create_screen_timer_actor(lua, create_default_dummy_actor)?;
+        actor.set("Name", name)?;
+        return Ok(actor);
+    }
+    if let Some(index) = crate::top_screen_score_index(name) {
+        return crate::lua_util::create_top_screen_score_actor(
+            lua,
+            index,
+            create_default_dummy_actor,
+        );
+    }
+    crate::lua_util::create_top_screen_theme_actor(
+        lua,
+        &lua.create_table()?,
+        name,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+    )?
+    .ok_or_else(|| mlua::Error::runtime("screen part is not implemented"))
+}
+
+// Migration oracle: execute the production compiler in a retained VM so tests
+// can observe partial Init state. The fixture supplies a malformed mod_actions
+// sentinel to stop at the existing typed read before Begin/On and baking.
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_compile_song_layers(
+    lua: &Lua,
+    paths: &[&Path],
+    primary: usize,
+    context: &SongLuaCompileContext,
+) -> Result<(), String> {
+    compile_song_lua_layers_with_actors::<(), (), _>(
+        paths,
+        primary,
+        context,
+        Some(lua.clone()),
+        SongLuaNoteskinResolver::default(),
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+        install_default_actor_methods,
+        |_, _, _| Ok(Arc::from([])),
+        |_| None,
+        |_, _| None,
+    )
+    .map(|_| ())
+}
+
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+#[derive(Clone)]
+pub(crate) struct MigrationInitialStates {
+    pub actors: Vec<(Table, crate::SongLuaOverlayState)>,
+    pub screen_layers: Vec<(Table, crate::SongLuaOverlayState)>,
+}
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+fn migration_record_initial(
+    lua: &Lua,
+    actors: &std::collections::HashMap<usize, (Table, crate::SongLuaOverlayState)>,
+    screen_layers: &std::collections::HashMap<usize, (Table, crate::SongLuaOverlayState)>,
+) {
+    lua.set_app_data(MigrationInitialStates {
+        actors: actors.values().cloned().collect(),
+        screen_layers: screen_layers.values().cloned().collect(),
+    });
+}
+
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+#[derive(Default)]
+pub(crate) struct MigrationActivationProbe {
+    pub initialized: [Option<Table>; 4],
+}
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) struct MigrationActivationResult {
+    pub root: Table,
+    pub initial_states: Vec<(Table, crate::SongLuaOverlayState)>,
+    pub updates: std::collections::HashMap<usize, crate::rust_engine::SongStartupState>,
+    pub broadcasts: Vec<(f32, String, bool)>,
+    pub startup_queue: Vec<Table>,
+    pub initialized: [Option<Table>; 4],
+    pub options: crate::SongLuaStartup,
+    pub new_screen: Option<String>,
+}
+
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) struct MigrationFreshCompile;

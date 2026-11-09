@@ -1,0 +1,167 @@
+[
+  {
+    "file": "crates/deadlib-lua/src/vm/host.rs",
+    "sha256": "b10198f0e10f9aa8faf35c082e16f6fc3078633bee6ae80abc9df7b62c904049",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadlib-lua/src/vm/host.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadlib-lua/tests/host_roots.rs",
+    "sha256": "c7edf38bdee13a3842434c3ac0c13fef8ff713a3125fc4062bd4cd7ad62e15ea",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadlib-lua/tests/host_roots.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine.rs",
+    "sha256": "a175dd67a8a770c4e109aa462037170b17df096e43ac26ecf4ecffadbe3dc6b9",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "sha256": "b37b509ebece05ca81d53ae6b965dffd61dc6c9212743f1c4a0ba9584e015566",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+    "sha256": "4a57b7717fe92707f8ba762ad753a543fe59af62758ddf1af3dcaea7312d728a",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs",
+    "sha256": "b26aafd9f3f8dbd3d977a2a268110a1988928eae0f49550db34492c73f455642",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors/effects.rs",
+    "sha256": "cab8b9a63b08c6c7ff8cb0de2d5aece42f7e3ce8e261e9f1bbf42663bedb9d84",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors/effects.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors/sound.rs",
+    "sha256": "66eca6341ea796247798f0ca46e6ca69edc737ca730e0d32d2443d25c9023748",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors/sound.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/actors/assets.rs",
+    "sha256": "bd38cf810d78c8954bcb220f71f1faa711b9657b7b52bc21fec05a4820a7879a",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/actors/assets.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "sha256": "e81b93aed064478875f17f929d950a843a9d61df8efb73371ebf1f6cf4534987",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "crates/deadsync-song-lua/tests/rust_sound.rs",
+    "sha256": "99d87ecae1f4375befc21d541338dc9f3d3c6d59c69058b8b50545a82e043c1b",
+    "command": [
+      "rustfmt",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/deadsync-song-lua/tests/rust_sound.rs"
+    ],
+    "exit_code": 0,
+    "output": ""
+  }
+]

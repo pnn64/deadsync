@@ -1,0 +1,28 @@
+{
+  "native": [
+    {
+      "overlay": 2,
+      "target": "X",
+      "samples": 123
+    },
+    {
+      "overlay": 1,
+      "target": "Diffuse",
+      "samples": 63
+    },
+    {
+      "overlay": 2,
+      "target": "Diffuse",
+      "samples": 63
+    }
+  ],
+  "rust": [
+    {
+      "overlay": 1,
+      "target": "Diffuse",
+      "samples": 63
+    }
+  ],
+  "cause": "Rust startup self-queue is marked recurring before recording pending command; replay setup discards that capture and no LoopFade X/Diffuse tracks remain. Native queues the command first whenever startup collection is active.",
+  "limits": "Four-second original source/warp diagnosis, placeholder model loader; original root native Model mesh regression remains separate."
+}

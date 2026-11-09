@@ -1,0 +1,47 @@
+[
+  {
+    "path": "crates/deadsync-notefield/src/combo_feedback.rs",
+    "before": "75944b052190a5837fcc675850dcc81bf50687f39d96032ac749c641c01fe1ba",
+    "after": "486acfa14529a79c0963eb0736761e2db8e1c23466055c53ba6231ae816fb65d"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/display_mods.rs",
+    "before": "0dd5c7ea7d994dbed9fe578ad3c14c6b8cd20578119d9e9f5bb593d1995b45ab",
+    "after": "6aee13899bcbde416265f5167bd6e0c90416e73ee4002646c468d4bf01af941b"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/error_bar.rs",
+    "before": "7d880be591a19a55044b225ebe1f09bc38f93ed3c47ade0c23ad7f4cce4e08af",
+    "after": "481ccfd3df7743fe40f670ee4053df24a535447d8f451251c0b65f1c41a8407b"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/feedback.rs",
+    "before": "cc3903daea3f9687b78fdbb08db9a80b1a68574143f724134cebd29533d687b0",
+    "after": "b79957014e573a83a1d2316cbabd44aff50a8d233137c9ea9ebf1f0b224eb2c3"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/judgment_feedback.rs",
+    "before": "e3605cee2d7afa3555566ce060fb3ed5312539e1be4301ead2bbd7263692a963",
+    "after": "6e02c20fc2870f46811424894956f0ba44a8dc5795e20639d1eb7ad6cb40b166"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/measure_lines.rs",
+    "before": "cbcb8d217c909d0934b5003f1047b2763f4e9577022bba762c4adaef5e61b49d",
+    "after": "3073ce56862247176f1fb7b6d62f1c3b7dae1d76ca05e6f05e6717a8da383ab5"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/mini_indicator.rs",
+    "before": "441724feee647ed4474cdc9d77a4a5511b59abc0a90b1593f398829a92c09ecd",
+    "after": "0f75b61881ade3e9e2908c0ff8b59ba99a5b2120a0f1a0b09c8331a1e4c54f71"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/placement.rs",
+    "before": "cc7453a6d6ed560691ab09a5a9e944a9d740ec9534df5daf3c0e8be7683a3842",
+    "after": "20303deef55304fc60910cffb989c14899e163a35d70f6392caa525c8f8d6b49"
+  },
+  {
+    "path": "crates/deadsync-notefield/src/transforms.rs",
+    "before": "0fe930f92d21c2bde0c4c3d451a702211fa3061126fb169ca25eabb6f1858a1c",
+    "after": "7bb797ed6a8fb7f41de078f622900b939e744b8b7e890d6e9986f796362e283c"
+  }
+]

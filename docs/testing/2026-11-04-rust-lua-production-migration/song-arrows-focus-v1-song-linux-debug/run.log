@@ -1,0 +1,96 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 42s
+     Running tests/rust_arrows.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_arrows-b28a4bf857134065)
+
+running 11 tests
+test alpha_preserves_visibility_boundaries_and_nonfinite_far_edge_results ... 
+thread 'alpha_preserves_visibility_boundaries_and_nonfinite_far_edge_results' (3064465) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:26:29:
+native PS=GAMESTATE:GetPlayerState(PLAYER_1);PO=PS:GetCurrentPlayerOptions();OTHER=GAMESTATE:GetPlayerState(PLAYER_2): runtime error: /arrow-check.lua:1: attempt to index global 'PS' (a nil value)
+stack traceback:
+	[C]: in ?
+	/arrow-check.lua:1: in main chunk
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test cache_commit_is_atomic_and_selected_options_remain_rooted_across_collection ... 
+thread 'cache_commit_is_atomic_and_selected_options_remain_rooted_across_collection' (3064474) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:26:29:
+native PS=GAMESTATE:GetPlayerState(PLAYER_1);PO=PS:GetCurrentPlayerOptions();OTHER=GAMESTATE:GetPlayerState(PLAYER_2): runtime error: /arrow-check.lua:1: attempt to index global 'PS' (a nil value)
+stack traceback:
+	[C]: in ?
+	/arrow-check.lua:1: in main chunk
+FAILED
+test captured_native_x_cases_match_full_float_results ... 
+thread 'captured_native_x_cases_match_full_float_results' (3064475) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:26:29:
+native PS=GAMESTATE:GetPlayerState(PLAYER_1);PO=PS:GetCurrentPlayerOptions();OTHER=GAMESTATE:GetPlayerState(PLAYER_2): runtime error: /arrow-check.lua:1: attempt to index global 'PS' (a nil value)
+stack traceback:
+	[C]: in ?
+	/arrow-check.lua:1: in main chunk
+FAILED
+test captured_native_y_cache_wave_reverse_and_selected_timer_cases_match ... 
+thread 'captured_native_y_cache_wave_reverse_and_selected_timer_cases_match' (3064476) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:26:29:
+native PS=GAMESTATE:GetPlayerState(PLAYER_1);PO=PS:GetCurrentPlayerOptions();OTHER=GAMESTATE:GetPlayerState(PLAYER_2): runtime error: /arrow-check.lua:1: attempt to index global 'PS' (a nil value)
+stack traceback:
+	[C]: in ?
+	/arrow-check.lua:1: in main chunk
+FAILED
+test captured_native_zoom_and_column_tiny_cases_match ... 
+thread 'captured_native_zoom_and_column_tiny_cases_match' (3064477) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:26:29:
+native PS=GAMESTATE:GetPlayerState(PLAYER_1);PO=PS:GetCurrentPlayerOptions();OTHER=GAMESTATE:GetPlayerState(PLAYER_2): runtime error: /arrow-check.lua:1: attempt to index global 'PS' (a nil value)
+stack traceback:
+	[C]: in ?
+	/arrow-check.lua:1: in main chunk
+FAILED
+test live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override ... 
+thread 'live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override' (3064478) panicked at crates/deadsync-song-lua/tests/rust_arrows.rs:41:29:
+rust for _,o in ipairs{PO,SONG}do o:Tipsy(0.5);o:Beat(1)end
+ BASE=ArrowEffects.GetYPos(PS,1,0);ROOT:SetUpdateFunction(function()DURING=ArrowEffects.GetYPos(PS,1,0)end)
+ ROOT:addcommand('HealthStateChangedMessage',function()HEALTH=ArrowEffects.GetYPos(PS,1,0)end)
+ ArrowEffects.Update=function()error('host phase must bypass public override')end
+ : Error { kind: Runtime, line: 2, message: "native stack must precede result writes", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589937114))), target_thread: None }
+
+thread 'live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override' (3064478) panicked at crates/deadsync-song-lua/src/rust_engine/live_runtime.rs:22:47:
+song VM: PoisonError { .. }
+stack backtrace:
+   0:     0x6313fb402fd1 - <<std[68c81ae915296b05]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[efd5e57aef94d71e]::fmt::Display>::fmt
+   1:     0x6313fb41aeca - core[efd5e57aef94d71e]::fmt::write
+   2:     0x6313fb408a4c - <std[68c81ae915296b05]::sys::stdio::unix::Stderr as core[efd5e57aef94d71e]::io::write::Write>::write_fmt
+   3:     0x6313fb3dc4b6 - std[68c81ae915296b05]::panicking::default_hook::{closure#0}
+   4:     0x6313fb3f9ca1 - std[68c81ae915296b05]::panicking::default_hook
+   5:     0x6313fb3f9fcb - std[68c81ae915296b05]::panicking::panic_with_hook
+   6:     0x6313fb3dc562 - std[68c81ae915296b05]::panicking::panic_handler::{closure#0}
+   7:     0x6313fb3d47c9 - std[68c81ae915296b05]::sys::backtrace::__rust_end_short_backtrace::<std[68c81ae915296b05]::panicking::panic_handler::{closure#0}, !>
+   8:     0x6313fb3dd15d - __rustc[3d2f79520d6fa809]::rust_begin_unwind
+   9:     0x6313fb41b79c - core[efd5e57aef94d71e]::panicking::panic_fmt
+  10:     0x6313fb41b4c2 - core[efd5e57aef94d71e]::result::unwrap_failed
+  11:     0x6313fa382e72 - <deadsync_song_lua[f8b57288a5103a4b]::rust_engine::live_runtime::SongLiveRuntime>::access
+  12:     0x6313fa94800b - <deadsync_song_lua[f8b57288a5103a4b]::rust_engine::live_scene::SongLiveScene>::end
+  13:     0x6313f9ff1efb - core[efd5e57aef94d71e]::ptr::drop_glue::<rust_arrows[cf5dbc8b82994442]::Live>
+  14:     0x6313fa0058e4 - <rust_arrows[cf5dbc8b82994442]::live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override::{closure#0} as core[efd5e57aef94d71e]::ops::function::FnOnce<()>>::call_once
+  15:     0x6313fa01a6ab - test[ff178199d140d5fa]::__rust_begin_short_backtrace::<core[efd5e57aef94d71e]::result::Result<(), alloc[c23e483dde3f7cfb]::string::String>, fn() -> core[efd5e57aef94d71e]::result::Result<(), alloc[c23e483dde3f7cfb]::string::String>>
+  16:     0x6313fa027d15 - test[ff178199d140d5fa]::run_test::{closure#0}
+  17:     0x6313fa0210d4 - std[68c81ae915296b05]::sys::backtrace::__rust_begin_short_backtrace::<test[ff178199d140d5fa]::run_test::{closure#1}, ()>
+  18:     0x6313fa02ae72 - <std[68c81ae915296b05]::thread::lifecycle::spawn_unchecked<test[ff178199d140d5fa]::run_test::{closure#1}, ()>::{closure#1} as core[efd5e57aef94d71e]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  19:     0x6313fb402019 - <std[68c81ae915296b05]::sys::thread::unix::Thread>::new::thread_start
+  20:     0x7c0ea304e8bb - <unknown>
+  21:     0x7c0ea30cc538 - <unknown>
+  22:                0x0 - <unknown>
+
+thread 'live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override' (3064478) panicked at /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/panicking.rs:233:5:
+panic in a destructor during cleanup
+thread caused non-unwinding panic. aborting.
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_arrows`
+
+Caused by:
+  process didn't exit successfully: `/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_arrows-b28a4bf857134065 --nocapture --test-threads=1` (signal: 6, SIGABRT: process abort signal)
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_arrows`

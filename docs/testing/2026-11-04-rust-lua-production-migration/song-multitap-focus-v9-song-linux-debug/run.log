@@ -1,0 +1,43 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 43s
+     Running tests/rust_song_multitap.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_multitap-73747558a05393cf)
+
+running 14 tests
+test complete_plan_rejects_hidden_root_wrapper_column_and_screen_callbacks ... ok
+test descriptor_typed_errors_match_and_challenge_fallback_suppresses_only_fallback_errors ... ok
+test descriptors_preserve_selection_coercion_holes_and_peak_errors ... ok
+test double_two_player_decorations_and_existing_visuals_match ... ok
+test hit_command_capture_rewinds_shared_locals_globals_and_rng ... ok
+test hit_command_failures_remove_temporary_commands_and_preserve_actor_state ... ok
+test loaded_theme_and_truthy_deferred_fields_keep_chronological_replay ... ok
+test malformed_plan_fields_and_optional_rotation_propagate_errors ... ok
+test numbered_factory_curves_and_missing_visuals_match ... ok
+test plan_cache_retains_traversal_until_update_function_invalidates_it ... ok
+test precision_collapsed_beat_edges_preserve_replay_fallback ... ok
+test update_stage_installs_model_clocks_from_compiled_initial_state ... 
+thread 'update_stage_installs_model_clocks_from_compiled_initial_state' (3020984) panicked at crates/deadsync-song-lua/tests/rust_song_multitap.rs:591:91:
+called `Result::unwrap()` on an `Err` value: FromLuaConversionError { from: "nil", to: "table", message: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test update_stage_keeps_chronological_theme_and_authored_callbacks ... ok
+test update_stage_selects_analytic_curves_and_prepares_hits ... ok
+
+failures:
+
+failures:
+    update_stage_installs_model_clocks_from_compiled_initial_state
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.69s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_multitap`

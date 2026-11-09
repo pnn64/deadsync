@@ -1,0 +1,153 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:10:23
+   |
+10 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 3m 00s
+     Running tests\rust_files.rs (target\rust-adapters\debug\deps\rust_files-56e725bc0c4f163d.exe)
+
+running 9 tests
+test combo_font_helper_resolves_current_lua_callbacks_during_collection_and_reentry ... ok
+test combo_fonts_scan_current_theme_and_preserve_wendy_order_without_fallbacks ... ok
+test file_queries_preserve_paths_sorting_filters_argument_rules_and_errors ... ok
+test mutation_stubs_keep_result_arity_counts_and_files_unchanged ... ok
+test rage_file_argument_conversion_return_arity_and_error_recovery_match ... 
+thread 'rage_file_argument_conversion_return_arity_and_error_recovery_match' (47936) panicked at crates\deadsync-song-lua\tests\rust_files.rs:50:37:
+Rust: 
+        local file=RageFileUtil:CreateRageFile(false,{},function()error('ignored')end)
+        local result={}
+        for _,args in ipairs{pack(),pack(nil),pack(false),pack('file'),pack({}),pack(file),
+            pack(file,false,1),pack(file,{},1),pack(file,'files/A.txt'),
+            pack(file,'files/A.txt',false),pack(file,'files/A.txt',1.9),
+            pack(file,'files/A.txt',' 1.9 '),pack(file,'files/A.txt','0x1'),
+            pack(file,'files/A.txt',0/0),pack(file,'files/A.txt',math.huge),
+            pack(file,'files/A.txt',2147483648),pack(file,'files/A.txt',-2147483649)} do
+            result[#result+1]=observe(file.Open,unpack(args,1,args.n))
+        end
+        for _,args in ipairs{pack(),pack(nil),pack(false),pack({}),pack(0),pack(1.9),pack('1.9'),
+            pack(-1),pack(-2),pack('0x2'),pack(2147483648),pack(-2147483649),pack(0/0),pack(math.huge)} do
+            assert(file:Open('files/b.txt',1))
+            result[#result+1]=observe(file.ReadBytes,file,unpack(args,1,args.n))
+            result[#result+1]=pack(file:Tell(),file:AtEOF())
+            result[#result+1]=observe(file.Seek,file,unpack(args,1,args.n))
+            result[#result+1]=pack(file:Tell(),file:AtEOF())
+        end
+        assert(file:Open('virtual.txt',2))
+        for _,args in ipairs{pack(),pack(nil),pack(false),pack({}),pack(12.5),pack('a\0ignored')} do
+            result[#result+1]=observe(file.Write,file,unpack(args,1,args.n))
+            result[#result+1]=observe(file.PutLine,file,unpack(args,1,args.n))
+        end
+        assert(file:Close('first','last')=='last')
+        assert(file:ClearError(nil)==nil)
+        local marker={}
+        assert(file:destroy(marker)==marker)
+        for _,name in ipairs{'Open','Write','Read','GetLine','ReadBytes','Seek','Tell','AtEOF','GetError','Flush','Close','ClearError','destroy'} do
+            result[#result+1]=observe(file[name],file,'ignored',1)
+        end
+        return snapshot{result,__songlua_side_effect_count}
+    
+Error { kind: Runtime, line: 25, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589935337))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test rage_file_read_write_seek_eof_and_destroy_match_the_existing_contract ... 
+thread 'rage_file_read_write_seek_eof_and_destroy_match_the_existing_contract' (48636) panicked at crates\deadsync-song-lua\tests\rust_files.rs:50:37:
+Rust: 
+        local file = RageFileUtil.CreateRageFile()
+        assert(not file:Open('missing.txt', 1) and #file:GetError() > 0)
+        assert(not pcall(function() file:GetLine() end))
+        assert(file:Flush() == file and file:GetError() == 'Not open')
+        assert(not file:Open('input.bin', 0))
+        assert(file:GetError() == 'Neither reading nor writing specified')
+        assert(not file:Open('input.bin', 3))
+        assert(file:GetError() == 'Reading and writing are mutually exclusive')
+        assert(file:Open('input.bin', 1))
+        assert(file:GetLine() == 'alpha' and file:Tell() == 7 and not file:AtEOF())
+        assert(file:GetLine() == '' and file:Tell() == 8 and not file:AtEOF())
+        assert(file:GetLine() == 'beta\rZ' and file:Tell() == 19 and not file:AtEOF())
+        assert(file:GetLine() == '' and file:AtEOF())
+        assert(file:Seek(file:Tell()) == 19 and file:AtEOF())
+        assert(file:Seek(0) == 0 and not file:AtEOF())
+        assert(file:ReadBytes(7) == 'alpha\r\n' and file:Tell() == 7)
+        assert(file:ReadBytes(0) == '' and not file:AtEOF())
+        assert(file:Read() == '\nbeta\rZ' and file:AtEOF())
+        assert(not pcall(function() file:Write('x') end))
+        assert(file:Flush() == file)
+        assert(file:ClearError() == file.ClearError)
+        assert(file:Close() == file.Close)
+        assert(file:Open('output.txt', 2))
+        assert(file:Write('abc') == 3 and file:PutLine('def') == 2)
+        assert(file:Flush() == file)
+        assert(not pcall(function() file:Read() end))
+        file:Close()
+        local reader = RageFileUtil.CreateRageFile()
+        assert(reader:Open('output.txt', 1) and reader:Read() == 'abcdef\r\n')
+        reader:Close()
+        assert(file:destroy() == file.destroy)
+        assert(not pcall(function() file:GetLine() end))
+        return snapshot{__songlua_side_effect_count}
+    
+Error { kind: Runtime, line: 22, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969278))), target_thread: None }
+FAILED
+test rage_file_saved_methods_gc_reentry_and_session_write_isolation_match ... 
+thread 'rage_file_saved_methods_gc_reentry_and_session_write_isolation_match' (43492) panicked at crates\deadsync-song-lua\tests\rust_files.rs:45:37:
+legacy: 
+        local create=RageFileUtil.CreateRageFile
+        RageFileUtil=nil;collectgarbage('collect')
+        local writer=create();assert(writer:Open('virtual.txt',2))
+        assert(writer:Write('hello')==5);writer:Flush()
+        local reader=create();assert(not reader:Open('virtual.txt',1))
+        local close=writer.Close;writer.Close=nil
+        local reads,writes=0,0
+        rawset(_G,'__songlua_side_effect_count',nil)
+        setmetatable(_G,{__index=function(t,k)
+            if k=='__songlua_side_effect_count' then
+                reads=reads+1;collectgarbage('collect')
+                assert(not pcall(writer.Tell,writer));return 10
+            end
+        end,__newindex=function(t,k,v)
+            if k=='__songlua_side_effect_count' then
+                writes=writes+1;assert(not pcall(close,writer));return
+            end
+            rawset(t,k,v)
+        end})
+        assert(close(writer)==nil)
+        setmetatable(_G,nil);rawset(_G,'__songlua_side_effect_count',0)
+        assert(reads==1 and writes==1)
+        local open,read=reader.Open,reader.Read
+        reader=nil;writer=nil;collectgarbage('collect');collectgarbage('collect')
+        assert(open({},'virtual.txt',1));assert(read({})=='hello')
+        assert(open({},'files/A.txt',1));assert(read({})=='123')
+        return snapshot{reads,writes,__songlua_side_effect_count}
+    
+error converting Lua nil to function
+stack traceback:
+	[C]: in local 'close'
+	crates\deadsync-song-lua\tests\rust_files.rs:43:21: in main chunk
+
+FAILED
+test saved_file_callbacks_survive_collection_and_effects_allow_global_reentry ... ok
+test sprite_hint_stripping_preserves_native_string_conversion_and_suffix_rules ... ok
+
+failures:
+
+failures:
+    rage_file_argument_conversion_return_arity_and_error_recovery_match
+    rage_file_read_write_seek_eof_and_destroy_match_the_existing_contract
+    rage_file_saved_methods_gc_reentry_and_session_write_isolation_match
+
+test result: FAILED. 6 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.88s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_files`

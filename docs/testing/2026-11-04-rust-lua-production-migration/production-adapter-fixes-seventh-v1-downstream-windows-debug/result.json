@@ -1,0 +1,34 @@
+{
+  "stage": "production-adapter-fixes-seventh-v1",
+  "suite": "downstream",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--test",
+    "song_lua_itgmania_semantic_parity",
+    "runtime_modifiers::seventh_gear_opening_pulse_keeps_size_and_speed_synchronized",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 983.1077572999056,
+  "log_sha256": "97515933c22adfaca373b4f139cc81b0059bed11b081584c9d3b613dec9a8267",
+  "tests_passed": 1,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 400 filtered out; finished in 21.97s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

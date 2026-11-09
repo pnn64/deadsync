@@ -1,0 +1,21 @@
+The test bodies completed: 17 native contract tests, 17 unchanged-assertion
+Rust contract tests, and 9 direct engine comparison tests passed. The
+Windows-only actor_input_render target ran zero tests under Linux.
+
+The original Linux recorder (PID 3088905) then remained in disk sleep,
+waiting in p9_client_rpc. No Cargo process remained. Its result.json was
+not produced. An independent Windows inventory/hash check confirmed all
+1307 watched sources still matched the original sources.json and retained
+the complete test log hash in actor-input-snapshots-contract-v1-host-source-proof.json.
+The source review and rustfmt check also passed independently on Windows.
+
+SIGKILL was sent only to that owned recorder. /proc/3088905/status showed
+SigPnd and ShdPnd 0000000000000100, with the process still in disk sleep.
+The kill is pending until the filesystem call returns. The WSL instance
+and unrelated processes were not stopped or restarted. This is interrupted
+verification evidence, not a successful final recorder result.
+
+Production sources remain frozen. A separate Windows adapter check was
+started against the same 1307-source snapshot, using the existing native
+target/rust-adapters cache. No interpreter scope was reopened and the
+production migration acceptance criteria remain unchanged.

@@ -1,0 +1,12 @@
+{
+  "pid": 35680,
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deadsync.exe",
+    "--perf-case",
+    "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-rendered-dreaming-windows-v2\\manifest.json"
+  ],
+  "binary_sha256": "c00c4bb9f4b7db8e92974668382168af05ddf7e04d3cca609e9dec39c8102084",
+  "preserved_binary": "C:\\GitHub\\deadsync\\target\\rust-lua-production-current\\production-rendered-dreaming-windows-v2\\deadsync.exe",
+  "manifest_sha256": "81aba34c8fe2f5cf4bf622d4a375bf9ae9b18af3dc45f2eb8a35ab6b943d71c6",
+  "baseline_manifest_sha256": "9244f98d44d0b8146d07f852eae5aa393ac63dddf9d3f457aee54a07d5a9abaa"
+}

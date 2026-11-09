@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "run",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-sharkmode-diagnostic-v1\\Cargo.toml",
+    "--bin",
+    "production-sharkmode-control"
+  ],
+  "exit_code": 0,
+  "seconds": 788.9694608000573,
+  "log_sha256": "f51f7b66175e9bceb03de5b85fd7cc841a934113c2cff33898beff58809be5ba",
+  "sources_unchanged": true,
+  "changed_sources": [],
+  "note": "Initialization diagnosis only; execution success is not a regression or performance acceptance claim."
+}

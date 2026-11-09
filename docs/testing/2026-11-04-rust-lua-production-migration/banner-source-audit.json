@@ -1,0 +1,16 @@
+{
+  "baseline": "text-displays-final-adapters-song-linux-debug",
+  "explicit_edit_baseline": "banner-edit-baseline.json",
+  "untouched_source_entries": 1030,
+  "untouched_sources_match": true,
+  "core_evidence": "actor-meshes-final-core-core-linux-debug",
+  "core_tests_passed": 949,
+  "core_entries_unchanged": 240,
+  "legacy_extraction_audit": "banner-extraction-audit.json",
+  "new_files": [
+    "crates/deadsync-song-lua/src/blank_texture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/banners.rs",
+    "crates/deadsync-song-lua/tests/rust_banners.rs"
+  ],
+  "migration_complete": false
+}

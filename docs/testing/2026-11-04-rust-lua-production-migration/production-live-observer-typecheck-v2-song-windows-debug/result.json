@@ -1,0 +1,30 @@
+{
+  "stage": "production-live-observer-typecheck-v2",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--no-deps",
+    "--lib"
+  ],
+  "exit_code": 101,
+  "seconds": 32.33830489986576,
+  "log_sha256": "b7a3090085edb20c4a4399c833223200ff2a69cae9793578ebb8d3c0c715f15b",
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "test_results": [],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

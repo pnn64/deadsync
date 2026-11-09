@@ -1,0 +1,52 @@
+{
+  "frozen_native_pose_sha256": "adb84a02e9e0cb1aee3e9d182e03b56a6e5f04cc683011514ac2ca30fc9780fa",
+  "pose_fields": [
+    "__songlua_diffuse",
+    "__songlua_state_diffuse",
+    "__songlua_state_glow",
+    "__songlua_state_vertex_colors",
+    "__songlua_state_aux",
+    "__songlua_state_x",
+    "__songlua_state_y",
+    "__songlua_state_z",
+    "__songlua_state_zoom",
+    "__songlua_state_zoom_x",
+    "__songlua_state_zoom_y",
+    "__songlua_state_zoom_z",
+    "__songlua_state_skew_x",
+    "__songlua_state_skew_y",
+    "__songlua_state_cropleft",
+    "__songlua_state_cropright",
+    "__songlua_state_croptop",
+    "__songlua_state_cropbottom",
+    "__songlua_state_fadeleft",
+    "__songlua_state_faderight",
+    "__songlua_state_fadetop",
+    "__songlua_state_fadebottom",
+    "__songlua_aux",
+    "__songlua_current_x",
+    "__songlua_current_y",
+    "__songlua_current_z"
+  ],
+  "render_flags": [
+    "draw_by_z_position",
+    "mask_source",
+    "mask_dest",
+    "depth_test",
+    "depth_write",
+    "depth_test_on_fail",
+    "texture_filtering",
+    "texture_wrapping"
+  ],
+  "base_fields": [
+    "basezoom",
+    "basezoom_x",
+    "basezoom_y",
+    "basezoom_z",
+    "halign",
+    "valign"
+  ],
+  "exact_field_union_matches_new_comparison": true,
+  "interpretation": "These 40 fields are the existing native copy export. This does not add draw-only metadata or generic engine behavior.",
+  "runtime_status": "Initial build in progress; no passing claim."
+}

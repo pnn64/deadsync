@@ -7,33 +7,11 @@ use rustc_hash::FxHashMap;
 pub(crate) mod update;
 mod tables;
 pub use update::SongLuaCompiledActorInteractions;
+pub use crate::input_types::{SongLuaActorInputAction, SongLuaInputScalar};
 
-/// An authored native actor write, in callback execution order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SongLuaActorInputAction {
-    /// Actor indices address overlays first, followed by tracked actors.
-    Visible {
-        actor: usize,
-        visible: bool,
-    },
-    /// The exact f32 bits written by the authored numeric setter.
-    X {
-        actor: usize,
-        bits: u32,
-    },
-    Y {
-        actor: usize,
-        bits: u32,
-    },
-}
 
-/// Primitive state captured from a raw scalar table.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SongLuaInputScalar<'a> {
-    Boolean(bool),
-    Number(f64),
-    Bytes(&'a [u8]),
-}
+
+
 
 /// A closed snapshot of screen input callbacks and their actor states.
 ///

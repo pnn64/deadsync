@@ -1,0 +1,53 @@
+{
+  "stage": "bitmap-text-template-capture",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--test",
+    "rust_bitmap_text",
+    "--test",
+    "rust_actors",
+    "--test",
+    "rust_definitions",
+    "--test",
+    "rust_draw",
+    "--test",
+    "rust_render",
+    "--test",
+    "rust_wrappers",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 97.79309277003631,
+  "log_sha256": "eac08b64849fffef7c01ae45576ec50a886d86f4a0a219d0c9023b8b514f55e7",
+  "tests_passed": 73,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.41s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+    "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+    "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s",
+    "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "/var/tmp/deadsync-rust-adapters-target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "PKG_CONFIG_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/pkgconfig:/var/tmp/deadsync-rust-adapters-native-deps/root/usr/share/pkgconfig",
+    "CPATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include",
+    "LD_LIBRARY_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu:"
+  }
+}

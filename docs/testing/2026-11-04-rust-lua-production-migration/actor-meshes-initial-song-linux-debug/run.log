@@ -1,0 +1,35 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+error: float literals must have an integer part
+   --> crates/deadsync-song-lua/tests/rust_meshes.rs:129:22
+    |
+129 | ...ce(.25);
+    |       ^^^
+    |
+help: must have an integer part
+    |
+129 |         pair.advance(0.25);
+    |                      +
+
+error: float literals must have an integer part
+   --> crates/deadsync-song-lua/tests/rust_meshes.rs:130:22
+    |
+130 | ...ce(.5);
+    |       ^^
+    |
+help: must have an integer part
+    |
+130 |         pair.advance(0.5);
+    |                      +
+
+error: could not compile `deadsync-song-lua` (test "rust_meshes") due to 2 previous errors

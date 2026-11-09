@@ -1,0 +1,63 @@
+{
+  "goal_complete": false,
+  "source_count": 1195,
+  "changed": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/compile.rs",
+    "crates/deadsync-song-lua/src/lua_util.rs",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/native_children.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/notefields.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_activation.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_activation.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "removed": [],
+  "unchanged": 1180,
+  "normal_production_compiler_unchanged": true,
+  "prior_tests_and_fixtures_unchanged": true,
+  "formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "new_cases": 9,
+  "results": {
+    "song-activation-focused-v5-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 181.91177434497513,
+      "log_sha256": "24b8cd381f764ba533014eb59cad707b2f694de8ff2df26ae45dd8fe5ff64adf",
+      "tests_passed": 51,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-activation-shared-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 99.62681544199586,
+      "log_sha256": "96d8c009dc96eeeceb9772730bbc79e1d9efc7fce3f5efd2b563e06126df07d9",
+      "tests_passed": 89,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-activation-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 31.614393156953156,
+      "log_sha256": "81f4f532f8b246e217c89ceba4ce84be8170870caf1b54793d64daa37da360bd",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  },
+  "reused_components": [
+    "scene-retirement-core-v1-core-linux-debug",
+    "scene-retirement-core-lint-v1-core-linux-debug",
+    "scene-retirement-noteskin-v1-noteskin-linux-debug",
+    "scene-retirement-gifs-v1-gifs-linux-debug"
+  ],
+  "remaining": "Initial-update/wrapper and broadcast capture outputs, shared-state queued discovery/rewind, prepared/live output, reload orchestration, fallback/cache, unconditional cutover and final fixture/app/render/dependency/performance evidence"
+}

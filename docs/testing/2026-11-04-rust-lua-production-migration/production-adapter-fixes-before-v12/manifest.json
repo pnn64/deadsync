@@ -1,0 +1,5 @@
+{
+  "file": "crates/deadsync-song-lua/examples/input_frames.rs",
+  "sha256": "a02de48a0e8d25b78dcc619684426837d3bdf6b84ff2c02b2d53e618f95feaaf",
+  "scope": "Only development input_frames example module wiring; excluded from all three active compilation target selections. Runtime, libraries and test source remain fixed; broad global guards will retain this additional path difference."
+}

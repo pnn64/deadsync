@@ -1,0 +1,26 @@
+﻿[
+    {
+        "file":  "crates/deadsync-song-lua/src/lua_util.rs",
+        "baseline_sha256":  "adb84a02e9e0cb1aee3e9d182e03b56a6e5f04cc683011514ac2ca30fc9780fa",
+        "current_sha256":  "adb84a02e9e0cb1aee3e9d182e03b56a6e5f04cc683011514ac2ca30fc9780fa",
+        "baseline_identical":  true
+    },
+    {
+        "file":  "crates/deadsync-song-lua/src/tween_pose.rs",
+        "baseline_sha256":  "8110fc8292a02d24f18a795c22b3fc7fde29ec7a84db1fee58b6629b0bb3e433",
+        "current_sha256":  "8110fc8292a02d24f18a795c22b3fc7fde29ec7a84db1fee58b6629b0bb3e433",
+        "baseline_identical":  true
+    },
+    {
+        "file":  "crates/deadsync-song-lua/src/values.rs",
+        "baseline_sha256":  "2bb98fe7c1f6c819c84cdb015f83a825c8b640c7868b15b54cbde09556138661",
+        "current_sha256":  "2bb98fe7c1f6c819c84cdb015f83a825c8b640c7868b15b54cbde09556138661",
+        "baseline_identical":  true
+    },
+    {
+        "file":  "crates/deadsync-song-lua/src/callback_args.rs",
+        "baseline_sha256":  "8948276367dff67fc992de41622531d61556ab8512451ae8a14b3257d03ce338",
+        "current_sha256":  "8948276367dff67fc992de41622531d61556ab8512451ae8a14b3257d03ce338",
+        "baseline_identical":  true
+    }
+]

@@ -1,0 +1,27 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 27s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 8 tests
+test function_action_cleanup_order_retains_first_return_and_counts_late_column_side_effects ... ok
+test function_action_collects_overlay_tracked_broadcast_sound_and_rewinds_shared_state ... ok
+test function_action_column_restore_errors_keep_native_partial_state_and_release_scope ... ok
+test function_action_instruction_abort_restores_actor_clock_globals_and_allows_later_capture ... ok
+test function_action_output_errors_preserve_cleanup_and_precede_callback_errors ... ok
+test function_action_restores_column_membership_and_cloned_spline_values_after_replacement ... ok
+test function_action_sound_manager_keeps_existing_methods_lookup_rules_and_return_identity ... ok
+test function_action_sound_manager_preserves_partial_errors_gc_and_runtime_message_context ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 7.71s
+

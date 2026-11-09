@@ -1,0 +1,26 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 30s
+     Running tests/rust_screen_parts.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_parts-5327aa286726df0e)
+
+running 7 tests
+test background_preserves_border_geometry_brightness_groups_and_owned_lookups ... ok
+test generated_named_score_children_advance_and_all_release_with_the_scene ... ok
+test inherited_lyric_helper_uses_current_vars_and_animates_both_layers ... ok
+test internal_texture_queries_keep_their_owner_and_public_class_overrides ... ok
+test lyrics_follow_current_reverse_selection_and_keep_real_layer_commands ... ok
+test percentage_score_owns_named_only_children_and_text_aliases ... ok
+test timer_and_engine_labels_keep_types_visibility_and_bound_methods ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.88s
+

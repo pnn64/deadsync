@@ -1,0 +1,28 @@
+{
+  "stage": "production-final-core-clippy-v1",
+  "suite": "core",
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "deadlib-lua",
+    "--no-deps",
+    "--lib"
+  ],
+  "exit_code": 0,
+  "seconds": 8.023854300146922,
+  "log_sha256": "a138feab76c0f19f94bf444dbba18d1aed89f6d0790678ad43a4d8e266b06520",
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "test_results": [],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-lua-final-core",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

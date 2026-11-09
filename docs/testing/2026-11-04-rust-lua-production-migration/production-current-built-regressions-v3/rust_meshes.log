@@ -1,0 +1,14 @@
+
+running 9 tests
+test copied_texture_handle_retains_identity_and_metadata_across_gc_and_reload ... ok
+test draw_state_getters_reenter_collect_and_keep_partial_writes ... ok
+test host_buffer_provenance_is_weak ... ok
+test mesh_modes_ranges_and_line_joins_match_the_production_reader ... ok
+test mesh_reader_rejects_invalid_buffers_and_recovers_without_stale_output ... ok
+test mesh_updates_and_texture_loads_remain_immediate_during_tweens ... ok
+test mesh_upload_conversion_and_count_rules_keep_existing_fallbacks ... ok
+test uploaded_buffer_collection_after_successful_and_failed_queries ... ok
+test vertex_uploads_copy_scalars_and_survive_collection ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+

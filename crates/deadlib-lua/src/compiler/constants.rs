@@ -1,5 +1,9 @@
 //! Append-ordered constants with a temporary index for larger function pools.
-use crate::bytecode::Constant;
+use crate::{
+    Error,
+    bytecode::Constant,
+    memory::fallible::{SliceExt, VecExt},
+};
 
 #[derive(Default)]
 pub(super) struct Constants {
@@ -67,12 +71,12 @@ impl Key<'_> {
 }
 
 impl Constants {
-    pub fn finish(self) -> Box<[Constant]> {
-        self.values.into_boxed_slice()
+    pub fn finish(self) -> Result<Box<[Constant]>, Error> {
+        self.values.try_into_boxed_slice()
     }
-    fn rebuild(&mut self) {
+    fn rebuild(&mut self) -> Result<(), Error> {
         self.slots
-            .resize((self.values.len() * 2).next_power_of_two(), 0);
+            .try_resize((self.values.len() * 2).next_power_of_two(), 0)?;
         self.slots.fill(0);
         let mask = self.slots.len() - 1;
         for (id, value) in self.values.iter().enumerate() {
@@ -85,59 +89,62 @@ impl Constants {
             }
             self.slots[slot] = id as u32 + 1;
         }
+        Ok(())
     }
     #[inline]
-    fn lookup(&mut self, key: Key<'_>) -> Entry {
+    fn lookup(&mut self, key: Key<'_>) -> Result<Entry, Error> {
         // A zero slot reserves one encoding. Preserve the original complete
         // u32 ID range by using the linear path at its last representable ID.
         if self.values.len() < INDEX_AT || self.values.len() >= u32::MAX as usize {
-            return self
+            return Ok(self
                 .values
                 .iter()
                 .position(|v| key.matches(v))
-                .map_or(Entry::Vacant(LINEAR), |id| Entry::Present(id as u32));
+                .map_or(Entry::Vacant(LINEAR), |id| Entry::Present(id as u32)));
         }
         if self.slots.is_empty() {
-            self.rebuild();
+            self.rebuild()?;
         }
         let Some(hash) = key.hash() else {
-            return Entry::Vacant(LINEAR);
+            return Ok(Entry::Vacant(LINEAR));
         };
         let mask = self.slots.len() - 1;
         let mut slot = hash & mask;
         loop {
             let id = self.slots[slot];
             if id == 0 {
-                return Entry::Vacant(slot);
+                return Ok(Entry::Vacant(slot));
             }
             if key.matches(&self.values[id as usize - 1]) {
-                return Entry::Present(id - 1);
+                return Ok(Entry::Present(id - 1));
             }
             slot = (slot + 1) & mask;
         }
     }
-    fn append(&mut self, value: Constant, slot: usize) -> Option<u32> {
-        let id = u32::try_from(self.values.len()).ok()?;
-        self.values.push(value);
+    fn append(&mut self, value: Constant, slot: usize) -> Result<Option<u32>, Error> {
+        let Ok(id) = u32::try_from(self.values.len()) else {
+            return Ok(None);
+        };
+        self.values.try_push(value)?;
         if !self.slots.is_empty() && id != u32::MAX {
             if self.values.len() * 4 >= self.slots.len() * 3 {
-                self.rebuild();
+                self.rebuild()?;
             } else if slot != LINEAR {
                 self.slots[slot] = id + 1;
             }
         }
-        Some(id)
+        Ok(Some(id))
     }
-    pub fn intern(&mut self, value: Constant) -> Option<u32> {
-        match self.lookup(Key::from_constant(&value)) {
-            Entry::Present(id) => Some(id),
+    pub fn intern(&mut self, value: Constant) -> Result<Option<u32>, Error> {
+        match self.lookup(Key::from_constant(&value))? {
+            Entry::Present(id) => Ok(Some(id)),
             Entry::Vacant(slot) => self.append(value, slot),
         }
     }
-    pub fn string(&mut self, bytes: &[u8]) -> Option<u32> {
-        match self.lookup(Key::String(bytes)) {
-            Entry::Present(id) => Some(id),
-            Entry::Vacant(slot) => self.append(Constant::String(bytes.into()), slot),
+    pub fn string(&mut self, bytes: &[u8]) -> Result<Option<u32>, Error> {
+        match self.lookup(Key::String(bytes))? {
+            Entry::Present(id) => Ok(Some(id)),
+            Entry::Vacant(slot) => self.append(Constant::String(bytes.try_boxed()?), slot),
         }
     }
 }

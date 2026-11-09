@@ -1,10 +1,16 @@
-use crate::callback_args::{CheckedPrefix, IgnoredArgs, NumericArgs};
+use crate::bitmap_font::{song_lua_uses_builtin_theme_font, song_lua_font_name};
+use crate::callback_args::CheckedPrefix;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::callback_args::IgnoredArgs;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::callback_args::NumericArgs;
 use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
 use crate::render_flags::{RenderFlag, RenderFlags};
 use crate::base_transform::{BaseField, BaseTransform};
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -13,54 +19,182 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::{
-    GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, SONG_LUA_BROADCASTS_KEY,
-    SONG_LUA_CAPTURE_ACTOR_SET_KEY, SONG_LUA_CAPTURE_ACTORS_KEY, SONG_LUA_CAPTURE_SNAPSHOTS_KEY,
-    SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_PROBE_ACTOR_SET_KEY,
-    SONG_LUA_PROBE_ACTORS_KEY, SONG_LUA_PROBE_METHODS_KEY, SONG_LUA_SOUND_CALLS_KEY,
-    SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
-    SONG_LUA_SUPPRESS_BROADCAST_KEY, SONG_LUA_THEME_PATH_PREFIX, SONG_LUA_TOP_SCREEN_OPTION_ROWS,
-    SongLuaActorMultiVertexPoint, SongLuaCapturedActor, SongLuaColumnOffsetBuildParams,
-    SongLuaColumnOffsetSample, SongLuaColumnOffsetWindow, SongLuaColumnTransformSample,
-    SongLuaColumnTransformTarget, SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty,
-    SongLuaEaseTarget, SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
-    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
-    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
-    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
-    SongLuaProxyTarget, SongLuaSoundEvent, SongLuaSpanMode, SongLuaStatefulMessageCapture,
-    SongLuaStatefulMessageWrite, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
-    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-    UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env, call_with_script_dir, call_with_script_path,
-    clone_lua_value, column_transform_windows_from_samples, compile_song_runtime_delta_values,
-    compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
-    crop_texture_rect, display_bpms_text, effect_clock_label, file_path_string,
-    format_rolling_number, graph_display_body_size, initial_chunk_environment,
-    input_status_actor_text, is_song_lua_audio_path, is_song_lua_image_path,
-    is_song_lua_media_path, is_song_lua_video_path, message_command_lists_have_listener,
-    note_song_lua_side_effect, offset_texture_rect as song_lua_offset_texture_rect,
-    option_row_default_text, overlay_eases_from_captures, overlay_state_after_blocks,
-    overlay_text_align_label, parse_color_text, parse_overlay_blend_mode,
-    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
-    parse_overlay_text_glow_mode, parse_sprite_sheet_dims, player_child_proxy_name,
-    player_index_from_value, player_number_name, push_unique_compile_detail,
-    read_actions_with_function_capture, read_boolish, read_f32, read_f64, read_i32_value,
-    read_song_lua_broadcasts, read_string, read_u32_value,
-    record_unsupported_function_action_capture, register_loader_env, resolve_load_actor_path,
-    resolve_script_path, rolling_numbers_format, scale_to_rect_plan, set_compile_song_runtime_beat,
-    set_compile_song_runtime_values, set_string_method, song_lua_halign_value,
-    song_lua_human_player_count, song_lua_side_effect_count, song_lua_span_end,
-    song_lua_style_column_x, song_lua_style_info, song_lua_text_align_value,
-    song_lua_valid_sprite_state_index, song_lua_valign_value, song_music_rate,
-    sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
-    text_glow_mode_label, texture_pixel_offset_rect, theme_metric_number, theme_path,
-    top_screen_danger_index, top_screen_life_meter_index,
-    top_screen_life_meter_name, top_screen_option_row_name, top_screen_player_index,
-    top_screen_player_name, top_screen_score_index, top_screen_score_name,
-    top_screen_score_percent_name,
-    top_screen_step_stats_pane_index, top_screen_steps_display_index, truthy, underlay_score_index,
-    underlay_score_name,
-};
+use crate::GRAPH_DISPLAY_VALUE_RESOLUTION;
+use crate::LUA_PLAYERS;
+use crate::SONG_LUA_BROADCASTS_KEY;
+use crate::SONG_LUA_CAPTURE_ACTOR_SET_KEY;
+use crate::SONG_LUA_CAPTURE_ACTORS_KEY;
+use crate::SONG_LUA_CAPTURE_SNAPSHOTS_KEY;
+use crate::SONG_LUA_DANGER_LIFE;
+use crate::SONG_LUA_INITIAL_LIFE;
+use crate::SONG_LUA_PROBE_ACTOR_SET_KEY;
+use crate::SONG_LUA_PROBE_ACTORS_KEY;
+use crate::SONG_LUA_PROBE_METHODS_KEY;
+use crate::SONG_LUA_SOUND_CALLS_KEY;
+use crate::SONG_LUA_SOUND_PATHS_KEY;
+use crate::SONG_LUA_SPRITE_STATE_CLEAR;
+use crate::SONG_LUA_STARTUP_MESSAGE;
+use crate::SONG_LUA_SUPPRESS_BROADCAST_KEY;
+use crate::SONG_LUA_THEME_PATH_PREFIX;
+use crate::SONG_LUA_TOP_SCREEN_OPTION_ROWS;
+use crate::SongLuaActorMultiVertexPoint;
+use crate::SongLuaCapturedActor;
+use crate::SongLuaColumnOffsetBuildParams;
+use crate::SongLuaColumnOffsetSample;
+use crate::SongLuaColumnOffsetWindow;
+use crate::SongLuaColumnTransformSample;
+use crate::SongLuaColumnTransformTarget;
+use crate::SongLuaCompileContext;
+use crate::SongLuaCompileInfo;
+use crate::SongLuaDifficulty;
+use crate::SongLuaEaseTarget;
+use crate::SongLuaMessageEvent;
+use crate::SongLuaNoteHideWindow;
+use crate::SongLuaOverlayBlendMode;
+use crate::SongLuaOverlayCommandBlock;
+use crate::SongLuaOverlayEase;
+use crate::SongLuaOverlayEaseBuildParams;
+use crate::SongLuaOverlayKind;
+use crate::SongLuaOverlayMeshVertex;
+use crate::SongLuaOverlayMessageCommand;
+use crate::SongLuaOverlayModelLayer;
+use crate::SongLuaOverlayState;
+use crate::SongLuaOverlayStateDelta;
+use crate::SongLuaOverlayUpdateTarget;
+use crate::SongLuaOverlayUpdateValue;
+use crate::SongLuaPlayerContext;
+use crate::SongLuaProxyTarget;
+use crate::SongLuaSoundEvent;
+use crate::SongLuaSpanMode;
+use crate::SongLuaStatefulMessageCapture;
+use crate::SongLuaStatefulMessageWrite;
+use crate::SongLuaTimeUnit;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::SongLuaTrackedActor;
+use crate::SongLuaTrackedActorTarget;
+use crate::THEME_RECEPTOR_Y_REV;
+use crate::THEME_RECEPTOR_Y_STD;
+use crate::TOP_SCREEN_THEME_CHILD_NAMES;
+use crate::UNDERLAY_THEME_CHILD_NAMES;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::call_with_chunk_env;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::call_with_script_dir;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::call_with_script_path;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::clone_lua_value;
+use crate::column_transform_windows_from_samples;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::compile_song_runtime_delta_values;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::compile_song_runtime_values;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_chunk_env_proxy;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_life_record_table;
+use crate::crop_texture_rect;
+use crate::display_bpms_text;
+use crate::effect_clock_label;
+use crate::file_path_string;
+use crate::format_rolling_number;
+use crate::graph_display_body_size;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::initial_chunk_environment;
+use crate::input_status_actor_text;
+use crate::is_song_lua_audio_path;
+use crate::is_song_lua_image_path;
+use crate::is_song_lua_media_path;
+use crate::is_song_lua_video_path;
+use crate::message_command_lists_have_listener;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::note_song_lua_side_effect;
+use crate::offset_texture_rect as song_lua_offset_texture_rect;
+use crate::option_row_default_text;
+use crate::overlay_eases_from_captures;
+use crate::overlay_state_after_blocks;
+use crate::overlay_text_align_label;
+use crate::parse_color_text;
+use crate::parse_overlay_blend_mode;
+use crate::parse_overlay_effect_clock;
+use crate::parse_overlay_effect_mode;
+use crate::parse_overlay_text_align;
+use crate::parse_overlay_text_glow_mode;
+use crate::parse_sprite_sheet_dims;
+use crate::player_child_proxy_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::player_index_from_value;
+use crate::player_number_name;
+use crate::push_unique_compile_detail;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_actions_with_function_capture;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_boolish;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f64;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_i32_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_song_lua_broadcasts;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_u32_value;
+use crate::record_unsupported_function_action_capture;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::register_loader_env;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::resolve_load_actor_path;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::resolve_script_path;
+use crate::rolling_numbers_format;
+use crate::scale_to_rect_plan;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::set_compile_song_runtime_beat;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::set_compile_song_runtime_values;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::set_string_method;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_halign_value;
+use crate::song_lua_human_player_count;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_side_effect_count;
+use crate::song_lua_span_end;
+use crate::song_lua_style_column_x;
+use crate::song_lua_style_info;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_text_align_value;
+use crate::song_lua_valid_sprite_state_index;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_valign_value;
+use crate::song_music_rate;
+use crate::sprite_animation_state_at;
+use crate::sprite_frame_count;
+use crate::sprite_image_frame_size;
+use crate::sprite_texture_rect;
+use crate::text_glow_mode_label;
+use crate::texture_pixel_offset_rect;
+use crate::theme_metric_number;
+use crate::theme_path;
+use crate::top_screen_danger_index;
+use crate::top_screen_life_meter_index;
+use crate::top_screen_life_meter_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::top_screen_option_row_name;
+use crate::top_screen_player_index;
+use crate::top_screen_player_name;
+use crate::top_screen_score_index;
+use crate::top_screen_score_name;
+use crate::top_screen_score_percent_name;
+use crate::top_screen_step_stats_pane_index;
+use crate::top_screen_steps_display_index;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::truthy;
+use crate::underlay_score_index;
+use crate::underlay_score_name;
 
 type ActorAssetPrefixKey = (String, String);
 type ActorAssetPrefixCache = Mutex<HashMap<ActorAssetPrefixKey, Option<PathBuf>>>;
@@ -74,11 +208,13 @@ const UPDATE_FN_ERROR_KEY: &str = "__songlua_update_function_error_reported";
 const UPDATE_CMD_ERROR_KEY: &str = "__songlua_update_command_error_reported";
 const UPDATE_QUEUE_ERROR_KEY: &str = "__songlua_update_queue_error_reported";
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 enum ActorScriptDir {
     Blank,
     Text(mlua::LuaString),
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl mlua::FromLua for ActorScriptDir {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
         // Keep String's coercions and errors for non-stack conversions.
@@ -136,6 +272,7 @@ where
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl<const N: usize> mlua::FromLua for LuaFieldText<N>
 where
     [u8; N]: smallvec::Array<Item = u8>,
@@ -171,11 +308,13 @@ where
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
     pub players: [Table; LUA_PLAYERS],
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaOverlayCompileActor<Kind> {
     pub table: Table,
     pub actor: crate::SongLuaOverlayActor<Kind>,
@@ -189,6 +328,7 @@ impl<Kind> std::borrow::Borrow<Table> for SongLuaOverlayCompileActor<Kind> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaOverlayUpdateCapture {
     actor_indices: FxHashMap<usize, usize>,
     // Load-time replay owns new wrappers and their initial poses. Their capture
@@ -225,12 +365,14 @@ struct SongLuaOverlayUpdateCapture {
 }
 
 struct SongLuaProbeCaptureActive;
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaActionCaptureActive {
     functions: HashSet<usize>,
     locals: Vec<FunctionActionSnapshot>,
 }
 pub(crate) struct SongLuaUpdateErrors(pub Vec<String>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaDeferredMessage {
     actor: Table,
     command: String,
@@ -240,8 +382,10 @@ struct SongLuaDeferredMessage {
 
 // Owned by one load-time Lua session. Retry once after chronological replay;
 // actual broadcasts capture their writes while no static block is available.
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaDeferredMessages(Vec<SongLuaDeferredMessage>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn has_deferred_message(lua: &Lua, actor: &Table, command: Option<&str>) -> bool {
     lua.app_data_ref::<SongLuaDeferredMessages>()
         .is_some_and(|deferred| {
@@ -252,6 +396,7 @@ fn has_deferred_message(lua: &Lua, actor: &Table, command: Option<&str>) -> bool
         })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn defer_actor_message(lua: &Lua, actor: &Table, command: &str, detail: String) -> String {
     if lua.app_data_ref::<SongLuaDeferredMessages>().is_none() {
         lua.set_app_data(SongLuaDeferredMessages(Vec::new()));
@@ -275,23 +420,9 @@ fn defer_actor_message(lua: &Lua, actor: &Table, command: &str, detail: String) 
     detail
 }
 
-#[derive(Clone)]
-pub struct SongLuaScheduledOverlayUpdate {
-    /// Immutable native time-left samples baked at load, shared by all writes
-    /// to the queue's back tween. No sampling work or allocation during play.
-    pub progress: Option<std::sync::Arc<[[f32; 2]]>>,
-    /// Queued commands cannot render before their actual replay frame.
-    pub dispatch_seconds: Option<f64>,
-    pub frame_advance: f32,
-    pub initial_value: Option<SongLuaOverlayUpdateValue>,
-    pub delay_seconds: f32,
-    pub duration_seconds: f32,
-    pub easing: Option<String>,
-    pub opt1: Option<f32>,
-    pub target: SongLuaOverlayUpdateTarget,
-    pub value: SongLuaOverlayUpdateValue,
-}
+pub use crate::frame_capture::ScheduledUpdate as SongLuaScheduledOverlayUpdate;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl SongLuaOverlayUpdateCapture {
     fn new(actor_indices: FxHashMap<usize, usize>) -> Self {
         // Shared actor tables can replace earlier map entries without changing
@@ -531,6 +662,7 @@ impl SongLuaOverlayUpdateCapture {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin_overlay_update_capture_from_indices(
     lua: &Lua,
     actor_indices: impl IntoIterator<Item = (usize, usize)>,
@@ -542,12 +674,14 @@ pub(crate) fn begin_overlay_update_capture_from_indices(
     ));
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin_wrapper_capture(lua: &Lua) {
     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
         capture.wrapper_start = Some(capture.values.len());
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_new_wrapper(lua: &Lua, owner: &Table, wrapper: &Table) -> mlua::Result<()> {
     ensure_tween_replay(lua, wrapper)?;
     let owner = owner.to_pointer() as usize;
@@ -577,6 +711,7 @@ fn capture_new_wrapper(lua: &Lua, owner: &Table, wrapper: &Table) -> mlua::Resul
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn append_wrapper_actors(
     lua: &Lua,
     actors: &mut Vec<Table>,
@@ -600,6 +735,7 @@ pub(crate) fn append_wrapper_actors(
     capture.wrapper_seen = capture.wrappers.len();
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn finish_wrapper_capture(
     lua: &Lua,
     overlay_count: usize,
@@ -646,6 +782,7 @@ pub(crate) fn finish_wrapper_capture(
     (start, std::mem::take(&mut capture.wrappers))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn drain_overlay_update_capture(
     lua: &Lua,
     mut visit: impl FnMut(
@@ -681,6 +818,7 @@ pub fn drain_overlay_update_capture(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn apply_message_advances<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -705,6 +843,7 @@ pub(crate) fn apply_message_advances<Kind>(
 #[cfg(feature = "test-support")]
 pub(crate) struct SongLuaOverlayWrites(pub Vec<crate::SongLuaOverlayUpdateTrack>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn end_overlay_update_capture(lua: &Lua) {
     let capture = lua.remove_app_data::<SongLuaOverlayUpdateCapture>();
     #[cfg(feature = "test-support")]
@@ -727,6 +866,7 @@ pub fn end_overlay_update_capture(lua: &Lua) {
     drop(capture);
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_pending_tweens(
     lua: &Lua,
     values: impl IntoIterator<Item = (usize, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>,
@@ -758,6 +898,7 @@ const POSITION_DEST_KEYS: [&str; 3] = [
     "__songlua_state_z",
 ];
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_prior_positions(lua: &Lua, states: &[SongLuaOverlayState]) {
     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
         for (position, state) in capture.prior_positions.iter_mut().zip(states) {
@@ -766,6 +907,7 @@ pub(crate) fn set_prior_positions(lua: &Lua, states: &[SongLuaOverlayState]) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_current_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result<f32> {
     if lua
         .app_data_ref::<SongLuaCompileUpdatePhase>()
@@ -792,6 +934,7 @@ fn actor_current_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result
         .unwrap_or(0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_capture_position(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
         return Ok(());
@@ -840,6 +983,7 @@ fn advance_capture_position(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn finish_pending_tweens(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let values = {
         let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
@@ -872,6 +1016,7 @@ fn finish_pending_tweens(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn stop_pending_tweens(lua: &Lua, actor: &Table, position: [f32; 3]) {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
         return;
@@ -909,6 +1054,7 @@ fn stop_pending_tweens(lua: &Lua, actor: &Table, position: [f32; 3]) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn captured_update_target_mask(lua: &Lua, actor: &Table) -> u128 {
     let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
         return 0;
@@ -923,6 +1069,7 @@ pub(crate) fn captured_update_target_mask(lua: &Lua, actor: &Table) -> u128 {
         .fold(0, |mask, target| mask | (1_u128 << target as usize))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture> {
     let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
         return Vec::new();
@@ -945,12 +1092,14 @@ pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn runtime_broadcast_captures(lua: &Lua) -> Vec<(f32, String, bool)> {
     lua.app_data_ref::<SongLuaOverlayUpdateCapture>()
         .map(|capture| capture.runtime_broadcasts.clone())
         .unwrap_or_default()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_runtime_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
     if let Some(mut events) = lua.app_data_mut::<LiveBroadcasts>() {
         return std::mem::take(&mut events.0);
@@ -960,6 +1109,7 @@ pub(crate) fn take_runtime_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
         .unwrap_or_default()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn capture_runtime_sound(lua: &Lua, path: PathBuf) {
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     let queued_startup = lua.app_data_ref::<SongLuaQueuedStartup>().is_some();
@@ -974,24 +1124,38 @@ pub(crate) fn capture_runtime_sound(lua: &Lua, path: PathBuf) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_runtime_sounds(lua: &Lua) -> Vec<SongLuaSoundEvent> {
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::take(&mut capture.runtime_sounds))
         .unwrap_or_default()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_sound_capture(lua: &Lua, queued_startup: Option<bool>) {
+    lua.remove_app_data::<SongLuaQueuedStartup>();
+    if let Some(queued) = queued_startup {
+        begin_overlay_update_capture_from_indices(lua, std::iter::empty());
+        if queued { lua.set_app_data(SongLuaQueuedStartup(0.0)); }
+    } else { end_overlay_update_capture(lua); }
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_judgment_textures(lua: &Lua) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::take(&mut capture.judgment_textures))
         .unwrap_or_default()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_sprite_textures(lua: &Lua) -> Vec<(usize, crate::SongLuaSpriteTexture)> {
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::take(&mut capture.sprite_textures))
         .unwrap_or_default()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_sprite_texture(lua: &Lua, actor: &Table, previous: Option<PathBuf>) -> mlua::Result<()> {
     if !actor_type_is(actor, "Sprite")? {
         return Ok(());
@@ -1040,6 +1204,7 @@ fn capture_sprite_texture(lua: &Lua, actor: &Table, previous: Option<PathBuf>) -
     capture_judgment_texture(lua, actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_judgment_texture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(player) = actor.get::<Option<usize>>("__songlua_judgment_sprite_player")? else {
         return Ok(());
@@ -1166,6 +1331,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_overlay_update_capture(
     lua: &Lua,
     actor: &Table,
@@ -1284,6 +1450,7 @@ fn record_overlay_update_capture(
         })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_overlay_update_capture_immediate(
     lua: &Lua,
     actor: &Table,
@@ -1378,6 +1545,7 @@ fn record_overlay_update_capture_immediate(
         })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     indices: &[usize],
@@ -1392,6 +1560,7 @@ pub fn overlay_compile_actor_tables_for_indices<Kind>(
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn reset_overlay_compile_actor_capture_tables<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -1403,6 +1572,7 @@ pub fn reset_overlay_compile_actor_capture_tables<Kind>(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
     let globals = lua.globals();
     let Some(paths) = globals
@@ -1418,10 +1588,12 @@ pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Function> {
     load_script_file_with_env(lua, path, song_dir, None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn load_script_file_with_env(
     lua: &Lua,
     path: &Path,
@@ -1431,6 +1603,7 @@ pub(crate) fn load_script_file_with_env(
     load_script_file_with_source(lua, path, path, song_dir, environment)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_script_file_with_source(
     lua: &Lua,
     path: &Path,
@@ -1468,11 +1641,13 @@ fn load_script_file_with_source(
     Ok(wrapper)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn execute_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Value> {
     let loader = load_script_file(lua, path, song_dir)?;
     loader.call::<Value>(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn execute_script_file_with_source(
     lua: &Lua,
     path: &Path,
@@ -1482,10 +1657,12 @@ pub(crate) fn execute_script_file_with_source(
     load_script_file_with_source(lua, path, source_path, song_dir, None)?.call::<Value>(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Function> {
     create_loader_function_with_env(lua, song_dir, path, None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_loader_function_with_env(
     lua: &Lua,
     song_dir: &Path,
@@ -1505,11 +1682,13 @@ fn create_loader_function_with_env(
     load_script_file_with_env(lua, &resolved, song_dir, environment)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn caller_chunk_environment(lua: &Lua) -> Option<Table> {
     lua.inspect_stack(1, |debug| debug.function().environment())
         .flatten()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_file_loader_globals(
     lua: &Lua,
     song_dir: PathBuf,
@@ -1575,6 +1754,7 @@ pub fn install_file_loader_globals(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn load_actor_path(
     lua: &Lua,
     song_dir: &Path,
@@ -1605,6 +1785,7 @@ pub fn load_actor_path(
     load_script_file(lua, &resolved, song_dir)?.call::<Value>(args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_theme_path_actor(
     lua: &Lua,
     path: &str,
@@ -1631,6 +1812,7 @@ pub fn create_theme_path_actor(
     Ok(Some(actor))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_media_actor(
     lua: &Lua,
     actor_type: &'static str,
@@ -1650,6 +1832,7 @@ pub fn create_media_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone, Copy)]
 struct ActorDefinitionHost {
     human_player_count: usize,
@@ -1657,6 +1840,7 @@ struct ActorDefinitionHost {
     install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_def_globals(
     lua: &Lua,
     human_player_count: usize,
@@ -1776,6 +1960,7 @@ end
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_tracked_compile_actors(
     lua: &Lua,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
@@ -1855,6 +2040,7 @@ pub fn read_tracked_compile_actors(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn make_actor_ctor(
     lua: &Lua,
     actor_type: &'static str,
@@ -1918,6 +2104,7 @@ end
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn initialize_actor_instance(
     lua: &Lua,
     table: &Table,
@@ -1967,6 +2154,7 @@ fn initialize_actor_instance(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn materialize_actor_declaration(lua: &Lua, declaration: &Table) -> mlua::Result<Table> {
     let host = *lua.app_data_ref::<ActorDefinitionHost>()
         .ok_or_else(|| mlua::Error::runtime("actor declaration has no gameplay host"))?;
@@ -2014,6 +2202,7 @@ fn materialize_actor_declaration(lua: &Lua, declaration: &Table) -> mlua::Result
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_def_children(
     lua: &Lua,
     actor: &Table,
@@ -2062,6 +2251,7 @@ fn actor_def_children(
     Ok((source, children))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn own_actor_children(
     lua: &Lua,
     actor: &Table,
@@ -2091,6 +2281,7 @@ fn own_actor_children(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn own_actor_root(
     lua: &Lua,
     root: Value,
@@ -2111,6 +2302,7 @@ pub(crate) fn own_actor_root(
     Ok(Value::Table(actor))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn clone_actor_def(
     lua: &Lua,
     source: &Table,
@@ -2160,6 +2352,7 @@ fn clone_actor_def(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_graph_display_children(
     lua: &Lua,
     actor: &Table,
@@ -2180,6 +2373,7 @@ fn install_graph_display_children(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn lua_text_value(value: Value) -> mlua::Result<String> {
     match value {
         Value::String(text) => Ok(text.to_str()?.to_string()),
@@ -2190,6 +2384,7 @@ pub fn lua_text_value(value: Value) -> mlua::Result<String> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_string_field(table: &Table, names: &[&str]) -> mlua::Result<Option<String>> {
     for name in names {
         if let Some(value) = read_string(table.get::<Value>(*name)?) {
@@ -2199,6 +2394,7 @@ pub fn table_string_field(table: &Table, names: &[&str]) -> mlua::Result<Option<
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_f32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<f32>> {
     for name in names {
         if let Some(value) = read_f32(table.get::<Value>(*name)?) {
@@ -2208,6 +2404,7 @@ pub fn table_f32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<f32
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_i32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<i32>> {
     for name in names {
         if let Some(value) = read_i32_value(table.get::<Value>(*name)?) {
@@ -2217,6 +2414,7 @@ pub fn table_i32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<i32
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bool>> {
     for name in names {
         if let Some(value) = read_boolish(table.get::<Value>(*name)?) {
@@ -2226,6 +2424,7 @@ pub fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bo
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn current_song_lua_style_name(lua: &Lua) -> String {
     let owned_style = lua.globals().get::<Table>("GAMESTATE").and_then(|state| {
         state.raw_get::<Table>("__songlua_current_style")?.raw_get::<Value>(1)
@@ -2252,6 +2451,7 @@ enum ActorChildPointers {
     Large(rustc_hash::FxHashSet<usize>),
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl ActorChildPointers {
     fn push(&mut self, out: &mut Vec<Table>, child: Table) {
         if self.insert(child.to_pointer() as usize) {
@@ -2287,6 +2487,7 @@ impl ActorChildPointers {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn push_unique_actor_child(out: &mut Vec<Table>, seen: &mut Vec<usize>, child: Table) {
     let ptr = child.to_pointer() as usize;
     if seen.contains(&ptr) {
@@ -2296,6 +2497,7 @@ pub fn push_unique_actor_child(out: &mut Vec<Table>, seen: &mut Vec<usize>, chil
     out.push(child);
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(children) = actor.get::<Option<Table>>("__songlua_children")? {
         return Ok(children);
@@ -2322,6 +2524,7 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(children)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn actor_name(actor: &Table) -> mlua::Result<String> {
     if let Some(name) = actor.raw_get::<Option<String>>("__songlua_load_name")? {
         return Ok(name);
@@ -2332,6 +2535,7 @@ pub(crate) fn actor_name(actor: &Table) -> mlua::Result<String> {
     Ok(actor.raw_get::<Option<String>>("Name")?.unwrap_or_default())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_actor_name(actor: &Table, name: mlua::LuaString) -> mlua::Result<()> {
     if !matches!(actor.raw_get::<Value>("__songlua_load_name")?, Value::Nil) {
         actor.raw_set("__songlua_load_name", name.clone())?;
@@ -2339,6 +2543,7 @@ pub(crate) fn set_actor_name(actor: &Table, name: mlua::LuaString) -> mlua::Resu
     actor.raw_set("__songlua_native_name", name)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
     if actor.raw_get::<Option<bool>>("__songlua_owned_child_lookup")?.unwrap_or(false) {
@@ -2422,6 +2627,7 @@ pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(children)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
     let mut out = Vec::new();
     let mut seen = ActorChildPointers::new();
@@ -2451,6 +2657,7 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool> {
     let parent_type = parent.get::<Option<String>>("__songlua_actor_type")?;
     if parent_type
@@ -2485,6 +2692,7 @@ pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
     let children = actor_children(lua, actor)?;
     children.set(name, Value::Nil)?;
@@ -2528,6 +2736,7 @@ pub fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn remove_all_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for index in 1..=actor.raw_len() {
         actor.raw_set(index, Value::Nil)?;
@@ -2546,6 +2755,7 @@ pub fn remove_all_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn push_sequence_child_once(actor: &Table, child: Table) -> mlua::Result<bool> {
     let child_ptr = child.to_pointer();
     for index in 1..=actor.raw_len() {
@@ -2559,6 +2769,7 @@ pub fn push_sequence_child_once(actor: &Table, child: Table) -> mlua::Result<boo
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_course_contents_list_children(actor: &Table) -> mlua::Result<()> {
     actor.set("__songlua_scroller_current_item", 0.0_f32)?;
     actor.set("__songlua_scroller_destination_item", 0.0_f32)?;
@@ -2573,6 +2784,7 @@ pub fn install_course_contents_list_children(actor: &Table) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn position_scroller_items(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(display) = actor_named_children(lua, actor)?.get::<Option<Table>>("Display")? else {
         return Ok(());
@@ -2593,6 +2805,7 @@ pub fn position_scroller_items(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn populate_course_contents_display(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(display) = actor_named_children(lua, actor)?.get::<Option<Table>>("Display")? else {
         return Ok(());
@@ -2612,6 +2825,7 @@ pub fn populate_course_contents_display(lua: &Lua, actor: &Table) -> mlua::Resul
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_course_contents_params(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
     let params = lua.create_table()?;
     params.set("Number", 0_i64)?;
@@ -2623,10 +2837,12 @@ fn create_course_contents_params(lua: &Lua, player_index: usize) -> mlua::Result
     Ok(params)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn current_song_value(lua: &Lua) -> mlua::Result<Value> {
     current_gamestate_value(lua, "GetCurrentSong")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn current_gamestate_value(lua: &Lua, method_name: &str) -> mlua::Result<Value> {
     let Some(gamestate) = lua.globals().get::<Option<Table>>("GAMESTATE")? else {
         return Ok(Value::Nil);
@@ -2637,10 +2853,12 @@ pub fn current_gamestate_value(lua: &Lua, method_name: &str) -> mlua::Result<Val
     method.call::<Value>(gamestate)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn current_steps_value(lua: &Lua, player_index: usize) -> mlua::Result<Value> {
     current_gamestate_player_value(lua, "GetCurrentSteps", player_index)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn current_gamestate_player_value(
     lua: &Lua,
     method_name: &str,
@@ -2655,6 +2873,7 @@ pub fn current_gamestate_player_value(
     method.call::<Value>((gamestate, player_number_name(player_index)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_course_contents_steps_params(lua: &Lua, params: &Table, steps: Value) -> mlua::Result<()> {
     let Value::Table(steps) = steps else {
         params.set("Meter", "?")?;
@@ -2681,6 +2900,7 @@ fn set_course_contents_steps_params(lua: &Lua, params: &Table, steps: Value) -> 
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn call_table_method(table: &Table, method_name: &str) -> mlua::Result<Value> {
     let Some(method) = table.get::<Option<Function>>(method_name)? else {
         return Ok(Value::Nil);
@@ -2688,6 +2908,7 @@ pub fn call_table_method(table: &Table, method_name: &str) -> mlua::Result<Value
     method.call::<Value>(table.clone())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
     let group = lua.create_table()?;
     let mt = lua.create_table()?;
@@ -2725,6 +2946,7 @@ pub fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
     Ok(group)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_is_child_group(table: &Table) -> mlua::Result<bool> {
     table
         .metatable()
@@ -2733,6 +2955,7 @@ pub fn actor_is_child_group(table: &Table) -> mlua::Result<bool> {
         .map(|value| value.flatten().unwrap_or(false))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         return Ok(wrappers);
@@ -2742,6 +2965,7 @@ pub fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(wrappers)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
     for key in ["__songlua_player1_enabled", "__songlua_player2_enabled"] {
         if let Some(enabled) = from.raw_get::<Option<bool>>(key)? {
@@ -2808,6 +3032,7 @@ fn is_actor_semantic_state_key(key: &str) -> bool {
     is_actor_mutable_state_key(key) && !key.starts_with("__songlua_capture_")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_actor_mutable_state(
     lua: &Lua,
     actor: &Table,
@@ -2815,10 +3040,12 @@ pub fn snapshot_actor_mutable_state(
     snapshot_actor_state(lua, actor, is_actor_mutable_state_key)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_actor_semantic_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(String, Value)>> {
     snapshot_actor_state(lua, actor, is_actor_semantic_state_key)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn clone_actor_state(lua: &Lua, key: &str, value: Value) -> mlua::Result<Value> {
     if key == "__songlua_wrappers" {
         if let Value::Table(wrappers) = value {
@@ -2834,6 +3061,7 @@ fn clone_actor_state(lua: &Lua, key: &str, value: Value) -> mlua::Result<Value> 
     clone_lua_value(lua, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn retained_key_text(lua: &Lua, key: &mlua::LuaString, keep: fn(&str) -> bool) -> mlua::Result<Option<String>> {
     // SAFETY: one rooted, checked Lua string; UTF-8 validation and the fixed
     // Rust predicate do not call Lua. Only owned text leaves the read scope.
@@ -2851,6 +3079,7 @@ fn retained_key_text(lua: &Lua, key: &mlua::LuaString, keep: fn(&str) -> bool) -
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn remove_scalar_global(lua: &Lua, key: &mlua::LuaString, scalar: bool, retained: &HashSet<&str>) -> mlua::Result<bool> {
     // SAFETY: same rooted immutable-string read; hashing is pure Rust.
     unsafe {
@@ -2867,6 +3096,7 @@ fn remove_scalar_global(lua: &Lua, key: &mlua::LuaString, scalar: bool, retained
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_actor_state(
     lua: &Lua,
     actor: &Table,
@@ -2900,6 +3130,7 @@ fn snapshot_actor_state(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_actor_mutable_state(
     actor: &Table,
     snapshot: Vec<(String, Value)>,
@@ -2907,10 +3138,12 @@ pub fn restore_actor_mutable_state(
     restore_actor_state(actor, snapshot, is_actor_mutable_state_key)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn restore_actor_semantic_state(actor: &Table, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
     restore_actor_state(actor, snapshot, is_actor_semantic_state_key)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn restore_actor_state(
     actor: &Table,
     snapshot: Vec<(String, Value)>,
@@ -2937,6 +3170,7 @@ fn restore_actor_state(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn is_scalar_lua_value(value: &Value) -> bool {
     matches!(
         value,
@@ -2944,6 +3178,7 @@ fn is_scalar_lua_value(value: &Value) -> bool {
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_scalar_globals(lua: &Lua) -> mlua::Result<Vec<(String, Value)>> {
     let mut out = Vec::new();
     // Non-scalar globals need no retained key. Raw callback traversal avoids
@@ -2960,6 +3195,7 @@ fn snapshot_scalar_globals(lua: &Lua) -> mlua::Result<Vec<(String, Value)>> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
     let globals = lua.globals();
     let keys = snapshot
@@ -2989,6 +3225,7 @@ fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_actors_semantic_state<'a>(
     lua: &Lua,
     actors: impl IntoIterator<Item = &'a Table>,
@@ -2999,6 +3236,7 @@ pub fn snapshot_actors_semantic_state<'a>(
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_actors_semantic_state(
     snapshots: Vec<(Table, Vec<(String, Value)>)>,
 ) -> mlua::Result<()> {
@@ -3008,6 +3246,7 @@ pub fn restore_actors_semantic_state(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if live_destination_value(lua, actor, |_| ()).is_some() {
         let snapshot = lua.create_table()?;
@@ -3041,6 +3280,7 @@ pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(snapshot)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_semantic_state_table(snapshot: &Table) -> mlua::Result<Vec<(String, Value)>> {
     let mut out = Vec::with_capacity(snapshot.raw_len());
     for entry in snapshot.sequence_values::<Table>() {
@@ -3050,6 +3290,7 @@ pub fn read_actor_semantic_state_table(snapshot: &Table) -> mlua::Result<Vec<(St
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_actor_registry(lua: &Lua) -> mlua::Result<Table> {
     let globals = lua.globals();
     if let Some(registry) = globals.get::<Option<Table>>("__songlua_actor_registry")? {
@@ -3070,6 +3311,7 @@ struct SongLuaMessageCoverage {
     pending: Vec<String>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_message_coverage(lua: &Lua) -> Vec<String> {
     #[cfg(feature = "test-support")]
     if let Some(mut coverage) = lua.app_data_mut::<SongLuaMessageCoverage>() {
@@ -3079,6 +3321,7 @@ pub(crate) fn take_message_coverage(lua: &Lua) -> Vec<String> {
     Vec::new()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 pub(crate) fn install_message_order(lua: &Lua, ranks: &[(String, usize)]) -> mlua::Result<()> {
     if ranks.is_empty() { return Ok(()); }
@@ -3093,6 +3336,7 @@ pub(crate) fn install_message_order(lua: &Lua, ranks: &[(String, usize)]) -> mlu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 pub(crate) fn message_actor_path(actor: &Table) -> mlua::Result<String> {
     let mut current = actor.clone();
@@ -3141,6 +3385,7 @@ pub(crate) fn message_actor_path(actor: &Table) -> mlua::Result<String> {
     Ok(parts.join("/"))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn captured_message_actor_identity(lua: &Lua, actor: &Table) -> mlua::Result<Option<usize>> {
     let path = message_actor_path(actor)?;
@@ -3159,34 +3404,9 @@ fn captured_message_actor_identity(lua: &Lua, actor: &Table) -> mlua::Result<Opt
     Ok(rank)
 }
 
-#[cfg(test)]
-#[test]
-fn broadcast_identity_order() {
-    let lua = Lua::new();
-    lua.load(r#"
-        seen = {}
-        local function receive(self) seen[#seen + 1] = self end
-        a = { GoMessageCommand = receive }
-        b = { GoMessageCommand = receive }
-        __songlua_actor_registry = { a, b }
-    "#).exec().expect("live subscribers");
-    let a = lua.globals().get::<Table>("a").expect("subscriber a");
-    let b = lua.globals().get::<Table>("b").expect("subscriber b");
-    let expected = if a.to_pointer() < b.to_pointer() { [a.clone(), b.clone()] } else { [b.clone(), a.clone()] };
-    for reversed in [false, true] {
-        lua.globals().set("seen", lua.create_table().expect("observations")).expect("reset observations");
-        let registry = lua.create_sequence_from(if reversed { [b.clone(), a.clone()] } else { [a.clone(), b.clone()] })
-            .expect("registry permutation");
-        lua.globals().set("__songlua_actor_registry", registry).expect("install registry");
-        broadcast_song_lua_message(&lua, "Go", None).expect("deliver by identity");
-        let seen = lua.globals().get::<Table>("seen").expect("observed recipients");
-        assert_eq!(seen.raw_len(), 2);
-        for (index, actor) in expected.iter().enumerate() {
-            assert_eq!(seen.raw_get::<Table>(index + 1).expect("recipient").to_pointer(), actor.to_pointer());
-        }
-    }
-}
 
+
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if crate::live::active(lua) {
         ensure_tween_replay(lua, actor)?;
@@ -3198,6 +3418,7 @@ pub fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn registry_contains_actor(lua: &Lua, registry: &Table, actor: &Table) -> mlua::Result<bool> {
     // SAFETY: registry/actor are rooted in two reserved slots. A third holds
     // one raw sequence value. Reads and identity checks cannot invoke Lua.
@@ -3223,6 +3444,7 @@ fn registry_contains_actor(lua: &Lua, registry: &Table, actor: &Table) -> mlua::
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn inherit_actor_dirs(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if let Some(script_dir) = lua
         .globals()
@@ -3236,6 +3458,7 @@ pub fn inherit_actor_dirs(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_dummy_actor(
     lua: &Lua,
     actor_type: &'static str,
@@ -3251,6 +3474,7 @@ pub fn create_dummy_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::Result<()> {
     actor.set("__songlua_actor_type", actor_type)?;
     // Quad and ActorMultiVertex constructors load RageTexture_Default. Its manager lookup key is
@@ -3275,6 +3499,7 @@ fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()> {
     actor.set("__songlua_proxy_target_kind", Value::Nil)?;
     actor.set("__songlua_proxy_player_index", Value::Nil)?;
@@ -3320,6 +3545,7 @@ pub fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn normalize_broadcast_params(
     lua: &Lua,
     message: &str,
@@ -3336,6 +3562,7 @@ pub fn normalize_broadcast_params(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn runtime_broadcast_beat(lua: &Lua) -> f32 {
     // Use the queued command's dispatch frame, including pauses and split
     // chart timing, rather than the callback that originally queued it.
@@ -3349,6 +3576,7 @@ fn runtime_broadcast_beat(lua: &Lua) -> f32 {
         .unwrap_or_else(|| compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn source_broadcast_value(value: Value, depth: usize, seen: &mut Vec<usize>) -> Result<serde_json::Value, String> {
     use serde_json::{Value as Json, json};
     Ok(match value {
@@ -3400,6 +3628,7 @@ fn source_broadcast_number(value: f64) -> serde_json::Value {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> Result<serde_json::Value, String> {
     use serde_json::Value as Json;
     let mut entries = Vec::new();
@@ -3437,6 +3666,7 @@ fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> 
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<&Value>) {
     if lua.app_data_ref::<LiveSourceBroadcasts>().is_none() { return; }
     if !crate::live::observes_source_call(lua) { return; }
@@ -3454,11 +3684,13 @@ pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_source_broadcasts(lua: &Lua) -> Vec<crate::live::SongLuaLiveBroadcast> {
     lua.app_data_mut::<LiveSourceBroadcasts>()
         .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn broadcast_song_lua_message(
     lua: &Lua,
     message: &str,
@@ -3467,6 +3699,7 @@ pub fn broadcast_song_lua_message(
     broadcast_song_lua_message_impl(lua, message, params, true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Engine parameters already contain native note objects and optional fields.
 /// Do not add the compiler's sampled Judgment defaults to a real engine event.
 pub(crate) fn broadcast_native_song_lua_message(
@@ -3475,6 +3708,7 @@ pub(crate) fn broadcast_native_song_lua_message(
     broadcast_song_lua_message_impl(lua, message, params, false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn broadcast_song_lua_message_impl(
     lua: &Lua, message: &str, params: Option<Value>, normalize: bool,
 ) -> mlua::Result<()> {
@@ -3593,6 +3827,7 @@ fn broadcast_song_lua_message_impl(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn normalize_judgment_params(lua: &Lua, params: &Table) -> mlua::Result<()> {
     if matches!(params.get::<Value>("Player")?, Value::Nil) {
         params.set("Player", player_number_name(0))?;
@@ -3640,6 +3875,7 @@ fn normalize_judgment_params(lua: &Lua, params: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn default_message_command_params(
     lua: &Lua,
     command_name: &str,
@@ -3688,6 +3924,7 @@ pub fn default_message_command_params(
     Ok(Some(Value::Table(params)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_life_meter_param_table(lua: &Lua) -> mlua::Result<Table> {
     let meter = lua.create_table()?;
     meter.set(
@@ -3709,6 +3946,7 @@ fn create_life_meter_param_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(meter)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_ex_counts_param_table(lua: &Lua) -> mlua::Result<Table> {
     let counts = lua.create_table()?;
     for key in [
@@ -3719,10 +3957,12 @@ fn create_ex_counts_param_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(counts)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn table_has_entries(table: &Table) -> mlua::Result<bool> {
     Ok(table.pairs::<Value, Value>().next().transpose()?.is_some())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn normalize_tap_note_table(lua: &Lua, params: &Table, note: Table) -> mlua::Result<Table> {
     if !matches!(note.get::<Value>("GetTapNoteType")?, Value::Nil) {
         return Ok(note);
@@ -3737,6 +3977,7 @@ pub(crate) fn normalize_tap_note_table(lua: &Lua, params: &Table, note: Table) -
     Ok(note)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_tap_note_table(
     lua: &Lua,
     params: &Table,
@@ -3753,6 +3994,7 @@ fn create_tap_note_table(
     Ok(note)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_tap_note_methods(
     lua: &Lua,
     params: &Table,
@@ -3813,6 +4055,7 @@ fn install_tap_note_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_tap_note_result_table(
     lua: &Lua,
     params: &Table,
@@ -3823,6 +4066,7 @@ fn create_tap_note_result_table(
     Ok(result)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn normalize_tap_note_result_table(
     lua: &Lua,
     params: &Table,
@@ -3835,6 +4079,7 @@ fn normalize_tap_note_result_table(
     Ok(result)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_tap_note_result_methods(
     lua: &Lua,
     params: &Table,
@@ -3880,10 +4125,12 @@ fn install_tap_note_result_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
     run_actor_named_command_with_drain(lua, actor, name, true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_named_command_with_drain(
     lua: &Lua,
     actor: &Table,
@@ -3895,6 +4142,7 @@ pub fn run_actor_named_command_with_drain(
 
 // Message handlers share the native direct command map. Retain their
 // authored field name when a direct command executes them in the live trace.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn lookup_actor_named_command<'a>(
     actor: &Table,
     name: &'a str,
@@ -3910,6 +4158,7 @@ fn lookup_actor_named_command<'a>(
         .map(|command| (command, std::borrow::Cow::Owned(field))))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_named_command_with_drain_and_params(
     lua: &Lua,
     actor: &Table,
@@ -3923,6 +4172,7 @@ pub fn run_actor_named_command_with_drain_and_params(
     run_guarded_actor_command(lua, actor, field.as_ref(), &command, drain_queue, params)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_actor_message_with_params(
     lua: &Lua,
     actor: &Table,
@@ -3951,11 +4201,13 @@ fn run_actor_message_with_params(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub const fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
     let _ = actor;
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn call_actor_function(
     lua: &Lua,
     actor: &Table,
@@ -3994,6 +4246,7 @@ pub fn call_actor_function(
     call()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_guarded_actor_command(
     lua: &Lua,
     actor: &Table,
@@ -4082,6 +4335,7 @@ fn run_guarded_actor_command(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(active) = actor.get::<Option<Table>>("__songlua_active_commands")? {
         return Ok(active);
@@ -4091,6 +4345,7 @@ pub fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(active)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_has_active_command(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
     for pair in actor_active_commands(lua, actor)?.pairs::<Value, Value>() {
         let (_, value) = pair?;
@@ -4101,6 +4356,7 @@ fn actor_has_active_command(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(queue) = actor.get::<Option<Table>>("__songlua_command_queue")? {
         return Ok(queue);
@@ -4110,6 +4366,7 @@ pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(queue)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn enqueue_actor_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
     prepare_capture_scope_actor(lua, actor)?;
     // Commands and messages append a zero-duration state after the active tween.
@@ -4146,6 +4403,7 @@ fn enqueue_actor_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if has_tween_replay(lua, actor) {
         return Ok(());
@@ -4340,6 +4598,7 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_debug_label(actor: &Table) -> String {
     let actor_type = actor
         .get::<Option<String>>("__songlua_actor_type")
@@ -4353,6 +4612,7 @@ pub fn actor_debug_label(actor: &Table) -> String {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_metatable(
     lua: &Lua,
     actor: &Table,
@@ -4406,6 +4666,7 @@ pub fn install_actor_metatable(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Background.cpp loads Lua files through UpperLeft.lua, whose declaration
 /// concatenates native callbacks with the authored root before actor creation.
 pub(crate) fn install_background_upper_left(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<Table> {
@@ -4429,6 +4690,7 @@ end
     wrap.call(actor.clone())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
     for pair in rhs.pairs::<Value, Value>() {
         let (key, value) = pair?;
@@ -4459,6 +4721,7 @@ fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()>
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_shadow_len(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 2]> {
     if !live_actor_playback(lua)
         && let Some(value) = actor_current_capture_block(lua, actor)?
@@ -4472,6 +4735,7 @@ pub fn actor_shadow_len(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 2]> {
         .unwrap_or([0.0, 0.0]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_actor_command(
     lua: &Lua,
     actor: &Table,
@@ -4492,6 +4756,7 @@ fn capture_actor_command(
     read_actor_capture_blocks(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_actor_command_preserving_state(
     lua: &Lua,
     actor: &Table,
@@ -4530,6 +4795,7 @@ pub struct SongLuaCapturedMessageCommands {
     pub skipped: Vec<String>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn for_each_actor_message_command(
     actor: &Table,
     mut visit: impl FnMut(String, Function),
@@ -4549,6 +4815,7 @@ fn for_each_actor_message_command(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_actor_message_commands(
     lua: &Lua,
     actor: &Table,
@@ -4618,6 +4885,7 @@ pub fn capture_actor_message_commands(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     debug_assert!(!live_actor_playback(lua), "live actor requested compiler capture history");
     record_probe_actor_call(lua, actor)?;
@@ -4650,6 +4918,7 @@ pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Tab
     Ok(block)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     record_probe_actor_call(lua, actor)?;
     prepare_capture_scope_actor(lua, actor)?;
@@ -4720,6 +4989,7 @@ fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table
     Ok(block)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_bool(lua: &Lua, actor: &Table, key: &str, value: bool) -> mlua::Result<()> {
     if !record_overlay_update_capture_immediate(
         lua,
@@ -4734,6 +5004,7 @@ fn capture_immediate_bool(lua: &Lua, actor: &Table, key: &str, value: bool) -> m
     set_actor_capture_state(actor, key, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
     if set_live_base_field(lua, actor, key, value) { return Ok(()); }
     if !record_overlay_update_capture_immediate(
@@ -4749,6 +5020,7 @@ fn capture_immediate_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlu
     set_actor_capture_state(actor, key, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
     if !record_overlay_update_capture_immediate(
         lua,
@@ -4763,6 +5035,7 @@ fn capture_immediate_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlu
     set_actor_capture_state(actor, key, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_vec2(lua: &Lua, actor: &Table, key: &str, size: [f32; 2]) -> mlua::Result<()> {
     if live_actor_playback(lua) {
         return crate::native_vector::store(lua, actor, actor_capture_state_key(key).as_ref(), size);
@@ -4785,6 +5058,7 @@ fn capture_immediate_vec2(lua: &Lua, actor: &Table, key: &str, size: [f32; 2]) -
     set_actor_capture_state(actor, key, table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_vec3(
     lua: &Lua,
     actor: &Table,
@@ -4811,6 +5085,7 @@ fn capture_immediate_vec3(
     set_actor_capture_state(actor, key, table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_vec4(
     lua: &Lua,
     actor: &Table,
@@ -4837,6 +5112,7 @@ fn capture_immediate_vec4(
     set_actor_capture_state(actor, key, table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_vec5(
     lua: &Lua,
     actor: &Table,
@@ -4863,6 +5139,7 @@ fn capture_immediate_vec5(
     set_actor_capture_state(actor, key, table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) -> mlua::Result<()> {
     let update = capture_target_for_key(key).and_then(|target| match target {
         SongLuaOverlayUpdateTarget::TextAlign => {
@@ -4886,6 +5163,7 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
     set_actor_capture_state(actor, key, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
     if set_live_base_field(lua, actor, key, value) { return Ok(()); }
     if live_destination_scalar(lua, actor, key).is_some() {
@@ -4986,6 +5264,7 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_bool(
     lua: &Lua,
     actor: &Table,
@@ -5110,6 +5389,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
     std::borrow::Cow::Borrowed(state_key)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_actor_capture_state(
     actor: &Table,
     key: &str,
@@ -5118,6 +5398,7 @@ fn set_actor_capture_state(
     actor.set(actor_capture_state_key(key).as_ref(), value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
     if live_actor_playback(lua) && has_tween_replay(lua, actor) {
         record_overlay_update_capture(lua, actor, "diffuse", SongLuaOverlayUpdateValue::Vec4(color));
@@ -5143,6 +5424,7 @@ pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlu
     sync_tween_getters(lua, actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_actor_vertex_diffuse(
     lua: &Lua,
     actor: &Table,
@@ -5168,6 +5450,7 @@ pub fn capture_actor_vertex_diffuse(
     capture_block_set_vertex_colors(lua, actor, colors)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_text_attributes_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(attributes) = actor.get::<Option<Table>>("__songlua_text_attributes")? {
         return Ok(attributes);
@@ -5177,6 +5460,7 @@ fn actor_text_attributes_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> 
     Ok(attributes)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_actor_text_attribute(
     lua: &Lua,
     actor: &Table,
@@ -5238,6 +5522,7 @@ pub fn capture_actor_text_attribute(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_vec4(
     lua: &Lua,
     actor: &Table,
@@ -5264,6 +5549,7 @@ pub fn capture_block_set_vec4(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_vertex_colors(
     lua: &Lua,
     actor: &Table,
@@ -5290,6 +5576,7 @@ pub fn capture_block_set_vertex_colors(
 // Actor::SetDiffuses and its corner/edge variants mutate the back tween state.
 // Live playback owns that fixed-size array already; only capture observers need
 // an independently owned update value.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn write_live_vertex_colors(
     lua: &Lua,
     actor: &Table,
@@ -5316,6 +5603,7 @@ fn write_live_vertex_colors(
     true
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_vec5(
     lua: &Lua,
     actor: &Table,
@@ -5337,6 +5625,7 @@ pub fn capture_block_set_vec5(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::U32(value)) {
         let block = actor_current_capture_block(lua, actor)?;
@@ -5347,6 +5636,7 @@ pub fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) ->
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_i32(lua: &Lua, actor: &Table, key: &str, value: i32) -> mlua::Result<()> {
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::I32(value)) {
         let block = actor_current_capture_block(lua, actor)?;
@@ -5357,6 +5647,7 @@ pub fn capture_block_set_i32(lua: &Lua, actor: &Table, key: &str, value: i32) ->
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_vec2(
     lua: &Lua,
     actor: &Table,
@@ -5375,6 +5666,7 @@ pub fn capture_block_set_vec2(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
     // Actor::StretchTo keeps m_size and sets the destination scale on each axis.
     let (base_width, base_height) = actor_base_size(actor)?;
@@ -5386,6 +5678,7 @@ pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> ml
     capture_block_set_f32(lua, actor, "zoom_y", height / base_height)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
     if live_actor_playback(lua) {
         return crate::native_vector::store(lua, actor, "__songlua_state_size", size);
@@ -5403,6 +5696,7 @@ pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua:
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_zoom_axes(
     lua: &Lua,
     actor: &Table,
@@ -5417,6 +5711,7 @@ pub fn capture_block_set_zoom_axes(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_vec3(
     lua: &Lua,
     actor: &Table,
@@ -5436,6 +5731,7 @@ pub fn capture_block_set_vec3(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_block_set_string(
     lua: &Lua,
     actor: &Table,
@@ -5470,6 +5766,7 @@ pub fn capture_block_set_string(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_texture_rect(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
     capture_block_set_u32(
         lua,
@@ -5480,6 +5777,7 @@ pub fn capture_texture_rect(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::R
     capture_block_set_vec4(lua, actor, "custom_texture_rect", rect)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_halign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
     if let Some(base) = live_base_transform(lua, actor) { return Ok(base.get(BaseField::HAlign).unwrap_or(0.5)); }
     Ok(actor
@@ -5487,6 +5785,7 @@ pub fn actor_halign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
         .unwrap_or(0.5))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_valign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
     if let Some(base) = live_base_transform(lua, actor) { return Ok(base.get(BaseField::VAlign).unwrap_or(0.5)); }
     Ok(actor
@@ -5494,6 +5793,7 @@ pub fn actor_valign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
         .unwrap_or(0.5))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
     crate::model_texture::set_state(lua, actor, state_index.min(i32::MAX as u32) as i32);
     // Sprite::SetState changes animation state immediately, outside Actor's
@@ -5508,6 +5808,7 @@ pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Result<()> {
     // Actor owns one effect selector; the separate render flags are aliases.
     capture_immediate_bool(lua, actor, "vibrate", mode == "vibrate")?;
@@ -5524,6 +5825,7 @@ pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Resu
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_effect_period(lua: &Lua, actor: &Table, period: f32) -> mlua::Result<()> {
     capture_immediate_f32(lua, actor, "effect_period", period)?;
     if actor
@@ -5540,6 +5842,7 @@ fn capture_effect_period(lua: &Lua, actor: &Table, period: f32) -> mlua::Result<
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_effect_defaults(
     lua: &Lua,
     actor: &Table,
@@ -5619,6 +5922,7 @@ pub fn set_actor_effect_defaults(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_texture_from_path(actor: &Table, path: &str) -> mlua::Result<bool> {
     let path = path.trim();
     if path.is_empty() {
@@ -5632,6 +5936,7 @@ pub fn set_actor_texture_from_path(actor: &Table, path: &str) -> mlua::Result<bo
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_texture_from_path_methods(
     actor: &Table,
     value: Option<&Value>,
@@ -5650,6 +5955,7 @@ pub fn set_actor_texture_from_path_methods(
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_texture_from_path_methods_or_fallback(
     actor: &Table,
     value: Option<&Value>,
@@ -5662,6 +5968,7 @@ pub fn set_actor_texture_from_path_methods_or_fallback(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_texture_from_value(
     actor: &Table,
     value: Option<&Value>,
@@ -5735,6 +6042,7 @@ pub(crate) fn texture_path_key(path: &Path) -> Arc<str> {
     Arc::from(path.to_string_lossy().as_ref())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
     if actor.raw_get::<bool>("__songlua_default_texture")? {
         return Ok(Some((1, 1)));
@@ -5754,6 +6062,7 @@ pub fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>
     Ok(Some(parse_sprite_sheet_dims(texture)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_texture_rect(actor: &Table) -> mlua::Result<[f32; 4]> {
     let custom_rect = actor
         .get::<Option<Table>>("__songlua_state_custom_texture_rect")?
@@ -5766,11 +6075,13 @@ pub fn actor_texture_rect(actor: &Table) -> mlua::Result<[f32; 4]> {
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn offset_actor_texture_rect(lua: &Lua, actor: &Table, dx: f32, dy: f32) -> mlua::Result<()> {
     let rect = song_lua_offset_texture_rect(actor_texture_rect(actor)?, [dx, dy]);
     capture_texture_rect(lua, actor, rect)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_base_size_with_image(
     actor: &Table,
     image_frame_size: Option<(f32, f32)>,
@@ -5799,10 +6110,12 @@ pub fn actor_base_size_with_image(
     Ok((1.0, 1.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
     actor_base_size_with_image(actor, actor_image_frame_size(actor)?)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(path) = actor_texture_path(actor)?
         && let Some(texture) = deadlib_assets::generated_texture(&path.to_string_lossy())
@@ -5818,6 +6131,7 @@ pub fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     let path = actor_texture_path(actor)?;
     let sheet_dims = path
@@ -5843,6 +6157,7 @@ pub fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>>
 // No eviction or shared locking; the VM frees it after compilation. Probe failure
 // is logged once and retains the existing screen-size fallback. Worst-case work
 // is one ffprobe invocation per loaded movie actor, including duplicate sources.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn movie_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     let Some(path) = actor_texture_path(actor)?.filter(|path| is_song_lua_video_path(path)) else {
         return Ok(None);
@@ -5893,6 +6208,7 @@ fn image_source_size(path: &Path) -> Option<(f32, f32)> {
     Some((width as f32, height as f32))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_crop_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(size) = actor_image_frame_size(actor)? {
         return Ok(Some(size));
@@ -5906,6 +6222,7 @@ pub fn actor_crop_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn crop_actor_to(lua: &Lua, actor: &Table, width: f32, height: f32) -> mlua::Result<()> {
     let target = [width, height];
     if !target.iter().all(|value| value.is_finite() && *value > 0.0) {
@@ -5917,6 +6234,7 @@ pub fn crop_actor_to(lua: &Lua, actor: &Table, width: f32, height: f32) -> mlua:
     crop_actor_to_source_size(lua, actor, target, [source_width, source_height])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn texture_source_size(lua: &Lua, actor: &Table, path: &Path) -> mlua::Result<(f32, f32)> {
     if let Some(size) = image_source_size(path) {
         return Ok(size);
@@ -5927,6 +6245,7 @@ pub fn texture_source_size(lua: &Lua, actor: &Table, path: &Path) -> mlua::Resul
     actor_base_size(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn scale_actor_to_rect_with_base_size(
     lua: &Lua,
     actor: &Table,
@@ -5952,11 +6271,13 @@ pub fn scale_actor_to_rect_with_base_size(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn scale_actor_to_rect(lua: &Lua, actor: &Table, rect: [f32; 4], cover: bool) -> mlua::Result<()> {
     let (base_width, base_height) = actor_base_size(actor)?;
     scale_actor_to_rect_with_base_size(lua, actor, rect, cover, [base_width, base_height])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn crop_actor_to_source_size(
     lua: &Lua,
     actor: &Table,
@@ -5982,6 +6303,7 @@ pub fn crop_actor_to_source_size(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn scale_background(lua: &Lua, actor: &Table, center: bool) -> mlua::Result<()> {
     let globals = lua.globals();
     let width: f32 = globals.get("SCREEN_WIDTH")?;
@@ -6023,6 +6345,7 @@ fn scale_background(lua: &Lua, actor: &Table, center: bool) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for (name, center) in [
         ("scale_or_crop_background", true),
@@ -6169,6 +6492,7 @@ pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Resul
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_image_coord_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "addimagecoords",
@@ -6201,6 +6525,7 @@ pub fn install_actor_image_coord_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_upload_image_size(actor: &Table) -> mlua::Result<Option<[f32; 2]>> {
     let Some((width, height)) = actor_image_texture_size(actor)? else { return Ok(None); };
     let path = actor_texture_path(actor)?.unwrap_or_default();
@@ -6212,6 +6537,7 @@ fn actor_upload_image_size(actor: &Table) -> mlua::Result<Option<[f32; 2]>> {
         .map_err(mlua::Error::external)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetWidth",
@@ -6269,6 +6595,7 @@ pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_seconds_into_animation(
     lua: &Lua,
     actor: &Table,
@@ -6282,10 +6609,12 @@ pub fn set_actor_seconds_into_animation(
     set_actor_sprite_state(lua, actor, state)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
     Ok(sprite_frame_count(actor_sprite_sheet_dims(actor)?))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(texture) = actor.raw_get::<Option<Table>>("__songlua_amv_texture_handle")? {
         return Ok(texture);
@@ -6419,6 +6748,7 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(texture)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_texture_proxy_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetTexture",
@@ -6444,6 +6774,7 @@ pub fn install_actor_texture_proxy_getter_methods(lua: &Lua, actor: &Table) -> m
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_texture_proxy_methods(
     lua: &Lua,
     texture: &Table,
@@ -6538,6 +6869,7 @@ pub fn install_texture_proxy_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_sound_file_from_value(
     actor: &Table,
     value: Option<&Value>,
@@ -6558,6 +6890,7 @@ pub fn set_actor_sound_file_from_value(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn play_sound_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if crate::live::active(lua) {
         if let Some(file) = actor.get::<Option<String>>("File")? {
@@ -6585,6 +6918,7 @@ fn play_sound_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if !actor_type_is(actor, "Sound")? {
         return Ok(());
@@ -6681,6 +7015,7 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_rolling_numbers_metric(actor: &Table, metric: &str) -> mlua::Result<()> {
     actor.set("__songlua_rolling_numbers_metric", metric)?;
     actor.set(
@@ -6690,6 +7025,7 @@ pub fn set_rolling_numbers_metric(actor: &Table, metric: &str) -> mlua::Result<(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn rolling_numbers_text(actor: &Table, number: f32) -> mlua::Result<String> {
     let format = actor
         .get::<Option<String>>("__songlua_rolling_numbers_format")?
@@ -6697,6 +7033,7 @@ pub fn rolling_numbers_text(actor: &Table, number: f32) -> mlua::Result<String> 
     Ok(format_rolling_number(&format, number))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_update_text_pre_zoom_flags(
     lua: &Lua,
     actor: &Table,
@@ -6715,6 +7052,7 @@ pub fn actor_update_text_pre_zoom_flags(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_command_on_leaves(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
     let mut saw_child = false;
     for child in actor_direct_children(lua, actor)? {
@@ -6727,6 +7065,7 @@ pub fn run_command_on_leaves(lua: &Lua, actor: &Table, command: &Function) -> ml
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_named_command_on_leaves(
     lua: &Lua,
     actor: &Table,
@@ -6744,6 +7083,7 @@ pub fn run_named_command_on_leaves(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_named_command_on_children_recursively(
     lua: &Lua,
     actor: &Table,
@@ -6760,6 +7100,7 @@ pub fn run_named_command_on_children_recursively(
 // ActorFrame overrides SetZTestMode and SetZWrite to apply the setter to
 // every owned child. Capture these writes on the children themselves so a
 // child's later ztest(0) still overrides its parent's earlier ztest(1).
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, field: &str, enabled: bool) -> mlua::Result<()> {
     capture_block_set_bool(lua, actor, field, enabled)?;
     for child in actor_direct_children(lua, actor)? {
@@ -6768,11 +7109,13 @@ fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, field: &str, enabled:
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |_, _args: IgnoredArgs| Ok(actor.clone()))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, _args: IgnoredArgs| {
@@ -6816,6 +7159,7 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_finish_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, _args: IgnoredArgs| {
@@ -6824,6 +7168,7 @@ pub fn make_actor_finish_tweening_method(lua: &Lua, actor: &Table) -> mlua::Resu
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn finish_actor_tree_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     prepare_capture_scope_actor(lua, actor)?;
     clear_spin_queue(actor, true)?;
@@ -6838,6 +7183,7 @@ fn finish_actor_tree_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
         frames.clocks.remove(&(actor.to_pointer() as usize));
@@ -6859,6 +7205,7 @@ fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, CheckedPrefix((first, second, _third, _rest)): NumericArgs| {
@@ -6874,6 +7221,7 @@ pub fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Fu
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, CheckedPrefix((first, second, third, _rest)): NumericArgs| {
@@ -6895,10 +7243,12 @@ pub fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Func
 
 // Actor.cpp's FArg property setters narrow Lua numbers to float without
 // discarding NaN or infinity. Keep duration and other validated inputs on read_f32.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_scalar_f32(value: Value) -> Option<f32> {
     match value { Value::Number(value) => Some(value as f32), other => read_f32(other) }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_capture_f32_method(
     lua: &Lua,
     actor: &Table,
@@ -6927,6 +7277,7 @@ pub fn make_actor_capture_f32_method(
     Ok(function)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_add_f32_method(
     lua: &Lua,
     actor: &Table,
@@ -6961,6 +7312,7 @@ pub fn make_actor_add_f32_method(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_actor_tween_method(
     lua: &Lua,
     actor: &Table,
@@ -6980,6 +7332,7 @@ pub fn make_actor_tween_method(
 
 // Actor::BeginTweening finishes an overflowing queue before adding its 52nd
 // state. Sleep adds two states; queued commands add one zero-duration state.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn finish_overflowing_tween_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let retained = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
         replays.0.get(&(actor.to_pointer() as usize)).map(|replay| replay.queue.len()));
@@ -6997,6 +7350,7 @@ fn finish_overflowing_tween_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn begin_actor_tween(lua: &Lua, actor: &Table, duration: f32, exact_duration: f64,
     easing: Option<&str>) -> mlua::Result<Table> {
     prepare_capture_scope_actor(lua, actor)?;
@@ -7024,6 +7378,7 @@ fn begin_actor_tween(lua: &Lua, actor: &Table, duration: f32, exact_duration: f6
     Ok(actor.clone())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn make_native_actor_tween_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, args: MultiValue| {
@@ -7108,12 +7463,14 @@ impl std::ops::Deref for ActorCommandName {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl mlua::IntoLua for ActorCommandName {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         lua.create_string(self.as_str()).map(Value::String)
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetTarget",
@@ -7495,6 +7852,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_actor_texture(
     lua: &Lua,
     actor: &Table,
@@ -7519,6 +7877,7 @@ fn load_actor_texture(
     capture_sprite_texture(lua, actor, previous)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "LoadTexture",
@@ -7863,6 +8222,7 @@ end
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("x", make_actor_capture_f32_method(lua, actor, "x", Some("x"))?)?;
     actor.set("y", make_actor_capture_f32_method(lua, actor, "y", Some("y"))?)?;
@@ -8307,6 +8667,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "Set",
@@ -8774,6 +9135,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "cropbottom",
@@ -8989,6 +9351,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "z",
@@ -9172,6 +9535,7 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "setstate",
@@ -9442,6 +9806,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "glowshift",
@@ -9803,6 +10168,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for name in [
         "clearzbuffer",
@@ -9928,6 +10294,7 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "load",
@@ -10379,6 +10746,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_tap_note_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetDidTapNoteCallback",
@@ -10430,6 +10798,7 @@ pub fn install_actor_tap_note_methods(lua: &Lua, actor: &Table) -> mlua::Result<
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_child_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "RunCommandsOnChildren",
@@ -10472,6 +10841,7 @@ pub fn install_actor_child_command_methods(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_path_child_methods(
     lua: &Lua,
     actor: &Table,
@@ -10494,6 +10864,7 @@ pub fn install_actor_path_child_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn add_actor_child_from_path(
     lua: &Lua,
     actor: &Table,
@@ -10523,6 +10894,7 @@ pub fn add_actor_child_from_path(
     run_added_actor_child_commands(lua, actor, &child)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_runtime_child_methods(
     lua: &Lua,
     actor: &Table,
@@ -10607,6 +10979,7 @@ pub fn install_actor_runtime_child_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_methods(
     lua: &Lua,
     actor: &Table,
@@ -10646,6 +11019,7 @@ pub fn install_actor_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_wrapper_query_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetWrapperState",
@@ -10677,6 +11051,7 @@ pub fn install_actor_wrapper_query_methods(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_child_query_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetChildren",
@@ -10699,6 +11074,7 @@ pub fn install_actor_child_query_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "name",
@@ -10782,6 +11158,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetZ",
@@ -10938,6 +11315,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetSecsIntoEffect",
@@ -10988,6 +11366,7 @@ pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetParent",
@@ -10999,6 +11378,7 @@ pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn adopt_actor_child(parent: &Table, child: &Table) -> mlua::Result<()> {
     // Session root lists group loaders; they are not native ActorFrames and
     // must not replace a song actor's SongForeground/SongBackground parent.
@@ -11008,6 +11388,7 @@ fn adopt_actor_child(parent: &Table, child: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let (_, children) = actor_def_children(lua, actor)?;
     let mut indices = smallvec::SmallVec::<[mlua::Integer; 16]>::new();
@@ -11037,6 +11418,7 @@ fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn sort_actor_children_by_draw_order(actor: &Table) -> mlua::Result<()> {
     let mut children = actor.sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>()?;
     // ActorFrame::SortByDrawOrder is stable: ties retain the current child order.
@@ -11047,6 +11429,7 @@ fn sort_actor_children_by_draw_order(actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor
         .get::<Option<bool>>("__songlua_init_commands_ran")?
@@ -11098,6 +11481,7 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor.raw_get::<Option<bool>>("__songlua_defer_on")?.unwrap_or(false) {
         return Ok(());
@@ -11127,6 +11511,7 @@ pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::R
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let previous_flags = live_render_flags(lua, actor);
     // ActorFrame::InitState resets children and base Actor state, preserving
@@ -11180,6 +11565,7 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
     sync_tween_getters(lua, actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn run_background_transition(lua: &Lua, actor: &Table, transition: &str) -> mlua::Result<()> {
     let duration = match transition {
         "" => return Ok(()),
@@ -11200,6 +11586,7 @@ pub(crate) fn run_background_transition(lua: &Lua, actor: &Table, transition: &s
     leaves(lua, actor, duration)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_added_actor_child_commands(
     lua: &Lua,
     parent: &Table,
@@ -11220,6 +11607,7 @@ pub fn run_added_actor_child_commands(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     let Value::Table(root) = root else {
         return Ok(());
@@ -11232,6 +11620,7 @@ pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_init_commands_for_table(lua, root)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaStartupQueues(Vec<Table>);
 struct SongLuaZeroUpdate;
 struct SongLuaQueuedStartup(f32);
@@ -11303,12 +11692,14 @@ impl SongLuaCompileFrames {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_compile_actor_frames(lua: &Lua, inputs: Option<Vec<[f32; 2]>>) {
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
         frames.actor_frames = inputs;
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_compile_frames(
     lua: &Lua,
     frames: impl Iterator<Item = (f64, f64)>,
@@ -11369,12 +11760,14 @@ pub(crate) fn set_compile_frames(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_compile_frame(lua: &Lua, frame: usize) {
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
         frames.frame = frame;
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queue_actor_order(lua: &Lua, actor: usize) -> usize {
     lua.app_data_ref::<SongLuaCompileUpdateOrders>()
         .and_then(|orders| orders.0.get(&actor).copied())
@@ -11451,6 +11844,7 @@ fn advance_queue_clock(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::Result<Option<f32>> {
     if has_tween_replay(lua, actor) {
         return Ok(None);
@@ -11572,6 +11966,7 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::R
     Ok(delay)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_tween_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32; 2]]>> {
     let actor = actor.to_pointer() as usize;
     let mut frames = lua.app_data_mut::<SongLuaCompileFrames>()?;
@@ -11605,6 +12000,7 @@ fn actor_tween_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32
     progress
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queued_zero_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32; 2]]>> {
     let empty_tail = lua
         .app_data_ref::<SongLuaCompileFrames>()?
@@ -11631,6 +12027,7 @@ fn queued_zero_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32
     .then_some(progress)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {
     let actor = actor.to_pointer() as usize;
     let mut frames = lua.app_data_mut::<SongLuaCompileFrames>()?;
@@ -11652,12 +12049,14 @@ fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {
     None
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queued_dispatch_seconds(lua: &Lua) -> Option<f64> {
     let scope = *lua.app_data_ref::<SongLuaQueuedCommand>()?;
     let (frame, _) = scope.time?;
     Some(lua.app_data_ref::<SongLuaCompileFrames>()?.time(frame))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queued_render_advance(
     lua: &Lua,
     scope: SongLuaQueuedCommand,
@@ -11684,14 +12083,7 @@ fn queued_render_advance(
     (frames.time(frames.frame) + f64::from(scope.start) - frames.time(frame) + advance) as f32
 }
 
-pub struct SongLuaStartupState {
-    pub initial: SongLuaOverlayState,
-    pub blocks: Vec<SongLuaOverlayCommandBlock>,
-    steps: Vec<f32>,
-    commands: Vec<Option<String>>,
-    block_steps: Vec<Option<usize>>,
-    clock_path: Vec<[f32; 2]>,
-}
+pub use crate::frame_capture::StartupState as SongLuaStartupState;
 
 // Load-time Actor::UpdateTweening state. Each queue consumes the actual actor
 // delta after ancestor hibernation, wrappers and ActorFrame update rates. Its
@@ -11723,12 +12115,14 @@ struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 // and immediate actor properties are sufficient; audit history is disposable.
 pub(crate) struct LiveActorPlayback;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_actor_playback(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveActorPlayback>().is_some()
 }
 
 // Position writes target the actual current pose only with no tween/effect
 // owner that can alter it outside the compiled callback unit.
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn can_compile_actor_position(lua: &Lua, actor: &Table) -> bool {
     use mlua::InspectionValue;
     if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_some() { return false; }
@@ -11751,12 +12145,14 @@ pub(crate) fn can_compile_actor_position(lua: &Lua, actor: &Table) -> bool {
     actor.raw_get::<Option<bool>>("__songlua_state_rainbow").is_ok_and(|value| !value.unwrap_or(false))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn can_compile_actor_input(lua: &Lua) -> bool {
     live_actor_playback(lua) && lua.app_data_ref::<SongLuaActionCaptureActive>().is_none()
         && !lua.has_hook()
         && !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
     for actor in actors {
         ensure_tween_replay(lua, actor)?;
@@ -11788,11 +12184,13 @@ pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_base_transform(lua: &Lua, actor: &Table) -> Option<BaseTransform> {
     lua.app_data_ref::<ActorTweenReplays>()?
         .0.get(&(actor.to_pointer() as usize))?.base_transform.as_deref().copied()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_live_base_field(lua: &Lua, actor: &Table, key: &str, value: f32) -> bool {
     let Some(field) = BaseField::from_key(key) else { return false; };
     let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else { return false; };
@@ -11814,11 +12212,13 @@ pub(crate) fn use_table_base_transform(lua: &Lua, actors: &[Table]) -> mlua::Res
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_render_flags(lua: &Lua, actor: &Table) -> Option<RenderFlags> {
     lua.app_data_ref::<ActorTweenReplays>()?
         .0.get(&(actor.to_pointer() as usize))?.render_flags
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_live_render_flag(lua: &Lua, actor: &Table, key: &str, value: bool) -> bool {
     let Some(flag) = RenderFlag::from_key(key) else { return false; };
     let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else { return false; };
@@ -11840,12 +12240,14 @@ pub(crate) fn use_table_render_flags(lua: &Lua, actors: &[Table]) -> mlua::Resul
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_current_value<T>(lua: &Lua, actor: &Table, read: impl FnOnce(&TweenPose) -> T) -> Option<T> {
     if !crate::live::active(lua) { return None; }
     lua.app_data_ref::<ActorTweenReplays>()?
         .0.get(&(actor.to_pointer() as usize)).map(|replay| read(&replay.current))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_current_pose(lua: &Lua, actor: &Table) -> Option<TweenPose> {
     live_current_value(lua, actor, |current| *current)
 }
@@ -11853,6 +12255,7 @@ fn live_current_pose(lua: &Lua, actor: &Table) -> Option<TweenPose> {
 // Tween setters and destination getters address the queue tail, while drawing reads
 // current. During playback the replay owns both; Lua tables are only exported
 // for public getter results and explicit definition/state snapshots.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_destination_value<T>(
     lua: &Lua,
     actor: &Table,
@@ -11864,6 +12267,7 @@ fn live_destination_value<T>(
         .map(|replay| read(replay.queue.back().map_or(&replay.current, |step| &step.to)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_destination_scalar(lua: &Lua, actor: &Table, key: &str) -> Option<f32> {
     live_destination_value(lua, actor, |dest| Some(match key {
         "aux" => dest.aux,
@@ -11890,6 +12294,7 @@ fn live_destination_scalar(lua: &Lua, actor: &Table, key: &str) -> Option<f32> {
     })).flatten()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_destination_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result<f32> {
     if let Some(value) = live_destination_value(lua, actor, |dest| [dest.x, dest.y, dest.z][axis]) {
         return Ok(value);
@@ -11897,12 +12302,14 @@ fn actor_destination_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Re
     Ok(actor.get::<Option<f32>>(POSITION_DEST_KEYS[axis])?.unwrap_or(0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_destination_zoom(lua: &Lua, actor: &Table, key: &str) -> mlua::Result<f32> {
     if let Some(value) = live_destination_scalar(lua, actor, key) { return Ok(value); }
     Ok(actor.get::<Option<f32>>(actor_capture_state_key(key).as_ref())?
         .or(actor.get::<Option<f32>>("__songlua_state_zoom")?).unwrap_or(1.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn live_pose_snapshot(lua: &Lua, actor: &Table) -> mlua::Result<Option<[(&'static str, Value); 26]>> {
     let Some(dest) = live_destination_value(lua, actor, |dest| *dest) else { return Ok(None); };
     let current = live_current_pose(lua, actor).expect("live destination has a current pose");
@@ -11939,6 +12346,7 @@ fn live_pose_snapshot(lua: &Lua, actor: &Table) -> mlua::Result<Option<[(&'stati
     ]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn copy_live_actor_pose(lua: &Lua, source: &Table, into: &Table) -> mlua::Result<()> {
     if let Some(pose) = live_pose_snapshot(lua, source)? {
         for (key, value) in pose { into.raw_set(key, value)?; }
@@ -11955,6 +12363,7 @@ pub(crate) fn copy_live_actor_pose(lua: &Lua, source: &Table, into: &Table) -> m
 struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     lua.remove_app_data::<LiveActorPlayback>();
     lua.remove_app_data::<CanonicalLiveActorHandles>();
@@ -11977,6 +12386,7 @@ pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn set_live_frame(lua: &Lua, seconds: f64, beat: f64, delta: f64) {
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
         frames.times[0] = seconds;
@@ -11989,6 +12399,7 @@ pub(crate) fn set_live_frame(lua: &Lua, seconds: f64, beat: f64, delta: f64) {
 
 pub(crate) use crate::tween_pose::TARGETS as TWEEN_POSE_TARGETS;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin_tween_replay<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -12061,6 +12472,7 @@ pub(crate) fn begin_tween_replay<Kind>(
     lua.set_app_data(ActorTweenReplays(replays));
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queue_replay_tween(lua: &Lua, actor: &Table, duration: f64, easing: Option<&str>) {
     let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else {
         return;
@@ -12086,6 +12498,7 @@ fn queue_replay_tween(lua: &Lua, actor: &Table, duration: f64, easing: Option<&s
     });
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_tween_write(
     lua: &Lua,
     actor: &Table,
@@ -12171,6 +12584,7 @@ fn record_tween_write(
     Some(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn observe_tween_write(
     lua: &Lua,
@@ -12186,6 +12600,7 @@ fn observe_tween_write(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     sync_replay_spin_pose(lua, actor)?;
     if live_actor_playback(lua) {
@@ -12258,6 +12673,7 @@ fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn sync_replay_spin_pose(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
         return Ok(());
@@ -12273,6 +12689,7 @@ fn sync_replay_spin_pose(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn clear_replay_tweens(lua: &Lua, actor: &Table, finish: bool) -> mlua::Result<()> {
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>()
         && let Some(replay) = replays.0.get_mut(&(actor.to_pointer() as usize))
@@ -12285,6 +12702,7 @@ fn clear_replay_tweens(lua: &Lua, actor: &Table, finish: bool) -> mlua::Result<(
     sync_tween_getters(lua, actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOverlayState) -> bool {
     if let Some(replays) = lua.app_data_ref::<ActorTweenReplays>()
         && let Some(replay) = replays.0.get(&(actor.to_pointer() as usize))
@@ -12295,6 +12713,7 @@ pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOve
     false
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if has_tween_replay(lua, actor) {
         return Ok(());
@@ -12318,11 +12737,13 @@ pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn has_tween_replay(lua: &Lua, actor: &Table) -> bool {
     lua.app_data_ref::<ActorTweenReplays>()
         .is_some_and(|replays| replays.0.contains_key(&(actor.to_pointer() as usize)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queue_replay_command(lua: &Lua, actor: &Table, name: &str) -> bool {
     if !has_tween_replay(lua, actor) {
         return false;
@@ -12340,6 +12761,7 @@ fn queue_replay_command(lua: &Lua, actor: &Table, name: &str) -> bool {
     true
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn dispatch_replay_command(
     lua: &Lua,
     actor: &Table,
@@ -12377,6 +12799,7 @@ fn dispatch_replay_command(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua::Result<()> {
     if lua.app_data_ref::<ActorTweenReplays>()
         .and_then(|replays| replays.0.get(&(actor.to_pointer() as usize)).map(|replay| replay.queue.is_empty()))
@@ -12459,6 +12882,7 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn sample_tween_replays(lua: &Lua) {
     let time = lua
         .app_data_ref::<SongLuaCompileFrames>()
@@ -12478,6 +12902,7 @@ pub(crate) fn sample_tween_replays(lua: &Lua) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn capture_tween_poses(lua: &Lua, actors: &[Table]) {
     let Some(replays) = lua.app_data_ref::<ActorTweenReplays>() else {
         return;
@@ -12511,6 +12936,7 @@ pub(crate) fn capture_tween_poses(lua: &Lua, actors: &[Table]) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn finish_tween_replay<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -12547,6 +12973,7 @@ pub(crate) fn finish_tween_replay<Kind>(
 
 // Snapshot the native update ancestry before speculative queued-body captures.
 // A wrapper receives its owner's wake remainder before the owner applies its rate.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn startup_clock_path(actor: &Table) -> mlua::Result<Vec<[f32; 2]>> {
     let mut path = Vec::new();
     let mut next = Some(actor.clone());
@@ -12686,6 +13113,7 @@ pub(crate) fn bake_startup_tweens<'a>(
 }
 pub(crate) type SongLuaStartupStates = HashMap<usize, SongLuaStartupState>;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn collect_initial_states(
     root: &Value,
     states: &mut HashMap<usize, (Table, SongLuaOverlayState)>,
@@ -12706,6 +13134,7 @@ pub(crate) fn collect_initial_states(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn screen_layer_states(
     lua: &Lua,
 ) -> mlua::Result<HashMap<usize, (Table, SongLuaOverlayState)>> {
@@ -12721,6 +13150,7 @@ pub(crate) fn screen_layer_states(
     Ok(states)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn capture_startup_states(
     states: HashMap<usize, (Table, SongLuaOverlayState)>,
 ) -> Result<HashMap<usize, SongLuaStartupState>, String> {
@@ -12791,6 +13221,7 @@ pub(crate) fn capture_startup_states(
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_startup_states(
     lua: &Lua,
     actor: &Table,
@@ -12848,6 +13279,7 @@ fn collect_startup_states(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_wrapper_initials(
     actor: &Table,
     states: &mut HashMap<usize, (Table, SongLuaOverlayState)>,
@@ -12869,6 +13301,7 @@ fn collect_wrapper_initials(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_startup(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<crate::SongLuaStartup> {
     let globals = lua.globals();
     let mut startup = crate::SongLuaStartup::default();
@@ -12896,6 +13329,7 @@ pub(crate) struct SongLuaStartupCapture {
     pub broadcasts: Vec<(f32, String, bool)>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn set_reference_start_clock(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     if let Some(&[music, beat, _]) = context.compile_clock_inputs.first() {
@@ -12907,6 +13341,7 @@ fn set_reference_start_clock(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_initial_update(
     lua: &Lua,
     root: &Table,
@@ -12955,6 +13390,7 @@ fn capture_initial_update(
     Ok(updates)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn run_actor_startup_commands(
     lua: &Lua,
     root: &Value,
@@ -13011,6 +13447,43 @@ pub(crate) fn run_actor_startup_commands(
     }
     let broadcasts = take_runtime_broadcasts(lua);
     collect_wrapper_initials(root, &mut initial_states)?;
+    #[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+    if let Some(probe) = lua.remove_app_data::<crate::compile::MigrationActivationProbe>() {
+        let startup_queue = lua
+            .app_data_ref::<SongLuaStartupQueues>()
+            .unwrap()
+            .0
+            .clone();
+        lua.set_app_data(crate::compile::MigrationActivationResult {
+            root: root.clone(),
+            startup_queue,
+            initial_states: initial_states.values().cloned().collect(),
+            updates: initial_updates
+                .into_iter()
+                .map(|(actor, state)| {
+                    (
+                        actor,
+                        crate::rust_engine::SongStartupState {
+                            initial: state.initial,
+                            blocks: state.blocks,
+                            steps: state.steps,
+                            commands: state.commands,
+                            block_steps: state.block_steps,
+                            clock_path: state.clock_path,
+                        },
+                    )
+                })
+                .collect(),
+            broadcasts,
+
+            initialized: probe.initialized,
+            options: options.clone(),
+            new_screen: screen_request.as_ref().map(|request| request.0.clone()),
+        });
+        return Err(mlua::Error::runtime(
+            "migration activation boundary reached",
+        ));
+    }
     let queued = lua
         .remove_app_data::<SongLuaStartupQueues>()
         .expect("startup queue scope was installed above");
@@ -13107,8 +13580,10 @@ pub(crate) fn run_actor_startup_commands(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct SongLuaStartupLocals(Option<FunctionActionSnapshot>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn end_actor_scene(lua: &Lua, root: &Table) -> mlua::Result<()> {
     lua.globals().raw_set("__songlua_top_screen", Value::Nil)?;
     // EndScreen dispatches commands without advancing the outgoing actors'
@@ -13119,6 +13594,7 @@ pub(crate) fn end_actor_scene(lua: &Lua, root: &Table) -> mlua::Result<()> {
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn restore_startup_locals(lua: &Lua) -> mlua::Result<()> {
     if let Some(snapshot) = lua
         .remove_app_data::<SongLuaStartupLocals>()
@@ -13129,10 +13605,12 @@ pub(crate) fn restore_startup_locals(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_update_functions_with_delta(lua, root, 1.0_f64 / 60.0)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_update_functions_with_delta(
     lua: &Lua,
     root: &Value,
@@ -13151,6 +13629,7 @@ enum SongLuaCompileParentDelta {
     NoteColumns,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
     Transition { actor: Table },
@@ -13180,6 +13659,7 @@ enum SongLuaCompileUpdateJob {
     },
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone, Default)]
 struct SongLuaCompileUpdatePlan {
     jobs: Arc<[SongLuaCompileUpdateJob]>,
@@ -13193,6 +13673,7 @@ struct CompileUpdateSlots {
     parent: Option<usize>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl SongLuaCompileUpdatePlan {
     fn new(jobs: Vec<SongLuaCompileUpdateJob>) -> Self {
         let mut actors = FxHashMap::default();
@@ -13223,10 +13704,12 @@ impl SongLuaCompileUpdatePlan {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn invalidate_compile_update_plan(lua: &Lua) {
     lua.remove_app_data::<SongLuaCompileUpdatePlan>();
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_compile_update_jobs(
     lua: &Lua,
     actor: &Table,
@@ -13273,6 +13756,7 @@ fn collect_compile_update_jobs(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_compile_update_self_jobs(
     lua: &Lua,
     actor: &Table,
@@ -13323,6 +13807,7 @@ fn collect_compile_update_self_jobs(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<SongLuaCompileUpdatePlan> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
@@ -13386,6 +13871,7 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<SongLuaCompileUp
         .unwrap_or_default())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Copy only the authored root's existing traversal, without executing lookups
 /// or rebuilding a plan that authored code may have invalidated.
 pub(crate) fn callback_update_jobs(lua: &Lua, root: &Value) -> Option<Vec<crate::actor_input::update::SourceJob>> {
@@ -13436,14 +13922,17 @@ pub(crate) fn callback_update_jobs(lua: &Lua, root: &Value) -> Option<Vec<crate:
 // mlua Table clones share one auxiliary stack reference. Keep one retained
 // handle per actor across the live registry and update jobs, instead of reading
 // the same Lua object into a new auxiliary reference at every tree traversal.
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct CanonicalLiveActorHandles(FxHashMap<usize, Table>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn canonical_live_actor_handle(lua: &Lua, actor: Table) -> Table {
     lua.app_data_ref::<CanonicalLiveActorHandles>()
         .and_then(|cache| cache.0.get(&(actor.to_pointer() as usize)).cloned())
         .unwrap_or(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn prepare_live_actor_handle_cache(
     lua: &Lua,
     actors: impl IntoIterator<Item = Table>,
@@ -13460,6 +13949,7 @@ pub(crate) fn prepare_live_actor_handle_cache(
     Ok(registry)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn prepare_live_updates(lua: &Lua, root: &Value) -> mlua::Result<()> {
     if let Value::Table(root) = root {
         compile_update_jobs(lua, root)?;
@@ -13467,6 +13957,7 @@ pub(crate) fn prepare_live_updates(lua: &Lua, root: &Value) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlua::Result<bool> {
     let Value::Table(root) = root else {
         return Ok(false);
@@ -13515,6 +14006,7 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
 // tween destination. Keep that small rotation queue inside semantic actor state
 // so speculative captures restore it along with the actor. It exists only at
 // song load; gameplay consumes baked rotation tracks without Lua allocations.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn queue_spin_tween(
     lua: &Lua,
     actor: &Table,
@@ -13542,6 +14034,7 @@ fn queue_spin_tween(
     pose.set("tail", tail + 1)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn clear_spin_queue(actor: &Table, finish: bool) -> mlua::Result<()> {
     let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
         return Ok(());
@@ -13566,6 +14059,7 @@ fn clear_spin_queue(actor: &Table, finish: bool) -> mlua::Result<()> {
     pose.set("tail", 0usize)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
     // Native Actor advances its timer before any effect has been selected.
     // Retain that history so a later pulse keeps the actor's existing phase.
@@ -13618,31 +14112,10 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
 mod actor_clock_tests {
     use super::*;
 
-    #[test]
-    fn effect_clock_timer_preserves_itgmania_single_subtraction_and_getters() {
-        for native in [false, true] {
-            let lua = Lua::new();
-            if native { lua.set_app_data(LiveActorPlayback); }
-            let actor = lua.create_table().unwrap();
-            install_actor_effect_time_getter_methods(&lua, &actor).unwrap();
-            let units = actor.get::<Function>("GetSecsIntoEffect").unwrap();
-            let delta = actor.get::<Function>("GetEffectDelta").unwrap();
-            // Actor.cpp uses >, not >=, and subtracts the period only once.
-            for (elapsed, expected) in [(0.5, 0.5), (0.5, 1.0), (0.0, 1.0), (2.5, 2.5), (-0.5, 1.0)] {
-                advance_motion_clock(&lua, &actor, elapsed).unwrap();
-                assert_eq!(units.call::<f32>(()).unwrap(), expected);
-                assert_eq!(delta.call::<f32>(()).unwrap(), elapsed as f32);
-            }
-            actor.raw_set("__songlua_state_effect_period", 0.0).unwrap();
-            advance_motion_clock(&lua, &actor, 2.0).unwrap();
-            assert_eq!(units.call::<f32>(()).unwrap(), 3.0);
-            actor.raw_set("__songlua_state_effect_period", -1.0).unwrap();
-            advance_motion_clock(&lua, &actor, 0.0).unwrap();
-            assert_eq!(units.call::<f32>(()).unwrap(), 4.0);
-        }
-    }
+    
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn effect_render_time(
     actor: &Table,
     frame_clock: [f32; 2],
@@ -13688,6 +14161,7 @@ pub(crate) fn effect_render_time(
     ]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn sync_motion_restart(lua: &Lua, actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {
     // Global clocks replace the timer on every update. A startup effect reset
     // must not overwrite that frame's beat/music clock with elapsed seconds.
@@ -13716,6 +14190,7 @@ pub(crate) fn sync_motion_restart(lua: &Lua, actor: &Table, epoch: f32, seconds:
 
 // Mirrors Actor::UpdateInternal: advance spin first, then interpolate the
 // complete tween rotation even if the authored tween only changes alpha.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
     let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
         return Ok(());
@@ -13813,6 +14288,7 @@ fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Resu
     pose.set("baked", true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn spin_render_pose(actor: &Table) -> mlua::Result<Option<[f32; 3]>> {
     let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
         return Ok(None);
@@ -13837,6 +14313,7 @@ struct SongLuaCompileUpdatePhase {
     delta_seconds: f64,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_message_advance(lua: &Lua, actor: &Table) {
     let advance = actor_frame_advance(lua, actor);
     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
@@ -13861,6 +14338,7 @@ fn record_message_advance(lua: &Lua, actor: &Table) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_frame_advance(lua: &Lua, actor: &Table) -> f32 {
     let Some(phase) = lua.app_data_ref::<SongLuaCompileUpdatePhase>() else {
         return 0.0;
@@ -13879,6 +14357,7 @@ fn actor_frame_advance(lua: &Lua, actor: &Table) -> f32 {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_compile_update_functions_with_delta(
     lua: &Lua,
     root: &Value,
@@ -13901,6 +14380,7 @@ struct ActorCompileUpdateDeltas {
 #[derive(Default)]
 struct CompileUpdateDeltaScratch(Vec<ActorCompileUpdateDeltas>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn run_actor_compile_update_functions_with_entry(
     lua: &Lua,
     root: &Value,
@@ -14109,6 +14589,7 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<bool> {
     let Value::Table(root) = root else {
         return Ok(false);
@@ -14116,6 +14597,7 @@ pub fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<
     actor_table_has_update_functions(lua, root)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn update_tree_reads_global(lua: &Lua, root: &Value, name: &str) -> mlua::Result<bool> {
     let Value::Table(root) = root else {
         return Ok(false);
@@ -14123,6 +14605,7 @@ pub fn update_tree_reads_global(lua: &Lua, root: &Value, name: &str) -> mlua::Re
     update_actor_reads_global(lua, root, name.as_bytes())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn update_actor_reads_global(lua: &Lua, actor: &Table, name: &[u8]) -> mlua::Result<bool> {
     let chunk_has_name = |function: Function| {
         let chunk = function.dump(true);
@@ -14152,6 +14635,7 @@ fn update_actor_reads_global(lua: &Lua, actor: &Table, name: &[u8]) -> mlua::Res
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn song_meter_stream_child(lua: &Lua, actor: &Table) -> mlua::Result<Option<Table>> {
     if !actor_type_is(actor, "SongMeterDisplay")? {
         return Ok(None);
@@ -14163,6 +14647,7 @@ fn song_meter_stream_child(lua: &Lua, actor: &Table) -> mlua::Result<Option<Tabl
     Ok(Some(stream))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_song_meter_stream_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(stream) = song_meter_stream_child(lua, actor)? else {
         return Ok(());
@@ -14170,6 +14655,7 @@ fn run_song_meter_stream_init_command(lua: &Lua, actor: &Table) -> mlua::Result<
     run_actor_init_commands_for_table(lua, &stream)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_song_meter_stream_startup_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(stream) = song_meter_stream_child(lua, actor)? else {
         return Ok(());
@@ -14177,12 +14663,14 @@ fn run_song_meter_stream_startup_command(lua: &Lua, actor: &Table) -> mlua::Resu
     run_actor_startup_commands_for_table(lua, &stream)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
     Ok(actor
         .raw_get::<Option<f64>>("__songlua_update_rate")?
         .unwrap_or(1.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_hibernation(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<Option<f64>> {
     if actor
         .raw_get::<Option<bool>>("__songlua_theme_hibernating")?
@@ -14208,6 +14696,7 @@ fn advance_hibernation(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Re
     Ok((left <= 0.0).then(|| f64::from(-left)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn report_update_error(
     lua: &Lua,
     actor: &Table,
@@ -14236,6 +14725,7 @@ pub(crate) fn report_update_error(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_recurring_update(
     lua: &Lua,
     actor: &Table,
@@ -14335,6 +14825,7 @@ fn run_recurring_update(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_update_callback(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
     let key = if actor
         .raw_get::<Option<bool>>("__songlua_update_pending")?
@@ -14362,6 +14853,7 @@ fn run_update_callback(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_update_functions_for_table(
     lua: &Lua,
     actor: &Table,
@@ -14370,6 +14862,7 @@ pub fn run_actor_update_functions_for_table(
     run_actor_update_functions_for_table_inner(lua, actor, parent_delta_seconds, false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn run_actor_update_functions_for_table_inner(
     lua: &Lua,
     actor: &Table,
@@ -14436,6 +14929,7 @@ fn run_actor_update_functions_for_table_inner(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_draw_functions(lua: &Lua, root: &Value) {
     let Value::Table(root) = root else {
         return;
@@ -14445,6 +14939,7 @@ pub fn run_actor_draw_functions(lua: &Lua, root: &Value) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let globals = lua.globals();
     let prior = globals.raw_get::<Value>(DRAW_CALLBACK_ACTIVE_KEY)?;
@@ -14467,6 +14962,7 @@ pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Res
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
     // Motion clocks need chronological advancement even without a Lua callback.
     if actor
@@ -14514,6 +15010,7 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
 // Table::get supplies a live result slot under the VM lock. Classify this
 // frequent name without copying it; retain String's validation and coercions.
 struct ActorIsFrameTexture(bool);
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl mlua::FromLua for ActorIsFrameTexture {
     fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
         Ok(Self(
@@ -14544,6 +15041,7 @@ impl mlua::FromLua for ActorIsFrameTexture {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline]
 pub fn actor_type_is(actor: &Table, expected: &str) -> mlua::Result<bool> {
     if expected.eq_ignore_ascii_case("ActorFrameTexture") {
@@ -14560,6 +15058,7 @@ pub fn actor_type_is(actor: &Table, expected: &str) -> mlua::Result<bool> {
         }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
     Ok(actor
         .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
@@ -14571,6 +15070,7 @@ pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
         }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_named_actor(
     lua: &Lua,
     actor_type: &'static str,
@@ -14583,6 +15083,7 @@ pub fn create_named_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_named_text_actor(
     lua: &Lua,
     actor_type: &'static str,
@@ -14595,6 +15096,7 @@ pub fn create_named_text_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_combo_milestone(lua: &Lua, thousand: bool) -> mlua::Result<Value> {
     let (name, source) = if thousand {
         ("Combo 1000milestone", include_str!("../assets/simply-love/Graphics/Combo 1000milestone/default.lua"))
@@ -14623,6 +15125,7 @@ fn load_native_combo_milestone(lua: &Lua, thousand: bool) -> mlua::Result<Value>
         .set_name(format!("@theme:/Graphics/{name}/default.lua")).eval()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool,
     install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>) -> mlua::Result<Table> {
     let install = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
@@ -14638,6 +15141,7 @@ fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool,
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_native_gameplay_combo(lua: &Lua,
     install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>) -> mlua::Result<()> {
     let globals = lua.globals();
@@ -14663,6 +15167,7 @@ pub(crate) fn install_native_gameplay_combo(lua: &Lua,
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_named_child_actor(
     lua: &Lua,
     parent: &Table,
@@ -14858,6 +15363,7 @@ pub(crate) fn native_gameplay_in_bitmap_filename(name: &str) -> Option<&'static 
         .map(|bitmap| bitmap.filename)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_gameplay_in_bitmap(name: &str) -> mlua::Result<String> {
     let bitmap = NATIVE_GAMEPLAY_IN_BITMAPS.iter()
         .find(|bitmap| bitmap.key == name || bitmap.filename == name)
@@ -14883,35 +15389,14 @@ fn load_native_gameplay_in_bitmap(name: &str) -> mlua::Result<String> {
     }).as_ref().cloned().map_err(|error| mlua::Error::external(error.clone()))
 }
 
-pub(crate) const NATIVE_BLANK_TEXTURE_PATH: &str = "Themes/_fallback/Graphics/_blank.png";
+pub(crate) use crate::blank_texture::NATIVE_BLANK_TEXTURE_PATH;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_blank_texture() -> mlua::Result<&'static str> {
-    // Bundled native bitmap, decoded/prepared once at screen construction.
-    // The generated registry carries real pixels to ordinary renderer prewarm.
-    static PREPARED: OnceLock<Result<(), String>> = OnceLock::new();
-    PREPARED.get_or_init(|| {
-        let decoded = image::load_from_memory_with_format(
-            include_bytes!("../assets/itgmania/_blank.png"), image::ImageFormat::Png,
-        ).map_err(|error| error.to_string())?;
-        let mut bitmap = decoded.into_rgba8();
-        let source_size = [bitmap.width(), bitmap.height()];
-        let hints = deadlib_assets::TextureHints {
-            min_size: Some(8), max_size: Some(2048), ..Default::default()
-        };
-        let upload = deadlib_assets::texture_image_size(source_size, &hints)
-            .map_err(|error| error.to_string())?;
-        if upload != source_size {
-            bitmap = image::imageops::resize(&bitmap, upload[0], upload[1], image::imageops::FilterType::Triangle);
-        }
-        deadlib_assets::fix_hidden_alpha(&mut bitmap);
-        deadlib_assets::register_prepared_generated_texture(
-            NATIVE_BLANK_TEXTURE_PATH, bitmap, source_size, hints.sampler_desc(),
-        );
-        Ok(())
-    }).as_ref().map(|_| NATIVE_BLANK_TEXTURE_PATH)
-        .map_err(|error| mlua::Error::external(error.clone()))
+    crate::blank_texture::load_native_blank_texture().map_err(mlua::Error::external)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_lyric_display_actor(
     lua: &Lua,
     name: &str,
@@ -14956,6 +15441,7 @@ return allReverse and 'SetReverse' or anyReverse and 'SetOneReverse' or 'SetNoRe
 }
 
 // StepsDisplay.cpp::Load/SetInternal and the pinned StepsDisplayGameplay metrics.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_native_steps_display(
     lua: &Lua, name: &str,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -14987,12 +15473,14 @@ fn create_native_steps_display(
     Ok(display)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_steps_display_visibility(lua: &Lua, actor: &Table, visible: bool) -> mlua::Result<()> {
     // Native SetVisible updates the immediate property, including GetVisible.
     actor.raw_set("__songlua_visible", visible)?;
     capture_immediate_bool(lua, actor, "visible", visible)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_steps_display_set(lua: &Lua, display: &Table, value: Option<Table>, trail: bool) -> mlua::Result<()> {
     let (difficulty, steps_type, meter) = if let Some(value) = &value {
         (value.get::<Function>("GetDifficulty")?.call::<String>(value.clone())?,
@@ -15050,6 +15538,7 @@ fn native_steps_display_set(lua: &Lua, display: &Table, value: Option<Table>, tr
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_steps_display_from_game_state(lua: &Lua, display: &Table, player: Value) -> mlua::Result<()> {
     let game = lua.globals().get::<Table>("GAMESTATE")?;
     let course = game.get::<Function>("IsCourseMode")?.call::<bool>(game.clone())?;
@@ -15058,6 +15547,7 @@ fn native_steps_display_from_game_state(lua: &Lua, display: &Table, player: Valu
     native_steps_display_set(lua, display, value, course)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn initialize_native_steps_displays(lua: &Lua, screen: &Table) -> mlua::Result<()> {
     let game = lua.globals().get::<Table>("GAMESTATE")?;
     let commands = lua.load(r#"
@@ -15098,6 +15588,7 @@ return {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_top_screen_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -15355,6 +15846,7 @@ return {
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_native_song_background(
     lua: &Lua, create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Table> {
@@ -15392,6 +15884,7 @@ fn create_native_song_background(
     Ok(background)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_underlay_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -15427,6 +15920,7 @@ pub fn create_underlay_theme_actor(
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_screen_timer_actor(
     lua: &Lua,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -15439,6 +15933,7 @@ pub fn create_screen_timer_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_top_screen_score_actor(
     lua: &Lua,
     player_index: usize,
@@ -15457,6 +15952,7 @@ pub fn create_top_screen_score_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_score_display_percent_actor(
     lua: &Lua,
     player_index: usize,
@@ -15470,6 +15966,7 @@ pub fn create_score_display_percent_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_score_percent_text_actor(
     lua: &Lua,
     player_index: usize,
@@ -15481,6 +15978,7 @@ pub fn create_score_percent_text_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_option_row_table(
     lua: &Lua,
     name: &str,
@@ -15499,6 +15997,7 @@ pub fn create_option_row_table(
     Ok(row)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_option_row_frame(
     lua: &Lua,
     row_name: &str,
@@ -15520,6 +16019,7 @@ fn create_option_row_frame(
     Ok(frame)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_option_row_text_actor(
     lua: &Lua,
     name: &str,
@@ -15532,6 +16032,7 @@ fn create_option_row_text_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_top_screen_player_actor(
     lua: &Lua,
     player: SongLuaPlayerContext,
@@ -15591,6 +16092,7 @@ pub fn create_top_screen_player_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_top_screen_theme_children(
     lua: &Lua,
     top_screen: &Table,
@@ -15635,6 +16137,7 @@ pub fn install_top_screen_theme_children(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_underlay_background_filter(
     lua: &Lua, underlay: &Table, player: usize,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -15708,6 +16211,7 @@ return {
     Ok(Some(actor))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_underlay_difficulty_meter(
     lua: &Lua, underlay: &Table, player: usize,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -15793,6 +16297,7 @@ return {
     Ok(frame)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_standard_life_swoosh() -> mlua::Result<String> {
     static PREPARED: OnceLock<Result<String, String>> = OnceLock::new();
     PREPARED.get_or_init(|| {
@@ -15810,6 +16315,7 @@ fn load_native_standard_life_swoosh() -> mlua::Result<String> {
     }).as_ref().cloned().map_err(|error| mlua::Error::external(error.clone()))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_underlay_standard_life_meter(
     lua: &Lua, underlay: &Table, player: usize,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -15959,6 +16465,7 @@ return meter
     Ok(Some(meter))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_shared_bpm_node(
     lua: &Lua, parent: &Table, definition: Table,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -15997,6 +16504,7 @@ fn create_shared_bpm_node(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_underlay_shared_bpm(
     lua: &Lua, underlay: &Table,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -16174,6 +16682,7 @@ return t
     create_shared_bpm_node(lua, underlay, definition, create_dummy_actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_underlay_theme_children(
     lua: &Lua,
     underlay: &Table,
@@ -16238,6 +16747,7 @@ pub fn install_underlay_theme_children(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_named_theme_children(
     lua: &Lua,
     parent: &Table,
@@ -16258,6 +16768,7 @@ fn install_named_theme_children(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_hold_judgments(
     lua: &Lua, player: &Table, player_index: usize, style_name: &str,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
@@ -16294,6 +16805,7 @@ fn install_hold_judgments(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_life_meter_table(
     lua: &Lua,
     name: &'static str,
@@ -16356,6 +16868,7 @@ pub fn create_life_meter_table(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_note_field_actor(
     lua: &Lua,
     player_index: usize,
@@ -16419,6 +16932,7 @@ pub fn create_note_field_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn note_field_column_actors(
     lua: &Lua,
     note_field: &Table,
@@ -16450,6 +16964,7 @@ pub fn note_field_column_actors(
     Ok(columns)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_top_screen_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -16872,6 +17387,7 @@ pub fn create_top_screen_table(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_note_column_actor(
     lua: &Lua,
     note_field: &Table,
@@ -16919,6 +17435,7 @@ pub fn create_note_column_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
     let handler = lua.create_table()?;
     let spline = create_cubic_spline_table(lua)?;
@@ -16992,6 +17509,7 @@ pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
     Ok(handler)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
     let spline = lua.create_table()?;
     spline.set("__songlua_spline_size", 0_i64)?;
@@ -17137,6 +17655,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(spline)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn solve_spline_table(lua: &Lua, spline: &Table) -> mlua::Result<()> {
     let size = spline.get::<usize>("__songlua_spline_size")?;
     let table = spline.get::<Table>("__songlua_spline_points")?;
@@ -17158,6 +17677,7 @@ fn solve_spline_table(lua: &Lua, spline: &Table) -> mlua::Result<()> {
     spline.set("__songlua_spline_coefficients", table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn eval_spline_table(lua: &Lua, spline: &Table, t: f32) -> mlua::Result<Table> {
     let size = spline.get::<usize>("__songlua_spline_size")?;
     let mut values = [0.0_f32; 3];
@@ -17191,6 +17711,7 @@ fn eval_spline_table(lua: &Lua, spline: &Table, t: f32) -> mlua::Result<Table> {
     lua.create_sequence_from(values)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_spline_point(points: &Table, index: usize) -> mlua::Result<[f32; 3]> {
     let Some(point) = points.raw_get::<Option<Table>>(index)? else {
         return Ok([0.0; 3]);
@@ -17202,6 +17723,7 @@ fn read_spline_point(points: &Table, index: usize) -> mlua::Result<[f32; 3]> {
     Ok(values)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn note_zoom_point_hides(point: &Table) -> bool {
     let zoom_x = point.raw_get::<Value>(1).ok().and_then(read_f32);
     let zoom_y = point.raw_get::<Value>(2).ok().and_then(read_f32);
@@ -17227,6 +17749,7 @@ pub fn push_note_hide_window(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_zoom_hides_for_actor(
     player: usize,
     column: usize,
@@ -17288,6 +17811,7 @@ pub fn read_note_column_zoom_hides_for_actor(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindow>, String> {
     let globals = lua.globals();
     let mut out = Vec::new();
@@ -17330,6 +17854,7 @@ pub fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindo
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
     let Some(handler) = actor
         .get::<Option<Table>>("__songlua_pos_handler")
@@ -17388,6 +17913,7 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
 // sequence_values also uses raw access, so actor metatables do not affect this.
 // Scripted registry getters/setters can add sequence children; retain the full
 // merge path when the registry is not already stored on the actor.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn note_field_table(lua: &Lua, player_actor: &Table) -> mlua::Result<Option<Table>> {
     if player_actor.raw_len() == 0
         && let Some(children) = player_actor.raw_get::<Option<Table>>("__songlua_children")?
@@ -17397,6 +17923,7 @@ fn note_field_table(lua: &Lua, player_actor: &Table) -> mlua::Result<Option<Tabl
     actor_named_children(lua, player_actor)?.get("NoteField")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn for_each_note_field(
     lua: &Lua,
     mut visit: impl FnMut(Table) -> mlua::Result<()>,
@@ -17419,6 +17946,7 @@ fn for_each_note_field(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
     let mut out = Vec::new();
     for_each_note_field(lua, |field| {
@@ -17428,10 +17956,12 @@ pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<SongLuaColumnOffsetSample>, String> {
     read_note_column_pos_samples_for_fields(note_field_tables(lua).map_err(|err| err.to_string())?)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_transform_samples(
     lua: &Lua,
 ) -> Result<Vec<SongLuaColumnTransformSample>, String> {
@@ -17465,6 +17995,7 @@ fn spline_points_match(points: &[[f32; 3]], coefficients: &[[[f32; 4]; 3]]) -> b
             })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_position_spline(
     column: &Table,
     key: &str,
@@ -17568,6 +18099,7 @@ fn read_position_spline(
     Ok(Some(result))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Reuse capture scratch and the preceding frame's immutable coefficients.
 /// Every Lua field and coordinate is still read and validated on every sample.
 pub(crate) fn read_column_position_splines<'a>(
@@ -17623,6 +18155,7 @@ pub(crate) fn read_column_position_splines<'a>(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn compile_note_column_pos_function_ease(
     lua: &Lua,
     function: &Function,
@@ -17660,6 +18193,7 @@ pub fn compile_note_column_pos_function_ease(
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_note_column_transform_samples(
     lua: &Lua,
     function: &Function,
@@ -17677,6 +18211,7 @@ fn capture_note_column_transform_samples(
     samples
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn note_column_handler_uniform_component(
     column: &Table,
     handler_key: &str,
@@ -17767,6 +18302,7 @@ fn note_column_handler_uniform_component(
     Ok(Some(if offset_mode { baseline + value } else { value }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn note_column_position_x_offset(column: &Table) -> Result<Option<f32>, String> {
     let Some(handler) = column
         .get::<Option<Table>>("__songlua_pos_handler")
@@ -17787,6 +18323,7 @@ fn note_column_position_x_offset(column: &Table) -> Result<Option<f32>, String> 
 
 // Two-point splines are linear even when Solve uses cubic interpolation.
 // Keep point and handler validation together to avoid partial captures.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn note_column_pos_spline(
     actor: &Table,
 ) -> Result<Option<[(SongLuaColumnTransformTarget, f32); 10]>, String> {
@@ -17850,6 +18387,7 @@ fn note_column_pos_spline(
     Ok(Some(out))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_transform_samples_for_fields(
     note_fields: Vec<Table>,
 ) -> Result<Vec<SongLuaColumnTransformSample>, String> {
@@ -17933,6 +18471,7 @@ pub fn read_note_column_transform_samples_for_fields(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_note_column_pos_samples_for_fields(
     note_fields: Vec<Table>,
 ) -> Result<Vec<SongLuaColumnOffsetSample>, String> {
@@ -17973,6 +18512,7 @@ pub fn read_note_column_pos_samples_for_fields(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaNoteColumnHandlerSnapshot {
     handler: Table,
     spline: Table,
@@ -17985,6 +18525,7 @@ pub struct SongLuaNoteColumnHandlerSnapshot {
     spline_points: Value,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaNoteFieldColumnSnapshot {
     player_actor: Table,
     note_field: Option<Table>,
@@ -17992,6 +18533,7 @@ pub struct SongLuaNoteFieldColumnSnapshot {
     handlers: Vec<SongLuaNoteColumnHandlerSnapshot>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_note_column_handlers(
     lua: &Lua,
     columns: &Table,
@@ -18032,6 +18574,7 @@ pub fn snapshot_note_column_handlers(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_note_field_columns(lua: &Lua) -> mlua::Result<Vec<SongLuaNoteFieldColumnSnapshot>> {
     let mut out = Vec::new();
     let globals = lua.globals();
@@ -18063,6 +18606,7 @@ pub fn snapshot_note_field_columns(lua: &Lua) -> mlua::Result<Vec<SongLuaNoteFie
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_note_column_handlers(
     snapshots: Vec<SongLuaNoteColumnHandlerSnapshot>,
 ) -> mlua::Result<()> {
@@ -18092,6 +18636,7 @@ pub fn restore_note_column_handlers(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_note_field_columns(
     lua: &Lua,
     snapshots: Vec<SongLuaNoteFieldColumnSnapshot>,
@@ -18115,6 +18660,7 @@ pub fn restore_note_field_columns(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn probe_target_kind(actor: &Table) -> mlua::Result<&'static str> {
     let Some(_player_index) = actor.get::<Option<i64>>("__songlua_player_index")? else {
         return Ok("overlay");
@@ -18133,6 +18679,7 @@ pub fn probe_target_kind(actor: &Table) -> mlua::Result<&'static str> {
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> mlua::Result<()> {
     if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_none() {
         return Ok(());
@@ -18149,6 +18696,7 @@ pub fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_none() {
         return Ok(());
@@ -18171,6 +18719,7 @@ fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn prepare_capture_scope_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if lua.app_data_ref::<SongLuaActionCaptureActive>().is_none() {
         return Ok(());
@@ -18203,6 +18752,7 @@ pub fn prepare_capture_scope_actor(lua: &Lua, actor: &Table) -> mlua::Result<()>
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEaseTarget>> {
     let mut saw_x = false;
     let mut saw_y = false;
@@ -18296,6 +18846,7 @@ pub fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLu
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn probe_function_ease_target(
     lua: &Lua,
     function: &Function,
@@ -18329,6 +18880,7 @@ pub fn probe_function_ease_target(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn probe_call_names(calls: &Table) -> mlua::Result<Vec<String>> {
     let mut out = Vec::new();
     for value in calls.sequence_values::<String>() {
@@ -18337,6 +18889,7 @@ pub fn probe_call_names(calls: &Table) -> mlua::Result<Vec<String>> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn probe_actor_pointers(actors: &Table) -> mlua::Result<Vec<usize>> {
     let mut out = Vec::new();
     for value in actors.sequence_values::<Table>() {
@@ -18345,6 +18898,7 @@ pub fn probe_actor_pointers(actors: &Table) -> mlua::Result<Vec<usize>> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_scope_actor_pointers(actors: &Table) -> mlua::Result<HashSet<usize>> {
     let mut out = HashSet::with_capacity(actors.raw_len());
     for actor in actors.sequence_values::<Table>() {
@@ -18353,6 +18907,7 @@ pub fn capture_scope_actor_pointers(actors: &Table) -> mlua::Result<HashSet<usiz
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_scope_actor_tables(actors: &Table) -> mlua::Result<Vec<Table>> {
     let mut out = Vec::with_capacity(actors.raw_len());
     for actor in actors.sequence_values::<Table>() {
@@ -18361,6 +18916,7 @@ pub fn capture_scope_actor_tables(actors: &Table) -> mlua::Result<Vec<Table>> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaActionCaptureScope {
     pub actors: Table,
     pub snapshots: Table,
@@ -18371,6 +18927,7 @@ pub struct SongLuaActionCaptureScope {
     random: Option<crate::compat::RandomSnapshot>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn begin_action_capture_scope(lua: &Lua) -> mlua::Result<SongLuaActionCaptureScope> {
     let globals = lua.globals();
     let previous_actors = globals.get::<Value>(SONG_LUA_CAPTURE_ACTORS_KEY)?;
@@ -18397,6 +18954,7 @@ pub fn begin_action_capture_scope(lua: &Lua) -> mlua::Result<SongLuaActionCaptur
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_action_capture_scope(
     lua: &Lua,
     scope: SongLuaActionCaptureScope,
@@ -18425,6 +18983,7 @@ pub fn restore_action_capture_scope(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_scope_snapshots(
     snapshots: &Table,
 ) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
@@ -18438,6 +18997,7 @@ pub fn capture_scope_snapshots(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn reset_actor_capture_tables(lua: &Lua, actors: &[Table]) -> Result<(), String> {
     for actor in actors {
         reset_actor_capture(lua, actor).map_err(|err| err.to_string())?;
@@ -18445,6 +19005,7 @@ pub fn reset_actor_capture_tables(lua: &Lua, actors: &[Table]) -> Result<(), Str
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn reset_indexed_actor_capture_tables(
     lua: &Lua,
     actors: &[(usize, Table)],
@@ -18455,12 +19016,14 @@ pub fn reset_indexed_actor_capture_tables(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn collect_indexed_actor_capture_blocks(
     actors: &[(usize, Table)],
 ) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
     collect_borrowed_actor_capture_blocks(actors.iter().map(|(index, actor)| (*index, actor)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_borrowed_actor_capture_blocks<'a>(
     actors: impl IntoIterator<Item = (usize, &'a Table)>,
 ) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
@@ -18475,6 +19038,7 @@ fn collect_borrowed_actor_capture_blocks<'a>(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_indexed_actor_function_blocks(
     lua: &Lua,
     actors: &[(usize, Table)],
@@ -18502,6 +19066,7 @@ pub fn capture_indexed_actor_function_blocks(
     Ok(blocks)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_touched_blocks(
     lua: &Lua,
     actors: &[(usize, Table)],
@@ -18538,6 +19103,7 @@ fn capture_touched_blocks(
     Ok(blocks)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_overlay_function_eases(
     lua: &Lua,
     overlays: &[(usize, Table)],
@@ -18613,6 +19179,7 @@ pub fn capture_overlay_function_eases(
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_overlay_compile_actor_function_eases<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -18658,11 +19225,13 @@ pub struct SongLuaFunctionActionCapture {
     pub side_effects: i64,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct FunctionActionSnapshot {
     tables: Table,
     cells: Table,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<Table> {
     let entries = lua.create_table()?;
     let mut count = 0;
@@ -18677,6 +19246,7 @@ fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<Table
     lua.create_sequence_from([table, entries])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_function_action_tables(
     lua: &Lua,
     functions: &Table,
@@ -18704,6 +19274,7 @@ fn snapshot_function_action_tables(
     snapshot_function_locals(lua, functions, snapshots)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn snapshot_function_locals(
     lua: &Lua,
     functions: &Table,
@@ -18819,6 +19390,7 @@ fn function_upvalue_count(lua: &Lua, function: &Function) -> mlua::Result<u8> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_function_upvalue(
     lua: &Lua,
     function: Function,
@@ -18843,6 +19415,7 @@ fn read_function_upvalue(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn restore_function_action_tables(_lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
     for cell in snapshot.cells.sequence_values::<Table>() {
         let cell = cell?;
@@ -18863,6 +19436,7 @@ fn restore_function_action_tables(_lua: &Lua, snapshot: FunctionActionSnapshot) 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_function_action_blocks(
     lua: &Lua,
     overlays: &[(usize, Table)],
@@ -18873,6 +19447,7 @@ pub fn capture_function_action_blocks(
     capture_function_action_blocks_inner(lua, overlays, tracked_actors, function, beat, true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_function_action_blocks_inner(
     lua: &Lua,
     overlays: &[(usize, Table)],
@@ -18987,6 +19562,7 @@ fn actor_capture_effects(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn message_capture_runner(
     lua: &Lua,
     source: &Table,
@@ -19005,6 +19581,7 @@ fn message_capture_runner(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn capture_deferred_messages<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -19131,6 +19708,7 @@ pub(crate) fn capture_deferred_messages<Kind>(
     Ok(sounds)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_stable_cross_actor_message_commands<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -19227,6 +19805,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_path_table(table: &Table) -> Result<Vec<PathBuf>, String> {
     table
         .sequence_values::<String>()
@@ -19234,6 +19813,7 @@ fn read_path_table(table: &Table) -> Result<Vec<PathBuf>, String> {
         .collect()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_overlay_compile_actor_function_action_blocks<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -19249,6 +19829,7 @@ pub fn capture_overlay_compile_actor_function_action_blocks<Kind>(
     capture_function_action_blocks(lua, &overlay_tables, tracked_actors, function, beat)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn compile_overlay_compile_actor_function_action<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -19336,6 +19917,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_overlay_compile_actor_actions<Kind>(
     lua: &Lua,
     table: Option<Table>,
@@ -19369,6 +19951,7 @@ pub fn read_overlay_compile_actor_actions<Kind>(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn overlay_compile_actors_have_message_listener<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &[SongLuaTrackedActor],
@@ -19387,6 +19970,7 @@ fn overlay_compile_actors_have_message_listener<Kind>(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn reset_tracked_capture_tables(
     lua: &Lua,
     tracked_actors: &[SongLuaTrackedActor],
@@ -19397,6 +19981,7 @@ pub fn reset_tracked_capture_tables(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn collect_tracked_capture_blocks_for_indices(
     tracked_actors: &[SongLuaTrackedActor],
     indices: &[usize],
@@ -19407,6 +19992,7 @@ pub fn collect_tracked_capture_blocks_for_indices(
     collect_borrowed_actor_capture_blocks(actors)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn tracked_song_lua_actor(
     table: Table,
     target: SongLuaTrackedActorTarget,
@@ -19442,6 +20028,7 @@ pub fn tracked_song_lua_actor(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn manually_draws_player_hud(player: &Table) -> Result<bool, String> {
     let Some(children) = player
         .get::<Option<Table>>("__songlua_children")
@@ -19467,6 +20054,7 @@ fn manually_draws_player_hud(player: &Table) -> Result<bool, String> {
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn tracked_indices_for_actor_pointers(
     tracked_actors: &[SongLuaTrackedActor],
     actor_ptrs: &HashSet<usize>,
@@ -19509,12 +20097,15 @@ pub fn actor_pointers_touch_actor(
     (0..len).any(|index| sorted.binary_search(&pointer_at(index)).is_ok())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
     read_color_values(args.iter().skip(method_arg_offset(args)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct CaptureResetKeys(Table);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_reset_keys(lua: &Lua) -> mlua::Result<Table> {
     if let Some(keys) = lua.app_data_ref::<CaptureResetKeys>() {
         return Ok(keys.0.clone());
@@ -19529,6 +20120,7 @@ fn capture_reset_keys(lua: &Lua) -> mlua::Result<Table> {
     Ok(keys)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if live_actor_playback(lua) { return Ok(()); }
     if crate::live::active(lua) {
@@ -19574,6 +20166,7 @@ pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn flush_actor_capture(actor: &Table) -> mlua::Result<()> {
     let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? else {
         return Ok(());
@@ -19600,6 +20193,7 @@ pub fn flush_actor_capture(actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_tween_time_left(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
     if let Some(state) = actor.raw_get::<Option<u8>>("__songlua_transition_state")? {
         return if state == 1 {
@@ -19646,6 +20240,7 @@ pub fn actor_tween_time_left(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
     Ok(left)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn start_actor_transition(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor.raw_get::<Option<u8>>("__songlua_transition_state")? != Some(0) {
         return Ok(());
@@ -19658,11 +20253,13 @@ pub(crate) fn start_actor_transition(lua: &Lua, actor: &Table) -> mlua::Result<(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn scale_actor_capture_f32(actor: &Table, key: &str, scale: f32) -> mlua::Result<()> {
     let value = actor.get::<Option<f32>>(key)?.unwrap_or(0.0);
     actor.set(key, value * scale)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn hurry_actor_tweening(lua: &Lua, actor: &Table, factor: f32) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
     // Actor::HurryTweening multiplies duration and remaining time together,
@@ -19742,6 +20339,7 @@ fn is_capture_block_meta_key(key: &str) -> bool {
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn finish_actor_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
     finish_pending_tweens(lua, actor)?;
@@ -19789,6 +20387,7 @@ pub fn finish_actor_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
     let Some(blocks) = actor
         .get::<Option<Table>>("__songlua_capture_blocks")
@@ -20227,6 +20826,7 @@ enum ActorNumberValue {
     Fallback,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     read_actor_overlay_state(
         actor,
@@ -20237,6 +20837,7 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct ActorScalarKeys(Table);
 
 #[cfg(test)]
@@ -20244,6 +20845,7 @@ pub(crate) mod draw_state_baseline {
     include!("../tests/perf/draw_capture/state_baseline.rs");
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_scalar_keys(lua: &Lua) -> mlua::Result<Table> {
     if let Some(keys) = lua.app_data_ref::<ActorScalarKeys>() {
         return Ok(keys.0.clone());
@@ -20254,6 +20856,7 @@ fn actor_scalar_keys(lua: &Lua) -> mlua::Result<Table> {
     Ok(keys)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn actor_overlay_state_batched(
     lua: &Lua,
     actor: &Table,
@@ -20261,6 +20864,7 @@ pub(crate) fn actor_overlay_state_batched(
     actor_overlay_state_with_pose(lua, actor, None, None, None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
     if !crate::live::active(lua) { return actor_overlay_state_batched(lua, actor); }
     let state = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
@@ -20270,6 +20874,7 @@ pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongL
         state.and_then(|state| state.1), state.and_then(|state| state.2))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_overlay_state_with_pose(
     lua: &Lua,
     actor: &Table,
@@ -20377,35 +20982,7 @@ mod actor_state_read_tests {
 
     include!("../tests/unit/overlay_state_reads.rs");
 
-    #[test]
-    fn native_render_flag_promotion_avoids_authored_reads_and_retains_model_defaults() {
-        let lua = Lua::new();
-        begin_live_runtime(&lua).unwrap();
-        let actor = lua.load(r#"
-TEXTURE_READS = 0
-return setmetatable({__songlua_actor_type='Sprite'}, {
-    __index=function(_, key)
-        if key == 'Texture' then TEXTURE_READS=TEXTURE_READS+1 end
-    end,
-})
-"#).eval::<Table>().unwrap();
-        ensure_tween_replay(&lua, &actor).unwrap();
-        let reads: u32 = lua.globals().get("TEXTURE_READS").unwrap();
-        assert!(reads > 0);
-        begin_live_actor_playback(&lua, &[actor]).unwrap();
-        assert_eq!(lua.globals().get::<u32>("TEXTURE_READS").unwrap(), reads);
-
-        let model = lua.load("{__songlua_actor_type='Model'}").eval::<Table>().unwrap();
-        ensure_tween_replay(&lua, &model).unwrap();
-        let state = live_actor_overlay_state(&lua, &model).unwrap();
-        assert!(state.depth_test && state.depth_write && state.texture_wrapping && state.texture_filtering);
-        capture_block_set_bool(&lua, &model, "depth_test", false).unwrap();
-        capture_block_set_bool(&lua, &model, "texture_wrapping", false).unwrap();
-        assert!(!live_actor_overlay_state(&lua, &model).unwrap().depth_test);
-        init_actor_native_state(&lua, &model).unwrap();
-        let state = live_actor_overlay_state(&lua, &model).unwrap();
-        assert!(state.depth_test && state.depth_write && state.texture_wrapping && state.texture_filtering);
-    }
+    
 
     fn vector_bits<const N: usize>(value: Option<[f32; N]>) -> Option<[u32; N]> {
         value.map(|items| items.map(f32::to_bits))
@@ -20418,334 +20995,26 @@ return setmetatable({__songlua_actor_type='Sprite'}, {
         assert_eq!(vector_bits(table_vec5(table)), vector_bits(draw_state_baseline::table_vec5(table)));
     }
 
-    #[test]
-    fn vector_batches_preserve_bits_coercions_holes_and_raw_lookup() {
-        let lua = Lua::new();
-        let table = lua.create_sequence_from([1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
-        for value in [Value::Nil, Value::Boolean(false), Value::Table(lua.create_table().unwrap()),
-            Value::String(lua.create_string(" -0.0 ").unwrap()),
-            Value::String(lua.create_string("0x10").unwrap()),
-            Value::String(lua.create_string("not a number").unwrap()),
-            Value::String(lua.create_string([b'1',0,b'x']).unwrap()),
-            Value::String(lua.create_string([0xff]).unwrap()),
-            Value::Number(f64::INFINITY), Value::Number(f64::NEG_INFINITY),
-            Value::Number(f64::from_bits(0xfff8_2468_0000_1234)), Value::Number(-0.0)] {
-            for position in 1..=6 {
-                table.raw_set(position, value.clone()).unwrap();
-                compare_vectors(&table);
-                table.raw_set(position, position as f32).unwrap();
-            }
-        }
-        let missing = lua.load(r#"lookups=0; return setmetatable({}, {__index=function()
-            lookups=lookups+1; error('raw reads must not call __index') end})"#).eval::<Table>().unwrap();
-        compare_vectors(&missing);
-        assert_eq!(lua.globals().get::<i32>("lookups").unwrap(), 0);
-        let bad = lua.create_sequence_from([false]).unwrap();
-        lua.exec_raw_lua(|raw| unsafe {
-            assert_ne!(ffi::lua_checkstack(raw.state(), 8), 0);
-            raw.push(77).unwrap();
-            let top = ffi::lua_gettop(raw.state());
-            compare_vectors(&table);
-            compare_vectors(&bad);
-            assert_eq!(ffi::lua_gettop(raw.state()), top);
-            assert_eq!(raw.pop::<i32>().unwrap(), 77);
-        });
-        lua.globals().set("read_vector", lua.create_function(|_, table: Table| Ok(table_vec4(&table))).unwrap()).unwrap();
-        let (ok, result): (bool, Table) = lua.load("return coroutine.resume(coroutine.create(function() return read_vector{1,2,3,4} end))").eval().unwrap();
-        assert!(ok);
-        assert_eq!(table_vec4(&result), Some([1.0,2.0,3.0,4.0]));
-    }
+    
 
-    #[test]
-    fn color_batches_preserve_nested_failures_aliases_and_stack() {
-        let lua = Lua::new();
-        let row = lua.create_sequence_from([1.0, 0.5, 0.25, 0.75, 99.0]).unwrap();
-        let colors = lua.create_sequence_from([row.clone(),row.clone(),row.clone(),row.clone(),row.clone()]).unwrap();
-        let compare = || {
-            let bits = |v: Option<[[f32;4];4]>| v.map(|rows| rows.map(|items| items.map(f32::to_bits)));
-            assert_eq!(bits(table_vertex_colors(&colors)), bits(draw_state_baseline::table_vertex_colors(&colors)));
-        };
-        compare();
-        for position in 1..=5 {
-            for value in [Value::Nil, Value::Boolean(false), Value::Number(2.0),
-                Value::Table(lua.create_table().unwrap())] {
-                colors.raw_set(position, value).unwrap();
-                compare();
-            }
-            colors.raw_set(position, row.clone()).unwrap();
-        }
-        for position in 1..=5 {
-            for value in [Value::Nil, Value::Boolean(true),
-                Value::String(lua.create_string(" 0.25 ").unwrap()),
-                Value::Number(f64::NAN), Value::Number(f64::INFINITY), Value::Number(-0.0)] {
-                row.raw_set(position, value).unwrap();
-                compare();
-            }
-            row.raw_set(position, 0.5).unwrap();
-        }
-        colors.raw_set(3, false).unwrap();
-        lua.exec_raw_lua(|raw| unsafe {
-            assert_ne!(ffi::lua_checkstack(raw.state(), 8), 0);
-            raw.push(42).unwrap();
-            let top = ffi::lua_gettop(raw.state());
-            compare();
-            assert_eq!(ffi::lua_gettop(raw.state()), top);
-            assert_eq!(raw.pop::<i32>().unwrap(),42);
-        });
-        lua.globals().set("color_lookups",0).unwrap();
-        let missing=lua.load(r#"return setmetatable({}, {__index=function()
-            color_lookups=color_lookups+1; error('unexpected color lookup') end})"#).eval::<Table>().unwrap();
-        assert_eq!(table_vertex_colors(&missing),draw_state_baseline::table_vertex_colors(&missing));
-        colors.raw_set(3,missing).unwrap();
-        compare();
-        assert_eq!(lua.globals().get::<i32>("color_lookups").unwrap(),0);
-        assert_eq!(lua.load("return 6*7").eval::<i32>().unwrap(),42);
-    }
+    
 
-    #[test]
-    fn state_class_and_texture_reads_match_frozen_decoder() {
-        let lua = Lua::new();
-        for field in ["__songlua_actor_type", "Texture"] {
-            for value in [Value::Nil, Value::String(lua.create_string("Model").unwrap()),
-                Value::String(lua.create_string("Sprite").unwrap()),
-                Value::String(lua.create_string("x".repeat(200)).unwrap()),
-                Value::String(lua.create_string([0xff, 0xfe]).unwrap()),
-                Value::Integer(42), Value::Number(1.5), Value::Boolean(false),
-                Value::Table(lua.create_table().unwrap())] {
-                let actor = lua.create_table().unwrap();
-                actor.raw_set("__songlua_actor_type", "Sprite").unwrap();
-                actor.raw_set(field, value).unwrap();
-                assert_eq!(actor_overlay_initial_state(&actor), draw_state_baseline::initial_state(&actor));
-            }
-        }
-    }
+    
 
-    #[test]
-    fn compile_update_slots_preserve_alias_visits_and_plan_rebuilds() {
-        let lua = Lua::new();
-        let root = lua.load(r#"
-            events = {}
-            local function update(_, delta) events[#events+1] = delta end
-            local shared = { __songlua_update_function = update }
-            local root = {
-                { shared, __songlua_update_rate = 2 },
-                { shared, __songlua_update_rate = 3 },
-            }
-            return root
-        "#).eval::<Table>().unwrap();
-        run_actor_compile_update_functions_with_delta(&lua, &Value::Table(root.clone()), 1.0).unwrap();
-        let events: Vec<f64> = lua.globals().get::<Table>("events").unwrap()
-            .sequence_values().collect::<mlua::Result<_>>().unwrap();
-        assert_eq!(events, [2.0, 3.0], "shared actors retain each parent's chronological delta");
-        let new_actor = lua.load(r#"return { __songlua_update_function = function(_, delta)
-            events[#events+1] = delta
-        end, __songlua_update_rate = 5 }"#).eval::<Table>().unwrap();
-        root.raw_set(3, new_actor).unwrap();
-        invalidate_compile_update_plan(&lua);
-        run_actor_compile_update_functions_with_delta(&lua, &Value::Table(root), 0.5).unwrap();
-        let events: Vec<f64> = lua.globals().get::<Table>("events").unwrap()
-            .sequence_values().collect::<mlua::Result<_>>().unwrap();
-        assert_eq!(events, [2.0, 3.0, 1.0, 1.5, 2.5], "rebuilds resize scratch without retaining old deltas");
-    }
+    
 
-    #[test]
-    fn short_class_fields_keep_string_coercions_spills_and_errors() {
-        let lua = Lua::new();
-        let actor = lua.create_table().unwrap();
-        for value in [Value::Nil, Value::String(lua.create_string("ActorFrame").unwrap()),
-            Value::String(lua.create_string("x".repeat(200)).unwrap()),
-            Value::String(lua.create_string([0xff, 0xfe]).unwrap()),
-            Value::Integer(42), Value::Number(1.5), Value::Boolean(false),
-            Value::Table(lua.create_table().unwrap())] {
-            actor.raw_set("__songlua_actor_type", value).unwrap();
-            let expected = actor.raw_get::<Option<String>>("__songlua_actor_type")
-                .map_err(|err| err.to_string());
-            let actual = actor.raw_get::<Option<LuaFieldText<64>>>("__songlua_actor_type")
-                .map(|value| value.map(|value| value.as_str().to_owned()))
-                .map_err(|err| err.to_string());
-            assert_eq!(actual, expected);
-        }
-    }
+    
 
-    #[test]
-    fn capture_reset_preserves_compiler_snapshots_and_reuses_live_blocks() {
-        let lua = Lua::new();
-        let actor = lua.create_table().unwrap();
-        let blocks = lua.create_sequence_from([42]).unwrap();
-        actor.raw_set("__songlua_capture_blocks", blocks.clone()).unwrap();
-        actor.raw_set("__songlua_capture_cursor", 3.0).unwrap();
-        actor.raw_set("__songlua_capture_block", blocks.clone()).unwrap();
-        reset_actor_capture(&lua, &actor).unwrap();
-        assert_eq!(blocks.raw_get::<i32>(1).unwrap(), 42, "saved compiler captures retain their data");
-        let fresh = actor.raw_get::<Table>("__songlua_capture_blocks").unwrap();
-        assert_ne!(fresh, blocks);
-        assert_eq!(actor.raw_get::<f32>("__songlua_capture_cursor").unwrap(), 0.0);
-        assert!(actor.raw_get::<Value>("__songlua_capture_block").unwrap().is_nil());
-        fresh.raw_set(1, 17).unwrap();
-        lua.set_app_data(crate::live::LiveMode(1));
-        reset_actor_capture(&lua, &actor).unwrap();
-        assert_eq!(actor.raw_get::<Table>("__songlua_capture_blocks").unwrap(), fresh);
-        assert_eq!(fresh.raw_len(), 0);
-        actor.raw_set("__songlua_capture_blocks", false).unwrap();
-        assert!(reset_actor_capture(&lua, &actor).is_err(), "live reset retains type validation");
-    }
+    
 
-    #[test]
-    fn native_pose_definition_clones_keep_destination_and_independence() {
-        let lua = Lua::new();
-        begin_live_runtime(&lua).unwrap();
-        let actor = lua.load("{__songlua_actor_type='Quad', authored={score=17}}")
-            .eval::<Table>().unwrap();
-        ensure_tween_replay(&lua, &actor).unwrap();
-        begin_live_actor_playback(&lua, &[actor.clone()]).unwrap();
-        queue_replay_tween(&lua, &actor, 1.0, Some("linear"));
-        capture_block_set_color(&lua, &actor, [0.25, 0.5, 0.75, 1.0]).unwrap();
-        capture_block_set_vec4(&lua, &actor, "glow", [1.0, 0.75, 0.5, 0.25]).unwrap();
-        capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
-        capture_block_set_bool(&lua, &actor, "depth_test", true).unwrap();
-        capture_block_set_bool(&lua, &actor, "texture_filtering", false).unwrap();
-        capture_block_set_f32(&lua, &actor, "basezoom", 2.0).unwrap();
-        capture_block_set_f32(&lua, &actor, "basezoom_x", 1.0).unwrap();
-        capture_block_set_f32(&lua, &actor, "halign", 0.25).unwrap();
-        for (key, value) in [("x",12.0), ("zoom_y",3.0), ("skew_x",0.25), ("fadeleft",0.5)] {
-            capture_block_set_f32(&lua, &actor, key, value).unwrap();
-        }
-        let Value::Table(generic) = clone_lua_value(&lua, Value::Table(actor.clone())).unwrap()
-            else { panic!("table clone"); };
-        let definition = clone_actor_def(&lua, &actor, |_, _| Ok(()), false).unwrap();
-        capture_block_set_color(&lua, &actor, [0.0; 4]).unwrap();
-        capture_block_set_f32(&lua, &actor, "x", 24.0).unwrap();
-        capture_block_set_bool(&lua, &actor, "depth_test", false).unwrap();
-        for copy in [generic, definition] {
-            assert_eq!(actor_overlay_initial_state(&copy).unwrap().diffuse, [0.25, 0.5, 0.75, 1.0]);
-            assert_eq!(actor_glow(&lua, &copy).unwrap(), [1.0, 0.75, 0.5, 0.25]);
-            assert_eq!(actor_vertex_colors(&lua, &copy).unwrap(), [[0.5; 4]; 4]);
-            let pose = actor_overlay_initial_state(&copy).unwrap();
-            assert!(pose.depth_test && !pose.texture_filtering);
-            assert_eq!((pose.basezoom,pose.basezoom_x,pose.halign), (2.0,1.0,0.25));
-            assert_eq!((pose.x,pose.zoom_y,pose.skew_x,pose.fadeleft), (12.0,3.0,0.25,0.5));
-            assert_eq!(copy.get::<Table>("authored").unwrap().get::<u32>("score").unwrap(), 17);
-            ensure_tween_replay(&lua, &copy).unwrap();
-            assert!(!live_actor_overlay_state(&lua, &actor).unwrap().depth_test);
-            assert!(live_actor_overlay_state(&lua, &copy).unwrap().depth_test);
-            assert!(copy.raw_get::<Value>("__songlua_state_depth_test").unwrap().is_nil());
-            assert!(copy.raw_get::<Value>("__songlua_state_basezoom_x").unwrap().is_nil());
-            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_x").unwrap(), 1.0);
-            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_y").unwrap(), 2.0);
-            capture_block_set_f32(&lua, &copy, "halign", 0.75).unwrap();
-            assert_eq!(actor_halign(&lua, &actor).unwrap(), 0.25);
-            set_actor_overlay_update_getter_value(&lua, &copy,
-                SongLuaOverlayUpdateTarget::BaseZoomX, &SongLuaOverlayUpdateValue::F32(5.0)).unwrap();
-            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_x").unwrap(), 5.0);
-            assert!(copy.raw_get::<Value>("__songlua_state_basezoom_x").unwrap().is_nil());
-            capture_block_set_color(&lua, &copy, [0.75; 4]).unwrap();
-            capture_block_set_f32(&lua, &copy, "x", 36.0).unwrap();
-            assert_eq!(actor_diffuse(&lua, &actor).unwrap(), [0.0; 4]);
-            assert_eq!(actor_destination_position(&lua, &actor, 0).unwrap(), 24.0);
-            assert_eq!(actor_current_position(&lua, &copy, 0).unwrap(), 36.0);
-        }
-    }
+    
 
-    #[test]
-    #[cfg(feature = "test-support")]
-    fn live_vertex_color_observer_preserves_owned_samples_and_queue_rules() {
-        let run = |live| {
-            let lua = Lua::new();
-            begin_live_runtime(&lua).unwrap();
-            let actor = lua.load("{__songlua_actor_type='Quad'}").eval::<Table>().unwrap();
-            ensure_tween_replay(&lua, &actor).unwrap();
-            if live { begin_live_actor_playback(&lua, &[actor.clone()]).unwrap(); }
-            begin_overlay_update_capture_from_indices(&lua, [(actor.to_pointer() as usize, 0)]);
-            let sample = || {
-                let capture = lua.app_data_ref::<SongLuaOverlayUpdateCapture>().unwrap();
-                let samples = &capture.writes[&(0, SongLuaOverlayUpdateTarget::VertexColors)];
-                assert_eq!(samples.len(), 1);
-                let SongLuaOverlayUpdateValue::VertexColors(colors) = &samples[0].value
-                    else { panic!("owned vertex color observation"); };
-                colors.clone()
-            };
-            capture_block_set_vertex_colors(&lua, &actor, [[0.25; 4]; 4]).unwrap();
-            let first = sample();
-            queue_replay_tween(&lua, &actor, 1.0, Some("linear"));
-            capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
-            assert_eq!(*sample(), *first, "same-beat queued writes retain the earlier observation");
-            clear_replay_tweens(&lua, &actor, false).unwrap();
-            let args = MultiValue::from_vec(vec![Value::Table(actor.clone()), Value::Number(1.0),
-                Value::Number(0.75), Value::Number(0.5), Value::Number(0.25)]);
-            capture_actor_vertex_diffuse(&lua, &actor, &args, 3).unwrap();
-            let second = sample();
-            assert_eq!(second[0], [1.0, 0.75, 0.5, 0.25]);
-            assert_eq!(*first, [[0.25; 4]; 4], "later writes cannot mutate an owned sample");
-            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().queued_depth = 1;
-            capture_block_set_vertex_colors(&lua, &actor, [[0.75; 4]; 4]).unwrap();
-            assert_eq!(*sample(), *second, "ordinary queued commands are not update samples");
-            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().update_command = true;
-            capture_block_set_vertex_colors(&lua, &actor, [[1.0; 4]; 4]).unwrap();
-            let third = sample();
-            assert_eq!(*third, [[1.0; 4]; 4]);
-            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().active_broadcast = Some("Tint".into());
-            capture_block_set_vertex_colors(&lua, &actor, [[0.0; 4]; 4]).unwrap();
-            assert_eq!(*sample(), *third, "broadcast writes are not update samples");
-            [*first, *second, *third]
-        };
-        assert_eq!(run(true), run(false), "live mutation retains capture-backed observation rules");
-    }
+    
 
-    #[test]
-    fn live_scalar_read_preserves_defaults_coercions_and_errors() {
-        let lua = Lua::new();
-        let actor = lua.create_table().unwrap();
-        assert_eq!(
-            actor_overlay_state_batched(&lua, &actor).unwrap(),
-            actor_overlay_initial_state(&actor).unwrap()
-        );
-        for numeric in [
-            Value::Number(0.75),
-            Value::String(lua.create_string(" 1.25 ").unwrap()),
-        ] {
-            for key in ActorNumberField::KEYS {
-                actor.raw_set(*key, numeric.clone()).unwrap();
-            }
-            for truthy in [
-                Value::Boolean(false),
-                Value::Boolean(true),
-                Value::Number(0.0),
-                Value::String(lua.create_string("").unwrap()),
-            ] {
-                for key in ActorFlagField::KEYS {
-                    actor.raw_set(*key, truthy.clone()).unwrap();
-                }
-                let expected = actor_overlay_initial_state(&actor).unwrap();
-                let actual = actor_overlay_state_batched(&lua, &actor).unwrap();
-                assert_eq!(actual, expected);
-                if matches!(truthy, Value::Number(_)) {
-                    assert!(actual.visible, "Lua zero is truthy");
-                }
-                assert_eq!(lua.load("return 6*7").eval::<u32>().unwrap(), 42);
-            }
-        }
-        for key in ActorNumberField::KEYS {
-            actor.raw_set(*key, Value::Nil).unwrap();
-        }
-        actor.raw_set("__songlua_state_x", f32::NAN).unwrap();
-        actor.raw_set("__songlua_state_z", f32::INFINITY).unwrap();
-        let mut expected = actor_overlay_initial_state(&actor).unwrap();
-        let mut actual = actor_overlay_state_batched(&lua, &actor).unwrap();
-        assert_eq!(actual.x.to_bits(), expected.x.to_bits());
-        actual.x = 0.0;
-        expected.x = 0.0;
-        assert_eq!(actual, expected);
-        actor
-            .raw_set("__songlua_state_x", lua.create_table().unwrap())
-            .unwrap();
-        assert_eq!(
-            actor_overlay_state_batched(&lua, &actor).unwrap_err(),
-            actor_overlay_initial_state(&actor).unwrap_err()
-        );
-        assert_eq!(lua.load("return 6*7").eval::<u32>().unwrap(), 42);
-    }
+    
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_overlay_state(
     actor: &Table,
     lua: Option<&Lua>,
@@ -21209,6 +21478,7 @@ fn read_actor_overlay_state(
     Ok(state)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_overlay_getter_state(
     lua: &Lua,
     actor: &Table,
@@ -21303,6 +21573,7 @@ pub fn set_actor_overlay_getter_state(
     sync_tween_getters(lua, actor).map_err(|err| err.to_string())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_overlay_update_getter_value(
     lua: &Lua,
     actor: &Table,
@@ -21337,39 +21608,7 @@ pub fn set_actor_overlay_update_getter_value(
         return Ok(());
     }
 
-    let key = match target {
-        Target::Aux => "aux",
-        Target::X => "x",
-        Target::Y => "y",
-        Target::Z => "z",
-        Target::Zoom => "zoom",
-        Target::ZoomX => "zoom_x",
-        Target::ZoomY => "zoom_y",
-        Target::ZoomZ => "zoom_z",
-        Target::BaseZoom => "basezoom",
-        Target::BaseZoomX => "basezoom_x",
-        Target::BaseZoomY => "basezoom_y",
-        Target::BaseZoomZ => "basezoom_z",
-        Target::RotationX => "rot_x_deg",
-        Target::RotationY => "rot_y_deg",
-        Target::RotationZ => "rot_z_deg",
-        Target::BaseRotation => "base_rotation",
-        Target::Quaternion => "quaternion",
-        Target::BaseAlpha => "base_alpha",
-        Target::SkewX => "skew_x",
-        Target::SkewY => "skew_y",
-        Target::CropLeft => "cropleft",
-        Target::CropRight => "cropright",
-        Target::CropTop => "croptop",
-        Target::CropBottom => "cropbottom",
-        Target::FadeLeft => "fadeleft",
-        Target::FadeRight => "faderight",
-        Target::FadeTop => "fadetop",
-        Target::FadeBottom => "fadebottom",
-        Target::EffectPeriod => "effect_period",
-        Target::EffectOffset => "effect_offset",
-        _ => "",
-    };
+    let key = crate::frame_capture::overlay_getter_scalar_key(target);
     match value {
         UpdateValue::F32(value) if !key.is_empty() => {
             if set_live_base_field(lua, actor, key, *value) { return Ok(()); }
@@ -21420,6 +21659,7 @@ pub fn set_actor_overlay_update_getter_value(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_graph_display_line_state(
     lua: &Lua,
     actor: &Table,
@@ -21434,6 +21674,7 @@ pub fn read_graph_display_line_state(
     actor_overlay_initial_state(&line)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_graph_display_body_state(
     lua: &Lua,
     actor: &Table,
@@ -21455,6 +21696,7 @@ pub fn read_graph_display_body_state(
     actor_overlay_initial_state(&body)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_song_meter_display_state(
     lua: &Lua,
     actor: &Table,
@@ -21485,6 +21727,7 @@ pub fn read_song_meter_display_state(
     Ok(Some((stream_width, stream_state)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_song_meter_display_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let width = actor
         .get::<Option<Value>>("StreamWidth")?
@@ -21519,6 +21762,7 @@ pub fn read_graph_display_size(
     [size[0].abs().max(1.0), size[1].abs().max(1.0)]
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn capture_graph_display_values(
     lua: &Lua,
     actor: &Table,
@@ -21560,6 +21804,7 @@ pub fn capture_graph_display_values(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_graph_display_values(actor: &Table) -> Result<Arc<[f32]>, String> {
     let values = actor
         .get::<Option<Table>>("__songlua_graph_display_values")
@@ -21584,6 +21829,7 @@ fn default_graph_display_values() -> Arc<[f32]> {
     Arc::from([SONG_LUA_INITIAL_LIFE; GRAPH_DISPLAY_VALUE_RESOLUTION])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_multi_vertex_texture_path(
     actor: &Table,
     aft_capture_names: &HashSet<String>,
@@ -21607,6 +21853,7 @@ pub fn read_actor_multi_vertex_texture_path(
     Ok(resolve_actor_asset_path(actor, &texture).ok())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_multi_vertex_mesh(
     actor: &Table,
 ) -> Result<Option<Arc<[SongLuaOverlayMeshVertex]>>, String> {
@@ -21646,6 +21893,7 @@ pub fn read_actor_multi_vertex_mesh(
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn live_multi_vertex_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
     if actor.raw_get::<bool>("__songlua_default_texture")? {
         // RageTexture_Default is an opaque white texel, unlike the transparent
@@ -21661,6 +21909,7 @@ pub(crate) fn live_multi_vertex_texture_path(actor: &Table) -> mlua::Result<Opti
     } else { actor_texture_path(actor) }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_model_paths(actor: &Table) -> Result<Option<[PathBuf; 3]>, String> {
     let mut paths = [None, None, None];
     for (index, key) in ["Meshes", "Materials", "Bones"].into_iter().enumerate() {
@@ -21682,6 +21931,7 @@ pub fn read_model_paths(actor: &Table) -> Result<Option<[PathBuf; 3]>, String> {
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_model_layers<Slot, Vertex, ReadSlots, ReadLayer>(
     actor: &Table,
     read_slots: ReadSlots,
@@ -21725,6 +21975,7 @@ pub struct SongLuaNoteskinTapActorModel {
     pub model_paths: [PathBuf; 3],
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_noteskin_tap_actor_model(
     actor: &Table,
 ) -> Result<Option<SongLuaNoteskinTapActorModel>, String> {
@@ -21752,6 +22003,7 @@ pub fn read_noteskin_tap_actor_model(
     }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_noteskin_tap_actor_slots<Slot, ReadSlots>(
     actor: &Table,
     read_slots: ReadSlots,
@@ -21773,6 +22025,7 @@ where
         })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Result<(), String> {
     if actor
         .get::<Option<String>>("__songlua_actor_type")
@@ -21796,6 +22049,7 @@ pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
     let registry = song_lua_actor_registry(lua).map_err(|err| err.to_string())?;
     let actor_pointers = registry
@@ -21837,6 +22091,7 @@ fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
     Ok(referenced)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
     if let Some(allocation) = actor.raw_get::<Option<Table>>("__songlua_aft_allocation")? {
         return allocation.get("name");
@@ -21844,6 +22099,7 @@ pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
     actor.get("__songlua_aft_capture_name")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Successful Create owns these settings; later setters only change requests.
 pub fn read_aft_kind<N, M, T>(actor: &Table) -> Result<SongLuaOverlayKind<N, M, T>, String> {
     let allocation = actor
@@ -21879,6 +22135,7 @@ pub fn read_aft_kind<N, M, T>(actor: &Table) -> Result<SongLuaOverlayKind<N, M, 
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn report_script_error(lua: &Lua, message: &str) -> mlua::Result<()> {
     const GUARD: &str = "__songlua_reporting_script_error";
     let globals = lua.globals();
@@ -21918,6 +22175,7 @@ fn collapse_texture_name(name: &str) -> String {
     out
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_aft(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor
         .raw_get::<Option<Table>>("__songlua_aft_allocation")?
@@ -21965,6 +22223,7 @@ fn create_aft(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     capture_immediate_bool(lua, actor, "aft_created", true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_overlay_compile_actors<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
     lua: &Lua,
     root: &Value,
@@ -22025,6 +22284,7 @@ where
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_overlay_compile_actors_from_table<
     NoteskinSlot,
     ModelVertex,
@@ -22117,6 +22377,7 @@ where
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_overlay_compile_actor<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
     lua: &Lua,
     actor: &Table,
@@ -22351,12 +22612,14 @@ where
     }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
     let mut states = Vec::new();
     visit_sprite_states(actor, |state| states.push(state))?;
     Ok(states)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Retain the published native array until authored frame values change.
 /// Inspect values in one pass: Frames can be edited in place, and legacy
 /// frame fields can invoke __index. Identity checks or a second decoding pass
@@ -22386,6 +22649,7 @@ pub(crate) fn sync_sprite_states(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn visit_sprite_states(
     actor: &Table,
     mut visit: impl FnMut(crate::SongLuaSpriteState),
@@ -22446,109 +22710,9 @@ fn write_sprite_frame_key(index: i32, key: &mut [u8; 16]) -> usize {
     16 - output.len()
 }
 
-#[cfg(test)]
-mod sprite_state_publication_tests {
-    use super::*;
 
-    fn assert_fresh(actor: &Table, states: &mut Arc<[crate::SongLuaSpriteState]>) {
-        let expected = read_sprite_states(actor).unwrap();
-        sync_sprite_states(actor, states).unwrap();
-        assert_eq!(states.as_ref(), expected);
-    }
 
-    #[test]
-    fn native_sprite_array_reuses_unchanged_values_and_preserves_old_snapshots() {
-        let lua = Lua::new();
-        let actor: Table = lua.load("return {Frames={{Frame=2,Delay='0.25'},{Delay=0.5}}}").eval().unwrap();
-        let mut states: Arc<[_]> = Arc::from([]);
-        assert_fresh(&actor, &mut states);
-        let original = states.clone();
-        assert_fresh(&actor, &mut states);
-        assert!(Arc::ptr_eq(&original, &states));
-        let frames = actor.raw_get::<Table>("Frames").unwrap();
-        frames.raw_get::<Table>(1).unwrap().set("Frame", 3).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert_eq!(states.iter().map(|state| state.frame).collect::<Vec<_>>(), [3, 3]);
-        assert_eq!(original.iter().map(|state| state.frame).collect::<Vec<_>>(), [2, 2]);
-        assert!(!Arc::ptr_eq(&original, &states));
-        frames.raw_set(3, lua.load("return {Frame=7}").eval::<Table>().unwrap()).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert_eq!(states.len(), 3);
-        frames.raw_set(2, Value::Nil).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert_eq!(states.len(), 1, "sequence traversal stops at the first hole");
-        actor.raw_set("__songlua_state_sprite_default_states", true).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert!(states.is_empty());
-        let empty = states.clone();
-        assert_fresh(&actor, &mut states);
-        assert!(Arc::ptr_eq(&empty, &states));
-        actor.raw_set("__songlua_state_sprite_default_states", false).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert_eq!(states.len(), 1);
-        actor.raw_set("Frames", Value::Nil).unwrap();
-        actor.set("Frame0000", "9").unwrap();
-        actor.set("Delay0000", 0.75).unwrap();
-        assert_fresh(&actor, &mut states);
-        assert_eq!(states[0].frame, 9);
-        let legacy = states.clone();
-        assert_fresh(&actor, &mut states);
-        assert!(Arc::ptr_eq(&legacy, &states));
-    }
-
-    #[test]
-    fn native_sprite_publication_visits_getters_once_and_keeps_last_good_array_on_error() {
-        let lua = Lua::new();
-        let actor: Table = lua.load(r#"
-reads, frame, bad = 0, 4, false
-return setmetatable({}, {__index=function(_, key)
-    reads=reads+1
-    if key=='Frame0000' then return frame end
-    if key=='Delay0000' then return '0.5' end
-    if key=='Frame0001' and bad then return {} end
-end})
-"#).eval().unwrap();
-        let mut states: Arc<[_]> = Arc::from([]);
-        for frame in [4, 4, 8] {
-            lua.globals().set("reads", 0).unwrap();
-            lua.globals().set("frame", frame).unwrap();
-            let previous = states.clone();
-            sync_sprite_states(&actor, &mut states).unwrap();
-            assert_eq!(lua.globals().get::<u32>("reads").unwrap(), 3);
-            assert_eq!(states[0].frame, frame);
-            if previous.first().is_some_and(|state| state.frame == frame) {
-                assert!(Arc::ptr_eq(&previous, &states));
-            }
-        }
-        let previous = states.clone();
-        lua.load("reads=0; frame=20; bad=true").exec().unwrap();
-        let error = sync_sprite_states(&actor, &mut states).unwrap_err();
-        assert_eq!(lua.globals().get::<u32>("reads").unwrap(), 3);
-        assert_eq!(error, read_sprite_states(&actor).unwrap_err());
-        assert!(Arc::ptr_eq(&previous, &states), "a partial read must not publish");
-    }
-
-    #[test]
-    fn native_sprite_publication_compares_delay_bits() {
-        let lua = Lua::new();
-        let actor: Table = lua.load("return {Frames={{Frame=0,Delay=0}}}").eval().unwrap();
-        let entry = actor.raw_get::<Table>("Frames").unwrap().raw_get::<Table>(1).unwrap();
-        let mut states: Arc<[_]> = Arc::from([]);
-        sync_sprite_states(&actor, &mut states).unwrap();
-        let positive_zero = states.clone();
-        entry.set("Delay", -0.0_f32).unwrap();
-        sync_sprite_states(&actor, &mut states).unwrap();
-        assert_eq!(states[0].delay.to_bits(), (-0.0_f32).to_bits());
-        assert!(!Arc::ptr_eq(&positive_zero, &states));
-        entry.set("Delay", f64::NAN).unwrap();
-        sync_sprite_states(&actor, &mut states).unwrap();
-        assert!(states[0].delay.is_nan());
-        let nan = states.clone();
-        sync_sprite_states(&actor, &mut states).unwrap();
-        assert!(Arc::ptr_eq(&nan, &states), "unchanged NaNs should not force allocations");
-    }
-}
-
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_multi_vertex_range(
     actor: &Table,
     vertex_count: usize,
@@ -22581,6 +22745,7 @@ fn read_actor_multi_vertex_range(
 
 // Copy the common numeric vertex layout with one VM lock and stack frame.
 // Noncanonical inputs retain the existing conversions and defaults below.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_multi_vertex_upload(
     lua: &Lua,
     vertices: &Table,
@@ -22643,44 +22808,10 @@ fn read_actor_multi_vertex_upload(
 mod vertex_upload_tests {
     use super::*;
 
-    #[test]
-    fn packed_vertex_upload_matches_general_reader_and_restores_stack() {
-        let lua = Lua::new();
-        for expression in [
-            "{}",
-            "{{{1,2,3},{0.25,0.5,0.75,1},{0.1,0.2}}}",
-            "{{{0/0,2,-3},{1,1,1,1},{0,1}}}",
-            "{{{1,2},{1,0,0},{0,1}}}",
-            "{{{1,2,3},'#ff0000',{0/0,1}}}",
-            "{{{'1','2','3'},{'0.5',1,1,1},{'0.1','0.2'}}}",
-            "{false,{{1,2,3},{1,1,1,1},{0,1}}}",
-        ] {
-            let vertices: Table = lua.load(format!("return {expression}")).eval().unwrap();
-            let expected = read_actor_multi_vertex_points(&vertices).unwrap();
-            let actual = read_actor_multi_vertex_upload(&lua, &vertices).unwrap();
-            assert_eq!(actual.len(), expected.len(), "{expression}");
-            for (actual, expected) in actual.iter().zip(&expected) {
-                let scalars = |point: &SongLuaActorMultiVertexPoint| {
-                    [
-                        point.pos[0],
-                        point.pos[1],
-                        point.z,
-                        point.color[0],
-                        point.color[1],
-                        point.color[2],
-                        point.color[3],
-                        point.uv[0],
-                        point.uv[1],
-                    ]
-                    .map(f32::to_bits)
-                };
-                assert_eq!(scalars(actual), scalars(expected), "{expression}");
-            }
-            assert_eq!(lua.load("return 6*7").eval::<u32>().unwrap(), 42);
-        }
-    }
+    
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 unsafe fn vertex_numeric_array<const N: usize>(
     state: *mut ffi::lua_State,
     table: c_int,
@@ -22707,6 +22838,7 @@ unsafe fn vertex_numeric_array<const N: usize>(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_multi_vertex_points(
     vertices: &Table,
 ) -> Result<Vec<SongLuaActorMultiVertexPoint>, String> {
@@ -22721,6 +22853,7 @@ fn read_actor_multi_vertex_points(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_actor_multi_vertex_point(
     value: Value,
 ) -> Result<Option<SongLuaActorMultiVertexPoint>, String> {
@@ -22960,6 +23093,7 @@ const fn actor_multi_vertex_mesh_vertex(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn actor_base_zoom_axis(lua: &Lua, actor: &Table, key: &str) -> mlua::Result<f32> {
     if let Some(field) = key.strip_prefix("__songlua_state_").and_then(BaseField::from_key)
         && let Some(base) = live_base_transform(lua, actor) {
@@ -22969,6 +23103,7 @@ fn actor_base_zoom_axis(lua: &Lua, actor: &Table, key: &str) -> mlua::Result<f32
         .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?).unwrap_or(1.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_zoom_axis(lua: &Lua, actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
     let zoom = match zoom_key.strip_prefix("__songlua_state_")
         .and_then(|key| live_destination_scalar(lua, actor, key)) {
@@ -22980,6 +23115,7 @@ pub fn actor_zoom_axis(lua: &Lua, actor: &Table, zoom_key: &str, basezoom_key: &
     Ok(basezoom * zoom)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
     // Quad::LoadFromNode bypasses Sprite's Texture attribute loading.
     if actor.raw_get::<bool>("__songlua_default_texture")? {
@@ -23025,6 +23161,7 @@ pub fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget>, String> {
     let Some(raw_kind) = actor
         .get::<Option<String>>("__songlua_proxy_target_kind")
@@ -23071,6 +23208,7 @@ pub fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String> {
     let raw_path = Path::new(raw.trim());
     if deadlib_assets::generated_texture_shared_key(raw.trim()).is_some() {
@@ -23156,6 +23294,7 @@ fn resolve_actor_asset_prefix(script_dir: &Path, raw_path: &Path) -> Option<Path
     found
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_bitmap_font(actor: &Table) -> Result<Option<(&'static str, PathBuf)>, String> {
     let Some(font) = actor
         .get::<Option<String>>("Font")
@@ -23175,6 +23314,7 @@ pub fn read_bitmap_font(actor: &Table) -> Result<Option<(&'static str, PathBuf)>
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_bitmap_text_attributes(actor: &Table) -> Result<Arc<[TextAttribute]>, String> {
     let Some(attributes) = actor
         .get::<Option<Table>>("__songlua_text_attributes")
@@ -23192,6 +23332,7 @@ pub fn read_bitmap_text_attributes(actor: &Table) -> Result<Arc<[TextAttribute]>
     Ok(Arc::from(out.into_boxed_slice()))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn read_bitmap_text_attribute(entry: &Table) -> Result<Option<TextAttribute>, String> {
     let start_value = entry
         .raw_get::<Value>("start")
@@ -23232,31 +23373,8 @@ pub(crate) fn read_bitmap_text_attribute(entry: &Table) -> Result<Option<TextAtt
     }))
 }
 
-fn song_lua_uses_builtin_theme_font(raw: &str) -> bool {
-    let trimmed = raw.trim().trim_start_matches('/');
-    if trimmed.is_empty() {
-        return false;
-    }
-    let normalized = trimmed.replace('\\', "/");
-    normalized.starts_with(SONG_LUA_THEME_PATH_PREFIX)
-        || (!normalized.contains('/') && Path::new(&normalized).extension().is_none())
-}
 
-fn song_lua_font_name(font_path: &Path) -> &'static str {
-    static SONG_LUA_FONT_NAMES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
-    let canonical = font_path.to_string_lossy().replace('\\', "/");
-    let cache = SONG_LUA_FONT_NAMES.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(&name) = guard.get(&canonical) {
-        return name;
-    }
-    let leaked = Box::leak(format!("songlua_font:{canonical}").into_boxed_str());
-    guard.insert(canonical, leaked);
-    leaked
-}
-
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_texture_is_video(actor: &Table) -> mlua::Result<bool> {
     if let Some(path) = actor_texture_path(actor)? {
         return Ok(is_song_lua_video_path(&path));
@@ -23266,6 +23384,7 @@ pub fn actor_texture_is_video(actor: &Table) -> mlua::Result<bool> {
         .is_some_and(|texture| is_song_lua_video_path(Path::new(texture.trim()))))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_actor_decode_movie_for_texture(actor: &Table) -> mlua::Result<()> {
     actor.set(
         "__songlua_state_decode_movie",
@@ -23273,12 +23392,14 @@ pub fn set_actor_decode_movie_for_texture(actor: &Table) -> mlua::Result<()> {
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_decode_movie(actor: &Table) -> mlua::Result<bool> {
     Ok(actor
         .get::<Option<bool>>("__songlua_state_decode_movie")?
         .unwrap_or(actor_texture_is_video(actor)?))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4]>, String> {
     Ok(actor
         .get::<Option<Table>>(key)
@@ -23286,6 +23407,7 @@ pub fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4
         .and_then(|value| table_vec4(&value)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_diffuse(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
     if let Some(diffuse) = live_destination_value(lua, actor, |dest| dest.diffuse) { return Ok(diffuse); }
     Ok(actor
@@ -23294,6 +23416,7 @@ pub fn actor_diffuse(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
         .unwrap_or([1.0, 1.0, 1.0, 1.0]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_vertex_colors(lua: &Lua, actor: &Table) -> mlua::Result<[[f32; 4]; 4]> {
     if let Some(colors) = live_destination_value(lua, actor, |dest| dest.vertex_colors) {
         return Ok(colors.unwrap_or([[1.0; 4]; 4]));
@@ -23304,6 +23427,7 @@ pub fn actor_vertex_colors(lua: &Lua, actor: &Table) -> mlua::Result<[[f32; 4]; 
         .unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn text_attribute_matches(
     attr: &Table,
     start: i32,
@@ -23331,6 +23455,7 @@ pub fn text_attribute_matches(
     Ok(existing_color == color && existing_vertex_colors == vertex_colors && existing_glow == glow)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn text_attribute_value(params: &Table, keys: &[&str]) -> mlua::Result<Option<Value>> {
     for key in keys {
         let value = params.get::<Value>(*key)?;
@@ -23341,6 +23466,7 @@ pub fn text_attribute_value(params: &Table, keys: &[&str]) -> mlua::Result<Optio
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_glow(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
     if let Some(glow) = live_destination_value(lua, actor, |dest| dest.glow) { return Ok(glow); }
     Ok(actor
@@ -23349,6 +23475,7 @@ pub fn actor_glow(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
         .unwrap_or([1.0, 1.0, 1.0, 0.0]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn actor_effect_magnitude(actor: &Table) -> mlua::Result<[f32; 3]> {
     Ok(actor
         .get::<Option<ActorVectorValue<3>>>("__songlua_state_effect_magnitude")?
@@ -23374,6 +23501,7 @@ pub fn banner_sort_order_path(sort_order: &str) -> Option<String> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_screen_size(lua: &Lua) -> mlua::Result<(f32, f32)> {
     let globals = lua.globals();
     let width = globals.get::<Option<i32>>("SCREEN_WIDTH")?.unwrap_or(640) as f32;
@@ -23381,6 +23509,7 @@ pub fn song_lua_screen_size(lua: &Lua) -> mlua::Result<(f32, f32)> {
     Ok((width, height))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_screen_center(lua: &Lua) -> mlua::Result<(f32, f32)> {
     let globals = lua.globals();
     let center_x = globals
@@ -23394,6 +23523,7 @@ pub fn song_lua_screen_center(lua: &Lua) -> mlua::Result<(f32, f32)> {
 
 // Reuse the callback's buffer, then restore it so all arguments stay alive
 // through the caller's Text setter, including on the formatter's error path.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn lua_format_text_in_place(lua: &Lua, args: &mut MultiValue) -> mlua::Result<String> {
     let receiver = if method_arg_offset(args) == 1 {
         args.pop_front()
@@ -23414,6 +23544,7 @@ fn lua_format_text_in_place(lua: &Lua, args: &mut MultiValue) -> mlua::Result<St
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
     let offset = method_arg_offset(args);
     if args.get(offset).is_none() {
@@ -23430,6 +23561,7 @@ pub fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
     lua_text_value(format.call::<Value>(call_args)?)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_string_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
     let table = lua.create_table_with_capacity(values.len(), 0)?;
     for (index, value) in values.iter().enumerate() {
@@ -23438,6 +23570,7 @@ pub fn create_string_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_owned_string_array(lua: &Lua, values: &[String]) -> mlua::Result<Table> {
     let table = lua.create_table_with_capacity(values.len(), 0)?;
     for (index, value) in values.iter().enumerate() {
@@ -23446,6 +23579,7 @@ pub fn create_owned_string_array(lua: &Lua, values: &[String]) -> mlua::Result<T
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn function_named_upvalue_tables(
     getupvalue: &Function,
     function: &Function,
@@ -23474,6 +23608,7 @@ pub fn function_named_upvalue_tables(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn nested_function_named_upvalue_tables(
     getupvalue: &Function,
     function: &Function,
@@ -23495,6 +23630,7 @@ pub fn nested_function_named_upvalue_tables(
 
 // Append in depth-first discovery order without allocating and copying a
 // separate result vector at every recursive level.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn collect_nested_function_named_upvalue_tables(
     getupvalue: &Function,
     function: &Function,
@@ -23536,6 +23672,7 @@ fn collect_nested_function_named_upvalue_tables(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_update_function_tables(
     lua: &Lua,
     root: &Value,
@@ -23563,6 +23700,7 @@ pub fn read_update_function_tables(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_update_function_nested_tables(
     lua: &Lua,
     root: &Value,
@@ -23598,6 +23736,7 @@ pub fn read_update_function_nested_tables(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_global_function_nested_tables(
     lua: &Lua,
     table_name: &str,
@@ -23644,6 +23783,7 @@ pub fn read_global_function_nested_tables(
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_update_function_tables_for_table(
     actor: &Table,
     getupvalue: &Function,
@@ -23687,6 +23827,7 @@ fn read_update_function_tables_for_table(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_update_function_nested_tables_for_table(
     actor: &Table,
     getupvalue: &Function,
@@ -23740,6 +23881,7 @@ fn read_update_function_nested_tables_for_table(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_bool_array(lua: &Lua, values: &[bool]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (index, value) in values.iter().enumerate() {
@@ -23748,6 +23890,7 @@ pub fn create_bool_array(lua: &Lua, values: &[bool]) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::Result<Table> {
     let wheel = lua.create_table()?;
     wheel.set(
@@ -23817,6 +23960,7 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
     Ok(wheel)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
     let debug = lua.create_table()?;
     debug.set(
@@ -23873,6 +24017,7 @@ pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(debug)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     let table = lua.create_table_with_capacity(4, 0)?;
@@ -23886,6 +24031,7 @@ pub fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
 // SAFETY: index must be a positive index of a rooted table in the locked VM,
 // with one spare stack slot. Numeric conversion neither allocates Lua objects
 // nor invokes metamethods. Each component is popped before returning.
+#[cfg(any(test, feature = "legacy-oracle"))]
 unsafe fn stack_vector<const N: usize>(state: *mut ffi::lua_State, index: c_int) -> Option<[f32; N]> {
     let mut out = [0.0; N];
     for (component, dest) in out.iter_mut().enumerate() {
@@ -23901,6 +24047,7 @@ unsafe fn stack_vector<const N: usize>(state: *mut ffi::lua_State, index: c_int)
     Some(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn table_vector<const N: usize>(table: &Table) -> Option<[f32; N]> {
     let lua = table.weak_lua().upgrade();
     // SAFETY: the owning table stays rooted. Three slots match raw_get's
@@ -23913,11 +24060,16 @@ pub(crate) fn table_vector<const N: usize>(table: &Table) -> Option<[f32; N]> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_vec2(table: &Table) -> Option<[f32; 2]> { table_vector(table) }
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_vec3(table: &Table) -> Option<[f32; 3]> { table_vector(table) }
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_vec4(table: &Table) -> Option<[f32; 4]> { table_vector(table) }
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_vec5(table: &Table) -> Option<[f32; 5]> { table_vector(table) }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn table_vertex_colors(table: &Table) -> Option<[[f32; 4]; 4]> {
     let lua = table.weak_lua().upgrade();
     // SAFETY: three reserved slots hold the root, current row and component.
@@ -23940,6 +24092,7 @@ pub fn table_vertex_colors(table: &Table) -> Option<[[f32; 4]; 4]> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn make_vertex_color_table(lua: &Lua, colors: [[f32; 4]; 4]) -> mlua::Result<Table> {
     let out = lua.create_table_with_capacity(4, 0)?;
     for (index, color) in colors.into_iter().enumerate() {
@@ -23948,6 +24101,7 @@ pub fn make_vertex_color_table(lua: &Lua, colors: [[f32; 4]; 4]) -> mlua::Result
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (name, text) in [
@@ -24008,6 +24162,7 @@ pub fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 fn table_color(table: &Table) -> Option<[f32; 4]> {
     let [r, g, b] = table.raw_get_array::<f32, 3>().ok()?;
@@ -24019,6 +24174,7 @@ fn table_color(table: &Table) -> Option<[f32; 4]> {
     ])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_color_value(value: Value) -> Option<[f32; 4]> {
     match value {
@@ -24028,6 +24184,7 @@ pub fn read_color_value(value: Value) -> Option<[f32; 4]> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_vertex_colors_value(value: Value) -> Option<[[f32; 4]; 4]> {
     let Value::Table(table) = value else {
         return None;
@@ -24047,10 +24204,12 @@ pub fn read_vertex_colors_value(value: Value) -> Option<[[f32; 4]; 4]> {
     saw_color.then_some(colors)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
     read_color_values(args.iter())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_color_values<'a>(mut values: impl Iterator<Item = &'a Value>) -> Option<[f32; 4]> {
     let first = values.next()?;
     match first {
@@ -24067,6 +24226,7 @@ fn read_color_values<'a>(mut values: impl Iterator<Item = &'a Value>) -> Option<
     Some([r, g, b, a])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_color_component(value: &Value) -> Option<f32> {
     match value {
         Value::Integer(_) | Value::Number(_) => read_f32(value.clone()),
@@ -24075,6 +24235,7 @@ fn read_color_component(value: &Value) -> Option<f32> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 #[must_use]
 pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
@@ -24082,155 +24243,17 @@ pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
     args.get(offset + index)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 #[must_use]
 pub fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
 }
 
-#[cfg(test)]
-mod snapshot_tests {
-    use super::*;
-
-    fn large_live_actor_snapshot(lua: &Lua, message: bool) -> (Table, Vec<Table>) {
-        let root = lua.create_table().unwrap();
-        let command = lua.load("return function(self) SEEN[#SEEN + 1] = self.ordinal end")
-            .eval::<Function>().unwrap();
-        lua.globals().set("SEEN", lua.create_table().unwrap()).unwrap();
-        for ordinal in 1..=6000 {
-            let actor = lua.create_table().unwrap();
-            actor.raw_set("Name", format!("Child{ordinal}")).unwrap();
-            actor.raw_set("ordinal", ordinal).unwrap();
-            if message { actor.raw_set("GoMessageCommand", command.clone()).unwrap(); }
-            root.raw_set(ordinal, actor).unwrap();
-        }
-        actor_named_children(lua, &root).unwrap();
-        let actors = root.sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
-        let registry = lua.create_sequence_from(actors.iter().cloned()).unwrap();
-        lua.globals().raw_set("__songlua_actor_registry", registry).unwrap();
-        prepare_live_actor_handle_cache(lua, actors.iter().cloned()).unwrap();
-        (root, actors)
-    }
-
-    #[test]
-    fn large_live_actor_snapshot_children_share_retained_handles() {
-        let lua = Lua::new();
-        let (root, actors) = large_live_actor_snapshot(&lua, false);
-        let children = actor_direct_children(&lua, &root)
-            .expect("copying native child pointers must not double auxiliary Lua references");
-        assert_eq!(children.len(), actors.len());
-        for (child, actor) in children.iter().zip(&actors) {
-            assert_eq!(child.to_pointer(), actor.to_pointer());
-        }
-    }
-
-    #[test]
-    fn large_live_actor_snapshot_broadcast_preserves_identity_order() {
-        let lua = Lua::new();
-        let (_root, mut actors) = large_live_actor_snapshot(&lua, true);
-        broadcast_song_lua_message(&lua, "Go", None)
-            .expect("native subscriber snapshots must reuse retained actor handles");
-        actors.sort_unstable_by_key(|actor| actor.to_pointer() as usize);
-        let seen: Table = lua.globals().get("SEEN").unwrap();
-        assert_eq!(seen.raw_len(), actors.len());
-        for (index, actor) in actors.iter().enumerate() {
-            assert_eq!(seen.raw_get::<usize>(index + 1).unwrap(), actor.raw_get::<usize>("ordinal").unwrap());
-        }
-    }
-
-    #[test]
-    fn recursive_begin_handles_large_actor_tree_in_order() {
-        let lua = Lua::new();
-        let root = lua.create_table().expect("actor tree");
-        let calls = lua.create_table().expect("Begin observations");
-        lua.globals().set("BEGIN_CALLS", calls.clone()).unwrap();
-        let begin = lua.load("return function(self) BEGIN_CALLS[#BEGIN_CALLS + 1] = self.ordinal end")
-            .eval::<Function>().expect("authored Begin command");
-        for ordinal in 1..=2800 {
-            let child = lua.create_table().expect("child actor");
-            child.raw_set("ordinal", ordinal).unwrap();
-            child.raw_set("BeginCommand", begin.clone()).unwrap();
-            root.raw_set(ordinal, child).unwrap();
-        }
-        // Scene preparation keeps initial actor states while Begin traverses
-        // the same tree. Those independent handles must remain usable.
-        let initial_actors = root.sequence_values::<Table>()
-            .collect::<mlua::Result<Vec<_>>>().expect("initial actor states");
-        // Named-child queries can initialize every actor's child registry
-        // before the screen broadcasts Begin, as authored scene scanners do.
-        for actor in &initial_actors {
-            let children = actor_named_children(&lua, actor).expect("initial child lookup");
-            assert_eq!(children.raw_len(), 0);
-        }
-        run_named_command_on_children_recursively(&lua, &root, "BeginCommand", None)
-            .expect("Begin must traverse a large actor tree within the native Lua stack limit");
-        assert_eq!(calls.raw_len(), 2800);
-        for (index, actor) in initial_actors.iter().enumerate() {
-            let ordinal = index + 1;
-            assert_eq!(actor.raw_get::<usize>("ordinal").unwrap(), ordinal);
-            assert_eq!(calls.raw_get::<usize>(ordinal).unwrap(), ordinal,
-                "Begin runs once per actor in child order");
-        }
-    }
-
-    #[test]
-    fn tap_note_results_do_not_consume_auxiliary_references_per_note() {
-        let lua = Lua::new();
-        lua.gc_stop();
-        let notes = lua.create_table().unwrap();
-        let params = lua.create_table().unwrap();
-        params.raw_set("TapNoteScore", "TapNoteScore_W1").unwrap();
-        for index in 1..=10_000 {
-            params.raw_set("TapNoteOffset", index as f32 / 1000.0).unwrap();
-            notes.raw_set(index, create_tap_note_table(&lua, &params, None).unwrap()).unwrap();
-        }
-        for index in [1, 5000, 10_000] {
-            let note = notes.raw_get::<Table>(index).unwrap();
-            let result = note.get::<Function>("GetTapNoteResult").unwrap().call::<Table>(note.clone()).unwrap();
-            let hold = note.get::<Function>("GetHoldNoteResult").unwrap().call::<Table>(note.clone()).unwrap();
-            assert_eq!(result.to_pointer(), hold.to_pointer());
-            assert_eq!(result.get::<Function>("GetTapNoteOffset").unwrap().call::<f32>(result.clone()).unwrap(), index as f32 / 1000.0);
-            assert_eq!(result.get::<Function>("GetTapNoteScore").unwrap().call::<String>(result).unwrap(), "TapNoteScore_W1");
-        }
-        lua.gc_restart();
-    }
-
-    #[test]
-    fn large_snapshot_restores_aliases_and_cells() {
-        let lua = Lua::new();
-        let functions = lua.load(r#"
-local graph = {}
-for i = 1, 10000 do graph[i] = {value = i} end
-local original = graph
-local shared = graph[9999]
-graph.alias = shared
-graph.self = graph
-local function mutate()
-    for i = 1, 10000 do graph[i].value = -i end
-    graph.alias = {}
-    graph.self = nil
-    shared.extra = 'changed'
-    graph = {replacement = true}
-end
-local function verify()
-    assert(graph == original and graph.self == graph)
-    assert(graph.alias == shared and graph[9999] == shared)
-    assert(shared.extra == nil)
-    for i = 1, 10000 do assert(graph[i].value == i) end
-end
-return {mutate, verify}
-"#).eval::<Table>().expect("large aliased graph");
-        let mutate = functions.raw_get::<Function>(1).expect("mutation");
-        let verify = functions.raw_get::<Function>(2).expect("verification");
-        let snapshot = snapshot_function_locals(&lua, &functions, lua.create_table().expect("snapshot rows"))
-            .expect("large snapshot must fit the unmodified native Lua stack limit");
-        mutate.call::<()>(()).expect("mutate saved locals");
-        restore_function_action_tables(&lua, snapshot).expect("restore saved locals");
-        verify.call::<()>(()).expect("restore identities, values, aliases and replaced upvalue cells");
-    }
-}
 
 
+
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_gameplay_overlay(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
     let name = path.strip_prefix("./").unwrap_or(path);
     let source = match name {
@@ -24249,6 +24272,7 @@ fn load_native_gameplay_overlay(lua: &Lua, environment: &Table, path: &str, args
         .call(args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_native_gameplay_overlay(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
     context: &SongLuaCompileContext,
@@ -24323,6 +24347,7 @@ pub(crate) fn install_native_gameplay_overlay(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_native_gameplay_decorations(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
 ) -> mlua::Result<()> {
@@ -24376,6 +24401,7 @@ pub(crate) fn install_native_gameplay_decorations(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_native_gameplay_transitions(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
 ) -> mlua::Result<()> {
@@ -24409,6 +24435,7 @@ pub(crate) fn install_native_gameplay_transitions(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_step_statistics(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
     let name = path.strip_prefix("./").unwrap_or(path);
     let source = match name {
@@ -24427,6 +24454,7 @@ fn load_native_step_statistics(lua: &Lua, environment: &Table, path: &str, args:
         .call(args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_step_statistics_environment(lua: &Lua) -> mlua::Result<Table> {
     let globals = lua.globals();
     if let Some(environment) = globals.raw_get::<Option<Table>>("__songlua_step_statistics_environment")? {
@@ -24450,6 +24478,7 @@ fn native_step_statistics_environment(lua: &Lua) -> mlua::Result<Table> {
     Ok(environment)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_step_statistics_command(lua: &Lua, actor: &Table, command: &str) -> mlua::Result<()> {
     if let Some(callback) = actor.raw_get::<Option<Function>>(command)? { callback.call::<()>(actor.clone())?; }
     for child in actor_direct_children(lua, actor)? {
@@ -24458,12 +24487,14 @@ fn native_step_statistics_command(lua: &Lua, actor: &Table, command: &str) -> ml
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_step_statistics_lookup(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor_type_is(actor, "ActorFrame")? { actor.raw_set("__songlua_owned_child_lookup", true)?; }
     for child in actor_direct_children(lua, actor)? { native_step_statistics_lookup(lua, &child)?; }
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_native_note_field(lua: &Lua, name: &str, args: MultiValue) -> mlua::Result<Value> {
     let source = match name {
         "ColumnCues.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"),
@@ -24496,6 +24527,7 @@ fn load_native_note_field(lua: &Lua, name: &str, args: MultiValue) -> mlua::Resu
         .call(args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_native_gameplay_underlay(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
 ) -> mlua::Result<()> {
@@ -24631,9 +24663,7 @@ mod vm_reads_perf;
 #[path = "../tests/perf/actor_state.rs"]
 mod actor_state_perf;
 
-#[cfg(test)]
-#[path = "../tests/perf/ignored_actor.rs"]
-mod ignored_args_perf;
+
 
 #[cfg(test)]
 #[path = "../tests/perf/prefix_args.rs"]
@@ -24666,3 +24696,344 @@ mod message_inputs_perf;
 #[cfg(test)]
 #[path = "../tests/perf/upvalue_batches.rs"]
 mod upvalue_batches_perf;
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_player_parts(
+    lua: &Lua,
+    player: &Table,
+    index: usize,
+    style: &str,
+    dummy: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    named: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+) -> mlua::Result<()> {
+    install_named_theme_children(lua, player, &["Combo", "Judgment"], named)?;
+    install_hold_judgments(lua, player, index, style, dummy)?;
+    install_named_theme_children(lua, player, &["NoteField"], named)
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(any(test, feature = "legacy-oracle"), feature = "test-support"))]
+pub(crate) fn migration_initialize_steps_displays(lua: &Lua, screen: &Table) -> mlua::Result<()> {
+    initialize_native_steps_displays(lua, screen)
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_startup_tween_capture(
+    states: &[(Table, SongLuaOverlayState)],
+) -> Result<HashMap<usize, crate::rust_engine::SongStartupState>, String> {
+    capture_startup_states(
+        states
+            .iter()
+            .map(|(actor, state)| (actor.to_pointer() as usize, (actor.clone(), *state)))
+            .collect(),
+    )
+    .map(|states| {
+        states
+            .into_iter()
+            .map(|(actor, state)| {
+                (
+                    actor,
+                    crate::rust_engine::SongStartupState {
+                        initial: state.initial,
+                        blocks: state.blocks,
+                        steps: state.steps,
+                        commands: state.commands,
+                        block_steps: state.block_steps,
+                        clock_path: state.clock_path,
+                    },
+                )
+            })
+            .collect()
+    })
+}
+
+// Migration oracle: resume the actual activation observer's queued phase.
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_discover_startup(
+    lua: &Lua,
+    root: &Table,
+    states: &[(Table, SongLuaOverlayState)],
+    skip: bool,
+) -> mlua::Result<HashMap<usize, crate::rust_engine::SongStartupState>> {
+    let queued = lua.remove_app_data::<SongLuaStartupQueues>().unwrap();
+    if skip {
+        return Ok(HashMap::new());
+    }
+    let locals = if queued.0.is_empty() {
+        None
+    } else {
+        let functions = lua.create_table()?;
+        let mut seen = HashSet::new();
+        for (actor, _) in states {
+            actor.for_each::<Value, Value>(|_, value| {
+                if let Value::Function(function) = value
+                    && function.environment().is_some()
+                    && seen.insert(function.to_pointer() as usize)
+                {
+                    functions.raw_set(functions.raw_len() + 1, function)?;
+                }
+                Ok(())
+            })?;
+        }
+        Some(snapshot_function_action_tables(lua, &functions)?)
+    };
+    let mut states = HashMap::new();
+    if !queued.0.is_empty() {
+        let mut initial = HashMap::new();
+        collect_startup_states(lua, root, &mut initial)?;
+        lua.set_app_data(SongLuaQueuedStartup(0.0));
+        let result = queued
+            .0
+            .into_iter()
+            .try_for_each(|actor| drain_actor_command_queue(lua, &actor));
+        lua.remove_app_data::<SongLuaQueuedStartup>();
+        result?;
+        for (pointer, (actor, initial)) in initial {
+            flush_actor_capture(&actor)?;
+            states.insert(
+                pointer,
+                crate::rust_engine::SongStartupState {
+                    initial,
+                    blocks: read_actor_capture_blocks(&actor).map_err(mlua::Error::external)?,
+                    steps: Vec::new(),
+                    commands: Vec::new(),
+                    block_steps: Vec::new(),
+                    clock_path: startup_clock_path(&actor)?,
+                },
+            );
+        }
+    }
+    lua.set_app_data(SongLuaStartupLocals(locals));
+    lua.remove_app_data::<crate::host::SongLuaScreenRequest>();
+    Ok(states)
+}
+
+// Differential observer for the existing chronological preparation boundary.
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_begin_song_replay(
+    lua: &Lua,
+    overlays: &[(Table, SongLuaOverlayState)],
+    startup: &HashMap<usize, crate::rust_engine::SongStartupState>,
+) -> Result<(), String> {
+    restore_startup_locals(lua).map_err(|e| e.to_string())?;
+    for (actor, initial) in overlays {
+        reset_actor_capture(lua, actor).map_err(|e| e.to_string())?;
+        if let Some(binding) = actor
+            .raw_get::<Option<Table>>("__songlua_startup_sprite")
+            .map_err(|e| e.to_string())?
+        {
+            for key in [
+                "Texture",
+                "Frames",
+                "__songlua_state_sprite_default_states",
+                "__songlua_state_sprite_texture_epoch",
+                "__songlua_state_sprite_frame_sheet",
+            ] {
+                actor
+                    .raw_set(
+                        key,
+                        binding.raw_get::<Value>(key).map_err(|e| e.to_string())?,
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        set_actor_overlay_getter_state(lua, actor, *initial)?;
+    }
+    let overlays: Vec<_> = overlays
+        .iter()
+        .map(|(table, initial_state)| SongLuaOverlayCompileActor {
+            table: table.clone(),
+            message_sounds: Vec::new(),
+            actor: crate::SongLuaOverlayActor {
+                kind: (),
+                name: None,
+                parent_index: None,
+                initial_state: *initial_state,
+                message_commands: Vec::new(),
+            },
+        })
+        .collect();
+    let startup = startup
+        .iter()
+        .map(|(&id, state)| {
+            (
+                id,
+                SongLuaStartupState {
+                    initial: state.initial,
+                    blocks: state.blocks.clone(),
+                    steps: state.steps.clone(),
+                    commands: state.commands.clone(),
+                    block_steps: state.block_steps.clone(),
+                    clock_path: state.clock_path.clone(),
+                },
+            )
+        })
+        .collect();
+    begin_tween_replay(lua, &overlays, &startup);
+    Ok(())
+}
+
+// Observe the real scheduler's progress arrays and explicit write mask.
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_song_tween_replay(
+    lua: &Lua,
+) -> HashMap<usize, crate::rust_engine::SongTweenReplay> {
+    sample_tween_replays(lua);
+    let Some(replays) = lua.app_data_ref::<ActorTweenReplays>() else {
+        return HashMap::new();
+    };
+    replays
+        .0
+        .iter()
+        .map(|(&id, replay)| {
+            (
+                id,
+                crate::rust_engine::SongTweenReplay {
+                    progress: replay.progress.clone().unwrap_or_default(),
+                    values: TWEEN_POSE_TARGETS
+                        .into_iter()
+                        .filter(|target| replay.targets & (1u128 << *target as usize) != 0)
+                        .map(|target| (target, replay.current.get(target)))
+                        .collect(),
+                },
+            )
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(all(feature = "test-support", any(test, feature = "legacy-oracle")))]
+pub(crate) fn migration_finish_song_tween_replay(
+    lua: &Lua,
+    actors: &[Table],
+    startup: &HashMap<usize, crate::rust_engine::SongStartupState>,
+) -> HashMap<usize, Vec<SongLuaOverlayCommandBlock>> {
+    let mut overlays: Vec<_> = actors
+        .iter()
+        .filter_map(|table| {
+            let state = startup.get(&(table.to_pointer() as usize))?;
+            Some(SongLuaOverlayCompileActor {
+                table: table.clone(),
+                message_sounds: Vec::new(),
+                actor: crate::SongLuaOverlayActor {
+                    kind: (),
+                    name: None,
+                    parent_index: None,
+                    initial_state: state.initial,
+                    message_commands: vec![crate::SongLuaOverlayMessageCommand {
+                        frame_advance: 0.,
+                        message: "__songlua_actor_startup".into(),
+                        blocks: state.blocks.clone(),
+                    }],
+                },
+            })
+        })
+        .collect();
+    let startup = startup
+        .iter()
+        .map(|(&id, state)| {
+            (
+                id,
+                SongLuaStartupState {
+                    initial: state.initial,
+                    blocks: state.blocks.clone(),
+                    steps: state.steps.clone(),
+                    commands: state.commands.clone(),
+                    block_steps: state.block_steps.clone(),
+                    clock_path: state.clock_path.clone(),
+                },
+            )
+        })
+        .collect();
+    finish_tween_replay(lua, &mut overlays, &startup);
+    overlays
+        .into_iter()
+        .map(|actor| {
+            (
+                actor.table.to_pointer() as usize,
+                actor
+                    .actor
+                    .message_commands
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .blocks,
+            )
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_preserving_function_state(
+    lua: &Lua,
+    function: Function,
+    args: MultiValue,
+) -> mlua::Result<MultiValue> {
+    let functions = lua.create_sequence_from([function.clone()])?;
+    let snapshot = snapshot_function_action_tables(lua, &functions)?;
+    let result = function.call(args);
+    restore_function_action_tables(lua, snapshot)?;
+    result
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_preserving_command_locals<T>(
+    lua: &Lua,
+    probe: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let scope = begin_action_capture_scope(lua)?;
+    let result = probe();
+    restore_action_capture_scope(lua, scope)?;
+    result
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_capture_touched_actor_function(
+    lua: &Lua,
+    actors: &[(usize, Table)],
+    function: &Function,
+    arg: Option<f32>,
+    beat: Option<f32>,
+) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
+    capture_touched_blocks(lua, actors, function, arg, beat)
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_message_capture_runner(
+    lua: &Lua,
+    actor: &Table,
+    command_name: &str,
+    command: &Function,
+) -> mlua::Result<Function> {
+    message_capture_runner(lua, actor, command_name, command)
+}
+
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_deferred_message_states(lua: &Lua) -> Vec<(Table, String, String, bool)> {
+    lua.app_data_ref::<SongLuaDeferredMessages>()
+        .map(|messages| {
+            messages
+                .0
+                .iter()
+                .map(|message| {
+                    (
+                        message.actor.clone(),
+                        message.command.clone(),
+                        message.detail.clone(),
+                        message.observed,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}

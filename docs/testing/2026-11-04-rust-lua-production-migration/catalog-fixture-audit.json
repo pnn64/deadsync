@@ -1,0 +1,26 @@
+{
+  "tests/fixtures/itgmania-song-lua-micro/song-steps-native.json": {
+    "baseline": "64dbbee0aaa7d05ae3b03e94ac2037cbfef310f48b1fda3500ad7a0a58ad0f40",
+    "current": "64dbbee0aaa7d05ae3b03e94ac2037cbfef310f48b1fda3500ad7a0a58ad0f40"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/song-steps-provenance.json": {
+    "baseline": "18a1e34a5ec2a49607b8497e06453acc221f6bf32e6c19295835325b9cd24d89",
+    "current": "18a1e34a5ec2a49607b8497e06453acc221f6bf32e6c19295835325b9cd24d89"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/song-steps.sm": {
+    "baseline": "bc5a092db8d51d7c17bc9255402a4039413ae9c87a4027d1e36109c72d7d0076",
+    "current": "bc5a092db8d51d7c17bc9255402a4039413ae9c87a4027d1e36109c72d7d0076"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/timing-data-native.json": {
+    "baseline": "46c369d12c8c3ea110b4eb7ef1612504132145827e1851e6d91bed56ab9e3833",
+    "current": "46c369d12c8c3ea110b4eb7ef1612504132145827e1851e6d91bed56ab9e3833"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/timing-data-provenance.json": {
+    "baseline": "91501495eb85c9745b235fb5adf73cb9db073eb8d2b02d1c78477a4356f0fd53",
+    "current": "91501495eb85c9745b235fb5adf73cb9db073eb8d2b02d1c78477a4356f0fd53"
+  },
+  "tests/fixtures/itgmania-song-lua-micro/timing-data.ssc": {
+    "baseline": "dd306782b16ae5df342834cea72018dc0ba9519940e4761a31a4d49d8b3fadc9",
+    "current": "dd306782b16ae5df342834cea72018dc0ba9519940e4761a31a4d49d8b3fadc9"
+  }
+}

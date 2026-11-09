@@ -1,5 +1,7 @@
 //! Cold Lua 5.1 stack and prototype inspection; ordinary dispatch stores no names.
 use super::*;
+#[cfg(test)]
+mod allocation_tests;
 
 pub(super) const GET_INFO: u64 = 112;
 pub(super) const GET_UPVALUE: u64 = 113;
@@ -22,6 +24,7 @@ pub(super) enum LocalSlot {
     Copy(Value),
 }
 
+#[derive(Clone, Copy)]
 pub(super) enum LocalName {
     Named(usize, usize, usize),
     Temporary,
@@ -69,6 +72,14 @@ impl Vm {
         thread: ThreadId,
         index: usize,
     ) -> Option<(Box<[u8]>, &'static [u8])> {
+        self.debug_name_ref(thread, index)
+            .map(|(name, kind)| (name.into(), kind))
+    }
+    pub(super) fn debug_name_ref(
+        &self,
+        thread: ThreadId,
+        index: usize,
+    ) -> Option<(&[u8], &'static [u8])> {
         let frames = self.debug_frames(thread);
         if matches!(frames[index].function, FrameKind::Lua(_)) && frames[index].tail_calls != 0 {
             return None;
@@ -89,7 +100,7 @@ impl Vm {
         if call.kind.bytes().is_empty() {
             return None;
         }
-        Some((c_bytes(&call.name).into(), call.kind.bytes()))
+        Some((c_bytes(&call.name), call.kind.bytes()))
     }
     pub(super) fn debug_nups(&self, id: u64) -> usize {
         match id {
@@ -158,7 +169,7 @@ impl Vm {
         let code = if let Value::Function(id) = function {
             let closure = &self.functions[slot_index(id.0)];
             Some((
-                Arc::clone(&self.programs[closure.program].data),
+                self.programs[closure.program].data.clone(),
                 closure.prototype,
             ))
         } else {
@@ -268,11 +279,11 @@ impl Vm {
         else {
             return Ok(0);
         };
-        let data = Arc::clone(&self.programs[closure.program].data);
+        let data = self.programs[closure.program].data.clone();
         let name = c_bytes(&data.prototypes[closure.prototype].debug.upvalues[n as usize - 1]);
         if id == SET_UPVALUE {
             // lua_setupvalue consumes the actual top, including extra arguments.
-            self.set_cell(cell as usize, self.argument(base, count, count - 1));
+            self.set_cell(cell as usize, self.argument(base, count, count - 1))?;
         }
         let name = self.intern(name);
         self.registers[base] = name;
@@ -339,7 +350,13 @@ impl Vm {
             }
         }
     }
-    pub(super) fn debug_write_local(&mut self, thread: ThreadId, slot: &LocalSlot, value: Value) {
+    pub(super) fn debug_write_local(
+        &mut self,
+        thread: ThreadId,
+        slot: &LocalSlot,
+        value: Value,
+    ) -> Result<(), Error> {
+        self.reserve_gc_barrier(Value::Thread(thread), value)?;
         match *slot {
             LocalSlot::Register(r) => self.debug_set_register(thread, r, value),
             LocalSlot::Copy(_) => {}
@@ -353,6 +370,7 @@ impl Vm {
             }
         }
         self.gc_barrier(Value::Thread(thread), value);
+        Ok(())
     }
     fn local_slot_inner(
         &self,
@@ -666,7 +684,7 @@ impl Vm {
             value = Value::Nil;
         }
         if id == SET_LOCAL {
-            self.debug_write_local(thread, &slot, self.argument(base, count, arg + 2));
+            self.debug_write_local(thread, &slot, self.argument(base, count, arg + 2))?;
         }
         let name = match name {
             LocalName::Named(program, prototype, local) => {
@@ -674,10 +692,15 @@ impl Vm {
                     .debug
                     .locals[local]
                     .name;
-                Value::String(self.strings.intern(c_bytes(bytes)))
+                Value::String(
+                    self.strings
+                        .try_intern(c_bytes(bytes))
+                        .map_err(|_| self.memory_failure())?,
+                )
             }
-            LocalName::Temporary => self.intern(b"(*temporary)"),
+            LocalName::Temporary => self.try_intern(b"(*temporary)")?,
         };
+        self.reserve_registers(self.registers.len().max(base + 2))?;
         self.resize_registers(self.registers.len().max(base + 2));
         self.registers[base] = name;
         if id == GET_LOCAL {

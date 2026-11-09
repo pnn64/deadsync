@@ -1,0 +1,31 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 40s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 12 tests
+test column_eases_endpoint_capture_keeps_metadata_clocks_shared_cells_rng_and_original_splines ... ok
+test column_eases_endpoint_errors_keep_native_body_sample_and_restore_priority ... ok
+test column_eases_endpoint_first_return_stays_alive_during_authored_restoration ... ok
+test column_eases_global_collection_roots_both_fields_before_reading_columns ... ok
+test column_eases_instruction_abort_restores_columns_clocks_and_releases_detached_values ... ok
+test column_eases_reader_publishes_real_column_endpoints_and_keeps_owned_rows_after_teardown ... ok
+test column_eases_samples_keep_native_mode_baselines_numeric_coercion_and_target_order ... ok
+test column_eases_samples_pin_transient_columns_handlers_and_points_during_witness_setters ... ok
+test column_eases_samples_recheck_nonuniform_witnesses_and_keep_later_y_errors ... ok
+test column_eases_samples_release_each_processed_field_before_the_next_getter ... ok
+test column_eases_samples_validate_two_point_splines_and_preserve_sparse_raw_points ... ok
+test column_eases_snapshot_failure_preserves_selected_clock_and_does_not_call_body ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 15.06s
+

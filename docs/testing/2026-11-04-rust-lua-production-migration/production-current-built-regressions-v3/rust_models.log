@@ -1,0 +1,12 @@
+
+running 7 tests
+test capture_owns_frame_data_until_finish_or_last_scene_release ... ok
+test existing_model_material_fixture_loads_identical_owned_geometry_and_materials ... ok
+test existing_texture_order_fixture_preserves_hibernation_parent_rates_and_queued_selection ... ok
+test material_state_selection_callback_order_static_layers_and_reset_match_control ... ok
+test model_construction_defaults_inheritance_and_immediate_render_controls ... ok
+test model_paths_preserve_fallbacks_getter_order_gc_and_failed_query_cleanup ... ok
+test model_private_child_queries_preserve_names_groups_and_registry_aliases ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+

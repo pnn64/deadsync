@@ -1,16 +1,34 @@
 use log::{debug, info};
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, Table, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::time::Instant;
 
-use crate::{
-    SongLuaColumnOffsetWindow, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaSpanMode, SongLuaTimeUnit,
-    capture_overlay_compile_actor_function_eases, compile_note_column_pos_function_ease,
-    probe_function_ease_target, read_easing_name, read_f32, read_player, read_span_mode,
-    record_unsupported_function_ease_capture,
-};
+use crate::SongLuaColumnOffsetWindow;
+use crate::SongLuaCompileInfo;
+use crate::SongLuaEaseTarget;
+use crate::SongLuaEaseWindow;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::SongLuaOverlayCompileActor;
+use crate::SongLuaOverlayEase;
+use crate::SongLuaSpanMode;
+use crate::SongLuaTimeUnit;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::capture_overlay_compile_actor_function_eases;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::compile_note_column_pos_function_ease;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::probe_function_ease_target;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_easing_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_player;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_span_mode;
+use crate::record_unsupported_function_ease_capture;
 
 pub struct SongLuaReadEasesResult {
     pub eases: Vec<SongLuaEaseWindow>,
@@ -30,6 +48,7 @@ pub struct SongLuaReadEasesStats {
     pub overlay_capture_ms: f64,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone)]
 pub struct SongLuaFunctionEaseInput {
     pub function: Function,
@@ -57,6 +76,7 @@ pub enum SongLuaFunctionEaseDecision {
     Skip,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_eases_with_function_capture<F>(
     table: Option<Table>,
     unit: SongLuaTimeUnit,
@@ -197,6 +217,7 @@ where
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_eases_for_overlay_actors<Kind>(
     lua: &Lua,
     table: Option<Table>,
@@ -249,6 +270,7 @@ pub fn read_eases_for_overlay_actors<Kind>(
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_function_ease<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],

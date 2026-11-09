@@ -1,0 +1,36 @@
+{
+  "stage": "noteskin-cutover-oracle-fixed",
+  "suite": "noteskin",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-noteskin",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 55.705100612016395,
+  "log_sha256": "b7773de9d87beb148e9116fab0c930af144727d703048ea0cdf2d22babedaf44",
+  "tests_passed": 311,
+  "test_results": [
+    "test result: ok. 298 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 4.98s",
+    "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.78s",
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.97s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "/var/tmp/deadsync-rust-adapters-target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "PKG_CONFIG_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/pkgconfig:/var/tmp/deadsync-rust-adapters-native-deps/root/usr/share/pkgconfig",
+    "CPATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include",
+    "LD_LIBRARY_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu:"
+  }
+}

@@ -69,6 +69,7 @@ impl RenderFlags {
         }
     }
 
+    #[cfg(any(test, feature = "legacy-oracle"))]
     pub fn snapshot(self) -> impl Iterator<Item = (&'static str, mlua::Value)> {
         RenderFlag::ALL
             .into_iter()

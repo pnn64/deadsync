@@ -1,0 +1,26 @@
+﻿{
+    "goal_status":  "active",
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "source_count":  1278,
+    "tests_passed":  204,
+    "test_targets":  16,
+    "live_actor_cases":  16,
+    "existing_tests_byte_unchanged":  true,
+    "native_algorithms_byte_unchanged":  true,
+    "engine_unchanged":  true,
+    "formatting_passed":  true,
+    "clippy_diagnostics_match_prior_baseline":  true,
+    "without_test_support_compiles":  true,
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "previous_goal_turn":  "no progress: scope acknowledgment only",
+    "current_goal_turn":  "progress: Rust live actor traversal and native player feedback",
+    "documents":  {
+                      "docs/lua-architecture.md":  "cd02123c3a92ac1ae47232dfdca5a07c9fe7c49aac500bccb15dda8065f548ed",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "7fac5d36bdf45d6d9656d67a24c350116f1e7066db466a2aa2c9773d2d1ed65f",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/review_live_actors.py":  "36698398e4707dd9c4fb4a6190c7e245fee9351447c602ce3746965942888aaa",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/song-live-actors-review.json":  "6ead0ee13b8c58351e41eecf3d194a2e076579683bb86449a0141b30a8f10fc8",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/document_live_actors.py":  "a267bc67fa8ebe4c33ab2524fdb92708eec21e598709bab0c190200329186cdf",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/audit_live_actors.ps1":  "d18d23a0176f783900f8d249978af5f9b551940f8bdc51ef0df5435ce439deea"
+                  }
+}

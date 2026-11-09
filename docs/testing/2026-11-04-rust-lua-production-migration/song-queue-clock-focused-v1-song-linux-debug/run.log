@@ -1,0 +1,22 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 37s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 3 tests
+test queue_clock_predicts_render_samples_and_cross_actor_frame_advancement ... ok
+test queue_clock_preserves_actor_frame_spans_zero_tails_hurry_and_cancellation ... ok
+test queue_clock_retains_dispatch_remainders_and_sample_arrays_after_queue_callbacks ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 3.40s
+

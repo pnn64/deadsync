@@ -1,0 +1,50 @@
+{
+  "checks": [
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_song_options.rs",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/song_tables.rs",
+      "portion": "song-tables-before",
+      "exit_code": 1,
+      "log": "song-options-format-song-tables-before.log"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/song_tables.rs",
+      "portion": "song-tables-current",
+      "exit_code": 1,
+      "log": "song-options-format-song-tables-current.log"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/song_tables.rs",
+      "portion": "song-tables-hook",
+      "exit_code": 0,
+      "log": "song-options-format-song-tables-hook.log"
+    }
+  ],
+  "original_native_prefix_sha256": "325d4f0c59e11e78f0e54d3690a7110b629cfe1908f7ed65c491ea36decd8b0b",
+  "original_native_prefix_unchanged": true,
+  "whole_file_format_diagnostics_unchanged": true
+}

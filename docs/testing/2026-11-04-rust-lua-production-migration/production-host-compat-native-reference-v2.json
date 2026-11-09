@@ -1,0 +1,30 @@
+{
+  "scope": "Only existing pre-migration song host bindings; no interpreter/C API milestone reopened.",
+  "native_reference_files": {
+    "host.rs": {
+      "baseline_sha256": "87c0f27f0b50be52bbcf3d03485b9e29f54b10502fd0ba811de09d43d80a908f",
+      "current_sha256": "dd9a05ddaac20191467fc6f10cf330bebe901c864c5d6dee463575e4a7820e9c"
+    },
+    "compat.rs": {
+      "baseline_sha256": "459c02b0825dcc7f36f7838c7d2da76c39f7dafdad9fefd97cab8ba634161fc0",
+      "current_sha256": "afef6bb0e936a2186429b33bd2bbc38381640a4d154c63179750aec707040dd2",
+      "restored_debug_walk_equals_frozen_chunk": true
+    },
+    "theme_colors.rs": {
+      "baseline_sha256": "531871f7d086c2faf5eb667788f83929e4421cf82e3f6eb5223b9eafe3805b84",
+      "current_sha256": "04d90a7a125f67eda7f8785fe130a7756cd7cd9f65705cff16b481390f3234e0"
+    },
+    "files.rs": {
+      "baseline_sha256": "56b3d24d57aca4f2886744af994065164570e8d7d7fea1776d4b983626790215",
+      "current_sha256": "2e35d70c60a359beead8f7f2be62d459d56f50370475c1701aec412fe6196f77"
+    },
+    "tables.rs": {
+      "baseline_sha256": "b15dc38ee100292479cfd7681eac9d85c4bd43243af3983bb6100590d4f9a39b",
+      "current_sha256": "398715f3d480ec54e80d66b37d689ad101d4f8a549cbd677a9f9748b56da9364",
+      "unchanged_seconds_to_time_parts": true
+    }
+  },
+  "time_overflow": "The unchanged shared seconds_to_time_parts multiplies saturated minutes by 60 in debug builds. Native pcall catches this Rust panic via mlua; the adapter now protects this helper so it is a caught Lua error rather than invalidating the Rust VM. Infinite inputs and the unprotected native overflow remain explicit controls.",
+  "current_runtime_validation": "v6: 45 checks pass with unchanged sources, including 16 host-helper comparisons and explicit protected/unprotected formatter overflow controls. Normal routing without oracle is being checked separately.",
+  "live_actor_copy_metadata": "Not yet implemented or verified."
+}

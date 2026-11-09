@@ -1,0 +1,54 @@
+{
+  "full_run": {
+    "completed_targets": 84,
+    "passed": 2135,
+    "failed": 6,
+    "ignored": 43,
+    "exit_code": 101,
+    "sources_unchanged": true
+  },
+  "launch_retries": {
+    "passed": 18,
+    "failed": 0,
+    "all_binaries_identical": true,
+    "all_sources_unchanged": true,
+    "elevation_used": false
+  },
+  "assertion_failures": [
+    {
+      "target": "playback",
+      "test": "manual_rgb_passes_keep_geometry_and_preserve_flags",
+      "status": "SetFOV alias omitted from Rust frame class; replacement applied, retest pending"
+    },
+    {
+      "target": "playback",
+      "test": "song_lua_actor_multi_vertex_builds_textured_mesh_overlay",
+      "status": "Pre-existing renderer/expectation mismatch reproduced in retained baseline log; no Lua executed in this test"
+    },
+    {
+      "target": "playback",
+      "test": "song_lua_message_advance_matches_native",
+      "status": "Message frame advance mismatch; adapter investigation pending"
+    },
+    {
+      "target": "playback",
+      "test": "song_lua_tween_playback_matches_native",
+      "status": "retarget-update/Before at 0.35: 110.5 versus 101.25; adapter investigation pending"
+    },
+    {
+      "target": "rust_preparation",
+      "test": "preparation_loader_saved_callbacks_resolve_their_source_and_restore_failed_scopes",
+      "status": "Native control fails its Origin path assertion before Rust comparison; diagnostic rerun pending"
+    },
+    {
+      "target": "rust_song_activation",
+      "test": "function_action_sound_manager_keeps_existing_methods_lookup_rules_and_return_identity",
+      "status": "Native control fails its sound path assertion before Rust comparison; diagnostic rerun pending"
+    }
+  ],
+  "sources": [
+    "production-all-song-regressions-v1-song-windows-debug/result.json",
+    "production-song-neutral-controls-v1/result.json",
+    "song-after-noteskin-song-windows-release/glow-baseline-audit.json"
+  ]
+}

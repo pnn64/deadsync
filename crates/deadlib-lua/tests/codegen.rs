@@ -137,7 +137,6 @@ pub fn generated() -> Vec<String> {
 mod tests {
     use super::*;
     use deadlib_lua::{Value, Vm, compile_named};
-    use lua_reference::Lua;
 
     #[derive(Debug, PartialEq)]
     enum Scalar {
@@ -150,36 +149,15 @@ mod tests {
         check_bound(sources, None);
     }
     fn check_bound(sources: Vec<String>, max_registers: Option<u16>) {
-        // SAFETY: fixed developer programs run under the official protected VM.
-        let lua = unsafe { Lua::unsafe_new() };
-        let expected: Vec<Vec<Scalar>> = sources
-            .iter()
-            .map(|source| {
-                let values: lua_reference::MultiValue = lua
-                    .load(source.as_bytes())
-                    .set_name("=codegen")
-                    .eval()
-                    .unwrap();
-                values
-                    .into_iter()
-                    .map(|v| match v {
-                        lua_reference::Value::Nil => Scalar::Nil,
-                        lua_reference::Value::Boolean(v) => Scalar::Boolean(v),
-                        lua_reference::Value::Integer(v) => Scalar::Number((v as f64).to_bits()),
-                        lua_reference::Value::Number(v) => Scalar::Number(v.to_bits()),
-                        lua_reference::Value::String(v) => Scalar::Bytes(v.as_bytes().to_vec()),
-                        other => panic!("unexpected reference value {other:?}"),
-                    })
-                    .collect()
-            })
-            .collect();
-        std::thread::Builder::new()
+        let observed = std::thread::Builder::new()
             .name("flat-codegen".into())
             .stack_size(512 * 1024)
             .spawn(move || {
+                let mut observed = Vec::with_capacity(sources.len());
+
                 let mut vm = Vm::new();
                 vm.set_instruction_limit(Some(5_000_000));
-                for (source, expected) in sources.iter().zip(expected) {
+                for source in &sources {
                     let program = compile_named(source.as_bytes(), b"=codegen").unwrap();
                     if let Some(max) = max_registers {
                         assert!(
@@ -201,12 +179,15 @@ mod tests {
                             other => panic!("unexpected Rust value {other:?}"),
                         })
                         .collect();
-                    assert_eq!(actual, expected, "{source}");
+                    observed.push(actual);
                 }
+
+                observed
             })
             .unwrap()
             .join()
             .unwrap();
+        reference_test::assert_debug("tests/codegen.rs::check_bound::expected", &observed);
     }
 
     #[test]
@@ -787,3 +768,7 @@ mod tests {
         check(sources);
     }
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

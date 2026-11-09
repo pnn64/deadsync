@@ -1,0 +1,129 @@
+{
+  "previous_goal_turn": "no progress: scope acknowledgement only; revalidated attachment and current source before continuing",
+  "goal_complete": false,
+  "scope": "pre-Init actor, player and screen-layer compiler state capture; original migration finish line unchanged",
+  "evidence": [
+    "compile.rs:513-527 and pre-Init collect_initial_states",
+    "lua_util.rs:12699-12736 and actor_overlay_initial_state"
+  ],
+  "failed_runs": {
+    "v1": "Missing local truthiness helper; replaced with explicit Lua nil/false check.",
+    "v2": "New test helper used Vm.table_get; actual supported raw_table_get now reads the identity label on both sides.",
+    "v3": "8 passed, 2 failed: generated player dummy sprites had authored Sprite animation defaults instead of production create_dummy_actor defaults. Fixed generated_players::dummy; kept all comparisons.",
+    "v4_edit_script": "A line-ending assertion stopped the edit script after the generated sprite fix; subsequent checks tested that fix only. Deferred FOV and diagnostic-helper changes until the process completed."
+  },
+  "focused_v4": "35 passed, 0 failed; all sources unchanged",
+  "review_fix": "Preserve disabled camera state when the FOV declaration remains present; compare the actual Underlay capture with production.",
+  "next_integration_evidence": {
+    "phase_boundary": "compile.rs reads mod_actions, consumes only an Init NewScreen request, then reads mod_perframes/mods/mods_ease before clearing screen_loading and startup. These retained tables need traced ownership.",
+    "startup": "lua_util.rs run_actor_startup_commands sends Begin to loader children (excluding start-beat backgrounds), starts In, records/broadcasts ScreenChanged, then runs On with defer_on. The generic lifecycle::start does Begin/On directly and is not this boundary.",
+    "zero_update": "read_startup snapshots enabled noteskin overrides, min-seconds-to-music and In visibility before capture_initial_update. That function uses song_beat_at_elapsed_seconds(0), advances options by zero, updates loader roots without advancing queues, preserves capture-block prefixes, and honors defer_initial_live_update.",
+    "requests": "Screen Requests has separate next and transition. Startup consumes only next before future queued probes; take_screen_requests drains transition too, so it must not substitute for startup request consumption.",
+    "wrappers": "collect_wrapper_initials adds default ActorFrame states for wrappers after On and again after Update(0). New pre-Init maps intentionally do not capture wrappers at construction.",
+    "preparation": "Existing ActorCommandCapture owns copied block/queue data. Preparation queue discovery still requires shared locals/global snapshot and rewind; live skips that discovery. No new baking capability is authorized.",
+    "finish_line": "Full session orchestration, prepared/live output, fallback/cache, unconditional production song cutover and final fixtures/app/render/dependency/performance evidence remain required."
+  },
+  "focused_v5": {
+    "stage": "song-initial-focused-v5",
+    "suite": "song",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "rust-engine,test-support",
+      "--test",
+      "rust_song_layers",
+      "--test",
+      "rust_render",
+      "--test",
+      "rust_preparation",
+      "--test",
+      "rust_gameplay_theme",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 187.05364526296034,
+    "log_sha256": "ab9f2754247053e1a6568d6738ed4650cc02f071e0dc8118e5dad24365ac5033",
+    "tests_passed": 50,
+    "tests_failed": 0,
+    "test_results": [
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.84s",
+      "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.18s",
+      "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.73s",
+      "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.34s"
+    ],
+    "sources_unchanged": true,
+    "environment": {
+      "CARGO_TARGET_DIR": "/var/tmp/deadsync-rust-adapters-target",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_BUILD_JOBS": "4",
+      "PKG_CONFIG_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/pkgconfig:/var/tmp/deadsync-rust-adapters-native-deps/root/usr/share/pkgconfig",
+      "CPATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include",
+      "LD_LIBRARY_PATH": "/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu:"
+    }
+  },
+  "final_review_rooting": "Before final checks, dynamic screen/child/player lookup results were explicitly rooted through capture and attachment, including unowned temporary tables. Final checks cover this source.",
+  "full_verification": "passed: song-initial-review.json",
+  "verified_checkpoint": {
+    "goal_complete": false,
+    "song_tests_passed": 566,
+    "song_targets": 55,
+    "new_cases": 3,
+    "source_count": 1192,
+    "changed": [
+      "crates/deadsync-song-lua/src/compile.rs",
+      "crates/deadsync-song-lua/src/rust_engine.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/generated_players.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/notefields.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/screen_parts.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+      "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+      "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+      "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+    ],
+    "added": [
+      "crates/deadsync-song-lua/src/rust_engine/actors/initial_state.rs"
+    ],
+    "removed": [],
+    "unchanged": 1181,
+    "normal_production_compiler_unchanged": true,
+    "prior_tests_and_fixtures_unchanged": true,
+    "formatting_passed": true,
+    "song_clippy_baseline_unchanged": true,
+    "results": {
+      "song-initial-adapters-v1-song-linux-debug": {
+        "exit_code": 0,
+        "seconds": 815.1361247890163,
+        "log_sha256": "f663d92dbacfdb51708dfdf29985dc50b9c0ad4d0d0794971b6aa7ff4e36a720",
+        "tests_passed": 566,
+        "tests_failed": 0,
+        "sources_unchanged": true
+      },
+      "song-initial-lint-v1-song-linux-debug": {
+        "exit_code": 101,
+        "seconds": 29.335212491918355,
+        "log_sha256": "1f2755c017d9f7c26995e8ff90875c4ef87a24fe5b820b80ed4842175809e20f",
+        "tests_passed": 0,
+        "tests_failed": 0,
+        "sources_unchanged": true
+      }
+    },
+    "reused_components": [
+      "scene-retirement-core-v1-core-linux-debug",
+      "scene-retirement-core-lint-v1-core-linux-debug",
+      "scene-retirement-noteskin-v1-noteskin-linux-debug",
+      "scene-retirement-gifs-v1-gifs-linux-debug"
+    ],
+    "remaining": "Complete startup/navigation, prepared/live outputs, fallback/cache, unconditional production song cutover and final fixtures/application/render/dependency/performance evidence"
+  },
+  "audit_tool_correction": "Initial matcher assumed CRLF in the compiler body. Current baseline inspection proved LF body plus CRLF prior oracle. Corrected matcher only; removing the gated additions now recovers the original bytes exactly. No source changes or test reruns."
+}

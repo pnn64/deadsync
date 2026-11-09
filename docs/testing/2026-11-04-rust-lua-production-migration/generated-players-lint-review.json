@@ -1,0 +1,6 @@
+{
+  "baseline": "screen-manager-lint-song-linux-debug",
+  "current": "generated-players-lint-song-linux-debug",
+  "library_diagnostics_identical_to_baseline": true,
+  "log_sha256": "5cf6ad2ed396c26a3a6c6c49f84eb673ad4ee155305abaebd800890d9edb9ae0"
+}

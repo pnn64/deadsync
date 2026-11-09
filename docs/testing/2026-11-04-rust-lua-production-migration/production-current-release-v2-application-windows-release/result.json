@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "rustc",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--bin",
+    "deadsync",
+    "--release",
+    "--",
+    "-C",
+    "link-arg=/MAP:C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-current-release-v2-application-windows-release\\application.map"
+  ],
+  "exit_code": 0,
+  "seconds": 1534.778015299933,
+  "log_sha256": "f2933f658a1d765f2004fbc1b6c7ba787a0576610b979a670ec10bd45e74c58a",
+  "sources_unchanged": false,
+  "artifact": {
+    "path": "C:\\GitHub\\deadsync\\target\\rust-adapters\\release\\deadsync.exe",
+    "sha256": "22480342ac1502cfaee8e2eccb0a119eef20d5ed3234728b987d665b06117317"
+  },
+  "link_map": {
+    "exists": true,
+    "sha256": "0a961bbda8646c28aadb5d11b2f1f3f3e07a7dc46213dcdbcfd00f5b35a56ae5",
+    "rust_engine_symbols_found": true,
+    "forbidden_lines": [],
+    "validation_passed": true
+  }
+}

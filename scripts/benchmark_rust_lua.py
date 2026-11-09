@@ -35,8 +35,6 @@ def main() -> None:
         "Cargo.toml", "Cargo.lock", ".cargo/config.toml",
         "crates/deadlib-lua/Cargo.toml", "scripts/benchmark_rust_lua.py",
     )]
-    reference = [p for p in (root / "vendor/lua-src/lua-5.1.5").iterdir()
-                 if p.suffix in (".c", ".h")]
     command = ["cargo", "bench", "-p", "deadlib-lua", "--bench", "baseline"]
     before = digest(sources, root)
     started = time.time()
@@ -49,8 +47,6 @@ def main() -> None:
     if before != digest(sources, root):
         raise SystemExit("sources changed during benchmark; results cannot be attributed")
     samples = []
-    reference_heap = {}
-    reference_collected_heap = {}
     rust_heap = {}
     rust_program_layout = {}
     metadata = {}
@@ -62,10 +58,6 @@ def main() -> None:
                                 sample=int(sample), repeats=int(repeats), ns_per_iteration=int(ns),
                                 rust_allocations_total=int(allocs), rust_reallocations_total=int(reallocs),
                                 rust_allocated_bytes_total=int(size)))
-        elif fields[0] == "reference_live_heap_bytes":
-            reference_heap[fields[1]] = int(fields[2])
-        elif fields[0] == "reference_after_collect_heap_bytes":
-            reference_collected_heap[fields[1]] = int(fields[2])
         elif fields[0] == "rust_heap_estimate":
             _, name, phase, live, reserved, peak, collections, reclaimed, userdata = fields
             rust_heap.setdefault(name, {})[phase] = dict(live_bytes=int(live), reserved_bytes=int(reserved),
@@ -74,29 +66,22 @@ def main() -> None:
             rust_program_layout[fields[1]] = dict(instructions=int(fields[2]), entry_registers=int(fields[3]))
         elif len(fields) == 2:
             metadata[fields[0]] = fields[1]
-    ratios = {}
-    for name in sorted({s["workload"] for s in samples if s["metric"] == "execute"}):
-        rust = {s["sample"]: s["ns_per_iteration"] for s in samples
-                if s["metric"] == "execute" and s["engine"] == "rust" and s["workload"] == name}
-        official = {s["sample"]: s["ns_per_iteration"] for s in samples
-                    if s["metric"] == "execute" and s["engine"] == "lua51" and s["workload"] == name}
-        if len(rust) != 5 or rust.keys() != official.keys():
-            raise SystemExit(f"missing paired measurements for {name}")
-        ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 81 or len(rust_heap) != 81 or len(reference_collected_heap) != 81:
-        raise SystemExit(f"expected 81 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
-    compile_ratios = {}
-    for name in sorted({s["workload"] for s in samples if s["workload"].startswith("frontend_")}):
-        rust = {s["sample"]: s["ns_per_iteration"] for s in samples
-                if s["metric"] == "compile_drop" and s["engine"] == "rust" and s["workload"] == name}
-        official = {s["sample"]: s["ns_per_iteration"] for s in samples
-                    if s["metric"] == "compile_drop" and s["engine"] == "lua51" and s["workload"] == name}
-        if len(rust) != 5 or rust.keys() != official.keys():
-            raise SystemExit(f"missing paired compilation measurements for {name}")
-        compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(compile_ratios) != 22:
-        raise SystemExit(f"expected 22 frontend scaling measurements, received {len(compile_ratios)}")
-    if rust_program_layout.keys() != ratios.keys() | compile_ratios.keys():
+    def medians(metric: str, frontend: bool) -> dict[str, float]:
+        result = {}
+        for name in sorted({row["workload"] for row in samples
+                            if row["metric"] == metric and row["workload"].startswith("frontend_") == frontend}):
+            rows = [row for row in samples if row["metric"] == metric and row["workload"] == name]
+            if {row["sample"] for row in rows} != set(range(5)) or len(rows) != 5:
+                raise SystemExit(f"missing Rust samples for {name}")
+            if any(row["engine"] != "rust" for row in rows):
+                raise SystemExit(f"unexpected engine for {name}")
+            result[name] = statistics.median(row["ns_per_iteration"] for row in rows)
+        return result
+    execution = medians("execute", False)
+    frontend = medians("compile_drop", True)
+    if len(execution) != 81 or len(rust_heap) != 81 or len(frontend) != 22:
+        raise SystemExit("expected 81 execution workloads with heap observations and 22 frontend workloads")
+    if rust_program_layout.keys() != execution.keys() | frontend.keys():
         raise SystemExit("missing program layout measurements")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -106,20 +91,20 @@ def main() -> None:
         rustc=subprocess.check_output(["rustc", "-vV"], text=True),
         git_revision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
         dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root)),
-        source_digest=before, reference_source_digest=digest(reference, root),
+        source_digest=before,
         source_hashes={p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                        for p in sorted(sources)},
-        median_paired_rust_over_lua51=ratios, samples=samples,
-        median_paired_compile_rust_over_lua51=compile_ratios,
-        reference_live_heap_bytes=reference_heap, metadata=metadata,
-        rust_heap_estimates=rust_heap, reference_after_collect_heap_bytes=reference_collected_heap,
+        median_execute_ns=execution, samples=samples,
+        median_frontend_compile_ns=frontend,
+        metadata=metadata,
+        rust_heap_estimates=rust_heap,
         rust_program_layout=rust_program_layout,
-        missing_metrics=["exact Rust allocator live/peak heap", "process peak RSS", "native C allocation counts",
+        missing_metrics=["exact Rust allocator live/peak heap", "process peak RSS",
                          "per-thread CPU cycles", "other Rust engines", "full standard-library workloads"],
     )
     output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(output)
-    print(json.dumps(ratios, indent=2))
+    print(json.dumps(execution, indent=2))
 
 
 if __name__ == "__main__":

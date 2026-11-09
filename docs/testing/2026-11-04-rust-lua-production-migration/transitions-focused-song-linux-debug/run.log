@@ -1,0 +1,64 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: function `native_gameplay_in_bitmap_filename` is never used
+   --> crates/deadsync-song-lua/src/rust_engine/actors/gameplay_bitmaps.rs:470:15
+    |
+470 | ...fn nativ...ename(na...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 1m 35s
+     Running tests/rust_transitions.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_transitions-c0a1092556700396)
+
+running 6 tests
+test cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update ... 
+thread 'cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update' (2606104) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969083))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test constructors_keep_real_children_commands_geometry_and_textures ... 
+thread 'constructors_keep_real_children_commands_geometry_and_textures' (2606105) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969085))), target_thread: None }
+FAILED
+test incoming_hide_queue_and_off_survive_collection_and_scene_release ... 
+thread 'incoming_hide_queue_and_off_survive_collection_and_scene_release' (2606106) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969086))), target_thread: None }
+FAILED
+test incoming_style_spooky_reload_and_stage_variants_match ... 
+thread 'incoming_style_spooky_reload_and_stage_variants_match' (2606107) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969087))), target_thread: None }
+FAILED
+test outgoing_off_preserves_white_score_and_routine_updates ... 
+thread 'outgoing_off_preserves_white_score_and_routine_updates' (2606108) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969083))), target_thread: None }
+FAILED
+test transition_time_uses_retained_child_and_raw_state_not_owner_queue ... 
+thread 'transition_time_uses_retained_child_and_raw_state_not_owner_queue' (2606109) panicked at crates/deadsync-song-lua/tests/rust_transitions.rs:61:64:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 0, message: "actor function expected", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294969083))), target_thread: None }
+FAILED
+
+failures:
+
+failures:
+    cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update
+    constructors_keep_real_children_commands_geometry_and_textures
+    incoming_hide_queue_and_off_survive_collection_and_scene_release
+    incoming_style_spooky_reload_and_stage_variants_match
+    outgoing_off_preserves_white_score_and_routine_updates
+    transition_time_uses_retained_child_and_raw_state_not_owner_queue
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.42s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_transitions`

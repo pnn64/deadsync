@@ -1,0 +1,48 @@
+{
+  "goal_complete": false,
+  "source_count": 1199,
+  "changed": [
+    "crates/deadsync-song-lua/src/lua_util.rs",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_discovery.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "added": [],
+  "removed": [],
+  "unchanged": 1190,
+  "normal_production_compiler_unchanged_outside_test_observers": true,
+  "prior_tests_and_fixtures_unchanged": true,
+  "formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "new_cases": 3,
+  "results": {
+    "song-tween-progress-focused-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 260.37599004106596,
+      "log_sha256": "0ed4b85904cc2ee9d9f324c36605cc91d5799d30306c1a5f242d72e02b58197e",
+      "tests_passed": 106,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-tween-progress-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 35.328642670065165,
+      "log_sha256": "1478af1927dc9a12e65016b830c374199056efd88e7d997c940de2a1adab7d5d",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  },
+  "reused_components": [
+    "scene-retirement-core-v1-core-linux-debug",
+    "scene-retirement-core-lint-v1-core-linux-debug",
+    "scene-retirement-noteskin-v1-noteskin-linux-debug",
+    "scene-retirement-gifs-v1-gifs-linux-debug"
+  ],
+  "remaining": "Full compiler overlay extraction and chronological write/message provenance capture; orchestration of actions, tracked actors, options, media and text; retained live/session lifecycle and fallback/cache; unconditional production cutover; final fixture/application/render/dependency/link/performance validation."
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/player_options.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/player_options/parser.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/player_options/scalars.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/src/rust_engine/managers/player_options/speed.rs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "path": "crates/deadsync-song-lua/tests/rust_player_options.rs",
+    "exit_code": 0,
+    "output": ""
+  }
+]

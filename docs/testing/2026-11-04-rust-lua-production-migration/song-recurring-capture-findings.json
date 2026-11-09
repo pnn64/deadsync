@@ -1,0 +1,29 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "Progress: corrected captured queue dispatch and verified 144 regressions. The interpreter and C API removal milestones remain completed.",
+  "scope": "Preserve the existing recurring-command scheduler in the separately authorized production song migration. Acceptance criteria are unchanged.",
+  "implementation": "Retain exact command-duration sums separately from f32 queue time; run captured self-queued commands after actor advancement and before children/update callbacks. Keep zero-interval and timed branches, the native 64-run limit, conditional renewal, cancellation, hurry scaling and one-time runtime-error reporting. Restore dispatch scope after callback errors.",
+  "verification": {
+    "exit_code": 0,
+    "tests_passed": 148,
+    "tests_failed": 0,
+    "seconds": 183.48374007409438,
+    "log_sha256": "4648a7c0e0153b0abc20ca1c7dfcbf7949575d165abacac2528bf3a725cdb3a4",
+    "sources_unchanged": true
+  },
+  "coverage_changes": "Added four native/Rust comparisons for exact intervals, hibernation and update rates, callback ordering, zero and negative deltas, run limits, conditional stopping, errors and partial writes, GC, scope restoration, Hurry, Stop and Finish. Every earlier activation case and every other test remains unchanged.",
+  "development_runs": [
+    {
+      "stage": "song-recurring-capture-focused-v1",
+      "exit_code": 0,
+      "tests_passed": 104,
+      "tests_failed": 0,
+      "log_sha256": "176ab2c2cbb4b7d376a049b6bf402a4382041fffc69c32bbb3b4bd15b3117bf3",
+      "note": "Initial four-target check before adding the cancellation case."
+    }
+  ],
+  "unresolved_regression_failures": [],
+  "limits": "This check covers recurring commands captured outside frame updates and immediate/message publication. It does not establish equivalence for commands first promoted to dynamic queues during updates, future queue-clock prediction, all delayed property/pose output or full production sessions. Fatal execution/resource errors still follow the existing adapter propagation path.",
+  "remaining": "Complete preparation queue-clock/dynamic recurrence interaction, delayed non-tween and pose publication, full overlay extraction, tracked actor/wrapper indices, actions/options/media/text output, retained live/session orchestration and fallback/cache, unconditional production cutover, then the original fixture/application/render/dependency/link/performance gates.",
+  "timing_note": "Recorded durations are verification costs, not application performance measurements."
+}

@@ -1,0 +1,22 @@
+
+running 17 tests
+test dynamic_command_source_scope_preserves_the_selected_observer_profile ... ok
+test empty_live_session_keeps_the_screen_and_zero_authored_entries ... ok
+test live_startup_reload_limit_rejects_after_the_existing_128_reconstructions ... ok
+test malformed_live_file_keeps_rust_dummy_fallback_and_prior_side_effects ... ok
+test multilayer_wrapper_proxy_aft_and_sprite_payloads_use_shared_layer_splitting ... ok
+test nested_tail_loaded_actor_keeps_live_file_directory ... ok
+test original_unsupported_statistics_getlife_fixture_remains_a_rejection_control ... ok
+test replacement_init_does_not_observe_the_previous_frames_live_player_feedback ... ok
+test retained_rust_scene_moves_from_loading_worker_to_the_playback_thread ... ok
+test retained_scene_reload_runs_end_then_rebuilds_in_the_same_vm ... ok
+test saved_scalar_getters_and_writes_revert_to_lua_backing_after_reload ... ok
+test sound_owner_events_survive_startup_and_runtime_reload_in_native_order ... ok
+test source_callback_scope_survives_nested_theme_gc_and_unwinds_after_error ... ok
+test startup_reloads_preserve_globals_rng_end_order_and_saved_actor_ownership ... ok
+test unified_live_compilation_freezes_initial_assets_and_retains_future_callbacks ... ok
+test unified_offline_entry_preserves_existing_finite_output ... ok
+test unsupported_startup_screen_rejection_matches ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.24s
+

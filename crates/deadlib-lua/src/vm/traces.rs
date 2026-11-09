@@ -1,6 +1,8 @@
 //! Resumable traceback formatting, including Lua 5.1 concatenation callbacks.
 use super::*;
 use debug::StackEntry;
+#[cfg(test)]
+mod allocation_tests;
 
 const FIRST_LEVELS: i32 = 12;
 const LAST_LEVELS: i32 = 10;
@@ -30,58 +32,85 @@ impl Vm {
                 .is_some_and(|f| matches!(f.function, FrameKind::Native(debug::TRACEBACK)))
         });
     }
-    fn trace_row(&mut self, thread: ThreadId, entry: StackEntry) -> ([Value; ROW_PIECES], usize) {
+    fn trace_row(
+        &mut self,
+        thread: ThreadId,
+        entry: StackEntry,
+    ) -> Result<([Value; ROW_PIECES], usize), Error> {
         let mut pieces = [Value::Nil; ROW_PIECES];
-        pieces[0] = self.intern(b"\n\t");
+        pieces[0] = self.try_intern(b"\n\t")?;
         if let StackEntry::Frame(index) = entry {
             let frame = self.debug_frames(thread)[index];
-            let (source, defined, line) = if let FrameKind::Lua(id) = frame.function {
+            let mut source = [0; 60];
+            let (source_len, defined, line) = if let FrameKind::Lua(id) = frame.function {
                 let closure = &self.functions[slot_index(id.0)];
                 let program = &self.programs[closure.program].data;
                 let proto = &program.prototypes[closure.prototype];
                 let pc = frame.pc().saturating_sub(1).min(proto.lines.len() - 1);
                 (
-                    crate::bytecode::chunk_id(program.source(proto)),
+                    crate::bytecode::chunk_id_into(program.source(proto), &mut source),
                     Some(proto.debug.defined[0]),
                     Some(proto.debug_line(pc)),
                 )
             } else {
-                (b"[C]".to_vec(), None, None)
+                source[..3].copy_from_slice(b"[C]");
+                (3, None, None)
             };
-            let mut prefix = self.take_buffer(64);
-            prefix.extend_from_slice(&source);
-            prefix.push(b':');
-            pieces[1] = self.finish_buffer(prefix);
+            let source = &source[..source_len];
+            let mut row = Buffer::new_in(self.registers.memory().clone());
+            self.trace_append(&mut row, source)?;
+            self.trace_append(&mut row, b":")?;
+            pieces[1] = self.try_intern(&row)?;
+            row.clear();
             let mut count = 2;
             if let Some(line) = line
                 && line > 0
             {
-                pieces[count] = self.intern(format!("{line}:").as_bytes());
+                let (digits, offset) = decimal(line as u64);
+                self.trace_append(&mut row, &digits[offset..])?;
+                self.trace_append(&mut row, b":")?;
+                pieces[count] = self.try_intern(&row)?;
+                row.clear();
                 count += 1;
             }
-            let mut row = self.take_buffer(128);
-            if let Some((name, _)) = self.debug_name(thread, index) {
+            if let Some((name, _)) = self.debug_name_ref(thread, index) {
+                let capacity = row.capacity();
+                row.try_reserve(15usize.checked_add(name.len()).ok_or_else(Error::memory)?)
+                    .map_err(|_| self.memory_failure())?;
                 row.extend_from_slice(b" in function '");
-                row.extend_from_slice(&name);
+                row.extend_from_slice(name);
                 row.push(b'\'');
+                self.gc_note_control(row.capacity() - capacity);
             } else {
                 match defined {
-                    Some(0) => row.extend_from_slice(b" in main chunk"),
+                    Some(0) => self.trace_append(&mut row, b" in main chunk")?,
                     Some(line) => {
-                        row.extend_from_slice(b" in function <");
-                        row.extend_from_slice(&source);
-                        row.extend_from_slice(format!(":{line}>").as_bytes());
+                        self.trace_append(&mut row, b" in function <")?;
+                        self.trace_append(&mut row, source)?;
+                        self.trace_append(&mut row, b":")?;
+                        let (digits, offset) = decimal(u64::from(line));
+                        self.trace_append(&mut row, &digits[offset..])?;
+                        self.trace_append(&mut row, b">")?;
                     }
-                    None => row.extend_from_slice(b" ?"),
+                    None => self.trace_append(&mut row, b" ?")?,
                 }
             }
-            pieces[count] = self.finish_buffer(row);
-            (pieces, count + 1)
+            pieces[count] = self.try_intern(&row)?;
+            Ok((pieces, count + 1))
         } else {
-            pieces[1] = self.intern(b"(tail call):");
-            pieces[2] = self.intern(b" ?");
-            (pieces, 3)
+            pieces[1] = self.try_intern(b"(tail call):")?;
+            pieces[2] = self.try_intern(b" ?")?;
+            Ok((pieces, 3))
         }
+    }
+    fn trace_append(&mut self, output: &mut Buffer<u8>, bytes: &[u8]) -> Result<(), Error> {
+        let before = output.capacity();
+        output
+            .try_reserve(bytes.len())
+            .map_err(|_| self.memory_failure())?;
+        output.extend_from_slice(bytes);
+        self.gc_note_control(output.capacity() - before);
+        Ok(())
     }
     pub(super) fn traceback_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
@@ -105,20 +134,25 @@ impl Vm {
             {
                 frame.vararg_count = count as u32;
                 self.frames[owner] = frame;
-                return Ok(self.return_frame(frame, frame.vararg_start + count - 1, 1));
+                return self.return_frame(frame, frame.vararg_start + count - 1, 1);
             }
             // All retained Lua values stay in the native register window. A
             // hidden target root survives argument changes during callbacks.
             let root = base + frame.argc().max(2) + SCRATCH_PIECES;
+            let capacity = self.tracebacks.capacity();
+            self.tracebacks
+                .try_reserve(1)
+                .map_err(|_| self.memory_failure())?;
+            self.gc_note_control((self.tracebacks.capacity() - capacity) * size_of::<Traceback>());
+            self.reserve_registers(self.registers.len().max(root + 1))?;
             self.resize_registers(self.registers.len().max(root + 1));
             self.registers
                 .copy_within(frame.vararg_start..frame.vararg_start + count, base);
             self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].fill(Value::Nil);
             self.registers[root] = Value::Thread(thread);
             let message = count > arg;
-            self.registers[base + count] = self.intern(if message { b"\n" } else { b"" });
-            self.registers[base + count + 1] = self.intern(b"stack traceback:");
-            let capacity = self.tracebacks.capacity();
+            self.registers[base + count] = self.try_intern(if message { b"\n" } else { b"" })?;
+            self.registers[base + count + 1] = self.try_intern(b"stack traceback:")?;
             self.tracebacks.push(Traceback {
                 owner,
                 arg,
@@ -131,9 +165,6 @@ impl Vm {
                 pending: false,
                 done: false,
             });
-            self.gc_note_control(
-                (self.tracebacks.capacity() - capacity) * std::mem::size_of::<Traceback>(),
-            );
             self.frames[owner].vararg_count = 0;
             self.frames[owner].pc = 1;
         }
@@ -155,11 +186,11 @@ impl Vm {
                     while first > start && scalar(self.registers[first - 1]) {
                         first -= 1;
                     }
-                    let mut bytes = self.take_buffer(0);
+                    let mut bytes = Buffer::new_in(self.registers.memory().clone());
                     for pos in first..=last {
                         let value = self.registers[pos];
                         let value = if let Value::Number(n) = value {
-                            self.intern(format_number(n).as_slice())
+                            self.intern_number(n)?
                         } else {
                             value
                         };
@@ -167,9 +198,15 @@ impl Vm {
                         let Value::String(id) = value else {
                             unreachable!("traceback scalar was converted");
                         };
-                        bytes.extend_from_slice(&self.strings.bytes[slot_index(id.0)]);
+                        let before = bytes.capacity();
+                        let text = &self.strings.bytes[slot_index(id.0)];
+                        bytes
+                            .try_reserve(text.len())
+                            .map_err(|_| self.memory_failure())?;
+                        bytes.extend_from_slice(text);
+                        self.gc_note_control(bytes.capacity() - before);
                     }
-                    self.registers[first] = self.finish_buffer(bytes);
+                    self.registers[first] = self.try_intern(&bytes)?;
                     self.tracebacks[index].count = first - start + 1;
                 } else {
                     self.tracebacks[index].pending = true;
@@ -186,7 +223,7 @@ impl Vm {
                 frame.vararg_start = base;
                 frame.vararg_count = (start + 1 - base) as u32;
                 self.frames[owner] = frame;
-                return Ok(self.return_frame(frame, start, 1));
+                return self.return_frame(frame, start, 1);
             }
         }
         let (thread, level) = (self.tracebacks[index].thread, self.tracebacks[index].level);
@@ -206,7 +243,7 @@ impl Vm {
                 self.tracebacks[index].level = height
                     .saturating_sub(LAST_LEVELS as u64)
                     .min(i32::MAX as u64) as i32;
-                let ellipsis = self.intern(b"\n\t...");
+                let ellipsis = self.try_intern(b"\n\t...")?;
                 self.registers[start + self.tracebacks[index].count] = ellipsis;
                 self.tracebacks[index].count += 1;
                 self.tracebacks[index].top = self.tracebacks[index].count;
@@ -216,12 +253,25 @@ impl Vm {
             self.tracebacks[index].first = false;
             return Ok(None);
         }
-        let (pieces, count) = self.trace_row(thread, entry);
+        let (pieces, count) = self.trace_row(thread, entry)?;
         let position = start + self.tracebacks[index].count;
         self.registers[position..position + count].copy_from_slice(&pieces[..count]);
         self.tracebacks[index].count += count;
         self.tracebacks[index].top = self.tracebacks[index].count;
         self.tracebacks[index].reduce = true;
         Ok(None)
+    }
+}
+
+fn decimal(mut number: u64) -> ([u8; 20], usize) {
+    let mut digits = [0; 20];
+    let mut offset = digits.len();
+    loop {
+        offset -= 1;
+        digits[offset] = b'0' + (number % 10) as u8;
+        number /= 10;
+        if number == 0 {
+            return (digits, offset);
+        }
     }
 }

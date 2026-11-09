@@ -987,10 +987,14 @@ impl State {
         // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
         scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
             .map_err(|error| error.to_string())?;
-        scene.install_tap_row_judgment_callback(&mut self.gameplay);
-        scene.install_step_callback(&mut self.gameplay);
-        scene.install_hold_judgment_callback(&mut self.gameplay);
-        scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
+        scene.install_tap_row_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_step_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_hold_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_avoided_mine_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
         if !self.song_lua_output.errors.is_empty() {

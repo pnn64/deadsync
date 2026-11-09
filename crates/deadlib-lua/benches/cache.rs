@@ -1,5 +1,5 @@
 //! Public compile/store/reload costs with allocation counts and warm OS file cache.
-use deadlib_lua::{CacheStatus, Program, ProgramCache, Value, Vm, compile_named};
+use deadlib_lua::{CacheStatus, Program, ProgramCache, Value, Vm, compile, compile_named};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     fs,
@@ -129,6 +129,19 @@ fn clear(directory: &Path) {
     }
     fs::remove_dir(directory).unwrap();
 }
+fn dump_fixture(source: &[u8], name: &[u8]) -> Vec<u8> {
+    let program = deadlib_lua::compile_named(source, name).unwrap();
+    let mut vm = Vm::new();
+    let function = vm.load_program(&program);
+    vm.set_global(b"fixture", Value::Function(function))
+        .unwrap();
+    let dump = compile(b"return string.dump(fixture)").unwrap();
+    let Value::String(bytes) = vm.execute(&dump).unwrap()[0] else {
+        panic!("string.dump must return a string");
+    };
+    vm.string_bytes(bytes).unwrap().to_vec()
+}
+
 fn main() {
     let directory = root();
     if let Ok(metric) = std::env::var("DEADLIB_LUA_CACHE_CPU") {
@@ -173,13 +186,7 @@ fn main() {
     }
     binary.push_str("};return #t,#t[256],string.byte(t[1],1),string.byte(t[256],128)");
     let source = closures(512);
-    let lua = lua_reference::Lua::new();
-    let native = lua
-        .load(source.as_slice())
-        .set_name("=cache-native")
-        .into_function()
-        .unwrap()
-        .dump(false);
+    let native = dump_fixture(&source, b"=cache-native");
     let fixtures = [
         (
             "tiny",

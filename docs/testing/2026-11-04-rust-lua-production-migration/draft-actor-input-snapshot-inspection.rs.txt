@@ -1,0 +1,157 @@
+// Draft only: local, non-executing inspection for the existing snapshot schema.
+fn raw(stack: &mut NativeStack<'_, '_>, table: TableId, key: &[u8]) -> Result<Value, Error> {
+    let top = stack.top();
+    let result = (|| {
+        stack.push(Value::Table(table))?;
+        stack.push_bytes(key)?;
+        stack.get_table((top + 1) as isize, true)?;
+        Ok(stack.value(-1).unwrap())
+    })();
+    stack.set_top(top)?;
+    result
+}
+fn metatable(stack: &mut NativeStack<'_, '_>, table: TableId) -> Result<Option<TableId>, Error> {
+    let top = stack.top();
+    let result = (|| {
+        stack.push(Value::Table(table))?;
+        if !stack.get_metatable(-1)? { return Ok(None); }
+        let Some(Value::Table(table)) = stack.value(-1) else { unreachable!() };
+        Ok(Some(table))
+    })();
+    stack.set_top(top)?;
+    result
+}
+fn raw_len(stack: &mut NativeStack<'_, '_>, table: TableId) -> Result<usize, Error> {
+    let top = stack.top();
+    stack.push(Value::Table(table))?;
+    let result = stack.object_len(-1);
+    stack.set_top(top)?;
+    result
+}
+fn byte_string(stack: &mut NativeStack<'_, '_>, value: Value) -> Result<Option<Box<[u8]>>, Error> {
+    if !matches!(value, Value::String(_)) { return Ok(None); }
+    let top = stack.top();
+    stack.push(value)?;
+    let result = stack.to_bytes(-1)?.map(Box::<[u8]>::from);
+    stack.set_top(top)?;
+    Ok(result)
+}
+fn raw_entries(stack: &mut NativeStack<'_, '_>, table: TableId) -> Result<Vec<(Value, Value)>, Error> {
+    let top = stack.top();
+    let result = (|| {
+        stack.push(Value::Table(table))?;
+        let index = (top + 1) as isize;
+        stack.push(Value::Nil)?;
+        let mut rows = Vec::new();
+        while stack.next_table(index)? {
+            rows.push((stack.value(-2).unwrap(), stack.value(-1).unwrap()));
+            stack.set_top(stack.top() - 1)?;
+        }
+        Ok(rows)
+    })();
+    stack.set_top(top)?;
+    result
+}
+fn dump(stack: &mut NativeStack<'_, '_>, function: Value) -> Result<Option<Vec<u8>>, Error> {
+    let top = stack.top();
+    stack.push(function)?;
+    let mut bytes = Vec::new();
+    let result = stack.dump(|_, block| { bytes.extend_from_slice(block); Ok(0) });
+    stack.set_top(top)?;
+    Ok((result? == 0).then_some(bytes))
+}
+fn raw_global(stack: &mut NativeStack<'_, '_>, key: &[u8]) -> Result<Value, Error> {
+    let top = stack.top();
+    stack.push_bytes(key)?;
+    let result = stack.get_table(-10002, true).map(|()| stack.value(-1).unwrap());
+    stack.set_top(top)?;
+    result
+}
+
+// Mirror actor_classes::setter_targets. Read only raw fields and original Rust
+// identities; never execute a user lookup, assignment hook or callback body.
+fn setter_targets(
+    stack: &mut NativeStack<'_, '_>, store: &Shared, actor: TableId,
+) -> Result<[Option<(scalar_methods::Setter, TableId)>; 3], Error> {
+    use scalar_methods::{Method, Setter};
+    let identity = |function| store.lock().unwrap().scalar_methods.identity(function);
+    let mut selected = [None; 3];
+    let mut inherit = [false; 3];
+    let lookup = if let Some(mt) = metatable(stack, actor)? {
+        let assign = raw(stack, mt, b"__newindex")?;
+        if assign != Value::Nil && identity(assign) != Some(Method::Assign) {
+            return Ok([None; 3]);
+        }
+        let lookup = raw(stack, mt, b"__index")?;
+        if lookup == Value::Nil { false }
+        else if identity(lookup) == Some(Method::Lookup) { true }
+        else { return Ok([None; 3]); }
+    } else { false };
+    for (index, setter) in Setter::ALL.into_iter().enumerate() {
+        let value = raw(stack, actor, setter.name().as_bytes())?;
+        match value {
+            Value::Function(_) | Value::Native(_) => selected[index] = identity(value),
+            Value::Nil => inherit[index] = lookup,
+            _ => {},
+        }
+    }
+    if inherit.iter().any(|flag| *flag) {
+        let inherited = (|| -> Result<Option<[Option<Method>; 3]>, Error> {
+            let kind = raw(stack, actor, b"__songlua_actor_type")?;
+            let kind = if kind == Value::Nil { b"Actor".to_vec().into_boxed_slice() }
+                else if let Some(kind) = byte_string(stack, kind)? { kind }
+                else { return Ok(None); };
+            let Ok(kind) = std::str::from_utf8(&kind) else { return Ok(None); };
+            if !matches!(kind, "Actor" | "ActorFrame" | "Sprite" | "Quad" | "Banner" |
+                "ActorFrameTexture" | "ActorMultiVertex" | "ActorProxy" | "BitmapText" | "WrapperState") {
+                return Ok(None);
+            }
+            let public = match kind {
+                "Sprite" | "Quad" => "Sprite", "WrapperState" => "ActorFrame", kind => kind,
+            };
+            let Value::Table(mut class) = raw_global(stack, public.as_bytes())? else { return Ok(None); };
+            let mut seen = smallvec::SmallVec::<[TableId; 8]>::new();
+            let mut found = [None; 3];
+            let mut pending = inherit;
+            loop {
+                if seen.len() == 64 || seen.contains(&class) { return Ok(None); }
+                seen.push(class);
+                for (index, setter) in Setter::ALL.into_iter().enumerate() {
+                    if !pending[index] { continue; }
+                    match raw(stack, class, setter.name().as_bytes())? {
+                        value @ (Value::Function(_) | Value::Native(_)) => {
+                            found[index] = identity(value); pending[index] = false;
+                        }
+                        Value::Nil => {},
+                        _ => pending[index] = false,
+                    }
+                }
+                let Some(mt) = metatable(stack, class)? else { break; };
+                match raw(stack, mt, b"__index")? {
+                    Value::Nil => break,
+                    Value::Table(next) => class = next,
+                    _ => return Ok(None),
+                }
+            }
+            Ok(Some(found))
+        })()?;
+        if let Some(inherited) = inherited {
+            for index in 0..3 { if inherit[index] { selected[index] = inherited[index]; } }
+        }
+    }
+    let mut forwards = [None; 3];
+    if let Value::Table(methods) = raw(stack, actor, b"__songlua_bound_methods")? {
+        for setter in Setter::ALL {
+            if !selected.contains(&Some(Method::Forward(setter))) { continue; }
+            let function = raw(stack, methods, setter.name().as_bytes())?;
+            if let Some(Method::Bound(operation, target)) = identity(function) {
+                forwards[setter as usize] = Some((operation, target));
+            }
+        }
+    }
+    Ok(selected.map(|method| match method {
+        Some(Method::Bound(setter, target)) => Some((setter, target)),
+        Some(Method::Forward(setter)) => forwards[setter as usize],
+        _ => None,
+    }))
+}

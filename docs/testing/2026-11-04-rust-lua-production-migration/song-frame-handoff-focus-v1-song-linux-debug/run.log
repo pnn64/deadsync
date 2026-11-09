@@ -1,0 +1,27 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 7m 24s
+     Running tests/rust_song_frame_capture.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_frame_capture-0d054aca34e34920)
+
+running 8 tests
+test handoff_batch_roots_and_shared_color_alias_survive_authored_assignment_gc ... ok
+test handoff_empty_touched_rows_keep_metadata_errors_and_batch_retry_semantics ... ok
+test handoff_fallbacks_are_not_published_as_native_poses_and_scene_guards_hold ... ok
+test handoff_native_tween_publications_keep_progress_and_queue_ownership_across_frames ... ok
+test handoff_partial_write_errors_keep_reentrant_getters_and_nested_setter_effects ... ok
+test handoff_player_destination_suppression_and_typed_raw_metadata_keep_error_order ... ok
+test handoff_scalar_boolean_vector_and_ignored_targets_match_native_fields ... ok
+test handoff_schedule_sampler_updates_real_getters_before_following_callbacks ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 13.89s
+

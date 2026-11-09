@@ -1,6 +1,9 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::Value;
 
-use crate::{custom_option_default_text, read_i32_value};
+use crate::custom_option_default_text;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_i32_value;
 
 pub const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
     "SpeedModType",
@@ -103,6 +106,7 @@ pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
     "SongMeter",
 ];
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn top_screen_option_row_name(value: Option<Value>) -> String {
     match value {
         Some(Value::String(name)) => name

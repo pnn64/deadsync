@@ -2,6 +2,7 @@
 //! Only raw host reads enter this tape; actor/query observations never do.
 use std::collections::{HashMap, VecDeque};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue};
 
 use crate::SongLuaCompileContext;
@@ -30,6 +31,7 @@ fn canonical_source(source: &str, song_root: &str) -> String {
     source
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install(lua: &Lua, context: &SongLuaCompileContext) {
     let song_root = context.song_dir.to_string_lossy().replace('\\', "/");
     let mut inputs = ClockInputs { song_root, reads: HashMap::new() };
@@ -40,6 +42,7 @@ pub(crate) fn install(lua: &Lua, context: &SongLuaCompileContext) {
     lua.set_app_data(inputs);
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn next(lua: &Lua, clock: &str) -> Option<f64> {
     if !lua.app_data_ref::<ClockInputs>().is_some_and(|inputs| !inputs.reads.is_empty()) {
         return None;
@@ -55,6 +58,7 @@ pub(crate) fn next(lua: &Lua, clock: &str) -> Option<f64> {
     inputs.reads.get_mut(&(clock.to_owned(), source, line))?.pop_front()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_calendar(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     for name in ["Year", "MonthOfYear", "DayOfMonth", "DayOfYear", "Hour", "Minute", "Second"] {

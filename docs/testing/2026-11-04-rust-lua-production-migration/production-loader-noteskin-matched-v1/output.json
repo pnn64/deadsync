@@ -1,0 +1,1181 @@
+{
+  "arch": "x86_64",
+  "cases": [
+    {
+      "actor_files": 27,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 14607944,
+          "wall_seconds": 0.0066655
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 17883542,
+          "wall_seconds": 0.0081637
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 17579535,
+          "wall_seconds": 0.0080236
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 13905545,
+          "wall_seconds": 0.0063654
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 13864278,
+          "wall_seconds": 0.0063362
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 17614656,
+          "wall_seconds": 0.0080501
+        }
+      ],
+      "skin": "default"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26810827,
+          "wall_seconds": 0.0122647
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 23256464,
+          "wall_seconds": 0.0106196
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 22611790,
+          "wall_seconds": 0.0103215
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 27358478,
+          "wall_seconds": 0.0125141
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 27319410,
+          "wall_seconds": 0.0124811
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22897360,
+          "wall_seconds": 0.0104712
+        }
+      ],
+      "skin": "cel"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21722378,
+          "wall_seconds": 0.009923
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26909822,
+          "wall_seconds": 0.01243
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 27342237,
+          "wall_seconds": 0.012648
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 22313711,
+          "wall_seconds": 0.0102638
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22193865,
+          "wall_seconds": 0.0102372
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 27220854,
+          "wall_seconds": 0.0125563
+        }
+      ],
+      "skin": "cyber"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 24128977,
+          "wall_seconds": 0.0110208
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 20487473,
+          "wall_seconds": 0.0093536
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 20172268,
+          "wall_seconds": 0.0092192
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 25544531,
+          "wall_seconds": 0.0116701
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 24451861,
+          "wall_seconds": 0.011173
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 19701221,
+          "wall_seconds": 0.0090003
+        }
+      ],
+      "skin": "ddr-note"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 19659957,
+          "wall_seconds": 0.0089849
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 24359890,
+          "wall_seconds": 0.0111468
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 23369724,
+          "wall_seconds": 0.0106743
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 20221657,
+          "wall_seconds": 0.0092327
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 19608376,
+          "wall_seconds": 0.0089577
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 24819743,
+          "wall_seconds": 0.0113395
+        }
+      ],
+      "skin": "ddr-rainbow"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 24102417,
+          "wall_seconds": 0.0110054
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 20238558,
+          "wall_seconds": 0.0092492
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 19312709,
+          "wall_seconds": 0.008825
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 24733260,
+          "wall_seconds": 0.0112915
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 24638655,
+          "wall_seconds": 0.0112651
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 20459156,
+          "wall_seconds": 0.00935
+        }
+      ],
+      "skin": "ddr-vivid"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 22312834,
+          "wall_seconds": 0.0102145
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26556646,
+          "wall_seconds": 0.012132
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 25941608,
+          "wall_seconds": 0.0118521
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 21849908,
+          "wall_seconds": 0.0099823
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22108260,
+          "wall_seconds": 0.0101003
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 25220332,
+          "wall_seconds": 0.0115217
+        }
+      ],
+      "skin": "devcel-2024"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 28915394,
+          "wall_seconds": 0.0132136
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 22551430,
+          "wall_seconds": 0.0103026
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 23789410,
+          "wall_seconds": 0.0108671
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 28883347,
+          "wall_seconds": 0.0132087
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 32338496,
+          "wall_seconds": 0.0147741
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 24644582,
+          "wall_seconds": 0.0113048
+        }
+      ],
+      "skin": "enchantment"
+    },
+    {
+      "actor_files": 41,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21018661,
+          "wall_seconds": 0.0096057
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26903676,
+          "wall_seconds": 0.0123021
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 26438557,
+          "wall_seconds": 0.0120915
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 22261031,
+          "wall_seconds": 0.0101839
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22252690,
+          "wall_seconds": 0.0101885
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26629958,
+          "wall_seconds": 0.0121663
+        }
+      ],
+      "skin": "lambda"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 29805246,
+          "wall_seconds": 0.0136339
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 22983624,
+          "wall_seconds": 0.0105013
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 23117740,
+          "wall_seconds": 0.0105598
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 28218922,
+          "wall_seconds": 0.012898
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 27531226,
+          "wall_seconds": 0.0125682
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 23853945,
+          "wall_seconds": 0.0108889
+        }
+      ],
+      "skin": "metal"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 22975504,
+          "wall_seconds": 0.0104889
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 28347328,
+          "wall_seconds": 0.0129515
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 27922595,
+          "wall_seconds": 0.0127685
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 23153298,
+          "wall_seconds": 0.0105726
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22285395,
+          "wall_seconds": 0.0101831
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 28660116,
+          "wall_seconds": 0.0131069
+        }
+      ],
+      "skin": "robot"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 31922983,
+          "wall_seconds": 0.0145818
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 26725440,
+          "wall_seconds": 0.0122211
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 26835192,
+          "wall_seconds": 0.0122706
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 31194463,
+          "wall_seconds": 0.0143012
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 29173086,
+          "wall_seconds": 0.0133282
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 24547122,
+          "wall_seconds": 0.0112154
+        }
+      ],
+      "skin": "vivid"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21095926,
+          "wall_seconds": 0.0096311
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 24781990,
+          "wall_seconds": 0.011315
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 24517053,
+          "wall_seconds": 0.0111934
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 20867426,
+          "wall_seconds": 0.0095367
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 20608196,
+          "wall_seconds": 0.009419
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 25581189,
+          "wall_seconds": 0.0117017
+        }
+      ],
+      "skin": "default"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 25990557,
+          "wall_seconds": 0.0118647
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21772644,
+          "wall_seconds": 0.0099477
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 22057775,
+          "wall_seconds": 0.0100927
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 26265809,
+          "wall_seconds": 0.0120004
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 25908682,
+          "wall_seconds": 0.0118516
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22048556,
+          "wall_seconds": 0.0100726
+        }
+      ],
+      "skin": "cmd"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21847494,
+          "wall_seconds": 0.0099741
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 27618809,
+          "wall_seconds": 0.0126235
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 28159436,
+          "wall_seconds": 0.0129113
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 24116026,
+          "wall_seconds": 0.0110294
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 25275424,
+          "wall_seconds": 0.0115369
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 29597600,
+          "wall_seconds": 0.0135268
+        }
+      ],
+      "skin": "cmd-routine-p1"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 30001040,
+          "wall_seconds": 0.0136978
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 24426837,
+          "wall_seconds": 0.0111551
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 23854161,
+          "wall_seconds": 0.010891
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 28454005,
+          "wall_seconds": 0.0130013
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26531622,
+          "wall_seconds": 0.0121138
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 24645900,
+          "wall_seconds": 0.0112595
+        }
+      ],
+      "skin": "cmd-routine-p2"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 23654417,
+          "wall_seconds": 0.0108068
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 29381612,
+          "wall_seconds": 0.0134272
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 27818113,
+          "wall_seconds": 0.012727
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 23469818,
+          "wall_seconds": 0.0107319
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 21696696,
+          "wall_seconds": 0.0099145
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 27020230,
+          "wall_seconds": 0.0123425
+        }
+      ],
+      "skin": "complex"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 40923580,
+          "wall_seconds": 0.018695
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 34889964,
+          "wall_seconds": 0.015951
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 35805498,
+          "wall_seconds": 0.0163616
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 39718306,
+          "wall_seconds": 0.0181551
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 39868442,
+          "wall_seconds": 0.0182277
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 35702552,
+          "wall_seconds": 0.0163148
+        }
+      ],
+      "skin": "delta"
+    },
+    {
+      "actor_files": 86,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 230,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 31715115,
+          "wall_seconds": 0.0145039
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 37173423,
+          "wall_seconds": 0.0169847
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 37027893,
+          "wall_seconds": 0.016917
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 32519144,
+          "wall_seconds": 0.0148476
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 30065134,
+          "wall_seconds": 0.0137429
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 33192789,
+          "wall_seconds": 0.0151677
+        }
+      ],
+      "skin": "delta-note"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 39280623,
+          "wall_seconds": 0.0179403
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 33812657,
+          "wall_seconds": 0.0154419
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 33059553,
+          "wall_seconds": 0.0150996
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 41018185,
+          "wall_seconds": 0.0187404
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 39847810,
+          "wall_seconds": 0.018228
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 33593597,
+          "wall_seconds": 0.015347
+        }
+      ],
+      "skin": "delta-routine-p1"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 33170402,
+          "wall_seconds": 0.0151528
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 40192425,
+          "wall_seconds": 0.0183576
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 39763963,
+          "wall_seconds": 0.0181612
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 33644959,
+          "wall_seconds": 0.015371
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 32911392,
+          "wall_seconds": 0.0150444
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 40185402,
+          "wall_seconds": 0.0183662
+        }
+      ],
+      "skin": "delta-routine-p2"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 230,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26059040,
+          "wall_seconds": 0.0119041
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21568948,
+          "wall_seconds": 0.009855
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 21604287,
+          "wall_seconds": 0.0098574
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 26085380,
+          "wall_seconds": 0.011903
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26433727,
+          "wall_seconds": 0.0120672
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 21656090,
+          "wall_seconds": 0.0098961
+        }
+      ],
+      "skin": "frame5p"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21392031,
+          "wall_seconds": 0.0097727
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 25057241,
+          "wall_seconds": 0.0114507
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 25763156,
+          "wall_seconds": 0.011761
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 21208749,
+          "wall_seconds": 0.0096826
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 22320297,
+          "wall_seconds": 0.0102238
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26438554,
+          "wall_seconds": 0.0120803
+        }
+      ],
+      "skin": "newextra"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 25326569,
+          "wall_seconds": 0.0115702
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21335399,
+          "wall_seconds": 0.0097439
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 21146191,
+          "wall_seconds": 0.0096545
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 25523460,
+          "wall_seconds": 0.0116636
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 25394614,
+          "wall_seconds": 0.0115996
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 21168140,
+          "wall_seconds": 0.0096735
+        }
+      ],
+      "skin": "pad"
+    },
+    {
+      "actor_files": 56,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 22505993,
+          "wall_seconds": 0.0102743
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 26883921,
+          "wall_seconds": 0.0122722
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 27179586,
+          "wall_seconds": 0.0124455
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 21985558,
+          "wall_seconds": 0.0100376
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 21927832,
+          "wall_seconds": 0.0100179
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26874482,
+          "wall_seconds": 0.0122806
+        }
+      ],
+      "skin": "rhythm"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": 24802841,
+          "wall_seconds": 0.0113327
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": 21723695,
+          "wall_seconds": 0.0099126
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": 20845476,
+          "wall_seconds": 0.0095272
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": 25721888,
+          "wall_seconds": 0.0117526
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": 26132572,
+          "wall_seconds": 0.0119396
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": 21841567,
+          "wall_seconds": 0.0099808
+        }
+      ],
+      "skin": "simple"
+    }
+  ],
+  "debug_assertions": false,
+  "limitations": "wall time and Windows thread cycles only; no allocation or peak-memory comparison; not a general VM or LuaJIT benchmark",
+  "os": "windows",
+  "player_options": "Mirror",
+  "samples_per_backend": 3,
+  "scope": "independent VM per call; source reads, compilation, preparation and VM destruction included; input discovery, output comparison and bundle destruction excluded; OS/source/path caches warmed; backend order alternates"
+}

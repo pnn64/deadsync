@@ -1,0 +1,122 @@
+{
+  "created_utc": "2026-11-08T13:07:47.342465+00:00",
+  "status": "Verification active, no completion claim",
+  "source_changes": [
+    {
+      "path": "Cargo.toml",
+      "snapshot": "v1",
+      "before_sha256": "80f3687cb0aadf4b51540d25f7620c13d585fbb1eeee251ccc925e7ecf668d21",
+      "after_sha256": "7c2a9dd11ff40266198d076d5594afdfd17b4908505857e9eee9cb7ec9df869b"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+      "snapshot": "v1",
+      "before_sha256": "2e9e48560417e288a0c7fc5a27aceb27f3cbc71d6606a22d343d213d6e382a38",
+      "after_sha256": "f86d0ff1bd4bdd473e2648814d0c218d611aa4a505ad627d5f8b0f9d42631ff0"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "snapshot": "v1",
+      "before_sha256": "bb9c68d60ca313dbac9c47ef0b2ad8eb4840c640de606a0e2aa28ad0cb707974",
+      "after_sha256": "7879fa87abf4dc1fb5d97f0b5c7a513ba7369c396564a7167bbf6a6bbfe41933"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs",
+      "snapshot": "v1",
+      "before_sha256": "2e0b7b3e366735e9cb74eed14489e1a84bf34d95b2081174a3498dddf2b8ce39",
+      "after_sha256": "1dbd8cedf51ea8b1eb0f28e17f553caa972ab33d2d08ef0095d7c62ed62069cd"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs",
+      "snapshot": "v1",
+      "before_sha256": "8a3fe9e5e954e89ff42ef8b9f43f6ed0dd98dc946a98c26703a8d1f980551118",
+      "after_sha256": "0bde8a4597c4371d873d1dfeac136c144d7605b8ac9e6696d97e9407e630cd27"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/messages/compilation.rs",
+      "snapshot": "v1",
+      "before_sha256": "427d3ad6edd06d054ba66861c6aee428b2630a104259d86b8e46db895d812994",
+      "after_sha256": "1765164c91dfb6d5d0645102e05ef29b438351b58a2cf723b9962c2dbe40e533"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/live_scene.rs",
+      "snapshot": "v1",
+      "before_sha256": "ced270720819cbadcdf7d4c11a0b5a591ce1ea3ab709fffeb6564f193c16024e",
+      "after_sha256": "6bb27a71eb2b85fb4e60f983450c05c87e76945d3b7976f3a8bd60bb985ca6ec"
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_song_compiler.rs",
+      "snapshot": "v1",
+      "before_sha256": "27bb49bd86d54b1009e9b9278e9b6ede6eebf2404d7357fae3931440ba3aba12",
+      "after_sha256": "142049d2f5b1649c3b0a375c251342910cc89cb86f25db1f98d2fe0ee7f4e590",
+      "original_test_text_is_prefix": true
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_compiler.rs",
+      "snapshot": "v1",
+      "before_sha256": "433d855a8c1314b705ed1ca7afe91bb1b530e7619208835a8570795b4e6af36c",
+      "after_sha256": "9012b68c0c28592a8b0741bdbf532baf924d54f8b92e703ffb504e58e4e777fc",
+      "original_test_text_is_prefix": true
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/retained.rs",
+      "snapshot": "v2",
+      "before_sha256": "0922657b31416377f3271f97cb48abf786efcbdb6fa2d53cf00324df724e9ce6",
+      "after_sha256": "bdf4213dd6a87324c0a467c5616c279c3c4cabae7ea96f95684bc0e448858d80"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs",
+      "snapshot": "v2",
+      "before_sha256": "0eac8415662cd571f8d49451939594a9c842c9ca24b731d8ddbcfa5ca4b22ac9",
+      "after_sha256": "377999ccb2577480bd04b3dbeec4ee35fc36a61dc5af9c9c057416f754c91a86"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs",
+      "snapshot": "v2",
+      "before_sha256": "cbbf5b6479697e4d4f4bcb64f6bc4cd58fea472e4bf975dde1033fbabdbefdaf",
+      "after_sha256": "c653f62934e5b90bfdbde8c44feac333d1dbec298232333d336f3a0cabc58d56"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/scalar_methods.rs",
+      "snapshot": "v2",
+      "before_sha256": "e9883b75066f8b521f7dd1de77905362186096bd46dce58ec6bb8b5ac11645ca",
+      "after_sha256": "8a975440cfcd421b891d66f5f4a4a79d399646df8cdb0431f1da9e4945dcacd1"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs",
+      "snapshot": "v2",
+      "before_sha256": "8f87e359d45b5e12a8f0666906e219895ecfe31454fb2de3fbf992fafcf242a7",
+      "after_sha256": "57d9b88581734de8746b3eca8746575a9faf9703242342d857b912ea7ac35c7a"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/textures.rs",
+      "snapshot": "v2",
+      "before_sha256": "510cfc32315de8590715618489a543a9c0a97ef17f37a2d179d5d5d08aaf83a8",
+      "after_sha256": "f48ac6a42b48ace8d915f69fe8186f037537b764d919ef7310ff1533464d7254"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors.lua",
+      "snapshot": "v2",
+      "before_sha256": "eb256ac6ad2f6674295cfd9a9a60b20e55c9d8cb7585ad016fee8d2121b8084d",
+      "after_sha256": "364c5fd3af6c9d460e0b463a0011f273630fd6abf3c59305262c8dc3bc264223"
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_actors.rs",
+      "snapshot": "v2",
+      "before_sha256": "1f00e17483dbb4b9d03ad06183a4b34fe6d357045f8dca8d3f01d3981d90c487",
+      "after_sha256": "7e0a6303599e7b2eb720ddfbfb3db5cc69735cce5b96a18b6d8e8b3f1aa612f7",
+      "original_test_text_is_prefix": true
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_meshes.rs",
+      "snapshot": "v2",
+      "before_sha256": "a663479447881885d3617d2f5fd717ae198a0e5c36cad99ecbcf0706a19eeaf3",
+      "after_sha256": "9bd6ef49103170deea7a0631acabe6f293f96f83e800e0d8b8d58d09dae4d846",
+      "original_test_text_is_prefix": true
+    }
+  ],
+  "rooting": "Five arbitrary actor batches use traced Lua tables; two reuse existing retained snapshot roots with a table key. Temporary batch pins release on attach/publication success or error. Generic host capture limit remains255.",
+  "actor_string": "Public class naming follows the original native adapter. Stable opaque Rust VM identities replace object addresses; native pointer layout is not required.",
+  "amv_texture": "Copied RageTexture proxy is strongly retained on the actor before texture-path handling, returned by identity from GetTexture, and cleared by replacement/load. Port follows the exact native implementation order.",
+  "unchanged_coverage": "Every prior test body remains an exact normalized-text prefix; only four meaningful regression controls were appended across four targets."
+}

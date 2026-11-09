@@ -1,0 +1,1673 @@
+--- a/crates/deadsync-song-lua/src/rust_engine/actors.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -52,6 +52,7 @@
+ mod song_media;
+ #[cfg(feature = "test-support")]
+ pub(super) use song_media::TARGETS as MEDIA_CAPTURE_TARGETS;
++mod action_capture;
+ mod command_locals;
+ mod function_capture;
+ pub(super) mod song_kinds;
+@@ -258,6 +259,7 @@
+     startup_discovery: bool,
+     capture_scope: Option<f32>,
+     command_locals: Option<command_locals::Scope>,
++    action_capture: Option<action_capture::State>,
+     song_broadcasts: Option<song_capture::Broadcasts>,
+     next: u64,
+     actors: HashMap<TableId, Actor>,
+@@ -2640,6 +2642,7 @@
+ ) -> Result<(), Error> {
+     if name == "draworder" {
+         if let Some(value) = integer_scalar(call, arg(call, 1)) {
++            action_capture::prepare(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -2669,6 +2672,9 @@
+         let store_ref = store;
+         let x = float_scalar(call, arg(call, 1), false);
+         let y = float_scalar(call, arg(call, 2), false);
++        if x.is_some() || y.is_some() {
++            action_capture::prepare(call, store, actor)?;
++        }
+         let mut store = store.lock().unwrap();
+         let position = store.actors.get_mut(&actor).unwrap().destination_mut();
+         if let Some(x) = x {
+@@ -2714,6 +2720,9 @@
+     if matches!(name, "SetWidth" | "SetHeight") {
+         sprites::refresh_size(call, store, actor)?;
+     }
++    if matches!(name, "SetWidth" | "SetHeight" | "setsize" | "visible") {
++        action_capture::prepare(call, store, actor)?;
++    }
+     if matches!(name, "SetWidth" | "SetHeight" | "setsize") {
+         let size = {
+             let store = store.lock().unwrap();
+@@ -2747,6 +2756,7 @@
+     } else {
+         None
+     };
++    action_capture::prepare(call, store, actor)?;
+     let id = actor;
+     let mut guard = store.lock().unwrap();
+     let actor = guard.actors.get_mut(&id).unwrap();
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs
+@@ -3,9 +3,9 @@
+ use super::*;
+ use crate::tween_pose::TweenPose;
+ 
+-struct Saved {
+-    actor: TableId,
+-    raw: TableId,
++pub(super) struct Saved {
++    pub(super) actor: TableId,
++    pub(super) raw: TableId,
+     state: ActorSnapshot,
+     current: TweenPose,
+     queue: VecDeque<TweenStep>,
+@@ -18,7 +18,7 @@
+     wrappers: Vec<TableId>,
+ }
+ impl Saved {
+-    fn read(store: &Shared, actor: TableId, raw: TableId) -> Option<Self> {
++    pub(super) fn read(store: &Shared, actor: TableId, raw: TableId) -> Option<Self> {
+         let guard = store.lock().unwrap();
+         let a = guard.actors.get(&actor)?;
+         Some(Self {
+@@ -36,7 +36,7 @@
+             wrappers: a.wrappers.clone(),
+         })
+     }
+-    fn restore(self, store: &Shared) {
++    pub(super) fn restore(self, store: &Shared) {
+         let mut guard = store.lock().unwrap();
+         let Some(a) = guard.actors.get_mut(&self.actor) else {
+             return;
+@@ -146,7 +146,7 @@
+     }
+ }
+ 
+-fn reset(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
++pub(super) fn reset(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+     if let Some(a) = store.lock().unwrap().actors.get_mut(&actor) {
+         a.capture
+             .get_or_insert_with(capture::Capture::default)
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
+@@ -16,6 +16,7 @@
+ 
+ #[derive(Clone)]
+ struct Entry {
++    changed: bool,
+     block: Block,
+     tween_step: usize,
+ }
+@@ -105,6 +106,7 @@
+                 let mut final_block = block(0., 0., None, false);
+                 final_block.delta = delta;
+                 self.blocks.push(Entry {
++                    changed: false,
+                     block: final_block,
+                     tween_step: 0,
+                 });
+@@ -148,15 +150,20 @@
+ 
+     fn current(&mut self, queued: bool) -> &mut Entry {
+         self.current.get_or_insert_with(|| Entry {
++            changed: false,
+             block: block(self.cursor, 0., None, queued),
+             tween_step: self.steps.len(),
+         })
+     }
+ 
++    pub(super) fn mark_current_changed(&mut self, queued: bool) {
++        self.current(queued).changed = true;
++    }
++
+     pub(super) fn flush(&mut self) {
+         if let Some(entry) = self.current.take() {
+             self.cursor = entry.block.start + entry.block.duration.max(0.);
+-            if !crate::overlay_delta_is_empty(&entry.block.delta) {
++            if entry.changed || !crate::overlay_delta_is_empty(&entry.block.delta) {
+                 self.blocks.push(entry);
+             }
+         }
+@@ -188,6 +195,7 @@
+         self.steps.push_back(Some(duration));
+         self.time_left = self.cursor + duration;
+         self.current = Some(Entry {
++            changed: false,
+             block: block(self.cursor, duration, Some(easing.to_owned()), queued),
+             tween_step: self.steps.len(),
+         });
+@@ -221,6 +229,7 @@
+                 self.blocks.insert(
+                     index,
+                     Entry {
++                        changed: false,
+                         block: block(start, 0., None, scope.is_some()),
+                         tween_step: 0,
+                     },
+@@ -265,6 +274,72 @@
+     }
+     song_immediate::delta(call, store, id, &delta, immediate);
+     song_media::delta(call, store, id, &delta);
++}
++
++/// Frame publication also supplies command blocks during construction/probes.
++/// Capture::write already retains its delta, so its frame path skips this hook.
++pub(super) fn retain_render_update(
++    store: &Shared,
++    id: TableId,
++    target: crate::SongLuaOverlayUpdateTarget,
++    value: &crate::SongLuaOverlayUpdateValue,
++    immediate: bool,
++) {
++    use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
++    let mut guard = store.lock().unwrap();
++    if !guard.preparing || guard.replay_frame.is_some() {
++        return;
++    }
++    let mut delta = Delta::default();
++    match (target, value) {
++        (Target::Visible, Update::Bool(value)) => delta.visible = Some(*value),
++        (Target::Hibernating, Update::Bool(value)) => delta.hibernating = Some(*value),
++        (Target::HAlign, Update::F32(value)) => delta.halign = Some(*value),
++        (Target::VAlign, Update::F32(value)) => delta.valign = Some(*value),
++        (Target::TextAlign, Update::TextAlign(value)) => delta.text_align = Some(*value),
++        (Target::BaseZoom, Update::F32(value)) => delta.basezoom = Some(*value),
++        (Target::BaseZoomX, Update::F32(value)) => delta.basezoom_x = Some(*value),
++        (Target::BaseZoomY, Update::F32(value)) => delta.basezoom_y = Some(*value),
++        (Target::BaseZoomZ, Update::F32(value)) => delta.basezoom_z = Some(*value),
++        (Target::BaseAlpha, Update::F32(value)) => delta.base_alpha = Some(*value),
++        (Target::BaseRotation, Update::Vec3(value)) => delta.base_rotation = Some(*value),
++        (Target::ShadowLen, Update::Vec2(value)) => delta.shadow_len = Some(*value),
++        (Target::ShadowColor, Update::Vec4(value)) => delta.shadow_color = Some(*value),
++        (Target::Size, Update::Vec2(value)) => delta.size = Some(*value),
++        (Target::SpriteTexture, Update::Bool(value)) => delta.sprite_texture = Some(*value),
++        (Target::SpriteStateIndex, Update::U32(value)) => delta.sprite_state_index = Some(*value),
++        (Target::Vibrate, Update::Bool(value)) => delta.vibrate = Some(*value),
++        (Target::Rainbow, Update::Bool(value)) => delta.rainbow = Some(*value),
++        (Target::EffectMode, Update::EffectMode(value)) => delta.effect_mode = Some(*value),
++        (Target::EffectPeriod, Update::F32(value)) => delta.effect_period = Some(*value),
++        (Target::EffectTiming, Update::Vec5(value)) => delta.effect_timing = Some(*value),
++        (Target::EffectMagnitude, Update::Vec3(value)) => delta.effect_magnitude = Some(*value),
++        (Target::EffectColor1, Update::Vec4(value)) => delta.effect_color1 = Some(*value),
++        (Target::EffectColor2, Update::Vec4(value)) => delta.effect_color2 = Some(*value),
++        (Target::EffectOffset, Update::F32(value)) => delta.effect_offset = Some(*value),
++        (Target::EffectClock, Update::EffectClock(value)) => delta.effect_clock = Some(*value),
++        (Target::EffectNoOffset, Update::Bool(value)) => delta.effect_no_offset = Some(*value),
++        (Target::EffectTimer, Update::Bool(value)) => delta.effect_timer = Some(*value),
++        (Target::CullMode, Update::CullMode(value)) => delta.cull_mode = Some(*value),
++        (Target::AftPreserve, Update::Bool(value)) => delta.aft_preserve = Some(*value),
++        (Target::AftCreated, Update::Bool(value)) => delta.aft_created = Some(*value),
++        (Target::ZBias, Update::F32(value)) => delta.z_bias = Some(*value),
++        (Target::DrawOrder, Update::I32(value)) => delta.draw_order = Some(*value),
++        (Target::DrawByZPosition, Update::Bool(value)) => delta.draw_by_z_position = Some(*value),
++        (Target::Fov, Update::F32(value)) => delta.fov = Some(*value),
++        (Target::Vanishpoint, Update::Vec2(value)) => delta.vanishpoint = Some(*value),
++        (Target::Blend, Update::Blend(value)) => delta.blend = Some(*value),
++        (Target::DepthTest, Update::Bool(value)) => delta.depth_test = Some(*value),
++        (Target::DepthTestOnFail, Update::Bool(value)) => delta.depth_test_on_fail = Some(*value),
++        (Target::DepthWrite, Update::Bool(value)) => delta.depth_write = Some(*value),
++        (Target::TextureFiltering, Update::Bool(value)) => delta.texture_filtering = Some(*value),
++        _ => return,
++    }
++    let scope = guard.capture_scope;
++    let fallback = song_pose::mode(&guard, id);
++    if let Some(actor) = guard.actors.get_mut(&id) {
++        record(actor, &delta, immediate, scope, fallback);
++    }
+ }
+ 
+ fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
+@@ -414,6 +489,14 @@
+         "zoomto" => {
+             delta.zoom_x = Some(pose.zoom_x);
+             delta.zoom_y = Some(pose.zoom_y);
++        }
++        "scaletofit" | "scaletocover" => {
++            delta.x = Some(pose.x);
++            delta.y = Some(pose.y);
++            delta.zoom = Some(pose.zoom);
++            delta.zoom_x = Some(pose.zoom_x);
++            delta.zoom_y = Some(pose.zoom_y);
++            delta.zoom_z = Some(pose.zoom_z);
+         }
+         "stretchto" => {
+             delta.x = Some(pose.x);
+@@ -492,14 +575,8 @@
+             delta.shadow_color = Some(render.shadow_color);
+             immediate = true;
+         }
+-        "zbias" => {
+-            delta.z_bias = Some(render.z_bias);
+-            immediate = true;
+-        }
+-        "fov" => {
+-            delta.fov = render.fov;
+-            immediate = true;
+-        }
++        "zbias" => delta.z_bias = Some(render.z_bias),
++        "fov" => delta.fov = render.fov,
+         _ => return,
+     }
+     record(actor, &delta, immediate, scope, fallback);
+@@ -544,6 +621,7 @@
+     actor: TableId,
+     name: Vec<u8>,
+ ) -> Result<bool, Error> {
++    action_capture::prepare(call, store, actor)?;
+     enter_replay_queue(store, actor);
+     let mut command_field = name.clone();
+     command_field.extend_from_slice(b"Command");
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
+@@ -77,6 +77,7 @@
+ ];
+ 
+ pub(super) fn finish(call: &mut HostCall<'_>, store: &Shared, id: TableId) -> Result<(), Error> {
++    action_capture::prepare(call, store, id)?;
+     {
+         let mut store = store.lock().unwrap();
+         if let Some(clock) = &mut store.replay_clock {
+@@ -207,6 +208,7 @@
+     command: Option<Vec<u8>>,
+ ) -> Result<(), Error> {
+     let duration = exact_duration as f32;
++    action_capture::prepare(call, store, id)?;
+     capture::enter_replay_queue(store, id);
+     // BeginTweening finishes the actor subtree before adding its 52nd state.
+     let count = {
+@@ -384,6 +386,7 @@
+                 .hibernate = duration;
+             let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+             call.raw_table_set(actor, key, Value::Number(duration as f64))?;
++            action_capture::prepare(call, store, actor)?;
+             capture::write(
+                 call,
+                 store,
+@@ -396,6 +399,7 @@
+             );
+         }
+         Lifecycle::Stop => {
++            action_capture::prepare(call, store, actor)?;
+             {
+                 let mut store = store.lock().unwrap();
+                 let fallback = song_pose::mode(&store, actor);
+@@ -440,6 +444,7 @@
+             if factor < 0.0 {
+                 return Err(call.error(b"hurrytweening factor must not be negative"));
+             }
++            action_capture::prepare(call, store, actor)?;
+             hurry(&mut store.lock().unwrap(), actor, factor);
+             song_messages::hurry_timing(call, store, actor, factor)?;
+         }
+--- a/crates/deadsync-song-lua/src/rust_engine/song_output.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/song_output.rs
+@@ -197,3 +197,52 @@
+         result
+     }
+ }
++
++impl RustSongRuntime {
++    /// Capture only actors first touched by capture-producing methods. Direct
++    /// script/global mutations remain owned by the caller's outer probe scope.
++    pub fn capture_song_touched_actor_function(
++        &mut self,
++        actors: &[(usize, Value)],
++        function: Value,
++        arg: Option<f32>,
++        song_beat: Option<f32>,
++    ) -> Result<SongActorFunctionBlocks, String> {
++        if !self.actors.actor_function_capture_ready() {
++            return Err("actor function capture requires preparation before frame replay".into());
++        }
++        let mut pins = Vec::new();
++        let result = (|| {
++            pins.push(self.vm.pin(function).map_err(|e| e.to_string())?);
++            let mut selected = Vec::new();
++            for &(index, value) in actors {
++                pins.push(self.vm.pin(value).map_err(|e| e.to_string())?);
++                let Value::Table(actor) = value else {
++                    return Err("capture actor table expected".into());
++                };
++                selected.push((index, actor));
++            }
++            let previous = self.values().map_err(|e| e.to_string())?;
++            if let Some(beat) = song_beat {
++                self.set_beat(beat).map_err(|e| e.to_string())?;
++            }
++            let (result, restored, returned) = self.actors.capture_touched_actor_function(
++                &mut self.vm,
++                selected,
++                function,
++                arg,
++                &self.random,
++            );
++            pins.extend(returned);
++            if restored {
++                self.set_values(previous.0, previous.1)
++                    .map_err(|e| e.to_string())?;
++            }
++            result.map_err(|e| e.to_string())
++        })();
++        for root in pins {
++            self.vm.unpin(root).map_err(|e| e.to_string())?;
++        }
++        result
++    }
++}
+--- a/crates/deadsync-song-lua/src/rust_engine/test_support.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1644,3 +1644,13 @@
+ ) -> mlua::Result<T> {
+     crate::lua_util::migration_preserving_command_locals(lua, || probe(lua))
+ }
++
++pub fn legacy_capture_touched_actor_function(
++    lua: &mlua::Lua,
++    actors: &[(usize, mlua::Table)],
++    function: &mlua::Function,
++    arg: Option<f32>,
++    beat: Option<f32>,
++) -> Result<super::SongActorFunctionBlocks, String> {
++    crate::lua_util::migration_capture_touched_actor_function(lua, actors, function, arg, beat)
++}
+--- a/crates/deadsync-song-lua/src/lua_util.rs
++++ b/crates/deadsync-song-lua/src/lua_util.rs
+@@ -24954,3 +24954,14 @@
+     restore_action_capture_scope(lua, scope)?;
+     result
+ }
++
++#[cfg(feature = "test-support")]
++pub(crate) fn migration_capture_touched_actor_function(
++    lua: &Lua,
++    actors: &[(usize, Table)],
++    function: &Function,
++    arg: Option<f32>,
++    beat: Option<f32>,
++) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
++    capture_touched_blocks(lua, actors, function, arg, beat)
++}
+--- a/crates/deadsync-song-lua/tests/rust_song_activation.rs
++++ b/crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -5146,3 +5146,487 @@
+     assert!(rust.1.starts_with("3,"));
+     pair.script("assert(probe_peek()==0);log(math.random())");
+ }
++
++fn compare_touched_actor_capture(
++    pair: &mut Pair,
++    selected: &[(usize, &str)],
++    arg: Option<f32>,
++    beat: Option<f32>,
++    error: bool,
++    emptied: bool,
++) -> Option<deadsync_song_lua::rust_engine::SongActorFunctionBlocks> {
++    let mut native = Vec::new();
++    let mut rust = Vec::new();
++    for &(index, key) in selected {
++        let (a, b) = saved_pair(pair, key);
++        native.push((index, a));
++        rust.push((index, Value::Table(b)));
++    }
++    let f: mlua::Function = pair.native.globals().get("indexed_probe").unwrap();
++    let g = pair.rust.vm_mut().get_global(b"indexed_probe").unwrap();
++    let expected =
++        test_support::legacy_capture_touched_actor_function(&pair.native, &native, &f, arg, beat);
++    let actual = pair
++        .rust
++        .capture_song_touched_actor_function(&rust, g, arg, beat);
++    assert_eq!(
++        expected.is_err(),
++        error,
++        "native capture error: {expected:?}"
++    );
++    assert_eq!(actual.is_err(), error, "Rust capture error: {actual:?}");
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    if emptied {
++        for ((_, a), (_, b)) in native.iter().zip(&rust) {
++            assert!(test_support::legacy_captured_blocks(a).unwrap().is_empty());
++            assert!(
++                pair.rust
++                    .actor_command_capture(*b)
++                    .unwrap()
++                    .blocks
++                    .is_empty()
++            );
++        }
++    }
++    pair.compare();
++    if error {
++        None
++    } else {
++        let expected = expected.unwrap();
++        let actual = actual.unwrap();
++        assert_eq!(actual, expected);
++        Some(actual)
++    }
++}
++
++#[test]
++fn touched_actor_capture_filters_readonly_actors_preserves_order_and_restores_unselected_writes() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"
++        return Def.ActorFrame{
++            Def.Quad{Name='touch-a',InitCommand=function(self)saved.a=self;self:x(3)end},
++            Def.Quad{Name='touch-b',InitCommand=function(self)saved.b=self;self:y(6)end},
++            Def.Quad{Name='touch-other',InitCommand=function(self)saved.other=self;self:x(4)end},
++            Def.BitmapText{Font='Common Normal',Text='original',InitCommand=function(self)saved.text=self end}}
++    "#,
++    );
++    let before = capture_metadata(&pair, &["touch-a", "touch-b", "touch-other"]);
++    pair.script("rawset(saved.b,string.char(255),true);indexed_probe=function(v) saved.text:settext('kept');saved.b:x(false);log(saved.b:GetY());saved.a:x(v);saved.other:x(99);log(#__songlua_capture_scope_actors) end");
++    let blocks = compare_touched_actor_capture(
++        &mut pair,
++        &[(8, "a"), (2, "b"), (8, "a"), (3, "text")],
++        Some(12.),
++        Some(9.),
++        false,
++        false,
++    )
++    .unwrap();
++    assert_eq!(blocks.iter().map(|(i, _)| *i).collect::<Vec<_>>(), [8, 8]);
++    assert_eq!(blocks[0].1, blocks[1].1);
++    assert_eq!(
++        capture_metadata(&pair, &["touch-a", "touch-b", "touch-other"]),
++        before
++    );
++    pair.script("assert(saved.text:GetText()=='kept');rawset(saved.b,string.char(255),nil);assert(__songlua_capture_scope_actors==nil)");
++}
++
++#[test]
++fn touched_actor_capture_snapshots_at_first_write_and_restores_command_locals_and_rng() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"
++        local n=0;probe_peek=function()return n end
++        return Def.BitmapText{Name='touch-text',Font='Common Normal',Text='original',
++            InitCommand=function(self)saved.a=self;self:x(3)end,
++            HiddenCommand=function(self)n=n+1;last_count=n;self:x(55)end}
++    "#,
++    );
++    pair.script("math.randomseed(1234);indexed_probe=function()saved.a:settext('before'):x(31):settext('after'):playcommand('Hidden');math.randomseed(999);math.random();probe_global=11 end");
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, Some(8.), false, true).unwrap();
++    pair.script("assert(saved.a:GetText()=='before' and saved.a:GetX()==3 and probe_peek()==0 and last_count==1 and probe_global==11);log(math.random())");
++}
++
++#[test]
++fn touched_actor_capture_nested_queues_rewind_all_reached_actors_and_keep_script_bindings() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"
++        local n=0;probe_peek=function()return n end
++        return Def.ActorFrame{Name='touch-a',InitCommand=function(self)saved.a=self;self:x(3)end,
++            LaterCommand=function(self)n=n+1;self:linear(.5):x(28);saved.b:y(14);rawset(self,'LaterCommand',nil);collectgarbage()end,
++            Def.Quad{Name='touch-b',InitCommand=function(self)saved.b=self;self:y(4)end}}
++    "#,
++    );
++    let before = capture_metadata(&pair, &["touch-a", "touch-b"]);
++    pair.script(
++        "indexed_probe=function()saved.a:sleep(.25):queuecommand('Later');probe_global='kept'end",
++    );
++    let blocks =
++        compare_touched_actor_capture(&mut pair, &[(7, "b"), (2, "a")], None, None, false, true)
++            .unwrap();
++    assert_eq!(blocks.iter().map(|(i, _)| *i).collect::<Vec<_>>(), [7, 2]);
++    assert_eq!(capture_metadata(&pair, &["touch-a", "touch-b"]), before);
++    pair.script("assert(probe_peek()==0 and probe_global=='kept' and saved.a.LaterCommand==nil)");
++}
++
++#[test]
++fn touched_actor_capture_snapshot_and_callback_errors_clean_scope_and_allow_recovery() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"
++        return Def.ActorFrame{
++            Def.Quad{Name='touch-a',InitCommand=function(self)saved.a=self;self:x(3)end},
++            Def.Quad{Name='touch-b',InitCommand=function(self)saved.b=self;self:x(4)end}}
++    "#,
++    );
++    let before = capture_metadata(&pair, &["touch-a", "touch-b"]);
++    pair.script("rawset(saved.b,string.char(255),true);indexed_probe=function()saved.a:x(19);saved.b:x(21);probe_after=true end");
++    compare_touched_actor_capture(&mut pair, &[(0, "a"), (1, "b")], None, Some(9.), true, true);
++    assert_eq!(capture_metadata(&pair, &["touch-a", "touch-b"]), before);
++    pair.script("assert(probe_after==nil and __songlua_capture_scope_actors==nil);rawset(saved.b,string.char(255),nil);indexed_probe=function()saved.a:x(25);error('touch failure')end");
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, Some(11.), true, true);
++    assert_eq!(capture_metadata(&pair, &["touch-a", "touch-b"]), before);
++    pair.script("indexed_probe=function()saved.a:x(37)end");
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, None, false, true).unwrap();
++}
++
++#[test]
++fn touched_actor_capture_includes_render_effect_and_media_writes() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"
++        return Def.ActorFrame{
++            Def.Quad{Name='touch-a',InitCommand=function(self)saved.a=self end},
++            Def.Quad{Name='touch-b',InitCommand=function(self)saved.b=self end},
++            Def.BitmapText{Name='touch-text',Font='Common Normal',Text='original',InitCommand=function(self)saved.text=self end}}
++    "#,
++    );
++    pair.script("indexed_probe=function()saved.a:diffusealpha(.4);saved.b:glowshift():effectperiod(2);saved.text:rainbowscroll(true)end");
++    let blocks = compare_touched_actor_capture(
++        &mut pair,
++        &[(0, "a"), (1, "b"), (2, "text")],
++        None,
++        None,
++        false,
++        true,
++    )
++    .unwrap();
++    assert_eq!(blocks.len(), 3);
++}
++
++#[test]
++fn touched_actor_capture_covers_existing_setter_families_independently() {
++    let dir = tempfile::tempdir().unwrap();
++    image::RgbaImage::new(8, 8)
++        .save(dir.path().join("one.png"))
++        .unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{InitCommand=function(self)saved.frame=self end,
++            Def.Sprite{Texture='one.png',InitCommand=function(self)saved.sprite=self end},
++            Def.BitmapText{Font='Common Normal',Text='original',InitCommand=function(self)saved.text=self end},
++            Def.ActorFrameTexture{Name='touch-aft',Width=4,Height=4,InitCommand=function(self)saved.aft=self end},
++            Def.ActorMultiVertex{Texture='one.png',InitCommand=function(self)saved.mesh=self end}}
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "touched setter families",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    test_support::legacy_discover_song_startup_commands(&pair.native, &native, false).unwrap();
++    pair.rust
++        .discover_song_startup_commands(pair.scene, &rust)
++        .unwrap();
++    let frame = [
++        "x(1)",
++        "y(2)",
++        "z(3)",
++        "aux(4)",
++        "zoom(2)",
++        "rotationx(5)",
++        "rotationy(6)",
++        "rotationz(7)",
++        "skewx(.1)",
++        "skewy(.2)",
++        "cropleft(.1)",
++        "cropright(.2)",
++        "croptop(.3)",
++        "cropbottom(.4)",
++        "fadeleft(.1)",
++        "faderight(.2)",
++        "fadetop(.3)",
++        "fadebottom(.4)",
++        "diffuse(.2,.3,.4,.5)",
++        "diffuseupperleft(1,0,0,1)",
++        "glow(.5,.4,.3,.2)",
++        "heading(15)",
++        "visible(false)",
++        "hibernate(.1)",
++        "halign(.2)",
++        "valign(.7)",
++        "horizalign('left')",
++        "basezoom(2)",
++        "basezoomx(3)",
++        "basezoomy(4)",
++        "basezoomz(5)",
++        "basealpha(.3)",
++        "baserotationz(8)",
++        "shadowlength(2)",
++        "shadowcolor(.1,.2,.3,.4)",
++        "setsize(10,20)",
++        "vibrate()",
++        "rainbow()",
++        "glowshift()",
++        "effectperiod(2)",
++        "effecttiming(1,2,3,4,5)",
++        "effectmagnitude(1,2,3)",
++        "effectcolor1(.1,.2,.3,.4)",
++        "effectcolor2(.4,.3,.2,.1)",
++        "effectoffset(.2)",
++        "effectclock('timer')",
++        "cullmode('back')",
++        "zbias(.1)",
++        "draworder(3)",
++        "SetDrawByZPosition(true)",
++        "fov(60)",
++        "fov(-1)",
++        "vanishpoint(10,20)",
++        "blend('add')",
++        "ztest(true)",
++        "ztestmode('writeonfail')",
++        "zwrite(true)",
++        "SetTextureFiltering(false)",
++        "MaskSource()",
++        "MaskDest()",
++        "diffusealpha(.4)",
++        "xy(10,20)",
++        "addx(2)",
++        "SetWidth(12)",
++        "SetHeight(13)",
++        "align(.2,.3)",
++        "vertalign('top')",
++        "Center()",
++        "FullScreen()",
++        "zoomto(10,20)",
++        "stretchto(0,0,10,20)",
++        "scaletofit(0,0,10,20)",
++        "scaletocover(0,0,10,20)",
++        "setsize(0,0):scaletofit(0,0,10,20)",
++        "setsize(0,0):scaletocover(0,0,10,20)",
++    ];
++    let sprite = [
++        "SetTexture(nil)",
++        "setstate(0)",
++        "animate(false)",
++        "loop(false)",
++        "rate(2)",
++        "SetAllStateDelays(.125)",
++        "texturewrapping(true)",
++        "texturetranslate(.25,.5)",
++        "customtexturerect(0,.1,.8,.9)",
++        "texcoordvelocity(1,2)",
++        "play()",
++        "pause()",
++        "Load('one.png')",
++        "SetStateProperties({{Frame=0,Delay=.2},{Frame=1,Delay=.3}})",
++        "SetSecondsIntoAnimation(.2)",
++        "stretchtexcoords(.1,.2)",
++        "CropTo(4,4)",
++        "scaletoclipped(5,6)",
++    ];
++    let text = [
++        "uppercase(true)",
++        "rainbowscroll(true)",
++        "jitter(true)",
++        "distort(.2)",
++        "textglowmode('TextGlowMode_Inner')",
++        "set_mult_attrs_with_diffuse(true)",
++        "vertspacing(3)",
++        "wrapwidthpixels(120)",
++        "maxwidth(80)",
++        "maxheight(40)",
++        "max_dimension_use_zoom(true)",
++    ];
++    let aft = ["EnablePreserveTexture(true)", "Create()"];
++    for (actor, setters) in [
++        ("frame", frame.as_slice()),
++        ("sprite", sprite.as_slice()),
++        ("text", text.as_slice()),
++        ("aft", aft.as_slice()),
++        (
++            "mesh",
++            [
++                "LoadTexture(nil)",
++                "LoadTexture('one.png')",
++                "SetTexture(nil)",
++            ]
++            .as_slice(),
++        ),
++    ] {
++        for setter in setters {
++            for prefix in ["", "sleep(.125):linear(.25):"] {
++                eprintln!("touched setter {actor}:{prefix}{setter}");
++                pair.script(&format!("indexed_probe=function()saved.{actor}:{prefix}{setter};log(#__songlua_capture_scope_actors)end"));
++                compare_touched_actor_capture(
++                    &mut pair,
++                    &[
++                        (0, "frame"),
++                        (1, "sprite"),
++                        (2, "text"),
++                        (3, "aft"),
++                        (4, "mesh"),
++                    ],
++                    None,
++                    None,
++                    false,
++                    true,
++                )
++                .unwrap();
++            }
++        }
++    }
++}
++
++#[test]
++fn touched_actor_capture_restores_wrapper_membership_and_detached_wrapper_state() {
++    let (_dir, mut pair) =
++        command_scope_pair(r#"return Def.ActorFrame{InitCommand=function(self)saved.a=self end}"#);
++    pair.script(
++        "indexed_probe=function()probe_wrapper=saved.a:AddWrapperState():x(42);collectgarbage()end",
++    );
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, None, false, true).unwrap();
++    pair.script("assert(saved.a:GetNumWrapperStates()==0 and probe_wrapper:GetX()==0)");
++}
++
++#[test]
++fn touched_actor_capture_instruction_limits_restore_state_clock_and_allow_later_capture() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"return Def.Quad{Name='touch-limit',InitCommand=function(self)saved.a=self;self:x(3)end}"#,
++    );
++    let before = capture_metadata(&pair, &["touch-limit"]);
++    pair.script("indexed_probe=function()saved.a:x(99);while true do end end");
++    let (_, actor) = saved_pair(&mut pair, "a");
++    let f = pair.rust.vm_mut().get_global(b"indexed_probe").unwrap();
++    let clock = pair.rust.values().unwrap();
++    pair.rust.vm_mut().set_instruction_limit(Some(50_000));
++    let error = pair
++        .rust
++        .capture_song_touched_actor_function(&[(0, Value::Table(actor))], f, None, Some(7.))
++        .unwrap_err();
++    pair.rust.vm_mut().set_instruction_limit(None);
++    assert!(error.contains("limit"));
++    assert_eq!(pair.rust.values().unwrap(), clock);
++    assert_eq!(capture_metadata(&pair, &["touch-limit"]), before);
++    pair.script(
++        "assert(__songlua_capture_scope_actors==nil);indexed_probe=function()saved.a:x(22)end",
++    );
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, None, false, true).unwrap();
++}
++
++#[test]
++fn touched_actor_capture_roots_previous_globals_and_first_return_through_gc_then_releases() {
++    let (_dir, mut pair) = command_scope_pair(
++        r#"return Def.BitmapText{Font='Common Normal',Text='original',InitCommand=function(self)saved.a=self end}"#,
++    );
++    pair.script(r#"
++        probe_weak=setmetatable({}, {__mode='v'})
++        do local old={marker='previous'};probe_weak[3]=old;__songlua_capture_scope_actors=old end
++        local a=saved.a;local mt=getmetatable(a);local set=a.settext
++        setmetatable(a,{__index=mt.__index,__newindex=function(t,k,v)
++            if k=='Text' then collectgarbage();collectgarbage();assert(probe_weak[1] and probe_weak[1].marker=='first');assert(probe_weak[2]==nil);log('retained',v)end
++            rawset(t,k,v)
++        end});rawset(a,'settext',set)
++        indexed_probe=function()
++            collectgarbage();assert(probe_weak[3].marker=='previous')
++            a:x(12):settext('temporary');local first={marker='first'};local extra={marker='extra'}
++            probe_weak[1]=first;probe_weak[2]=extra;return first,extra
++        end
++    "#);
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, Some(8.), false, true).unwrap();
++    pair.script("assert(__songlua_capture_scope_actors==probe_weak[3]);__songlua_capture_scope_actors=nil;collectgarbage();collectgarbage();assert(probe_weak[1]==nil and probe_weak[3]==nil);assert(saved.a:GetText()=='original')");
++}
++
++#[test]
++fn touched_actor_capture_preserves_structural_sort_and_following_updates() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{InitCommand=function(self)saved.parent=self end,
++            Def.ActorFrame{InitCommand=function(self)saved.a=self end,OnCommand=function(self)self:SetUpdateFunction(function()log('a')end)end},
++            Def.ActorFrame{InitCommand=function(self)saved.b=self end,OnCommand=function(self)self:SetUpdateFunction(function()log('b')end)end}}
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "touched structural ordering",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    test_support::legacy_discover_song_startup_commands(&pair.native, &native, false).unwrap();
++    pair.rust
++        .discover_song_startup_commands(pair.scene, &rust)
++        .unwrap();
++    deadsync_song_lua::run_actor_update_functions_with_delta(
++        &pair.native,
++        &mlua::Value::Table(native.root.clone()),
++        0.1,
++    )
++    .unwrap();
++    pair.rust.advance_actor_scene(pair.scene, 0.1).unwrap();
++    pair.compare();
++    pair.script(
++        "events={};saved.b:draworder(-1);indexed_probe=function()saved.parent:SortByDrawOrder()end",
++    );
++    compare_touched_actor_capture(&mut pair, &[(0, "parent")], None, None, false, false).unwrap();
++    deadsync_song_lua::run_actor_update_functions_with_delta(
++        &pair.native,
++        &mlua::Value::Table(native.root.clone()),
++        0.1,
++    )
++    .unwrap();
++    pair.rust.advance_actor_scene(pair.scene, 0.1).unwrap();
++    // This pre-replay native path rebuilds traversal after the structural sort.
++    assert_eq!(pair.compare(), "b|a");
++}
++
++#[test]
++fn touched_actor_capture_preserves_preexisting_tween_queue_steps() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{Name='capture-queued',InitCommand=function(self)saved.a=self;self:x(3)end,
++            OnCommand=function(self)self:linear(1):x(40)end}
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "indexed actor queue state",
++    ));
++    pair.activate(&[&path]);
++    let (native, actor) = saved_pair(&mut pair, "a");
++    let before = test_support::legacy_actor_command_capture(&pair.native, &native).unwrap();
++    assert!(!before.steps.is_empty());
++    assert_eq!(
++        pair.rust
++            .actor_command_capture(Value::Table(actor))
++            .unwrap()
++            .steps,
++        before.steps
++    );
++    pair.script("indexed_probe=function()saved.a:x(21)end");
++    compare_touched_actor_capture(&mut pair, &[(0, "a")], None, None, false, true).unwrap();
++    let after = test_support::legacy_actor_command_capture(&pair.native, &native).unwrap();
++    assert_eq!(after.steps, before.steps);
++    assert_eq!(
++        pair.rust
++            .actor_command_capture(Value::Table(actor))
++            .unwrap()
++            .steps,
++        after.steps
++    );
++}
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/render.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/render.rs
+@@ -1,5 +1,6 @@
+ //! Song actor render bindings. Tween destinations and immediate render settings
+ //! stay separate so queued commands cannot delay native immediate properties.
++use super::action_capture;
+ use super::{
+     Shared, arg, capture, children, float_scalar, helper, song_immediate, song_media,
+     song_properties, song_replay,
+@@ -94,6 +95,7 @@
+     let value = call.raw_table_get(actor, key)?;
+     if value != Value::Nil {
+         let number = super::sprites::number(call, value)? as f32;
++        action_capture::prepare(call, store, actor)?;
+         scalar(call, store, actor, "fov", number);
+     }
+     Ok(())
+@@ -229,6 +231,7 @@
+     target: Target,
+     enabled: bool,
+ ) -> Result<(), Error> {
++    action_capture::prepare(call, store, actor)?;
+     {
+         let mut store = store.lock().unwrap();
+         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+@@ -256,6 +259,7 @@
+     if name == "align" {
+         for (index, vertical) in [(1, false), (2, true)] {
+             if let Some(value) = alignment(call, arg(call, index), vertical) {
++                action_capture::prepare(call, store, actor)?;
+                 let mut delta = crate::SongLuaOverlayStateDelta::default();
+                 {
+                     let mut guard = store.lock().unwrap();
+@@ -319,6 +323,7 @@
+         || corner_mask(name).is_some()
+     {
+         if let Some(mut color) = color(call)? {
++            action_capture::prepare(call, store, actor)?;
+             let shared = store;
+             let id = actor;
+             let mut store = store.lock().unwrap();
+@@ -372,6 +377,9 @@
+         let text_align = (name == "horizalign")
+             .then(|| text(call, value).and_then(crate::parse_overlay_text_align))
+             .flatten();
++        if align.is_some() || text_align.is_some() {
++            action_capture::prepare(call, store, actor)?;
++        }
+         let shared = store;
+         let mut guard = store.lock().unwrap();
+         let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+@@ -418,6 +426,7 @@
+         } else {
+             cull_mode(call)?
+         };
++        action_capture::prepare(call, store, actor)?;
+         store
+             .lock()
+             .unwrap()
+@@ -435,6 +444,7 @@
+             crate::SongLuaOverlayUpdateValue::CullMode(mode),
+         );
+     } else if matches!(name, "MaskSource" | "MaskDest") {
++        action_capture::prepare(call, store, actor)?;
+         let key = if name == "MaskSource" {
+             "mask_source"
+         } else {
+@@ -484,6 +494,7 @@
+             .arguments()
+             .get(1)
+             .is_none_or(|v| !matches!(v, Value::Nil | Value::Boolean(false)));
++        action_capture::prepare(call, store, actor)?;
+         let mut guard = store.lock().unwrap();
+         let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+         if name == "SetTextureFiltering" {
+@@ -505,6 +516,7 @@
+         );
+     } else if name == "blend" {
+         if let Some(blend) = text(call, value).and_then(crate::parse_overlay_blend_mode) {
++            action_capture::prepare(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -543,6 +555,7 @@
+         ) || (name == "diffusealpha"
+             && matches!(value, Value::Number(v) if v.is_infinite()));
+         if let Some(number) = float_scalar(call, value, nonfinite) {
++            action_capture::prepare(call, store, actor)?;
+             scalar(call, store, actor, name, number);
+             if name == "diffusealpha" {
+                 song_replay::sync_getters(call, store, actor)?;
+@@ -706,6 +719,7 @@
+         // an explicit center; invalid dimensions must still report an error.
+         center[index] = value.unwrap_or(screen_size(call)?[index] * 0.5);
+     }
++    action_capture::prepare(call, store, actor)?;
+     let mut guard = store.lock().unwrap();
+     let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
+     if name != "CenterY" {
+@@ -732,6 +746,21 @@
+     let bitmap = store.lock().unwrap().actors[&actor].state.class == "BitmapText";
+     let text_height =
+         bitmap && name == "zoomtoheight" && !super::text::content(call, actor)?.is_empty();
++    let scale_plan = if matches!(name, "scaletofit" | "scaletocover") {
++        let guard = store.lock().unwrap();
++        let instance = &guard.actors[&actor];
++        let plan = crate::scale_to_rect_plan(
++            values,
++            instance.state.size.map(f32::abs),
++            [instance.state.render.halign, instance.state.render.valign],
++            name == "scaletocover",
++        );
++        let Some(plan) = plan else { return Ok(()) };
++        Some(plan)
++    } else {
++        None
++    };
++    action_capture::prepare(call, store, actor)?;
+     let id = actor;
+     let mut guard = store.lock().unwrap();
+     let actor = guard.actors.get_mut(&id).unwrap();
+@@ -763,7 +792,6 @@
+         );
+         return Ok(());
+     }
+-    let align = [render.halign, render.valign];
+     let pose = actor.destination_mut();
+     match name {
+         "zoomtowidth" => pose.zoom_x = values[0] / width,
+@@ -781,34 +809,39 @@
+             pose.zoom_y = h / height;
+         }
+         "scaletofit" | "scaletocover" => {
+-            if let Some(plan) =
+-                crate::scale_to_rect_plan(values, [width, height], align, name == "scaletocover")
+-            {
+-                scaled = true;
+-                pose.x = plan.pos[0];
+-                pose.y = plan.pos[1];
+-                pose.zoom = plan.zoom;
+-                pose.zoom_x = plan.zoom;
+-                pose.zoom_y = plan.zoom;
+-                pose.zoom_z = plan.zoom;
+-                if plan.flip_x {
+-                    pose.rot_y_deg = 180.0;
+-                }
+-                if plan.flip_y {
+-                    pose.rot_x_deg = 180.0;
+-                }
+-                if plan.flip_x {
+-                    actor.state.rotation[1] = 180.0;
+-                }
+-                if plan.flip_y {
+-                    actor.state.rotation[0] = 180.0;
+-                }
++            let plan = scale_plan.unwrap();
++            scaled = true;
++            pose.x = plan.pos[0];
++            pose.y = plan.pos[1];
++            pose.zoom = plan.zoom;
++            pose.zoom_x = plan.zoom;
++            pose.zoom_y = plan.zoom;
++            pose.zoom_z = plan.zoom;
++            if plan.flip_x {
++                pose.rot_y_deg = 180.0;
++            }
++            if plan.flip_y {
++                pose.rot_x_deg = 180.0;
++            }
++            if plan.flip_x {
++                actor.state.rotation[1] = 180.0;
++            }
++            if plan.flip_y {
++                actor.state.rotation[0] = 180.0;
+             }
+         }
+         _ => unreachable!(),
+     }
+     drop(guard);
+     capture::property(call, store, id, name);
++    if let Some(plan) = scale_plan {
++        if plan.flip_x {
++            capture::property(call, store, id, "rotationy");
++        }
++        if plan.flip_y {
++            capture::property(call, store, id, "rotationx");
++        }
++    }
+     if scaled {
+         super::text::pre_zoom(call, store, id, true, true)?;
+     }
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/effects.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/effects.rs
+@@ -254,6 +254,7 @@
+         }
+         "effectcolor1" | "effectcolor2" => {
+             let color = render::color(call)?.unwrap_or([1.0; 4]);
++            super::action_capture::prepare(call, store, actor)?;
+             let mut store = store.lock().unwrap();
+             let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+             if name == "effectcolor1" {
+@@ -266,6 +267,7 @@
+         }
+         "effectperiod" | "effectoffset" => {
+             if let Some(value) = float_scalar(call, value, false) {
++                super::action_capture::prepare(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 if name == "effectperiod" {
+@@ -283,6 +285,7 @@
+         "effectmagnitude" => {
+             let magnitude =
+                 [1, 2, 3].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
++            super::action_capture::prepare(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -307,6 +310,7 @@
+                 .max(0.0);
+             let total = timing.iter().sum::<f32>();
+             if total > 0.0 {
++                super::action_capture::prepare(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 render.effect_timing = Some(timing);
+@@ -316,8 +320,7 @@
+         }
+         "effect_hold_at_full" => {
+             let hold = number(call, value)? as f32;
+-            let mut store = store.lock().unwrap();
+-            let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
++            let render = store.lock().unwrap().actors[&actor].state.render;
+             let period = render.effect_period;
+             let mut timing =
+                 render
+@@ -328,6 +331,9 @@
+             if hold < 0.0 || total <= 0.0 {
+                 return Err(call.error(b"effect timings must be nonnegative and not all zero"));
+             }
++            super::action_capture::prepare(call, store, actor)?;
++            let mut guard = store.lock().unwrap();
++            let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             render.effect_timing = Some(timing);
+             render.effect_period = total;
+             fields.extend([Target::EffectTiming, Target::EffectPeriod]);
+@@ -336,11 +342,14 @@
+             if let Some(raw) = render::text(call, value)
+                 && let Some(clock) = crate::parse_overlay_effect_clock(raw)
+             {
++                let no_offset = raw.eq_ignore_ascii_case("beatnooffset");
++                let timer = raw.eq_ignore_ascii_case("timer");
++                super::action_capture::prepare(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 render.effect_clock = clock;
+-                render.effect_no_offset = raw.eq_ignore_ascii_case("beatnooffset");
+-                render.effect_timer = raw.eq_ignore_ascii_case("timer");
++                render.effect_no_offset = no_offset;
++                render.effect_timer = timer;
+                 fields.extend([
+                     Target::EffectClock,
+                     Target::EffectNoOffset,
+@@ -348,7 +357,10 @@
+                 ]);
+             }
+         }
+-        _ => fields = select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name),
++        _ => {
++            super::action_capture::prepare(call, store, actor)?;
++            fields = select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name);
++        }
+     }
+     if !fields.is_empty() {
+         let state = store.lock().unwrap().actors[&actor].state.render;
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/text.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/text.rs
+@@ -1,4 +1,5 @@
+ //! BitmapText bindings and immutable renderer payloads over the Rust host API.
++use super::action_capture;
+ use super::{
+     Shared, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, song_media,
+     sprites, table,
+@@ -351,6 +352,7 @@
+     key: &str,
+     value: bool,
+ ) -> Result<(), Error> {
++    action_capture::prepare(call, store, actor)?;
+     {
+         let mut guard = store.lock().unwrap();
+         let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+@@ -477,6 +479,7 @@
+                     .unwrap_or(0.)
+                     .max(0.)
+             };
++            action_capture::prepare(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -502,6 +505,7 @@
+                     n as i32
+                 };
+                 if name == "vertspacing" || n >= 0 {
++                    action_capture::prepare(call, store, actor)?;
+                     let key = if name == "vertspacing" {
+                         "vert_spacing"
+                     } else {
+@@ -529,6 +533,7 @@
+         "maxwidth" | "maxheight" => {
+             if let Some(n) = float_scalar(call, arg(call, 1), false) {
+                 let width = name == "maxwidth";
++                action_capture::prepare(call, store, actor)?;
+                 {
+                     let mut guard = store.lock().unwrap();
+                     let s = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+@@ -581,6 +586,7 @@
+             if let Some(mode) =
+                 render::text(call, arg(call, 1)).and_then(crate::parse_overlay_text_glow_mode)
+             {
++                action_capture::prepare(call, store, actor)?;
+                 store
+                     .lock()
+                     .unwrap()
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
+@@ -278,6 +278,16 @@
+     target: Target,
+     value: UpdateValue,
+ ) {
++    capture::retain_render_update(store, id, target, &value, true);
++    record_frame(call, store, id, target, value);
++}
++fn record_frame(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    target: Target,
++    value: UpdateValue,
++) {
+     if context(&store.lock().unwrap(), id).is_none() {
+         return;
+     }
+@@ -346,7 +356,7 @@
+     crate::apply_overlay_delta(&mut state, delta);
+     for &target in TARGETS {
+         if delta.has_update_target(target) {
+-            record(
++            record_frame(
+                 call,
+                 store,
+                 id,
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/song_properties.rs
+@@ -22,6 +22,7 @@
+     target: Target,
+     value: Update,
+ ) {
++    capture::retain_render_update(store, id, target, &value, false);
+     let _ = record_inner(call, store, id, target, value);
+ }
+ 
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
+@@ -402,6 +402,9 @@
+     index: u32,
+     clear_rect: bool,
+ ) -> Result<(), Error> {
++    if clear_rect {
++        action_capture::prepare(call, store, actor)?;
++    }
+     set(
+         call,
+         actor,
+@@ -440,6 +443,17 @@
+             },
+             true,
+         );
++        // Native SetState marks the current block when it clears its rectangle,
++        // including a timed block with no other captured delta fields.
++        let mut guard = store.lock().unwrap();
++        let queued = guard.capture_scope.is_some();
++        if let Some(capture) = guard
++            .actors
++            .get_mut(&actor)
++            .and_then(|a| a.capture.as_mut())
++        {
++            capture.mark_current_changed(queued);
++        }
+     }
+     Ok(())
+ }
+@@ -449,6 +463,7 @@
+     actor: TableId,
+     rect: [f32; 4],
+ ) -> Result<(), Error> {
++    action_capture::prepare(call, store, actor)?;
+     state(
+         call,
+         store,
+@@ -649,6 +664,7 @@
+     value: Value,
+     preserve: bool,
+ ) -> Result<(), Error> {
++    action_capture::prepare(call, store, actor)?;
+     let previous = assets::texture_path(call, actor)?;
+     if preserve {
+         let key = call.try_intern(b"__songlua_state_sprite_frame_sheet")?;
+@@ -764,6 +780,7 @@
+     }
+     if name == "loop" {
+         let value = boolish(call, value).unwrap_or(true);
++        action_capture::prepare(call, store, actor)?;
+         set(
+             call,
+             actor,
+@@ -781,6 +798,7 @@
+             .sprite_loop = value;
+         song_media::record(call, store, actor, "sprite_loop");
+     } else if let Some(value) = float_scalar(call, value, false) {
++        action_capture::prepare(call, store, actor)?;
+         set(
+             call,
+             actor,
+@@ -847,6 +865,7 @@
+         }
+         "animate" | "texturewrapping" => {
+             let enabled = boolish(call, value).unwrap_or(true);
++            action_capture::prepare(call, store, actor)?;
+             let mut guard = store.lock().unwrap();
+             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "animate" {
+@@ -887,6 +906,7 @@
+         "SetAllStateDelays" => {
+             if let Some(delay) = float_scalar(call, value, false) {
+                 let delay = delay.max(0.0);
++                action_capture::prepare(call, store, actor)?;
+                 set(
+                     call,
+                     actor,
+@@ -964,6 +984,7 @@
+                     Value::Number(length as f64),
+                 )?;
+                 if let Some(delay) = first_delay {
++                    action_capture::prepare(call, store, actor)?;
+                     set(
+                         call,
+                         actor,
+@@ -1011,6 +1032,7 @@
+         }
+         "texturetranslate" | "texcoordvelocity" => {
+             let value = [1, 2].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
++            action_capture::prepare(call, store, actor)?;
+             let mut guard = store.lock().unwrap();
+             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "texturetranslate" {
+@@ -1036,6 +1058,7 @@
+             };
+             let target = [w, h];
+             if name == "scaletoclipped" {
++                action_capture::prepare(call, store, actor)?;
+                 size(store, actor, target);
+                 capture::property(call, store, actor, "size");
+             } else if target.iter().all(|n| n.is_finite() && *n > 0.0) {
+@@ -1046,6 +1069,7 @@
+                 if let Some(source) = source
+                     && let Some(crop) = crate::crop_texture_rect(source, target)
+                 {
++                    action_capture::prepare(call, store, actor)?;
+                     size(store, actor, target);
+                     capture::property(call, store, actor, "size");
+                     rect(call, store, actor, crop)?;
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs
+@@ -137,6 +137,7 @@
+     created: bool,
+     value: bool,
+ ) -> Result<(), Error> {
++    action_capture::prepare(call, store, actor)?;
+     let key = if created {
+         "__songlua_state_aft_created"
+     } else {
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/wrappers.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/wrappers.rs
+@@ -81,6 +81,7 @@
+             call.push(value)
+         }
+         "AddWrapperState" => {
++            action_capture::prepare(call, store, actor)?;
+             let scene = store.lock().unwrap().actors[&actor].scene;
+             let attrs = call.try_new_table()?;
+             let key = call.try_intern(b"Class")?;
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/sound.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/sound.rs
+@@ -103,6 +103,7 @@
+         if !matches!(name, "play" | "pause") {
+             return call.push(Value::Table(actor));
+         }
++        action_capture::prepare(call, store, actor)?;
+         store
+             .lock()
+             .unwrap()
+--- a/crates/deadsync-song-lua/src/rust_engine/actors/meshes.rs
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/meshes.rs
+@@ -395,6 +395,7 @@
+             }
+         }
+         "LoadTexture" => {
++            super::action_capture::prepare(call, store, actor)?;
+             if value == Value::Nil {
+                 sprites::set_texture(call, store, actor, value, true)?;
+                 let key = call.try_intern(b"__songlua_default_texture")?;
+--- /dev/null
++++ b/crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs
+@@ -0,0 +1,275 @@
++//! Lazy actor state around the existing compiler touched-function probes.
++use super::super::{SongActorFunctionBlocks, random::RandomState};
++use super::*;
++
++const KEYS: [&str; 3] = [
++    crate::SONG_LUA_CAPTURE_ACTORS_KEY,
++    crate::SONG_LUA_CAPTURE_ACTOR_SET_KEY,
++    crate::SONG_LUA_CAPTURE_SNAPSHOTS_KEY,
++];
++pub(super) struct State {
++    retained: TableId,
++    actors: TableId,
++    actor_set: TableId,
++    snapshots: TableId,
++    order: Vec<TableId>,
++    seen: HashSet<TableId>,
++    saved: Vec<(TableId, TableId, Option<function_capture::Saved>)>,
++}
++#[derive(Default)]
++struct Output {
++    previous: Option<State>,
++    current: Option<State>,
++    activated: bool,
++    deactivated: bool,
++    restored: bool,
++    raw: bool,
++    blocks: SongActorFunctionBlocks,
++}
++#[derive(Clone)]
++struct Run {
++    store: Shared,
++    selected: Vec<(usize, TableId)>,
++    output: Arc<Mutex<Output>>,
++}
++impl Actors {
++    pub(in crate::rust_engine) fn capture_touched_actor_function(
++        &self,
++        vm: &mut Vm,
++        actors: Vec<(usize, TableId)>,
++        function: Value,
++        arg: Option<f32>,
++        random: &RandomState,
++    ) -> (Result<SongActorFunctionBlocks, Error>, bool, Option<Root>) {
++        let output = Arc::new(Mutex::new(Output::default()));
++        let mut returned = None;
++        let result = (|| {
++            let retained = vm.try_new_table()?;
++            let pin = vm.pin(Value::Table(retained))?;
++            let result = (|| {
++                let captures = [
++                    Value::Table(self.registry),
++                    Value::Table(self.helpers),
++                    Value::Table(retained),
++                ]
++                .into_iter()
++                .chain(actors.iter().map(|(_, a)| Value::Table(*a)))
++                .collect::<Vec<_>>();
++                let data = Run {
++                    store: self.store.clone(),
++                    selected: actors,
++                    output: output.clone(),
++                };
++                // Allocate cleanup callbacks before activating the probe. Their
++                // allocation must not run GC between freezing touched actors and
++                // restoring the outer scope's command locals/globals.
++                let start = vm.new_host_function_with_data(begin, &captures, data.clone())?;
++                vm.raw_table_set(retained, Value::Number(11.), start)?;
++                let inactive =
++                    vm.new_host_function_with_data(deactivate, &captures, data.clone())?;
++                vm.raw_table_set(retained, Value::Number(12.), inactive)?;
++                let finish = vm.new_host_function_with_data(finish, &captures, data)?;
++                vm.raw_table_set(retained, Value::Number(13.), finish)?;
++                vm.call(start, &[])?;
++                let previous_locals = self.begin_command_locals();
++                let random = random.preserve();
++                let args = arg
++                    .map(|n| Value::Number(f64::from(n)))
++                    .into_iter()
++                    .collect::<Vec<_>>();
++                let result = vm
++                    .call(function, &args)
++                    .map(|v| v.first().copied().unwrap_or(Value::Nil));
++                let result = result.and_then(|value| vm.pin(value).map(|pin| returned = Some(pin)));
++                {
++                    // Native reads touched actor identities and snapshots before
++                    // restoring command locals. Later cleanup activity belongs
++                    // outside that frozen set of probe results.
++                    let mut guard = self.store.lock().unwrap();
++                    let state = guard.action_capture.as_mut().unwrap();
++                    let frozen = State {
++                        retained: state.retained,
++                        actors: state.actors,
++                        actor_set: state.actor_set,
++                        snapshots: state.snapshots,
++                        order: state.order.clone(),
++                        seen: state.seen.clone(),
++                        saved: std::mem::take(&mut state.saved),
++                    };
++                    let mut out = output.lock().unwrap();
++                    out.current = Some(frozen);
++                    out.raw = result
++                        .as_ref()
++                        .err()
++                        .is_some_and(|e| e.kind() != ErrorKind::Runtime);
++                }
++                let locals = self.restore_command_locals(vm, previous_locals);
++                let inactive = vm.call(inactive, &[]).map(|_| ());
++                drop(random);
++                locals?;
++                inactive?;
++                vm.call(finish, &[])?;
++                result?;
++                Ok(std::mem::take(&mut output.lock().unwrap().blocks))
++            })();
++            // VM allocation/entry failure must never leave a live Rust scope
++            // whose retained values are about to lose their temporary root.
++            {
++                let mut out = output.lock().unwrap();
++                if out.activated && !out.deactivated {
++                    self.store.lock().unwrap().action_capture = out.previous.take();
++                    out.deactivated = true;
++                }
++            }
++            vm.unpin(pin)?;
++            result
++        })();
++        let mut out = output.lock().unwrap();
++        let restored = out.restored;
++        out.current = None;
++        if result.is_err() {
++            out.blocks.clear();
++        }
++        (result, restored, returned)
++    }
++}
++fn begin(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let data = call.function_data::<Run>().unwrap().clone();
++    let globals = helper(call, 5)?;
++    let retained = table(call, call.captures()[2])?;
++    let mut tables = Vec::new();
++    for (i, key) in KEYS.iter().enumerate() {
++        let key = call.try_intern(key.as_bytes())?;
++        call.raw_table_set(retained, Value::Number((i + 7) as f64), key)?;
++        let old = call.table_get(globals, key)?;
++        call.raw_table_set(retained, Value::Number((i + 1) as f64), old)?;
++        let next = call.try_new_table()?;
++        call.raw_table_set(retained, Value::Number((i + 4) as f64), Value::Table(next))?;
++        tables.push((key, next));
++    }
++    for &(key, next) in &tables {
++        call.table_set(globals, key, Value::Table(next))?;
++    }
++    let state = State {
++        retained,
++        actors: tables[0].1,
++        actor_set: tables[1].1,
++        snapshots: tables[2].1,
++        order: Vec::new(),
++        seen: HashSet::new(),
++        saved: Vec::new(),
++    };
++    let previous = data.store.lock().unwrap().action_capture.replace(state);
++    let mut output = data.output.lock().unwrap();
++    output.previous = previous;
++    output.activated = true;
++    Ok(())
++}
++pub(super) fn prepare(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++) -> Result<(), Error> {
++    let tables = {
++        let mut guard = store.lock().unwrap();
++        let Some(state) = guard.action_capture.as_mut() else {
++            return Ok(());
++        };
++        if !state.seen.insert(actor) {
++            return Ok(());
++        }
++        (
++            state.actors,
++            state.actor_set,
++            state.snapshots,
++            state.retained,
++        )
++    };
++    call.raw_table_set(tables.1, Value::Table(actor), Value::Boolean(true))?;
++    let count = call.raw_table_len(tables.0)? + 1;
++    call.raw_table_set(tables.0, Value::Number(count as f64), Value::Table(actor))?;
++    store
++        .lock()
++        .unwrap()
++        .action_capture
++        .as_mut()
++        .unwrap()
++        .order
++        .push(actor);
++    let raw = state_snapshot::raw_copy(call, actor)?;
++    call.with_roots(&[Value::Table(raw)], |call| {
++        let row = call.try_new_table()?;
++        call.with_roots(&[Value::Table(row)], |call| {
++            call.raw_table_set(row, Value::Number(1.), Value::Table(actor))?;
++            call.raw_table_set(row, Value::Number(2.), Value::Table(raw))?;
++            let count = call.raw_table_len(tables.2)? + 1;
++            call.raw_table_set(tables.3, Value::Table(row), Value::Boolean(true))?;
++            call.raw_table_set(tables.2, Value::Number(count as f64), Value::Table(row))
++        })
++    })?;
++    let saved = function_capture::Saved::read(store, actor, raw);
++    store
++        .lock()
++        .unwrap()
++        .action_capture
++        .as_mut()
++        .unwrap()
++        .saved
++        .push((actor, raw, saved));
++    function_capture::reset(call, store, actor)
++}
++fn deactivate(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let data = call.function_data::<Run>().unwrap().clone();
++    {
++        let mut output = data.output.lock().unwrap();
++        let mut store = data.store.lock().unwrap();
++        store.action_capture = output.previous.take();
++        output.deactivated = true;
++    }
++    let retained = table(call, call.captures()[2])?;
++    let globals = helper(call, 5)?;
++    for (i, key) in KEYS.iter().enumerate() {
++        let old = call.raw_table_get(retained, Value::Number((i + 1) as f64))?;
++        let key = call.try_intern(key.as_bytes())?;
++        call.table_set(globals, key, old)?;
++    }
++    Ok(())
++}
++fn finish(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let data = call.function_data::<Run>().unwrap().clone();
++    let (state, restore_raw) = {
++        let mut out = data.output.lock().unwrap();
++        (out.current.take().unwrap(), out.raw)
++    };
++    let mut blocks = Vec::new();
++    for (index, actor) in &data.selected {
++        if state.seen.contains(actor)
++            && let Some(capture) = data
++                .store
++                .lock()
++                .unwrap()
++                .actors
++                .get_mut(actor)
++                .and_then(|a| a.capture.as_mut())
++        {
++            let captured = capture.snapshot().blocks;
++            if !captured.is_empty() {
++                blocks.push((*index, captured));
++            }
++        }
++    }
++    for actor in state.order {
++        function_capture::reset(call, &data.store, actor)?;
++    }
++    for (actor, raw, saved) in state.saved {
++        state_snapshot::restore_raw(call, actor, raw, restore_raw)?;
++        if let Some(saved) = saved {
++            saved.restore(&data.store);
++        }
++    }
++    lifecycle::invalidate_plans(call, &data.store)?;
++    let mut output = data.output.lock().unwrap();
++    output.blocks = blocks;
++    output.restored = true;
++    Ok(())
++}

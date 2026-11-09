@@ -1,0 +1,8 @@
+
+running 3 tests
+test json_integers_preserve_values_beyond_i32 ... ok
+test range_numbers_preserve_values_beyond_native_integer_range ... ok
+test runtime_numbers_preserve_values_beyond_native_integer_range ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

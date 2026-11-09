@@ -1,0 +1,10 @@
+{
+  "binary": "target\\rust-adapters\\debug\\deps\\rust_live_scene-36ecf767e307a22f.exe",
+  "binary_sha256": "068b74045ba48ce12037f6dccc0bb1783993c12fe23750bdf0e79f03fd2af863",
+  "source_snapshot": "production-effect-and-scope-v4-song-windows-debug/sources.json",
+  "exit_code": 101,
+  "seconds": 45.39689790015109,
+  "log_sha256": "0275edeb19c346b6c58ad5ef70ae5fa67d617b8f5699194f79aa17f82ac3ac6f",
+  "binary_unchanged": true,
+  "note": "Original v4 executable; source changed after that snapshot. Repeated existing assertions unchanged, for allocation-sensitive coverage-diagnostic order diagnosis only."
+}

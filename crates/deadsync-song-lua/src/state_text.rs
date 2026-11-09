@@ -1,13 +1,16 @@
 use std::ffi::c_int;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{FromLua, FromLuaMulti, Lua, LuaString, MultiValue, Value, ffi, state::RawLua};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// A validated string handle, with String's getter coercions and errors.
 pub(crate) enum StateText {
     Lua(LuaString),
     Coerced(String),
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl StateText {
     pub(crate) fn into_string(self, lua: &Lua) -> mlua::Result<LuaString> {
         match self {
@@ -17,6 +20,7 @@ impl StateText {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl FromLua for StateText {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
         // Preserve String's safe conversion contract, including its error names.
@@ -45,9 +49,11 @@ impl FromLua for StateText {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// String-only setter argument; invalid or absent input means the empty string.
 pub(crate) struct StateTextArgs(pub(crate) Option<LuaString>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl FromLuaMulti for StateTextArgs {
     fn from_lua_multi(mut values: MultiValue, _lua: &Lua) -> mlua::Result<Self> {
         let mut value = values.pop_front();
@@ -83,6 +89,7 @@ impl FromLuaMulti for StateTextArgs {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Caller must provide a live stack slot whose type is LUA_TSTRING.
 unsafe fn validate_stack_text(index: c_int, lua: &RawLua) -> Result<(), std::str::Utf8Error> {
     let mut len = 0;

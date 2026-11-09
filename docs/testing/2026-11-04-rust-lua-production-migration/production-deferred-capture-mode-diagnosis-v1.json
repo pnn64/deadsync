@@ -1,0 +1,30 @@
+{
+  "created_utc": "2026-11-08T14:25:50.735489+00:00",
+  "kind": "read-only source diagnosis; pending runtime verification",
+  "cause": [
+    "begin_song_replay calls begin_playback, which sets preparing=false and playback=true.",
+    "end_song_update_capture clears replay_frame/replay_clock/session.messages but does not restore preparation modes.",
+    "compiler.rs invokes capture_song_deferred_messages after compile_song_update_stage.",
+    "song_message_attempts calls capture_song_function_action_inner, whose actor_function_capture_ready guard requires preparing && !playback && !live. All deferred retries after chronological playback are therefore rejected before entering authored Lua.",
+    "Earlier player-nil attribution came from initial skipped capture diagnostics and does not establish the later retry error. Corrected here."
+  ],
+  "bounded_fix_plan": [
+    "Enter the existing preparation capture mode only around deferred compiler retries after chronological capture has ended. Restore both mode flags on all Result paths.",
+    "Keep the public pre-replay action-capture guard; do not enable probes inside an active frame or live scene.",
+    "Preserve actor/queue/shared-local snapshots through the existing touched-function capture; no new baking or language functionality.",
+    "Pause the preparation playback-broadcast sink around both existing indexed and touched probe boundaries, restoring it on success/error and preserving nested scopes. Keep live delivery unchanged."
+  ],
+  "verification": [
+    "Existing nine complete microfixture payload comparisons, especially deferred-effects/nested-start/queued-state.",
+    "Existing rust_song_activation command/action-scope tests and original root semantic tests remain enabled."
+  ],
+  "sources": {
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs": "c653f62934e5b90bfdbde8c44feac333d1dbec298232333d336f3a0cabc58d56",
+    "crates/deadsync-song-lua/src/rust_engine/actors/chronological.rs": "e755b37582b6878abca3415d426bd3cacad460670643ebf0e6271af6009c1796",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs": "189ba6d7e42decd01c2d3c555060370b29170f55324f108eb341b381a8c320a2",
+    "crates/deadsync-song-lua/src/rust_engine/song_action.rs": "3adbd9df7c46dac7edf5aef20c81873b689e9aa9f79435aaab0242082b157bd0",
+    "crates/deadsync-song-lua/src/rust_engine/song_message_retry.rs": "465663834ec4cc9f8296e754af67a404a93945321ed5ed58ec15d4ce58e98475",
+    "crates/deadsync-song-lua/src/rust_engine/song_updates.rs": "57d0a8eadb5e856026fd27304daa362e0955c0b6dd734557a233ad4e9766b6f2",
+    "crates/deadsync-song-lua/src/rust_engine/compiler.rs": "eaa6648738885f73977240f60db162108b7b49a1fea5b53db3e00ba97f7d3576"
+  }
+}

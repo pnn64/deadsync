@@ -1,0 +1,61 @@
+warning: patch `rfd v0.17.2 (C:\GitHub\deadsync\vendor\rfd-win7)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: profile package spec `sha2` in profile `dev` did not match any packages
+
+help: a package with a similar name exists: `slab`
+    Blocking waiting for file lock on build directory
+   Compiling deadlib-platform v0.1.0 (C:\GitHub\deadsync\crates\deadlib-platform)
+   Compiling deadsync-rules v0.1.0 (C:\GitHub\deadsync\crates\deadsync-rules)
+   Compiling deadsync-chart v0.1.0 (C:\GitHub\deadsync\crates\deadsync-chart)
+   Compiling deadlib-render-backend-wgpu v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-wgpu)
+   Compiling deadlib-render-backend-gl v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-gl)
+   Compiling deadlib-render-backend-vulkan v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-vulkan)
+   Compiling deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+   Compiling deadlib-audio-decode v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-decode)
+   Compiling deadsync-input v0.1.0 (C:\GitHub\deadsync\crates\deadsync-input)
+   Compiling deadsync-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-gameplay)
+   Compiling deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+   Compiling deadsync-score v0.1.0 (C:\GitHub\deadsync\crates\deadsync-score)
+   Compiling deadlib-present v0.1.0 (C:\GitHub\deadsync\crates\deadlib-present)
+   Compiling deadlib-video v0.1.0 (C:\GitHub\deadsync\crates\deadlib-video)
+   Compiling deadlib-audio-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-core)
+   Compiling deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+   Compiling deadlib-audio-backend-wasapi v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-backend-wasapi)
+   Compiling deadsync-audio-analysis v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-analysis)
+   Compiling deadsync-theme v0.1.0 (C:\GitHub\deadsync\crates\deadsync-theme)
+   Compiling deadsync-audio-replaygain v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-replaygain)
+   Compiling deadlib-audio v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio)
+   Compiling deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+   Compiling rustmaniax-sdk v2.1.1
+   Compiling deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+   Compiling deadsync-smx v0.1.0 (C:\GitHub\deadsync\crates\deadsync-smx)
+   Compiling deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+   Compiling deadsync-audio-stream v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-stream)
+   Compiling deadsync-lights v0.1.0 (C:\GitHub\deadsync\crates\deadsync-lights)
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+   Compiling deadsync-config v0.1.0 (C:\GitHub\deadsync\crates\deadsync-config)
+warning: unused import: `SongLuaMessageEvent`
+  --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+   Compiling production-sharkmode-control v0.1.0 (C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-sharkmode-diagnostic-v1)
+    Finished `dev` profile [unoptimized] target(s) in 13m 04s
+     Running `target\rust-adapters\debug\production-sharkmode-control.exe`
+NATIVE Ok(Object {"overlays": Number(16), "draw_frames": Number(241), "overlay_update_tracks": Number(5), "info": String("SongLuaCompileInfo { unsupported_perframes: 0, unsupported_function_eases: 0, unsupported_function_actions: 0, unsupported_perframe_captures: [], unsupported_function_ease_captures: [], unsupported_function_action_captures: [], skipped_message_command_captures: [] }")})
+RUST Err("failed to run actor init commands for 'C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-sharkmode-input-review-v1/inputs/song\\default.lua': line 69: [string \"C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-...\"]:69: attempt to call method 'scale_or_crop_background' (a nil value)")
+false

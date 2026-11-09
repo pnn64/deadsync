@@ -1,0 +1,20 @@
+
+running 15 tests
+test automatic_input_binding_matches_authored_lua_then_runs_without_its_vm ... ok
+test runtime_fallback::tests::retry_errors_remain_visible ... ok
+test runtime_fallback::tests::runtime_rejection_retries_with_loading_and_clock_handoff ... ok
+test runtime_fallback::tests::successful_compilation_keeps_the_requested_mode ... ok
+test runtime_fallback::tests::unrelated_errors_and_live_rejections_are_not_retried ... ok
+test screen_input::tests::additions_on_both_sides_of_current_callback_keep_native_identity_order ... ok
+test screen_input::tests::closed_callbacks_use_native_dispatch_and_debug_hooks_keep_lua_execution ... ok
+test screen_input::tests::compiled_registry_keeps_function_identity_rooted_until_removal ... ok
+test screen_input::tests::mixed_callbacks_see_mutated_events_and_removals_restore_native_eligibility ... ok
+test screen_input::tests::native_prefix_stopping_preserves_later_lua_action_order ... ok
+test screen_input::tests::nested_dispatch_removing_earlier_entries_repairs_outer_position ... ok
+test screen_input::tests::reentrant_dispatch_keeps_existing_pending_removal_protocol ... ok
+test screen_input::tests::screen_callbacks_defer_removals_share_event_and_use_lua_truthiness ... ok
+test screen_input::tests::screen_callbacks_receive_press_repeat_release_and_deduplicate_registration ... ok
+test unsupported_state_calls_coercions_and_event_mutation_keep_fallback ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

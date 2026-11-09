@@ -1,7 +1,9 @@
 //! Checked callback values with inline storage for short lists.
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{FromLua, FromLuaMulti, IntoLuaMulti, Lua, MultiValue, Value};
 use std::os::raw::c_int;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) use mlua::IgnoredArgs;
 
 /// Tuple decoding with MultiValue's original unwrapped stack-error policy.
@@ -9,8 +11,10 @@ pub(crate) use mlua::IgnoredArgs;
 /// input through the tuple's final MultiValue field.
 pub(crate) struct CheckedPrefix<T>(pub(crate) T);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) type NumericArgs = CheckedPrefix<(Value, Value, Value, MultiValue)>;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl<T: FromLuaMulti> FromLuaMulti for CheckedPrefix<T> {
     fn from_lua_multi(values: MultiValue, lua: &Lua) -> mlua::Result<Self> {
         T::from_lua_multi(values, lua).map(Self)
@@ -22,6 +26,7 @@ impl<T: FromLuaMulti> FromLuaMulti for CheckedPrefix<T> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) enum ForwardArgs {
     Empty,
     One(Value),
@@ -30,6 +35,7 @@ pub(crate) enum ForwardArgs {
     Many(MultiValue),
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl ForwardArgs {
     pub(crate) fn front(&self) -> Option<&Value> {
         match self {
@@ -42,6 +48,7 @@ impl ForwardArgs {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl FromLuaMulti for ForwardArgs {
     fn from_lua_multi(mut values: MultiValue, _: &Lua) -> mlua::Result<Self> {
         Ok(match values.len() {
@@ -72,6 +79,7 @@ impl FromLuaMulti for ForwardArgs {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl IntoLuaMulti for ForwardArgs {
     fn into_lua_multi(self, _: &Lua) -> mlua::Result<MultiValue> {
         Ok(match self {

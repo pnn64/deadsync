@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cargo",
+    "fmt",
+    "-p",
+    "deadsync-noteskin",
+    "-p",
+    "deadlib-lua",
+    "--check"
+  ],
+  "exit_code": 0,
+  "seconds": 3.401882299920544
+}

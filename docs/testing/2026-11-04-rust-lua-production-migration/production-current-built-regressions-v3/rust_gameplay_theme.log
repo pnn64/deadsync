@@ -1,0 +1,16 @@
+
+running 11 tests
+test bundled_combo_instances_keep_native_names_parents_textures_and_disabled_player ... ok
+test bundled_combo_visual_styles_and_truthy_hide_setting ... ok
+test bundled_sources_keep_native_chunk_names_and_ignore_replaced_lua_loaders ... ok
+test combo_init_order_environment_and_collection_match_the_production_loader ... ok
+test combo_without_theme_fonts_remains_an_invisible_leaf ... ok
+test failed_milestone_init_is_owned_by_the_screen_and_preserves_the_source_error ... ok
+test loaded_theme_scene_owns_callback_roots_until_release ... ok
+test loaded_transition_children_keep_original_sources_geometry_and_owner_state ... ok
+test loaded_transition_commands_retain_rate_dependent_timing_across_gc ... ok
+test retained_combo_commands_survive_gc_and_keep_their_capture_or_live_tweens ... ok
+test transition_load_writes_native_registry_without_authored_newindex_callbacks ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.14s
+

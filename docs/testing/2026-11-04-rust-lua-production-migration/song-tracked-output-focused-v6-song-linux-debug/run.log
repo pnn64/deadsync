@@ -1,0 +1,37 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 22s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 6 tests
+test tracked_output_manual_snapshot_keeps_raw_data_and_does_not_repeat_authored_getters ... 
+thread 'tracked_output_manual_snapshot_keeps_raw_data_and_does_not_repeat_authored_getters' (2735029) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:236:9:
+assertion `left == right` failed
+  left: "texture getter|texture getter|texture getter|texture getter|texture getter|texture getter|texture getter|texture getter"
+ right: "texture getter|texture getter|texture getter|texture getter|texture getter|texture getter|texture getter"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test tracked_output_pins_identities_through_retirement_and_rejects_foreign_or_released_roots ... ok
+test tracked_output_preserves_order_state_aliases_and_optional_layers ... ok
+test tracked_output_recreates_missing_children_and_retains_native_partial_errors ... ok
+test tracked_output_roots_transient_foregrounds_before_reentrant_global_reads ... ok
+test tracked_output_uses_manual_draw_snapshots_without_resurrecting_whole_players ... ok
+
+failures:
+
+failures:
+    tracked_output_manual_snapshot_keeps_raw_data_and_does_not_repeat_authored_getters
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 63 filtered out; finished in 6.96s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

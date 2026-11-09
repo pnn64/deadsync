@@ -1,0 +1,17 @@
+[
+  {
+    "source": "crates/deadsync-song-lua/src/rust_engine/actors/input_snapshot.rs",
+    "archive": "actor-input-snapshots-pre-lint-src_rust_engine_actors_input_snapshot.rs.txt",
+    "sha256": "cc570901f9ead2163a490c0f97a25f21f02d189660cfcb5fc9e7e6c4c46d27e2"
+  },
+  {
+    "source": "crates/deadsync-song-lua/src/rust_engine/actors/input_snapshot/tables.rs",
+    "archive": "actor-input-snapshots-pre-lint-src_rust_engine_actors_input_snapshot_tables.rs.txt",
+    "sha256": "ad4df84e392a5ddd41d96f393ea6d6378456ee3915764a8f0f6cb8176e5fc73f"
+  },
+  {
+    "source": "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle/snapshot.rs",
+    "archive": "actor-input-snapshots-pre-lint-src_rust_engine_actors_lifecycle_snapshot.rs.txt",
+    "sha256": "27650b32a0534722a92ebe9a3ad0a96ad7df74dd5000eae2704171cf351e10dd"
+  }
+]

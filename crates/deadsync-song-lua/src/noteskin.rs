@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
@@ -6,8 +7,10 @@ use crate::{
     song_lua_default_noteskin_name,
 };
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub type SongLuaActorFactory = fn(&Lua, &'static str) -> mlua::Result<Table>;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_noteskin_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -41,6 +44,7 @@ pub fn create_noteskin_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn noteskin_table_for_skin(
     lua: &Lua,
     resolver: SongLuaNoteskinResolver,
@@ -220,6 +224,7 @@ fn noteskin_table_for_skin(
     Ok(noteskin)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn song_lua_noteskin_metric_a(
     lua: &Lua,
     resolver: SongLuaNoteskinResolver,
@@ -236,6 +241,7 @@ fn song_lua_noteskin_metric_a(
     lua.load(source).eval()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn song_lua_noteskin_actor(
     lua: &Lua,
     resolver: SongLuaNoteskinResolver,
@@ -298,6 +304,7 @@ fn song_lua_noteskin_actor(
     Ok(actor)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn tag_song_lua_noteskin_actor(
     actor: &Table,
     skin: &str,

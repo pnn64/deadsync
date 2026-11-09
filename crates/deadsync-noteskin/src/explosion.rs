@@ -2206,7 +2206,9 @@ mod tests {
                 case["order"].as_i64().unwrap() as i32,
                 "{script}"
             );
-            assert!((animation.duration() - case["duration"].as_f64().unwrap() as f32).abs() < 1e-6);
+            assert!(
+                (animation.duration() - case["duration"].as_f64().unwrap() as f32).abs() < 1e-6
+            );
             for sample in case["samples"].as_array().unwrap() {
                 let state = animation.state_at(sample[0].as_f64().unwrap() as f32);
                 assert!(

@@ -1,0 +1,7 @@
+{
+  "shared_policy_matches_extracted_production": true,
+  "production_util_only_extraction_and_import": true,
+  "production_lib_only_module_declaration": true,
+  "fixture_sha256": "3abecf3dc407223405ae6a2fc8e430be50995f869155d8c429c4c3db97ff68e8",
+  "fixture_matches_frozen_baseline": true
+}

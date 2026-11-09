@@ -1,4 +1,8 @@
 //! Lexical capture limits while parsing, including unfinished reader input.
+use crate::{
+    Error, ErrorKind,
+    memory::fallible::{self, VecExt},
+};
 const NONE: u32 = u32::MAX;
 const MAX_UPVALUES: u8 = 60;
 
@@ -38,21 +42,21 @@ pub(super) struct Bindings {
     captures: Vec<Capture>,
     free: u32,
 }
-impl Default for Bindings {
-    fn default() -> Self {
-        Self {
+impl Bindings {
+    pub(super) fn try_new() -> Result<Self, Error> {
+        Ok(Self {
             names: Vec::new(),
             buckets: Vec::new(),
             locals: Vec::new(),
-            scopes: vec![Scope {
+            scopes: fallible::vec([Scope {
                 base: 0,
                 head: NONE,
                 count: 0,
                 line: 0,
-            }],
+            }])?,
             captures: Vec::new(),
             free: NONE,
-        }
+        })
     }
 }
 fn hash(bytes: &[u8]) -> u64 {
@@ -91,14 +95,14 @@ impl Bindings {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
     }
-    pub(super) fn intern(&mut self, input: &[u8], start: usize, end: usize) {
+    pub(super) fn intern(&mut self, input: &[u8], start: usize, end: usize) -> Result<(), Error> {
         let bytes = &input[start..end];
         let hash = hash(bytes);
         if self.lookup(input, bytes, hash).is_some() {
-            return;
+            return Ok(());
         }
         if (self.names.len() + 1) * 2 >= self.buckets.len() {
-            self.buckets = vec![0; (self.buckets.len() * 2).max(16)];
+            self.buckets = fallible::repeat(0, (self.buckets.len() * 2).max(16))?;
             for (index, name) in self.names.iter().enumerate() {
                 let mut slot = name.hash as usize & (self.buckets.len() - 1);
                 while self.buckets[slot] != 0 {
@@ -112,11 +116,12 @@ impl Bindings {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
         self.buckets[slot] = self.names.len() as u32 + 2;
-        self.names.push(Name {
+        self.names.try_push(Name {
             start,
             len: bytes.len(),
             hash,
-        });
+        })?;
+        Ok(())
     }
     pub(super) fn name(&self, input: &[u8], bytes: &[u8]) -> u32 {
         self.lookup(input, bytes, hash(bytes))
@@ -132,29 +137,38 @@ impl Bindings {
             }
         }
     }
-    pub(super) fn declare(&mut self, input: &[u8], bytes: &[u8]) {
-        self.locals.push(self.name(input, bytes));
+    pub(super) fn declare(&mut self, input: &[u8], bytes: &[u8]) -> Result<(), Error> {
+        self.locals.try_push(self.name(input, bytes))?;
+        Ok(())
     }
-    pub(super) fn hidden(&mut self, count: usize) {
-        self.locals.resize(self.locals.len() + count, NONE);
+    pub(super) fn hidden(&mut self, count: usize) -> Result<(), Error> {
+        self.locals.try_resize(self.locals.len() + count, NONE)?;
+        Ok(())
     }
     pub(super) fn truncate(&mut self, count: u16) {
         self.locals
             .truncate(self.scopes.last().unwrap().base + usize::from(count));
     }
-    pub(super) fn enter(&mut self, input: &[u8], line: u32, params: &[Box<[u8]>], vararg: bool) {
-        self.scopes.push(Scope {
+    pub(super) fn enter(
+        &mut self,
+        input: &[u8],
+        line: u32,
+        params: &[Box<[u8]>],
+        vararg: bool,
+    ) -> Result<(), Error> {
+        self.scopes.try_push(Scope {
             base: self.locals.len(),
             head: NONE,
             count: 0,
             line,
-        });
+        })?;
         for param in params {
-            self.declare(input, param);
+            self.declare(input, param)?;
         }
         if vararg {
-            self.locals.push(0);
+            self.locals.try_push(0)?;
         }
+        Ok(())
     }
     pub(super) fn leave(&mut self) {
         let scope = self.scopes.pop().expect("nested function");
@@ -181,7 +195,7 @@ impl Bindings {
     }
     /// Return the first overflowing function's definition line. Captures must
     /// propagate from the owning scope outwards, as for nested closures in 5.1.
-    pub(super) fn reference(&mut self, input: &[u8], bytes: &[u8]) -> Result<Reference, u32> {
+    pub(super) fn reference(&mut self, input: &[u8], bytes: &[u8]) -> Result<Reference, Error> {
         let name = self.name(input, bytes);
         let mut end = self.locals.len();
         let mut owner = None;
@@ -204,7 +218,11 @@ impl Bindings {
         }; // Global.
         for scope in owner + 1..self.scopes.len() {
             if self.scopes[scope].count == MAX_UPVALUES {
-                return Err(self.scopes[scope].line);
+                return Err(Error::new_static(
+                    ErrorKind::Limit,
+                    self.scopes[scope].line,
+                    "upvalue limit",
+                ));
             }
             let capture = Capture {
                 name,
@@ -212,7 +230,7 @@ impl Bindings {
             };
             let index = if self.free == NONE {
                 let index = self.captures.len() as u32;
-                self.captures.push(capture);
+                self.captures.try_push(capture)?;
                 index
             } else {
                 let index = self.free;

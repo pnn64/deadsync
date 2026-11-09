@@ -84,12 +84,10 @@ assert(status==0 and f()==42 and debug.getinfo(f,'S').source=='@'..path)
 
 #[test]
 fn binary_files_reopen_raw_and_initialize_imported_capture_cells() {
-    let reference = lua_reference::Lua::new();
-    let f: lua_reference::Function = reference
-        .load("local a=17;return function()return a,42 end")
-        .eval()
-        .unwrap();
-    let binary = f.dump(false);
+    let binary = reference_test::native_chunk(
+        "tests/native_file.rs::binary_files_reopen_raw_and_initialize_imported_capture_cells::chunk0",
+        &("local a=17;return function()return a,42 end"),
+    );
     for prefix in [b"".as_slice(), b"#!/lua\r\n"] {
         let file = Fixture::new(&[prefix, &binary].concat());
         let mut vm = Vm::new();
@@ -227,27 +225,29 @@ local ok,e=pcall(host,path);assert(not ok and e==marker)
 
 #[test]
 fn empty_path_errors_match_official_file_library_diagnostics() {
-    let reference = lua_reference::Lua::new();
-    let expected: lua_reference::LuaString = reference
-        .load("local f,e=loadfile('');assert(f==nil);return e")
-        .eval()
-        .unwrap();
+    let reason = if cfg!(windows) {
+        "Invalid argument"
+    } else {
+        "No such file or directory"
+    };
     let mut vm = Vm::new();
     install(&mut vm, loader);
     let values = run(&mut vm, b"local s,e=host('');assert(s==6);return e");
     let Value::String(id) = values[0] else {
         panic!("file error must be a string")
     };
-    assert_eq!(vm.string_bytes(id).unwrap(), expected.as_bytes().as_ref());
+    assert_eq!(
+        vm.string_bytes(id).unwrap(),
+        format!("cannot open : {reason}").as_bytes()
+    );
     let values = run(&mut vm, b"local f,e=io.open('');assert(f==nil);return e");
-    let expected: lua_reference::LuaString = reference
-        .load("local f,e=io.open('');assert(f==nil);return e")
-        .eval()
-        .unwrap();
     let Value::String(id) = values[0] else {
         panic!("I/O error must be a string")
     };
-    assert_eq!(vm.string_bytes(id).unwrap(), expected.as_bytes().as_ref());
+    assert_eq!(
+        vm.string_bytes(id).unwrap(),
+        format!(": {reason}").as_bytes()
+    );
 }
 
 #[test]
@@ -307,3 +307,7 @@ assert(ok and s==6 and handled and e:find('cannot read ',1,true)==1)
     );
     std::fs::remove_dir(&dir).unwrap();
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

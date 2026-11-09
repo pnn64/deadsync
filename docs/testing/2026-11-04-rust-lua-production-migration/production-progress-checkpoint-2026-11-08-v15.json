@@ -1,0 +1,29 @@
+{
+  "previous": "production-progress-checkpoint-2026-11-08-v14.json",
+  "goal_status": "active",
+  "authority": "objective.txt; interpreter and C API milestones remain closed",
+  "completed_since_previous": {
+    "production-live-observer-regressions-v1-song-windows-debug": "302 passed, one allocation-sensitive coverage diagnostic ordering failure; original assertions retained; source guard true",
+    "production-live-observer-gameplay-v1-downstream-windows-debug": "70 passed, two failed; source guard true; failures exposed Sprite-specific loop observation and copied unresolved theme texture metadata loss",
+    "production-sharkmode-diagnostic-v1": "Four-second same-archive initialization diagnosis: native succeeds, Rust lacked the existing scale_or_crop_background method; not a full shell or performance result",
+    "production-live-observer-typecheck-v3-song-windows-debug": "Terminal, source guard true; only previously recorded denied cmd.rs349 while_immutable_condition; same log hash as v2; native exec handle was lost in truncated tool output",
+    "production-adapter-fixes-format-v4.json": "31 changed Rust files pass rustfmt --check"
+  },
+  "source_window10_pending_behavior_verification": [
+    "Preserve AMV retained texture proxy while applying its path internally; only a new public string/nil replacement clears the handle",
+    "Port existing scale_or_crop_background and no_move helpers with five existing preference modes",
+    "Observe Sprite-specific loop and rate overrides; use integer Steps labels and lazy eligible-call trace details",
+    "Append complete compiler payload controls for copied theme texture dimensions across GC and existing background fit modes; no original tests changed"
+  ],
+  "live_sessions": [
+    {"id": 40617, "stage": "production-existing-bindings-v1-song-windows-debug", "targets": ["rust_song_compiler", "rust_meshes", "rust_render"]},
+    {"id": 2241, "stage": "production-original-semantic-regressions-v1-downstream-windows-debug", "targets": ["song_lua_itgmania_semantic_parity, original full target"]},
+    {"id": 17231, "stage": "production-existing-sharkmode-v1-downstream-windows-debug", "targets": ["original Sharkmode direct/texture compiled draw regression"]}
+  ],
+  "source_freeze": "No watched Rust, Lua, manifests or tests edits until all three guarded runners are terminal",
+  "remaining": [
+    "Resolve real remaining existing-behavior adapter defects; explain original alpha-loop, conflicting table setter history and allocation-sensitive diagnostics without weakening coverage",
+    "Final-source applicable regression, build/link/graph, rendered gameplay refresh, representative preparation/live/memory measurements, formatting/Clippy attribution and accurate documentation"
+  ],
+  "scope": "Original fixed inventory only; no new baking, interpreter/C API reopening, JIT, assembly, broad parity or allocation-failure campaign; stop when objective criteria are met"
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "song_lua_execution",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "deadsync-shell",
+      "--bin",
+      "song_lua_execution"
+    ],
+    "exit_code": 101,
+    "seconds": 68.63436613208614,
+    "log_sha256": "bf1fd4f67cd1a8cefc51e5dc829247d313ab63d31f532f9c70109de6e118bdb9"
+  },
+  {
+    "name": "song_lua_performance",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "deadsync",
+      "--example",
+      "song_lua_performance"
+    ],
+    "exit_code": 101,
+    "seconds": 31.82528638187796,
+    "log_sha256": "b77f18e9a205330110b95067fd59dd9ac09e0eeb9cbba3363b2ce999fca4a095"
+  }
+]

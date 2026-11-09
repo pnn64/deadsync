@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::Value;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -6,6 +7,7 @@ use crate::{LUA_PLAYERS, SongLuaSpanMode};
 
 pub const SONG_LUA_EASING_NAME_KEY: &str = "__songlua_easing_name";
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_f32(value: Value) -> Option<f32> {
     match value {
@@ -19,6 +21,7 @@ pub fn read_f32(value: Value) -> Option<f32> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_f64(value: Value) -> Option<f64> {
     match value {
@@ -29,6 +32,7 @@ pub fn read_f64(value: Value) -> Option<f64> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_boolish(value: Value) -> Option<bool> {
     match value {
@@ -56,6 +60,7 @@ pub fn read_boolish(value: Value) -> Option<bool> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_string(value: Value) -> Option<String> {
     match value {
@@ -64,6 +69,7 @@ pub fn read_string(value: Value) -> Option<String> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_u32_value(value: Value) -> Option<u32> {
     match value {
@@ -75,6 +81,7 @@ pub fn read_u32_value(value: Value) -> Option<u32> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_i32_value(value: Value) -> Option<i32> {
     match value {
@@ -95,6 +102,7 @@ pub fn read_i32_value(value: Value) -> Option<i32> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_player(value: Value) -> Option<u8> {
     match value {
@@ -104,6 +112,7 @@ pub fn read_player(value: Value) -> Option<u8> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_span_mode(value: Value) -> Option<SongLuaSpanMode> {
     let Value::String(text) = value else {
@@ -119,6 +128,7 @@ pub fn read_span_mode(value: Value) -> Option<SongLuaSpanMode> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn read_easing_name(
     value: Value,
@@ -137,11 +147,13 @@ pub fn read_easing_name(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub const fn truthy(value: &Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn lua_values_equal(left: &Value, right: &Value) -> bool {
     match (left, right) {
@@ -157,6 +169,7 @@ pub fn lua_values_equal(left: &Value, right: &Value) -> bool {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn lua_binary_to_hex(value: Value) -> String {
     let Value::String(text) = value else {
         return String::new();
@@ -171,6 +184,7 @@ pub fn lua_binary_to_hex(value: Value) -> String {
     String::from_utf8(out).expect("hexadecimal lookup table contains only ASCII")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn player_index_from_value(value: &Value) -> Option<usize> {
     match value {
@@ -208,6 +222,7 @@ pub fn player_number_name(player: usize) -> &'static str {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(never)]
 fn string_values_equal(left: &mlua::LuaString, right: &mlua::LuaString) -> bool {
     // Equal bytes need one UTF-8 check; invalid strings remain unequal,

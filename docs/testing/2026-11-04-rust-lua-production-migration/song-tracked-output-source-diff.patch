@@ -1,0 +1,1078 @@
+--- before/crates/deadsync-song-lua/src/rust_engine.rs
++++ after/crates/deadsync-song-lua/src/rust_engine.rs
+@@ -22,6 +22,8 @@
+ mod gameplay;
+ mod song_activation;
+ mod song_discovery;
++mod song_output;
++pub use song_output::{SongTrackedActor, SongTrackedActors};
+ mod song_layers;
+ pub use song_activation::{SongActivation, SongStartupState};
+ pub use song_discovery::{
+--- before/crates/deadsync-song-lua/src/rust_engine/actors.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -52,10 +52,12 @@
+ mod song_media;
+ #[cfg(feature = "test-support")]
+ pub(super) use song_media::TARGETS as MEDIA_CAPTURE_TARGETS;
++mod song_output;
+ mod song_pose;
+ mod song_properties;
+ mod sound;
+ mod sprites;
++mod state_snapshot;
+ mod text;
+ mod text_displays;
+ mod textures;
+@@ -647,6 +649,7 @@
+             }
+         }
+         native_children::install_helpers(vm, actor, helpers)?;
++        state_snapshot::install(vm, helpers)?;
+         let broadcast = messages::install(vm, &store, &captures)?;
+         let instantiate = vm.new_host_function_with_data(
+             callback,
+@@ -1620,6 +1623,7 @@
+         b"PercentageDisplay" if internal => "PercentageDisplay",
+         b"StepsDisplay" if internal => "StepsDisplay",
+         b"TopScreen" if internal => "TopScreen",
++        b"ChildActor" if internal => "ChildActor",
+         b"OptionRow" if internal => "OptionRow",
+         b"OptionRowFrame" if internal => "OptionRowFrame",
+         b"Timer" if internal => "Timer",
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/player_parts.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/player_parts.rs
+@@ -280,3 +280,27 @@
+         })
+     })
+ }
++
++// Reuse Player::Init's actual HUD constructors for compiler fallback children.
++pub(super) fn tracked_child(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    scene: u64,
++    player: TableId,
++    index: usize,
++    name: &str,
++) -> Result<TableId, Error> {
++    let child = match name {
++        "Judgment" => judgment(call, store, scene, player, index)?,
++        "Combo" => combo(call, store, scene, index)?,
++        _ => unreachable!(),
++    };
++    underlay::copy_tags(call, player, child)?;
++    let value = call.try_intern(name.as_bytes())?;
++    set(call, child, "__songlua_player_child_name", value)?;
++    native_children::adopt(call, store, child, player)?;
++    native_children::insert(call, player, name, Value::Table(child))?;
++    append(call, store, player, child)?;
++    lifecycle::invalidate_plans(call, store)?;
++    Ok(child)
++}
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/draw.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/draw.rs
+@@ -123,10 +123,20 @@
+     Ok(())
+ }
+ fn state(
+-    call: &HostCall<'_>,
++    call: &mut HostCall<'_>,
+     store: &Shared,
+     actor: TableId,
+ ) -> Result<crate::SongLuaOverlayState, Error> {
++    // The native preparation reader resolves an uninitialized Sprite's
++    // Texture/AFT getter before reading later scalar fields. Keep this read
++    // at draw time; snapshotting raw semantic state must not invoke it early.
++    if !live(store) {
++        let kind = get(call, actor, b"__songlua_actor_type")?;
++        let sprite = matches!(kind,Value::String(id)if call.string_bytes(id).is_some_and(|s|s.eq_ignore_ascii_case(b"Sprite")));
++        if sprite && get(call, actor, b"__songlua_state_sprite_texture")? == Value::Nil {
++            return initial_state::read(call, store, actor);
++        }
++    }
+     let store = store.lock().unwrap();
+     let live = store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
+     let actor = store
+@@ -557,6 +567,22 @@
+         "Draw" => {
+             let value = field(call, actor, "__songlua_visible")?;
+             if value == Value::Nil || truthy(value) {
++                let globals = table(call, helper(call, 5)?)?;
++                let active = field(call, globals, ACTIVE)?;
++                let screen = assets::field(call, actor, b"__songlua_top_screen_child_name")?;
++                let player = screen
++                    .as_deref()
++                    .is_some_and(|name| matches!(name, "PlayerP1" | "PlayerP2"));
++                if truthy(active) && !player {
++                    let state = native_children::state(call, store, actor)?;
++                    let snapshot = state_snapshot::write(call, store, actor, &state)?;
++                    song_replay::raw_set(
++                        call,
++                        actor,
++                        "__songlua_manual_draw_state",
++                        Value::Table(snapshot),
++                    )?;
++                }
+                 draw(call, store, actor)?;
+             }
+         }
+--- before/crates/deadsync-song-lua/src/rust_engine/test_support.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1493,3 +1493,17 @@
+ ) {
+     crate::lua_util::set_pending_tweens(lua, values.iter().cloned());
+ }
++
++/// Exercise the production collector and its actual default child factory.
++pub fn legacy_read_song_tracked_actors(
++    lua: &mlua::Lua,
++) -> Result<Vec<crate::SongLuaTrackedActor>, String> {
++    crate::lua_util::read_tracked_compile_actors(
++        lua,
++        crate::compile::create_default_named_child_actor,
++    )
++}
++
++pub fn legacy_draw_song_layers(lua: &mlua::Lua, activation: &LegacySongActivation) {
++    crate::lua_util::run_actor_draw_functions(lua, &mlua::Value::Table(activation.root.clone()));
++}
+--- before/crates/deadsync-song-lua/src/compile.rs
++++ after/crates/deadsync-song-lua/src/compile.rs
+@@ -134,7 +134,7 @@
+     Ok(compiled)
+ }
+ 
+-fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
++pub(crate) fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
+     create_host_named_child_actor(
+         lua,
+         parent,
+--- before/crates/deadsync-song-lua/tests/rust_song_activation.rs
++++ after/crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -3745,3 +3745,292 @@
+     }
+     pair.compare();
+ }
++
++fn tracked_target_key(target: deadsync_song_lua::SongLuaTrackedActorTarget) -> (u8, usize) {
++    use deadsync_song_lua::SongLuaTrackedActorTarget as T;
++    match target {
++        T::Player(i) => (0, i),
++        T::PlayerJudgment(i) => (1, i),
++        T::PlayerCombo(i) => (2, i),
++        T::SongForeground => (3, 0),
++        T::ScreenLayer(i) => (4, i),
++    }
++}
++fn compare_tracked_output(pair: &mut Pair) -> deadsync_song_lua::rust_engine::SongTrackedActors {
++    let expected = test_support::legacy_read_song_tracked_actors(&pair.native).unwrap();
++    let actual = pair
++        .rust
++        .read_song_tracked_actors(pair.scene)
++        .unwrap()
++        .unwrap();
++    assert_eq!(actual.actors.len(), expected.len());
++    for (a, b) in actual.actors.iter().zip(&expected) {
++        assert_eq!(tracked_target_key(a.target), tracked_target_key(b.target));
++        assert_eq!(
++            a.actor,
++            b.actor,
++            "tracked target {:?}",
++            tracked_target_key(a.target)
++        );
++        assert!(matches!(
++            pair.rust.song_tracked_actor_value(a).unwrap(),
++            Value::Table(_)
++        ));
++    }
++    pair.compare();
++    actual
++}
++
++#[test]
++fn tracked_output_preserves_order_state_aliases_and_optional_layers() {
++    for live in [false, true] {
++        let dir = tempfile::tempdir().unwrap();
++        let path = write(dir.path(), "default.lua", "return Def.ActorFrame{}");
++        let mut context = SongLuaCompileContext::new(dir.path(), "tracked output");
++        context.live = live;
++        let mut pair = Pair::new(context);
++        pair.activate(&[&path]);
++        pair.script(
++            r#"
++            local p=__songlua_top_screen_player_1
++            p:x(11):rotationz(3);p.__songlua_children.Judgment:y(22)
++            p.__songlua_children.Combo:aux(4)
++            __songlua_top_screen.__songlua_children.SongForeground:z(33)
++            collectgarbage()
++        "#,
++        );
++        let mut first = compare_tracked_output(&mut pair);
++        assert_eq!(
++            first
++                .actors
++                .iter()
++                .map(|a| tracked_target_key(a.target))
++                .collect::<Vec<_>>(),
++            [
++                (0, 0),
++                (1, 0),
++                (2, 0),
++                (0, 1),
++                (1, 1),
++                (2, 1),
++                (3, 0),
++                (4, 0),
++                (4, 1),
++                (4, 2),
++                (4, 3)
++            ]
++        );
++        assert!(pair.rust.release_song_tracked_actors(&mut first).unwrap());
++        pair.script("__songlua_top_screen_player_2=__songlua_top_screen_player_1;__songlua_top_screen.__songlua_children.Overlay=nil;collectgarbage()");
++        let mut alias = compare_tracked_output(&mut pair);
++        assert_eq!(
++            pair.rust
++                .song_tracked_actor_value(&alias.actors[0])
++                .unwrap(),
++            pair.rust
++                .song_tracked_actor_value(&alias.actors[3])
++                .unwrap()
++        );
++        assert!(
++            !alias
++                .actors
++                .iter()
++                .any(|a| tracked_target_key(a.target) == (4, 1))
++        );
++        assert!(pair.rust.release_song_tracked_actors(&mut alias).unwrap());
++    }
++}
++
++#[test]
++fn tracked_output_recreates_missing_children_and_retains_native_partial_errors() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(dir.path(), "default.lua", "return Def.ActorFrame{}");
++    let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "tracked fallback"));
++    pair.activate(&[&path]);
++    pair.script(
++        r#"
++        old_foreground=__songlua_top_screen.__songlua_children.SongForeground
++        old_judgment=__songlua_top_screen_player_1.__songlua_children.Judgment
++        __songlua_top_screen.__songlua_children.SongForeground=nil
++        __songlua_top_screen_player_1.__songlua_children.Judgment=nil
++        __songlua_top_screen_player_1.__songlua_children.Combo=nil
++        GetComboFonts=function()return{}end
++    "#,
++    );
++    let mut output = compare_tracked_output(&mut pair);
++    pair.script(
++        r#"
++        assert(__songlua_top_screen.__songlua_children.SongForeground~=old_foreground)
++        assert(__songlua_top_screen_player_1.__songlua_children.Judgment~=old_judgment)
++        assert(__songlua_top_screen_player_1.__songlua_children.Combo.Name=='Combo')
++        __songlua_top_screen.__songlua_children.SongForeground=nil
++        __songlua_top_screen_player_2='invalid tracked player';collectgarbage()
++    "#,
++    );
++    assert!(test_support::legacy_read_song_tracked_actors(&pair.native).is_err());
++    assert!(pair.rust.read_song_tracked_actors(pair.scene).is_err());
++    pair.script("assert(type(__songlua_top_screen.__songlua_children.SongForeground)=='table');__songlua_top_screen_player_2=__songlua_top_screen_player_1");
++    assert!(pair.rust.release_song_tracked_actors(&mut output).unwrap());
++    let mut recovered = compare_tracked_output(&mut pair);
++    pair.rust
++        .release_song_tracked_actors(&mut recovered)
++        .unwrap();
++}
++
++#[test]
++fn tracked_output_uses_manual_draw_snapshots_without_resurrecting_whole_players() {
++    for live in [false, true] {
++        let dir = tempfile::tempdir().unwrap();
++        let path = write(
++            dir.path(),
++            "default.lua",
++            r#"
++        return Def.ActorFrame{OnCommand=function(self)self:SetDrawFunction(function()
++            local p=__songlua_top_screen_player_1
++            local j=p.__songlua_children.Judgment
++            j:visible(true):x(12):y(13):zoom(2):diffuse(0.1,0.2,0.3,0.4):blend('BlendMode_Subtract'):heading(15)
++            j:Draw();j:x(99):zoom(3)
++            local p2=__songlua_top_screen_player_2
++            p2.__songlua_children.Judgment:visible(false):Draw()
++            p2.__songlua_children.Combo:visible(false):Draw()
++            p:visible(true):x(80):Draw();p:visible(false):x(6)
++            collectgarbage()
++        end)end}
++    "#,
++        );
++        let mut context = SongLuaCompileContext::new(dir.path(), "tracked manual draw");
++        context.live = live;
++        let mut pair = Pair::new(context);
++        let (native, _) = pair.activate(&[&path]);
++        test_support::legacy_draw_song_layers(&pair.native, &native);
++        pair.rust.draw_actor_scene(pair.scene).unwrap();
++        let mut output = compare_tracked_output(&mut pair);
++        assert!(output.actors[0].actor.manual_hud_draw);
++        assert!(!output.actors[3].actor.manual_hud_draw);
++        assert!(!output.actors[0].actor.initial_state.visible);
++        assert_eq!(output.actors[0].actor.initial_state.x, 6.);
++        assert_eq!(output.actors[1].actor.initial_state.x, 12.);
++        assert_eq!(output.actors[1].actor.initial_state.zoom_x, 2.);
++        pair.rust.release_song_tracked_actors(&mut output).unwrap();
++    }
++}
++
++#[test]
++fn tracked_output_pins_identities_through_retirement_and_rejects_foreign_or_released_roots() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(dir.path(), "default.lua", "return Def.ActorFrame{}");
++    let context = SongLuaCompileContext::new(dir.path(), "tracked identity lifetime");
++    let mut pair = Pair::new(context.clone());
++    pair.activate(&[&path]);
++    let mut output = compare_tracked_output(&mut pair);
++    let copied = output.actors[0].clone();
++    let state = copied.actor.clone();
++    let mut foreign = RustSongRuntime::new(&context).unwrap();
++    assert!(
++        foreign
++            .read_song_tracked_actors(pair.scene)
++            .unwrap()
++            .is_none()
++    );
++    assert!(foreign.song_tracked_actor_value(&copied).is_err());
++    assert!(foreign.release_song_tracked_actors(&mut output).is_err());
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    pair.rust.vm_mut().execute(&compile_named(b"__songlua_top_screen=nil;__songlua_top_screen_player_1=nil;__songlua_top_screen_player_2=nil;collectgarbage()",b"=release globals").unwrap()).unwrap();
++    assert!(pair.rust.song_tracked_actor_value(&copied).is_ok());
++    assert!(
++        pair.rust
++            .read_song_tracked_actors(pair.scene)
++            .unwrap()
++            .is_none()
++    );
++    assert!(pair.rust.release_song_tracked_actors(&mut output).unwrap());
++    assert!(!pair.rust.release_song_tracked_actors(&mut output).unwrap());
++    assert!(pair.rust.song_tracked_actor_value(&copied).is_err());
++    drop(pair);
++    assert_eq!(copied.actor, state);
++}
++
++#[test]
++fn tracked_output_manual_snapshot_keeps_raw_data_and_does_not_repeat_authored_getters() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            Def.Sprite{InitCommand=function(self)saved.sprite=self;saved.draw=self.Draw;saved.settexture=self.SetTexture end},
++            OnCommand=function(self)self:SetDrawFunction(function()saved.sprite:Draw()end)end,
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "tracked snapshot getters",
++    ));
++    let (native, _) = pair.activate(&[&path]);
++    pair.script(
++        r#"
++        local sprite=saved.sprite
++        setmetatable(sprite,{__index=function(t,k)
++            if k=='Texture'then log('texture getter');collectgarbage();return nil end
++        end})
++        sprite.Draw=saved.draw;sprite.SetTexture=saved.settexture
++        __songlua_top_screen_player_1.__songlua_children.Judgment=sprite
++    "#,
++    );
++    test_support::legacy_draw_song_layers(&pair.native, &native);
++    pair.rust.draw_actor_scene(pair.scene).unwrap();
++    pair.compare();
++    let mut output = compare_tracked_output(&mut pair);
++    assert!(output.actors[0].actor.manual_hud_draw);
++    assert!(output.actors[1].actor.initial_state.sprite_texture);
++    pair.rust.release_song_tracked_actors(&mut output).unwrap();
++
++    // An explicit unbound write survives even though the inferred constructor
++    // flag was omitted from the preceding raw semantic snapshot.
++    pair.script("saved.sprite:SetTexture(nil)");
++    test_support::legacy_draw_song_layers(&pair.native, &native);
++    pair.rust.draw_actor_scene(pair.scene).unwrap();
++    pair.compare();
++    let mut output = compare_tracked_output(&mut pair);
++    assert!(!output.actors[1].actor.initial_state.sprite_texture);
++    pair.rust.release_song_tracked_actors(&mut output).unwrap();
++}
++
++#[test]
++fn tracked_output_roots_transient_foregrounds_before_reentrant_global_reads() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(dir.path(), "default.lua", "return Def.ActorFrame{}");
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "tracked transient identity",
++    ));
++    pair.activate(&[&path]);
++    pair.script(
++        r#"
++        local children=__songlua_top_screen.__songlua_children
++        rawset(children,'SongForeground',nil)
++        setmetatable(children,{__index=function(t,k)
++            if k=='SongForeground'then log('foreground');return {__songlua_state_x=7}end
++        end})
++        local p1=__songlua_top_screen_player_1
++        __songlua_top_screen_player_1=nil
++        setmetatable(_G,{__index=function(t,k)
++            if k=='__songlua_top_screen_player_1'then log('player');collectgarbage();return p1 end
++        end})
++    "#,
++    );
++    let mut output = compare_tracked_output(&mut pair);
++    assert_eq!(output.actors[6].actor.initial_state.x, 7.);
++    pair.rust
++        .vm_mut()
++        .execute(&compile_named(b"collectgarbage()", b"=tracked transient GC").unwrap())
++        .unwrap();
++    assert!(matches!(
++        pair.rust
++            .song_tracked_actor_value(&output.actors[6])
++            .unwrap(),
++        Value::Table(_)
++    ));
++    pair.rust.release_song_tracked_actors(&mut output).unwrap();
++}
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
+@@ -706,6 +706,12 @@
+             .state
+             .render
+             .sprite_texture = bound;
++        set(
++            call,
++            actor,
++            "__songlua_state_sprite_texture",
++            Value::Boolean(bound),
++        )?;
+         capture::write(
+             call,
+             store,
+@@ -726,6 +732,12 @@
+             .state
+             .render
+             .sprite_texture = true;
++        set(
++            call,
++            actor,
++            "__songlua_state_sprite_texture",
++            Value::Boolean(true),
++        )?;
+         capture::write(
+             call,
+             store,
+--- before/crates/deadsync-song-lua/src/rust_engine/song_output.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/song_output.rs
+@@ -0,0 +1,72 @@
++//! Compiler-owned tracked actor identities and their initial captured state.
++use super::{ActorScene, RustSongRuntime};
++use crate::{SongLuaCapturedActor, SongLuaTrackedActorTarget};
++use deadlib_lua::{Error, Root, Value};
++
++/// A tracked compiler row. Its Lua identity is retained by the owning batch.
++/// Resolve it through song_tracked_actor_value; copied rows reject a released
++/// batch or a different VM instead of exposing an unrooted table ID.
++#[derive(Clone)]
++pub struct SongTrackedActor {
++    pub actor: SongLuaCapturedActor,
++    pub target: SongLuaTrackedActorTarget,
++    pub(super) owner: Root,
++    pub(super) slot: usize,
++}
++
++/// Pinned identities plus owned compiler output. Release the pin with
++/// release_song_tracked_actors when the compiler/session no longer needs Lua.
++/// The owned actor state remains readable after release and after VM teardown.
++pub struct SongTrackedActors {
++    pub actors: Vec<SongTrackedActor>,
++    pub(super) owner: Option<Root>,
++}
++impl RustSongRuntime {
++    /// Read the same player/HUD/foreground/screen-layer targets as production,
++    /// including existing lazy child construction and manual draw snapshots.
++    pub fn read_song_tracked_actors(
++        &mut self,
++        screen: ActorScene,
++    ) -> Result<Option<SongTrackedActors>, Error> {
++        if self.actor_scene_root(screen).is_none() {
++            return Ok(None);
++        }
++        let (values, rows) = self.actors.read_song_tracked_actors(&mut self.vm, screen)?;
++        let owner = self.vm.pin(values)?;
++        let actors = rows
++            .into_iter()
++            .enumerate()
++            .map(|(slot, row)| SongTrackedActor {
++                actor: row.actor,
++                target: row.target,
++                owner,
++                slot: slot + 1,
++            })
++            .collect();
++        Ok(Some(SongTrackedActors {
++            actors,
++            owner: Some(owner),
++        }))
++    }
++
++    pub fn song_tracked_actor_value(&self, actor: &SongTrackedActor) -> Result<Value, Error> {
++        let Value::Table(owner) = self.vm.rooted(actor.owner)? else {
++            unreachable!()
++        };
++        self.vm
++            .raw_table_get(owner, Value::Number(actor.slot as f64))
++    }
++
++    /// A foreign VM leaves the batch pinned. Repeated release returns false.
++    pub fn release_song_tracked_actors(
++        &mut self,
++        actors: &mut SongTrackedActors,
++    ) -> Result<bool, Error> {
++        let Some(owner) = actors.owner else {
++            return Ok(false);
++        };
++        self.vm.unpin(owner)?;
++        actors.owner = None;
++        Ok(true)
++    }
++}
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/song_output.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/song_output.rs
+@@ -0,0 +1,209 @@
++//! Production tracked actor extraction; Lua access stays inside one host call.
++use super::*;
++use crate::{SongLuaCapturedActor, SongLuaTrackedActorTarget as Target};
++use sprites::{field, set};
++
++pub(in crate::rust_engine) struct Tracked {
++    pub actor: SongLuaCapturedActor,
++    pub target: Target,
++}
++#[derive(Clone)]
++struct Read {
++    store: Shared,
++    scene: u64,
++    output: Arc<Mutex<Vec<Tracked>>>,
++}
++impl Actors {
++    pub(in crate::rust_engine) fn read_song_tracked_actors(
++        &self,
++        vm: &mut Vm,
++        screen: ActorScene,
++    ) -> Result<(Value, Vec<Tracked>), Error> {
++        let output = Arc::new(Mutex::new(Vec::new()));
++        let function = vm.new_host_function_with_data(
++            read,
++            &[Value::Table(self.registry), Value::Table(self.helpers)],
++            Read {
++                store: self.store.clone(),
++                scene: screen.id,
++                output: output.clone(),
++            },
++        )?;
++        let values = vm.call(function, &[])?[0];
++        let rows = std::mem::take(&mut *output.lock().unwrap());
++        Ok((values, rows))
++    }
++}
++fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, Error> {
++    if value == Value::Nil {
++        Ok(None)
++    } else {
++        table(call, value).map(Some)
++    }
++}
++fn registry(call: &mut HostCall<'_>, actor: TableId) -> Result<TableId, Error> {
++    let function = native_children::helper_function(call, b"native_registry")?;
++    let value = call.call(function, &[Value::Table(actor)])?[0];
++    table(call, value)
++}
++fn manual_hud(call: &mut HostCall<'_>, player: TableId) -> Result<bool, Error> {
++    let value = field(call, player, "__songlua_children")?;
++    let Some(children) = optional_table(call, value)? else {
++        return Ok(false);
++    };
++    call.with_roots(&[value], |call| {
++        for name in ["Judgment", "Combo"] {
++            let value = field(call, children, name)?;
++            let Some(child) = optional_table(call, value)? else {
++                continue;
++            };
++            let present = call.with_roots(&[value], |call| {
++                let value = field(call, child, "__songlua_manual_draw_state")?;
++                Ok(optional_table(call, value)?.is_some())
++            })?;
++            if present {
++                return Ok(true);
++            }
++        }
++        Ok(false)
++    })
++}
++fn push(
++    call: &mut HostCall<'_>,
++    data: &Read,
++    batch: TableId,
++    actor: TableId,
++    target: Target,
++) -> Result<(), Error> {
++    // Pin the identity before any authored getter can detach it and collect.
++    let index = call.raw_table_len(batch)? + 1;
++    call.raw_table_set(batch, Value::Number(index as f64), Value::Table(actor))?;
++    let state = if matches!(target, Target::Player(_)) {
++        initial_state::read(call, &data.store, actor)?
++    } else {
++        let value = field(call, actor, "__songlua_manual_draw_state")?;
++        if let Some(snapshot) = optional_table(call, value)? {
++            call.with_roots(&[value], |call| {
++                initial_state::read(call, &data.store, snapshot)
++            })?
++        } else {
++            initial_state::read(call, &data.store, actor)?
++        }
++    };
++    let manual_hud_draw = matches!(target, Target::Player(_)) && manual_hud(call, actor)?;
++    data.output.lock().unwrap().push(Tracked {
++        target,
++        actor: SongLuaCapturedActor {
++            initial_state: state,
++            manual_hud_draw,
++            ..Default::default()
++        },
++    });
++    Ok(())
++}
++fn child(
++    call: &mut HostCall<'_>,
++    data: &Read,
++    parent: TableId,
++    name: &str,
++) -> Result<TableId, Error> {
++    let kind = assets::field(call, parent, b"__songlua_actor_type")?;
++    let index = field(call, parent, "__songlua_player_index")?;
++    if kind
++        .as_deref()
++        .is_some_and(|s| s.eq_ignore_ascii_case("PlayerActor"))
++        && index != Value::Nil
++    {
++        let index = sprites::number(call, index)?;
++        if index.fract() != 0. || !(0. ..crate::LUA_PLAYERS as f64).contains(&index) {
++            return Err(call.error(b"tracked player index out of range"));
++        }
++        return player_parts::tracked_child(
++            call,
++            &data.store,
++            data.scene,
++            parent,
++            index as usize,
++            name,
++        );
++    }
++    let top = kind
++        .as_deref()
++        .is_some_and(|s| s.eq_ignore_ascii_case("TopScreen"));
++    let actor = if top {
++        screen_parts::create(call, &data.store, data.scene, name)?
++    } else {
++        generated_players::dummy(call, &data.store, data.scene, "ChildActor", name, None)?
++    };
++    underlay::copy_tags(call, parent, actor)?;
++    native_children::adopt(call, &data.store, actor, parent)?;
++    if top {
++        let value = call.try_intern(name.as_bytes())?;
++        set(call, actor, "__songlua_top_screen_child_name", value)?;
++    }
++    Ok(actor)
++}
++fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
++    let data = call.function_data::<Read>().unwrap().clone();
++    let batch = call.try_new_table()?;
++    call.with_roots(&[Value::Table(batch)], |call| {
++        let globals = table(call, helper(call, 5)?)?;
++        let top = field(call, globals, "__songlua_top_screen")?;
++        let top = table(call, top)?;
++        call.with_roots(&[Value::Table(top)], |call| {
++            let children = registry(call, top)?;
++            call.with_roots(&[Value::Table(children)], |call| {
++                let value = field(call, children, "SongForeground")?;
++                let foreground = if let Some(actor) = optional_table(call, value)? {
++                    actor
++                } else {
++                    let actor = child(call, &data, top, "SongForeground")?;
++                    set(call, children, "SongForeground", Value::Table(actor))?;
++                    actor
++                };
++                call.with_roots(&[Value::Table(foreground)], |call| {
++                    // Native resolves both players before reading any of their state.
++                    let p1 = field(call, globals, "__songlua_top_screen_player_1")?;
++                    let p1 = table(call, p1)?;
++                    call.with_roots(&[Value::Table(foreground), Value::Table(p1)], |call| {
++                        let p2 = field(call, globals, "__songlua_top_screen_player_2")?;
++                        let p2 = table(call, p2)?;
++                        call.with_roots(&[Value::Table(p2)], |call| {
++                            for (index, player) in [p1, p2].into_iter().enumerate() {
++                                push(call, &data, batch, player, Target::Player(index))?;
++                                let children = registry(call, player)?;
++                                call.with_roots(&[Value::Table(children)], |call| {
++                                    for (name, target) in [
++                                        ("Judgment", Target::PlayerJudgment(index)),
++                                        ("Combo", Target::PlayerCombo(index)),
++                                    ] {
++                                        let value = field(call, children, name)?;
++                                        let actor =
++                                            if let Some(actor) = optional_table(call, value)? {
++                                                actor
++                                            } else {
++                                                child(call, &data, player, name)?
++                                            };
++                                        push(call, &data, batch, actor, target)?;
++                                    }
++                                    Ok(())
++                                })?;
++                            }
++                            push(call, &data, batch, foreground, Target::SongForeground)?;
++                            for (index, name) in ["Underlay", "Overlay", "SongBackground", "In"]
++                                .into_iter()
++                                .enumerate()
++                            {
++                                let value = field(call, children, name)?;
++                                if let Some(actor) = optional_table(call, value)? {
++                                    push(call, &data, batch, actor, Target::ScreenLayer(index))?;
++                                }
++                            }
++                            call.push(Value::Table(batch))
++                        })
++                    })
++                })
++            })
++        })
++    })
++}
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/state_snapshot.rs
++++ after/crates/deadsync-song-lua/src/rust_engine/actors/state_snapshot.rs
+@@ -0,0 +1,315 @@
++//! Lua-owned manual-draw snapshot for the compiler's existing state reader.
++use super::*;
++use crate::{
++    SongLuaOverlayState, SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++};
++const FIELDS: &[(Target, &str)] = &[
++    (Target::Aux, "__songlua_state_aux"),
++    (Target::X, "__songlua_state_x"),
++    (Target::Y, "__songlua_state_y"),
++    (Target::Z, "__songlua_state_z"),
++    (Target::ZBias, "__songlua_state_z_bias"),
++    (Target::DrawOrder, "__songlua_state_draw_order"),
++    (
++        Target::DrawByZPosition,
++        "__songlua_state_draw_by_z_position",
++    ),
++    (Target::AftPreserve, "__songlua_state_aft_preserve"),
++    (Target::AftCreated, "__songlua_state_aft_created"),
++    (Target::HAlign, "__songlua_state_halign"),
++    (Target::VAlign, "__songlua_state_valign"),
++    (Target::TextAlign, "__songlua_state_text_align"),
++    (Target::Uppercase, "__songlua_state_uppercase"),
++    (Target::ShadowLen, "__songlua_state_shadow_len"),
++    (Target::ShadowColor, "__songlua_state_shadow_color"),
++    (Target::Glow, "__songlua_state_glow"),
++    (Target::Fov, "__songlua_state_fov"),
++    (Target::Vanishpoint, "__songlua_state_vanishpoint"),
++    (Target::Diffuse, "__songlua_state_diffuse"),
++    (Target::VertexColors, "__songlua_state_vertex_colors"),
++    (Target::Visible, "__songlua_state_visible"),
++    (Target::Hibernating, "__songlua_state_hibernating"),
++    (Target::CropLeft, "__songlua_state_cropleft"),
++    (Target::CropRight, "__songlua_state_cropright"),
++    (Target::CropTop, "__songlua_state_croptop"),
++    (Target::CropBottom, "__songlua_state_cropbottom"),
++    (Target::FadeLeft, "__songlua_state_fadeleft"),
++    (Target::FadeRight, "__songlua_state_faderight"),
++    (Target::FadeTop, "__songlua_state_fadetop"),
++    (Target::FadeBottom, "__songlua_state_fadebottom"),
++    (Target::MaskSource, "__songlua_state_mask_source"),
++    (Target::MaskDest, "__songlua_state_mask_dest"),
++    (Target::DepthTest, "__songlua_state_depth_test"),
++    (Target::DepthWrite, "__songlua_state_depth_write"),
++    (
++        Target::DepthTestOnFail,
++        "__songlua_state_depth_test_on_fail",
++    ),
++    (Target::CullMode, "__songlua_state_cull_mode"),
++    (Target::Zoom, "__songlua_state_zoom"),
++    (Target::ZoomX, "__songlua_state_zoom_x"),
++    (Target::ZoomY, "__songlua_state_zoom_y"),
++    (Target::ZoomZ, "__songlua_state_zoom_z"),
++    (Target::BaseZoom, "__songlua_state_basezoom"),
++    (Target::BaseZoomX, "__songlua_state_basezoom_x"),
++    (Target::BaseZoomY, "__songlua_state_basezoom_y"),
++    (Target::BaseZoomZ, "__songlua_state_basezoom_z"),
++    (Target::RotationX, "__songlua_state_rot_x_deg"),
++    (Target::RotationY, "__songlua_state_rot_y_deg"),
++    (Target::RotationZ, "__songlua_state_rot_z_deg"),
++    (Target::BaseRotation, "__songlua_state_base_rotation"),
++    (Target::Quaternion, "__songlua_state_quaternion"),
++    (Target::BaseAlpha, "__songlua_state_base_alpha"),
++    (Target::SkewX, "__songlua_state_skew_x"),
++    (Target::SkewY, "__songlua_state_skew_y"),
++    (Target::Blend, "__songlua_state_blend"),
++    (Target::Vibrate, "__songlua_state_vibrate"),
++    (Target::EffectMagnitude, "__songlua_state_effect_magnitude"),
++    (Target::EffectClock, "__songlua_state_effect_clock"),
++    (Target::EffectTimer, "__songlua_state_effect_timer"),
++    (Target::EffectNoOffset, "__songlua_state_effect_no_offset"),
++    (Target::EffectMode, "__songlua_state_effect_mode"),
++    (Target::EffectColor1, "__songlua_state_effect_color1"),
++    (Target::EffectColor2, "__songlua_state_effect_color2"),
++    (Target::EffectPeriod, "__songlua_state_effect_period"),
++    (Target::EffectOffset, "__songlua_state_effect_offset"),
++    (Target::EffectTiming, "__songlua_state_effect_timing"),
++    (Target::Rainbow, "__songlua_state_rainbow"),
++    (Target::RainbowScroll, "__songlua_state_rainbow_scroll"),
++    (Target::TextJitter, "__songlua_state_text_jitter"),
++    (Target::TextDistortion, "__songlua_state_text_distortion"),
++    (Target::TextGlowMode, "__songlua_state_text_glow_mode"),
++    (
++        Target::MultAttrsWithDiffuse,
++        "__songlua_state_mult_attrs_with_diffuse",
++    ),
++    (Target::SpriteTexture, "__songlua_state_sprite_texture"),
++    (Target::SpriteAnimate, "__songlua_state_sprite_animate"),
++    (Target::SpriteLoop, "__songlua_state_sprite_loop"),
++    (
++        Target::SpritePlaybackRate,
++        "__songlua_state_sprite_playback_rate",
++    ),
++    (
++        Target::SpriteStateDelay,
++        "__songlua_state_sprite_state_delay",
++    ),
++    (
++        Target::SpriteStateIndex,
++        "__songlua_state_sprite_state_index",
++    ),
++    (Target::VertSpacing, "__songlua_state_vert_spacing"),
++    (Target::WrapWidthPixels, "__songlua_state_wrap_width_pixels"),
++    (Target::MaxWidth, "__songlua_state_max_width"),
++    (Target::MaxHeight, "__songlua_state_max_height"),
++    (Target::MaxWPreZoom, "__songlua_state_max_w_pre_zoom"),
++    (Target::MaxHPreZoom, "__songlua_state_max_h_pre_zoom"),
++    (
++        Target::MaxDimensionUsesZoom,
++        "__songlua_state_max_dimension_uses_zoom",
++    ),
++    (
++        Target::TextureFiltering,
++        "__songlua_state_texture_filtering",
++    ),
++    (Target::TextureWrapping, "__songlua_state_texture_wrapping"),
++    (Target::TexcoordOffset, "__songlua_state_texcoord_offset"),
++    (
++        Target::CustomTextureRect,
++        "__songlua_state_custom_texture_rect",
++    ),
++    (
++        Target::TexcoordVelocity,
++        "__songlua_state_texcoord_velocity",
++    ),
++    (Target::Size, "__songlua_state_size"),
++    (Target::StretchRect, "__songlua_state_stretch_rect"),
++];
++const COPY: &[u8] = br#"
++local type,next,rawget,rawset,sub,error = type,next,rawget,rawset,string.sub,error
++local exact={__songlua_visible=true,__songlua_native_name=true,__songlua_wrappers=true,
++ __songlua_hibernate_seconds=true,__songlua_theme_hibernating=true,__songlua_update_rate=true,
++ __songlua_current_x=true,__songlua_current_y=true,__songlua_current_z=true,
++ __songlua_diffuse=true,__songlua_text_attributes=true,__songlua_stroke_color=true,
++ __songlua_aux=true,__songlua_stream_width=true,__songlua_sprite_animation_length_seconds=true,
++ __songlua_sprite_effect_mode=true,Text=true,Texture=true,File=true,StreamWidth=true}
++local function clone(v)
++ if type(v)~='table' then return v end
++ local out={};for k,x in next,v do rawset(out,clone(k),clone(x)) end;return out
++end
++return function(actor)
++ local out={}
++ for k,v in next,actor do
++  if type(k)=='string' and (exact[k] or sub(k,1,16)=='__songlua_state_' or
++   sub(k,1,24)=='__songlua_graph_display_' or sub(k,1,19)=='__songlua_scroller_' or
++   sub(k,1,14)=='__songlua_aft_' or sub(k,1,23)=='__songlua_command_queue' or
++   sub(k,1,27)=='__songlua_recurring_update_') then
++    if k=='__songlua_wrappers' and type(v)=='table' then
++     local copy={};local i=1;while rawget(v,i)~=nil do
++      local w=rawget(v,i);if type(w)~='table'then error('wrapper table expected')end
++      copy[i]=w;i=i+1
++     end;rawset(out,k,copy)
++    else rawset(out,k,clone(v)) end
++  end
++ end
++ return out
++end
++"#;
++pub(super) fn install(vm: &mut Vm, helpers: TableId) -> Result<(), Error> {
++    let code = compile_named(COPY, b"=manual actor draw snapshot")?;
++    let function = vm.execute(&code)?[0];
++    super::super::put(vm, helpers, "manual_state_snapshot", function)
++}
++pub(super) fn write(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++    state: &SongLuaOverlayState,
++) -> Result<TableId, Error> {
++    // Native snapshot iteration validates string keys but never calls authored
++    // property getters. Preserve that boundary before copying raw semantic data.
++    {
++        let mut stack = call.native_stack()?;
++        let base = stack.top();
++        stack.push(Value::Table(actor))?;
++        let table = stack.top_offset();
++        stack.push(Value::Nil)?;
++        while stack.next_table(table)? {
++            if matches!(stack.value(-2), Some(Value::String(_))) {
++                let valid = std::str::from_utf8(stack.to_bytes(-2)?.unwrap()).is_ok();
++                if !valid {
++                    return Err(stack.error(b"actor snapshot key is not UTF-8"));
++                }
++            }
++            stack.set_top(stack.top() - 1)?;
++        }
++        stack.set_top(base)?;
++    }
++    let function = native_children::helper_function(call, b"manual_state_snapshot")?;
++    let value = call.call(function, &[Value::Table(actor)])?[0];
++    let snapshot = table(call, value)?;
++    let live = store
++        .lock()
++        .unwrap()
++        .clock
++        .live
++        .load(std::sync::atomic::Ordering::Relaxed);
++    call.with_roots(&[value], |call| {
++        let default = SongLuaOverlayState::default();
++        for &(target, key) in FIELDS {
++            // The constructor infers an unbound Sprite in Rust metadata, but
++            // native semantic snapshots omit that inferred flag. With no actor
++            // type on the snapshot, its later reader defaults to a bound texture.
++            // Explicit texture setters publish the flag into the raw table.
++            if target == Target::SpriteTexture && get(call, snapshot, key.as_bytes())? == Value::Nil
++            {
++                continue;
++            }
++            let value = crate::perframe::overlay_state_update_value(state, target);
++            let overrides = live && live_override(target);
++            if !overrides
++                && (get(call, snapshot, key.as_bytes())? != Value::Nil
++                    || value == crate::perframe::overlay_state_update_value(&default, target))
++            {
++                continue;
++            }
++            let value = encode(call, &value)?;
++            song_replay::raw_set(call, snapshot, key, value)?;
++        }
++        for (key, value, changed) in [
++            (
++                "__songlua_visible",
++                Value::Boolean(state.visible),
++                !state.visible,
++            ),
++            (
++                "__songlua_hibernate_seconds",
++                Value::Number(if state.hibernating { 1. } else { 0. }),
++                state.hibernating,
++            ),
++            (
++                "__songlua_state_decode_movie",
++                Value::Boolean(state.decode_movie),
++                state.decode_movie,
++            ),
++        ] {
++            if changed && get(call, snapshot, key.as_bytes())? == Value::Nil {
++                song_replay::raw_set(call, snapshot, key, value)?;
++            }
++        }
++        Ok(snapshot)
++    })
++}
++fn live_override(target: Target) -> bool {
++    matches!(
++        target,
++        Target::Aux
++            | Target::X
++            | Target::Y
++            | Target::Z
++            | Target::Zoom
++            | Target::ZoomX
++            | Target::ZoomY
++            | Target::ZoomZ
++            | Target::SkewX
++            | Target::SkewY
++            | Target::CropLeft
++            | Target::CropRight
++            | Target::CropTop
++            | Target::CropBottom
++            | Target::FadeLeft
++            | Target::FadeRight
++            | Target::FadeTop
++            | Target::FadeBottom
++            | Target::Diffuse
++            | Target::Glow
++            | Target::VertexColors
++            | Target::DrawByZPosition
++            | Target::MaskSource
++            | Target::MaskDest
++            | Target::DepthTest
++            | Target::DepthWrite
++            | Target::DepthTestOnFail
++            | Target::TextureFiltering
++            | Target::TextureWrapping
++            | Target::BaseZoom
++            | Target::BaseZoomX
++            | Target::BaseZoomY
++            | Target::BaseZoomZ
++            | Target::HAlign
++            | Target::VAlign
++    )
++}
++fn encode(call: &mut HostCall<'_>, value: &Update) -> Result<Value, Error> {
++    Ok(match value {
++        Update::None => Value::Nil,
++        Update::F32(n) => Value::Number(f64::from(*n)),
++        Update::I32(n) => Value::Number(f64::from(*n)),
++        Update::U32(n) => Value::Number(f64::from(*n)),
++        Update::Bool(b) => Value::Boolean(*b),
++        Update::Vec2(v) => sprites::vector_value(call, v)?,
++        Update::Vec3(v) => sprites::vector_value(call, v)?,
++        Update::Vec4(v) | Update::Quaternion(v) => sprites::vector_value(call, v)?,
++        Update::Vec5(v) => sprites::vector_value(call, v)?,
++        Update::VertexColors(v) => {
++            let rows = call.try_new_table()?;
++            call.with_roots(&[Value::Table(rows)], |call| {
++                for (i, v) in v.iter().enumerate() {
++                    let value = sprites::vector_value(call, v)?;
++                    call.raw_table_set(rows, Value::Number((i + 1) as f64), value)?;
++                }
++                Ok(Value::Table(rows))
++            })?
++        }
++        Update::CullMode(mode) => Value::Number(match mode {
++            deadlib_render_core::CullMode::None => 0.,
++            deadlib_render_core::CullMode::Back => 1.,
++            deadlib_render_core::CullMode::Front => 2.,
++        }),
++        Update::TextAlign(v) => call.try_intern(crate::overlay_text_align_label(*v).as_bytes())?,
++        Update::EffectClock(v) => call.try_intern(crate::effect_clock_label(*v).as_bytes())?,
++        Update::EffectMode(v) => call.try_intern(crate::effect_mode_label(*v).as_bytes())?,
++        Update::TextGlowMode(v) => call.try_intern(crate::text_glow_mode_label(*v).as_bytes())?,
++        Update::Blend(v) => call.try_intern(format!("{v:?}").as_bytes())?,
++    })
++}

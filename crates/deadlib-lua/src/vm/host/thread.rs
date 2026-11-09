@@ -20,7 +20,7 @@ pub trait HostThreadState: Any + Send + Sync {
     }
 }
 
-pub(in crate::vm) struct ThreadData(Box<dyn HostThreadState>);
+pub(in crate::vm) struct ThreadData(Shared<dyn HostThreadState>);
 impl std::fmt::Debug for ThreadData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HostThreadState").finish_non_exhaustive()
@@ -31,7 +31,9 @@ impl ThreadData {
         self.0.roots()
     }
     pub(in crate::vm) fn heap_bytes(&self) -> usize {
-        std::mem::size_of_val(self.0.as_ref()).saturating_add(self.0.heap_bytes())
+        self.0
+            .heap_bytes()
+            .saturating_add(HostThreadState::heap_bytes(self.0.as_ref()))
     }
     pub(super) fn get<T: HostThreadState>(&self) -> Option<&T> {
         let state: &dyn Any = self.0.as_ref();
@@ -73,17 +75,27 @@ impl Vm {
         for &value in state.roots() {
             self.validate_value(value)?;
         }
-        // Barrier each edge even if this thread has already been traversed.
-        for &value in state.roots() {
-            self.gc_new_value(value);
-        }
-        let data = ThreadData(Box::new(state));
+        let data = ThreadData(
+            Shared::try_new_in(state, self.threads.memory().clone())
+                .map_err(|_| self.memory_failure())?
+                .project(|value| value as &dyn HostThreadState),
+        );
+        self.reserve_gc_new_values(data.roots().len())?;
         let bytes = data.heap_bytes();
         let states = &mut self.threads[index].host_states;
         let before = states.capacity();
+        states
+            .try_reserve(1)
+            .map_err(|_| Error::memory().with_value(Value::String(self.memory_error)))?;
+        let growth = (states.capacity() - before) * size_of::<ThreadData>();
+        // All reservations precede the barriers and publication. Root tracing
+        // is still required when the thread has already been traversed.
+        for &value in data.roots() {
+            self.gc_new_value(value);
+        }
+        let states = &mut self.threads[index].host_states;
         states.push(data);
-        let bytes =
-            bytes.saturating_add((states.capacity() - before) * std::mem::size_of::<ThreadData>());
+        let bytes = bytes.saturating_add(growth);
         self.gc_note_control(bytes);
         Ok(())
     }

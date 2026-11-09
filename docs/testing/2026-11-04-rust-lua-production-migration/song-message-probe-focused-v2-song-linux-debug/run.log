@@ -1,0 +1,38 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 29.52s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-9af1496fa95abf36)
+
+running 5 tests
+test message_probe_defaults_match_all_existing_parameter_shapes_and_retained_methods ... ok
+test message_probe_explicit_roots_hold_defaults_and_detached_handler_until_release ... ok
+test message_probe_runner_errors_release_command_guard_and_recover_after_instruction_abort ... ok
+test message_probe_runner_keeps_selected_handler_defaults_guard_and_nested_queues ... 
+thread 'message_probe_runner_keeps_selected_handler_defaults_guard_and_nested_queues' (2754515) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:5755:5:
+assertion failed: pair.compare().contains("1,2,PlayerNumber_P1,TapNoteScore_W3")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test message_probe_runner_without_defaults_preserves_arity_directory_and_unrelated_queues ... 
+thread 'message_probe_runner_without_defaults_preserves_arity_directory_and_unrelated_queues' (2754516) panicked at crates/deadsync-song-lua/tests/rust_song_activation.rs:5791:5:
+assertion `left == right` failed
+  left: "unrelated"
+ right: "custom|after"
+FAILED
+
+failures:
+
+failures:
+    message_probe_runner_keeps_selected_handler_defaults_guard_and_nested_queues
+    message_probe_runner_without_defaults_preserves_arity_directory_and_unrelated_queues
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 104 filtered out; finished in 5.43s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_activation`

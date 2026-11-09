@@ -1,0 +1,11 @@
+{
+  "exit_code": 0,
+  "seconds": 25.64092419994995,
+  "binary_sha256": "1255f7688fb25ac8792cf0ae07a79ae1aa40b87e97a3f40d3013ce67c349e7f5",
+  "result_exists": true,
+  "screenshots": [
+    "data\\save\\screenshots\\2026\\11-November\\2026-11-08_051634__315__DREAMING_ING__.png"
+  ],
+  "log_sha256": "c6d303737462e6ddb8544cb6dff0b9cb97606b1cf31d86caf1b33ecdf6500c7f",
+  "sources_unchanged": true
+}

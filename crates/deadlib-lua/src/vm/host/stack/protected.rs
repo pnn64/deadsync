@@ -41,6 +41,7 @@ impl Vm {
             self.truncate_registers(base + prefix);
             return Err(Error::new(ErrorKind::Runtime, 0, "native stack overflow"));
         }
+        self.reserve_registers(base + prefix + count)?;
         self.relocate_native_error_functions(range.start + 1..range.end, base + prefix);
         self.registers
             .copy_within(range.start + 1..range.end, base + prefix);
@@ -128,23 +129,37 @@ impl NativeStack<'_, '_> {
             return Ok(result.status);
         }
         let function = self.call.vm.registers[self.base + prefix];
-        let values =
-            self.call.vm.registers[self.base + prefix + 1..self.base + self.top()].to_vec();
-        self.call.results = prefix;
-        self.sync();
-        let outcome = self
-            .call
-            .run_action(Action::ProtectedCall(function, &values, handler), true);
+        let outcome = (|| {
+            let values = self.call.vm.return_scratch(
+                &self.call.vm.registers[self.base + prefix + 1..self.base + self.top()],
+                0,
+            )?;
+            self.call.results = prefix;
+            self.sync();
+            let range = self
+                .call
+                .run_action(Action::ProtectedCall(function, &values, handler), true)?;
+            self.call
+                .vm
+                .complete_native_protection(self.base, prefix, range, results)
+        })();
         match outcome {
-            Ok(range) => {
-                let (status, top) = self
-                    .call
-                    .vm
-                    .complete_native_protection(self.base, prefix, range, results)?;
+            Ok((status, top)) => {
                 self.call.results = top;
                 self.sync();
                 self.restore_window_call_base();
                 Ok(status)
+            }
+            Err(error) if error.kind() == ErrorKind::Memory && error.target_thread.is_none() => {
+                // Protection covers argument copying, boundary setup and result
+                // padding too. The original function slot provides error space.
+                self.call.vm.resize_registers(self.base + prefix + 1);
+                self.call.vm.registers[self.base + prefix] =
+                    Value::String(self.call.vm.memory_error);
+                self.call.results = prefix + 1;
+                self.sync();
+                self.restore_window_call_base();
+                Ok(NativeCallStatus::MemoryError)
             }
             Err(error) => {
                 self.call.results = self.call.vm.registers.len() - self.base;

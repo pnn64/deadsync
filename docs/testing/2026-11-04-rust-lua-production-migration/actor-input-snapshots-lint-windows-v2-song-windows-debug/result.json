@@ -1,0 +1,30 @@
+{
+  "stage": "actor-input-snapshots-lint-windows-v2",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine,test-support",
+    "--no-deps",
+    "--lib"
+  ],
+  "exit_code": 101,
+  "seconds": 27.297825899906456,
+  "log_sha256": "4ee530373bba6c2be50bdb64c4f4295d9980753406f9c288b2e9c24f058ca0b7",
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "test_results": [],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

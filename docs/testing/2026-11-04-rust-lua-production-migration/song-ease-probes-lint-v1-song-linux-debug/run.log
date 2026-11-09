@@ -1,0 +1,4 @@
+error: failed to link or copy `/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/build/proc-macro2-ca933b731e5e5745/build_script_build-ca933b731e5e5745` to `/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/build/proc-macro2-ca933b731e5e5745/build-script-build`
+
+Caused by:
+  Operation not permitted (os error 1)

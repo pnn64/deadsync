@@ -1,25 +1,105 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::string_args::string_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
-use crate::{
-    SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
-    SONG_LUA_THEME_PATH_PREFIX, create_actor_util_table, create_author_table,
-    create_background_filter_values, create_color_constants_table, create_credits_table,
-    create_cryptman_table, create_debug_table, create_ex_judgment_counts, create_fileman_table,
-    create_find_files_function, create_ini_file_table, create_lua_compat_table,
-    create_network_table, create_rage_file_util_table, create_range_table,
-    create_string_array, create_version_parts_table, current_gamestate_player_value,
-    current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
-    install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
-    lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
-    parse_chart_info, read_color_call, read_color_value, read_f32, read_string,
-    retarget_loader_env, rotate_lua_table, seconds_to_hhmmss, set_string_method,
-    song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
-    strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
-    worst_judgment_from_offsets,
-};
+use crate::SONG_LUA_PRODUCT_VERSION;
+use crate::SONG_LUA_THEME_NAME;
+use crate::SONG_LUA_THEME_PATH_PREFIX;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_actor_util_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_author_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_background_filter_values;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_color_constants_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_credits_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_cryptman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_debug_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_ex_judgment_counts;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_fileman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_find_files_function;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_ini_file_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_lua_compat_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_network_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_rage_file_util_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_range_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_string_array;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_version_parts_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::current_gamestate_player_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::current_gamestate_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::current_song_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::current_steps_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::deduplicate_lua_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::install_theme_color_helpers;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::json_to_lua_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::lua_binary_to_hex;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::lua_table_to_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::lua_to_json_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::make_color_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::map_lua_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::note_song_lua_side_effect;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::parse_chart_info;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_color_call;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_color_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::retarget_loader_env;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::rotate_lua_table;
+use crate::seconds_to_hhmmss;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::set_string_method;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_is_minimum_product_version;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_is_product_version;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::stringify_lua_table;
+use crate::strip_sprite_hints;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::timing_window_arg_index;
+use crate::timing_window_seconds;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::truthy;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::worst_judgment_from_offsets;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone, Copy)]
 pub struct SongLuaCompatCallbacks {
     pub current_gamestate_player_value: fn(&Lua, &str, usize) -> mlua::Result<Value>,
@@ -29,6 +109,7 @@ pub struct SongLuaCompatCallbacks {
     pub retarget_loader_env: fn(&Lua, &Function, &Table) -> mlua::Result<()>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_stdlib_compat(
     lua: &Lua,
     song_dir: &Path,
@@ -816,7 +897,7 @@ impl SongLuaRandom {
         }
     }
 
-    fn integer(&mut self, lower: i32, upper: i32) -> f64 {
+    pub(crate) fn integer(&mut self, lower: i32, upper: i32) -> f64 {
         let width = (i64::from(upper) - i64::from(lower) + 1) as u64;
         if width == 1_u64 << 32 {
             return (i64::from(lower) + i64::from(self.next())) as f64;
@@ -851,6 +932,7 @@ impl SongLuaRandom {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i32> {
     let value = lua
         .coerce_number(args.get(index).cloned().unwrap_or(Value::Nil))?
@@ -871,11 +953,13 @@ impl Default for SongLuaRandom {
     fn default() -> Self { Self::seeded(1) }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) struct RandomSnapshot {
     lua: Lua,
     previous: SongLuaRandom,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl Drop for RandomSnapshot {
     fn drop(&mut self) {
         if let Some(mut state) = self.lua.app_data_mut::<SongLuaRandomState>() {
@@ -884,6 +968,7 @@ impl Drop for RandomSnapshot {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn preserve_random(lua: &Lua) -> Option<RandomSnapshot> {
     let state = lua.app_data_ref::<SongLuaRandomState>()?;
     Some(RandomSnapshot {
@@ -892,6 +977,7 @@ pub(crate) fn preserve_random(lua: &Lua) -> Option<RandomSnapshot> {
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
     // VM-owned state moves with Lua and is accessed under mlua's VM lock.
     // No separately shared mutable cell or application mutex is needed.
@@ -941,6 +1027,7 @@ fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
     math.set("random", random)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_default_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     install_stdlib_compat(
         lua,
@@ -955,6 +1042,7 @@ pub fn install_default_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_game_command_table(lua: &Lua, callbacks: SongLuaCompatCallbacks) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(

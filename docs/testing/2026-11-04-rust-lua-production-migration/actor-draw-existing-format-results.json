@@ -1,0 +1,30 @@
+[
+  {
+    "file": "crates/deadsync-song-lua/src/lib.rs",
+    "version": "current",
+    "exit_code": 1,
+    "log": "actor-draw-format-current-lib.rs.log",
+    "log_sha256": "029ef9a281e8cfbdce2433e9db967f140bb612871dade5a05495537cbe79a40e"
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/lib.rs",
+    "version": "frozen_baseline",
+    "exit_code": 1,
+    "log": "actor-draw-format-frozen_baseline-lib.rs.log",
+    "log_sha256": "41ea986ace1e63602dc7a243c6628b5f07d7ccfd670b98fb7a3422207903c54f"
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/draw_capture.rs",
+    "version": "current",
+    "exit_code": 1,
+    "log": "actor-draw-format-current-draw_capture.rs.log",
+    "log_sha256": "417a36e450f71e203bcc6d070a914d8c61696c6a7116be5792af287c622503f0"
+  },
+  {
+    "file": "crates/deadsync-song-lua/src/draw_capture.rs",
+    "version": "frozen_baseline",
+    "exit_code": 1,
+    "log": "actor-draw-format-frozen_baseline-draw_capture.rs.log",
+    "log_sha256": "ebb79c72b4f04e316ea5f294249075275eb855659eca5a79d5639a00e13d4ebe"
+  }
+]

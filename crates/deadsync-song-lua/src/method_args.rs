@@ -1,13 +1,16 @@
 use std::ffi::c_int;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{FromLua, FromLuaMulti, Lua, MultiValue, Value, state::RawLua};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// The argument prefix used by small numeric methods, including explicit nils.
 pub(crate) struct MethodArgs<const N: usize> {
     values: [Value; N],
     len: usize,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl<const N: usize> MethodArgs<N> {
     pub(crate) fn front(&self) -> Option<&Value> {
         (self.len > 0).then(|| &self.values[0])
@@ -20,6 +23,7 @@ impl<const N: usize> MethodArgs<N> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl<const N: usize> FromLuaMulti for MethodArgs<N> {
     fn from_lua_multi(mut values: MultiValue, _lua: &Lua) -> mlua::Result<Self> {
         let len = values.len().min(N);

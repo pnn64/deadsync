@@ -1,0 +1,1318 @@
+--- crates/deadsync-song-lua/src/rust_engine.rs before
++++ crates/deadsync-song-lua/src/rust_engine.rs
+@@ -24,7 +24,7 @@
+ mod song_discovery;
+ mod song_layers;
+ pub use song_activation::{SongActivation, SongStartupState};
+-pub use song_discovery::SongTweenReplay;
++pub use song_discovery::{SongReplayImmediateUpdates, SongReplayScheduledUpdate, SongTweenReplay};
+ pub use song_layers::{SongInitialStates, SongLayerPlan};
+ mod host_clocks;
+ mod input;
+--- crates/deadsync-song-lua/src/rust_engine/song_discovery.rs before
++++ crates/deadsync-song-lua/src/rust_engine/song_discovery.rs
+@@ -32,7 +32,62 @@
+     }
+ }
+ 
++/// Owned compiler publication from setters which bypass the tween queue.
++/// Each batch contains only actors touched since the previous drain.
++#[derive(Clone, Debug, Default, PartialEq)]
++pub struct SongReplayImmediateUpdates {
++    pub overlay_index: usize,
++    pub values: Vec<(
++        crate::SongLuaOverlayUpdateTarget,
++        crate::SongLuaOverlayUpdateValue,
++    )>,
++    pub scheduled: Vec<SongReplayScheduledUpdate>,
++    pub final_values: Vec<(
++        crate::SongLuaOverlayUpdateTarget,
++        crate::SongLuaOverlayUpdateValue,
++    )>,
++    pub tween_reset: bool,
++}
++
++/// Existing compiler scheduling contract. Immediate setters use zero duration
++/// and delay, with an optional queued-command publication timestamp.
++#[derive(Clone, Debug, PartialEq)]
++pub struct SongReplayScheduledUpdate {
++    pub progress: Option<std::sync::Arc<[[f32; 2]]>>,
++    pub dispatch_seconds: Option<f64>,
++    pub frame_advance: f32,
++    pub initial_value: Option<crate::SongLuaOverlayUpdateValue>,
++    pub delay_seconds: f32,
++    pub duration_seconds: f32,
++    pub easing: Option<String>,
++    pub opt1: Option<f32>,
++    pub target: crate::SongLuaOverlayUpdateTarget,
++    pub value: crate::SongLuaOverlayUpdateValue,
++}
++
+ impl RustSongRuntime {
++    /// Consume immediate-property output since the last drain. Queued setters
++    /// retain their dispatch time, starting value and final same-frame value.
++    /// This complements tween pose/progress capture; delayed non-tween setters
++    /// require the compiler's separate scheduled-property capture.
++    pub fn drain_song_immediate_updates(
++        &mut self,
++        screen: ActorScene,
++    ) -> Option<Vec<SongReplayImmediateUpdates>> {
++        self.actor_scene_root(screen)?;
++        self.actors.drain_song_immediate_updates(screen)
++    }
++
++    /// Message provenance for the tween and immediate setters captured so far.
++    /// Draining frame output does not discard this session-level history.
++    pub fn song_replay_messages(
++        &self,
++        screen: ActorScene,
++    ) -> Option<Vec<crate::SongLuaStatefulMessageCapture>> {
++        self.actor_scene_root(screen)?;
++        self.actors.song_replay_messages(screen)
++    }
++
+     /// Advance preparation at an explicit song time, separate from actor delta
+     /// and the script's music/beat clock. The caller sets script clocks first.
+     pub fn advance_song_replay(
+@@ -62,7 +117,7 @@
+     /// Ordered message writes to the replay's overlay tween properties. Indices
+     /// refer to the overlay slice passed to begin_song_replay. Equal-value writes
+     /// and cross-actor mutations are retained; output owns no Lua handles.
+-    /// This exposes tween properties only; the remaining compiler update capture
++    /// This exposes tween properties only; the remaining compiler update capture
+     /// is a separate integration step.
+     pub fn song_replay_tween_messages(
+         &self,
+--- crates/deadsync-song-lua/src/rust_engine/actors.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -6,8 +6,11 @@
+ mod initial_state;
+ mod song_activation;
+ mod song_capture;
++mod song_immediate;
+ mod song_layers;
+ mod song_messages;
++#[cfg(feature = "test-support")]
++pub(super) use song_immediate::TARGETS as IMMEDIATE_CAPTURE_TARGETS;
+ mod song_replay;
+ pub use capture::ActorCommandCapture;
+ mod courses;
+@@ -230,7 +233,8 @@
+ struct Store {
+     clock: Arc<super::Clock>,
+     playback: bool,
+-    replay_frame: Option<(u64, f32)>,
++    replay_frame: Option<(u64, f64)>,
++    replay_dispatch: Option<f64>,
+     constructing_capture: bool,
+     defer_registration: bool,
+     preparing: bool,
+--- crates/deadsync-song-lua/src/rust_engine/actors/capture.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
+@@ -231,6 +231,7 @@
+     }
+     drop(guard);
+     song_messages::record(call, store, id, &delta);
++    song_immediate::delta(call, store, id, &delta, immediate);
+ }
+ 
+ fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>) {
+@@ -346,8 +347,10 @@
+ pub(super) fn property(call: &mut HostCall<'_>, store: &Shared, id: TableId, name: &str) {
+     let mut guard = store.lock().unwrap();
+     let scope = guard.capture_scope;
+-    let immediate_visibility =
+-        scope.is_some() || guard.startup_queues.is_some() || guard.startup_discovery;
++    let immediate_visibility = scope.is_some()
++        || guard.startup_queues.is_some()
++        || guard.startup_discovery
++        || guard.replay_frame.is_some();
+     let actor = guard.actors.get_mut(&id).unwrap();
+     if actor.capture.is_none() && actor.replay.is_none() {
+         return;
+@@ -411,8 +414,14 @@
+         "skewx" => delta.skew_x = Some(pose.skew_x),
+         "skewy" => delta.skew_y = Some(pose.skew_y),
+         "heading" | "pitch" | "roll" => delta.quaternion = Some(pose.quaternion),
+-        "halign" => delta.halign = Some(render.halign),
+-        "valign" => delta.valign = Some(render.valign),
++        "halign" => {
++            delta.halign = Some(render.halign);
++            immediate = true;
++        }
++        "valign" => {
++            delta.valign = Some(render.valign);
++            immediate = true;
++        }
+         // Immediate renderer/base-transform properties do not join a tween.
+         "basealpha" => {
+             delta.base_alpha = Some(render.base_alpha);
+@@ -462,6 +471,7 @@
+     record(actor, &delta, immediate, scope);
+     drop(guard);
+     song_messages::record(call, store, id, &delta);
++    song_immediate::delta(call, store, id, &delta, immediate);
+ }
+ 
+ pub(super) fn queue(
+--- crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
+@@ -87,6 +87,7 @@
+             actor.sync_rotation_getters();
+         }
+     }
++    song_immediate::cancel(call, store, id, true);
+     song_messages::reset_timing(call, store, id)?;
+     song_replay::sync_getters(call, store, id)?;
+     // Finish also visits native named children. Hurry, TimeLeft and ordinary
+@@ -375,6 +376,7 @@
+                     actor.sync_rotation_getters();
+                 }
+             }
++            song_immediate::cancel(call, store, actor, false);
+             song_messages::reset_timing(call, store, actor)?;
+             song_replay::sync_getters(call, store, actor)?;
+         }
+@@ -507,7 +509,7 @@
+         let command = {
+             let mut store = store.lock().unwrap();
+             let sync = !store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
+-            let time = store.replay_frame.map_or(0., |(_, time)| time);
++            let time = store.replay_frame.map_or(0., |(_, time)| time as f32);
+             let actor = store.actors.get_mut(&actor).unwrap();
+             let Some(step) = actor.queue.front_mut() else {
+                 break;
+@@ -554,11 +556,18 @@
+                 return Err(call.error(b"nonterminating zero-time actor command queue"));
+             }
+             song_messages::reset_timing(call, store, actor)?;
+-            if let Some(message) = command.strip_prefix(b"!") {
+-                messages::queued(call, store, message)?;
++            let previous = {
++                let mut guard = store.lock().unwrap();
++                let time = guard.replay_frame.map(|(_, time)| time);
++                std::mem::replace(&mut guard.replay_dispatch, time)
++            };
++            let result = if let Some(message) = command.strip_prefix(b"!") {
++                messages::queued(call, store, message)
+             } else {
+-                play(call, store, actor, &command, None, true)?;
+-            }
++                play(call, store, actor, &command, None, true)
++            };
++            store.lock().unwrap().replay_dispatch = previous;
++            result?;
+         }
+     }
+     Ok(())
+@@ -686,6 +695,13 @@
+             let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+             call.raw_table_set(node.actor, key, Value::Number(left.max(0.0) as f64))?;
+             if left <= 0.0 {
++                song_immediate::record(
++                    call,
++                    store,
++                    node.actor,
++                    crate::SongLuaOverlayUpdateTarget::Hibernating,
++                    crate::SongLuaOverlayUpdateValue::Bool(false),
++                );
+                 -left
+             } else {
+                 models::advance_materials(store, node.actor, material_delta);
+--- crates/deadsync-song-lua/src/rust_engine/actors/render.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/render.rs
+@@ -1,6 +1,6 @@
+ //! Song actor render bindings. Tween destinations and immediate render settings
+ //! stay separate so queued commands cannot delay native immediate properties.
+-use super::{Shared, arg, capture, children, float_scalar, helper, song_replay};
++use super::{Shared, arg, capture, children, float_scalar, helper, song_immediate, song_replay};
+ use deadlib_lua::{Error, HostCall, TableId, Value};
+ use deadlib_render_core::CullMode;
+ 
+@@ -349,6 +349,7 @@
+         let text_align = (name == "horizalign")
+             .then(|| text(call, value).and_then(crate::parse_overlay_text_align))
+             .flatten();
++        let shared = store;
+         let mut store = store.lock().unwrap();
+         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+         if let Some(value) = align {
+@@ -360,6 +361,29 @@
+         }
+         if let Some(value) = text_align {
+             render.text_align = value;
++        }
++        drop(store);
++        if let Some(value) = align {
++            song_immediate::record(
++                call,
++                shared,
++                actor,
++                if matches!(name, "valign" | "vertalign") {
++                    crate::SongLuaOverlayUpdateTarget::VAlign
++                } else {
++                    crate::SongLuaOverlayUpdateTarget::HAlign
++                },
++                crate::SongLuaOverlayUpdateValue::F32(value),
++            );
++        }
++        if let Some(value) = text_align {
++            song_immediate::record(
++                call,
++                shared,
++                actor,
++                crate::SongLuaOverlayUpdateTarget::TextAlign,
++                crate::SongLuaOverlayUpdateValue::TextAlign(value),
++            );
+         }
+     } else if name == "backfacecull" || name == "cullmode" {
+         let mode = if name == "backfacecull" {
+@@ -380,6 +404,13 @@
+             .state
+             .render
+             .cull_mode = mode;
++        song_immediate::record(
++            call,
++            store,
++            actor,
++            crate::SongLuaOverlayUpdateTarget::CullMode,
++            crate::SongLuaOverlayUpdateValue::CullMode(mode),
++        );
+     } else if matches!(name, "zbuffer" | "ztest" | "zwrite") {
+         let enabled = strict_boolean(call, name)?;
+         depth(
+--- crates/deadsync-song-lua/src/rust_engine/actors/effects.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/effects.rs
+@@ -1,6 +1,6 @@
+ //! Native actor effect selection, phase and spin, before tween advancement.
+ use super::{Actor, Shared, arg, float_scalar, helper, render, table};
+-use crate::{SongLuaOverlayState, rust_engine::Clock};
++use crate::{SongLuaOverlayState, SongLuaOverlayUpdateTarget as Target, rust_engine::Clock};
+ use deadlib_lua::{Error, HostCall, TableId, Value};
+ use deadlib_present::anim::{EffectClock, EffectMode};
+ use std::sync::atomic::Ordering;
+@@ -56,7 +56,8 @@
+     }
+ }
+ 
+-fn select(actor: &mut Actor, name: &str) {
++fn select(actor: &mut Actor, name: &str) -> smallvec::SmallVec<[Target; 8]> {
++    let mut fields = smallvec::smallvec![Target::Vibrate, Target::Rainbow, Target::EffectMode];
+     if name == "spin" {
+         super::capture::start_spin(actor);
+     }
+@@ -88,11 +89,21 @@
+     match name {
+         "glowblink" | "glowshift" | "glowramp" => {
+             set_period(render, 1.0);
++            fields.push(Target::EffectPeriod);
++            if render.effect_timing.is_some() {
++                fields.push(Target::EffectTiming);
++            }
++            fields.extend([Target::EffectColor1, Target::EffectColor2]);
+             render.effect_color1 = [1.0, 1.0, 1.0, 0.2];
+             render.effect_color2 = [1.0, 1.0, 1.0, 0.8];
+         }
+         "diffuseblink" | "diffuseshift" | "diffuseramp" => {
+             set_period(render, 1.0);
++            fields.push(Target::EffectPeriod);
++            if render.effect_timing.is_some() {
++                fields.push(Target::EffectTiming);
++            }
++            fields.extend([Target::EffectColor1, Target::EffectColor2]);
+             render.effect_color1 = if name == "diffuseblink" {
+                 [0.5; 4]
+             } else {
+@@ -103,21 +114,37 @@
+         "bob" | "bounce" | "wag" | "pulse" => {
+             if name != "bob" || reset {
+                 set_period(render, 2.0);
+-            }
++                fields.push(Target::EffectPeriod);
++                if render.effect_timing.is_some() {
++                    fields.push(Target::EffectTiming);
++                }
++            }
++            fields.push(Target::EffectMagnitude);
+             render.effect_magnitude = match name {
+                 "pulse" => [0.5, 1.0, 1.0],
+                 "wag" => [0.0, 0.0, 20.0],
+                 _ => [0.0, 20.0, 0.0],
+             };
+         }
+-        "rainbow" => set_period(render, 2.0),
++        "rainbow" => {
++            set_period(render, 2.0);
++            fields.push(Target::EffectPeriod);
++            if render.effect_timing.is_some() {
++                fields.push(Target::EffectTiming);
++            }
++        }
+         "spin" => {
++            fields.push(Target::EffectMagnitude);
+             actor.effects.spin_seen = true;
+             render.effect_magnitude = [0.0, 0.0, 180.0];
+         }
+-        "vibrate" => render.effect_magnitude = [10.0; 3],
++        "vibrate" => {
++            fields.push(Target::EffectMagnitude);
++            render.effect_magnitude = [10.0; 3];
++        }
+         _ => {}
+     }
++    fields
+ }
+ 
+ fn number(call: &mut HostCall<'_>, value: Value) -> Result<f64, Error> {
+@@ -197,6 +224,7 @@
+     name: &str,
+ ) -> Result<(), Error> {
+     let value = arg(call, 1);
++    let mut fields = smallvec::SmallVec::<[Target; 8]>::new();
+     match name {
+         "GetSecsIntoEffect" | "GetEffectDelta" => {
+             let (state, clock) = {
+@@ -230,8 +258,10 @@
+             let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+             if name == "effectcolor1" {
+                 render.effect_color1 = color;
++                fields.push(Target::EffectColor1);
+             } else {
+                 render.effect_color2 = color;
++                fields.push(Target::EffectColor2);
+             }
+         }
+         "effectperiod" | "effectoffset" => {
+@@ -240,8 +270,13 @@
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 if name == "effectperiod" {
+                     set_period(render, value);
++                    fields.push(Target::EffectPeriod);
++                    if render.effect_timing.is_some() {
++                        fields.push(Target::EffectTiming);
++                    }
+                 } else {
+                     render.effect_offset = value;
++                    fields.push(Target::EffectOffset);
+                 }
+             }
+         }
+@@ -257,6 +292,7 @@
+                 .state
+                 .render
+                 .effect_magnitude = magnitude;
++            fields.push(Target::EffectMagnitude);
+         }
+         "effecttiming" => {
+             let mut timing = [0.0; 5];
+@@ -275,6 +311,7 @@
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 render.effect_timing = Some(timing);
+                 render.effect_period = total;
++                fields.extend([Target::EffectTiming, Target::EffectPeriod]);
+             }
+         }
+         "effect_hold_at_full" => {
+@@ -293,6 +330,7 @@
+             }
+             render.effect_timing = Some(timing);
+             render.effect_period = total;
++            fields.extend([Target::EffectTiming, Target::EffectPeriod]);
+         }
+         "effectclock" => {
+             if let Some(raw) = render::text(call, value)
+@@ -303,9 +341,26 @@
+                 render.effect_clock = clock;
+                 render.effect_no_offset = raw.eq_ignore_ascii_case("beatnooffset");
+                 render.effect_timer = raw.eq_ignore_ascii_case("timer");
+-            }
+-        }
+-        _ => select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name),
++                fields.extend([
++                    Target::EffectClock,
++                    Target::EffectNoOffset,
++                    Target::EffectTimer,
++                ]);
++            }
++        }
++        _ => fields = select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name),
++    }
++    if !fields.is_empty() {
++        let state = store.lock().unwrap().actors[&actor].state.render;
++        for target in fields {
++            super::song_immediate::record(
++                call,
++                store,
++                actor,
++                target,
++                crate::perframe::overlay_state_update_value(&state, target),
++            );
++        }
+     }
+     call.push(Value::Table(actor))
+ }
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs
+@@ -540,7 +540,7 @@
+                     Err(stack.error(b"song preparation replay has not started"))
+                 });
+             }
+-            store.replay_frame = Some((screen.id, seconds as f32));
++            store.replay_frame = Some((screen.id, seconds));
+             store.next
+         };
+         let result = self.advance(vm, screen, delta);
+@@ -561,7 +561,7 @@
+         let mut result = HashMap::new();
+         for id in ids {
+             let actor = store.actors.get_mut(&id).unwrap();
+-            lifecycle::sample_replay(actor, time);
++            lifecycle::sample_replay(actor, time as f32);
+             let Some(replay) = &actor.replay else {
+                 continue;
+             };
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_messages.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_messages.rs
+@@ -6,7 +6,8 @@
+ 
+ pub(super) struct Capture {
+     // Identities are owned by this song session's scene, never by this map.
+-    indices: HashMap<TableId, usize>,
++    pub(super) indices: HashMap<TableId, usize>,
++    pub(super) immediate: song_immediate::Capture,
+     writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
+ }
+ 
+@@ -14,11 +15,19 @@
+     pub(super) fn new(indices: impl IntoIterator<Item = (TableId, usize)>) -> Self {
+         Self {
+             indices: indices.into_iter().collect(),
++            immediate: Default::default(),
+             writes: BTreeMap::new(),
+         }
+     }
+ 
+-    fn output(&self) -> Vec<SongLuaStatefulMessageCapture> {
++    pub(super) fn write(&mut self, message: String, write: SongLuaStatefulMessageWrite) {
++        // A pose-only message write still establishes this actor's place in
++        // the frame buffer if an immediate property follows later.
++        self.immediate.touch(write.overlay_index);
++        self.writes.entry(message).or_default().push(write);
++    }
++
++    pub(super) fn output(&self) -> Vec<SongLuaStatefulMessageCapture> {
+         self.writes
+             .iter()
+             .map(|(message, writes)| {
+@@ -43,6 +52,26 @@
+ }
+ 
+ impl Actors {
++    pub(in crate::rust_engine) fn song_replay_messages(
++        &self,
++        screen: ActorScene,
++    ) -> Option<Vec<SongLuaStatefulMessageCapture>> {
++        let store = self.store.lock().unwrap();
++        if store.replay_frame?.0 != screen.id {
++            return None;
++        }
++        Some(
++            store
++                .scenes
++                .get(&screen.id)?
++                .song_session
++                .as_ref()?
++                .messages
++                .as_ref()?
++                .output(),
++        )
++    }
++
+     pub(in crate::rust_engine) fn song_replay_tween_messages(
+         &self,
+         screen: ActorScene,
+@@ -59,7 +88,19 @@
+                 .as_ref()?
+                 .messages
+                 .as_ref()?
+-                .output(),
++                .output()
++                .into_iter()
++                .filter_map(|mut capture| {
++                    capture
++                        .writes
++                        .retain(|w| crate::tween_pose::TARGETS.contains(&w.target));
++                    for (_, targets) in &mut capture.overlay_targets {
++                        targets.retain(|t| crate::tween_pose::TARGETS.contains(t));
++                    }
++                    capture.overlay_targets.retain(|(_, t)| !t.is_empty());
++                    (!capture.writes.is_empty()).then_some(capture)
++                })
++                .collect(),
+         )
+     }
+ }
+@@ -218,7 +259,8 @@
+     let pose = TweenPose::from(state);
+     for target in crate::tween_pose::TARGETS {
+         if delta.has_update_target(target) {
+-            capture.writes.entry(context.2.clone()).or_default().push(
++            capture.write(
++                context.2.clone(),
+                 SongLuaStatefulMessageWrite {
+                     overlay_index: context.1,
+                     beat,
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs before
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1346,3 +1346,57 @@
+     captures.retain(|capture| !capture.writes.is_empty());
+     captures
+ }
++
++/// Drain the actual production capture, projecting its immediate-property subset.
++/// The scheduling fields are copied unchanged; no timing is reconstructed here.
++pub fn legacy_drain_song_immediate_updates(
++    lua: &mlua::Lua,
++) -> Result<Vec<super::SongReplayImmediateUpdates>, String> {
++    let targets = super::actors::IMMEDIATE_CAPTURE_TARGETS;
++    let mut output = Vec::new();
++    crate::lua_util::drain_overlay_update_capture(
++        lua,
++        |index, values, scheduled, finals, reset| {
++            let values = values
++                .iter()
++                .filter(|(target, _)| targets.contains(target))
++                .cloned()
++                .collect::<Vec<_>>();
++            let final_values = finals
++                .iter()
++                .filter(|(target, _)| targets.contains(target))
++                .cloned()
++                .collect::<Vec<_>>();
++            let scheduled = scheduled
++                .iter()
++                .filter(|update| targets.contains(&update.target))
++                .map(|update| super::SongReplayScheduledUpdate {
++                    progress: update.progress.clone(),
++                    dispatch_seconds: update.dispatch_seconds,
++                    frame_advance: update.frame_advance,
++                    initial_value: update.initial_value.clone(),
++                    delay_seconds: update.delay_seconds,
++                    duration_seconds: update.duration_seconds,
++                    easing: update.easing.clone(),
++                    opt1: update.opt1,
++                    target: update.target,
++                    value: update.value.clone(),
++                })
++                .collect::<Vec<_>>();
++            if !values.is_empty() || !scheduled.is_empty() || !final_values.is_empty() || reset {
++                output.push(super::SongReplayImmediateUpdates {
++                    overlay_index: index,
++                    values,
++                    scheduled,
++                    final_values,
++                    tween_reset: reset,
++                });
++            }
++            Ok(())
++        },
++    )?;
++    Ok(output)
++}
++pub fn legacy_song_replay_messages(lua: &mlua::Lua) -> Vec<crate::SongLuaStatefulMessageCapture> {
++    crate::lua_util::stateful_message_captures(lua)
++}
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs before
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -1938,3 +1938,363 @@
+     drop(pair);
+     assert_eq!(captured[0].writes.len(), 2);
+ }
++
++fn compare_immediate_updates(
++    pair: &mut Pair,
++) -> Vec<deadsync_song_lua::rust_engine::SongReplayImmediateUpdates> {
++    let expected = test_support::legacy_drain_song_immediate_updates(&pair.native).unwrap();
++    let actual = pair.rust.drain_song_immediate_updates(pair.scene).unwrap();
++    assert_eq!(actual, expected);
++    assert!(
++        pair.rust
++            .drain_song_immediate_updates(pair.scene)
++            .unwrap()
++            .is_empty()
++    );
++    assert!(
++        test_support::legacy_drain_song_immediate_updates(&pair.native)
++            .unwrap()
++            .is_empty()
++    );
++    assert_eq!(
++        pair.rust.song_replay_messages(pair.scene).unwrap(),
++        test_support::legacy_song_replay_messages(&pair.native)
++    );
++    actual
++}
++
++#[test]
++fn immediate_capture_preserves_base_alignment_size_visibility_and_explicit_writes() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            InitCommand=function(self)saved.listener=self end,
++            ChangeMessageCommand=function(self,p)p.apply(saved.target);collectgarbage()end,
++            Def.Quad{
++                InitCommand=function(self)saved.target=self end,
++                OnCommand=function(self)self:linear(1):x(1)end,
++            },
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "immediate properties",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    assert!(pair.rust.drain_song_immediate_updates(pair.scene).is_none());
++    begin_message_replay(&mut pair, &native, &rust, &["target"]);
++    for source in [
++        "a:basezoom(2):basezoomx(3):basezoomy(4):basezoomz(5):basealpha(0.5):basealpha(0.5)",
++        "a:baserotationx(10):baserotationy(20):baserotationz(30)",
++        "a:halign(0.2):valign(0.8):align(0.3,0.7):horizalign('left'):vertalign('bottom')",
++        "a:SetWidth(40):SetHeight(50):SetSize(60,70):shadowlength(4):shadowlengthx(5):shadowlengthy(6):shadowcolor(1,0.5,0.25,0.75)",
++        "a:visible(false):visible(false):hibernate(0.25):hibernate(0)",
++        "a:basealpha('invalid'):halign({}):SetWidth(false)",
++    ] {
++        pair.script(&format!(
++            "MESSAGEMAN:Broadcast('Change',{{apply=function(a){source}end}})"
++        ));
++        let output = compare_immediate_updates(&mut pair);
++        if source.contains("basealpha(0.5)") {
++            assert_eq!(
++                output[0]
++                    .values
++                    .iter()
++                    .filter(|(target, _)| *target == Target::BaseAlpha)
++                    .count(),
++                1
++            );
++            let messages = pair.rust.song_replay_messages(pair.scene).unwrap();
++            assert_eq!(
++                messages[0]
++                    .writes
++                    .iter()
++                    .filter(|w| w.target == Target::BaseAlpha && w.value == Update::F32(0.5))
++                    .count(),
++                2
++            );
++        }
++    }
++}
++
++#[test]
++fn immediate_effect_capture_preserves_native_preset_order_and_invalid_argument_rules() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply(saved.target)end,
++            Def.Quad{InitCommand=function(self)saved.target=self end,
++                OnCommand=function(self)self:linear(1):x(2)end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "effect publications",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["target"]);
++    for source in [
++        "a:effecttiming(0.2,0.3,0.4,0.5,0.6):effectperiod(3)",
++        "a:effectcolor1(1,0.2,0.3,0.4):effectcolor2(0.4,0.3,0.2,1):effectmagnitude(2,3,4)",
++        "a:effectclock('beatnooffset'):effectclock('timer'):effectoffset(0.125):effect_hold_at_full(0.75)",
++        "a:diffuseblink():diffuseshift():diffuseramp():glowblink():glowshift():glowramp()",
++        "a:bob():bob():effectperiod(3):bob():bounce():wag():pulse()",
++        "a:rainbow():rainbow():spin():vibrate():stopeffect()",
++        "a:effecttiming(0,0,0,0):effecttiming(false):effectclock('invalid'):effectperiod(false):effectoffset({})",
++        "a:effectmagnitude():effectcolor1():effectcolor2()",
++    ] {
++        pair.script(&format!(
++            "MESSAGEMAN:Broadcast('Change',{{apply=function(a){source};collectgarbage()end}})"
++        ));
++        compare_immediate_updates(&mut pair);
++    }
++}
++
++#[test]
++fn queued_immediate_capture_preserves_dispatch_precision_final_values_and_cancellation() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            InitCommand=function(self)saved.parent=self end,
++            OnCommand=function(self)self:sleep(0.125):queuecommand('Apply')end,
++            ApplyCommand=function(self)
++                saved.target:basealpha(0.25):basealpha(0.5):align(0.2,0.8)
++                MESSAGEMAN:Broadcast('Tint')
++                saved.target:stoptweening();collectgarbage()
++            end,
++            TintMessageCommand=function(self)saved.target:shadowcolor(1,0.5,0.25,1)end,
++            Def.Quad{InitCommand=function(self)saved.target=self end,
++                OnCommand=function(self)self:linear(1):x(2)end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "queued immediate publications",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["target"]);
++    pair.script("saved.target:basealpha(1)");
++    let time = 16777216.125;
++    deadsync_song_lua::set_compile_song_runtime_values(&pair.native, 3., 4.).unwrap();
++    pair.rust.set_values(3., 4.).unwrap();
++    test_support::legacy_advance_song_replay(&pair.native, &native, time, 0.25).unwrap();
++    pair.rust
++        .advance_song_replay(pair.scene, time, 0.25)
++        .unwrap();
++    pair.script("saved.target:basealpha(0.75)");
++    let frames = compare_immediate_updates(&mut pair);
++    assert_eq!(frames.len(), 1);
++    assert!(frames[0].tween_reset);
++    let alpha = frames[0]
++        .scheduled
++        .iter()
++        .find(|u| u.target == Target::BaseAlpha)
++        .unwrap();
++    assert_eq!(alpha.dispatch_seconds, Some(time));
++    assert_eq!(alpha.initial_value, Some(Update::F32(1.)));
++    assert_eq!(alpha.value, Update::F32(0.5));
++    assert_eq!(
++        frames[0]
++            .final_values
++            .iter()
++            .find(|(t, _)| *t == Target::BaseAlpha)
++            .unwrap()
++            .1,
++        Update::F32(0.75)
++    );
++    // Multiple dispatches without a drain retain publication order. Finish
++    // promotes only the final destination for each property.
++    pair.script("saved.target:queuecommand('Promote');saved.target.PromoteCommand=function(a)a:basealpha(0.2):basealpha(0.4)end");
++    test_support::legacy_advance_song_replay(&pair.native, &native, time + 1., 0.25).unwrap();
++    pair.rust
++        .advance_song_replay(pair.scene, time + 1., 0.25)
++        .unwrap();
++    pair.script("saved.target:queuecommand('Promote')");
++    test_support::legacy_advance_song_replay(&pair.native, &native, time + 2., 0.25).unwrap();
++    pair.rust
++        .advance_song_replay(pair.scene, time + 2., 0.25)
++        .unwrap();
++    pair.script("saved.target:finishtweening()");
++    let frames = compare_immediate_updates(&mut pair);
++    assert!(frames[0].tween_reset && frames[0].scheduled.is_empty());
++    assert!(
++        frames[0]
++            .values
++            .contains(&(Target::BaseAlpha, Update::F32(0.4)))
++    );
++}
++
++#[test]
++fn immediate_capture_keeps_partial_queue_errors_wake_writes_and_owned_output_after_teardown() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            InitCommand=function(self)saved.parent=self end,
++            OnCommand=function(self)self:sleep(0.125):queuecommand('Fail')end,
++            FailCommand=function(self)
++                saved.target:basealpha(0.4):visible(false)
++                error('partial publication')
++            end,
++            Def.Quad{InitCommand=function(self)saved.target=self end,
++                OnCommand=function(self)self:hibernate(0.5):linear(1):x(1)end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "publication lifetime",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["target", "target"]);
++    assert!(test_support::legacy_advance_song_replay(&pair.native, &native, 1., 0.25).is_err());
++    assert!(pair.rust.advance_song_replay(pair.scene, 1., 0.25).is_err());
++    pair.script("saved.target:visible(true);collectgarbage()");
++    let frames = compare_immediate_updates(&mut pair);
++    assert_eq!(frames[0].overlay_index, 1);
++    assert!(
++        frames[0]
++            .values
++            .contains(&(Target::Visible, Update::Bool(true)))
++    );
++    assert_eq!(frames[0].scheduled.len(), 2);
++    test_support::legacy_advance_song_replay(&pair.native, &native, 2., 0.75).unwrap();
++    pair.rust.advance_song_replay(pair.scene, 2., 0.75).unwrap();
++    let wake = compare_immediate_updates(&mut pair);
++    assert!(
++        wake[0]
++            .values
++            .contains(&(Target::Hibernating, Update::Bool(false)))
++    );
++    let mut foreign = RustSongRuntime::new(&pair.context).unwrap();
++    assert!(foreign.drain_song_immediate_updates(pair.scene).is_none());
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    assert!(pair.rust.drain_song_immediate_updates(pair.scene).is_none());
++    assert!(pair.rust.song_replay_messages(pair.scene).is_none());
++    drop(pair);
++    assert_eq!(frames[0].scheduled.len(), 2);
++}
++
++#[test]
++fn immediate_capture_preserves_actor_order_after_message_pose_writes() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply();collectgarbage()end,
++            Def.Quad{InitCommand=function(self)saved.first=self end},
++            Def.Quad{InitCommand=function(self)saved.second=self end},
++            Def.Quad{InitCommand=function(self)saved.pose_only=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "publication order"));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["first", "second", "pose_only"]);
++    for (source, indices) in [
++        (
++            "saved.pose_only:x(5);saved.first:x(1);saved.second:basealpha(0.5);saved.first:basealpha(0.25)",
++            vec![0, 1],
++        ),
++        (
++            "saved.second:y(2);saved.first:visible(false);saved.second:visible(true)",
++            vec![1, 0],
++        ),
++        ("saved.pose_only:linear(1):z(3)", vec![]),
++        (
++            "saved.first:basealpha(1);saved.pose_only:basealpha(0.75)",
++            vec![0, 2],
++        ),
++    ] {
++        pair.script(&format!(
++            "MESSAGEMAN:Broadcast('Change',{{apply=function(){source}end}})"
++        ));
++        let frames = compare_immediate_updates(&mut pair);
++        assert_eq!(
++            frames.iter().map(|f| f.overlay_index).collect::<Vec<_>>(),
++            indices
++        );
++    }
++}
++
++#[test]
++fn immediate_capture_publishes_sprite_state_culling_and_framebuffer_flags() {
++    use deadsync_song_lua::{
++        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
++    };
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            ChangeMessageCommand=function(self,p)p.apply();collectgarbage()end,
++            Def.Sprite{InitCommand=function(self)saved.sprite=self end},
++            Def.ActorFrameTexture{InitCommand=function(self)saved.aft=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "resource publications",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["sprite", "aft"]);
++    for source in [
++        "saved.sprite:linear(1):setstate(2):setstate(2):cullmode('front'):backfacecull(false)",
++        "saved.aft:SetSize(8,8):EnablePreserveTexture(true):Create();saved.aft:EnablePreserveTexture(false)",
++        "saved.sprite:setstate(-1):setstate(1.5):setstate({});assert(not pcall(function()saved.sprite:cullmode('invalid')end));assert(not pcall(function()saved.aft:EnablePreserveTexture(1)end))",
++        "saved.aft:Create()",
++    ] {
++        pair.script(&format!(
++            "MESSAGEMAN:Broadcast('Change',{{apply=function(){source}end}})"
++        ));
++        let frames = compare_immediate_updates(&mut pair);
++        if source.contains("setstate(2)") {
++            assert!(frames[0].scheduled.is_empty());
++            assert!(
++                frames[0]
++                    .values
++                    .contains(&(Target::SpriteStateIndex, Update::U32(2)))
++            );
++        }
++    }
++    // Resource setters dispatched from a queue still publish at the dispatch
++    // time, independently of the receiver's tween destination.
++    pair.script("saved.sprite.ApplyCommand=function(a)a:setstate(3):backfacecull(true);saved.aft:EnablePreserveTexture(true)end;saved.sprite:queuecommand('Apply')");
++    test_support::legacy_advance_song_replay(&pair.native, &native, 2., 2.).unwrap();
++    pair.rust.advance_song_replay(pair.scene, 2., 2.).unwrap();
++    let frames = compare_immediate_updates(&mut pair);
++    assert!(
++        frames
++            .iter()
++            .flat_map(|f| &f.scheduled)
++            .all(|u| u.dispatch_seconds == Some(2.))
++    );
++    assert_eq!(frames.iter().map(|f| f.scheduled.len()).sum::<usize>(), 3);
++}
+--- crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
+@@ -796,6 +796,13 @@
+                 && n.fract() == 0.0
+             {
+                 state(call, store, actor, n as u32, true)?;
++                song_immediate::record(
++                    call,
++                    store,
++                    actor,
++                    crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
++                    crate::SongLuaOverlayUpdateValue::U32(n as u32),
++                );
+             }
+         }
+         "animate" | "texturewrapping" => {
+--- crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs
+@@ -140,13 +140,25 @@
+         "__songlua_state_aft_preserve"
+     };
+     set(call, actor, key, Value::Boolean(value))?;
+-    let mut store = store.lock().unwrap();
+-    let state = &mut store.actors.get_mut(&actor).unwrap().state.render;
++    let mut guard = store.lock().unwrap();
++    let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+     if created {
+         state.aft_created = value;
+     } else {
+         state.aft_preserve = value;
+     }
++    drop(guard);
++    song_immediate::record(
++        call,
++        store,
++        actor,
++        if created {
++            crate::SongLuaOverlayUpdateTarget::AftCreated
++        } else {
++            crate::SongLuaOverlayUpdateTarget::AftPreserve
++        },
++        crate::SongLuaOverlayUpdateValue::Bool(value),
++    );
+     Ok(())
+ }
+ 
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
+@@ -0,0 +1,279 @@
++//! Compiler publication of properties which bypass the actor tween queue.
++use super::super::{SongReplayImmediateUpdates, SongReplayScheduledUpdate};
++use super::*;
++use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as UpdateValue};
++
++// The order within compound setters matters (notably basezoom and Load's size
++// and texture writes). Effects emit their own ordered sequence of writes.
++pub(crate) const TARGETS: &[Target] = &[
++    Target::Visible,
++    Target::Hibernating,
++    Target::HAlign,
++    Target::VAlign,
++    Target::TextAlign,
++    Target::BaseZoom,
++    Target::BaseZoomX,
++    Target::BaseZoomY,
++    Target::BaseZoomZ,
++    Target::BaseAlpha,
++    Target::BaseRotation,
++    Target::ShadowLen,
++    Target::ShadowColor,
++    Target::Size,
++    Target::SpriteTexture,
++    Target::SpriteStateIndex,
++    Target::Vibrate,
++    Target::Rainbow,
++    Target::EffectMode,
++    Target::EffectPeriod,
++    Target::EffectTiming,
++    Target::EffectMagnitude,
++    Target::EffectColor1,
++    Target::EffectColor2,
++    Target::EffectOffset,
++    Target::EffectClock,
++    Target::EffectNoOffset,
++    Target::EffectTimer,
++    Target::CullMode,
++    Target::AftPreserve,
++    Target::AftCreated,
++];
++
++#[derive(Default)]
++pub(super) struct Capture {
++    touched: Vec<usize>,
++    frames: HashMap<usize, SongReplayImmediateUpdates>,
++}
++
++fn replace(values: &mut Vec<(Target, UpdateValue)>, target: Target, value: UpdateValue) {
++    if let Some((_, old)) = values.iter_mut().find(|(key, _)| *key == target) {
++        *old = value;
++    } else {
++        values.push((target, value));
++    }
++}
++
++impl Capture {
++    pub(super) fn touch(&mut self, index: usize) -> &mut SongReplayImmediateUpdates {
++        self.frames.entry(index).or_insert_with(|| {
++            self.touched.push(index);
++            SongReplayImmediateUpdates {
++                overlay_index: index,
++                ..Default::default()
++            }
++        })
++    }
++
++    fn record(&mut self, index: usize, target: Target, value: UpdateValue, dispatch: Option<f64>) {
++        let frame = self.touch(index);
++        replace(&mut frame.final_values, target, value.clone());
++        if let Some(seconds) = dispatch {
++            if let Some(previous) = frame
++                .scheduled
++                .iter_mut()
++                .find(|update| update.target == target && update.dispatch_seconds == Some(seconds))
++            {
++                previous.value = value;
++            } else {
++                let initial_value = frame
++                    .values
++                    .iter()
++                    .find(|(key, _)| *key == target)
++                    .map(|(_, value)| value.clone());
++                frame.scheduled.push(SongReplayScheduledUpdate {
++                    progress: None,
++                    dispatch_seconds: Some(seconds),
++                    frame_advance: 0.,
++                    initial_value,
++                    delay_seconds: 0.,
++                    duration_seconds: 0.,
++                    easing: None,
++                    opt1: None,
++                    target,
++                    value,
++                });
++            }
++        } else {
++            replace(&mut frame.values, target, value);
++        }
++    }
++
++    fn drain(&mut self) -> Vec<SongReplayImmediateUpdates> {
++        self.touched
++            .drain(..)
++            .map(|index| self.frames.remove(&index).unwrap())
++            .filter(|frame| {
++                frame.tween_reset
++                    || !frame.values.is_empty()
++                    || !frame.scheduled.is_empty()
++                    || !frame.final_values.is_empty()
++            })
++            .collect()
++    }
++}
++
++impl Actors {
++    pub(in crate::rust_engine) fn drain_song_immediate_updates(
++        &self,
++        screen: ActorScene,
++    ) -> Option<Vec<SongReplayImmediateUpdates>> {
++        let mut store = self.store.lock().unwrap();
++        if store.replay_frame?.0 != screen.id {
++            return None;
++        }
++        Some(
++            store
++                .scenes
++                .get_mut(&screen.id)?
++                .song_session
++                .as_mut()?
++                .messages
++                .as_mut()?
++                .immediate
++                .drain(),
++        )
++    }
++}
++
++// A capture's actor IDs are traced by its enclosing scene. Lookup after each Lua
++// access also tolerates authored reentry without holding a Store lock across it.
++fn context(store: &Store, id: TableId) -> Option<(u64, usize)> {
++    if store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
++        return None;
++    }
++    let (owner, _) = store.replay_frame?;
++    if store.retired_scenes.contains_key(&owner) {
++        return None;
++    }
++    let capture = store
++        .scenes
++        .get(&owner)?
++        .song_session
++        .as_ref()?
++        .messages
++        .as_ref()?;
++    Some((owner, *capture.indices.get(&id)?))
++}
++
++pub(super) fn record(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    target: Target,
++    value: UpdateValue,
++) {
++    if context(&store.lock().unwrap(), id).is_none() {
++        return;
++    }
++    let beat = effects::values(call, false).map_or(0., |values| values[0]);
++    let mut guard = store.lock().unwrap();
++    let Some((owner, index)) = context(&guard, id) else {
++        return;
++    };
++    let dispatch = guard.replay_dispatch;
++    let message = guard.active_message.clone();
++    let capture = guard
++        .scenes
++        .get_mut(&owner)
++        .unwrap()
++        .song_session
++        .as_mut()
++        .unwrap()
++        .messages
++        .as_mut()
++        .unwrap();
++    if let Some(message) = message {
++        capture.write(
++            message,
++            crate::SongLuaStatefulMessageWrite {
++                overlay_index: index,
++                beat,
++                target,
++                value: value.clone(),
++                delay_seconds: 0.,
++                duration_seconds: 0.,
++                easing: None,
++                opt1: None,
++            },
++        );
++    }
++    capture.immediate.record(index, target, value, dispatch);
++}
++
++pub(super) fn delta(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    delta: &crate::SongLuaOverlayStateDelta,
++    immediate: bool,
++) {
++    if !immediate || context(&store.lock().unwrap(), id).is_none() {
++        return;
++    }
++    let mut state = crate::SongLuaOverlayState::default();
++    crate::apply_overlay_delta(&mut state, delta);
++    for &target in TARGETS {
++        if delta.has_update_target(target) {
++            record(
++                call,
++                store,
++                id,
++                target,
++                crate::perframe::overlay_state_update_value(&state, target),
++            );
++        }
++    }
++}
++
++pub(super) fn cancel(call: &mut HostCall<'_>, store: &Shared, id: TableId, finish: bool) {
++    if context(&store.lock().unwrap(), id).is_none() {
++        return;
++    }
++    let beat = effects::values(call, false).map_or(0., |values| values[0]);
++    let mut guard = store.lock().unwrap();
++    let Some((owner, index)) = context(&guard, id) else {
++        return;
++    };
++    let message = guard.active_message.clone();
++    let capture = guard
++        .scenes
++        .get_mut(&owner)
++        .unwrap()
++        .song_session
++        .as_mut()
++        .unwrap()
++        .messages
++        .as_mut()
++        .unwrap();
++    let frame = capture.immediate.touch(index);
++    frame.tween_reset = true;
++    // Stop cannot discard an immediate setter merely because it was published
++    // by a queued command. Finish promotes those pending publications now.
++    if finish {
++        let mut values = Vec::new();
++        for update in std::mem::take(&mut frame.scheduled) {
++            replace(&mut values, update.target, update.value);
++        }
++        for (target, value) in &values {
++            replace(&mut frame.values, *target, value.clone());
++            replace(&mut frame.final_values, *target, value.clone());
++        }
++        if let Some(message) = message {
++            for (target, value) in values {
++                capture.write(
++                    message.clone(),
++                    crate::SongLuaStatefulMessageWrite {
++                        overlay_index: index,
++                        beat,
++                        target,
++                        value,
++                        delay_seconds: 0.,
++                        duration_seconds: 0.,
++                        easing: None,
++                        opt1: None,
++                    },
++                );
++            }
++        }
++    }
++}

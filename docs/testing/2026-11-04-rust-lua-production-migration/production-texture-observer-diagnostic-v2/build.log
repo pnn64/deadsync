@@ -1,0 +1,25 @@
+warning: patch `rfd v0.17.2 (C:\GitHub\deadsync\vendor\rfd-win7)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: profile package spec `sha2` in profile `dev` did not match any packages
+
+help: a package with a similar name exists: `slab`
+warning: unused import: `SongLuaMessageEvent`
+  --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> C:\GitHub\deadsync\crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+   Compiling production-texture-observer-control-v2 v0.1.0 (C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-texture-observer-diagnostic-v2)
+    Finished `dev` profile [unoptimized] target(s) in 22.14s

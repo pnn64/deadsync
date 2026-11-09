@@ -1,14 +1,12 @@
 use deadlib_lua::{Value, Vm, compile_named};
-use lua_reference::Lua;
 
-struct Oracle {
+struct Harness {
     vm: Vm,
-    lua: Lua,
 }
 
 #[test]
 fn protected_calls_validate_the_required_native_slots() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "pcall()",
         "xpcall()",
         "xpcall(nil)",
@@ -23,7 +21,7 @@ fn protected_calls_validate_the_required_native_slots() {
 
 #[test]
 fn nul_format_conversions_preserve_native_error_context_and_recovery() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "string.format('%',17)",
         "return string.format('%\\000tail',17)",
         "return ('prefix%0'):format(17)",
@@ -33,13 +31,9 @@ fn nul_format_conversions_preserve_native_error_context_and_recovery() {
         "local co=coroutine.create(function()string.format('%\\000tail',17)end);local ok,e=coroutine.resume(co);error(e,0)",
     ]);
 }
-impl Oracle {
+impl Harness {
     fn new() -> Self {
-        // SAFETY: fixed developer cases use only the official standard libraries.
-        Self {
-            vm: Vm::new(),
-            lua: unsafe { Lua::unsafe_new() },
-        }
+        Self { vm: Vm::new() }
     }
     fn check(&mut self, body: &str) {
         let source =
@@ -53,20 +47,7 @@ impl Oracle {
             }
             other => panic!("unexpected results for {body}: {other:?}"),
         };
-        let (ok, error): (bool, Option<lua_reference::LuaString>) = self
-            .lua
-            .load(source.as_bytes())
-            .set_name("=native-errors")
-            .eval()
-            .unwrap();
-        let expected = (ok, error.map(|e| e.as_bytes().to_vec()));
-        assert_eq!(
-            actual,
-            expected,
-            "{body}\nRust: {:?}\nC: {:?}",
-            actual.1.as_deref().map(String::from_utf8_lossy),
-            expected.1.as_deref().map(String::from_utf8_lossy)
-        );
+        reference_test::assert_debug("tests/native_errors.rs::check::expected", &actual);
     }
     fn cases(&mut self, cases: &[&str]) {
         for body in cases {
@@ -77,7 +58,7 @@ impl Oracle {
 
 #[test]
 fn native_names_aliases_methods_tail_calls_and_binary_field_names() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "math.sin(false)",
         "return math.sin('a')",
         "local f=math.sin;f(nil)",
@@ -98,7 +79,7 @@ fn native_names_aliases_methods_tail_calls_and_binary_field_names() {
 
 #[test]
 fn generated_missing_nil_and_type_checks_across_native_libraries() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for function in [
         "math.sin",
         "math.pow",
@@ -157,7 +138,7 @@ fn generated_missing_nil_and_type_checks_across_native_libraries() {
 
 #[test]
 fn validation_order_options_and_argument_domains_match_reference() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "rawget(false)",
         "rawset(false)",
         "rawget({},nil)",
@@ -197,7 +178,7 @@ fn validation_order_options_and_argument_domains_match_reference() {
 
 #[test]
 fn file_userdata_types_options_and_format_arguments_keep_native_context() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "getmetatable(io.stdin).__gc()","getmetatable(io.stdin).__tostring(false)",
         "io.close(false)","io.input(false)","io.output(false)","io.read(false)","io.read('bad')","io.read('*bad')",
         "local f=assert(io.tmpfile());local ok,e=pcall(function()f:read(false)end);f:close();error(e,0)",
@@ -209,7 +190,7 @@ fn file_userdata_types_options_and_format_arguments_keep_native_context() {
 
 #[test]
 fn environment_and_stack_argument_errors_preserve_validation_order() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "getfenv(-1)",
         "getfenv(999999)",
         "setfenv(-1,{})",
@@ -229,7 +210,7 @@ fn environment_and_stack_argument_errors_preserve_validation_order() {
 
 #[test]
 fn native_error_context_survives_dispatch_callbacks_and_hook_argument_mutation() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local t={foreach=table.foreach};t:foreach(false)",
         "local t=setmetatable({},{__call=math.sin});return t()",
         "local t={f=setmetatable({},{__call=math.pow})};return t:f(1)",
@@ -257,6 +238,7 @@ fn failed_named_file_operations_keep_the_caller_and_path_bytes() {
             Err(error) => panic!("create fixture: {error}"),
         }
     };
+    reference_test::register_path(&directory);
     let missing = directory
         .join("missing.lua")
         .to_string_lossy()
@@ -265,10 +247,14 @@ fn failed_named_file_operations_keep_the_caller_and_path_bytes() {
         .join("absent/output.lua")
         .to_string_lossy()
         .replace('\\', "/");
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     oracle.check(&format!("io.input({missing:?})"));
     oracle.check(&format!("io.output({nested:?})"));
     oracle.check(&format!("io.lines({missing:?})"));
     oracle.check(&format!("local f=io.lines;f({missing:?})"));
     std::fs::remove_dir(directory).unwrap();
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

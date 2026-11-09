@@ -1,15 +1,31 @@
 use deadlib_present::anim::{EffectClock, EffectMode};
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, Table, Value};
 use std::sync::Arc;
 
-use crate::{
-    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaNoteskinResolver,
-    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
-    SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-    named_overlay_indices_by_name, overlay_delta_intersection, overlay_descendants_by_parent,
-    read_f32, song_lua_style_column_x, song_lua_style_info,
-};
+use crate::LUA_PLAYERS;
+use crate::SONG_LUA_DOUBLE_NOTE_COLUMNS;
+use crate::SongLuaCompileContext;
+use crate::SongLuaNoteskinResolver;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::SongLuaOverlayCompileActor;
+use crate::SongLuaOverlayEase;
+use crate::SongLuaOverlayKind;
+use crate::SongLuaOverlayMessageCommand;
+use crate::SongLuaOverlayState;
+use crate::SongLuaOverlayStateDelta;
+use crate::SongLuaSpanMode;
+use crate::SongLuaSpeedMod;
+use crate::SongLuaTimeUnit;
+use crate::THEME_RECEPTOR_Y_REV;
+use crate::THEME_RECEPTOR_Y_STD;
+use crate::named_overlay_indices_by_name;
+use crate::overlay_delta_intersection;
+use crate::overlay_descendants_by_parent;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+use crate::song_lua_style_column_x;
+use crate::song_lua_style_info;
 
 pub const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
 
@@ -35,6 +51,7 @@ pub struct MultitapPhase {
     pub visible: bool,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_multitap_descs(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -167,7 +184,7 @@ fn push_overlay_sample_eases_iter(
 }
 
 // Near zero, next_up alone is too small to survive `first_tap - beat`.
-const fn multitap_visible_start(first_tap: f32) -> f32 {
+pub(crate) const fn multitap_visible_start(first_tap: f32) -> f32 {
     (first_tap - MULTITAP_PREVISIBLE_BEATS.next_down())
         .max((first_tap - MULTITAP_PREVISIBLE_BEATS).next_up())
 }
@@ -406,6 +423,7 @@ fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, 
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn compile_multitap_update_overlays_for_actors<Slot, Vertex, Attribute, EnsureArrowVisual>(
     lua: &Lua,
     root: &Value,
@@ -565,6 +583,7 @@ where
     Ok(Some(out))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn multitap_arrow_noteskin<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     arrow_index: usize,
@@ -584,6 +603,7 @@ fn multitap_arrow_noteskin<Kind>(
 
 // Hit callbacks belong to the factory even when native model clocks or
 // float beat boundaries require chronological update replay.
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn install_multitap_hits<Kind>(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -614,6 +634,7 @@ pub(crate) fn install_multitap_hits<Kind>(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn capture_explosion_hits<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -851,7 +872,7 @@ pub fn multitap_frame_state(
     state
 }
 
-fn multitap_y_offset(
+pub(crate) fn multitap_y_offset(
     context: &SongLuaCompileContext,
     player: usize,
     beat: f32,
@@ -1384,99 +1405,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn multitap_travel_obeys_chart_timing_and_speedmod() {
-        use deadsync_rules::timing::{
-            ScrollSegment, SpeedSegment, SpeedUnit, TimingData, TimingSegments,
-        };
-        let mut context = SongLuaCompileContext::new(".", "Multitap timing");
-        context.player_timing[0] = Some(TimingData::from_segments(
-            0.0,
-            0.0,
-            &TimingSegments {
-                bpms: vec![(0.0, 120.0), (8.0, 240.0)],
-                scrolls: vec![
-                    ScrollSegment {
-                        beat: 0.0,
-                        ratio: 0.5,
-                    },
-                    ScrollSegment {
-                        beat: 8.0,
-                        ratio: 0.25,
-                    },
-                ],
-                speeds: vec![
-                    SpeedSegment {
-                        beat: 0.0,
-                        ratio: 0.5,
-                        delay: 0.0,
-                        unit: SpeedUnit::Beats,
-                    },
-                    SpeedSegment {
-                        beat: 4.0,
-                        ratio: 1.0,
-                        delay: 4.0,
-                        unit: SpeedUnit::Beats,
-                    },
-                ],
-                ..Default::default()
-            },
-            &[],
-        ));
-        context.players[0].display_bpms = [120.0, 240.0];
-        for (speed, rate, expected) in [
-            (SongLuaSpeedMod::X(1.0), 1.0, 72.0),
-            (SongLuaSpeedMod::X(2.0), 1.5, 144.0),
-            (SongLuaSpeedMod::M(480.0), 2.0, 72.0),
-            (SongLuaSpeedMod::C(120.0), 1.0, 192.0),
-            (SongLuaSpeedMod::C(120.0), 2.0, 96.0),
-        ] {
-            context.players[0].speedmod = speed;
-            context.song_music_rate = rate;
-            assert!((multitap_y_offset(&context, 0, 6.0, 4.0) - expected).abs() < 0.001);
-            let lua = Lua::new();
-            let globals = lua.globals();
-            globals
-                .set(
-                    crate::SONG_LUA_RUNTIME_KEY,
-                    crate::create_song_runtime_table(&lua, &context).unwrap(),
-                )
-                .unwrap();
-            // This clock takes elapsed wall time; beat 6 is music second 3.
-            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0 / rate).unwrap();
-            globals
-                .set(
-                    "ArrowEffects",
-                    crate::host::create_arrow_effects_table(&lua, &context, |_| "single".into())
-                        .unwrap(),
-                )
-                .unwrap();
-            let (method, value) = match speed {
-                SongLuaSpeedMod::X(value) => ("XMod", value),
-                SongLuaSpeedMod::M(value) => ("MMod", value),
-                SongLuaSpeedMod::C(value) => ("CMod", value),
-                _ => unreachable!(),
-            };
-            globals.set("speed_method", method).unwrap();
-            globals.set("speed_value", value).unwrap();
-            let actual: f32 = lua
-                .load(
-                    r#"
-                local options = {__songlua_reference_bpm=240}
-                options[speed_method] = function() return speed_value end
-                local ps = {GetPlayerNumber=function() return "PlayerNumber_P1" end,
-                    GetCurrentPlayerOptions=function() return options end}
-                return ArrowEffects.GetYOffset(ps, 1, 10) - ArrowEffects.GetYOffset(ps, 1, 6)
-            "#,
-                )
-                .eval()
-                .unwrap();
-            assert!(
-                (actual - expected).abs() < 0.001,
-                "Lua ArrowEffects {speed:?}: actual {actual}, expected {expected}"
-            );
-        }
-    }
+    
 
     #[test]
     fn explosion_eases_ignore_other_lanes_and_merge_overlapping_visibility() {

@@ -1,0 +1,26 @@
+﻿{
+    "goal_status":  "active",
+    "goal_complete":  false,
+    "production_cutover":  false,
+    "source_count":  1285,
+    "tests_passed":  561,
+    "test_targets":  30,
+    "live_scene_cases":  19,
+    "existing_tests_byte_unchanged":  true,
+    "native_algorithms_byte_unchanged":  true,
+    "engine_unchanged":  true,
+    "formatting_passed":  true,
+    "clippy_log_matches_prior_baseline":  true,
+    "without_test_support_compiles":  true,
+    "objective_sha256":  "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+    "previous_goal_turn":  "no progress: scope acknowledgement; objective and terminal evidence revalidated",
+    "current_goal_turn":  "progress: Rust retained live-scene lifecycle and output coordination",
+    "documents":  {
+                      "docs/lua-architecture.md":  "9e54e998f662e6479783b124187f3f13520ddfd461d2e25fe54655ca8c217ef0",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/README.md":  "172f9f70304aa88a46cd05acdeb3650eafd0b7af59ce7a1326387b7085488add",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/review_live_scene.py":  "46391b7f4a8505d2fc374969f244d7469783f19afcd32bf41bc6916897607c3a",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/song-live-scene-review.json":  "0013d53d86d043fbbd6e2a771dfc8bb08875f995f32dcf2af841680dc67513e3",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/document_live_scene.py":  "65d480627f9d1846be522d91ade3c63e7ed44a36b0abe67003f9f72932d38a12",
+                      "docs/testing/2026-11-04-rust-lua-production-migration/audit_live_scene.ps1":  "ea70499d280538f39d534504ae5f740581925a243effef4c1979f1c86524a92f"
+                  }
+}

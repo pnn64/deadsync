@@ -1,0 +1,114 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0425]: cannot find value `METHODS` in module `sprites`
+  --> crates/deadsync-song-lua/src/rust_engine/actors/models.rs:15:27
+   |
+15 | ...s::METHODS {
+   |       ^^^^^^^ not found in `sprites`
+   |
+help: consider importing one of these constants
+   |
+ 2 + use crate::rust_engine::actors::banners::METHODS;
+   |
+ 2 + use crate::rust_engine::actors::courses::METHODS;
+   |
+ 2 + use crate::rust_engine::actors::effects::METHODS;
+   |
+ 2 + use crate::rust_engine::actors::framebuffers::METHODS;
+   |
+   = and 3 other candidates
+help: if you import `METHODS`, refer to it directly
+   |
+15 -     for &name in sprites::METHODS {
+15 +     for &name in METHODS {
+   |
+
+error[E0425]: cannot find value `METHODS` in module `sprites`
+   --> crates/deadsync-song-lua/src/rust_engine/actors.rs:483:31
+    |
+483 | ...s::METHODS {
+    |       ^^^^^^^ not found in `sprites`
+    |
+help: consider importing one of these constants
+    |
+  2 + use crate::rust_engine::actors::banners::METHODS;
+    |
+  2 + use crate::rust_engine::actors::courses::METHODS;
+    |
+  2 + use crate::rust_engine::actors::effects::METHODS;
+    |
+  2 + use crate::rust_engine::actors::framebuffers::METHODS;
+    |
+    = and 3 other candidates
+help: if you import `METHODS`, refer to it directly
+    |
+483 -         for &name in sprites::METHODS {
+483 +         for &name in METHODS {
+    |
+
+error[E0624]: method `model_paths` is private
+   --> crates/deadsync-song-lua/src/rust_engine.rs:290:21
+    |
+290 |   ...rs.model_paths(&m...
+    |         ^^^^^^^^^^^ private method
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/models.rs:72:5
+    |
+ 72 | /     pub(super) fn model_paths(
+ 73 | |         &self,
+ 74 | |         vm: &mut Vm,
+ 75 | |         actor: Value,
+ 76 | |     ) -> Result<Option<[PathBuf; 3]>, Error> {
+    | |____________________________________________- private method defined here
+
+error[E0624]: method `install_model_materials` is private
+   --> crates/deadsync-song-lua/src/rust_engine.rs:321:21
+    |
+321 |   ...rs.insta...rials(ac...
+    |         ^^^^^...^^^^^ private method
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/models.rs:85:5
+    |
+ 85 | /     pub(super) fn install_mode...
+ 86 | |         &self,
+ 87 | |         actor: Value,
+ 88 | |         layers: &[crate::SongL...
+ 89 | |     ) -> Result<(), String> {
+    | |___________________________- private method defined here
+
+error[E0624]: method `sample_model_materials` is private
+   --> crates/deadsync-song-lua/src/rust_engine.rs:327:21
+    |
+327 | ...rs.sampl...rials(se...
+    |       ^^^^^...^^^^^ private method
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/models.rs:106:5
+    |
+106 |     pub(s... f32) {
+    |     -----...----- private method defined here
+
+error[E0624]: method `take_model_material_samples` is private
+   --> crates/deadsync-song-lua/src/rust_engine.rs:335:21
+    |
+335 |   ...rs.take_...mples(ac...
+    |         ^^^^^...^^^^^ private method
+    |
+   ::: crates/deadsync-song-lua/src/rust_engine/actors/models.rs:114:5
+    |
+114 | /     pub(super) fn take_model_material_samples(
+115 | |         &self,
+116 | |         actor: Value,
+117 | |     ) -> Result<Vec<Arc<[crate::SongLuaTextureSample]>>, String> {
+    | |________________________________________________________________- private method defined here
+
+Some errors have detailed explanations: E0425, E0624.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `deadsync-song-lua` (lib) due to 6 previous errors

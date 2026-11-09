@@ -1,0 +1,154 @@
+{
+  "BoostColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "ColorToHex": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "Difficulty": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "BlendColors": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "GetHexColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "HealthState": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "ProfileSlot": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "TapNoteType": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "ColorMidTone": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "LightenColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "ModTimerType": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "StageToColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "TapNoteScore": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "ColorDarkTone": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "HoldNoteScore": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "PlayerOptions": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "TapNoteSource": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "ColorLightTone": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "GameController": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "TapNoteSubType": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "PlayerDarkColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "rec_print_table": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "PlayerController": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "PlayerScoreColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "StageToStrokeColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "__songlua_song_dir": {
+    "rust": "nil",
+    "native": "string"
+  },
+  "rec_print_children": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "JudgmentLineToColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "StepsOrTrailToColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "JudgmentLineToStrokeColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "CustomDifficultyToDarkColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "CustomDifficultyToLightColor": {
+    "rust": "nil",
+    "native": "function"
+  },
+  "lua": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "CullMode": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "EditState": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "SortOrder": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "StepsType": {
+    "rust": "nil",
+    "native": "table"
+  },
+  "StyleType": {
+    "rust": "nil",
+    "native": "table"
+  }
+}

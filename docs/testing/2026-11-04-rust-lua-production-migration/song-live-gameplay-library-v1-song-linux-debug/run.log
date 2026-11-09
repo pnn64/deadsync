@@ -1,0 +1,342 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: unused import: `super::*`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:1:5
+  |
+1 | use super::*;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::actor_classes::forward_values_perf::before`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:2:5
+  |
+2 | use crate...efore;
+  |     ^^^^^...^^^^^
+
+warning: unused imports: `METHODS_KEY` and `forward`
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:3:28
+  |
+3 | ...::{METHODS_KEY, forward};
+  |       ^^^^^^^^^^^  ^^^^^^^
+
+warning: use of deprecated type alias `mlua::String`: use `mlua::LuaString` instead
+  --> crates/deadsync-song-lua/src/../tests/perf/native_function.rs:42:31
+   |
+42 | ...a::String, V...
+   |       ^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/deadsync-song-lua/src/../tests/perf/asset_strings.rs:159:9
+    |
+159 | ...et mut paths = ...
+    |       ----^^^^^
+    |       |
+    |       help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `matrix` is never used
+  --> crates/deadsync-song-lua/src/actor_quaternion.rs:49:15
+   |
+49 | ...fn matrix(q:...
+   |       ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `bind` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/vm_reads_actor_before.rs:4:15
+  |
+4 | ...fn bind(lu...
+  |       ^^^^
+
+warning: function `assign` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/vm_reads_actor_before.rs:58:15
+   |
+58 | ...fn assign(_:...
+   |       ^^^^^^
+
+warning: function `bind` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/forward_values_before.rs:42:15
+   |
+42 | ...fn bind(lu...
+   |       ^^^^
+
+warning: enum `Work` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:269:6
+    |
+269 | enum Work {
+    |      ^^^^
+
+warning: method `run` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:280:8
+    |
+279 | impl Work {
+    | --------- method in this implementation
+280 |     fn run(&m...
+    |        ^^^
+
+warning: function `prepare` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/finalization_events.rs:310:4
+    |
+310 | fn prepare(lu...
+    |    ^^^^^^^
+
+warning: struct `TraceLogger` is never constructed
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:6:8
+  |
+6 | ...ct TraceLogger(Mu...
+  |       ^^^^^^^^^^^
+
+warning: static `LOGGER` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/forward_trace.rs:7:8
+  |
+7 | ...ic LOGGER: T...
+  |       ^^^^^^
+
+warning: function `bindings` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/rage_file.rs:203:4
+    |
+203 | fn bindings(cu...
+    |    ^^^^^^^^
+
+warning: function `reset` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/rage_file_before.rs:349:15
+    |
+349 | ...fn reset(fi...
+    |       ^^^^^
+
+warning: constant `SONG_LUA_EASING_NAME_KEY` is never used
+ --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:8:11
+  |
+8 | ...st SONG_...E_KEY: &...
+  |       ^^^^^...^^^^^
+
+warning: function `read_f64` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:24:8
+   |
+24 | ...fn read_f64(va...
+   |       ^^^^^^^^
+
+warning: function `read_boolish` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:34:8
+   |
+34 | ...fn read_boolish(va...
+   |       ^^^^^^^^^^^^
+
+warning: function `read_string` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:61:8
+   |
+61 | ...fn read_string(va...
+   |       ^^^^^^^^^^^
+
+warning: function `read_u32_value` is never used
+  --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:69:8
+   |
+69 | ...fn read_...value(va...
+   |       ^^^^^...^^^^^
+
+warning: function `read_player` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:100:8
+    |
+100 | ...fn read_player(va...
+    |       ^^^^^^^^^^^
+
+warning: function `read_span_mode` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:109:8
+    |
+109 | ...fn read_..._mode(va...
+    |       ^^^^^...^^^^^
+
+warning: function `read_easing_name` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:124:8
+    |
+124 | ...fn read_..._name(
+    |       ^^^^^...^^^^^
+
+warning: function `truthy` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:142:14
+    |
+142 | ...fn truthy(va...
+    |       ^^^^^^
+
+warning: function `player_index_from_value` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:179:8
+    |
+179 | ...fn playe...value(va...
+    |       ^^^^^...^^^^^
+
+warning: function `player_number_name` is never used
+   --> crates/deadsync-song-lua/src/../tests/perf/values_before.rs:203:8
+    |
+203 | ...fn playe..._name(pl...
+    |       ^^^^^...^^^^^
+
+warning: `deadsync-song-lua` (lib test) generated 27 warnings (run `cargo fix --lib -p deadsync-song-lua --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 4m 55s
+     Running unittests src/lib.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/deadsync_song_lua-affb80fd97ebdb4a)
+
+running 150 tests
+test live::tests::actor_parent_loading ... ok
+test live::tests::actor_query_loading_names ... ok
+test live::tests::explicit_actor_children ... ok
+test live::tests::foreground_name_changes_after_init ... ok
+test live::tests::interactive_runtime_stops_only_the_authored_sound_actor ... ok
+test live::tests::interactive_runtime_uses_authored_controls_motion_timers_sounds_and_reload ... ok
+test live::tests::live_actor_name_ignores_lua_attribute_writes ... ok
+test live::tests::live_amv_load_texture_preserves_mesh_and_restores_native_default ... ok
+test live::tests::live_arrow_alpha_uses_visibility_and_native_far_edge_fade ... ok
+test live::tests::live_arrow_rotation_z_uses_native_player_beat_offsets_and_hold_policy ... ok
+test live::tests::live_arrow_x_matches_captured_native_source_and_cached_update_phase ... ok
+test live::tests::live_arrow_y_matches_native_source_wave_and_cached_tipsy_phase ... ok
+test live::tests::live_arrow_zoom_matches_native_source_and_column_tiny_lifecycle ... ok
+test live::tests::live_background_sprite_keeps_declared_texture_for_upper_left ... ok
+test live::tests::live_background_start_time_uses_native_note_row ... ok
+test live::tests::live_background_starts_at_change_beat ... ok
+test live::tests::live_banner_uses_declared_artwork_and_native_fallback ... ok
+test live::tests::live_cancel_transition_loads_quad_and_native_fade ... ok
+test live::tests::live_chart_attacks_use_strict_boundaries_and_keep_song_writes_between_them ... ok
+test live::tests::live_color_constants_preserve_native_palette_bound ... ok
+test live::tests::live_column_cues_derive_owned_tweens_from_chart_notes ... ok
+test live::tests::live_content_reaches_visual_slots_after_input_and_updates ... ok
+test live::tests::live_danger_owns_native_quad_and_health_lifecycle ... ok
+test live::tests::live_deferred_initial_update_uses_first_input_clock_once ... ok
+test live::tests::live_density_graph_owns_quantized_recurring_sleep ... ok
+test live::tests::live_deprecated_hidden_preserves_lua_truthiness_and_reports_warning ... ok
+test live::tests::live_draw_follows_owned_update_and_replaces_automatic_children ... ok
+test live::tests::live_effect_clocks_preserve_effects_getters_and_update_order ... ok
+test live::tests::live_empty_bitmap_text_zoomtoheight_sets_native_zoom ... ok
+test live::tests::live_empty_callback_slots_preserve_single_update_detection ... ok
+test live::tests::live_end_output ... ok
+test live::tests::live_failed_actor_load_keeps_vm_and_rebuilds_on_reload ... ok
+test live::tests::live_false_condition_skips_subtree_and_compacts_subscriber_paths ... ok
+test live::tests::live_foreground_clock ... ok
+test live::tests::live_foreground_directory_uses_requested_default_chunk_name ... ok
+test live::tests::live_foreground_finishes ... ok
+test live::tests::live_foreground_late_start ... ok
+test live::tests::live_foreground_observes_transition_before_current_frame_update ... ok
+test live::tests::live_foreground_on_observes_updated_underlay ... ok
+test live::tests::live_foreground_proxy_targets_reach_prepared_visuals ... ok
+test live::tests::live_foreground_start_time_uses_native_note_row ... ok
+test live::tests::live_game_state_class_methods_dispatch_on_owned_instance ... ok
+test live::tests::live_gameplay_children_retain_native_owned_inventory ... ok
+test live::tests::live_gameplay_lead_in_metrics_evaluate_current_theme_rate ... ok
+test live::tests::live_gameplay_reload_copies_human_steps_to_disabled_player ... ok
+test live::tests::live_get_all_steps_returns_native_array_without_internal_getter_calls ... ok
+test live::tests::live_hsva_initializes_native_vertex_colors ... ok
+test live::tests::live_in_transition_loads_native_style_bitmaps_and_poses ... ok
+test live::tests::live_infinite_sleep_keeps_foreground_sibling_reload_queue_active ... ok
+test live::tests::live_initial_song_bps_uses_native_reset_before_timing_update ... ok
+test live::tests::live_large_scene_preserves_actor_identity_and_update_order ... ok
+test live::tests::live_layers ... ok
+test live::tests::live_loadactor_collapses_paths_before_loading_and_naming_chunks ... ok
+test live::tests::live_loadactor_uses_helper_source_during_actor_callbacks ... ok
+test live::tests::live_loadfile_preserves_secondary_ready_function_and_nil_results ... ok
+test live::tests::live_loading_screen_is_unavailable_until_begin ... ok
+test live::tests::live_lyric_display_loads_text_layers_font_and_changed_commands ... ok
+test live::tests::live_message_order_gaps_preserve_callback_dispatch ... ok
+test live::tests::live_named_notefield_advances_once ... ok
+test live::tests::live_native_arrow_clocks_keep_query_and_cache_update_reads_independent ... ok
+test live::tests::live_native_base_transforms_preserve_getters_draws_and_reset ... ok
+test live::tests::live_native_broadcast_snapshot_preserves_explicit_nil_argument ... ok
+test live::tests::live_native_colors_export_independent_destination_snapshots ... ok
+test live::tests::live_native_float_foreground_activation_clock ... ok
+test live::tests::live_native_float_scale_operation_order ... ok
+test live::tests::live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z ... ok
+test live::tests::live_native_nonfinite_actor_scalar_write_and_immediate_read ... ok
+test live::tests::live_native_option_clocks_are_independent_and_consumed_once ... ok
+test live::tests::live_native_pose_getters_preserve_queue_and_sibling_order ... ok
+test live::tests::live_native_queues_preserve_behavior_without_capture_history ... ok
+test live::tests::live_native_raw_clocks_apply_to_constructors_and_same_frame_reads ... ok
+test live::tests::live_native_render_flags_preserve_recursive_writes_draws_and_reset ... ok
+test live::tests::live_native_scalar_methods_follow_receivers_and_reset ... ok
+test live::tests::live_native_scalars_export_current_and_destination_snapshots ... ok
+test live::tests::live_native_sound_pitch_preserves_identity_and_parameters ... ok
+test live::tests::live_native_tween_argument_and_hurry_contract ... ok
+test live::tests::live_native_tween_curves_match_native_probes ... ok
+test live::tests::live_native_vertex_colors_mutate_destinations_without_allocation ... ok
+test live::tests::live_note_field_container_owns_original_children_and_mod_lifecycle ... ok
+test live::tests::live_note_field_loads_inherited_board_sprite_outside_column_vector ... ok
+test live::tests::live_note_field_tap_returns_follow_native_optional_conversions ... ok
+test live::tests::live_null_foreground_keeps_later_entries_and_owns_each_instance ... ok
+test live::tests::live_numeric_option_getter_retains_native_argument_path ... ok
+test live::tests::live_numeric_song_selectors_retain_chart_across_reload ... ok
+test live::tests::live_oni_game_over_loads_inherited_blank_bitmap ... ok
+test live::tests::live_option_approach_uses_native_frame_delta_at_large_screen_time ... ok
+test live::tests::live_out_transition_loads_quad_directly_with_native_commands ... ok
+test live::tests::live_outro_dispatches_off_after_actor_update_once ... ok
+test live::tests::live_outro_rebuilds_song_options_after_queued_screen_message ... ok
+test live::tests::live_overlay_fails_judged_autoplay_during_off_after_exit_decision ... ok
+test live::tests::live_overlay_stage_observation_precedes_foreground_mutations ... ok
+test live::tests::live_percentage_display_inherits_actor_frame_class_methods ... ok
+test live::tests::live_player_attack_display_preserves_native_inventory_and_hold_indices ... ok
+test live::tests::live_player_combo_uses_current_theme_font_resources ... ok
+test live::tests::live_player_hold_judgment_tree ... ok
+test live::tests::live_player_judgment_tree ... ok
+test live::tests::live_player_life_setter_updates_shared_meter_and_notifies_synchronously ... ok
+test live::tests::live_player_song_positions_use_selected_chart_timing ... ok
+test live::tests::live_quad_default_texture_survives_geometry_and_explicit_rebinding ... ok
+test live::tests::live_queue ... ok
+test live::tests::live_queued_broadcast_origin ... ok
+test live::tests::live_rec_print_table_handles_owned_actor_values_and_depth ... ok
+test live::tests::live_relative_and_canonical_nested_media_keep_hidden_sprite_slots ... ok
+test live::tests::live_reload ... ok
+test live::tests::live_reload_resets_constructor_song_position ... ok
+test live::tests::live_reload_updates ... ok
+test live::tests::live_render_defaults_do_not_dispatch_public_class_lookups ... ok
+test live::tests::live_requests ... ok
+test live::tests::live_scalar_writes_and_idle_frames_preserve_owned_getter_state ... ok
+test live::tests::live_scheduled_reload ... ok
+test live::tests::live_score_display_loads_unnamed_blank_frame_before_percent ... ok
+test live::tests::live_screen_begin_reaches_message_commands_only_in_screen_children ... ok
+test live::tests::live_screen_debug_owns_its_native_tween_clock ... ok
+test live::tests::live_screen_direct_and_queued_commands_reach_song_children ... ok
+test live::tests::live_screen_layer_consumes_earlier_tween_before_later_message ... ok
+test live::tests::live_screen_positions_survive_registration_and_seed_authored_tweens ... ok
+test live::tests::live_screen_request_calls_preserve_duplicates_and_final_target ... ok
+test live::tests::live_shared_bpm_owns_native_hierarchy_and_updates_real_timing_and_rate ... ok
+test live::tests::live_simply_love_sm_broadcasts ... ok
+test live::tests::live_song_clock ... ok
+test live::tests::live_song_clock_and_timing_queries_follow_current_music_rate ... ok
+test live::tests::live_song_meter_owns_native_song_info_children_and_lifecycle ... ok
+test live::tests::live_sound_volume_keeps_the_sound_identity_and_owner ... ok
+test live::tests::live_source_broadcasts ... ok
+test live::tests::live_source_function_params ... ok
+test live::tests::live_source_params ... ok
+test live::tests::live_sparse_declarations_keep_native_child_callback_order ... ok
+test live::tests::live_sprite_cropto_alias ... ok
+test live::tests::live_sprite_linear_frames_builds_native_authored_states ... ok
+test live::tests::live_sprite_publication_preserves_input_update_draw_and_texture_loads ... ok
+test live::tests::live_standard_life_children_follow_native_subactor_table_construction ... ok
+test live::tests::live_stats ... ok
+test live::tests::live_step_statistics_judgment_labels_follow_initial_timing_windows ... ok
+test live::tests::live_step_statistics_owns_native_resources_and_updates_real_data ... ok
+test live::tests::live_steps_density_uses_real_note_rows_and_chart_timing ... ok
+test live::tests::live_steps_display_owns_native_children_resources_and_step_lifecycle ... ok
+test live::tests::live_table_find_returns_native_keys_and_completes_show_arrow ... ok
+test live::tests::live_text_publication_preserves_input_update_draw_and_lookup_order ... ok
+test live::tests::live_theme_setup_broadcasts_respect_song_construction_boundary ... ok
+test live::tests::live_transition_getter_uses_loaded_child_and_native_lifecycle ... ok
+test live::tests::live_underlay_background_filter_uses_initial_profile_inputs ... ok
+test live::tests::live_underlay_difficulty_meter_owns_native_quad_and_text ... ok
+test live::tests::live_underlay_header_uses_native_quad_texture_and_init ... ok
+test live::tests::live_underlay_standard_life_meter_uses_real_children_and_life_events ... ok
+test live::tests::live_untyped_declaration_discards_fields_commands_and_children ... ok
+test live::tests::live_untyped_foreground_uses_native_dummy_actor ... ok
+test live::tests::live_uptime_advances_while_music_is_paused ... ok
+test live::tests::live_versus_children_retain_native_player_construction_groups ... ok
+test live::tests::live_vertex_upload_copies_values_before_source_table_mutation ... ok
+test live::tests::stage_failure_is_visible_without_life_failure ... ok
+
+test result: ok. 150 passed; 0 failed; 0 ignored; 0 measured; 699 filtered out; finished in 168.33s
+

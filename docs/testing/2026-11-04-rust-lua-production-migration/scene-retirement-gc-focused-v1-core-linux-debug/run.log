@@ -1,0 +1,9 @@
+   Compiling deadlib-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-lua)
+    Finished `test` profile [unoptimized] target(s) in 19.57s
+     Running unittests src/lib.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/deadlib_lua-7c22c52af189a29c)
+
+running 1 test
+test vm::gc::tests::private_host_state_write_traces_white_graph_from_a_black_owner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 171 filtered out; finished in 0.00s
+

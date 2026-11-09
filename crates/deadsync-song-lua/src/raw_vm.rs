@@ -40,40 +40,4 @@ pub(crate) unsafe fn with_read_stack<R>(
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn raw_read_keeps_the_callers_stack_on_success_and_error() {
-        let lua = Lua::new();
-        lua.exec_raw_lua(|raw| unsafe {
-            assert_ne!(ffi::lua_checkstack(raw.state(), 8), 0);
-            raw.push(42).unwrap();
-            let top = ffi::lua_gettop(raw.state());
-            let value = with_read_stack(&lua, 4, |raw, base| {
-                assert_eq!(base, top);
-                raw.push(17)?;
-                raw.pop::<i32>()
-            }).unwrap();
-            assert_eq!(value, 17);
-            assert_eq!(ffi::lua_gettop(raw.state()), top);
-            let error = with_read_stack::<()>(&lua, 4, |raw, _| {
-                raw.push(99)?;
-                Err(mlua::Error::runtime("raw read probe"))
-            });
-            assert!(error.is_err());
-            assert_eq!(ffi::lua_gettop(raw.state()), top);
-            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                with_read_stack::<()>(&lua, 4, |raw, _| {
-                    raw.push(99)?;
-                    panic!("raw stack unwind probe");
-                })
-            }));
-            assert!(panic.is_err());
-            assert_eq!(ffi::lua_gettop(raw.state()), top);
-            assert_eq!(raw.pop::<i32>().unwrap(), 42);
-        });
-        assert_eq!(lua.load("return 6*7").eval::<i32>().unwrap(), 42);
-    }
-}

@@ -82,6 +82,7 @@ impl NativeStack<'_, '_> {
         let key = self.indexed_value(-1)?;
         let destination = self.end() - 1;
         let (value, yielded) = self.read_table(target, key, raw)?;
+        self.call.vm.reserve_gc_value(value)?;
         self.call.vm.registers[destination] = value;
         self.call.vm.gc_new_value(value);
         if let Some(yielded) = yielded {
@@ -103,10 +104,11 @@ impl NativeStack<'_, '_> {
             return Err(self.error(b"native stack overflow"));
         }
         let target = self.indexed_value(index)?;
-        let key = self.intern(name);
+        let key = self.try_intern(name)?;
         let destination = self.end();
         let (value, yielded) = self.read_table(target, key, false)?;
         if let Some(yielded) = yielded {
+            self.call.vm.reserve_gc_value(value)?;
             self.call.vm.registers[destination] = value;
             self.call.vm.gc_new_value(value);
             self.base = yielded.start;
@@ -144,7 +146,7 @@ impl NativeStack<'_, '_> {
         self.check_error()?;
         let target = self.indexed_value(index)?;
         let value = self.indexed_value(-1)?;
-        let key = self.intern(name);
+        let key = self.try_intern(name)?;
         if let Some(yielded) = self.write_table(target, key, value, false)? {
             self.base = yielded.start;
             self.set_window_end(yielded.end - 1);
@@ -201,7 +203,7 @@ impl NativeStack<'_, '_> {
             Value::Table(table) => Some(table),
             _ => return Err(self.error(b"native metatable must be a table or nil")),
         };
-        self.call.vm.set_metatable(value, table);
+        self.call.vm.set_metatable(value, table)?;
         self.set_top(self.top() - 1)
     }
     /// Replace a traversal key with the next key/value pair, or pop it at the end.

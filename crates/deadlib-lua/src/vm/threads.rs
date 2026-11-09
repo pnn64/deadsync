@@ -118,7 +118,7 @@ pub(super) enum NativeKind {
 pub(super) struct NativeClosure {
     pub env: TableId,
     pub kind: NativeKind,
-    pub captures: Box<[Value]>,
+    pub captures: Buffer<Value>,
 }
 
 #[derive(Debug)]
@@ -130,17 +130,17 @@ pub(super) enum Transition {
 
 #[derive(Debug)]
 pub(super) struct Thread {
-    pub(super) registers: Vec<Value>,
-    pub(super) frames: Vec<Frame>,
+    pub(super) registers: Buffer<Value>,
+    pub(super) frames: Buffer<Frame>,
     pub(super) call_slots: u16,
-    pub(super) open_upvalues: Vec<u32>,
+    pub(super) open_upvalues: Buffer<u32>,
     pub(super) globals: TableId,
     pub(super) top: usize,
     pub(super) active_native: Option<usize>,
-    pub(super) substitutions: Vec<strings::Substitution>,
-    pub(super) sorts: Vec<tables::Sort>,
-    pub(super) loads: Vec<loads::Loading>,
-    pub(super) tracebacks: Vec<traces::Traceback>,
+    pub(super) substitutions: Buffer<strings::Substitution>,
+    pub(super) sorts: Buffer<tables::Sort>,
+    pub(super) loads: Buffer<loads::Loading>,
+    pub(super) tracebacks: Buffer<traces::Traceback>,
     pub(super) hooks: hooks::Hooks,
     pub(super) entry: Option<(usize, usize)>,
     pub(super) api_stack: std::ops::Range<usize>,
@@ -155,23 +155,23 @@ pub(super) struct Thread {
     pub(super) resumer: Option<ThreadId>,
     pub(super) depth: u16,
     pub(super) line: u32,
-    pub(super) host_states: Vec<host::ThreadData>,
+    pub(super) host_states: Buffer<host::ThreadData>,
 }
 impl Thread {
-    pub fn main(globals: TableId) -> Self {
+    pub fn main(globals: TableId, memory: Memory) -> Self {
         Self {
-            registers: Vec::new(),
-            frames: Vec::new(),
+            registers: Buffer::new_in(memory.clone()),
+            frames: Buffer::new_in(memory.clone()),
             call_slots: 8,
-            open_upvalues: Vec::new(),
+            open_upvalues: Buffer::new_in(memory.clone()),
             globals,
             top: 0,
             active_native: None,
-            substitutions: Vec::new(),
-            sorts: Vec::new(),
-            loads: Vec::new(),
-            tracebacks: Vec::new(),
-            hooks: hooks::Hooks::default(),
+            substitutions: Buffer::new_in(memory.clone()),
+            sorts: Buffer::new_in(memory.clone()),
+            loads: Buffer::new_in(memory.clone()),
+            tracebacks: Buffer::new_in(memory.clone()),
+            hooks: hooks::Hooks::new_in(memory.clone()),
             entry: None,
             api_stack: 0..0,
             native_resumer: false,
@@ -185,18 +185,21 @@ impl Thread {
             resumer: None,
             depth: 0,
             line: 0,
-            host_states: Vec::new(),
+            host_states: Buffer::new_in(memory),
         }
     }
-    fn new(entry: FunctionId, globals: TableId) -> Self {
-        Self {
-            registers: vec![Value::Function(entry)],
+    fn new(entry: FunctionId, globals: TableId, memory: Memory) -> Result<Self, Error> {
+        let mut registers = Buffer::new_in(memory.clone());
+        registers.try_reserve_exact(1)?;
+        registers.push(Value::Function(entry));
+        Ok(Self {
+            registers,
             top: 1,
             api_stack: 0..1,
             globals,
             status: Status::Suspended,
-            ..Self::main(globals)
-        }
+            ..Self::main(globals, memory)
+        })
     }
 }
 
@@ -219,29 +222,40 @@ impl Vm {
             _ => None,
         }
     }
-    pub(super) fn set_closure_environment(&mut self, function: Value, env: TableId) {
+    pub(super) fn set_closure_environment(
+        &mut self,
+        function: Value,
+        env: TableId,
+    ) -> Result<(), Error> {
+        self.reserve_gc_barrier(function, Value::Table(env))?;
         match function {
             Value::Function(id) => {
                 self.functions[slot_index(id.0)].env = env;
                 self.gc_barrier(function, Value::Table(env));
             }
-            Value::Native(id) => self.set_native_environment(id, env),
+            Value::Native(id) => self.set_native_environment(id, env)?,
             _ => unreachable!("validated calling function"),
         }
+        Ok(())
     }
     pub(super) fn calling_environment(&self, thread: ThreadId) -> TableId {
         self.calling_function(thread)
             .and_then(|f| self.closure_environment(f))
             .unwrap_or_else(|| self.thread_environment(thread))
     }
-    pub(super) fn allocate_thread(&mut self) -> ThreadId {
-        let id = ThreadId(self.threads.insert(Thread {
-            status: Status::Suspended,
-            hooks: self.hooks.inherited(),
-            ..Thread::main(self.globals)
-        }));
+    pub(super) fn allocate_thread(&mut self) -> Result<ThreadId, Error> {
+        self.reserve_gc_new_value()?;
+        let id = ThreadId(
+            self.threads
+                .try_insert(Thread {
+                    status: Status::Suspended,
+                    hooks: self.hooks.inherited(),
+                    ..Thread::main(self.globals, self.threads.memory().clone())
+                })
+                .map_err(|_| self.memory_failure())?,
+        );
         self.gc_new_value(Value::Thread(id));
-        id
+        Ok(id)
     }
     pub(super) fn coroutine_status(&self, id: ThreadId) -> Status {
         if id == self.thread {
@@ -261,8 +275,8 @@ impl Vm {
             state.status
         }
     }
-    pub(super) fn open_threads(&mut self) {
-        let table = self.new_table();
+    pub(super) fn open_threads(&mut self) -> Result<(), Error> {
+        let table = self.try_new_table()?;
         for (i, name) in [
             b"create".as_slice(),
             b"resume",
@@ -274,13 +288,11 @@ impl Vm {
         .iter()
         .enumerate()
         {
-            let name = self.intern(name);
-            self.tables[slot_index(table.0)]
-                .set(name, Value::Native(CO_CREATE + i as u64))
-                .expect("coroutine names are valid");
+            let name = self.try_intern(name)?;
+            self.tables[slot_index(table.0)].set(name, Value::Native(CO_CREATE + i as u64))?;
         }
-        self.set_global(b"coroutine", Value::Table(table))
-            .expect("coroutine name is valid");
+        self.set_global(b"coroutine", Value::Table(table))?;
+        Ok(())
     }
     pub(super) fn new_native(
         &mut self,
@@ -288,13 +300,22 @@ impl Vm {
         captures: &[Value],
     ) -> Result<Value, Error> {
         let env = self.calling_environment(self.thread);
-        self.native_closures
-            .note_alloc(std::mem::size_of_val(captures));
-        let id = self.native_closures.insert(NativeClosure {
-            env,
-            kind,
-            captures: captures.into(),
-        });
+        let mut owned = Buffer::new_in(self.native_closures.memory().clone());
+        owned
+            .try_reserve_exact(captures.len())
+            .map_err(|_| self.memory_failure())?;
+        owned.extend_from_slice(captures);
+        let bytes = owned.capacity() * size_of::<Value>();
+        self.reserve_gc_new_value()?;
+        let id = self
+            .native_closures
+            .try_insert(NativeClosure {
+                env,
+                kind,
+                captures: owned,
+            })
+            .map_err(|_| self.memory_failure())?;
+        self.native_closures.note_alloc(bytes);
         self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
     }
@@ -319,19 +340,22 @@ impl Vm {
         if id >= strings::ITERATOR_FIRST {
             self.native_closures[slot_index(id)].env
         } else {
-            self.native_envs
-                .get(&id)
+            self.builtin_envs
+                .get(id as usize)
                 .copied()
+                .flatten()
                 .unwrap_or(self.initial_globals)
         }
     }
-    pub(super) fn set_native_environment(&mut self, id: u64, env: TableId) {
+    pub(super) fn set_native_environment(&mut self, id: u64, env: TableId) -> Result<(), Error> {
+        self.reserve_gc_barrier(Value::Native(id), Value::Table(env))?;
         if id >= strings::ITERATOR_FIRST {
             self.native_closures[slot_index(id)].env = env;
         } else {
-            self.native_envs.insert(id, env);
+            self.builtin_envs[id as usize] = Some(env);
         }
         self.gc_barrier(Value::Native(id), Value::Table(env));
+        Ok(())
     }
     pub(super) fn thread_environment(&self, id: ThreadId) -> TableId {
         if id == self.thread {
@@ -340,13 +364,19 @@ impl Vm {
             self.threads[slot_index(id.0)].globals
         }
     }
-    pub(super) fn set_thread_environment(&mut self, id: ThreadId, env: TableId) {
+    pub(super) fn set_thread_environment(
+        &mut self,
+        id: ThreadId,
+        env: TableId,
+    ) -> Result<(), Error> {
+        self.reserve_gc_barrier(Value::Thread(id), Value::Table(env))?;
         if id == self.thread {
             self.globals = env;
         } else {
             self.threads[slot_index(id.0)].globals = env;
         }
         self.gc_barrier(Value::Thread(id), Value::Table(env));
+        Ok(())
     }
     pub(super) fn cell_value(&self, id: usize) -> Value {
         match self.upvalues[id] {
@@ -360,7 +390,8 @@ impl Vm {
             }
         }
     }
-    pub(super) fn set_cell(&mut self, id: usize, value: Value) {
+    pub(super) fn set_cell(&mut self, id: usize, value: Value) -> Result<(), Error> {
+        self.reserve_gc_cell(id, value)?;
         match self.upvalues[id] {
             Cell::Closed(_) => self.upvalues[id] = Cell::Closed(value),
             Cell::Open(thread, register) => {
@@ -372,6 +403,7 @@ impl Vm {
             }
         }
         self.gc_cell_barrier(id, value);
+        Ok(())
     }
     // Active vectors stay directly in Vm for ordinary dispatch. Switching swaps
     // ownership with the inactive thread slots; it never copies stack contents.
@@ -409,15 +441,19 @@ impl Vm {
                 }
             }
             Some(Transition::Yield { source, count }) => {
-                return Ok(self.yield_thread(source..source + count, line));
+                return self.yield_thread(source..source + count, line);
             }
             Some(Transition::HookYield { base, top }) => {
-                return Ok(self.yield_thread(base..top, line));
+                return self.yield_thread(base..top, line);
             }
         }
         Ok(None)
     }
-    fn yield_thread(&mut self, range: std::ops::Range<usize>, line: &mut u32) -> Option<usize> {
+    fn yield_thread(
+        &mut self,
+        range: std::ops::Range<usize>,
+        line: &mut u32,
+    ) -> Result<Option<usize>, Error> {
         if let Some(scope) = self
             .api_calls
             .iter_mut()
@@ -430,10 +466,11 @@ impl Vm {
             state.status = Status::Suspended;
             self.top = range.end;
             state.api_stack = range;
-            return Some(0);
+            return Ok(Some(0));
         }
-        self.finish_thread_range(range, false, true, line)
-            .then_some(0)
+        Ok(self
+            .finish_thread_range(range, false, true, line)?
+            .then_some(0))
     }
     pub(super) fn finish_thread(
         &mut self,
@@ -442,7 +479,7 @@ impl Vm {
         failed: bool,
         suspended: bool,
         line: &mut u32,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         self.finish_thread_range(source..source + count, failed, suspended, line)
     }
     fn finish_thread_range(
@@ -451,10 +488,11 @@ impl Vm {
         failed: bool,
         suspended: bool,
         line: &mut u32,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         let source = values.start;
         let inverted = values.end < values.start;
         let count = if inverted { 1 } else { values.len() };
+        self.reserve_thread_return(count)?;
         let id = self.thread;
         let host = self.frames.last().is_some_and(
             |f| matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()),
@@ -493,7 +531,7 @@ impl Vm {
             self.top = values.end;
             self.threads[slot_index(parent.0)].status = Status::Running;
             self.switch_thread(parent, line);
-            return true;
+            return Ok(true);
         }
         let caller_index = self.threads[slot_index(parent.0)].frames.len() - 1;
         let body = self.body_code(parent, caller_index);
@@ -566,18 +604,49 @@ impl Vm {
             self.registers.clear();
         }
         self.switch_thread(parent, line);
-        false
+        Ok(false)
     }
-    pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) {
-        self.threads[slot_index(self.thread.0)].resume_status =
-            NativeThreadStatus::for_error(error);
-        self.discard_finalizers(0);
-        let value = error.value().unwrap_or_else(|| {
-            let value = self.intern(error.message().as_bytes());
-            self.located_error(value, 1)
-        });
-        if let Some(frame) = self.frames.last().copied() {
-            let (base, values) = match frame.function {
+    fn reserve_thread_return(&mut self, count: usize) -> Result<(), Error> {
+        let child = &self.threads[slot_index(self.thread.0)];
+        if child.native_resumer {
+            return Ok(());
+        }
+        let parent = child.resumer.expect("returning thread has a resumer");
+        let index = self.threads[slot_index(parent.0)].frames.len() - 1;
+        let body = self.body_code(parent, index);
+        let caller = &mut self.threads[slot_index(parent.0)];
+        let frame = caller.frames[index];
+        let prefix = usize::from(
+            body == Some(CO_RESUME) || matches!(frame.function, FrameKind::Native(CO_RESUME)),
+        );
+        let needed = frame.base + frame.argc() + prefix + count;
+        let before = caller.registers.capacity();
+        let reserved = caller
+            .registers
+            .try_reserve(needed.saturating_sub(caller.registers.len()));
+        let growth = (caller.registers.capacity() - before) * size_of::<Value>();
+        self.threads.note_alloc(growth);
+        reserved.map_err(|_| self.memory_failure())
+    }
+    pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) -> Result<(), Error> {
+        let child = self.thread;
+        let parent = self.threads[slot_index(child.0)]
+            .resumer
+            .expect("failed thread has a resumer");
+        if let Err(error) = self.try_fail_thread(error, line) {
+            // If delivery itself cannot reserve storage, propagate that failure
+            // to the waiting caller. Close captures before releasing child slots.
+            self.abort_threads_to(parent, line);
+            self.threads[slot_index(child.0)].resume_status = NativeThreadStatus::for_error(&error);
+            return Err(error);
+        }
+        Ok(())
+    }
+    fn try_fail_thread(&mut self, error: &Error, line: &mut u32) -> Result<(), Error> {
+        let value = self.error_value(error, 1)?;
+        let frame = self.frames.last().copied();
+        let (base, count, raw, append) = match frame {
+            Some(frame) => match frame.function {
                 FrameKind::Native(id) => {
                     let base = frame.vararg_start;
                     let count = if id == 1 {
@@ -585,47 +654,47 @@ impl Vm {
                     } else {
                         frame.argc()
                     };
-                    let mut values = self.registers[base..base + count].to_vec();
-                    if self.scheduled_native(id) != 1
-                        && (id != 1 || values.last().copied() != Some(value))
-                    {
-                        values.push(value);
-                    }
-                    (base, values)
+                    let append = self.scheduled_native(id) != 1
+                        && (id != 1
+                            || self.registers[base..base + count].last().copied() != Some(value));
+                    (base, count, None, append)
                 }
                 FrameKind::Lua(id) => {
-                    let f = &self.functions[slot_index(id.0)];
-                    let count =
-                        self.programs[f.program].data.prototypes[f.prototype].debug_registers();
-                    let mut values = self.registers[frame.base..frame.base + count].to_vec();
-                    values.push(self.intern(error.message_bytes()));
-                    values.push(value);
-                    (frame.base, values)
+                    let function = &self.functions[slot_index(id.0)];
+                    let count = self.programs[function.program].data.prototypes[function.prototype]
+                        .debug_registers();
+                    let raw = self.try_intern(error.message_bytes())?;
+                    (frame.base, count, Some(raw), true)
                 }
-            };
-            self.resize_registers(self.registers.len().max(base + values.len()));
-            self.registers[base..base + values.len()].copy_from_slice(&values);
-            self.top = base + values.len();
-            self.threads[slot_index(self.thread.0)].api_stack = base..self.top;
-            if matches!(frame.function, FrameKind::Native(_)) {
-                let f = self.frames.last_mut().unwrap();
-                f.base = base;
-                f.stack_start = base;
-                f.vararg_count = values.len() as u32;
-            }
-        } else {
-            // A rejected entry has no call frame, but its raw diagnostic is
-            // still on the base stack before lua_resume adds the error copy.
-            self.registers.push(value);
-            self.top = self.registers.len();
-            self.threads[slot_index(self.thread.0)].api_stack = 0..self.top;
+            },
+            None => (0, self.registers.len(), None, true),
+        };
+        let end = base + count + usize::from(raw.is_some()) + usize::from(append);
+        self.reserve_registers(end + 1)?;
+        self.reserve_thread_return(1)?;
+        self.threads[slot_index(self.thread.0)].resume_status =
+            NativeThreadStatus::for_error(error);
+        self.discard_finalizers(0);
+        self.resize_registers(self.registers.len().max(end + 1));
+        if let Some(raw) = raw {
+            self.registers[base + count] = raw;
         }
-        let source = self.top;
-        self.truncate_registers(source);
+        if append {
+            self.registers[end - 1] = value;
+        }
+        self.top = end;
+        self.threads[slot_index(self.thread.0)].api_stack = base..end;
+        if frame.is_some_and(|frame| matches!(frame.function, FrameKind::Native(_))) {
+            let frame = self.frames.last_mut().unwrap();
+            frame.base = base;
+            frame.stack_start = base;
+            frame.vararg_count = (end - base) as u32;
+        }
+        self.truncate_registers(end);
         self.registers.push(value);
-        // Keep faulting frames and open cells for debug inspection and escaped
-        // closures. A dead thread cannot execute again or overwrite those cells.
-        self.finish_thread(source, 1, true, false, line);
+        // Healthy delivery retains faulting frames and captures for inspection.
+        self.finish_thread(end, 1, true, false, line)?;
+        Ok(())
     }
     pub(super) fn abort_threads(&mut self, line: &mut u32) {
         self.abort_threads_to(self.main, line);
@@ -647,9 +716,10 @@ impl Vm {
                 .native_calls_for(id, self.frames.len())
                 .wrapping_sub(u16::from(host));
             let state = &mut self.threads[slot_index(id.0)];
-            let parent = state.resumer.take().ok_or_else(|| {
-                Error::new(ErrorKind::Runtime, 0, "invalid nonlocal error destination")
-            })?;
+            let parent = state
+                .resumer
+                .take()
+                .ok_or_else(|| Error::runtime_static("invalid nonlocal error destination"))?;
             state.status = Status::Normal;
             state.abandoned = true;
             state.native_level = level;
@@ -704,7 +774,14 @@ impl Vm {
                 let Value::Function(entry) = self.argument(base, count, 0) else {
                     return Err(self.argument_error(0, b"Lua function expected"));
                 };
-                let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
+                let state = Thread::new(entry, self.globals, self.threads.memory().clone())
+                    .map_err(|_| self.memory_failure())?;
+                self.reserve_gc_new_value()?;
+                let thread = ThreadId(
+                    self.threads
+                        .try_insert(state)
+                        .map_err(|_| self.memory_failure())?,
+                );
                 self.threads.note_alloc(size_of::<Value>());
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
                 self.gc_new_value(Value::Thread(thread));
@@ -726,7 +803,7 @@ impl Vm {
                     return Err(self.argument_error(0, b"coroutine expected"));
                 };
                 let status = self.coroutine_status(thread);
-                self.intern(status.name())
+                self.try_intern(status.name())?
             }
             _ => unreachable!("coroutine continuations are scheduled"),
         };
@@ -891,11 +968,7 @@ impl Vm {
             // An API can leave multiple native yields pending on one thread.
             // Only its topmost yielded call receives resume arguments. Reaching
             // an older call without a new resume is an invalid continuation.
-            return Err(Error::new(
-                ErrorKind::Runtime,
-                0,
-                "invalid coroutine resume state",
-            ));
+            return Err(Error::runtime_static("invalid coroutine resume state"));
         };
         Ok(values)
     }
@@ -910,8 +983,8 @@ impl Vm {
                         > self.threads[slot_index(self.thread.0)].native_base_calls
                 {
                     let message = "attempt to yield across metamethod/C-call boundary";
-                    let value = self.intern(message.as_bytes());
-                    return Err(Error::raised(value, message));
+                    let value = self.try_intern(message.as_bytes())?;
+                    return Err(Error::raised_static(value, message));
                 }
                 self.frames[owner].pc = 1;
                 self.transition = Some(Transition::Yield {
@@ -922,34 +995,38 @@ impl Vm {
             }
             let values = self.take_resume_values(frame)?;
             self.frames[owner].vararg_count = (self.top - frame.vararg_start) as u32;
-            return Ok(self.return_frame(self.frames[owner], values.start, values.len()));
+            return self.return_frame(self.frames[owner], values.start, values.len());
         }
         let wrapped = id != CO_RESUME;
         let phase = frame.pc & 3;
         if phase >= 2 {
             let source = base + (frame.pc >> 2) as usize;
             if wrapped && phase == 3 {
-                let value = self.located_error(self.registers[source], 1);
+                use crate::memory::fallible::{self, SliceExt};
+                let value = self.try_located_error(self.registers[source], 1)?;
                 self.registers[source] = value;
                 let message = match value {
-                    Value::String(s) => {
-                        String::from_utf8_lossy(&self.strings.bytes[slot_index(s.0)]).into_owned()
-                    }
-                    _ => format!("error object is a {} value", value.type_name()),
+                    Value::String(id) => self.string_bytes(id).unwrap().try_to_vec(),
+                    _ => fallible::format(format_args!(
+                        "error object is a {} value",
+                        value.type_name()
+                    ))
+                    .map(String::into_bytes),
                 };
-                return Err(Error::raised(value, message));
+                let error = self.runtime_message(message);
+                return Err(if error.kind() == ErrorKind::Memory {
+                    error
+                } else {
+                    error.with_value(value)
+                });
             }
-            return Ok(self.return_frame(frame, source, self.top - source));
+            return self.return_frame(frame, source, self.top - source);
         }
         let thread = if wrapped {
             let Value::Thread(thread) =
                 self.native_closures[slot_index(self.builtin_closure(id))].captures[0]
             else {
-                return Err(Error::new(
-                    ErrorKind::Runtime,
-                    0,
-                    "invalid coroutine wrapper capture",
-                ));
+                return Err(Error::runtime_static("invalid coroutine wrapper capture"));
             };
             thread
         } else {
@@ -971,14 +1048,16 @@ impl Vm {
         // Lua calls do not. The host's initial call accounts for the remaining one.
         let level = self.native_calls_for(self.thread, owner);
         if status != Status::Suspended || level >= 200 {
-            let message = if status != Status::Suspended {
-                format!(
-                    "cannot resume {} coroutine",
-                    String::from_utf8_lossy(status.name())
-                )
-            } else {
-                "C stack overflow".into()
+            let message = match status {
+                Status::Running => "cannot resume running coroutine",
+                Status::Normal => "cannot resume normal coroutine",
+                Status::Dead => "cannot resume dead coroutine",
+                Status::Suspended => "C stack overflow",
             };
+            let value = self.try_intern(message.as_bytes())?;
+            let arguments = frame.vararg_start..frame.vararg_start + frame.argc();
+            let start = base + arguments.len();
+            self.reserve_registers(start + 2)?;
             if status == Status::Suspended
                 && level >= 200
                 && self.threads[slot_index(thread.0)].frames.is_empty()
@@ -992,12 +1071,8 @@ impl Vm {
                 state.api_stack = 0..0;
                 state.status = Status::Dead;
             }
-            let value = self.intern(message.as_bytes());
-            let arguments =
-                self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec();
-            let start = base + arguments.len();
             self.resize_registers(self.registers.len().max(start + 2));
-            self.registers[base..start].copy_from_slice(&arguments);
+            self.registers.copy_within(arguments.clone(), base);
             if wrapped {
                 self.registers[start] = value;
             } else {
@@ -1012,11 +1087,17 @@ impl Vm {
         }
         let offset = usize::from(!wrapped);
         let count = frame.argc() - offset;
+        let state = &mut self.threads[slot_index(thread.0)];
+        let capacity = state.registers.capacity();
+        let needed = state.api_stack.end + count;
+        state
+            .registers
+            .try_reserve(needed.saturating_sub(state.registers.len()))
+            .map_err(|_| self.memory_failure())?;
         self.resume_api_barriers(thread);
         let args =
             &self.registers[frame.vararg_start + offset..frame.vararg_start + offset + count];
         let state = &mut self.threads[slot_index(thread.0)];
-        let capacity = state.registers.capacity();
         if state.frames.is_empty() {
             let call = state.api_stack.end - 1;
             state.registers.truncate(state.api_stack.end);

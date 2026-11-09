@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "check",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "rust-engine",
+    "--lib"
+  ],
+  "exit_code": 0,
+  "seconds": 29.859991499921307,
+  "sources_unchanged": true,
+  "log_sha256": "311f6c487690c8cf147fa76e5b98d214c809ef095b16b2721f5b0eda39dcb60b"
+}

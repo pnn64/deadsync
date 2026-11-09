@@ -1,0 +1,1181 @@
+{
+  "arch": "x86_64",
+  "cases": [
+    {
+      "actor_files": 27,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.086894086
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.129312374
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.134622012
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.092412688
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.089512406
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.12985432
+        }
+      ],
+      "skin": "default"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.199576938
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.153621913
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.151508267
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.197456599
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196961748
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.1569748
+        }
+      ],
+      "skin": "cel"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.171195893
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.219672548
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.206544606
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.160361143
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.156193042
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.205596926
+        }
+      ],
+      "skin": "cyber"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.197463201
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.153247121
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.144641684
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.190736507
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.186220261
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.150525254
+        }
+      ],
+      "skin": "ddr-note"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.149556858
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.190909942
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.1876995
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.142793034
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.145838624
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.188258818
+        }
+      ],
+      "skin": "ddr-rainbow"
+    },
+    {
+      "actor_files": 44,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.191000977
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.144122124
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.148394824
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.188506329
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.194314474
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.140715833
+        }
+      ],
+      "skin": "ddr-vivid"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.153519514
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.193376715
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196425464
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.151216401
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.14887958
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.194447134
+        }
+      ],
+      "skin": "devcel-2024"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.199245767
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.151923183
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.156685383
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.20210495
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200978478
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.156255592
+        }
+      ],
+      "skin": "enchantment"
+    },
+    {
+      "actor_files": 41,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.139079192
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.182448661
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.185355229
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.141054602
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.1400169
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.183728339
+        }
+      ],
+      "skin": "lambda"
+    },
+    {
+      "actor_files": 43,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200756693
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.156383158
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.153967025
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.197136145
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.201462484
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.152410961
+        }
+      ],
+      "skin": "metal"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.153383562
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.195740284
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196571409
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.152685229
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.152567105
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196128051
+        }
+      ],
+      "skin": "robot"
+    },
+    {
+      "actor_files": 42,
+      "complete_output_equal": true,
+      "game": "dance",
+      "loader_entries": 172,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.218496798
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.16632171
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.161514936
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.205643166
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.209906851
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.16832111
+        }
+      ],
+      "skin": "vivid"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.128803984
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.17959961
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.180676249
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.129752285
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.130251769
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.179859199
+        }
+      ],
+      "skin": "default"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.197499613
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.140053711
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.141512503
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.194560858
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196066489
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.139759819
+        }
+      ],
+      "skin": "cmd"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.161001924
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.220748929
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.223216372
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.173047101
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.164021883
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.220103947
+        }
+      ],
+      "skin": "cmd-routine-p1"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.215625826
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.159474337
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.160586829
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.219321597
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.226452447
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.166643199
+        }
+      ],
+      "skin": "cmd-routine-p2"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.144515653
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.192312777
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.198075819
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.138700482
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.141379047
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.187253353
+        }
+      ],
+      "skin": "complex"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.281854883
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.223469918
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.22418528
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.279194607
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.286649642
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.22816626
+        }
+      ],
+      "skin": "delta"
+    },
+    {
+      "actor_files": 86,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 230,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.199840411
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.251502117
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.253364272
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200720364
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.199960549
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.250920366
+        }
+      ],
+      "skin": "delta-note"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.305522135
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.241781047
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.241298631
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.298615032
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.303512951
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.239848575
+        }
+      ],
+      "skin": "delta-routine-p1"
+    },
+    {
+      "actor_files": 91,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 235,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.258848826
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.321984968
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.324397379
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.264401367
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.26199725
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.318073252
+        }
+      ],
+      "skin": "delta-routine-p2"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 230,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200899207
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.149628635
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.152154573
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200473849
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.204044188
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.146400307
+        }
+      ],
+      "skin": "frame5p"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.139797701
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.188288619
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.189619861
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.137387604
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.138613985
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.188826831
+        }
+      ],
+      "skin": "newextra"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.225190761
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.170618021
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.144363765
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.214199328
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.20095708
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.158760725
+        }
+      ],
+      "skin": "pad"
+    },
+    {
+      "actor_files": 56,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.150133442
+        },
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.200629342
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.199599059
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.146211879
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.148245905
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.196699076
+        }
+      ],
+      "skin": "rhythm"
+    },
+    {
+      "actor_files": 53,
+      "complete_output_equal": true,
+      "game": "pump",
+      "loader_entries": 220,
+      "samples": [
+        {
+          "backend": "rust",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.194430042
+        },
+        {
+          "backend": "legacy",
+          "sample": 0,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.13889166
+        },
+        {
+          "backend": "legacy",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.139403425
+        },
+        {
+          "backend": "rust",
+          "sample": 1,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.186823041
+        },
+        {
+          "backend": "rust",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.186269459
+        },
+        {
+          "backend": "legacy",
+          "sample": 2,
+          "thread_cpu_cycles": null,
+          "wall_seconds": 0.154055136
+        }
+      ],
+      "skin": "simple"
+    }
+  ],
+  "debug_assertions": true,
+  "limitations": "wall time and Windows thread cycles only; no allocation or peak-memory comparison; not a general VM or LuaJIT benchmark",
+  "os": "linux",
+  "player_options": "Mirror",
+  "samples_per_backend": 3,
+  "scope": "independent VM per call; source reads, compilation, preparation and VM destruction included; input discovery, output comparison and bundle destruction excluded; OS/source/path caches warmed; backend order alternates"
+}

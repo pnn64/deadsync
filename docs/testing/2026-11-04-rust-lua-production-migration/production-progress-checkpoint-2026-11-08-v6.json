@@ -1,0 +1,62 @@
+{
+  "created_utc": "2026-11-08T10:10:23.810733+00:00",
+  "goal_status": "active",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "previous_goal_turn_classification": "progress: fixed inventory/source/cache review and measurement source guard completed.",
+  "current_goal_turn_classification": "progress",
+  "progress": [
+    "Consumed completed full song run: 2170 pass, two assertion failures; byte-identical neutral launch retries add 18 passes without elevation. One failure is the recorded no-Lua mesh alpha defect.",
+    "Diagnosed and fixed the new TableToString precedence mismatch by restoring native base-before-late helper order. Native Lua script matches frozen source; original failing screen UI file remains byte-identical.",
+    "Preserved original sequence assertion body and all base formatter inputs; added separate base-stage coverage. Focused seven-target run passes 68 checks.",
+    "Final relevant Windows core suite passes 262 checks across 28 targets; core Clippy passes. No generic engine source changes.",
+    "Final full noteskin suite passes 321 checks; final GIF capture probe passes all 112 player/aspect comparisons over 28 cases, with current engine/adapter source guards.",
+    "Guarded normal and instrumented graph verification: 399 packages each, zero legacy runtime packages, 81 manifest/config inputs unchanged.",
+    "Migration formatting cleanup resolved; full 1163-file audit reports only 114 baseline/unrelated formatting failures. Final changed-file cfg refinement also passes rustfmt.",
+    "Prepared release/link-map recorder and smoke support for the recorded artifact; guarded measurement helper/harness identities and remaining eight-package downstream recorder.",
+    "Started fresh final full song run and normal release application/link-map build in separate profile directories against the same frozen source."
+  ],
+  "evidence": [
+    "production-full-song-after-copy-review-v1.json",
+    "production-formatter-precedence-analysis-v1.json",
+    "production-formatter-coverage-preservation-v1.json",
+    "production-formatter-and-final-regression-review-v1.json",
+    "production-lua-graph-v2/result.json",
+    "production-format-audit-v2/result.json",
+    "production-workload-instrumentation-review-v1.json"
+  ],
+  "live_runners": [
+    {
+      "native_session_id": 28881,
+      "stage": "production-final-full-song-v1-song-windows-debug",
+      "kind": "full song debug regression",
+      "status": "Re-poll original handle before assuming terminal or starting dependent debug Cargo work."
+    },
+    {
+      "native_session_id": 82240,
+      "stage": "production-final-linked-app-v1-application-windows-release",
+      "kind": "normal release application with MSVC linker map",
+      "status": "Re-poll original handle; verify result, artifact hash and actual map evidence, then run strict rendered smoke."
+    }
+  ],
+  "source_freeze": "Both runners guard the seven migration crates/root manifests/config. Do not edit watched files while either is live. Docs/tooling here are outside the guard. Debug/release build directories are independent; no timing measurement while builds run.",
+  "terminal_consumed_sessions": [
+    94461,
+    56104,
+    34443,
+    68113,
+    24550,
+    55217,
+    30011
+  ],
+  "known_preexisting_assertion": "playback::tests::song_lua_actor_multi_vertex_builds_textured_mesh_overlay; frozen-source no-Lua alpha mismatch remains enabled.",
+  "next_actions": [
+    "Consume final full song result; if Windows 740 launch-only errors recur, use retry_song_launch_failures.py with that completed stage before source edits.",
+    "Consume normal release build result; validate application.map actual Rust engine symbols and absence of legacy objects/C symbols. The strict smoke runner now uses artifact.path/sha256 from the build result.",
+    "Run strict rendered smoke: run_production_lua_smoke_v2.py production-final-rendered-dreaming-v1 --build production-final-linked-app-v1-application-windows-release. Inspect the actual screenshot.",
+    "After debug regression releases its lock, run checks.py production-final-downstream-v1 downstream --target-dir target/rust-adapters --no-fail-fast. It selects the original eight remaining downstream packages, including all theme/GIF tests.",
+    "Run applicable adapter/downstream Clippy; record the known unchanged cmd.rs immutable-loop lint separately if it recurs. Do not blanket-allow lints or edit unrelated renderer assertions.",
+    "Build release measurement tools using build_workloads.py with target/rust-adapters --release, then perform controlled matched baseline/current preparation/live/process-memory runs using preserved release binaries and pinned DREAMING-ING!! inputs.",
+    "Update final architecture/validation status and prove every original criterion in completion-audit.md; stop when satisfied."
+  ],
+  "completion": "Unproven. Same production migration scope; no new language features, C API work, baking capability, native backend or performance target."
+}

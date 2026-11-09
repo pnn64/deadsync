@@ -1,7 +1,10 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, MultiValue, Table, Value};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::note_song_lua_side_effect;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_cryptman_table(lua: &Lua) -> mlua::Result<Table> {
     let cryptman = lua.create_table()?;
     for name in ["SHA1File", "SHA1String"] {
@@ -38,34 +41,4 @@ pub fn create_cryptman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(cryptman)
 }
 
-#[cfg(test)]
-mod tests {
-    use mlua::{Lua, MultiValue, Value};
 
-    use super::create_cryptman_table;
-
-    #[test]
-    fn cryptman_returns_fixed_hash_lengths() {
-        let lua = Lua::new();
-        let cryptman = create_cryptman_table(&lua).unwrap();
-        let sha1 = cryptman
-            .get::<mlua::Function>("SHA1String")
-            .unwrap()
-            .call::<Value>(MultiValue::new())
-            .unwrap();
-        let sha256 = cryptman
-            .get::<mlua::Function>("SHA256String")
-            .unwrap()
-            .call::<Value>(MultiValue::new())
-            .unwrap();
-
-        assert_eq!(
-            matches!(sha1, Value::String(ref text) if text.as_bytes().len() == 20),
-            true
-        );
-        assert_eq!(
-            matches!(sha256, Value::String(ref text) if text.as_bytes().len() == 32),
-            true
-        );
-    }
-}

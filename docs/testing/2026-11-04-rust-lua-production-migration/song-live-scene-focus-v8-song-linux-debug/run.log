@@ -1,0 +1,36 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 50s
+     Running tests/rust_live_scene.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_scene-ad24fc511c115c43)
+
+running 17 tests
+test a_rejected_broadcast_history_write_does_not_capture_a_source_event ... ok
+test authored_startup_and_runtime_tween_queues_keep_current_render_poses ... ok
+test authored_statistics_selection_before_scene_construction_governs_live_writes ... ok
+test gameplay_outro_noted_after_actors_uses_the_same_off_boundary ... ok
+test health_callback_failures_are_reported_once_and_preserve_the_live_scene ... ok
+test health_callbacks_write_the_selected_statistics_and_freeze_poses_before_health ... ok
+test immediate_draw_submissions_and_normal_draw_frames_keep_their_live_boundaries ... ok
+test input_and_custom_draw_update_states_and_drain_in_execution_order ... ok
+test live_outputs_preserve_explicit_nil_tables_nested_messages_and_requests ... ok
+test malformed_live_source_keeps_the_existing_dummy_actor_fallback ... ok
+test malformed_raw_pose_fields_do_not_override_native_owned_live_tweens ... ok
+test original_startup_request_fixture_retains_the_native_reload_limit ... ok
+test prepared_background_failure_retries_the_host_phase_without_a_stale_prepared_mark ... ok
+test retained_scene_update_prepare_draw_end_and_owned_render_states_match ... ok
+test retained_sound_owners_preserve_startup_play_pause_and_teardown_order ... ok
+test scene_outro_clears_attacks_and_orders_success_and_all_failed_off ... ok
+test source_broadcast_snapshots_keep_functions_actors_cycles_and_trace_limits ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.28s
+

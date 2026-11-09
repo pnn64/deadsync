@@ -1,0 +1,113 @@
+--- a/docs/lua-architecture.md
++++ b/docs/lua-architecture.md
+@@ -971,9 +971,32 @@
+ records 331 passing tests across 23 targets, five new native/lifetime/recovery
+ cases, the unchanged prior 104-case activation prefix, formatting and the exact
+ pre-existing Clippy diagnostics. All 1,218 watched source inputs match the checks.
+-Complete function-action capture still requires its outer script/column/spline,
+-broadcast/sound, tracked-target and side-effect scope. Stable/deferred message
+-extraction and the production compiler/session cutover remain pending.
++The function-action scope below composes these pieces with outer script, column,
++broadcast/sound and tracked-output state. Stable/deferred message extraction and
++the production compiler/session cutover remain pending.
++
++`RustSongRuntime::capture_song_function_action` now implements the existing public
++function-action helper. It preserves overlay selection order/duplicates and
++tracked-row order, collects broadcasts/sound calls, restores column/spline state,
++measures side effects, resets/rewinds all touched actors, then restores output
++globals, clocks and shared script state in native order. Inputs, saved note
++identities, replaced globals and the first callback return remain rooted through
++reentrant cleanup/GC. Restoration errors retain native partial state while
++releasing the private scope for subsequent calls. The internal no-table-rewind
++variant is available for the remaining stable/deferred message orchestration.
++
++The differential action test also exposed the missing existing `SOUND` global.
++Its seven native methods now use Rust host bindings with the same path lookup,
++resource deduplication, repeated call/event capture, return identity, partial
++errors and queued-startup/message provenance. The
++[function-action review](testing/2026-11-04-rust-lua-production-migration/song-function-action-review.json)
++records 350 passing tests across 24 targets, including NoteField coverage and
++eight new comparisons with the exact prior 109-case activation prefix unchanged.
++Formatting passes, Clippy retains its exact existing diagnostics, and all 1,221
++watched inputs match both final checks. Stable/deferred message and easing/tree/
++wrapper/global-reference/proxy/derived-output compilation and complete production
++compiler/live-session/fallback/cache integration still require migration. Normal
++production songs continue to use legacy Lua.
+ 
+ The [migration ledger](testing/2026-11-04-rust-lua-production-migration/README.md)
+ records these differential checks and their limitations. Complete compiler/session
+--- a/docs/testing/2026-11-04-rust-lua-production-migration/README.md
++++ b/docs/testing/2026-11-04-rust-lua-production-migration/README.md
+@@ -5258,3 +5258,72 @@
+ preparation/live/memory gates still apply. Normal production songs still use
+ legacy Lua. Interpreter/C API removal milestones remain closed. The production
+ migration remains active and incomplete.
++
++## Full function-action scope and SOUND binding (2026-11-06)
++
++The Rust adapter implements the existing public compiler function-action helper.
++It composes shared-script snapshots and the lazy touched-actor scope, preserving
++overlay order and duplicate indices plus tracked-row order. Output collection
++precedes column/spline restoration; side effects are measured after that restore
++and before actor reset/rewind. Output globals and clocks restore before outer
++script tables/cells. Saved identities, inputs, previous globals and the first
++callback return remain rooted across all callbacks and GC. Cleanup callbacks
++remain allocated before scope activation. Fatal instruction aborts use fresh VM
++cleanup entries. Authored restoration errors preserve native partial state and
++release private scope/attachments so subsequent probes remain usable.
++
++Original note-field/column/handler/spline identities are retained. Native fields
++receive independently cloned pre-probe values; an old point-table alias may stay
++mutated while the restored spline gets its saved clone. Typed getters and the
++raw/full named-child lookup boundaries match the existing native helper.
++
++The combined comparison exposed an inventoried production gap: Rust had not
++installed the existing SOUND global. Its seven methods now preserve native
++side effects, captured-manager return identity, method argument offset,
++string-only path input, path lookup without extra trimming, audio filtering,
++resource deduplication, repeated PlayOnce calls, partial errors and runtime
++queued-startup/message provenance. This adds existing host behavior only.
++
++- [Final regressions](song-function-action-regressions-v1-song-linux-debug/result.json): **350 passed, zero failed across 24 targets**,
++  exit 0 in 409.12762353615835 seconds; sources unchanged. Log SHA-256:
++  `813078174c0ac185bf1bc7b3a5468758114c3dff2a9803028272629d00524315`.
++  Activation has 117 cases with the exact prior 109-case prefix unchanged.
++  Eight additions compare combined overlay/tracked output and broadcasts/sounds,
++  script/local/RNG rewind, column membership and deep spline clones, cleanup
++  ordering and first-return lifetime through GC, deferred output-error precedence,
++  fatal-limit recovery, SOUND methods/path/identity behavior, sound event context
++  and partial errors/GC, and failed column restoration with later recovery.
++  Existing NoteField coverage adds eleven cases because these snapshots now
++  participate in function actions.
++- [Clippy](song-function-action-lint-v1-song-linux-debug/result.json): the exact existing 166 warnings and cmd.rs:349
++  error, exit 101 in 34.5905553009361 seconds. Log SHA-256:
++  `1478af1927dc9a12e65016b830c374199056efd88e7d997c940de2a1adab7d5d`.
++  Its output is bitwise identical to the established baseline; no new diagnostics.
++- [Source review](song-function-action-review.json): all 1,221 watched inputs match both final checks.
++  Formatting passes for five modified adapter/test files and three new modules.
++  Native production/oracle implementations, core and manifests remain unchanged.
++  Test support delegates to the actual existing public native action helper.
++  The [dependency graph](song-function-action-test-dependencies.json),
++  [source diff](song-function-action-source-diff.patch) and edit/documentation
++  baselines retain the exact review boundary.
++- [Findings](song-function-action-findings.json) preserve the borrowed-stack conversion compile failure, both new-fixture
++  and missing-SOUND failures, the seven-case pass and final eight-case pass.
++  The fixture's nonexistent SOUNDMAN name was corrected to native SOUND; the
++  resulting missing Rust binding was implemented with all capture assertions
++  retained. Static review then used direct HostCall text coercion, tightened
++  raw-path input to native's string-only rule and added restoration-error coverage.
++  The weak table for the returned-value check lives on an actor so outer script
++  rewind cannot mask a leaked return root. No existing coverage was removed,
++  weakened or skipped. Durations are verification costs, not representative
++  preparation/live/memory measurements.
++
++The public function-action helper is implemented. The internal no-table-rewind
++variant still needs its callers in stable/deferred message orchestration.
++Per-actor message extraction, stable/cross-actor/deferred messages, easing target
++probes and full tree/wrapper/global-reference/proxy/derived-output compilation,
++production preparation compiler and retained live/session/navigation lifecycle,
++automatic teardown, fallback/cache and unconditional song cutover remain pending.
++All original final-source/content, normal application/render, dependency/link and
++preparation/live/memory gates remain required. Normal production songs still use
++legacy Lua. Interpreter/C API removal milestones remain closed. The production
++migration remains active and incomplete.

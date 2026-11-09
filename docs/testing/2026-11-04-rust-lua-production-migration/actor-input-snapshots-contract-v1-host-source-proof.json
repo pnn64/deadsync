@@ -1,0 +1,21 @@
+{
+  "recorded_utc": "2026-11-08T02:24:16.298430+00:00",
+  "stage": "actor-input-snapshots-contract-v1-song-linux-debug",
+  "runner_pid": 3088905,
+  "observed_runner_wait": "p9_client_rpc",
+  "runner_result": "Still pending at the time of this independent host source check.",
+  "watched_sources": 1307,
+  "sources_unchanged": true,
+  "source_manifest_sha256": "7d80465b8f2f40e2bb0f01c93ed1c510a35e31f65ab2d3692e6d95345c6ce929",
+  "log_sha256": "5a5de0755c4761a2b4db56366641dbd8390944c5200fa085a15bd4b981993252",
+  "test_results": [
+    "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.93s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.94s",
+    "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.69s"
+  ],
+  "tests_passed": 43,
+  "tests_failed": 0,
+  "windows_render_validation": "Not exercised: actor_input_render is Windows-only and ran zero tests under Linux.",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34"
+}

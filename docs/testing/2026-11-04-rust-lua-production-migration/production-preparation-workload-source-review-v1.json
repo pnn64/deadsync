@@ -1,0 +1,10 @@
+{
+  "path": "examples/song_lua_performance.rs",
+  "baseline_copy": "target/rust-lua-production-before/examples/song_lua_performance.rs",
+  "current_and_baseline_sha256": "e94a4b56491f7d2a3f0b119a1252dd79299b38819c791f2f2def0746a382f431",
+  "byte_identical": true,
+  "one_live_scene_assertion": "Present in both baseline and current source, not an unrelated later addition",
+  "workload": "DREAMING-ING!!/lua/default.lua lines437-438 remove/add InputHandler callbacks; existing input-specific live fallback applies",
+  "correction": "Supersedes the earlier continuation note suggesting the assertion was a later unrelated change. Do not alter production policy or benchmark to accommodate that mistaken attribution.",
+  "remaining": "Build current release tools and execute matched workload; source review alone is not performance acceptance"
+}

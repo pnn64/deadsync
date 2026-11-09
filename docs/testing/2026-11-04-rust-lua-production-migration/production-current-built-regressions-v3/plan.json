@@ -1,0 +1,19 @@
+{
+  "original_eligible_targets": 88,
+  "executing": 84,
+  "pending_cargo_targets": [
+    "rust_live_layers",
+    "rust_live_visuals",
+    "rust_render",
+    "rust_statistics"
+  ],
+  "build_stage": "docs\\testing\\2026-11-04-rust-lua-production-migration\\production-current-full-song-v2-song-windows-debug",
+  "build_to_execution_source_changes": [
+    "crates/deadsync-notefield/src/appearance_performance.rs",
+    "crates/deadsync-notefield/src/transforms.rs",
+    "crates/deadsync-song-lua/examples/input_frames.rs"
+  ],
+  "qualification": "Only two independently reviewed notefield changes and the development-only input_frames module import differ. Runtime/library/test Lua source is exact. Pure notefield identity equivalence in production-concurrent-notefield-source-review-v1; added benchmark and example are not compiled as dependencies/test targets.",
+  "no_test_filters": true,
+  "original_ignore_attributes_unchanged": true
+}

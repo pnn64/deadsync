@@ -1,0 +1,47 @@
+{
+  "goal_complete": false,
+  "historical_ledger_prefix_preserved": true,
+  "new_links_verified": [
+    [
+      "crates/deadsync-song-lua/README.md",
+      "../../docs/testing/2026-11-04-rust-lua-production-migration/song-activation-review.json"
+    ],
+    [
+      "docs/lua-architecture.md",
+      "testing/2026-11-04-rust-lua-production-migration/song-activation-review.json"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "song-activation-focused-v5-song-linux-debug/result.json"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "song-activation-shared-v1-song-linux-debug/result.json"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "song-activation-review.json"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "review_song_activation.py"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "song-activation-lint-v1-song-linux-debug/result.json"
+    ],
+    [
+      "docs/testing/2026-11-04-rust-lua-production-migration/README.md",
+      "song-activation-findings.json"
+    ]
+  ],
+  "docs": {
+    "crates/deadsync-song-lua/README.md": "a951591042dd5f681a3d113742f86b5dd244f98bcd4c916a8a18490bc2ee435b",
+    "docs/lua-architecture.md": "ebb03581fb5e1d6e4585039f7eedb1b497644f353c32e843d7f557cca1e79be7",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "1c9426e4c83b335bb6d5f6396a6d4b7e5f48299f38c4c6c9b41d72c60188d4fe"
+  },
+  "tests_passed": 140,
+  "targets": 10,
+  "new_cases": 9,
+  "source_audit": "song-activation-review.json"
+}

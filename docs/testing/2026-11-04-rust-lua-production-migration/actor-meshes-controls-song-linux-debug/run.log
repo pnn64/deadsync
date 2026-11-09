@@ -1,0 +1,39 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 31s
+     Running tests/rust_meshes.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_meshes-299e45fcf747710f)
+
+running 6 tests
+test draw_state_getters_reenter_collect_and_keep_partial_writes ... ok
+test mesh_modes_ranges_and_line_joins_match_the_production_reader ... ok
+test mesh_reader_rejects_invalid_buffers_and_recovers_without_stale_output ... ok
+test mesh_updates_and_texture_loads_remain_immediate_during_tweens ... 
+thread 'mesh_updates_and_texture_loads_remain_immediate_during_tweens' (2488313) panicked at crates/deadsync-song-lua/tests/rust_meshes.rs:106:41:
+called `Result::unwrap()` on an `Err` value: RuntimeError("crates/deadsync-song-lua/tests/rust_meshes.rs:106:1: attempt to call method 'InitState' (a nil value)\nstack traceback:\n\t[C]: in method 'InitState'\n\tcrates/deadsync-song-lua/tests/rust_meshes.rs:106:1: in main chunk")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test mesh_upload_conversion_and_count_rules_keep_existing_fallbacks ... ok
+test vertex_uploads_copy_scalars_and_survive_collection ... 
+thread 'vertex_uploads_copy_scalars_and_survive_collection' (2488315) panicked at crates/deadsync-song-lua/tests/rust_meshes.rs:11:10:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 1, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(17179869705))), target_thread: None }
+FAILED
+
+failures:
+
+failures:
+    mesh_updates_and_texture_loads_remain_immediate_during_tweens
+    vertex_uploads_copy_scalars_and_survive_collection
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_meshes`

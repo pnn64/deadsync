@@ -1,0 +1,12 @@
+{
+  "original_sequence_assertion_body_exactly_preserved": true,
+  "original_sequence_setup_change": "Native oracle now installs the actual late production globals, matching the full Rust runtime.",
+  "base_formatter_coverage": "Every original TableToString argument case is also retained in a separate base-stage comparison, plus saved-function/GC and cycle controls.",
+  "failing_screen_ui_file_unchanged": true,
+  "screen_ui_sha256": "14c0f42f34fa91f72fb7c2c0596927ade9bfe49b93fbc19e54c4cbb4836ad60d",
+  "core_sources_unchanged": true,
+  "core_files": 238,
+  "normal_production_change": "Base compatibility globals installed immediately before the existing late screen helpers. No engine changes.",
+  "test_only_helper": "Base table helper reinstall is accessible only through test_support, which requires test-support AND test/oracle at the root module.",
+  "source_formatting": "Six edited files formatted with rustfmt skip_children=true; no unrelated notefield files changed."
+}

@@ -1,0 +1,6 @@
+{
+  "complete_log_identical_to_baseline": true,
+  "baseline": "noteskin-manager-final-lint-song-linux-debug",
+  "final": "profiles-lint-song-linux-debug",
+  "log_sha256": "7b54f849f226da0372ef4c88492df1e604de5cc528ca39a689ae6c137c64bc9d"
+}

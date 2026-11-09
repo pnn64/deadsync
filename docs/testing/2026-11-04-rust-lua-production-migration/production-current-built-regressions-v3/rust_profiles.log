@@ -1,0 +1,13 @@
+
+running 8 tests
+test calories_preserve_float_order_display_and_partial_failures ... ok
+test complete_profile_surface_defaults_and_slot_identities_match_production ... ok
+test high_score_lookup_uses_raw_sequence_current_callbacks_and_reentrant_updates ... ok
+test mutable_fields_keep_typed_getter_errors_character_values_and_user_table_identity ... ok
+test profile_constant_methods_and_score_object_defaults_preserve_surface_and_identity ... ok
+test retained_profile_and_score_callbacks_survive_global_replacement_and_collection ... ok
+test setters_and_prefix_keep_metamethod_reentry_and_side_effect_write_order ... ok
+test setters_keep_string_number_boolean_conversion_and_bound_receiver_rules ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+

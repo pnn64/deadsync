@@ -1,0 +1,42 @@
+{
+  "stage": "production-existing-bindings-v1",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--test",
+    "rust_song_compiler",
+    "--test",
+    "rust_meshes",
+    "--test",
+    "rust_render",
+    "--no-fail-fast",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 595.4329815001693,
+  "log_sha256": "1168b83e2b0e504e4c7cf653bd8141762ea4f8211cbb4f05e27b6aac9317ba83",
+  "tests_passed": 46,
+  "tests_failed": 0,
+  "test_results": [
+    "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s",
+    "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s",
+    "test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 75.25s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

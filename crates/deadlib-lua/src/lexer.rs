@@ -57,13 +57,14 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
-    pub(crate) fn label(self) -> Vec<u8> {
+    pub(crate) fn try_label(self) -> Result<Vec<u8>, crate::Error> {
+        use crate::memory::fallible::{self, SliceExt};
         let text = match self {
             Self::Byte(byte) => {
                 return if crate::locale::class(byte, b'c') {
-                    format!("char({byte})").into_bytes()
+                    Ok(fallible::format(format_args!("char({byte})"))?.into_bytes())
                 } else {
-                    vec![byte]
+                    fallible::vec([byte])
                 };
             }
             Self::Eof => "<eof>",
@@ -118,7 +119,7 @@ impl Kind {
             Self::Concat => "..",
             Self::Dots => "...",
         };
-        text.as_bytes().to_vec()
+        text.as_bytes().try_to_vec()
     }
 }
 

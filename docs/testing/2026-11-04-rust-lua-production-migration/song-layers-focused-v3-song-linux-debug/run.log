@@ -1,0 +1,43 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.89s
+     Running tests/rust_song_layers.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_layers-e330a353d8c34dd3)
+
+running 6 tests
+test authored_sources_parenting_init_and_foreground_attachment_match_production ... 
+thread 'authored_sources_parenting_init_and_foreground_attachment_match_production' (2686355) panicked at crates/deadsync-song-lua/tests/rust_song_layers.rs:67:9:
+assertion `left == right` failed
+  left: "load,/tmp/.tmpYE7VL0/background.lua,/tmp/.tmpYE7VL0/background.lua,/tmp/.tmpYE7VL0|init,1,authored,nil,nil,true|load,/tmp/.tmpYE7VL0/./front/default.lua,/tmp/.tmpYE7VL0/./front/default.lua,/tmp/.tmpYE7VL0/./front|init,2,authored,SongForeground,0,true|load,/tmp/.tmpYE7VL0/ last.lua ,/tmp/.tmpYE7VL0/ last.lua ,/tmp/.tmpYE7VL0|init,3,authored,SongForeground,1,true"
+ right: "load,@/tmp/.tmpYE7VL0/background.lua,/tmp/.tmpYE7VL0/background.lua,/tmp/.tmpYE7VL0|init,1,authored,nil,nil,true|load,@/tmp/.tmpYE7VL0/./front/default.lua,/tmp/.tmpYE7VL0/./front/default.lua,/tmp/.tmpYE7VL0/./front|init,2,authored,SongForeground,0,true|load,@/tmp/.tmpYE7VL0/ last.lua ,/tmp/.tmpYE7VL0/ last.lua ,/tmp/.tmpYE7VL0|init,3,authored,SongForeground,1,true"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test background_upper_left_wraps_before_init_and_composes_existing_commands ... ok
+test failed_init_preserves_partial_state_and_all_constructor_owners_retire ... ok
+test invalid_plans_reject_entries_before_any_lua_execution ... ok
+test live_load_errors_and_scalar_returns_keep_prior_side_effects_and_dummy_layers ... ok
+test source_alias_selects_xero_environment_and_nested_file_directory ... 
+thread 'source_alias_selects_xero_environment_and_nested_file_directory' (2686360) panicked at crates/deadsync-song-lua/tests/rust_song_layers.rs:67:9:
+assertion `left == right` failed
+  left: "aliased-environment,25,25,/tmp/.tmp4xChhI/template/std.lua,/tmp/.tmp4xChhI/template/std.lua|aliased-init,25,25"
+ right: "aliased-environment,25,25,/tmp/.tmp4xChhI/template/std.lua,@/tmp/.tmp4xChhI/template/std.lua|aliased-init,25,25"
+FAILED
+
+failures:
+
+failures:
+    authored_sources_parenting_init_and_foreground_attachment_match_production
+    source_alias_selects_xero_environment_and_nested_file_directory
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.31s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_song_layers`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_song_layers`

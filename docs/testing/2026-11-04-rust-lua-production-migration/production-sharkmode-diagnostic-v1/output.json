@@ -1,0 +1,14 @@
+{
+  "native": {
+    "Ok": {
+      "overlays": 16,
+      "draw_frames": 241,
+      "overlay_update_tracks": 5,
+      "info": "SongLuaCompileInfo { unsupported_perframes: 0, unsupported_function_eases: 0, unsupported_function_actions: 0, unsupported_perframe_captures: [], unsupported_function_ease_captures: [], unsupported_function_action_captures: [], skipped_message_command_captures: [] }"
+    }
+  },
+  "rust": {
+    "Err": "failed to run actor init commands for 'C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-sharkmode-input-review-v1/inputs/song\\default.lua': line 69: [string \"C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-...\"]:69: attempt to call method 'scale_or_crop_background' (a nil value)"
+  },
+  "limit": "Same committed scripts, four-second representative context. Diagnoses initialization; not the original full shell regression or a performance measurement."
+}

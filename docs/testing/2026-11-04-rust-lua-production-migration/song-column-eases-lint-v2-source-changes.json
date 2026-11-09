@@ -1,0 +1,5 @@
+[
+  "crates/deadsync-shell/src/app/mod.rs",
+  "crates/deadsync-shell/src/input_backend.rs",
+  "crates/deadsync-theme-simply-love/src/screens/pad_config.rs"
+]

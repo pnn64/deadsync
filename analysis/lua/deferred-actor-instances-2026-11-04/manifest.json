@@ -1,0 +1,26 @@
+{
+  "recorded_utc": "2026-11-04T12:44:51.817085+00:00",
+  "reason": "User clarified that the current task is the Lua interpreter and required engine APIs, not DeadSync integration. Unfinished actor work preserved without continuing it.",
+  "files": {
+    "crates/deadsync-song-lua/src/rust_engine.rs": "ee2df31e14ca3bf95d0e96eb51d7bd48f2bfdd7b377f08da892608ffdff4e079",
+    "crates/deadsync-song-lua/Cargo.toml": "2e8dd0855056e99fcbd08facaade674f0008266504cd5bb433a7f56b0513e9b4",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs": "bb0d61d5adda3decb163e0031987c458cd165e366c75e30b22b02ce6e63f478d",
+    "crates/deadsync-song-lua/src/rust_engine/actors.lua": "e6017178eb29af3ea8f02b8f902d8872555260272e908970cf324f22d5f8f899",
+    "crates/deadsync-song-lua/tests/rust_actors.rs": "7589a0ce31f23a9cf2096c49a2ac0d571b7e308f27a8b6af4e6712ef48711bcf"
+  },
+  "restored_baselines": {
+    "crates/deadsync-song-lua/src/rust_engine.rs": "f5c39273dd4c45d7df3385e0da820d5ddd70535b4f9fc706f4fc35d1fae95a4a",
+    "crates/deadsync-song-lua/Cargo.toml": "93889fb6484ffc2f9c04023edf847fbac8a720a71badd9a664e255461209927d"
+  },
+  "validation": {
+    "command": "cargo test -p deadsync-song-lua --features rust-engine,test-support --test rust_actors -- --nocapture",
+    "platform": "Linux x64",
+    "terminal_session": 13189,
+    "exit_code": 1,
+    "passed": 8,
+    "failed": 1,
+    "failing_test": "instances_are_distinct_and_child_first_init_observes_native_loading_order",
+    "failure": "Lua assertion failed at /fixture/actors.lua line 2; not investigated or fixed after the scope correction.",
+    "status": "Incomplete; no readiness or parity claim."
+  }
+}

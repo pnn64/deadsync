@@ -1,0 +1,78 @@
+{
+  "scope": "Bounded investigation of raw visual-hash mismatch. Original results/hashes and harness assertions remain unchanged; no general actor/callback sorting or coverage suppression.",
+  "runs": [
+    "baseline-live-dreaming-windows-release",
+    "production-final-native-live-functional-v1",
+    "production-final-live-functional-v1"
+  ],
+  "binary_sha256": [
+    "245bd406798ae4e35421d2066f166aef516f86375cfd51ca6facb59989a1b88c",
+    "245bd406798ae4e35421d2066f166aef516f86375cfd51ca6facb59989a1b88c",
+    "6b1059c83b804f47bc50eed8a2af86ffcf915716e45d5ad3744c69ad2c21a66c"
+  ],
+  "inputs_sha256": "63b078b30d06fcf8498b306ceed83a6e52ac1d3faacccadcafbefd4e48cc76ea",
+  "raw_visual_hashes": [
+    "ba3d40cdf7cf607620b76907e4809eab85d535b53983abd7b7bb5ef68e671f7f",
+    "c6bd535021ba1e3e8e189877accf741f082c3cde3558915819bb3e4ce25dc0f0",
+    "e0dd9c4773cf966da466008cd6e810779cb5d40ced33bce304708b40f15a585c"
+  ],
+  "native_control_is_not_process_deterministic": true,
+  "native_repeat_changed_actor_indices": [
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161
+  ],
+  "cause_evidence": {
+    "frozen_native_source": "target\\rust-lua-production-before\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+    "sha256": "adb84a02e9e0cb1aee3e9d182e03b56a6e5f04cc683011514ac2ca30fc9780fa",
+    "lines": "3528-3532: subscribers sorted by actor.to_pointer(); comments explicitly state tree order does not define delivery.",
+    "unchanged_song_source": "target\\debug\\Songs\\lua-songs\\DREAMING-ING!!\\lua\\default.lua",
+    "song_source_sha256": "020766a2f1f4d448ea85aa4ac86d826f697d3613045e370263cf729c4decbccd",
+    "score_script_lines": "267-275 append Store-message subscribers to score arrays; 608-625 assign x=-16*inc; 719-737 construct two eight-sprite score groups.",
+    "other_native_variation": "The unchanged native repeat also permutes small-cube pool actors at indices 152-161; these are reported, not normalized or used to excuse a Rust difference."
+  },
+  "rust_vs_original_native_snapshot_checks": {
+    "all_182_initial_actors_match": true,
+    "final_count": 182,
+    "other_166_final_actors_match_in_order": true,
+    "two_score_group_ranges": [
+      [
+        18,
+        26
+      ],
+      [
+        27,
+        35
+      ]
+    ],
+    "score_group_available_snapshot_multisets_match": [
+      true,
+      true
+    ],
+    "errors_match": true,
+    "changed_visual_frame_count_match": true
+  },
+  "interpretation": "Raw whole-frame hash equality is not a stable cross-process control for this workload. The observed Rust final snapshot differences are confined to the two score groups whose layout is populated by identity-ordered Store listeners. No adapter defect is inferred from this raw hash alone. Existing lifecycle/ordering/DTO regressions remain strict.",
+  "limitations": "Available snapshots do not expose every per-frame rendering field; this review does not claim raw-hash, full-scene or pixel parity. Matched timing/memory measurements remain pending; concurrent compilation timings are not compared."
+}

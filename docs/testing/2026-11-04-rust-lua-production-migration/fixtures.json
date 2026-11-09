@@ -1,0 +1,9 @@
+{
+  "submodule": "tests/fixtures",
+  "commit": "f896283ab5e3a861ba8517569f156b1b34fa2ab6",
+  "files": 3980,
+  "bytes": 13915572555,
+  "seconds": 95.8467149999924,
+  "manifest_sha256": "1a13269c70ffb88063d464eb39f0fd34f37498567bd98c4a734674c1b1dfa1c8",
+  "git_status_sha256": "bf59daffa6ef8b80d943dc1060d72aa68affe9a69da44456b4ab4a8395483800"
+}

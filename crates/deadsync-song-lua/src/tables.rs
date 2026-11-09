@@ -1,25 +1,53 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::callback_args::IgnoredArgs;
 use std::path::Path;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
 use crate::files::{file_path_string, theme_path};
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::lua_util::{create_owned_string_array, create_string_array, lua_text_value, method_arg};
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::runtime::note_song_lua_side_effect;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::song_tables::{create_song_table, create_steps_table};
-use crate::values::{
-    lua_values_equal, player_index_from_value, player_number_name, read_boolish, read_f32,
-    read_i32_value, read_string,
-};
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::lua_values_equal;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::player_index_from_value;
+use crate::values::player_number_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::read_boolish;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::read_i32_value;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::read_string;
 use crate::version::version_parts;
-use crate::{
-    GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, SONG_LUA_INITIAL_LIFE, SONG_LUA_THEME_NAME,
-    SONG_LUA_THEME_PATH_PREFIX, SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext,
-    song_lua_arch_name, song_lua_human_player_count, song_lua_style_info, theme_has_string,
-    theme_metric_bool, theme_metric_names, theme_metric_number_for_screen,
-    theme_metric_value_for_human_players, theme_string, theme_string_names,
-};
+use crate::GRAPH_DISPLAY_VALUE_RESOLUTION;
+use crate::LUA_PLAYERS;
+use crate::SONG_LUA_INITIAL_LIFE;
+use crate::SONG_LUA_THEME_NAME;
+use crate::SONG_LUA_THEME_PATH_PREFIX;
+use crate::SongLuaCompileContext;
+use crate::SongLuaDifficulty;
+use crate::SongLuaPlayerContext;
+use crate::song_lua_arch_name;
+use crate::song_lua_human_player_count;
+use crate::song_lua_style_info;
+use crate::theme_has_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::theme_metric_bool;
+use crate::theme_metric_names;
+use crate::theme_metric_number_for_screen;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::theme_metric_value_for_human_players;
+use crate::theme_string;
+use crate::theme_string_names;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn lua_table_to_string(args: &MultiValue) -> String {
     let name = args
         .get(1)
@@ -37,6 +65,7 @@ pub fn lua_table_to_string(args: &MultiValue) -> String {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_version_parts_table(lua: &Lua, version: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (index, part) in version_parts(version).into_iter().enumerate() {
@@ -45,6 +74,7 @@ pub fn create_version_parts_table(lua: &Lua, version: &str) -> mlua::Result<Tabl
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.raw_set(1, bpms[0])?;
@@ -52,6 +82,7 @@ pub fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Tabl
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -61,6 +92,7 @@ pub fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
     let group = lua.create_table()?;
     group.set(
@@ -70,12 +102,14 @@ pub fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(group)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.raw_set(1, value)?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> mlua::Result<()> {
     // Native LuaReference retains values in the registry. Holding an mlua
     // string inside every getter consumes its limited auxiliary stack instead.
@@ -86,6 +120,7 @@ pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> m
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let reverse = lua.create_table()?;
@@ -110,6 +145,7 @@ pub fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let reverse = lua.create_table()?;
@@ -124,6 +160,7 @@ pub fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let reverse = lua.create_table()?;
@@ -140,6 +177,7 @@ pub fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_other_player_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.raw_set(player_number_name(0), player_number_name(1))?;
@@ -147,12 +185,14 @@ pub fn create_other_player_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
     let branch = lua.create_table()?;
     for (name, screen) in [
@@ -293,12 +333,14 @@ pub fn format_number_and_suffix(value: i64) -> String {
     out
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetName", "dance")?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_gameman_table(lua: &Lua) -> mlua::Result<Table> {
     let gameman = lua.create_table()?;
     gameman.set(
@@ -312,6 +354,7 @@ pub fn create_gameman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(gameman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_charman_table(lua: &Lua) -> mlua::Result<Table> {
     let charman = lua.create_table()?;
     charman.set(
@@ -331,6 +374,7 @@ pub fn create_charman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(charman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
     let human_player_count = song_lua_human_player_count(context);
@@ -609,6 +653,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     Ok(theme)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     let profileman = lua.create_table()?;
     profileman.set("__songlua_stats_prefix", "")?;
@@ -774,6 +819,7 @@ enum SongLuaProfileSlot {
     Machine,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn profile_slot_from_value(value: &Value) -> Option<SongLuaProfileSlot> {
     if let Some(index) = player_index_from_value(value) {
         return Some(SongLuaProfileSlot::Player(index));
@@ -795,6 +841,7 @@ fn profile_slot_from_value(value: &Value) -> Option<SongLuaProfileSlot> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let profile = lua.create_table()?;
     profile.set("__songlua_display_name", name)?;
@@ -1056,6 +1103,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     Ok(profile)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_string_getter(
     lua: &Lua,
     table: &Table,
@@ -1077,6 +1125,7 @@ fn set_state_string_getter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_string_setter(
     lua: &Lua,
     table: &Table,
@@ -1100,6 +1149,7 @@ fn set_state_string_setter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_number_getter(
     lua: &Lua,
     table: &Table,
@@ -1115,6 +1165,7 @@ fn set_state_number_getter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_number_setter(
     lua: &Lua,
     table: &Table,
@@ -1135,6 +1186,7 @@ fn set_state_number_setter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_bool_getter(
     lua: &Lua,
     table: &Table,
@@ -1150,6 +1202,7 @@ fn set_state_bool_getter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_state_bool_setter(
     lua: &Lua,
     table: &Table,
@@ -1173,6 +1226,7 @@ fn set_state_bool_setter(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let statsman = lua.create_table()?;
     let stage_stats = create_stage_stats_table(lua, context)?;
@@ -1224,9 +1278,11 @@ pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     Ok(statsman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone)]
 struct SongLuaStageTables(Table);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn reset_stage_stats(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     let stage = lua.app_data_ref::<SongLuaStageTables>()
         .ok_or_else(|| mlua::Error::runtime("missing current stage statistics"))?.0.clone();
@@ -1263,6 +1319,7 @@ pub(crate) fn reset_stage_stats(lua: &Lua, context: &SongLuaCompileContext) -> m
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let stage_stats = lua.create_table()?;
     let player_stats = [
@@ -1389,6 +1446,7 @@ fn dance_point_percent(actual: i64, possible: i64) -> f32 {
     (percent / INTERVAL) as i32 as f32 * INTERVAL
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_player_stage_stats_table(
     lua: &Lua,
     high_score_name: &str,
@@ -1734,6 +1792,7 @@ fn create_player_stage_stats_table(
     Ok(stats)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_life_record_table(lua: &Lua, samples: usize, life: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let value = life.clamp(0.0, 1.0);
@@ -1743,6 +1802,7 @@ pub fn create_life_record_table(lua: &Lua, samples: usize, life: f32) -> mlua::R
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_stage_radar_values_table(lua: &Lua, fallback: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -1752,6 +1812,7 @@ fn create_stage_radar_values_table(lua: &Lua, fallback: f32) -> mlua::Result<Tab
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_high_score_list_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let high_scores = lua.create_table()?;
@@ -1803,6 +1864,7 @@ fn create_high_score_list_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_high_score_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let score = lua.create_table()?;
     set_string_method(lua, &score, "GetName", name)?;
@@ -1850,6 +1912,7 @@ fn create_high_score_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     Ok(score)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_screen_table(
     lua: &Lua,
     width: f32,
@@ -1869,6 +1932,7 @@ pub fn create_screen_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_prefsmgr_table(
     lua: &Lua,
     global_offset_seconds: f32,
@@ -1985,6 +2049,7 @@ pub fn create_prefsmgr_table(
     Ok(prefsmgr)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn prefsmgr_default_value(
     lua: &Lua,
     key: &str,
@@ -2026,6 +2091,7 @@ fn with_ascii_lowercase<R>(key: &str, use_normalized: impl FnOnce(&str) -> R) ->
     use_normalized(&key.to_ascii_lowercase())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn prefsmgr_default_value_normalized(
     lua: &Lua,
     lower: &str,
@@ -2139,6 +2205,7 @@ fn prefsmgr_default_value_normalized(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_path_methods(
     lua: &Lua,
     table: &Table,
@@ -2156,6 +2223,7 @@ pub fn set_path_methods(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_timing_table(
     lua: &Lua,
     display_bpms: [f32; 2],
@@ -2248,6 +2316,7 @@ pub fn create_timing_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.raw_set("__songlua_style_key", style_name)?;
@@ -2288,6 +2357,7 @@ pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn display_bpms_for_args(
     args: &MultiValue,
     fallback: [f32; 2],
@@ -2307,6 +2377,7 @@ pub fn display_bpms_for_args(
     Ok(([bpms[0] * rate, bpms[1] * rate], rate))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Result<Table> {
     if separator.is_empty() {
         let table = lua.create_table_with_capacity(text.chars().count().max(1), 0)?;
@@ -2334,6 +2405,7 @@ pub fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Resul
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_range_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
     let Some(mut start) = args.front().cloned().and_then(read_f32) else {
         return Ok(Value::Nil);
@@ -2380,6 +2452,7 @@ pub fn create_range_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
     Ok(Value::Table(table))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
     let Some(Value::Table(table)) = args.front() else {
         return Ok(Value::Nil);
@@ -2411,6 +2484,7 @@ pub fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> 
     Ok(Value::Table(out))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Result<Table> {
     let out = lua.create_table()?;
     for (idx, value) in table.sequence_values::<Value>().enumerate() {
@@ -2421,6 +2495,7 @@ pub fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Res
 
 // Separate compact key sets preserve Lua's non-transitive mixed-number
 // comparisons without storing a large tagged key for every numeric entry.
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct DeduplicateIndex {
     booleans: u8,
     integers: std::collections::HashSet<mlua::Integer>,
@@ -2430,6 +2505,7 @@ struct DeduplicateIndex {
     tables: std::collections::HashSet<usize>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl DeduplicateIndex {
     fn from_prefix(prefix: &[Value]) -> Self {
         let (mut integers, mut numbers, mut strings, mut tables) = (0, 0, 0, 0);
@@ -2502,6 +2578,7 @@ impl DeduplicateIndex {
 
 // Keep the larger index frame out of the short-list path. This is called once
 // after accepting the 33rd value; the remaining loop needs no mode check.
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(never)]
 fn finish_indexed_deduplication(
     out: &Table,
@@ -2525,6 +2602,7 @@ fn finish_indexed_deduplication(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
     let out = lua.create_table()?;
     let mut seen = Vec::new();
@@ -2546,6 +2624,7 @@ pub fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn rotate_lua_table(lua: &Lua, args: &MultiValue, left: bool) -> mlua::Result<Table> {
     let Some(Value::Table(input)) = args.front() else {
         return lua.create_table();
@@ -2568,6 +2647,7 @@ pub fn rotate_lua_table(lua: &Lua, args: &MultiValue, left: bool) -> mlua::Resul
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_background_filter_values(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Off", 0)?;
@@ -2581,6 +2661,7 @@ pub fn create_background_filter_values(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_gameplay_layout(
     lua: &Lua,
     screen_center_y: f32,
@@ -2603,6 +2684,7 @@ pub fn create_gameplay_layout(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_credits_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Credits", 0)?;
@@ -2611,6 +2693,7 @@ pub fn create_credits_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_index_array(lua: &Lua, len: usize) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for index in 1..=len {
@@ -2619,6 +2702,7 @@ pub fn create_index_array(lua: &Lua, len: usize) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_author_table(lua: &Lua, steps: Option<&Value>) -> mlua::Result<Table> {
     let out = lua.create_table()?;
     let Some(Value::Table(steps)) = steps else {
@@ -2639,6 +2723,7 @@ pub fn create_author_table(lua: &Lua, steps: Option<&Value>) -> mlua::Result<Tab
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_ex_judgment_counts(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for name in [
@@ -2663,6 +2748,7 @@ pub fn create_ex_judgment_counts(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
     let response = lua.create_table()?;
     response.set("status", 0)?;
@@ -2689,6 +2775,7 @@ pub fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(response)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let display = lua.create_table()?;
     let width = context.display_width.max(0.0).round() as i32;
@@ -2728,6 +2815,7 @@ pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     Ok(display)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_memcardman_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -2752,6 +2840,7 @@ pub fn create_memcardman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for name in [
@@ -2820,6 +2909,7 @@ pub fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -2851,6 +2941,7 @@ pub fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_websocket_table(lua: &Lua) -> mlua::Result<Table> {
     let websocket = lua.create_table()?;
     websocket.set("is_open", false)?;
@@ -2870,6 +2961,7 @@ pub fn create_websocket_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(websocket)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_ini_file_table(
     lua: &Lua,
     theme_name: &'static str,
@@ -2904,6 +2996,7 @@ pub fn create_ini_file_table(
     Ok(ini)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_display_specs_table(lua: &Lua, width: i32, height: i32) -> mlua::Result<Table> {
     let specs = lua.create_table()?;
     specs.raw_set(1, create_display_spec_table(lua, width, height)?)?;
@@ -2916,6 +3009,7 @@ fn create_display_specs_table(lua: &Lua, width: i32, height: i32) -> mlua::Resul
     Ok(specs)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_display_spec_table(lua: &Lua, width: i32, height: i32) -> mlua::Result<Table> {
     let spec = lua.create_table()?;
     let mode = create_display_mode_table(lua, width, height)?;
@@ -2941,6 +3035,7 @@ fn create_display_spec_table(lua: &Lua, width: i32, height: i32) -> mlua::Result
     Ok(spec)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_display_mode_table(lua: &Lua, width: i32, height: i32) -> mlua::Result<Table> {
     let mode = lua.create_table()?;
     mode.set(
@@ -2958,6 +3053,7 @@ fn create_display_mode_table(lua: &Lua, width: i32, height: i32) -> mlua::Result
     Ok(mode)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_layout_slot(lua: &Lua, y: f32, max_height: Option<f32>) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("y", y)?;
@@ -2967,6 +3063,7 @@ fn create_layout_slot(lua: &Lua, y: f32, max_height: Option<f32>) -> mlua::Resul
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>> {
     let Some(function) = table.get::<Option<Function>>(name)? else {
         return Ok(None);
@@ -2974,6 +3071,7 @@ fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>>
     Ok(Some(lua_text_value(function.call::<Value>(table)?)?))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
     let Value::Table(table) = value else {
         return None;
@@ -2981,6 +3079,7 @@ fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
     Some(display_bpms_from_table(table))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
     if let Some(bpms) = table
         .get::<Option<Function>>("GetDisplayBpms")?
@@ -3011,10 +3110,12 @@ fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
         .unwrap_or([0.0, 0.0]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn call_table_function(table: &Table, function: &Function) -> mlua::Result<Value> {
     function.call(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
     let Value::Table(table) = value else {
         return None;
@@ -3025,6 +3126,7 @@ fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
     ])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn lua_number_value(value: f32) -> Value {
     // Integer::MAX rounds up as f32, so the upper bound must be exclusive.
     if value.is_finite()
@@ -3040,17 +3142,6 @@ fn lua_number_value(value: f32) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
-    use mlua::{Lua, MultiValue, Table, Value};
-
-    use super::{
-        create_author_table, create_display_bpms_table, create_ex_judgment_counts,
-        create_gameplay_layout, create_radar_values_table, create_range_table,
-        create_single_value_array, create_song_group_table, create_split_table, create_style_table,
-        create_timing_table, display_bpms_for_args, lua_table_to_string, rotate_lua_table,
-        set_path_methods, set_string_method,
-    };
     #[test]
     fn dance_percent_native_values() {
         let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
@@ -3065,352 +3156,43 @@ mod tests {
         assert_eq!(super::dance_point_percent(0, 0), 0.0, "native zero total branch");
     }
 
-    #[test]
-    fn split_table_handles_empty_separator() {
-        let lua = Lua::new();
-        let table = create_split_table(&lua, "abc", "").unwrap();
+    
 
-        assert_eq!(table.raw_get::<String>(1).unwrap(), "a");
-        assert_eq!(table.raw_get::<String>(2).unwrap(), "b");
-        assert_eq!(table.raw_get::<String>(3).unwrap(), "c");
-    }
+    
 
-    #[test]
-    fn range_table_counts_down_when_needed() {
-        let lua = Lua::new();
-        let mut args = MultiValue::new();
-        args.push_back(Value::Integer(3));
-        args.push_back(Value::Integer(1));
+    
 
-        let Value::Table(table) = create_range_table(&lua, &args).unwrap() else {
-            panic!("range should return a table");
-        };
-        assert_eq!(table.raw_get::<i64>(1).unwrap(), 3);
-        assert_eq!(table.raw_get::<i64>(2).unwrap(), 2);
-        assert_eq!(table.raw_get::<i64>(3).unwrap(), 1);
-    }
+    
 
-    #[test]
-    fn rotate_lua_table_wraps_indices() {
-        let lua = Lua::new();
-        let table = lua.create_table().unwrap();
-        table.raw_set(1, "a").unwrap();
-        table.raw_set(2, "b").unwrap();
-        table.raw_set(3, "c").unwrap();
+    
 
-        let mut args = MultiValue::new();
-        args.push_back(Value::Table(table));
-        args.push_back(Value::Integer(1));
+    
 
-        let rotated = rotate_lua_table(&lua, &args, false).unwrap();
-        assert_eq!(rotated.raw_get::<String>(1).unwrap(), "c");
-        assert_eq!(rotated.raw_get::<String>(2).unwrap(), "a");
-        assert_eq!(rotated.raw_get::<String>(3).unwrap(), "b");
-    }
+    
 
-    #[test]
-    fn lua_table_to_string_reports_sequence_length() {
-        let lua = Lua::new();
-        let table = lua.create_table().unwrap();
-        table.raw_set(1, "a").unwrap();
-        table.raw_set(2, "b").unwrap();
-        let mut args = MultiValue::new();
-        args.push_back(Value::Table(table));
-        args.push_back(Value::String(lua.create_string("Rows").unwrap()));
+    
 
-        assert_eq!(lua_table_to_string(&args), "Rows = {...2 item(s)}");
-    }
+    
 
-    #[test]
-    fn gameplay_layout_places_reverse_slots() {
-        let lua = Lua::new();
-        let layout = create_gameplay_layout(&lua, 240.0, true).unwrap();
-        let combo = layout.get::<Table>("Combo").unwrap();
-        let error_bar = layout.get::<Table>("ErrorBar").unwrap();
+    
 
-        assert_eq!(combo.get::<f32>("y").unwrap(), 210.0);
-        assert_eq!(error_bar.get::<f32>("y").unwrap(), 270.0);
-        assert_eq!(error_bar.get::<f32>("maxHeight").unwrap(), 30.0);
-    }
+    
 
-    #[test]
-    fn author_table_deduplicates_step_methods() {
-        let lua = Lua::new();
-        let steps = lua.create_table().unwrap();
-        for method in ["GetDescription", "GetAuthorCredit", "GetChartName"] {
-            steps
-                .set(
-                    method,
-                    lua.create_function(|_, _: Value| Ok("author")).unwrap(),
-                )
-                .unwrap();
-        }
+    
 
-        let authors = create_author_table(&lua, Some(&Value::Table(steps))).unwrap();
-        assert_eq!(authors.raw_len(), 1);
-        assert_eq!(authors.raw_get::<String>(1).unwrap(), "author");
-    }
+    
 
-    #[test]
-    fn ex_judgment_counts_defaults_to_zero() {
-        let lua = Lua::new();
-        let counts = create_ex_judgment_counts(&lua).unwrap();
+    
 
-        assert_eq!(counts.get::<i64>("W1").unwrap(), 0);
-        assert_eq!(counts.get::<i64>("Miss").unwrap(), 0);
-        assert_eq!(counts.get::<i64>("totalRolls").unwrap(), 0);
-    }
+    
 
-    #[test]
-    fn radar_values_default_to_zero() {
-        let lua = Lua::new();
-        let radar = create_radar_values_table(&lua).unwrap();
-        let get_value = radar.get::<mlua::Function>("GetValue").unwrap();
+    
 
-        assert_eq!(get_value.call::<f32>(MultiValue::new()).unwrap(), 0.0);
-    }
-
-    #[test]
-    fn song_group_table_has_zero_sync_offset() {
-        let lua = Lua::new();
-        let group = create_song_group_table(&lua).unwrap();
-        let get_sync_offset = group.get::<mlua::Function>("GetSyncOffset").unwrap();
-
-        assert_eq!(get_sync_offset.call::<f32>(MultiValue::new()).unwrap(), 0.0);
-    }
-
-    #[test]
-    fn single_value_array_wraps_table() {
-        let lua = Lua::new();
-        let value = lua.create_table().unwrap();
-        value.set("name", "song").unwrap();
-
-        let array = create_single_value_array(&lua, value).unwrap();
-        assert_eq!(array.raw_len(), 1);
-        assert_eq!(
-            array
-                .raw_get::<Table>(1)
-                .unwrap()
-                .get::<String>("name")
-                .unwrap(),
-            "song"
-        );
-    }
-
-    #[test]
-    fn string_method_returns_fixed_value() {
-        let lua = Lua::new();
-        let table = lua.create_table().unwrap();
-        set_string_method(&lua, &table, "GetName", "single").unwrap();
-        let get_name = table.get::<mlua::Function>("GetName").unwrap();
-
-        assert_eq!(
-            get_name.call::<String>(MultiValue::new()).unwrap(),
-            "single"
-        );
-    }
-
-    #[test]
-    fn path_methods_report_path_presence() {
-        let lua = Lua::new();
-        let table = lua.create_table().unwrap();
-        set_path_methods(
-            &lua,
-            &table,
-            "GetPath",
-            "HasPath",
-            Some(Path::new("songs\\pack\\song.ogg")),
-        )
-        .unwrap();
-        let get_path = table.get::<mlua::Function>("GetPath").unwrap();
-        let has_path = table.get::<mlua::Function>("HasPath").unwrap();
-
-        assert_eq!(
-            get_path.call::<String>(MultiValue::new()).unwrap(),
-            "songs/pack/song.ogg"
-        );
-        assert!(has_path.call::<bool>(MultiValue::new()).unwrap());
-    }
-
-    #[test]
-    fn native_float_timing_queries_preserve_separate_offset_inputs() {
-        use deadsync_rules::timing::{TimingData, TimingSegments};
-        let mut timing = TimingData::from_segments(0.01, 0.0, &TimingSegments {
-            bpms: vec![(0.0, 130.0)], ..Default::default()
-        }, &[]);
-        timing.shift_group_offset_seconds(-0.009);
-        timing.set_global_offset_seconds(-0.008);
-        let lua = Lua::new();
-        let table = create_timing_table(&lua, [130.0, 130.0], Some(&timing)).unwrap();
-        for (method, input, expected) in [
-            // C++ float order: (-song_offset - group_offset) - global_offset.
-            ("GetElapsedTimeFromBeat", 0.0_f32, 0.026999998837709427_f32),
-            ("GetBeatFromElapsedTime", 0.027732426300644875_f32, 0.0015869262861087918_f32),
-        ] {
-            let value = table.get::<mlua::Function>(method).unwrap()
-                .call::<f32>((table.clone(), input)).unwrap();
-            assert_eq!(value.to_bits(), expected.to_bits(), "native {method}");
-        }
-    }
-
-    #[test]
-    fn timing_getters_match_native() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/itgmania-song-lua-micro");
-        let options =
-            deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-        let song = deadsync_simfile::song::parse_song_meta_file(
-            &root.join("timing-data.ssc"),
-            &options,
-            0.0,
-            |_| 0.0,
-        )
-        .expect("parse native timing control");
-        let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
-            &song,
-            &[0, 1],
-            &deadsync_simfile::cache::GameplayChartLoadOptions {
-                cache_dir: &root,
-                parse_options: &options,
-                allow_cache_read: false,
-                allow_cache_write: false,
-                verify_cache_freshness: true,
-                global_offset_seconds: 0.0,
-            },
-            |_| 0.0,
-        )
-        .expect("load both native timing owners");
-        let native: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(root.join("timing-data-native.json")).expect("native timing values"),
-        )
-        .expect("native timing JSON");
-        let lua = Lua::new();
-        for (name, data) in [
-            ("Song", song.song_timing.as_ref().expect("song timing")),
-            ("Chart1", &payload.charts[0].timing),
-            ("Chart2", &payload.charts[1].timing),
-        ] {
-            let timing = create_timing_table(&lua, [60.0, 60.0], Some(data)).unwrap();
-            for (method, arg, key) in [
-                ("GetElapsedTimeFromBeat", 0.0, "Actor.x"),
-                ("GetElapsedTimeFromBeat", 6.0, "Actor.y"),
-                ("GetBeatFromElapsedTime", 3.0, "Actor.z"),
-                ("GetBPMAtBeat", 6.0, "Actor.aux"),
-                ("GetBPMAtBeat", 3.995, "Actor.rotationx"),
-            ] {
-                let value = timing
-                    .get::<mlua::Function>(method)
-                    .unwrap()
-                    .call::<f32>((timing.clone(), arg))
-                    .unwrap();
-                let expected = native[name][key].as_f64().expect("native number") as f32;
-                assert!(
-                    (value - expected).abs() < 0.000_01,
-                    "{name}.{method}: {value} vs {expected}"
-                );
-            }
-            let get = timing.get::<mlua::Function>("GetBPMsAndTimes").unwrap();
-            let rows = get.call::<Table>((timing.clone(), 0)).unwrap();
-            assert_eq!(
-                rows.raw_len() as f64,
-                native[name]["Actor.zoomy"].as_f64().unwrap()
-            );
-            assert_eq!(
-                rows.raw_get::<Table>(1).unwrap().raw_get::<f32>(2).unwrap(),
-                native[name]["Actor.zoomx"].as_f64().unwrap() as f32
-            );
-            let strings = get.call::<Table>(timing.clone()).unwrap();
-            assert!(matches!(
-                strings.raw_get::<Value>(1).unwrap(),
-                Value::String(_)
-            ));
-            rows.raw_set(1, Value::Nil).unwrap();
-            assert!(
-                get.call::<Table>((timing, true))
-                    .unwrap()
-                    .raw_get::<Table>(1)
-                    .is_ok()
-            );
-        }
-    }
-
-    #[test]
-    fn timing_table_exposes_bpm_policy() {
-        let lua = Lua::new();
-        let data = deadsync_rules::timing::TimingData::from_segments(
-            0.0,
-            0.0,
-            &deadsync_rules::timing::TimingSegments {
-                bpms: vec![(0.0, 120.0), (4.0, 180.0)],
-                ..Default::default()
-            },
-            &[],
-        );
-        let timing = create_timing_table(&lua, [120.0, 180.0], Some(&data)).unwrap();
-        let get_bpms = timing.get::<mlua::Function>("GetBPMs").unwrap();
-        let get_timed_bpms = timing.get::<mlua::Function>("GetBPMsAndTimes").unwrap();
-        let has_bpm_changes = timing.get::<mlua::Function>("HasBPMChanges").unwrap();
-        let bpms = get_bpms.call::<Table>(MultiValue::new()).unwrap();
-        let timed_bpms = get_timed_bpms
-            .call::<Table>((timing.clone(), true))
-            .unwrap();
-        let timed_bpm_strings = get_timed_bpms.call::<Table>((timing, false)).unwrap();
-
-        assert_eq!(bpms.raw_get::<f32>(1).unwrap(), 120.0);
-        assert_eq!(bpms.raw_get::<f32>(2).unwrap(), 180.0);
-        let second = timed_bpms.raw_get::<Table>(2).unwrap();
-        assert_eq!(second.raw_get::<f32>(1).unwrap(), 4.0);
-        assert_eq!(second.raw_get::<f32>(2).unwrap(), 180.0);
-        assert_eq!(
-            timed_bpm_strings.raw_get::<String>(1).unwrap(),
-            "0.000000=120.000000"
-        );
-        assert!(has_bpm_changes.call::<bool>(MultiValue::new()).unwrap());
-    }
-
-    #[test]
-    fn style_table_exposes_column_info() {
-        let lua = Lua::new();
-        let style = create_style_table(&lua, "double").unwrap();
-        let columns = style.get::<mlua::Function>("ColumnsPerPlayer").unwrap();
-        let get_column_info = style.get::<mlua::Function>("GetColumnInfo").unwrap();
-        let mut args = MultiValue::new();
-        args.push_back(Value::Table(style));
-        args.push_back(Value::Integer(1));
-
-        let info = get_column_info.call::<Table>(args).unwrap();
-        assert_eq!(columns.call::<i64>(MultiValue::new()).unwrap(), 8);
-        assert_eq!(info.get::<String>("Name").unwrap(), "Left");
-        assert_eq!(info.get::<i64>("Track").unwrap(), 0);
-    }
-
-    #[test]
-    fn display_bpms_for_args_uses_table_and_rate() {
-        let lua = Lua::new();
-        let bpms = create_display_bpms_table(&lua, [100.0, 200.0]).unwrap();
-        let steps = lua.create_table().unwrap();
-        steps
-            .set(
-                "GetDisplayBpms",
-                lua.create_function(move |_, _: Value| Ok(bpms.clone()))
-                    .unwrap(),
-            )
-            .unwrap();
-        let mut args = MultiValue::new();
-        args.push_back(Value::Nil);
-        args.push_back(Value::Table(steps));
-        args.push_back(Value::Number(1.5));
-
-        let (bpms, rate) = display_bpms_for_args(&args, [60.0, 60.0], 1.0).unwrap();
-        assert_eq!(bpms, [150.0, 300.0]);
-        assert_eq!(rate, 1.5);
-    }
+    
 }
 
 #[cfg(test)]
 #[path = "../tests/perf/text_format.rs"]
 mod text_perf;
 
-#[cfg(test)]
-#[path = "../tests/perf/ignored_tables.rs"]
-mod ignored_args_perf;
+

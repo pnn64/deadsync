@@ -1,0 +1,408 @@
+   Compiling unicode-ident v1.0.27
+   Compiling cfg-if v1.0.5
+   Compiling autocfg v1.5.1
+   Compiling libm v0.2.16
+   Compiling windows-link v0.2.1
+   Compiling proc-macro2 v1.0.107
+   Compiling log v0.4.35
+   Compiling bitflags v2.13.2
+   Compiling num-traits v0.2.19
+   Compiling quote v1.0.47
+   Compiling getrandom v0.4.3
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling jobserver v0.1.35
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.15
+   Compiling cc v1.10.0
+   Compiling memchr v2.8.3
+   Compiling smallvec v1.16.4
+   Compiling bytemuck_derive v1.12.1
+   Compiling cfg_aliases v0.2.2
+   Compiling windows-sys v0.61.2
+   Compiling num-integer v0.1.47
+   Compiling serde_core v1.0.229
+   Compiling pkg-config v0.3.34
+   Compiling bytemuck v1.25.2
+   Compiling raw-window-handle v0.6.2
+   Compiling num-complex v0.4.6
+   Compiling libc v0.2.191
+   Compiling arrayvec v0.7.8
+   Compiling windows-implement v0.60.2
+   Compiling windows-interface v0.59.3
+   Compiling windows-result v0.4.1
+   Compiling windows-strings v0.5.1
+   Compiling thiserror-impl v2.0.21
+   Compiling windows-core v0.62.2
+   Compiling windows_x86_64_msvc v0.52.6
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.3
+   Compiling allocator-api2 v0.2.21
+   Compiling windows-threading v0.2.1
+   Compiling utf8parse v0.2.2
+   Compiling thiserror v2.0.21
+   Compiling anstyle v1.0.14
+   Compiling once_cell_polyfill v1.70.2
+   Compiling anstyle-parse v1.0.0
+   Compiling windows-future v0.3.2
+   Compiling anstyle-wincon v3.0.11
+   Compiling windows-targets v0.52.6
+   Compiling windows-collections v0.3.2
+   Compiling windows-numerics v0.3.1
+   Compiling anstyle-query v1.1.5
+   Compiling zerocopy-derive v0.8.63
+   Compiling simd-adler32 v0.3.10
+   Compiling colorchoice v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstream v1.0.0
+   Compiling windows v0.62.2
+   Compiling windows-sys v0.52.0
+   Compiling crc32fast v1.5.3
+   Compiling crossbeam-utils v0.8.23
+   Compiling hashbrown v0.17.1
+   Compiling zerocopy v0.8.63
+   Compiling pin-project-lite v0.2.17
+   Compiling tracing-core v0.1.36
+   Compiling tracing v0.1.44
+   Compiling indexmap v2.14.2
+   Compiling crossbeam-epoch v0.9.21
+   Compiling winit v0.30.13
+   Compiling aho-corasick v1.1.5
+   Compiling adler2 v2.0.1
+   Compiling regex-syntax v0.8.11
+   Compiling half v2.7.1
+   Compiling regex-automata v0.4.18
+   Compiling crossbeam-deque v0.8.8
+   Compiling equator-macro v0.4.2
+   Compiling profiling-procmacros v1.0.18
+   Compiling either v1.19.0
+   Compiling smol_str v0.2.2
+   Compiling rustc-hash v2.1.3
+   Compiling dpi v0.1.2
+   Compiling unicode-segmentation v1.13.3
+   Compiling cursor-icon v1.2.0
+   Compiling profiling v1.0.18
+   Compiling equator v0.4.2
+   Compiling rayon-core v1.13.0
+   Compiling regex v1.13.1
+   Compiling cmake v0.1.58
+   Compiling khronos_api v3.1.0
+   Compiling option-ext v0.2.0
+   Compiling jiff-core v0.1.1
+   Compiling dirs-sys v0.5.0 (C:\GitHub\deadsync\vendor\dirs-sys-win7)
+   Compiling env_filter v2.0.0
+   Compiling aligned-vec v0.6.4
+   Compiling miniz_oxide v0.9.1
+   Compiling num-bigint v0.4.8
+   Compiling jiff v0.2.38
+   Compiling serde_derive v1.0.229
+   Compiling chrono v0.4.45
+   Compiling stable_deref_trait v1.2.1
+   Compiling as-slice v0.2.1
+   Compiling num-rational v0.4.2
+   Compiling serde v1.0.229
+   Compiling env_logger v0.11.11
+   Compiling flate2 v1.1.10
+   Compiling v_frame v0.3.9
+   Compiling anyhow v1.0.104
+   Compiling directories v6.0.0
+   Compiling rayon v1.12.0
+   Compiling miniz_oxide v0.8.9
+   Compiling built v0.8.0
+   Compiling xml-rs v0.8.29
+   Compiling version_check v0.9.5
+   Compiling pulp v0.22.3
+   Compiling gl_generator v0.14.0
+   Compiling rav1e v0.8.1
+   Compiling aligned v0.4.3
+   Compiling fdeflate v0.3.7
+   Compiling arg_enum_proc_macro v0.3.4
+   Compiling no_std_io2 v0.9.4
+   Compiling nom v8.0.0
+   Compiling quick-error v2.0.1
+   Compiling lazy_static v1.5.1
+   Compiling y4m v0.8.0
+   Compiling av-scenechange v0.14.1
+   Compiling symphonia-core v0.6.1
+   Compiling bitstream-io v4.10.0
+   Compiling png v0.18.1
+   Compiling av1-grain v0.2.5
+   Compiling maybe-rayon v0.1.1
+   Compiling itertools v0.14.0
+   Compiling num-derive v0.4.2
+   Compiling simd_helpers v0.1.0
+   Compiling raw-cpuid v11.6.0
+   Compiling libloading v0.8.9
+   Compiling reborrow v0.5.5
+   Compiling weezl v0.1.12
+   Compiling imgref v1.12.3
+   Compiling deadlib-platform v0.1.0 (C:\GitHub\deadsync\crates\deadlib-platform)
+   Compiling rand_core v0.10.1
+   Compiling zune-core v0.5.3
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling zune-jpeg v0.5.15
+   Compiling loop9 v0.1.5
+   Compiling zune-inflate v0.2.54
+   Compiling avif-serialize v0.8.9
+   Compiling bit_field v0.10.3
+   Compiling byteorder-lite v0.1.0
+   Compiling fax v0.2.7
+   Compiling rgb v0.8.53
+   Compiling pxfm v0.1.30
+   Compiling color_quant v1.1.0
+   Compiling lebe v0.5.3
+   Compiling regex-lite v0.1.9
+   Compiling exr v1.74.2
+   Compiling symphonia-metadata v0.6.1
+   Compiling ravif v0.13.0
+   Compiling gif v0.14.2
+   Compiling tiff v0.11.3
+   Compiling moxcms v0.8.1
+   Compiling image-webp v0.2.4
+   Compiling qoi v0.4.1
+   Compiling once_cell v1.21.4
+   Compiling ash v0.38.0+1.3.281
+   Compiling symphonia-common v0.6.1
+   Compiling glutin_wgl_sys v0.6.1
+   Compiling strength_reduce v0.2.4
+   Compiling rustc-hash v1.1.0
+   Compiling serde_json v1.0.154
+   Compiling cpufeatures v0.3.1
+   Compiling chacha20 v0.10.2
+   Compiling naga-types v30.0.1
+   Compiling transpose v0.2.3
+   Compiling zmij v1.0.23
+   Compiling primal-check v0.3.4
+   Compiling link-cplusplus v1.0.12
+   Compiling naga v30.0.1
+   Compiling image v0.25.10
+   Compiling scopeguard v1.2.0
+   Compiling itoa v1.0.18
+   Compiling bit-vec v0.9.1
+   Compiling unicode-width v0.2.3
+   Compiling codespan-reporting v0.13.1
+   Compiling bit-set v0.10.0
+   Compiling lock_api v0.4.14
+   Compiling rustfft v6.4.1
+   Compiling parking_lot_core v0.9.12
+   Compiling rand v0.10.3
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling static_assertions v1.1.0
+   Compiling roxmltree v0.20.0
+   Compiling khronos-egl v6.0.0
+   Compiling shaderc-sys v0.10.1
+   Compiling wgpu-types v30.0.1
+   Compiling twox-hash v2.1.5
+   Compiling parking_lot v0.12.5
+   Compiling symphonia-format-ogg v0.6.1
+   Compiling symphonia-codec-vorbis v0.6.1
+   Compiling symphonia-bundle-flac v0.6.1
+   Compiling symphonia-bundle-mp3 v0.6.1
+   Compiling hashbrown v0.16.1
+   Compiling wgpu-hal v30.0.1
+   Compiling glam v0.34.1
+   Compiling presser v0.3.1
+   Compiling gpu-allocator v0.28.0
+   Compiling symphonia v0.6.1
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling ordered-float v5.4.0
+   Compiling deadsync-core v0.1.0 (C:\GitHub\deadsync\crates\deadsync-core)
+   Compiling range-alloc v0.1.5
+   Compiling renderdoc-sys v1.1.0
+   Compiling deadlib-bincode-derive v2.0.1 (C:\GitHub\deadsync\crates\deadlib-bincode\derive)
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling glow v0.17.0
+   Compiling deadlib-render-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-core)
+   Compiling deadlib-bincode v2.0.1 (C:\GitHub\deadsync\crates\deadlib-bincode)
+   Compiling glutin_egl_sys v0.7.1
+   Compiling opusic-sys v0.7.5 (C:\GitHub\deadsync\vendor\opusic-sys)
+   Compiling wgpu-core v30.0.1
+   Compiling audio-codec-algorithms v0.8.1
+   Compiling litrs v1.0.1
+   Compiling document-features v0.2.12
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling audioadapter-sample v5.2.0
+   Compiling deadsync-rules v0.1.0 (C:\GitHub\deadsync\crates\deadsync-rules)
+   Compiling glutin v0.32.3
+   Compiling wgpu v30.0.1
+   Compiling audioadapter v5.0.0
+   Compiling audioadapter-buffers v5.2.0
+   Compiling deadsync-chart v0.1.0 (C:\GitHub\deadsync\crates\deadsync-chart)
+   Compiling realfft v3.5.1
+   Compiling visibility v0.1.1
+   Compiling windowfunctions v0.1.1
+   Compiling byteorder v1.5.0
+   Compiling ogg v0.9.2
+   Compiling rubato v5.0.1
+   Compiling ash-window v0.13.0
+   Compiling softbuffer v0.4.8
+   Compiling pollster v1.0.1
+   Compiling glow v0.18.0
+   Compiling deadlib-render-backend-wgpu v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-wgpu)
+   Compiling deadlib-render-backend-gl v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-gl)
+   Compiling deadlib-render-backend-software v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-software)
+   Compiling deadsync-input v0.1.0 (C:\GitHub\deadsync\crates\deadsync-input)
+   Compiling hidapi v2.6.7 (C:\GitHub\deadsync\vendor\hidapi-win7)
+   Compiling opusic-c v1.6.1
+   Compiling zstd-safe v7.3.0
+   Compiling dasp_sample v0.11.0
+   Compiling deadlib-audio-decode v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-decode)
+   Compiling ebur128 v0.1.11
+   Compiling dasp_frame v0.11.0
+   Compiling deadsync-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-gameplay)
+   Compiling deadsync-score v0.1.0 (C:\GitHub\deadsync\crates\deadsync-score)
+   Compiling deadlib-present v0.1.0 (C:\GitHub\deadsync\crates\deadlib-present)
+   Compiling deadlib-video v0.1.0 (C:\GitHub\deadsync\crates\deadlib-video)
+   Compiling winapi-util v0.1.11
+   Compiling rssp-core v0.4.290 (https://github.com/pnn64/rssp?branch=main#da616e3a)
+   Compiling bitflags v1.3.2
+   Compiling rtrb v0.4.1
+   Compiling heck v0.5.0
+   Compiling strsim v0.11.1
+   Compiling clap_lex v1.1.1
+   Compiling clap_builder v4.6.7
+   Compiling clap_derive v4.6.7
+   Compiling rssp v0.4.290 (https://github.com/pnn64/rssp?branch=main#da616e3a)
+   Compiling deadlib-audio-core v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-core)
+   Compiling same-file v1.0.6
+   Compiling null-or-die-audio v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+   Compiling null-or-die-core v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+   Compiling which v8.0.6
+   Compiling zstd v0.13.3
+   Compiling luajit-src v210.7.4+c6ffc14
+   Compiling deadsync-audio-analysis v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-analysis)
+   Compiling null-or-die-rssp v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+   Compiling walkdir v2.5.0
+   Compiling deadlib-audio-backend-wasapi v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio-backend-wasapi)
+   Compiling clap v4.6.7
+   Compiling lua-src v551.0.2 (C:\GitHub\deadsync\vendor\lua-src)
+   Compiling md5 v0.8.1
+   Compiling deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+   Compiling null-or-die-cli v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+   Compiling deadlib-lua-legacy-sys v0.13.0 (C:\GitHub\deadsync\crates\deadlib-lua-legacy\mlua-sys)
+   Compiling deadlib-audio v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio)
+   Compiling deadsync-audio-replaygain v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-replaygain)
+   Compiling rustmaniax-sdk v2.1.1
+   Compiling deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+   Compiling sha1_smol v1.0.1
+   Compiling uuid v1.29.0
+   Compiling deadsync-smx v0.1.0 (C:\GitHub\deadsync\crates\deadsync-smx)
+   Compiling deadsync-audio-stream v0.1.0 (C:\GitHub\deadsync\crates\deadsync-audio-stream)
+   Compiling null-or-die v0.1.3 (https://github.com/pnn64/null-or-die?branch=main#5304c8c5)
+   Compiling deadsync-lights v0.1.0 (C:\GitHub\deadsync\crates\deadsync-lights)
+   Compiling bstr v1.13.1
+   Compiling zstd-safe v8.2.0
+   Compiling fastrand v2.5.0
+   Compiling tempfile v3.27.0
+   Compiling zstd v0.14.3
+   Compiling deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+   Compiling deadlib-lua-legacy v0.12.2 (C:\GitHub\deadsync\crates\deadlib-lua-legacy)
+   Compiling shaderc v0.10.1
+   Compiling deadlib-render-backend-vulkan v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render-backend-vulkan)
+   Compiling deadlib-render v0.1.0 (C:\GitHub\deadsync\crates\deadlib-render)
+   Compiling deadlib-assets v0.1.0 (C:\GitHub\deadsync\crates\deadlib-assets)
+   Compiling deadsync-theme v0.1.0 (C:\GitHub\deadsync\crates\deadsync-theme)
+   Compiling deadsync-config v0.1.0 (C:\GitHub\deadsync\crates\deadsync-config)
+   Compiling deadsync-notefield v0.1.0 (C:\GitHub\deadsync\crates\deadsync-notefield)
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+   Compiling deadsync-simfile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-simfile)
+   Compiling deadsync-profile v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile)
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+    Finished `test` profile [unoptimized] target(s) in 11m 15s
+     Running tests\rust_actor_input_contract.rs (target/rust-adapters\debug\deps\rust_actor_input_contract-64c114079d69e4d1.exe)
+
+running 17 tests
+test authored_movement_shares_real_input_and_timer_state_and_runs_after_vm_destruction ... ok
+test changed_methods_metamethods_shared_cells_and_unknown_calls_reject_without_running ... ok
+test copied_bound_method_keeps_its_captured_target_and_chain_return_identity ... ok
+test copied_position_setters_keep_target_axis_return_identity_and_numeric_bits ... ok
+test copied_setter_rejects_custom_assignment_on_its_actual_mutation_target ... ok
+test input_and_update_callbacks_share_timers_rates_hibernation_and_postorder_without_a_vm ... ok
+test mixed_capture_counts_keep_bindings_aliases_and_ordered_writes_after_scene_destruction ... ok
+test movement_rejects_replaced_methods_coercions_and_active_pose_owners_without_execution ... ok
+test native_actor_actions_match_real_lua_state_and_continue_after_scene_destruction ... ok
+test original_fof_input_handler_preserves_two_player_state_after_scene_destruction ... ok
+test readonly_byte_specialization_survives_and_transient_byte_writes_keep_fallback ... ok
+test shared_tables_cross_callbacks_without_merging_equal_independent_state ... ok
+test state_table_metamethods_unknown_fields_and_type_changes_keep_lua_fallback ... ok
+test string_modes_share_transitions_across_inputs_updates_and_distinct_equal_cells_without_lua ... ok
+test traversal_tables_outside_render_inventory_cannot_alias_mutable_scalar_cells ... ok
+test update_receiver_position_writes_use_the_actor_inventory_identity ... ok
+test update_unit_rejects_unlowered_queues_effects_globals_and_callback_changes ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.31s
+
+     Running tests\rust_actor_inputs.rs (target/rust-adapters\debug\deps\rust_actor_inputs-fe2baba00f433c79.exe)
+
+running 9 tests
+test combined_units_keep_existing_queue_effect_and_unknown_operation_rejections ... ok
+test copied_and_chained_setter_actions_use_the_captured_target ... ok
+test movement_input_updates_preserve_hierarchical_position_action_order ... ok
+test mutable_byte_cells_share_the_existing_specialization_retry ... ok
+test original_actor_visibility_fixture_preserves_writes_after_teardown ... ok
+test original_fof_handler_preserves_dense_aliased_boolean_tables_after_teardown ... ok
+test original_movement_fixture_preserves_position_bits_and_scalar_cells ... ok
+test timed_input_updates_share_cells_rates_and_hibernation_after_teardown ... ok
+test unsupported_body_rejects_without_applying_its_earlier_action ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.07s
+
+     Running tests\rust_actors.rs (target/rust-adapters\debug\deps\rust_actors-a084828e86c5f45b.exe)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.48s
+
+     Running tests\rust_live_scene.rs (target/rust-adapters\debug\deps\rust_live_scene-a707990778ed962b.exe)
+
+running 19 tests
+test a_rejected_broadcast_history_write_does_not_capture_a_source_event ... ok
+test a_sound_without_a_file_keeps_the_existing_compiled_owner_filter ... ok
+test authored_startup_and_runtime_tween_queues_keep_current_render_poses ... ok
+test authored_statistics_selection_before_scene_construction_governs_live_writes ... ok
+test ended_scene_handoff_preserves_saved_actors_without_duplicate_sound_stops ... ok
+test gameplay_outro_noted_after_actors_uses_the_same_off_boundary ... ok
+test health_callback_failures_are_reported_once_and_preserve_the_live_scene ... ok
+test health_callbacks_write_the_selected_statistics_and_freeze_poses_before_health ... ok
+test immediate_draw_submissions_and_normal_draw_frames_keep_their_live_boundaries ... ok
+test input_and_custom_draw_update_states_and_drain_in_execution_order ... ok
+test live_outputs_preserve_explicit_nil_tables_nested_messages_and_requests ... ok
+test malformed_live_source_keeps_the_existing_dummy_actor_fallback ... ok
+test malformed_raw_pose_fields_do_not_override_native_owned_live_tweens ... ok
+test original_startup_request_fixture_retains_the_native_reload_limit ... ok
+test prepared_background_failure_retries_the_host_phase_without_a_stale_prepared_mark ... ok
+test retained_scene_update_prepare_draw_end_and_owned_render_states_match ... ok
+test retained_sound_owners_preserve_startup_play_pause_and_teardown_order ... ok
+test scene_outro_clears_attacks_and_orders_success_and_all_failed_off ... ok
+test source_broadcast_snapshots_keep_functions_actors_cycles_and_trace_limits ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.27s
+

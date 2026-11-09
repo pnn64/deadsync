@@ -1,0 +1,49 @@
+{
+  "goal_complete": false,
+  "source_count": 1212,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/meshes.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/models.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/text.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_output.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_kinds.rs"
+  ],
+  "other_source_changes_preserved": [],
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-kind-output-focused-v3-song-linux-debug": [],
+    "song-kind-output-lint-v2-song-linux-debug": []
+  },
+  "earlier_69_activation_tests_unchanged": true,
+  "new_cases": 5,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-kind-output-focused-v3-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 489.3442595549859,
+      "log_sha256": "6355e29dab2d27ff4190704085d966fc236186a9bf0125667aaff50782cae99d",
+      "tests_passed": 279,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-kind-output-lint-v2-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 30.707134287804365,
+      "log_sha256": "e0eab6a37e5621655159412d3f0c6843980e6bf551476c7dce6b46f352028521",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

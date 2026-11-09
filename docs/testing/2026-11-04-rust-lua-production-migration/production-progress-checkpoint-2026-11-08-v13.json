@@ -1,0 +1,55 @@
+{
+  "created_utc": "2026-11-08T14:41:03.232829+00:00",
+  "goal_status": "active",
+  "previous": "production-progress-checkpoint-2026-11-08-v12.json",
+  "new_results": {
+    "stage": "production-effect-and-scope-v4-song-windows-debug",
+    "passed": 110,
+    "failed": 5,
+    "sources_unchanged": true,
+    "log_sha256": "2bfaba717f8c414c726bb2951f26fd74a8fa8b991be8ec698405f57d65e80b4b",
+    "accepted": [
+      "All six original effect microfixtures now match complete native prepared payloads. All original effects10 and actors27 tests pass.",
+      "All17 live compiler controls pass, including declared nested-theme scope/GC/error cleanup and both dynamic-command observer profiles.",
+      "All13 message tests pass; all original compiler tests and300actor control pass."
+    ],
+    "remaining_failures": [
+      "deferred-effects final retry rejected by pre-replay mode guard",
+      "nested-start and queued-state speculative beat0 broadcast leakage",
+      "Two full retained-scene tests fail only on allocation-sensitive coverage-gap diagnostic ordering. Four isolated repetitions pass unchanged. Full repeat of the identical binary produces22pass1fail, compared with21pass2fail previously. Actual source-broadcast/delivery/state assertions unchanged. No oracle, production or test changes made for this ordering issue."
+    ]
+  },
+  "formatting": {
+    "report": "production-adapter-fixes-format-v3.json",
+    "files": 25,
+    "exit_code": 0
+  },
+  "current_source_window7": [
+    "Added RAII preparation-broadcast suspension to indexed/touched compiler probes; nesting and success/error restoration use the existing Store sink. Live sinks are unchanged.",
+    "Added bounded preparation mode for the compiler final deferred retry after replay ends. Restore preparing/playback flags on all Result paths. Public pre-replay capture guard remains unchanged.",
+    "Before bytes preserved in production-adapter-fixes-before-v7. No original tests edited."
+  ],
+  "live_runners": [
+    {
+      "session_id": 76941,
+      "stage": "production-preparation-capture-v1-song-windows-debug",
+      "targets": [
+        "rust_song_compiler",
+        "rust_song_activation",
+        "rust_live_scene"
+      ],
+      "source_freeze": "Do not edit watched Rust/Lua/manifests/tests until terminal."
+    }
+  ],
+  "terminal_consumed_sessions": [
+    96001,
+    29253
+  ],
+  "next": [
+    "Inspect current prepared payload and action-scope regression results.",
+    "Port existing selected trace queries/actor observations using current Rust host API. Preserve input setter authentication, exact multivalue/error forwarding, public GameState overrides, nested-query suppression and caller provenance.",
+    "Sharkmode baked draws, alpha-loop, table-order functional classification; original regressions remain enabled.",
+    "Final-source applicable regression/build/link/graph/rendered refresh; representative prep/live/memory and noteskin measurements; fmt/Clippy attribution; accurate completion docs."
+  ],
+  "limits": "Fixed original migration objective only. Interpreter/C API closed. No new baking/JIT/ASM/parity campaign, commits/resets/subagents. Preserve unrelated work and historical reports."
+}

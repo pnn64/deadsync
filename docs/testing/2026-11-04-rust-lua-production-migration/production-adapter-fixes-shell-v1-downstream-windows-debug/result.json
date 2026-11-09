@@ -1,0 +1,32 @@
+{
+  "stage": "production-adapter-fixes-shell-v1",
+  "suite": "downstream",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-shell",
+    "--lib",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 713.8082093000412,
+  "log_sha256": "179c8c673962af721eefe2896c0e1c88aebcc333d36b120642948e9d6384a980",
+  "tests_passed": 412,
+  "tests_failed": 12,
+  "test_results": [
+    "test result: FAILED. 412 passed; 12 failed; 16 ignored; 0 measured; 0 filtered out; finished in 77.44s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

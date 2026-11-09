@@ -1,0 +1,465 @@
+   Compiling num-traits v0.2.19
+   Compiling memchr v2.8.3
+   Compiling smallvec v1.16.4
+   Compiling bytemuck v1.25.2
+   Compiling thiserror v2.0.21
+   Compiling no_std_io2 v0.9.4
+   Compiling nom v8.0.0
+   Compiling bitstream-io v4.10.0
+   Compiling half v2.7.1
+   Compiling libm v0.2.16
+   Compiling num-integer v0.1.47
+   Compiling v_frame v0.3.9
+   Compiling num-bigint v0.4.8
+   Compiling num-complex v0.4.6
+   Compiling parking_lot_core v0.9.12
+   Compiling moxcms v0.8.1
+   Compiling num-rational v0.4.2
+   Compiling pulp v0.22.3
+   Compiling av-scenechange v0.14.1
+   Compiling av1-grain v0.2.5
+   Compiling rav1e v0.8.1
+   Compiling tiff v0.11.3
+   Compiling qoi v0.4.1
+   Compiling exr v1.74.2
+   Compiling foldhash v0.2.0
+   Compiling serde_json v1.0.154
+   Compiling hashbrown v0.17.1
+   Compiling ravif v0.13.0
+   Compiling serde v1.0.229
+   Compiling image v0.25.10
+   Compiling deadlib-lua-legacy-sys v0.13.0 (C:\GitHub\deadsync\crates\deadlib-lua-legacy\mlua-sys)
+   Compiling parking_lot v0.12.5
+   Compiling bstr v1.13.1
+   Compiling deadlib-lua-legacy v0.12.2 (C:\GitHub\deadsync\crates\deadlib-lua-legacy)
+   Compiling deadsync-noteskin v0.1.0 (C:\GitHub\deadsync\crates\deadsync-noteskin)
+    Finished `test` profile [unoptimized] target(s) in 46.29s
+     Running unittests src\lib.rs (target/rust-adapters\debug\deps\deadsync_noteskin-aad961fa4d0aecc8.exe)
+
+running 309 tests
+test actor::tests::actor_parser_ignores_commented_receptor_layers ... ok
+test actor::tests::actor_refs_preserve_condition_expression ... ok
+test actor::tests::aux_reads_are_not_actor_commands ... ok
+test actor::tests::button_commands_select_one_conditional_branch ... ok
+test actor::tests::color_list_uses_first_four_valid_components ... ok
+test actor::tests::command_aliases_select_itgmania_branch ... ok
+test actor::tests::frame_children_keep_independent_animation ... ok
+test actor::tests::frame_rotation_excludes_children_and_combines_ancestors ... ok
+test actor::tests::loadactor_refs_resolve_local_names_without_splitting_quoted_dots ... ok
+test actor::tests::local_command_aliases_capture_callbacks_and_reassignments ... ok
+test actor::tests::lua_path_detection_is_case_insensitive ... ok
+test actor::tests::mixed_case_actor_keys_helpers_and_arguments_retain_behavior ... ok
+test actor::tests::named_hold_emitter_preserves_interval_and_child_count ... ok
+test actor::tests::numeric_bindings_survive_nested_effect_expressions ... ok
+test actor::tests::pump_receptor_conditions_follow_button_and_steps_type ... ok
+test actor::tests::self_chain_commands_append_in_call_order ... ok
+test actor::tests::wrapper_commands_ignore_non_wrapper_content ... ok
+test actor::tests::wrapper_commands_parse_metric_cmd_and_function_forms ... ok
+test compiled::tests::compiled_actors_find_decl_for_noteskin_path ... ok
+test compiled::tests::load_request_detects_head_to_tap_mapping ... ok
+test compiled::tests::load_request_falls_back_to_requested_actor ... ok
+test compiled::tests::load_request_preserves_compiled_entry_data ... ok
+test compiler::legacy::aliases_perf::aliases_preserve_identity_raw_order_and_metamethod_effects ... ok
+test compiler::legacy::aliases_perf::benchmark_noteskin_aliases ... ignored, paired release benchmark; run alone
+test compiler::legacy::callbacks_perf::benchmark_noteskin_callbacks_and_commands ... ignored, paired release benchmark; run alone
+test compiler::legacy::callbacks_perf::command_extraction_preserves_holes_coercions_errors_and_callback_effects ... ok
+test compiler::legacy::callbacks_perf::complete_compiled_noteskin_bytes_match_baseline ... ok
+test compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics ... 
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+
+thread 'compiler::legacy::callbacks_perf::ignored_callback_inputs_still_resume_caught_rust_panics' (12148) panicked at crates\deadsync-noteskin\src\compiler\..\compiler_callbacks_perf.rs:95:25:
+ignored noteskin argument panic
+ok
+test compiler::legacy::callbacks_perf::ignored_callbacks_preserve_values_identities_argument_effects_and_coroutines ... ok
+test compiler::resource_perf::benchmark_resource_traversal ... ignored, paired release benchmark
+test compiler::resource_perf::reusable_hash_buffer_preserves_keys_across_file_sizes_and_changes ... ok
+test compiler::resource_perf::source_hash_reuses_file_buffer_across_actor_files ... ok
+test compiler::rust_engine::tests::aliases_preserve_identity_raw_order_and_metamethod_effects_across_gc ... ok
+test compiler::rust_engine::tests::command_extraction_preserves_holes_coercions_errors_and_callback_effects ... ok
+test compiler::rust_engine::tests::complete_compiled_callback_fixture_bytes_match_the_frozen_baseline ... ok
+test compiler::rust_engine::tests::host_panic_propagates_to_rust_and_session_destruction_releases_captures ... 
+thread 'compiler::rust_engine::tests::host_panic_propagates_to_rust_and_session_destruction_releases_captures' (57224) panicked at crates\deadsync-noteskin\src\compiler\rust_engine\tests.rs:235:21:
+noteskin host panic
+ok
+test compiler::rust_engine::tests::ignored_callbacks_preserve_values_identities_argument_effects_and_coroutines ... ok
+test compiler::rust_engine::tests::safe_libraries_and_module_failures_match_the_production_baseline ... ok
+test compiler::tests::actor_decl_expands_local_lua_command_helpers ... ok
+test compiler::tests::actor_decl_ignores_non_color_local_assignments ... ok
+test compiler::tests::actor_decl_preserves_repeated_sprite_frame_states ... ok
+test compiler::tests::compiled_bundle_path_omits_version_dir ... ok
+test compiler::tests::game_aware_loader_keeps_startup_nil_and_request_redirects_through_cache ... ok
+test compiler::tests::loader_keeps_color_variants_through_cache ... ok
+test compiler::tests::loader_loadfile_accepts_noteskin_path_tables ... ok
+test compiler::tests::loader_reads_theme_author_and_metrics ... ok
+test draw::tests::cursor_draw_is_bit_exact_across_frames_and_backward_seeks ... ok
+test draw::tests::glowshift_mix_uses_sine_phase ... ok
+test draw::tests::model_auto_rot_interpolates_and_wraps ... ok
+test draw::tests::model_draw_at_applies_timeline_spin_and_clamps ... ok
+test draw::tests::model_effect_clock_units_select_time_or_beat ... ok
+test draw::tests::model_effect_mix_ignores_non_mixing_modes ... ok
+test draw::tests::model_effect_mix_samples_itg_timing_curve ... ok
+test draw::tests::model_glow_with_draw_samples_glowshift_channel ... ok
+test draw::tests::model_texture_uv_params_preserve_atlas_shift_only ... ok
+test explosion::explosion_perf_tests::benchmark_constant_glow_phase ... ignored, paired release benchmark
+test explosion::explosion_perf_tests::deferred_glow_phase_preserves_float_behavior ... ok
+test explosion::tests::animation_seek_and_movie_rate_do_not_split_tweens ... ok
+test explosion::tests::direct_tap_explosion_elements_skip_blank_variants ... ok
+test explosion::tests::direct_tap_explosion_layers_resolve_selected_elements ... ok
+test explosion::tests::draw_order_is_immediate_metadata_and_preserves_native_tweens ... ok
+test explosion::tests::explosion_animation_ignores_all_state_delay_control ... ok
+test explosion::tests::explosion_element_classifiers_preserve_ascii_case_rules ... ok
+test explosion::tests::explosion_source_prefers_active_command_then_first_layer ... ok
+test explosion::tests::explosion_wrapper_prefers_active_command_then_element_hint ... ok
+test explosion::tests::frame_child_flash_retains_native_sleep_timing ... ok
+test explosion::tests::hit_mine_command_prefers_source_then_metric ... ok
+test explosion::tests::hit_mine_command_preserves_empty_overrides_and_trimmed_fallbacks ... ok
+test explosion::tests::hit_mine_explosion_slot_prefers_command_source ... ok
+test explosion::tests::hit_mine_explosion_slot_uses_direct_then_actor_fallback ... ok
+test explosion::tests::hold_explosion_slot_prefers_wrapper_and_source_before_fallbacks ... ok
+test explosion::tests::hold_explosion_slot_respects_blank_and_late_fallbacks ... ok
+test explosion::tests::hold_explosion_slot_skips_child_flash_emitters_without_active_command ... ok
+test explosion::tests::hold_explosion_slot_uses_source_with_wrapper_commands ... ok
+test explosion::tests::itg_command_with_init_prepends_nonempty_init ... ok
+test explosion::tests::mine_explosion_commands_include_init_for_each_layer ... ok
+test explosion::tests::missing_command_keeps_pending_tween ... ok
+test explosion::tests::named_commands_preserve_pending_tweens ... ok
+test explosion::tests::parse_explosion_animation_accepts_paused_sprite_state ... ok
+test explosion::tests::parse_explosion_animation_builds_tween_segments ... ok
+test explosion::tests::parse_explosion_animation_clamps_overbright_color ... ok
+test explosion::tests::parse_explosion_animation_finish_tweening_resets_prior_segments ... ok
+test explosion::tests::parse_explosion_animation_handles_function_duration_and_blend ... ok
+test explosion::tests::parse_explosion_animation_honors_visible_commands ... ok
+test explosion::tests::parse_explosion_animation_parses_judgment_line_color ... ok
+test explosion::tests::parse_explosion_animation_tracks_glowshift_and_blend ... ok
+test explosion::tests::random_rotation_is_stable_per_hit ... ok
+test explosion::tests::random_rotation_tweens_to_fixed_and_independent_random_targets ... ok
+test explosion::tests::recursive_commands_are_bounded ... ok
+test explosion::tests::sprite_clock_only_restarts_for_hit_animation_seeks ... ok
+test explosion::tests::tap_explosion_source_uses_visibility_for_mode ... ok
+test explosion::tests::tap_explosion_sources_partition_by_mode ... ok
+test itg::perf_tests::benchmark_ini_parse ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test itg::perf_tests::benchmark_owned_fallback_merge ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test itg::perf_tests::benchmark_runtime_cache ... ignored, paired release benchmark; run with --ignored --nocapture --test-threads=1
+test itg::perf_tests::owned_fallback_merge_matches_original_precedence_and_adopts_allocations ... ok
+test itg::perf_tests::parser_matches_original_for_assets_and_generated_sections ... ok
+test itg::perf_tests::runtime_cache_hashes_match_at_block_and_utf8_boundaries ... ok
+test itg::perf_tests::runtime_cache_matches_original_lifetime_keys_errors_and_reentry ... ok
+test itg::perf_tests::runtime_cache_retains_original_concurrent_winner_behavior ... ok
+test itg::tests::animation_is_beat_based_reads_notedisplay_then_global ... ok
+test itg::tests::borrowed_default_skin_check_matches_owned_ascii_normalization ... ok
+test itg::tests::borrowed_texture_expression_names_match_owned_quote_parsing ... ok
+test itg::tests::button_for_col_cycles_dance_panels ... ok
+test itg::tests::clear_data_cache_reloads_noteskin_data ... ok
+test itg::tests::clear_lookup_caches_rechecks_missing_file_prefixes ... ok
+test itg::tests::clear_lookup_caches_rechecks_missing_skin_dirs ... ok
+test itg::tests::data_cache_hits_borrow_normalized_lookup_keys ... ok
+test itg::tests::discover_skins_orders_preferred_and_filters_internal_dirs ... ok
+test itg::tests::discover_skins_returns_default_list_when_none_found ... ok
+test itg::tests::find_texture_with_prefix_uses_png_matches_in_search_order ... ok
+test itg::tests::ini_metric_lookup_remains_ascii_case_insensitive ... ok
+test itg::tests::ini_parser_preserves_global_and_repeated_section_values ... ok
+test itg::tests::inline_path_prefixes_preserve_exact_fallback_and_spill_text ... ok
+test itg::tests::itg_skin_runtime_cache_reuses_loaded_skin_by_style_and_name ... ok
+test itg::tests::load_itg_skin_from_roots_uses_default_fallback_candidates ... ok
+test itg::tests::load_noteskin_data_cached_from_roots_uses_first_loadable_root ... ok
+test itg::tests::load_noteskin_data_uses_normalized_requested_name ... ok
+test itg::tests::lookup_cache_keeps_case_insensitive_filesystem_behavior ... ok
+test itg::tests::normalized_names_trim_case_and_default_empty_skins ... ok
+test itg::tests::note_display_metrics_keep_defaults_for_invalid_values ... ok
+test itg::tests::note_display_metrics_parse_global_flags_and_offsets ... ok
+test itg::tests::parse_ini_float_trims_quotes_and_comments ... ok
+test itg::tests::relative_fallbacks_resolve_shared_skin_directories ... ok
+test itg::tests::resolve_texture_expr_handles_getpath_quotes_and_arg0 ... ok
+test itg::tests::song_lua_noteskin_helpers_use_cached_root_data ... ok
+test itg::tests::song_skins_keep_local_files_and_installed_fallbacks_separate ... ok
+test itg::tests::texture_key_for_path_prefers_asset_relative_path ... ok
+test itg::tests::texture_key_for_path_preserves_external_file_paths ... ok
+test itg::tests::texture_key_for_path_rejects_missing_external_paths ... ok
+test itg::tests::texture_paths_resolve_asset_subdirectories ... ok
+test mine::tests::mine_fill_slots_keeps_failed_fills_empty ... ok
+test mine::tests::mine_fill_slots_maps_present_mines_only ... ok
+test mine::tests::mine_gradient_bytes_round_and_saturate ... ok
+test mine::tests::mine_gradient_key_changes_with_colors ... ok
+test mine::tests::mine_gradient_resample_interpolates_and_expands_single_color ... ok
+test mine::tests::mine_gradient_sample_region_rejects_invalid_or_outside_regions ... ok
+test mine::tests::mine_gradient_sample_region_uses_frame_size_and_clamps ... ok
+test mine::tests::mine_gradient_samples_average_alpha_weighted_columns ... ok
+test mine::tests::mine_gradient_samples_from_slot_reports_region_warning ... ok
+test mine::tests::mine_gradient_samples_from_slot_samples_valid_region ... ok
+test mine::tests::mine_gradient_slot_plan_describes_generated_sheet ... ok
+test mine::tests::mine_gradient_texture_uses_one_frame_per_color ... ok
+test model::resource_perf::benchmark_resource_traversal ... ignored, paired release benchmark
+test model::resource_perf::merged_model_drops_one_full_vertex_buffer_allocation ... ok
+test model::resource_perf::merged_model_vertices_preserve_native_layers_and_invalid_inputs ... ok
+test model::tests::animated_texture_keeps_zero_based_precedence_and_one_based_fallback ... ok
+test model::tests::animated_texture_retains_repeated_image_states ... ok
+test model::tests::bone_animation_accepts_headerless_files_and_loops ... ok
+test model::tests::equal_mesh_names_preserve_native_merged_draws ... ok
+test model::tests::load_model_slots_builds_layer_plans ... ok
+test model::tests::load_model_slots_reads_separate_pieces ... ok
+test model::tests::material_texgen_preserves_normals_and_both_texture_stages ... ok
+test model::tests::mesh_sections_accept_optional_comment_headers ... ok
+test model::tests::model_bone_rotation_leaves_unbound_meshes_still ... ok
+test model::tests::model_material_paths_accept_windows_separators ... ok
+test model::tests::model_slot_plan_carries_auto_rot_and_texture_motion ... ok
+test model::tests::model_slot_plan_from_layer_honors_nomove_flags ... ok
+test parts::tests::clamped_hold_let_go_gray_percent_stays_in_unit_range ... ok
+test parts::tests::itg_column_xs_center_columns_on_64px_spacing ... ok
+test parts::tests::itg_column_xs_uses_pump_spacing_and_double_gap ... ok
+test receptor::tests::beat_fade_glow_matches_pump_receptor_update ... ok
+test receptor::tests::composite_flash_tweens_alpha_and_zoom_together ... ok
+test receptor::tests::itg_receptor_pulse_command_uses_first_layer_init ... ok
+test receptor::tests::itg_receptor_reverse_behaviors_use_first_two_layers ... ok
+test receptor::tests::itg_receptor_visuals_use_actor_layers_before_fallbacks ... ok
+test receptor::tests::itg_receptor_visuals_use_texture_fallbacks_only_without_actors ... ok
+test receptor::tests::receptor_glow_behavior_uses_press_then_lift_policy ... ok
+test receptor::tests::receptor_overlay_commands_prefer_actor_then_metrics ... ok
+test receptor::tests::receptor_pulse_effecttiming_recalculates_period ... ok
+test receptor::tests::receptor_reverse_behavior_parses_layer_commands ... ok
+test receptor::tests::receptor_step_behavior_normalizes_zoom_by_base_zoom ... ok
+test runtime::tests::active_model_draw_helper_applies_selected_command ... ok
+test runtime::tests::actor_explosions_do_not_invent_metric_commands ... ok
+test runtime::tests::actor_file_resolver_loads_non_lua_paths ... ok
+test runtime::tests::actor_file_resolver_uses_compiled_actor_declarations ... ok
+test runtime::tests::actor_sprite_resolution_applies_loader_request_policy ... ok
+test runtime::tests::actor_sprite_resolution_suppresses_blank_requests ... ok
+test runtime::tests::actor_sprites_with_ops_compiled_owns_reference_recursion ... ok
+test runtime::tests::child_actor_commands_apply_frame_then_merged_state ... ok
+test runtime::tests::components_mix_without_replacing_layout_or_other_hold_states ... ok
+test runtime::tests::default_hold_visuals_prefer_down_then_first_and_hold_for_roll ... ok
+test runtime::tests::default_skin_roll_heads_follow_note_quantization ... ok
+test runtime::tests::default_tap_explosions_prefer_down_then_first_nonempty ... ok
+test runtime::tests::direct_tap_explosion_resolved_layers_skip_blank_variants ... ok
+test runtime::tests::first_actor_sprite_slot_uses_compiled_animation_metadata ... ok
+test runtime::tests::first_actor_sprite_slot_uses_texture_loader_for_non_lua_paths ... ok
+test runtime::tests::first_resolved_slot_precedes_fallback_and_blank_suppresses_fallback ... ok
+test runtime::tests::hit_mine_explosion_from_layers_prefers_actor_policy ... ok
+test runtime::tests::hit_mine_explosion_from_layers_uses_fallback_and_metric ... ok
+test runtime::tests::hold_explosion_from_resolved_layers_uses_root_fallbacks ... ok
+test runtime::tests::hold_explosion_from_resolved_layers_uses_wrapper_command_policy ... ok
+test runtime::tests::hold_explosion_helper_updates_hold_and_roll_columns ... ok
+test runtime::tests::hold_head_layers_keep_stack_only_for_multi_layer_heads ... ok
+test runtime::tests::hold_visual_parts_skips_head_to_tap_mapped_heads ... ok
+test runtime::tests::hold_visual_parts_uses_roll_element_names ... ok
+test runtime::tests::hold_visuals_default_does_not_require_default_slot ... ok
+test runtime::tests::hold_visuals_from_parts_fall_back_active_to_inactive ... ok
+test runtime::tests::itg_hit_mine_explosion_uses_source_or_metric_command ... ok
+test runtime::tests::itg_mine_explosion_builds_layers_from_actor_commands ... ok
+test runtime::tests::itg_mine_explosion_preserves_fixed_layer_order_and_primary_animation ... ok
+test runtime::tests::itg_tap_explosion_map_builds_dim_and_bright_windows ... ok
+test runtime::tests::lift_layers_fall_back_to_note_layers ... ok
+test runtime::tests::loader_command_applies_nonempty_command_to_slots ... ok
+test runtime::tests::mine_hit_clock_only_restarts_for_hit_animation_seeks ... ok
+test runtime::tests::mixed_head_fallback_uses_arrow_metrics_per_state ... ok
+test runtime::tests::model_decl_loads_separate_pieces ... ok
+test runtime::tests::model_decl_resolves_fallback_texture_and_applies_plan ... ok
+test runtime::tests::noteskin_runtime_falls_back_to_default_hold_visuals ... ok
+test runtime::tests::noteskin_runtime_prefers_column_bright_tap_explosions ... ok
+test runtime::tests::noteskin_runtime_samples_uv_phase_and_translation ... ok
+test runtime::tests::noteskin_runtime_selects_column_or_default_hold_explosion ... ok
+test runtime::tests::noteskin_runtime_visits_nested_slots ... ok
+test runtime::tests::path_ref_decl_resolves_child_arg_and_commands ... ok
+test runtime::tests::receptor_column_applies_init_and_builds_column_policy ... ok
+test runtime::tests::receptor_column_keeps_actor_effect_between_base_and_press_glow ... ok
+test runtime::tests::receptor_column_uses_base_and_glow_after_static_underlay ... ok
+test runtime::tests::receptor_glow_behavior_uses_second_layer_commands_then_metrics ... ok
+test runtime::tests::receptor_pulse_from_command_uses_script_or_default ... ok
+test runtime::tests::ref_decl_merges_wrapper_then_reference_commands ... ok
+test runtime::tests::ref_decl_skips_nonmatching_actor_condition ... ok
+test runtime::tests::resolved_slots_apply_model_draw_programs ... ok
+test runtime::tests::resolved_sprite_decl_adds_frame_rotation_before_state ... ok
+test runtime::tests::roll_explosion_commands_prefer_actor_then_metrics ... ok
+test runtime::tests::roll_explosion_from_resolved_layers_selects_wrapper_commands ... ok
+test runtime::tests::roll_explosion_from_resolved_respects_blank_and_fallback_policy ... ok
+test runtime::tests::roll_explosion_hint_without_on_command_uses_metrics ... ok
+test runtime::tests::roll_visuals_from_parts_fall_back_to_hold_visuals ... ok
+test runtime::tests::runtime_columns_compiled_builds_column_runtime_state ... ok
+test runtime::tests::runtime_compiled_assembles_post_column_state ... ok
+test runtime::tests::sprite_decl_slot_falls_back_from_animation_to_frame ... ok
+test runtime::tests::tap_explosion_duration_uses_longest_layer ... ok
+test runtime::tests::tap_explosion_map_drops_blank_held_command_without_metric_fallback ... ok
+test runtime::tests::tap_explosion_map_from_layers_uses_direct_only_without_actor_sources ... ok
+test runtime::tests::tap_explosion_map_from_resolved_layers_builds_sources ... ok
+test runtime::tests::tap_explosion_map_uses_each_window_command_key ... ok
+test runtime::tests::tap_explosion_registry_preserves_map_operations_for_custom_keys ... ok
+test runtime::tests::tap_explosions_by_col_compiled_uses_down_cache_and_column_lookups ... ok
+test runtime::tests::tap_note_column_sorts_layers_and_expands_quantizations ... ok
+test runtime::tests::tap_note_layers_only_use_fallback_when_empty ... ok
+test script::tests::active_model_commands_keep_init_and_remap_active_command ... ok
+test script::tests::apply_sprite_animation_commands_preserves_clock_and_plan_order ... ok
+test script::tests::base_zoom_is_immediate_and_preserved_by_tweens_and_pulses ... ok
+test script::tests::base_zoom_multiplies_regular_zoom_with_last_setter_winning ... ok
+test script::tests::effect_arguments_resolve_once_per_actor_with_injected_values ... ok
+test script::tests::itg_parse_command_effect_handles_lua_function_zoom_pulse ... ok
+test script::tests::itg_parse_command_effect_tracks_alpha_zoom_and_interrupts ... ok
+test script::tests::model_draw_program_builds_tween_and_effect ... ok
+test script::tests::model_draw_program_ignores_all_state_delay_control ... ok
+test script::tests::model_draw_program_leaves_sprite_commands_to_asset_loading ... ok
+test script::tests::model_draw_program_parses_edge_fades_and_animation_controls ... ok
+test script::tests::model_draw_program_parses_vertalign_and_base_glow ... ok
+test script::tests::model_sleep_retains_state_until_following_commands ... ok
+test script::tests::numeric_arithmetic_matches_lua_precedence ... ok
+test script::tests::parent_actor_mod_accumulates_and_multiplies_values ... ok
+test script::tests::parent_actor_mod_negative_zoom_flips_sprite_definition ... ok
+test script::tests::parent_command_parses_and_applies_actor_mods ... ok
+test script::tests::parse_linear_frames_expr_builds_equal_frame_delays ... ok
+test script::tests::rainbow_colors_match_native_actor_samples ... ok
+test script::tests::screen_global_transforms_match_native_actor_assertions ... ok
+test script::tests::screen_globals_preserve_tweens_and_leave_strings_and_unknowns_untouched ... ok
+test script::tests::script_blend_detection_preserves_case_insensitive_substring_behavior ... ok
+test script::tests::script_color_wrapper_is_ascii_case_insensitive_without_false_prefixes ... ok
+test script::tests::script_effect_clock_preserves_aliases_quotes_and_beat_fallback ... ok
+test script::tests::script_judgment_colors_preserve_mixed_case_and_stroke_behavior ... ok
+test script::tests::script_rgba_parser_filters_invalid_values_and_takes_first_four ... ok
+test script::tests::script_token_classification_is_case_insensitive_and_preserves_unknown_commands ... ok
+test script::tests::script_token_preserves_arguments_beyond_inline_storage ... ok
+test script::tests::script_token_reuses_split_semantics ... ok
+test script::tests::script_vertalign_preserves_numeric_quoted_and_mixed_case_values ... ok
+test script::tests::sprite_animation_clock_uses_preferred_then_sorted_extra_commands ... ok
+test script::tests::sprite_animation_command_plans_parse_all_state_delays ... ok
+test script::tests::sprite_animation_command_refs_preserve_sorted_order_when_inline_storage_spills ... ok
+test script::tests::sprite_state_properties_command_plans_sort_and_select_clock ... ok
+test script::tests::sprite_state_properties_plans_parse_direct_and_lua_commands ... ok
+test sprite::sprite_perf_tests::benchmark_owned_state_properties ... ignored, paired release benchmark
+test sprite::sprite_perf_tests::owned_state_properties_preserve_results_and_callback_order ... ok
+test sprite::sprite_perf_tests::state_properties_reuse_texture_and_delay_allocations ... ok
+test sprite::tests::all_frames_animation_plan_ignores_single_frame_sheet ... ok
+test sprite::tests::all_frames_animation_plan_uses_full_grid_and_delay ... ok
+test sprite::tests::all_frames_slot_plan_returns_none_for_single_frame_sheet ... ok
+test sprite::tests::atlas_slot_plan_uses_full_texture ... ok
+test sprite::tests::duration_frame_index_uses_last_positive_span_as_fallback ... ok
+test sprite::tests::frame_duration_total_skips_non_positive_spans ... ok
+test sprite::tests::frame_slot_plan_uses_sheet_frame ... ok
+test sprite::tests::generated_animation_slot_plan_builds_single_row_source ... ok
+test sprite::tests::itg_animation_slot_plan_applies_all_state_delays_to_animated_sources ... ok
+test sprite::tests::itg_animation_slot_plan_applies_state_properties ... ok
+test sprite::tests::itg_path_all_frames_slot_plan_falls_back_to_atlas_slot ... ok
+test sprite::tests::itg_path_animation_slot_plan_falls_back_to_frame_slot ... ok
+test sprite::tests::itg_path_frame_slot_plan_uses_sheet_metadata_callbacks ... ok
+test sprite::tests::itg_path_slot_plan_uses_texture_metadata_callbacks ... ok
+test sprite::tests::model_vertex_mirroring_preserves_depth_and_texture_scale ... ok
+test sprite::tests::neg_rotation_uses_exact_cardinal_values ... ok
+test sprite::tests::sprite_animation_plan_normalizes_indices_and_delays ... ok
+test sprite::tests::sprite_frame_index_uses_weighted_durations_and_phase ... ok
+test sprite::tests::sprite_frame_indices_preserve_boundaries_and_wrapping ... ok
+test sprite::tests::sprite_sheet_frame_selects_wrapped_frame_region ... ok
+test sprite::tests::sprite_uv_helpers_apply_texel_inset_and_scrolling ... ok
+test sprite::tests::state_properties_animation_calculates_frame_grid_and_rate ... ok
+test sprite::tests::state_properties_animation_ignores_single_frame_sheets ... ok
+test sprite::tests::static_atlas_uv_cache_preserves_both_inset_variants ... ok
+test workshop::direct_data_perf::benchmark_direct_data_workshop ... ignored, paired release benchmark; run alone
+test workshop::direct_data_perf::rejected_workshop_family_does_not_allocate_normalized_paths ... ok
+test workshop::direct_data_perf::workshop_choices_match_original_including_errors_and_order ... ok
+test workshop::direct_data_perf::workshop_grouping_avoids_per_file_owned_slot_and_duplicate_id_keys ... ok
+test workshop::direct_data_perf::workshop_path_normalization_preserves_mixed_separators_and_errors ... ok
+test workshop::tests::cancellation_and_decode_errors_stop_bounded_workers ... ok
+test workshop::tests::shared_sources_decode_once_and_fill_every_cell_with_monotonic_progress ... ok
+
+test result: ok. 299 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 3.73s
+
+     Running tests\model_pieces.rs (target/rust-adapters\debug\deps\model_pieces-dc56ab363e2d22c1.exe)
+
+running 9 tests
+test blank_diffuse_texture_keeps_material_and_alpha_texture ... ok
+test declared_materials_and_bones_override_conflicting_mesh_sections ... ok
+test malformed_materials_never_reopen_embedded_materials ... ok
+test material_textures_do_not_fall_back_to_noteskin_search_directories ... ok
+test mesh_material_index_must_exist_in_declared_material_file ... ok
+test missing_alpha_texture_rejects_declared_materials ... ok
+test missing_declared_pieces_never_fall_back_to_mesh_file ... ok
+test missing_diffuse_texture_does_not_use_alpha_texture_as_diffuse ... ok
+test unused_material_textures_are_still_validated ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\packs.rs (target/rust-adapters\debug\deps\packs-f0931239549ddd53.exe)
+
+running 5 tests
+test cache_identity_is_canonical_and_changes_with_selection_or_pack_revision ... ok
+test discovery_ignores_valid_install_backups ... ok
+test invalid_manifests_and_escaping_paths_are_rejected ... ok
+test player_selections_resolve_independently_including_relocated_model_textures ... ok
+test png_variants_share_programs_but_keep_runtime_assets_independent ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+
+     Running tests\rust_engine.rs (target/rust-adapters\debug\deps\rust_engine-7dc04bc572dab8f4.exe)
+
+running 8 tests
+test authored_third_party_and_song_local_noteskins_match_legacy ... authored dance/FNF-3d
+authored dance/FNF_Quantize-3d
+authored dance/composite-3d
+authored dance/enchantment-original-3d
+authored dance/enchantment-original-3d+
+authored dance/SCH-CLASSIC-RAINBOW
+ok
+test backend_cutover_invalidates_the_legacy_cache_without_deleting_it ... ok
+test bundled_noteskins_match_the_legacy_compiler_with_their_real_fallback_chains ... bundled dance/default
+bundled dance/cel
+bundled dance/cyber
+bundled dance/ddr-note
+bundled dance/ddr-rainbow
+bundled dance/ddr-vivid
+bundled dance/devcel-2024
+bundled dance/enchantment
+bundled dance/lambda
+bundled dance/metal
+bundled dance/robot
+bundled dance/vivid
+bundled pump/default
+bundled pump/cmd
+bundled pump/cmd-routine-p1
+bundled pump/cmd-routine-p2
+bundled pump/complex
+bundled pump/delta
+bundled pump/delta-note
+bundled pump/delta-routine-p1
+bundled pump/delta-routine-p2
+bundled pump/frame5p
+bundled pump/newextra
+bundled pump/pad
+bundled pump/rhythm
+bundled pump/simple
+ok
+test color_variant_resource_expressions_and_model_properties_match_legacy ... ok
+test existing_noteskin_fixtures_produce_the_same_complete_native_bundles ... compare alias-normalization/dance
+compare alias-normalization/pump
+compare base-xy-rotation/dance
+compare base-xy-rotation/pump
+compare game-aware/dance
+compare game-aware/pump
+compare implicit-animation/dance
+compare implicit-animation/pump
+compare note-color-texture/dance
+compare note-color-texture/pump
+compare rainbow-effect/dance
+compare rainbow-effect/pump
+compare shock-mine/dance
+compare shock-mine/pump
+ok
+test fallback_closures_commands_metrics_and_deferred_loaders_survive_collection ... ok
+test invalid_loaders_and_resource_paths_fail_in_both_backends ... ok
+test property_metamethods_and_numeric_string_coercion_match_legacy ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.70s
+
+   Doc-tests deadsync_noteskin
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

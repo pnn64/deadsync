@@ -1,0 +1,698 @@
+--- crates/deadsync-song-lua/src/rust_engine.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine.rs
+@@ -21,6 +21,8 @@
+ mod function_snapshot;
+ mod gameplay;
+ mod song_action;
++mod song_action_compile;
++pub use song_action_compile::SongActionOutput;
+ mod song_easing;
+ mod song_tree;
+ pub use song_tree::{SongOverlayActor, SongOverlayActors};
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1863,3 +1863,74 @@
+         skipped,
+     )
+ }
++
++fn legacy_action_tracked(targets: &[LegacyMessageTarget<'_>]) -> Vec<crate::SongLuaTrackedActor> {
++    targets
++        .iter()
++        .map(|r| crate::SongLuaTrackedActor {
++            table: r.actor.clone(),
++            actor: crate::SongLuaCapturedActor {
++                message_commands: r.commands.clone(),
++                ..Default::default()
++            },
++            target: crate::SongLuaTrackedActorTarget::Player(0),
++        })
++        .collect()
++}
++pub fn legacy_compile_function_action(
++    lua: &mlua::Lua,
++    targets: &mut [LegacyMessageTarget<'_>],
++    tracked: &mut [LegacyMessageTarget<'_>],
++    function: &mlua::Function,
++    beat: f32,
++    persists: bool,
++    output: &mut super::SongActionOutput<'_>,
++) -> Result<bool, String> {
++    let mut overlays = legacy_message_overlays(targets);
++    let mut tracked_actors = legacy_action_tracked(tracked);
++    let result = crate::lua_util::compile_overlay_compile_actor_function_action(
++        lua,
++        &mut overlays,
++        &mut tracked_actors,
++        function,
++        beat,
++        persists,
++        output.counter,
++        output.messages,
++        output.sound_events,
++    );
++    for (target, row) in targets.iter_mut().zip(overlays) {
++        *target.commands = row.actor.message_commands;
++    }
++    for (target, row) in tracked.iter_mut().zip(tracked_actors) {
++        *target.commands = row.actor.message_commands;
++    }
++    result
++}
++pub fn legacy_read_overlay_actions(
++    lua: &mlua::Lua,
++    table: Option<mlua::Table>,
++    targets: &mut [LegacyMessageTarget<'_>],
++    tracked: &mut [LegacyMessageTarget<'_>],
++    output: &mut super::SongActionOutput<'_>,
++) -> Result<(), String> {
++    let mut overlays = legacy_message_overlays(targets);
++    let mut tracked_actors = legacy_action_tracked(tracked);
++    let result = crate::lua_util::read_overlay_compile_actor_actions(
++        lua,
++        table,
++        &mut overlays,
++        &mut tracked_actors,
++        output.messages,
++        output.sound_events,
++        output.counter,
++        output.info,
++    );
++    for (target, row) in targets.iter_mut().zip(overlays) {
++        *target.commands = row.actor.message_commands;
++    }
++    for (target, row) in tracked.iter_mut().zip(tracked_actors) {
++        *target.commands = row.actor.message_commands;
++    }
++    result
++}
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs (before)
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -7385,3 +7385,390 @@
+     assert_eq!(rows.actors.len(), 3);
+     pair.rust.release_song_overlay_actors(&mut rows).unwrap();
+ }
++
++#[derive(Clone, Debug, Default)]
++struct ActionPublished {
++    counter: usize,
++    messages: Vec<deadsync_song_lua::SongLuaMessageEvent>,
++    sounds: Vec<deadsync_song_lua::SongLuaSoundEvent>,
++    info: deadsync_song_lua::SongLuaCompileInfo,
++    overlays: MessageRows,
++    tracked: MessageRows,
++}
++impl ActionPublished {
++    fn seed() -> Self {
++        Self {
++            counter: 7,
++            messages: vec![deadsync_song_lua::SongLuaMessageEvent {
++                beat: -1.,
++                message: "before".into(),
++                persists: false,
++            }],
++            ..Default::default()
++        }
++    }
++    fn output(&mut self) -> deadsync_song_lua::rust_engine::SongActionOutput<'_> {
++        deadsync_song_lua::rust_engine::SongActionOutput {
++            counter: &mut self.counter,
++            messages: &mut self.messages,
++            sound_events: &mut self.sounds,
++            info: &mut self.info,
++        }
++    }
++}
++fn compare_compiled_actions(
++    pair: &mut Pair,
++    keys: &[&str],
++    tracked: &[&str],
++    reader: bool,
++    mut state: ActionPublished,
++) -> (ActionPublished, Result<Option<bool>, (String, String)>) {
++    let (mut native, mut rust) = (Vec::new(), Vec::new());
++    for key in keys.iter().chain(tracked) {
++        let (a, b) = saved_pair(pair, key);
++        native.push(a);
++        rust.push(Value::Table(b));
++    }
++    if state.overlays.is_empty() {
++        for (n, r) in native.iter().zip(&rust).take(keys.len()) {
++            let a = test_support::legacy_capture_actor_messages(&pair.native, n).unwrap();
++            let b = pair.rust.capture_song_actor_message_commands(*r).unwrap();
++            assert_eq!(a.commands, b.commands);
++            state.overlays.push(b.commands);
++        }
++    }
++    if state.tracked.is_empty() {
++        for (n, r) in native.iter().zip(&rust).skip(keys.len()) {
++            let a = test_support::legacy_capture_actor_messages(&pair.native, n).unwrap();
++            let b = pair.rust.capture_song_actor_message_commands(*r).unwrap();
++            assert_eq!(a.commands, b.commands);
++            state.tracked.push(b.commands);
++        }
++    }
++    let mut expected = state.clone();
++    let mut actual = state;
++    let mut en = std::mem::take(&mut expected.overlays);
++    en.extend(std::mem::take(&mut expected.tracked));
++    let mut ar = std::mem::take(&mut actual.overlays);
++    ar.extend(std::mem::take(&mut actual.tracked));
++    let mut nt = native
++        .into_iter()
++        .zip(en.iter_mut())
++        .map(|(actor, commands)| test_support::LegacyMessageTarget { actor, commands })
++        .collect::<Vec<_>>();
++    let mut rt = rust
++        .into_iter()
++        .zip(ar.iter_mut())
++        .map(
++            |(actor, commands)| deadsync_song_lua::rust_engine::SongMessageTarget {
++                actor,
++                commands,
++            },
++        )
++        .collect::<Vec<_>>();
++    let (a, b) = nt.split_at_mut(keys.len());
++    let er = if reader {
++        let table: Option<mlua::Table> = pair.native.globals().get("actions_probe").unwrap();
++        test_support::legacy_read_overlay_actions(&pair.native, table, a, b, &mut expected.output())
++            .map(|()| None)
++    } else {
++        let function: mlua::Function = pair.native.globals().get("compile_probe").unwrap();
++        test_support::legacy_compile_function_action(
++            &pair.native,
++            a,
++            b,
++            &function,
++            4.,
++            true,
++            &mut expected.output(),
++        )
++        .map(Some)
++    };
++    let (a, b) = rt.split_at_mut(keys.len());
++    let rr = if reader {
++        let table = pair.rust.vm_mut().get_global(b"actions_probe").unwrap();
++        pair.rust
++            .read_song_overlay_actions(Some(table), a, b, &mut actual.output())
++            .map(|()| None)
++    } else {
++        let function = pair.rust.vm_mut().get_global(b"compile_probe").unwrap();
++        pair.rust
++            .compile_song_function_action(a, b, function, 4., true, &mut actual.output())
++            .map(Some)
++    };
++    expected.tracked = en.split_off(keys.len());
++    expected.overlays = en;
++    actual.tracked = ar.split_off(keys.len());
++    actual.overlays = ar;
++    assert_eq!(er.is_err(), rr.is_err(), "native={er:?}, Rust={rr:?}");
++    assert_eq!(format!("{expected:?}"), format!("{actual:?}"));
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    pair.compare();
++    let result = match (er, rr) {
++        (Ok(a), Ok(b)) => {
++            assert_eq!(a, b);
++            Ok(b)
++        }
++        (Err(a), Err(b)) => Err((a, b)),
++        _ => unreachable!(),
++    };
++    (actual, result)
++}
++#[test]
++fn action_compiler_publication_keeps_broadcast_order_direct_tracked_sounds_and_counter() {
++    let (dir, mut pair) = command_scope_pair(
++        r#"return Def.ActorFrame{
++        Def.Quad{InitCommand=function(self)saved.a=self end},
++        Def.Quad{InitCommand=function(self)saved.b=self end,FlashMessageCommand=function(self)self:y(5)end},
++        Def.Quad{InitCommand=function(self)saved.c=self end}}"#,
++    );
++    let path = dir.path().join("action.wav");
++    fs::write(&path, b"existing sound").unwrap();
++    pair.script(&format!(
++        "action_sound={:?}",
++        deadsync_song_lua::file_path_string(&path)
++    ));
++    pair.script("compile_probe=function()MESSAGEMAN:Broadcast('Flash');MESSAGEMAN:Broadcast('Missing');MESSAGEMAN:Broadcast('Flash');saved.a:x(9);saved.c:z(10);SOUND:PlayOnce(action_sound);SOUND:PlayOnce(action_sound)end");
++    let (out, result) = compare_compiled_actions(
++        &mut pair,
++        &["a", "b"],
++        &["c"],
++        false,
++        ActionPublished::seed(),
++    );
++    assert_eq!(result.unwrap(), Some(true));
++    assert_eq!(out.counter, 8);
++    assert_eq!(
++        out.messages
++            .iter()
++            .map(|m| m.message.as_str())
++            .collect::<Vec<_>>(),
++        ["before", "Flash", "Flash", "__songlua_overlay_fn_action_7"]
++    );
++    assert_eq!(out.overlays[0][0].message, "__songlua_overlay_fn_action_7");
++    assert_eq!(out.tracked[0][0].message, "__songlua_overlay_fn_action_7");
++    assert_eq!(out.overlays[1].len(), 1);
++    assert_eq!(out.sounds.len(), 2);
++    assert!(out.sounds.iter().all(|s| s.beat == 4.
++        && s.path == path
++        && s.source_message.is_none()
++        && !s.queued_startup));
++    pair.script("assert(saved.a:GetX()==0 and saved.b:GetY()==0 and saved.c:GetZ()==0)");
++}
++#[test]
++fn action_compiler_publication_keeps_native_empty_side_effect_listener_and_error_results() {
++    for (body, handled, names) in [
++        ("return 7", Some(false), 0),
++        ("MESSAGEMAN:Broadcast('Flash')", Some(true), 1),
++        ("MESSAGEMAN:Broadcast('Missing')", Some(true), 0),
++        ("SOUND:StopMusic()", Some(true), 0),
++        ("saved.a:x(91);error('action publication failure')", None, 0),
++    ] {
++        let (_dir, mut pair) = command_scope_pair(
++            "return Def.Quad{InitCommand=function(self)saved.a=self end,FlashMessageCommand=function(self)self:y(5)end}",
++        );
++        pair.script(&format!("compile_probe=function(){body} end"));
++        let (out, result) =
++            compare_compiled_actions(&mut pair, &["a"], &[], false, ActionPublished::seed());
++        if let Some(handled) = handled {
++            assert_eq!(result.unwrap(), Some(handled));
++        } else {
++            assert!(result.is_err());
++        }
++        assert_eq!(out.counter, 7);
++        assert_eq!(out.messages.len(), 1 + names);
++        assert!(out.sounds.is_empty());
++        assert_eq!(out.info.unsupported_function_actions, 0);
++        pair.script("assert(saved.a:GetX()==0 and saved.a:GetY()==0)");
++    }
++}
++#[test]
++fn action_compiler_mixed_parameter_broadcasts_preserve_all_or_none_named_publication() {
++    for writes in [false, true] {
++        let source = format!(
++            r#"return Def.ActorFrame{{Def.Quad{{InitCommand=function(self)saved.a=self end,FlashMessageCommand=function(self)self:y(5)end}},Def.Quad{{InitCommand=function(self)saved.b=self end,ParamMessageCommand=function(self,p)assert(p.marker==3);{} end}}}}"#,
++            if writes { "self:z(11)" } else { "" }
++        );
++        let (_dir, mut pair) = command_scope_pair(&source);
++        pair.script("compile_probe=function()MESSAGEMAN:Broadcast('Flash');MESSAGEMAN:Broadcast('Param',{marker=3})end");
++        let (out, result) =
++            compare_compiled_actions(&mut pair, &["a", "b"], &[], false, ActionPublished::seed());
++        assert_eq!(result.unwrap(), Some(true));
++        assert_eq!(out.messages.len(), if writes { 2 } else { 1 });
++        assert!(out.messages.iter().all(|m| m.message != "Flash"));
++        assert_eq!(out.counter, if writes { 8 } else { 7 });
++    }
++}
++#[test]
++fn action_compiler_reader_uses_raw_fields_native_float_rules_truthiness_and_nil_boundary() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    pair.script(r#"actions_probe=setmetatable({false,{false,'skip'},{1,'one'},{' 2.5 ','two',0},{3,'three',''},{4,'four',false},{'NaN','nan',{}},{'inf','infinite',true},{math.huge,'skip'},{1e300,'skip'},{'0x10','skip'},{string.char(255),'skip'},setmetatable({},{__index=function()error('entry meta must not run')end}),setmetatable({5,'raw',false},{__index=function()error('entry meta must not run')end}),{6,29},{7,{}}},{__index=function()error('sequence meta must not run')end});actions_probe[18]={8,'after-hole'}"#);
++    let (out, result) =
++        compare_compiled_actions(&mut pair, &["a"], &[], true, ActionPublished::seed());
++    result.unwrap();
++    assert_eq!(out.counter, 7);
++    assert_eq!(
++        out.messages
++            .iter()
++            .map(|m| m.message.as_str())
++            .collect::<Vec<_>>(),
++        [
++            "before", "one", "two", "three", "four", "nan", "infinite", "raw"
++        ]
++    );
++    assert!(out.messages[2].persists && out.messages[3].persists && !out.messages[4].persists);
++    assert!(out.messages[5].beat.is_nan());
++    assert!(out.messages[6].beat.is_infinite());
++    assert_eq!(out.info.unsupported_function_actions, 0);
++    pair.script("actions_probe=nil");
++    let (next, result) = compare_compiled_actions(&mut pair, &["a"], &[], true, out.clone());
++    result.unwrap();
++    assert_eq!(format!("{next:?}"), format!("{out:?}"));
++}
++#[test]
++fn action_compiler_reader_continues_failed_or_unhandled_functions_and_deduplicates_details() {
++    let (dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    let sound = dir.path().join("discarded.wav");
++    fs::write(&sound, b"existing").unwrap();
++    pair.script(&format!(
++        "action_sound={:?}",
++        deadsync_song_lua::file_path_string(&sound)
++    ));
++    pair.script("actions_probe={{1,function()end,true},{1,function()error('body failure')end,true},{1,function()saved.a:x(91);SOUND:PlayOnce(action_sound);error('failed sound')end,true},{2,'after',true},{3,function()saved.a:x(7)end,false}}");
++    let (out, result) =
++        compare_compiled_actions(&mut pair, &["a"], &[], true, ActionPublished::seed());
++    result.unwrap();
++    assert_eq!(out.info.unsupported_function_actions, 3);
++    assert_eq!(
++        out.info.unsupported_function_action_captures,
++        ["function action beat=1.000 persists=true"]
++    );
++    assert_eq!(
++        out.messages
++            .iter()
++            .map(|m| m.message.as_str())
++            .collect::<Vec<_>>(),
++        ["before", "after", "__songlua_overlay_fn_action_7"]
++    );
++    assert_eq!(out.counter, 8);
++    assert!(out.sounds.is_empty());
++    assert!(!out.messages.last().unwrap().persists);
++    pair.script("assert(saved.a:GetX()==0)");
++}
++#[test]
++fn action_compiler_reader_hard_string_errors_preserve_prior_publications_and_recover() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    pair.script(
++        "actions_probe={{1,function()saved.a:x(4)end},{2,string.char(255)},{3,'unreached'}}",
++    );
++    let (out, result) =
++        compare_compiled_actions(&mut pair, &["a"], &[], true, ActionPublished::seed());
++    assert!(result.is_err());
++    assert_eq!(out.counter, 8);
++    assert_eq!(out.messages.len(), 2);
++    assert_eq!(out.overlays[0].len(), 1);
++    assert_eq!(out.info.unsupported_function_actions, 0);
++    pair.script("actions_probe={{4,'recovered'}}");
++    let (out, result) = compare_compiled_actions(&mut pair, &["a"], &[], true, out);
++    result.unwrap();
++    assert_eq!(out.counter, 8);
++    assert_eq!(out.messages.len(), 3);
++    assert_eq!(out.messages[2].message, "recovered");
++    assert_eq!(out.overlays[0].len(), 1);
++}
++#[test]
++fn action_compiler_reader_keeps_original_table_and_reads_mutated_next_entry_after_cleanup_error_gc()
++{
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self;self:x(3)end}");
++    pair.script(r#"
++        local h=SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):GetColumnActors()[1]:GetPosHandler()
++        actions_probe={{1,function()saved.a:x(91);rawset(h,'__songlua_spline_mode',nil)end},{2,'old-second'},{3,'old-third'}}
++        raw_actions={original=actions_probe};action_weak=setmetatable({actions_probe},{__mode='v'})
++        setmetatable(h,{__newindex=function(t,k,v)
++            if k=='__songlua_spline_mode'then
++                raw_actions.original[2]={9,'after-failure',true};raw_actions.original[3]=nil;raw_actions.original=nil
++                actions_probe={{20,'replacement-global'}};collectgarbage();error('action column cleanup')
++            end
++            rawset(t,k,v)
++        end})
++    "#);
++    let (out, result) =
++        compare_compiled_actions(&mut pair, &["a"], &[], true, ActionPublished::seed());
++    result.unwrap();
++    assert_eq!(out.info.unsupported_function_actions, 1);
++    assert_eq!(out.counter, 7);
++    assert_eq!(
++        out.messages
++            .iter()
++            .map(|m| m.message.as_str())
++            .collect::<Vec<_>>(),
++        ["before", "after-failure"]
++    );
++    assert_eq!(out.messages[1].beat, 9.);
++    pair.script("collectgarbage();collectgarbage();assert(action_weak[1]==nil);assert(saved.a:GetX()==91);local h=SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):GetColumnActors()[1]:GetPosHandler();setmetatable(h,nil);rawset(h,'__songlua_spline_mode','NoteColumnSplineMode_Disabled')");
++    let (out, result) = compare_compiled_actions(&mut pair, &["a"], &[], true, out);
++    result.unwrap();
++    assert_eq!(out.messages.last().unwrap().message, "replacement-global");
++}
++#[test]
++fn action_compiler_reader_accepts_existing_native_functions_and_records_unhandled_gc() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self end}");
++    pair.script(
++        "actions_probe={{1,SOUND.StopMusic,true},{2,collectgarbage,false},{3,'after-native'}}",
++    );
++    let (out, result) =
++        compare_compiled_actions(&mut pair, &["a"], &[], true, ActionPublished::seed());
++    result.unwrap();
++    assert_eq!(out.counter, 7);
++    assert_eq!(out.info.unsupported_function_actions, 1);
++    assert_eq!(
++        out.info.unsupported_function_action_captures,
++        ["function action beat=2.000 persists=false"]
++    );
++    assert_eq!(out.messages.last().unwrap().message, "after-native");
++}
++
++#[test]
++fn action_compiler_reader_instruction_abort_records_unsupported_continues_and_recovers() {
++    let (_dir, mut pair) =
++        command_scope_pair("return Def.Quad{InitCommand=function(self)saved.a=self;self:x(3)end}");
++    pair.script("actions_probe={{1,function()saved.a:x(99);probe_created={};while true do end end},{2,'after-limit'}}");
++    let (_, actor) = saved_pair(&mut pair, "a");
++    let table = pair.rust.vm_mut().get_global(b"actions_probe").unwrap();
++    let mut commands = Vec::new();
++    let mut out = ActionPublished::seed();
++    let clock = pair.rust.values().unwrap();
++    pair.rust.vm_mut().set_instruction_limit(Some(50_000));
++    let result = pair.rust.read_song_overlay_actions(
++        Some(table),
++        &mut [deadsync_song_lua::rust_engine::SongMessageTarget {
++            actor: Value::Table(actor),
++            commands: &mut commands,
++        }],
++        &mut [],
++        &mut out.output(),
++    );
++    pair.rust.vm_mut().set_instruction_limit(None);
++    result.unwrap();
++    assert_eq!(out.info.unsupported_function_actions, 1);
++    assert_eq!(out.messages.last().unwrap().message, "after-limit");
++    assert_eq!(out.counter, 7);
++    assert!(commands.is_empty());
++    assert_eq!(pair.rust.values().unwrap(), clock);
++    pair.script("assert(saved.a:GetX()==3 and probe_created==nil);assert(__songlua_capture_scope_actors==nil and __songlua_broadcast_messages==nil and __songlua_sound_calls==nil and __songlua_suppress_broadcast_dispatch==nil);actions_probe={{3,function()saved.a:x(12)end}} ");
++    let (out, result) = compare_compiled_actions(&mut pair, &["a"], &[], true, out);
++    result.unwrap();
++    assert_eq!(out.counter, 8);
++    assert_eq!(out.info.unsupported_function_actions, 1);
++    pair.rust.retire_actor_scene(pair.scene).unwrap();
++    drop(pair);
++    assert_eq!(out.overlays[0][0].blocks[0].delta.x, Some(12.));
++}
+--- crates/deadsync-song-lua/src/rust_engine/song_action_compile.rs (before)
++++ crates/deadsync-song-lua/src/rust_engine/song_action_compile.rs
+@@ -0,0 +1,214 @@
++//! Existing compiler action publication and raw sequential action-table reads.
++use super::*;
++use crate::{
++    SongLuaCompileInfo, SongLuaMessageEvent, SongLuaOverlayMessageCommand, SongLuaSoundEvent,
++};
++
++/// Borrow the compiler's existing output and synthetic-message sequence.
++pub struct SongActionOutput<'a> {
++    pub counter: &'a mut usize,
++    pub messages: &'a mut Vec<SongLuaMessageEvent>,
++    pub sound_events: &'a mut Vec<SongLuaSoundEvent>,
++    pub info: &'a mut SongLuaCompileInfo,
++}
++
++fn listener(
++    overlays: &[SongMessageTarget<'_>],
++    tracked: &[SongMessageTarget<'_>],
++    message: &str,
++) -> bool {
++    crate::message_command_lists_have_listener(
++        overlays
++            .iter()
++            .chain(tracked)
++            .map(|r| r.commands.as_slice()),
++        message,
++    )
++}
++
++impl RustSongRuntime {
++    /// Publish the native compiler's named broadcasts, sounds and synthetic
++    /// direct-effect message after a successful function-action capture.
++    pub fn compile_song_function_action(
++        &mut self,
++        overlays: &mut [SongMessageTarget<'_>],
++        tracked: &mut [SongMessageTarget<'_>],
++        function: Value,
++        beat: f32,
++        persists: bool,
++        output: &mut SongActionOutput<'_>,
++    ) -> Result<bool, String> {
++        let selected = overlays
++            .iter()
++            .map(|r| r.actor)
++            .enumerate()
++            .collect::<Vec<_>>();
++        let tracked_values = tracked.iter().map(|r| r.actor).collect::<Vec<_>>();
++        let capture =
++            self.capture_song_function_action(&selected, &tracked_values, function, beat)?;
++        output.sound_events.extend(
++            capture
++                .sound_paths
++                .into_iter()
++                .map(|path| SongLuaSoundEvent {
++                    beat,
++                    path,
++                    source_message: None,
++                    queued_startup: false,
++                }),
++        );
++        let mut handled = false;
++        if !capture.broadcasts.is_empty() && capture.broadcasts.iter().all(|(_, params)| !*params) {
++            for (message, _) in &capture.broadcasts {
++                if listener(overlays, tracked, message) {
++                    output.messages.push(SongLuaMessageEvent {
++                        beat,
++                        message: message.clone(),
++                        persists,
++                    });
++                    handled = true;
++                }
++            }
++        }
++        let direct = !capture.overlay_blocks.is_empty() || !capture.tracked_blocks.is_empty();
++        if handled && !direct {
++            return Ok(true);
++        }
++        if !direct {
++            return Ok(capture.side_effects > 0);
++        }
++        let message = format!("__songlua_overlay_fn_action_{}", output.counter);
++        *output.counter += 1;
++        for (index, blocks) in capture.overlay_blocks {
++            overlays[index].commands.push(SongLuaOverlayMessageCommand {
++                frame_advance: 0.,
++                message: message.clone(),
++                blocks,
++            });
++        }
++        for (index, blocks) in capture.tracked_blocks {
++            tracked[index].commands.push(SongLuaOverlayMessageCommand {
++                frame_advance: 0.,
++                message: message.clone(),
++                blocks,
++            });
++        }
++        output.messages.push(SongLuaMessageEvent {
++            beat,
++            message,
++            persists,
++        });
++        Ok(true)
++    }
++
++    /// Read the current raw sequence after each entry. Preserve malformed-entry
++    /// skips and hard string errors, and turn failed/unhandled function probes
++    /// into the existing unsupported detail before continuing later entries.
++    pub fn read_song_overlay_actions(
++        &mut self,
++        table: Option<Value>,
++        overlays: &mut [SongMessageTarget<'_>],
++        tracked: &mut [SongMessageTarget<'_>],
++        output: &mut SongActionOutput<'_>,
++    ) -> Result<(), String> {
++        let Some(table) = table.filter(|value| *value != Value::Nil) else {
++            return Ok(());
++        };
++        let mut pins = Vec::new();
++        let result: Result<(), String> = (|| {
++            pins.push(self.vm.pin(table).map_err(|e| e.to_string())?);
++            let Value::Table(table) = table else {
++                return Err("action table expected".into());
++            };
++            for target in overlays.iter().chain(tracked.iter()) {
++                pins.push(self.vm.pin(target.actor).map_err(|e| e.to_string())?);
++            }
++            let mut index = 1;
++            loop {
++                let value = self
++                    .vm
++                    .raw_table_get(table, Value::Number(index as f64))
++                    .map_err(|e| e.to_string())?;
++                if value == Value::Nil {
++                    break;
++                }
++                index += 1;
++                let Value::Table(entry) = value else {
++                    continue;
++                };
++                // Native owns a fresh table handle for this iteration. Retain
++                // both the selected entry and its original outer table across
++                // callbacks which replace globals, edit later slots or collect.
++                let entry_pin = self.vm.pin(value).map_err(|e| e.to_string())?;
++                let result: Result<(), String> = (|| {
++                    let beat = self
++                        .vm
++                        .raw_table_get(entry, Value::Number(1.))
++                        .map_err(|e| e.to_string())?;
++                    let Some(beat) = action_beat(&self.vm, beat) else {
++                        return Ok(());
++                    };
++                    let action = self
++                        .vm
++                        .raw_table_get(entry, Value::Number(2.))
++                        .map_err(|e| e.to_string())?;
++                    let persists = self
++                        .vm
++                        .raw_table_get(entry, Value::Number(3.))
++                        .map_err(|e| e.to_string())?
++                        .is_truthy();
++                    match action {
++                        Value::String(id) => {
++                            let message = std::str::from_utf8(self.vm.string_bytes(id).unwrap())
++                                .map_err(|e| e.to_string())?
++                                .to_owned();
++                            output.messages.push(SongLuaMessageEvent {
++                                beat,
++                                message,
++                                persists,
++                            });
++                        }
++                        Value::Function(_) | Value::Native(_)
++                            if !matches!(
++                                self.compile_song_function_action(
++                                    overlays, tracked, action, beat, persists, output
++                                ),
++                                Ok(true)
++                            ) =>
++                        {
++                            let detail = crate::record_unsupported_function_action_capture(
++                                output.info,
++                                beat,
++                                persists,
++                            );
++                            log::debug!("Unsupported song lua function action capture: {detail}");
++                        }
++                        _ => {}
++                    }
++                    Ok(())
++                })();
++                self.vm.unpin(entry_pin).map_err(|e| e.to_string())?;
++                result?;
++            }
++            Ok(())
++        })();
++        for pin in pins {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        result
++    }
++}
++fn action_beat(vm: &Vm, value: Value) -> Option<f32> {
++    match value {
++        Value::Number(value) => {
++            let value = value as f32;
++            value.is_finite().then_some(value)
++        }
++        Value::String(id) => std::str::from_utf8(vm.string_bytes(id)?)
++            .ok()?
++            .trim()
++            .parse()
++            .ok(),
++        _ => None,
++    }
++}

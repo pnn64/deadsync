@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "run",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-rust-lua-production-migration\\production-multitap-diagnostic-v1\\Cargo.toml",
+    "--target-dir",
+    "target/rust-adapters",
+    "--jobs",
+    "2"
+  ],
+  "exit_code": 0,
+  "seconds": 74.69217150006443,
+  "log_sha256": "a7e0af49d690f4f8a46d1ee2e080077920feab54b9b2ffb53fde685ed1aa67fa"
+}

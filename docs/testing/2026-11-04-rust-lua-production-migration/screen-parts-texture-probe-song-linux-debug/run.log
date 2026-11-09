@@ -1,0 +1,71 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.32s
+     Running tests/rust_screen_parts.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_parts-5327aa286726df0e)
+
+running 6 tests
+test background_preserves_border_geometry_brightness_groups_and_owned_lookups ... ok
+test generated_named_score_children_advance_and_all_release_with_the_scene ... ok
+test inherited_lyric_helper_uses_current_vars_and_animates_both_layers ... ok
+test lyrics_follow_current_reverse_selection_and_keep_real_layer_commands ... ok
+test percentage_score_owns_named_only_children_and_text_aliases ... 
+thread 'percentage_score_owns_named_only_children_and_text_aliases' (2596816) panicked at crates/deadsync-song-lua/tests/rust_screen_parts.rs:93:9:
+assertion `left == right` failed: 
+                assert(part[1]==nil and part:GetNumChildren()==2)
+                local frame=part:GetChild('');local percent=part:GetChild('ScoreDisplayPercentage Percent')
+                assert(frame:GetParent()==part and percent:GetParent()==part)
+                assert(percent.__songlua_actor_type=='PercentageDisplay' and percent:GetNumChildren()==1)
+                assert(percent[1]==nil and percent.SetUpdateFunction~=nil)
+                log(type(percent.GetTexture))
+                local pn=part:GetName():sub(-1);local text=percent:GetChild('PercentP'..pn)
+                assert(text:GetParent()==percent and text:GetText()=='0.00%')
+                text:name('renamed');assert(percent:GetChild('PercentP'..pn)==text)
+                assert(percent:GetChild('renamed')==nil)
+                local texture=frame:GetTexture()
+                log(texture:GetImageWidth(),texture:GetImageHeight(),texture:GetTextureWidth(),texture:GetTextureHeight())
+                local copy=part:GetChildren();copy['']=nil;assert(part:GetChild('')==frame)
+                log(part:GetName(),percent:GetName(),text:GetName(),text:GetText(),__songlua_side_effect_count)
+                pose(frame);pose(percent);pose(text)
+                text:settext('12.34%');log(text:GetText(),text:GetWidth(),text:GetHeight())
+                assert(part:GetChild('missing')==nil and percent:GetChild('missing')==nil)
+            
+  left: [110, 105, 108, 124, 56, 44, 56, 44, 56, 44, 56, 124, 83, 99, 111, 114, 101, 80, 49, 44, 83, 99, 111, 114, 101, 68, 105, 115, 112, 108, 97, 121, 80, 101, 114, 99, 101, 110, 116, 97, 103, 101, 32, 80, 101, 114, 99, 101, 110, 116, 44, 114, 101, 110, 97, 109, 101, 100, 44, 48, 46, 48, 48, 37, 44, 48, 124, 48, 44, 48, 44, 52, 44, 50, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 49, 50, 46, 51, 52, 37, 44, 49, 44, 49]
+ right: [102, 117, 110, 99, 116, 105, 111, 110, 124, 56, 44, 56, 44, 56, 44, 56, 124, 83, 99, 111, 114, 101, 80, 49, 44, 83, 99, 111, 114, 101, 68, 105, 115, 112, 108, 97, 121, 80, 101, 114, 99, 101, 110, 116, 97, 103, 101, 32, 80, 101, 114, 99, 101, 110, 116, 44, 114, 101, 110, 97, 109, 101, 100, 44, 48, 46, 48, 48, 37, 44, 48, 124, 48, 44, 48, 44, 52, 44, 50, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 49, 50, 46, 51, 52, 37, 44, 49, 44, 49]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test timer_and_engine_labels_keep_types_visibility_and_bound_methods ... 
+thread 'timer_and_engine_labels_keep_types_visibility_and_bound_methods' (2596817) panicked at crates/deadsync-song-lua/tests/rust_screen_parts.rs:93:9:
+assertion `left == right` failed: 
+                assert(part:GetParent()==nil);assert(Timer==nil and PercentageDisplay==nil)
+                log(part:GetName(),part.__songlua_actor_type,part.Text,__songlua_side_effect_count);pose(part)
+                if part.GetSeconds then
+                    local get=part.GetSeconds;assert(get()==0 and get({},1,2)==0)
+                    Actor.GetSeconds=function()return 12 end;assert(part:GetSeconds()==12);Actor.GetSeconds=nil
+                end
+                if part.GetNumChildren then assert(part:GetNumChildren()==0 and part:GetChild('missing')==nil)end
+                log(type(part.GetTexture))
+                local texture=part.GetTexture and part:GetTexture()
+                if texture then log(texture:GetPath(),texture:GetImageWidth())else log(nil)end
+                part:x(19);assert(part:GetX()==19)
+            
+  left: [84, 105, 109, 101, 114, 44, 84, 105, 109, 101, 114, 44, 110, 105, 108, 44, 48, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 110, 105, 108, 124, 110, 105, 108]
+ right: [84, 105, 109, 101, 114, 44, 84, 105, 109, 101, 114, 44, 110, 105, 108, 44, 48, 124, 48, 44, 48, 44, 49, 44, 49, 44, 49, 44, 49, 44, 116, 114, 117, 101, 44, 49, 124, 102, 117, 110, 99, 116, 105, 111, 110, 124, 110, 105, 108]
+FAILED
+
+failures:
+
+failures:
+    percentage_score_owns_named_only_children_and_text_aliases
+    timer_and_engine_labels_keep_types_visibility_and_bound_methods
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.68s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_screen_parts`

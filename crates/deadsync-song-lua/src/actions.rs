@@ -1,13 +1,20 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Table, Value};
 
-use crate::{SongLuaMessageEvent, read_f32, truthy};
+use crate::SongLuaMessageEvent;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::truthy;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaFunctionActionInput {
     pub function: Function,
     pub beat: f32,
     pub persists: bool,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_actions_with_function_capture<F>(
     table: Option<Table>,
     messages: &mut Vec<SongLuaMessageEvent>,

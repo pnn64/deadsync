@@ -1,4 +1,4 @@
-"""Measure paired Lua boundary operations, retaining samples and build identities."""
+"""Measure Lua boundary operations, retaining samples and build identities."""
 
 import argparse
 import hashlib
@@ -26,15 +26,14 @@ def main():
     root = Path(__file__).resolve().parent.parent
     runs = []
     if args.noteskin:
-        runs.append((args.noteskin.resolve(), "compiler::callbacks_perf::benchmark_noteskin_callbacks_and_commands"))
+        runs.append((args.noteskin.resolve(), "compiler::rust_engine::tests::callbacks_perf::benchmark_noteskin_callbacks_and_commands"))
     if args.song:
         runs.append((args.song.resolve(), "lua_util::upvalue_batches_perf::benchmark_upvalue_batches"))
     paths = [root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml", Path(__file__).resolve()]
-    for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin"):
+    for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin"):
         paths += list((root / "crates" / crate / "src").rglob("*.rs"))
     paths += list((root / "crates/deadsync-song-lua/tests/perf").glob("upvalue_batches*.rs"))
     paths += [root / name for name in (
-        "crates/deadlib-lua-legacy/tests/upvalues.rs", "crates/deadlib-lua-legacy/tests/ignored_args.rs",
         "tests/support/perf.rs",
         "tests/perf/resource_support.rs",
         "crates/deadsync-song-lua/tests/perf/draw_capture.rs",
@@ -60,11 +59,19 @@ def main():
                     rows.append(row)
             names = {row["workload"] for row in rows}
             assert len(names) in ((6, 8) if "noteskin" in test else (5,))
-            assert len(rows) == len(names) * 18
+            samples_per_workload = 9 if all(row.get("engine") == "rust" for row in rows) else 18
+            assert len(rows) == len(names) * samples_per_workload
             records.extend(rows)
             print(f"{round_index + 1}/{args.rounds}: {test}", flush=True)
     summary = []
     for name in dict.fromkeys(row["workload"] for row in records):
+        rust_rows = [row for row in records if row["workload"] == name and row.get("engine") == "rust"]
+        if rust_rows:
+            metrics = {key: statistics.median(row[key] / row["operations"] for row in rust_rows)
+                       for key in ("ns", "cycles", "allocations", "reallocations", "bytes")}
+            metrics["operations_per_second"] = 1e9 / metrics["ns"]
+            summary.append(dict(workload=name, rust=metrics))
+            continue
         variants = {}
         for current in (False, True):
             rows = [row for row in records if row["workload"] == name and row["current"] == current]
@@ -85,7 +92,10 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     for row in summary:
-        print(row["workload"], f"{row['throughput_gain_percent']:+.1f}% throughput", flush=True)
+        if "rust" in row:
+            print(row["workload"], f"{row['rust']['operations_per_second']:.0f} Rust operations/s", flush=True)
+        else:
+            print(row["workload"], f"{row['throughput_gain_percent']:+.1f}% throughput", flush=True)
 
 
 if __name__ == "__main__":

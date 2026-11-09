@@ -1,0 +1,10 @@
+--- previous song dependency graph
++++ current song dependency graph
+@@ -769,6 +769,7 @@
+ deadsync-core v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-core)
+ log v0.4.35
+ rustc-hash v2.1.3
++smallvec v1.16.4
+ deadsync-rules v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-rules) (*)
+ log v0.4.35
+ memchr v2.8.3

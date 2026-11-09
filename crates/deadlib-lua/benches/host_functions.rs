@@ -1,4 +1,4 @@
-//! Borrowed-register Rust callbacks compared with the development C bridge.
+//! Borrowed-register Rust callback workloads and allocation counts.
 use deadlib_lua::{Error, HostCall, Value, Vm, compile};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -72,23 +72,6 @@ fn reenter(call: &mut HostCall<'_>) -> Result<(), Error> {
     let arguments = [call.arguments()[1], call.arguments()[2]];
     call.call_and_return(function, &arguments)
 }
-// SAFETY: these fixed fixtures always pass a Lua function and two scalars.
-// Copies fit the reserved C stack. lua_pcall contains all Lua failures; no
-// longjmp crosses a Rust destructor. An unexpected fixture error aborts.
-unsafe extern "C-unwind" fn reference_reenter(
-    state: *mut lua_reference::ffi::lua_State,
-) -> std::ffi::c_int {
-    use lua_reference::ffi;
-    unsafe {
-        for index in 1..=3 {
-            ffi::lua_pushvalue(state, index);
-        }
-        if ffi::lua_pcall(state, 2, ffi::LUA_MULTRET, 0) != ffi::LUA_OK {
-            std::process::abort();
-        }
-        ffi::lua_gettop(state) - 3
-    }
-}
 fn measure(
     name: &str,
     engine: &str,
@@ -147,25 +130,6 @@ fn main() {
                     black_box(vm.execute(black_box(&program)).unwrap());
                 }
             }
-            "reference" => {
-                let lua = lua_reference::Lua::new();
-                let host = if reentry {
-                    // SAFETY: only the fixed protected-call fixture invokes it.
-                    unsafe { lua.create_c_function(reference_reenter) }.unwrap()
-                } else {
-                    lua.create_function(|_, (a, b): (f64, f64)| Ok(a + b))
-                        .unwrap()
-                };
-                lua.globals().set("host", host).unwrap();
-                if reentry {
-                    lua.load(CHILD_ADD).exec().unwrap();
-                }
-                let function = lua.load(source).into_function().unwrap();
-                assert_eq!(function.call::<f64>(()).unwrap(), 12_517_500.);
-                for _ in 0..400 {
-                    black_box(function.call::<f64>(()).unwrap());
-                }
-            }
             _ => panic!("unknown CPU engine"),
         }
         return;
@@ -182,45 +146,27 @@ fn main() {
     ]{
         let mut vm=Vm::new();let captures=if name=="capture_lua_loop"{[Value::Number(3.)].as_slice()}else{&[]};
         let host=vm.new_host_function(callback,captures).unwrap();vm.set_global(b"host",host).unwrap();let program=compile(source).unwrap();
-        let lua=lua_reference::Lua::new();
-        let host=match name{
-            "add_lua_loop"=>lua.create_function(|_,(a,b):(f64,f64)|Ok(a+b)).unwrap(),
-            "echo_lua_loop"=>lua.create_function(|_,(a,b):(f64,f64)|Ok((a,lua_reference::Value::Nil,b,false))).unwrap(),
-            "reenter_add_lua_loop"|"reenter_echo_lua_loop"=>{
-                // SAFETY: only fixed protected-call fixtures invoke it.
-                unsafe { lua.create_c_function(reference_reenter) }.unwrap()
-            },
-            _=>{let scale=black_box(3.);lua.create_function(move|_,a:f64|Ok(a*scale)).unwrap()},
-        };
-        lua.globals().set("host",host).unwrap();let function=lua.load(source).into_function().unwrap();
         if name.starts_with("reenter_") {
             let child = if name=="reenter_add_lua_loop" {CHILD_ADD} else {CHILD_ECHO};
             vm.execute(&compile(child).unwrap()).unwrap();
-            lua.load(child).exec().unwrap();
         }
-        for _ in 0..3{assert_eq!(vm.execute(&program).unwrap(),[Value::Number(expected)]);assert_eq!(function.call::<f64>(()).unwrap(),expected);}
+        for _ in 0..3{assert_eq!(vm.execute(&program).unwrap(),[Value::Number(expected)]);}
         println!("layout\t{name}\t{}\t{}",program.instruction_count(),program.register_count());
-        let h=vm.heap_stats();println!("heap\t{name}\t{}\t{}\t{}\t{}",h.live_bytes,h.reserved_bytes,h.native_closures,lua.used_memory());
+        let h=vm.heap_stats();println!("heap\t{name}\t{}\t{}\t{}",h.live_bytes,h.reserved_bytes,h.native_closures);
         for sample in 0..9{
             let rust=|vm:&mut Vm|{measure(name,"rust",sample,20,5000,||{black_box(vm.execute(black_box(&program)).unwrap());});};
-            let reference=||{measure(name,"reference",sample,20,5000,||{black_box(function.call::<f64>(()).unwrap());});};
-            if sample%2==0{rust(&mut vm);reference();}else{reference();rust(&mut vm);}
+            rust(&mut vm);
         }
     }
     let mut vm = Vm::new();
     let host = vm.new_host_function(add, &[]).unwrap();
     let root = vm.pin(host).unwrap();
-    let lua = lua_reference::Lua::new();
-    let function = lua
-        .create_function(|_, (a, b): (f64, f64)| Ok(a + b))
-        .unwrap();
     for _ in 0..3 {
         assert_eq!(
             vm.call(host, &[Value::Number(17.), Value::Number(25.)])
                 .unwrap(),
             [Value::Number(42.)]
         );
-        assert_eq!(function.call::<f64>((17., 25.)).unwrap(), 42.);
     }
     for sample in 0..9 {
         let rust = |vm: &mut Vm| {
@@ -234,18 +180,7 @@ fn main() {
                 );
             });
         };
-        let reference = || {
-            measure("add_direct", "reference", sample, 20000, 1, || {
-                black_box(function.call::<f64>(black_box((17., 25.))).unwrap());
-            });
-        };
-        if sample % 2 == 0 {
-            rust(&mut vm);
-            reference();
-        } else {
-            reference();
-            rust(&mut vm);
-        }
+        rust(&mut vm);
     }
     vm.unpin(root).unwrap();
 }

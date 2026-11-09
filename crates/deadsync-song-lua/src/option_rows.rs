@@ -1,11 +1,22 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
+use crate::SONG_LUA_THEME_NAME;
+use crate::custom_multi_modifier_key;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::lua_util::{create_string_array, method_arg};
+use crate::player_short_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::runtime::note_song_lua_side_effect;
-use crate::values::{player_index_from_value, player_number_name, read_string, truthy};
-use crate::{
-    SONG_LUA_THEME_NAME, custom_multi_modifier_key, player_short_name, theme_pref_default,
-};
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::theme_pref_default;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::player_index_from_value;
+use crate::values::player_number_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::read_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::values::truthy;
 
 #[derive(Clone, Copy)]
 pub enum SongLuaOptionValues {
@@ -751,6 +762,7 @@ fn operator_menu_option_row_spec_normalized(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
     let prefs = lua.create_table()?;
     let store = lua.create_table()?;
@@ -816,6 +828,7 @@ pub fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(prefs)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_lua_option_array(lua: &Lua, values: SongLuaOptionValues) -> mlua::Result<Table> {
     // Match Lua 5.1's dense growth so later holes keep the same length search.
     let capacity = match values.len() {
@@ -848,6 +861,7 @@ fn create_lua_option_array(lua: &Lua, values: SongLuaOptionValues) -> mlua::Resu
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_row_list_arg(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
     if let Some(Value::Table(table)) = method_arg(args, 0) {
         return Ok(table.clone());
@@ -858,6 +872,7 @@ fn option_row_list_arg(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
     lua.create_table()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_row_player_arg(args: &MultiValue) -> Option<&Value> {
     if matches!(args.front(), Some(Value::Table(_))) {
         if matches!(args.get(1), Some(Value::Table(_))) {
@@ -870,6 +885,7 @@ fn option_row_player_arg(args: &MultiValue) -> Option<&Value> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_row_has_selection(table: &Table, count: usize) -> mlua::Result<bool> {
     for index in 1..=count.max(table.raw_len()) {
         match table.raw_get::<Value>(index)? {
@@ -881,6 +897,7 @@ fn option_row_has_selection(table: &Table, count: usize) -> mlua::Result<bool> {
     Ok(false)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_row_values_table(row: &Table) -> mlua::Result<Table> {
     match row.get::<Value>("Values")? {
         Value::Table(values) => Ok(values),
@@ -888,6 +905,7 @@ fn option_row_values_table(row: &Table) -> mlua::Result<Table> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_row_selected_value(row: &Table, selections: &Table) -> mlua::Result<Value> {
     let values = option_row_values_table(row)?;
     let count = values.raw_len().max(selections.raw_len());
@@ -899,6 +917,7 @@ fn option_row_selected_value(row: &Table, selections: &Table) -> mlua::Result<Va
     values.raw_get(1)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_pref_option_save(lua: &Lua, row: &Table, pref_name: &str) -> mlua::Result<()> {
     let row_for_save = row.clone();
     let pref_name = pref_name.to_string();
@@ -916,6 +935,7 @@ fn set_pref_option_save(lua: &Lua, row: &Table, pref_name: &str) -> mlua::Result
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_theme_pref_option_save(lua: &Lua, row: &Table, pref_name: &str) -> mlua::Result<()> {
     let row_for_save = row.clone();
     let pref_name = pref_name.to_string();
@@ -932,6 +952,7 @@ fn set_theme_pref_option_save(lua: &Lua, row: &Table, pref_name: &str) -> mlua::
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_custom_option_save(lua: &Lua, row: &Table, option_name: &str) -> mlua::Result<()> {
     let row_for_save = row.clone();
     let option_name = option_name.to_string();
@@ -980,6 +1001,7 @@ fn set_custom_option_save(lua: &Lua, row: &Table, option_name: &str) -> mlua::Re
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_compat_option_row_table(
     lua: &Lua,
     name: &str,
@@ -1031,6 +1053,7 @@ fn create_compat_option_row_table(
     Ok(row)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_custom_option_row(lua: &Lua, name: &str) -> mlua::Result<Option<Table>> {
     let Some(spec) = custom_option_row_spec(name) else {
         return Ok(None);
@@ -1040,6 +1063,7 @@ pub fn create_custom_option_row(lua: &Lua, name: &str) -> mlua::Result<Option<Ta
     Ok(Some(row))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_conf_option_row(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let row_spec = conf_option_row_spec(name);
     let row = create_compat_option_row_table(lua, &row_spec.row_name, row_spec.spec)?;
@@ -1047,6 +1071,7 @@ pub fn create_conf_option_row(lua: &Lua, name: &str) -> mlua::Result<Table> {
     Ok(row)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_theme_prefs_rows_table(lua: &Lua) -> mlua::Result<Table> {
     let rows = lua.create_table()?;
     rows.set(
@@ -1081,6 +1106,7 @@ pub fn create_theme_prefs_rows_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(rows)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_sl_custom_prefs_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -1104,6 +1130,7 @@ pub fn create_sl_custom_prefs_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_theme_pref_defs(lua: &Lua) -> mlua::Result<Table> {
     let defs = lua.create_table()?;
     for name in THEME_PREF_ROW_NAMES {
@@ -1112,6 +1139,7 @@ fn create_theme_pref_defs(lua: &Lua) -> mlua::Result<Table> {
     Ok(defs)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_theme_pref_def(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let spec = theme_pref_row_spec(name);
     let def = lua.create_table()?;
@@ -1123,6 +1151,7 @@ fn create_theme_pref_def(lua: &Lua, name: &str) -> mlua::Result<Table> {
     Ok(def)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_operator_menu_option_rows_table(lua: &Lua) -> mlua::Result<Table> {
     let rows = lua.create_table()?;
     for method_name in [
@@ -1169,6 +1198,7 @@ pub fn create_operator_menu_option_rows_table(lua: &Lua) -> mlua::Result<Table> 
     Ok(rows)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_operator_menu_option_row(
     lua: &Lua,
     method_name: &str,

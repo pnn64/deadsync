@@ -1,0 +1,211 @@
+{
+  "goal_complete": false,
+  "previous_goal_turn": "progress: scene retirement implemented and verified; 556 song tests and final source audit passed",
+  "scope": "Integrate the existing authored song-layer construction phase, including source spelling, parent/Init/attach ordering, live load fallback and screen ownership",
+  "remaining": "Full startup/navigation, initial capture and prepared/live outputs, fallback/cache, production cutover and final application evidence",
+  "failed_runs": [
+    {
+      "stage": "song-layers-focused-v1",
+      "finding": "Compilation rejected a nonexistent HostCall coerce_number helper. Use the existing actor sprites::number conversion, which preserves the adapter numeric conversion contract."
+    },
+    {
+      "stage": "song-layers-focused-v2",
+      "passed": 47,
+      "failed": 2,
+      "finding": "All existing selected targets passed. New native fixtures used unsupported SetName and an untextured Sprite On callback. Use the authored Name field; retain the UpperLeft.lua:6 failure as an explicit pcall assertion and compare its earlier authored-On/x effects. No existing coverage changed."
+    },
+    {
+      "stage": "song-layers-focused-v3",
+      "passed": 4,
+      "failed": 2,
+      "finding": "Actual production compiler exposed a missing song debug compatibility table: its getinfo uses the current script context and prepends @, even though the real Lua chunk name is bare. Preserve raw chunk names for internal provenance and install the existing public song debug policy once for compiler sessions. Source: lua_util.rs create_debug_table and compat.rs install."
+    },
+    {
+      "stage": "song-layers-focused-v4",
+      "passed": 5,
+      "failed": 2,
+      "finding": "Scheduled live foreground activation used a raw lookup for inherited visible, yielding nil. Use the normal method lookup while retaining raw publication for compiler flags/name. Debug traceback must preserve only valid UTF-8 strings (native read_string), not coerce numbers. Also compare raw Def provenance and recognize the bare absolute source paths already accepted by production Def; internal constructors still capture real VM debug."
+    }
+  ],
+  "focused_verification": {
+    "stage": "song-layers-focused-v5",
+    "suite": "song",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "rust-engine,test-support",
+      "--test",
+      "rust_song_layers",
+      "--test",
+      "rust_loader",
+      "--test",
+      "rust_definitions",
+      "--test",
+      "rust_gameplay_theme",
+      "--test",
+      "rust_scene_retirement",
+      "--no-fail-fast",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 166.37374414200895,
+    "log_sha256": "56b2dcbf10c7c9fb3907677a6a88da40b4663ed1efdb37df8f4f4fe9049b5e47",
+    "tests_passed": 52,
+    "tests_failed": 0,
+    "test_results": [
+      "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.21s",
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.99s",
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.14s",
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.76s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.86s"
+    ],
+    "sources_unchanged": true
+  },
+  "full_verification": "passed: song-layers-review.json",
+  "next_integration_evidence": {
+    "initial_capture": "lua_util.rs collect_initial_states/screen_layer_states/actor_overlay_initial_state capture pre-Init raw render state. The new layer phase owns actors and runs Init but does not yet return those compiler captures; add capture at that existing boundary before startup/output integration.",
+    "startup_order": "run_actor_startup_commands dispatches Begin to non-background roots, starts In, records/broadcasts ScreenChanged, then runs On and Update(0). It consumes only the startup new-screen request before any preparation discovery; queued future commands must not trigger startup reloads.",
+    "activation": "The new layer phase writes the existing defer_on/live_inactive/start-beat fields and post-Init name/visibility. The full session scheduler still must apply them at the existing activation boundary; generic start_actor_scene alone is not a substitute.",
+    "retained_state": "Initialized mod_actions/mod_perframes/mods/mods_ease and initial actor states need traced ownership through the compiler phases. Startup options read raw noteskin overrides, min-seconds-to-music and In visibility.",
+    "unchanged_goal": "Complete compiler/session startup and navigation, captured preparation/live output, fallback/cache, unconditional production song cutover and final application/render/dependency/performance evidence remain required."
+  },
+  "verified_checkpoint": {
+    "goal_complete": false,
+    "song_tests_passed": 563,
+    "song_targets": 55,
+    "new_cases": 7,
+    "source_count": 1191,
+    "final_song_sources_match": true,
+    "changed": [
+      "crates/deadsync-song-lua/Cargo.toml",
+      "crates/deadsync-song-lua/src/compile.rs",
+      "crates/deadsync-song-lua/src/rust_engine.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+      "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+      "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+      "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+    ],
+    "added": [
+      "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+      "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs",
+      "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+      "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+    ],
+    "production_compiler_prefix_unchanged": true,
+    "previous_tests_and_fixtures_unchanged": true,
+    "formatting_passed": true,
+    "song_clippy_baseline_unchanged": true,
+    "results": {
+      "song-layers-adapters-v1-song-linux-debug": {
+        "exit_code": 0,
+        "seconds": 739.1618973810691,
+        "log_sha256": "cd11b1e41671b399d1ba636b8e0f094390c489861b3698b219ceb1faa05f4145",
+        "tests_passed": 563,
+        "tests_failed": 0,
+        "sources_unchanged": true
+      },
+      "song-layers-lint-v1-song-linux-debug": {
+        "exit_code": 101,
+        "seconds": 28.7952301800251,
+        "log_sha256": "ae3119b21d0d8a33343cfefb02cc3baa9a68b0b9202c82d11f681539ad8ee7fd",
+        "tests_passed": 0,
+        "tests_failed": 0,
+        "sources_unchanged": true
+      }
+    },
+    "reused_component_results": {
+      "scene-retirement-core-v1-core-linux-debug": {
+        "tests_passed": 954,
+        "log_sha256": "ae9c328c2804df66c8882410d4da8adb4e8b8a383a3873c3cb7de669201d667b",
+        "changed_excluded_song_files": [
+          "crates/deadsync-song-lua/Cargo.toml",
+          "crates/deadsync-song-lua/src/compile.rs",
+          "crates/deadsync-song-lua/src/rust_engine.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+          "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/retirement.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs",
+          "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+          "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+          "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+          "crates/deadsync-song-lua/tests/rust_scene_retirement.rs",
+          "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+        ]
+      },
+      "scene-retirement-core-lint-v1-core-linux-debug": {
+        "tests_passed": 0,
+        "log_sha256": "888268e7e026525b0f84f2fdc9d12701277e58270c9ae34e3f555d57aa0b676c",
+        "changed_excluded_song_files": [
+          "crates/deadsync-song-lua/Cargo.toml",
+          "crates/deadsync-song-lua/src/compile.rs",
+          "crates/deadsync-song-lua/src/rust_engine.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+          "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/retirement.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs",
+          "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+          "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+          "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+          "crates/deadsync-song-lua/tests/rust_scene_retirement.rs",
+          "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+        ]
+      },
+      "scene-retirement-noteskin-v1-noteskin-linux-debug": {
+        "tests_passed": 312,
+        "log_sha256": "4a9fc7d194d19db2473a347911db2c3e06c88c04fc31f883b9071ca73b8e395c",
+        "changed_excluded_song_files": [
+          "crates/deadsync-song-lua/Cargo.toml",
+          "crates/deadsync-song-lua/src/compile.rs",
+          "crates/deadsync-song-lua/src/rust_engine.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+          "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/retirement.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs",
+          "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+          "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+          "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+          "crates/deadsync-song-lua/tests/rust_scene_retirement.rs",
+          "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+        ]
+      },
+      "scene-retirement-gifs-v1-gifs-linux-debug": {
+        "tests_passed": 15,
+        "log_sha256": "f37c66e3ba6780f1f0a496bb98e4efbe2b7d096a1cdca898ed1cc7709a6da784",
+        "changed_excluded_song_files": [
+          "crates/deadsync-song-lua/Cargo.toml",
+          "crates/deadsync-song-lua/src/compile.rs",
+          "crates/deadsync-song-lua/src/rust_engine.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actor_def.lua",
+          "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/retirement.rs",
+          "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs",
+          "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+          "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+          "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+          "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+          "crates/deadsync-song-lua/tests/rust_scene_retirement.rs",
+          "crates/deadsync-song-lua/tests/rust_song_layers.rs"
+        ]
+      }
+    },
+    "remaining": "Full startup/navigation, initial capture and prepared/live outputs, fallback/cache, unconditional production song cutover and final fixture/application/render/dependency/performance evidence"
+  }
+}

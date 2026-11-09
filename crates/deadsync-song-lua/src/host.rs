@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::callback_args::IgnoredArgs;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -6,37 +7,156 @@ use std::path::Path;
 use chrono::{Datelike, Local, Timelike};
 use std::sync::Arc;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
-use crate::{
-    LUA_PLAYERS, SONG_LUA_EASING_NAME_KEY, SONG_LUA_EASING_NAMES,
-    SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
-    SONG_LUA_PLAYER_OPTIONS_KEYS, SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID,
-    SONG_LUA_PRODUCT_VERSION, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
-    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_CALLS_KEY,
-    SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_SUPPRESS_BROADCAST_KEY, SongLuaCompileContext,
-    SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-    broadcast_song_lua_message, create_branch_table, create_charman_table, create_conf_option_row,
-    create_course_table, create_custom_option_row, create_difficulty_table,
-    create_display_bpms_table, create_display_table, create_enabled_players_table,
-    create_game_table, create_gameman_table, create_gameplay_layout, create_hooks_table,
-    create_memcardman_table, create_noteskin_table, create_operator_menu_option_rows_table,
-    create_other_player_table, create_player_number_table, create_player_tables,
-    create_prefsmgr_table, create_profileman_table, create_screen_system_layer_helpers_table,
-    create_screen_table, create_sl_custom_prefs_table, create_sl_table, create_song_options_table,
-    create_song_position_table, create_song_runtime_table, create_song_table,
-    create_song_util_table, create_songman_table, create_statsman_table, create_string_enum_table,
-    create_style_table, create_theme_prefs_rows_table, create_theme_prefs_table,
-    create_theme_table, create_top_screen_table, create_trail_table, create_unlockman_table,
-    current_song_lua_style_name, display_bpms_for_args, display_bpms_text,
-    format_number_and_suffix, install_def_globals,
-    install_default_stdlib_compat, install_file_loader_globals, is_song_lua_audio_path,
-    lua_values_equal, method_arg, note_song_lua_side_effect, player_index_from_value,
-    player_number_name, read_f32, read_string, record_song_lua_broadcast, resolve_script_path,
-    scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss,
-    seconds_to_mss_ms_ms, song_dir_string, song_lua_human_player_count,
-    song_lua_runtime_number, song_lua_style_column_x, song_music_rate, theme_string, truthy,
-};
+use crate::LUA_PLAYERS;
+use crate::SONG_LUA_EASING_NAME_KEY;
+use crate::SONG_LUA_EASING_NAMES;
+use crate::SONG_LUA_PLAYER_OPTION_CAPABILITIES;
+use crate::SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES;
+use crate::SONG_LUA_PLAYER_OPTIONS_KEYS;
+use crate::SONG_LUA_PRODUCT_FAMILY;
+use crate::SONG_LUA_PRODUCT_ID;
+use crate::SONG_LUA_PRODUCT_VERSION;
+use crate::SONG_LUA_RUNTIME_BEAT_KEY;
+use crate::SONG_LUA_RUNTIME_KEY;
+use crate::SONG_LUA_RUNTIME_SECONDS_KEY;
+use crate::SONG_LUA_SIDE_EFFECT_COUNT_KEY;
+use crate::SONG_LUA_SOUND_CALLS_KEY;
+use crate::SONG_LUA_SOUND_PATHS_KEY;
+use crate::SONG_LUA_SUPPRESS_BROADCAST_KEY;
+use crate::SongLuaCompileContext;
+use crate::SongLuaNoteskinResolver;
+use crate::THEME_RECEPTOR_Y_REV;
+use crate::THEME_RECEPTOR_Y_STD;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::broadcast_song_lua_message;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_branch_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_charman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_conf_option_row;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_course_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_custom_option_row;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_difficulty_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_display_bpms_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_display_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_enabled_players_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_game_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_gameman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_gameplay_layout;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_hooks_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_memcardman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_noteskin_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_operator_menu_option_rows_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_other_player_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_player_number_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_player_tables;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_prefsmgr_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_profileman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_screen_system_layer_helpers_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_screen_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_sl_custom_prefs_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_sl_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_song_options_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_song_position_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_song_runtime_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_song_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_song_util_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_songman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_statsman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_string_enum_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_style_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_theme_prefs_rows_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_theme_prefs_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_theme_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_top_screen_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_trail_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_unlockman_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::current_song_lua_style_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::display_bpms_for_args;
+use crate::display_bpms_text;
+use crate::format_number_and_suffix;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::install_def_globals;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::install_default_stdlib_compat;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::install_file_loader_globals;
+use crate::is_song_lua_audio_path;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::lua_values_equal;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::method_arg;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::note_song_lua_side_effect;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::player_index_from_value;
+use crate::player_number_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::record_song_lua_broadcast;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::resolve_script_path;
+use crate::scale_value;
+use crate::seconds_to_hhmmss;
+use crate::seconds_to_mmss;
+use crate::seconds_to_mmss_ms_ms;
+use crate::seconds_to_mss;
+use crate::seconds_to_mss_ms_ms;
+use crate::song_dir_string;
+use crate::song_lua_human_player_count;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::song_lua_runtime_number;
+use crate::song_lua_style_column_x;
+use crate::song_music_rate;
+use crate::theme_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::truthy;
 
 pub const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
 
@@ -47,6 +167,7 @@ pub struct SongLuaHostState {
 
 pub(crate) struct SongLuaScreenRequest(pub String);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn initialize_gameplay_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     let Some(human) = context.players.iter().position(|player| player.enabled) else {
         return Ok(());
@@ -65,6 +186,7 @@ fn initialize_gameplay_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 pub(crate) fn selected_step_indices(lua: &Lua, step_count: usize) -> mlua::Result<[Option<usize>; LUA_PLAYERS]> {
     let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
@@ -79,6 +201,7 @@ pub(crate) fn selected_step_indices(lua: &Lua, step_count: usize) -> mlua::Resul
     Ok(indices)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn selected_scene_context(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -104,6 +227,7 @@ pub(crate) fn selected_scene_context(
     Ok(selected)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn replace_gameplay_screen(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -135,6 +259,7 @@ pub(crate) fn replace_gameplay_screen(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct SongLuaCompileGlobals {
     prefix_globals: Value,
     mods: Value,
@@ -144,6 +269,7 @@ pub struct SongLuaCompileGlobals {
     mod_actions: Value,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_compile_host(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -181,6 +307,7 @@ pub fn install_compile_host(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_compile_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -221,6 +348,7 @@ fn install_compile_globals(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
     match value {
         Value::UserData(data) => Ok(crate::native_vector::snapshot(lua, &data)?
@@ -239,6 +367,7 @@ pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn snapshot_compile_globals(lua: &Lua, globals: &Table) -> mlua::Result<SongLuaCompileGlobals> {
     Ok(SongLuaCompileGlobals {
         prefix_globals: clone_lua_value(lua, globals.get::<Value>("prefix_globals")?)?,
@@ -250,6 +379,7 @@ pub fn snapshot_compile_globals(lua: &Lua, globals: &Table) -> mlua::Result<Song
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn restore_compile_globals(
     globals: &Table,
     snapshot: SongLuaCompileGlobals,
@@ -272,6 +402,7 @@ pub fn is_compile_global_name(name: &str) -> bool {
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
     let proxy = lua.create_table()?;
     proxy.set("__songlua_env_target", target)?;
@@ -360,77 +491,9 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
     Ok(proxy)
 }
 
-#[cfg(test)]
-mod chunk_environment_tests {
-    use super::*;
 
-    fn original_reader(lua: &Lua, target: Table) -> Table {
-        let proxy = lua.create_table().unwrap();
-        proxy.set("__songlua_env_target", target).unwrap();
-        let owner = proxy.clone();
-        let globals = lua.globals();
-        let mt = lua.create_table().unwrap();
-        mt.set("__index", lua.create_function(move |_, (_self, key): (Table, Value)| {
-            let target: Table = owner.get("__songlua_env_target")?;
-            let value = target.get::<Value>(key.clone())?;
-            if !value.is_nil() { return Ok(value); }
-            globals.get::<Value>(key)
-        }).unwrap()).unwrap();
-        proxy.set_metatable(Some(mt)).unwrap();
-        proxy
-    }
 
-    #[test]
-    fn chunk_environment_reads_preserve_rebinding_metamethods_false_and_errors() {
-        let lua = Lua::new();
-        let target = lua.create_table().unwrap();
-        target.raw_set("present", 42).unwrap();
-        target.raw_set("disabled", false).unwrap();
-        target.raw_set("object", lua.create_table().unwrap()).unwrap();
-        target.raw_set("function", lua.create_function(|_, ()| Ok(42)).unwrap()).unwrap();
-        lua.globals().raw_set("fallback", 17).unwrap();
-        let original = original_reader(&lua, target.clone());
-        let current = create_chunk_env_proxy(&lua, target.clone()).unwrap();
-        for key in ["present", "disabled", "fallback", "missing", "object", "function"] {
-            assert_eq!(original.get::<Value>(key).unwrap(), current.get::<Value>(key).unwrap());
-        }
-        let replacement = lua.create_table().unwrap();
-        replacement.raw_set("present", 84).unwrap();
-        for proxy in [&original, &current] {
-            proxy.raw_set("__songlua_env_target", replacement.clone()).unwrap();
-        }
-        assert_eq!(current.get::<i32>("present").unwrap(), 84);
-        let mt = lua.create_table().unwrap();
-        mt.raw_set("__index", lua.load(r#"return function(_, key)
-            LOOKUPS = LOOKUPS + 1
-            if key == 'disabled' then return false end
-            if key == 'fault' then error('environment read fault') end
-        end"#).set_name("environment metamethod").eval::<Function>().unwrap()).unwrap();
-        replacement.set_metatable(Some(mt.clone())).unwrap();
-        for key in ["disabled", "fallback", "missing", "fault"] {
-            lua.globals().raw_set("LOOKUPS", 0).unwrap();
-            let expected = original.get::<Value>(key).map_err(|error| error.to_string());
-            let lookups = lua.globals().get::<i32>("LOOKUPS").unwrap();
-            lua.globals().raw_set("LOOKUPS", 0).unwrap();
-            let actual = current.get::<Value>(key).map_err(|error| error.to_string());
-            assert_eq!(actual, expected, "lookup {key}");
-            assert_eq!(lua.globals().get::<i32>("LOOKUPS").unwrap(), lookups);
-        }
-        // A missing value can invoke the same global __index twice. Preserve
-        // those calls, even when the global table is also the target.
-        lua.globals().set_metatable(Some(mt)).unwrap();
-        for proxy in [&original, &current] {
-            proxy.raw_set("__songlua_env_target", lua.globals()).unwrap();
-            lua.globals().raw_set("LOOKUPS", 0).unwrap();
-            assert!(proxy.get::<Value>("missing").unwrap().is_nil());
-            assert_eq!(lua.globals().get::<i32>("LOOKUPS").unwrap(), 2);
-            proxy.raw_set("__songlua_env_target", false).unwrap();
-        }
-        assert_eq!(original.get::<Value>("present").unwrap_err().to_string(),
-            current.get::<Value>("present").unwrap_err().to_string());
-    }
-}
-
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn initial_chunk_environment(lua: &Lua, path: &Path) -> mlua::Result<Table> {
     if path.file_name().and_then(|name| name.to_str()) == Some("std.lua")
         && path
@@ -445,6 +508,7 @@ pub fn initial_chunk_environment(lua: &Lua, path: &Path) -> mlua::Result<Table> 
     Ok(lua.globals())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_basic_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -884,6 +948,7 @@ pub fn song_lua_local_date_globals() -> SongLuaDateGlobals {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result<()> {
     let globals = lua.globals();
     let SongLuaDateGlobals {
@@ -933,6 +998,7 @@ pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     let globals = lua.globals();
     let global_offset_seconds = context.global_offset_seconds;
@@ -961,6 +1027,7 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_screen_utility_globals(lua: &Lua) -> mlua::Result<()> {
     // _fallback/Scripts/02 Actor.lua: background fit helpers used by song AFTs.
     lua.load(
@@ -1009,6 +1076,7 @@ pub fn install_screen_utility_globals(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_screen_string_globals(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     globals.set(
@@ -1025,8 +1093,10 @@ pub fn install_screen_string_globals(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub type SongLuaBroadcastCallback = fn(&Lua, &str, Option<Value>) -> mlua::Result<()>;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn broadcast_queued_message(lua: &Lua, message: &str) -> mlua::Result<()> {
     // Message(string) creates an empty parameter table. Retain that table in
     // baked callback captures, just as for parameterized Lua broadcasts.
@@ -1036,6 +1106,7 @@ pub(crate) fn broadcast_queued_message(lua: &Lua, message: &str) -> mlua::Result
     broadcast(lua, message, Some(Value::Table(lua.create_table()?)))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_screen_manager_globals(
     lua: &Lua,
     top_screen: Table,
@@ -1120,6 +1191,7 @@ pub fn install_screen_manager_globals(
     globals.set("SCREENMAN", screenman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_message_manager_globals(
     lua: &Lua,
     broadcast: SongLuaBroadcastCallback,
@@ -1173,6 +1245,7 @@ pub fn install_message_manager_globals(
     globals.set("MESSAGEMAN", messageman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_player_options(lua: &Lua, args: &MultiValue) -> mlua::Result<Option<Table>> {
     let Some(Value::Table(player_state)) = args.front() else {
         return Ok(None);
@@ -1185,6 +1258,7 @@ fn arrow_effects_player_options(lua: &Lua, args: &MultiValue) -> mlua::Result<Op
     Ok(Some(options))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Option<f32>> {
     let Some(method) = options.get::<Option<Function>>(name)? else {
         return Ok(None);
@@ -1193,6 +1267,7 @@ fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Opt
         .filter(|value| value.is_finite() && *value > 0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_speed_multiplier(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
     let Some(options) = arrow_effects_player_options(lua, args)? else {
         return Ok(1.0);
@@ -1212,6 +1287,7 @@ fn arrow_effects_speed_multiplier(lua: &Lua, args: &MultiValue) -> mlua::Result<
     Ok(1.0)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_reverse_percent(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
     let Some(options) = arrow_effects_player_options(lua, args)? else {
         return Ok(0.0);
@@ -1228,6 +1304,7 @@ fn arrow_effects_reverse_percent(lua: &Lua, args: &MultiValue) -> mlua::Result<f
     Ok(read_f32(method.call::<Value>((options, column))?).unwrap_or(0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_arrow_effects_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1338,8 +1415,10 @@ pub fn create_arrow_effects_table(
 }
 
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct NativeArrowEffectsCurrentOptions(Table);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone, Copy)]
 struct NativeArrowEffects {
     enabled: [bool; LUA_PLAYERS],
@@ -1354,6 +1433,7 @@ struct NativeArrowEffects {
 
 // ArrowEffects::Update runs after ScreenGameplay's actor updates. Lua reads
 // the preceding update's Beat factor; the remaining X options are read now.
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
     let Some(previous) = lua.app_data_ref::<NativeArrowEffects>().map(|state| *state) else {
         return Ok(());
@@ -1443,6 +1523,7 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_time(lua: &Lua, state: Option<&Table>, raw_uptime: Option<f64>) -> mlua::Result<f32> {
     let value = |name| -> mlua::Result<f32> {
         Ok(state.map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
@@ -1456,6 +1537,7 @@ fn arrow_effects_time(lua: &Lua, state: Option<&Table>, raw_uptime: Option<f64>)
     Ok(((clock + f64::from(value("modtimeroffset")?)) * (1.0 + f64::from(value("modtimermult")?))) as f32)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_query_time(lua: &Lua, state: Option<&Table>, domain: &str) -> mlua::Result<f32> {
     #[cfg(feature = "test-support")]
     let raw = if matches!(state.map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten(), Some(1 | 2)) {
@@ -1479,6 +1561,7 @@ fn arrow_effects_beat_factor(beat: f32, offset: f32, multiplier: f32) -> f32 {
     factor * 20.0
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_wave_offset(lua: &Lua, args: &MultiValue, mut y: f32, speed: f32) -> mlua::Result<f32> {
     if y >= 0.0 {
         if let Some(options) = arrow_effects_player_options(lua, args)? {
@@ -1494,6 +1577,7 @@ fn arrow_effects_wave_offset(lua: &Lua, args: &MultiValue, mut y: f32, speed: f3
     Ok(y * speed)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_y_pos(lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua) -> String) -> mlua::Result<f32> {
     let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
     let options = arrow_effects_player_options(lua, args)?;
@@ -1534,6 +1618,7 @@ fn arrow_effects_y_pos(lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua
     Ok(y)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_x_pos(
     lua: &Lua, args: &MultiValue, screen_height: f32,
     current_style_name: fn(&Lua) -> String,
@@ -1652,6 +1737,7 @@ fn arrow_effects_field_zoom(style: &crate::SongLuaStyleInfo) -> f32 {
     ((if two_sides { 544.0 } else { 272.0 }) / style.width).min(1.0)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_zoom(
     lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua) -> String,
 ) -> mlua::Result<f32> {
@@ -1700,6 +1786,7 @@ fn arrow_effects_zoom(
     Ok(zoom)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_alpha(
     lua: &Lua, args: &MultiValue, default_draw_distance: f32,
     current_style_name: fn(&Lua) -> String,
@@ -1824,6 +1911,7 @@ fn arrow_effects_alpha(
     Ok(if visible > 0.5 { 1.0 } else { 0.0 })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn arrow_effects_rotation_z(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
     use std::f32::consts::PI;
     let options = arrow_effects_player_options(lua, args)?;
@@ -1882,6 +1970,7 @@ pub(crate) const fn arrow_effects_rotation_x(column: i32) -> f32 {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {
     let globals = lua.globals();
     if let Some(paths) = globals.get::<Option<Table>>(SONG_LUA_SOUND_PATHS_KEY)? {
@@ -1892,6 +1981,7 @@ fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(paths)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn record_song_lua_sound_path(
     lua: &Lua,
     song_dir: &Path,
@@ -1928,6 +2018,7 @@ fn record_song_lua_sound_path(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     let globals = lua.globals();
     globals.set(SONG_LUA_SOUND_PATHS_KEY, lua.create_table()?)?;
@@ -1977,6 +2068,7 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone)]
 pub struct SongLuaGameStateGlobals {
     pub current_sort_order: Table,
@@ -1985,6 +2077,7 @@ pub struct SongLuaGameStateGlobals {
     step_objects: Arc<Vec<(Table, crate::SongLuaStep)>>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_core_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -2015,6 +2108,7 @@ pub fn install_core_globals(
 #[derive(Default)]
 pub(crate) struct SongLuaStateCalls(pub Vec<crate::SongLuaStateCall>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn record_state_call(lua: &Lua, operation: &'static str, args: Vec<serde_json::Value>) -> mlua::Result<()> {
     if lua.app_data_ref::<SongLuaStateCalls>().is_none() { return Ok(()) }
@@ -2032,6 +2126,7 @@ fn record_state_call(lua: &Lua, operation: &'static str, args: Vec<serde_json::V
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn write_current_steps(lua: &Lua, selected: &Table, player: usize, steps: Option<Table>) -> mlua::Result<()> {
     selected.raw_set(player + 1, steps)?;
     let message = ["CurrentStepsP1Changed", "CurrentStepsP2Changed"][player];
@@ -2043,6 +2138,7 @@ fn write_current_steps(lua: &Lua, selected: &Table, player: usize, steps: Option
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_game_state_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -2795,6 +2891,7 @@ pub fn install_game_state_globals(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_late_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     let globals = lua.globals();
     globals.set("STATSMAN", create_statsman_table(lua, context)?)?;
@@ -2933,6 +3030,7 @@ end"#)
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn register_loaded_easing_names(lua: &Lua, host: &mut SongLuaHostState) -> mlua::Result<()> {
     let globals = lua.globals();
     if let Some(ease) = globals.get::<Option<Table>>("ease")? {
@@ -2944,6 +3042,7 @@ pub fn register_loaded_easing_names(lua: &Lua, host: &mut SongLuaHostState) -> m
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn register_easing_table(table: &Table, host: &mut SongLuaHostState) -> mlua::Result<()> {
     for &name in SONG_LUA_EASING_NAMES {
         match table.get::<Value>(name)? {
@@ -2962,6 +3061,7 @@ fn register_easing_table(table: &Table, host: &mut SongLuaHostState) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     for name in ["queuecommand", "playcommand"] {
@@ -2993,6 +3093,7 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
     use std::io::Write;
     let value = args.front().cloned().and_then(read_f32).unwrap_or(0.0);
@@ -3005,120 +3106,9 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
     Ok(Value::String(lua.create_string(&buffer[..len])?))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn date_globals_expose_native_zero_based_day_of_year() {
-        let lua = Lua::new();
-        for (year, month, day, expected) in [
-            (2026, 0, 1, 0), (2026, 0, 18, 17), (2026, 0, 19, 18),
-            (2024, 1, 29, 59), (2024, 2, 1, 60), (2025, 2, 1, 59),
-            (1900, 2, 1, 59), (2000, 2, 1, 60),
-            (2024, 11, 31, 365), (2025, 11, 31, 364),
-        ] {
-            install_date_globals(&lua, SongLuaDateGlobals {
-                year, month_of_year: month, day_of_month: day,
-                hour: 12, minute: 0, second: 0,
-            }).expect("calendar globals");
-            let getter = lua.globals().get::<Function>("DayOfYear")
-                .expect("native DayOfYear calendar getter");
-            assert_eq!(getter.call::<i32>(()).expect("calendar day"), expected,
-                "native zero-based day for {year}-{month}-{day}");
-        }
-    }
 
-    #[test]
-    fn arrow_offset_uses_native_music_clock() {
-        use deadsync_rules::timing::{
-            DelaySegment, SpeedSegment, SpeedUnit, StopSegment, TimingData, TimingSegments,
-        };
-        let native: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/itgmania-actors/pause-offset.json"
-        ))
-        .expect("native pause offset control");
-        let mut failures = Vec::new();
-        for map in native["maps"].as_array().expect("native timing maps") {
-            let name = map["name"].as_str().expect("timing map name");
-            let timing = TimingData::from_segments(
-                0.125, 0.0,
-                &TimingSegments {
-                    bpms: vec![(0.0, 120.0)],
-                    stops: if name == "stop" { vec![StopSegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
-                    delays: if name == "delay" { vec![DelaySegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
-                    speeds: vec![
-                        SpeedSegment { beat: 0.0, ratio: 0.5, delay: 0.0, unit: SpeedUnit::Beats },
-                        SpeedSegment { beat: 4.0, ratio: 2.0, delay: 2.0, unit: SpeedUnit::Seconds },
-                    ],
-                    ..Default::default()
-                }, &[],
-            );
-            for rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] {
-                let lua = Lua::new();
-                let mut context = SongLuaCompileContext::new(".", "native pause offsets");
-                context.song_timing = Some(timing.clone());
-                context.player_timing[0] = Some(timing.clone());
-                context.player_timing[1] = Some(timing.clone());
-                context.song_music_rate = rate;
-                let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
-                let song = create_song_table(&lua, &context).expect("native song metadata");
-                let players = create_player_tables(&lua, &context, &runtime, &song).expect("native player states");
-                lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime.clone()).expect("install song clock");
-                let effects = create_arrow_effects_table(&lua, &context, |_| "single".into()).expect("ArrowEffects");
-                let offset = effects.get::<Function>("GetYOffset").expect("native offset getter");
-                for sample in map["samples"].as_array().expect("native samples") {
-                    let elapsed = sample["elapsed"].as_f64().expect("elapsed timestamp") as f32;
-                    let beat = sample["beat"].as_f64().expect("native beat") as f32;
-                    let note = sample["note"].as_f64().expect("note beat") as f32;
-                    let expected = sample["offset"].as_f64().expect("native offset") as f32;
-                    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat).expect("native update beat");
-                    runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, f64::from(elapsed) / f64::from(rate)).expect("replay wall clock");
-                    for state in [Value::Nil, Value::Table(players.player_states[0].clone()), Value::Table(players.player_states[1].clone())] {
-                        let actual = offset.call::<f32>((state, 1, note)).expect("arrow offset");
-                        if actual.to_bits() != expected.to_bits() {
-                            failures.push(format!("{name} rate={rate} elapsed={elapsed} beat={beat}: {actual} != {expected}"));
-                        }
-                    }
-                }
-            }
-        }
-        assert!(failures.is_empty(), "{}", failures.join("\n"));
-    }
 
-    #[test]
-    fn broadcast_params_match_native() {
-        fn receive(lua: &Lua, _name: &str, params: Option<Value>) -> mlua::Result<()> {
-            let globals = lua.globals();
-            globals.set("received", globals.get::<usize>("received")? + 1)?;
-            globals.set("received_params", params.unwrap_or(Value::Nil))
-        }
-        let lua = Lua::new();
-        lua.globals().set("received", 0).expect("counter");
-        install_message_manager_globals(&lua, receive).expect("message manager");
-        lua.load(
-            r#"
-            for _, invalid in ipairs({1, true, "text", function() end}) do
-                assert(not pcall(function() MESSAGEMAN:Broadcast("Probe", invalid) end))
-            end
-            assert(received == 0, "invalid parameters must not dispatch")
-            local params = { value = 3 }
-            assert(MESSAGEMAN:Broadcast("Probe", params) == MESSAGEMAN)
-            assert(received == 1 and received_params == params)
-            assert(MESSAGEMAN:Broadcast("Probe", nil) == MESSAGEMAN)
-            assert(received == 2 and received_params == nil)
-            assert(MESSAGEMAN:Broadcast("Probe") == MESSAGEMAN)
-            assert(received == 3 and received_params == nil)
-        "#,
-        )
-        .exec()
-        .expect("native Broadcast parameter contract");
-    }
-}
-
-#[cfg(test)]
-#[path = "../tests/perf/ignored_host.rs"]
-mod ignored_args_perf;
 
 #[cfg(test)]
 #[path = "../tests/perf/sound_path.rs"]

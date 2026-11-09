@@ -1,11 +1,12 @@
 pub use crate::compiled::{CompiledActors, CompiledLoader, actor_manifest_key};
+mod rust_engine;
 use crate::{
-    Quantization, actor as noteskin_actor, compiled as noteskin_compiled,
+    actor as noteskin_actor, compiled as noteskin_compiled,
     compiled::{CompiledActorFile, CompiledLoaderEntry, CompiledNoteskinBundle},
     itg as noteskin_itg,
 };
 use log::{info, warn};
-use mlua::{Function, IgnoredArgs, Lua, MultiValue, Table, Value};
+pub use rust_engine::compile_data;
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -16,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 29;
+const COMPILER_VERSION: u32 = 30;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -333,36 +334,6 @@ fn push_normalized_path(out: &mut String, path: &str) {
     }
 }
 
-/// Compile an isolated skin without consulting or populating the session cache.
-/// An empty source hash is suitable for a song-lifetime, in-memory bundle.
-pub fn compile_data(
-    game: &str,
-    data: &noteskin_itg::NoteskinData,
-    source_hash: &str,
-    player_options: &str,
-) -> Result<CompiledNoteskinBundle, String> {
-    let scripts = noteskin_paths(data);
-    let lua = Lua::new();
-    install_host(&lua, game, data, player_options).map_err(|err| err.to_string())?;
-    let (noteskin, color_variants) = load_noteskin_table(&lua, &scripts)?;
-    Ok(CompiledNoteskinBundle {
-        version: noteskin_compiled::CACHE_SCHEMA_VERSION,
-        game: game.to_string(),
-        skin: data.name.clone(),
-        source_hash: source_hash.to_string(),
-        loader: CompiledLoader {
-            version: COMPILER_VERSION,
-            game: game.to_string(),
-            skin: data.name.clone(),
-            entries: compile_entries(&lua, &noteskin, game, data, color_variants)?,
-        },
-        actors: CompiledActors {
-            version: COMPILER_VERSION,
-            files: compile_actor_files(&lua, data)?,
-        },
-    })
-}
-
 fn noteskin_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for dir in data.search_dirs.iter().rev() {
@@ -374,9 +345,14 @@ fn noteskin_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
     out
 }
 
-fn compile_actor_files(
-    lua: &Lua,
+fn compile_actor_files_with(
     data: &noteskin_itg::NoteskinData,
+    mut color_paths: impl FnMut(
+        &str,
+        Option<&str>,
+        crate::Quantization,
+        &mut noteskin_actor::ItgLuaActorDecl,
+    ) -> Result<(), String>,
 ) -> Result<Vec<CompiledActorFile>, String> {
     let mut out = Vec::new();
     for dir in &data.search_dirs {
@@ -416,16 +392,14 @@ fn compile_actor_files(
                 if uses_color {
                     for color in crate::Quantization::ALL {
                         let mut variant = decl.clone();
-                        compile_color_paths(lua, &content, button, color, &mut variant).map_err(
-                            |err| {
-                                format!(
-                                    "failed to compile '{}' ({}, {}): {err}",
-                                    path.display(),
-                                    button.unwrap_or("Down"),
-                                    color.color_name()
-                                )
-                            },
-                        )?;
+                        color_paths(&content, button, color, &mut variant).map_err(|err| {
+                            format!(
+                                "failed to compile '{}' ({}, {}): {err}",
+                                path.display(),
+                                button.unwrap_or("Down"),
+                                color.color_name()
+                            )
+                        })?;
                         if color == crate::Quantization::Q4th {
                             out.push(CompiledActorFile {
                                 key: key.clone(),
@@ -444,7 +418,7 @@ fn compile_actor_files(
             if uses_button {
                 let mut decl = noteskin_actor::parse_actor_decl(&content, &data.metrics);
                 if uses_color {
-                    compile_color_paths(lua, &content, None, crate::Quantization::Q4th, &mut decl)
+                    color_paths(&content, None, crate::Quantization::Q4th, &mut decl)
                         .map_err(|err| format!("failed to compile '{}': {err}", path.display()))?;
                 }
                 out.push(CompiledActorFile { key, decl });
@@ -473,456 +447,10 @@ fn uses_actor_var(content: &str, name: &str) -> bool {
     })
 }
 
-// Evaluate resource expressions with Lua so tables, concatenation and aliases
-// follow ITG's Var("Color") semantics. Commands remain in the existing compiler;
-// actor constructors only capture properties and never run animation callbacks.
-fn compile_color_paths(
-    lua: &Lua,
-    content: &str,
-    button: Option<&str>,
-    color: crate::Quantization,
-    decl: &mut noteskin_actor::ItgLuaActorDecl,
-) -> mlua::Result<()> {
-    let env = lua.create_table()?;
-    let mt = lua.create_table()?;
-    mt.set("__index", lua.globals())?;
-    env.set_metatable(Some(mt))?;
-    let button = button.unwrap_or("Down").to_owned();
-    env.set(
-        "Var",
-        lua.create_function(move |lua, name: String| match name.as_str() {
-            "Color" => Ok(Value::String(lua.create_string(color.color_name())?)),
-            "Button" => Ok(Value::String(lua.create_string(&button)?)),
-            _ => lua.globals().get::<Function>("Var")?.call(name),
-        })?,
-    )?;
-    let def = lua.create_table()?;
-    let models = lua.create_table()?;
-    let sprites = lua.create_table()?;
-    for (name, output) in [("Model", models.clone()), ("Sprite", sprites.clone())] {
-        def.set(
-            name,
-            lua.create_function(move |_, props: Table| {
-                output.raw_set(output.raw_len() + 1, props.clone())?;
-                Ok(props)
-            })?,
-        )?;
-    }
-    def.set(
-        "ActorFrame",
-        lua.create_function(|_, props: Table| Ok(props))?,
-    )?;
-    def.set("Actor", lua.create_function(|_, props: Table| Ok(props))?)?;
-    env.set("Def", def)?;
-    lua.load(content).set_environment(env).exec()?;
-    if models.raw_len() != decl.models.len() || sprites.raw_len() != decl.sprites.len() {
-        return Err(mlua::Error::runtime(
-            "color-dependent actor structure is unsupported",
-        ));
-    }
-    for (index, model) in decl.models.iter_mut().enumerate() {
-        let props: Table = models.raw_get(index + 1)?;
-        model.meshes_expr = compiled_path_expr(props.get("Meshes")?)?;
-        model.materials_expr = compiled_path_expr(props.get("Materials")?)?;
-        model.bones_expr = compiled_path_expr(props.get("Bones")?)?;
-        model.texture_expr = compiled_path_expr(props.get("Texture")?)?;
-    }
-    for (index, sprite) in decl.sprites.iter_mut().enumerate() {
-        let props: Table = sprites.raw_get(index + 1)?;
-        if let Some(path) = compiled_path_expr(props.get("Texture")?)? {
-            sprite.texture_expr = path;
-        }
-    }
-    Ok(())
-}
-
-fn compiled_path_expr(value: Value) -> mlua::Result<Option<String>> {
-    Ok(match value {
-        Value::Nil => None,
-        Value::String(value) => Some(format!("{:?}", value.to_str()?.as_ref())),
-        Value::Table(path) => {
-            let button: String = path.get("load_button")?;
-            let element: String = path.get("load_element")?;
-            Some(format!("NOTESKIN:GetPath({button:?},{element:?})"))
-        }
-        _ => return Err(mlua::Error::runtime("invalid noteskin resource path")),
-    })
-}
-
-fn install_host(
-    lua: &Lua,
-    game: &str,
-    data: &noteskin_itg::NoteskinData,
-    player_options: &str,
-) -> mlua::Result<()> {
-    let globals = lua.globals();
-    let player = lua.create_table()?;
-    let options = player_options.to_owned();
-    player.set(
-        "GetPlayerOptionsString",
-        lua.create_function(move |_, _: IgnoredArgs| Ok(options.clone()))?,
-    )?;
-    let state = lua.create_table()?;
-    let current_game = lua.create_table()?;
-    let game_name = game.trim().to_ascii_lowercase();
-    current_game.set(
-        "GetName",
-        lua.create_function(move |_, _: IgnoredArgs| Ok(game_name.clone()))?,
-    )?;
-    state.set(
-        "GetCurrentGame",
-        lua.create_function(move |_, _: IgnoredArgs| Ok(current_game.clone()))?,
-    )?;
-    state.set(
-        "GetPlayerState",
-        lua.create_function(move |_, _: IgnoredArgs| Ok(player.clone()))?,
-    )?;
-    globals.set("GAMESTATE", state)?;
-    let theme = lua.create_table()?;
-    // DeadSync has no ThemeInfo.ini author; match its song-Lua compatibility API.
-    theme.set(
-        "GetThemeAuthor",
-        lua.create_function(|_, _: IgnoredArgs| Ok(""))?,
-    )?;
-    globals.set("THEME", theme)?;
-    let actor_mt = lua.create_table()?;
-    let actor_methods = lua.create_table()?;
-    for name in [
-        "x",
-        "y",
-        "z",
-        "addx",
-        "addy",
-        "addz",
-        "rotationx",
-        "rotationy",
-        "rotationz",
-        "addrotationx",
-        "addrotationy",
-        "addrotationz",
-        "zoom",
-        "zoomx",
-        "zoomy",
-        "zoomz",
-        "diffuse",
-        "diffusealpha",
-        "glow",
-        "vertalign",
-        "valign",
-        "blend",
-        "visible",
-        "SetTextureFiltering",
-    ] {
-        let command = name.to_string();
-        actor_methods.set(
-            name,
-            lua.create_function(move |lua, (actor, args): (Table, MultiValue)| {
-                append_actor_command(lua, &actor, &command, args)?;
-                Ok(actor)
-            })?,
-        )?;
-    }
-    actor_mt.set("__index", actor_methods)?;
-    actor_mt.set(
-        "__concat",
-        lua.create_function(|_, (lhs, _rhs): (Table, Value)| Ok(lhs))?,
-    )?;
-    let make_actor = {
-        let actor_mt = actor_mt;
-        lua.create_function(
-            move |lua, (blank, button, element): (bool, Option<String>, Option<String>)| {
-                let actor = lua.create_table()?;
-                actor.set("__blank", blank)?;
-                if let Some(button) = button {
-                    actor.set("__load_button", button)?;
-                }
-                if let Some(element) = element {
-                    actor.set("__load_element", element)?;
-                }
-                let _ = actor.set_metatable(Some(actor_mt.clone()));
-                Ok(actor)
-            },
-        )?
-    };
-    let load_actor = {
-        let make_actor = make_actor.clone();
-        lua.create_function(move |_, value: Value| -> mlua::Result<Table> {
-            make_actor_for_path(&make_actor, value)
-        })?
-    };
-    globals.set("LoadActor", load_actor)?;
-    let var_fn = lua.create_function(|lua, name: String| {
-        let globals = lua.globals();
-        match name.as_str() {
-            // ITGmania installs these thread variables only while requesting an
-            // actor. NoteSkin.lua itself can read them before a request exists.
-            "Button" => globals.get::<Value>("__itg_button"),
-            "Element" => globals.get::<Value>("__itg_element"),
-            "Color" => Ok(Value::String(
-                lua.create_string(
-                    globals
-                        .get::<Option<String>>("__itg_color")?
-                        .as_deref()
-                        .unwrap_or("4th"),
-                )?,
-            )),
-            "SpriteOnly" => Ok(Value::Boolean(
-                globals.get::<bool>("__itg_sprite_only").unwrap_or(false),
-            )),
-            "Player" => Ok(Value::Integer(0)),
-            _ => Ok(Value::Nil),
-        }
-    })?;
-    globals.set("Var", var_fn)?;
-    globals.set(
-        "cmd",
-        lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
-    )?;
-    let noteskin = lua.create_table()?;
-    let metrics = data.metrics.clone();
-    noteskin.set(
-        "GetMetric",
-        lua.create_function(move |_, (_self, section, key): (Table, String, String)| {
-            Ok(metrics
-                .get(&section, &key)
-                .or_else(|| metrics.get("NoteDisplay", &key))
-                .unwrap_or("")
-                .to_owned())
-        })?,
-    )?;
-    noteskin.set(
-        "GetPath",
-        lua.create_function(|lua, (_self, button, element): (Table, String, String)| {
-            let path = lua.create_table()?;
-            path.set("load_button", button)?;
-            path.set("load_element", element)?;
-            Ok(path)
-        })?,
-    )?;
-    globals.set("NOTESKIN", noteskin)?;
-    let def = lua.create_table()?;
-    let actor_fn = {
-        let make_actor = make_actor.clone();
-        lua.create_function(move |_, _value: Value| -> mlua::Result<Table> {
-            make_actor.call((true, None::<String>, None::<String>))
-        })?
-    };
-    def.set("Actor", actor_fn)?;
-    let sprite_fn = {
-        let make_actor = make_actor.clone();
-        lua.create_function(move |_, value: Value| -> mlua::Result<Table> {
-            let Value::Table(props) = value else {
-                return make_actor.call((false, None::<String>, None::<String>));
-            };
-            let actor = match props.get::<Value>("Texture")? {
-                Value::Nil => make_actor.call((false, None::<String>, None::<String>))?,
-                texture => make_actor_for_path(&make_actor, texture)?,
-            };
-            copy_actor_fields(&props, &actor)?;
-            Ok(actor)
-        })?
-    };
-    def.set("Sprite", sprite_fn)?;
-    globals.set("Def", def)?;
-    let data = data.clone();
-    let loadfile = {
-        let make_actor = make_actor;
-        lua.create_function(move |lua, value: Value| -> mlua::Result<Value> {
-            let Some((button, element)) = loadfile_target(&data, value)? else {
-                return Ok(Value::Nil);
-            };
-            let make_actor = make_actor.clone();
-            let func = lua.create_function(move |_, _args: IgnoredArgs| -> mlua::Result<Table> {
-                make_actor.call((false, button.clone(), element.clone()))
-            })?;
-            Ok(Value::Function(func))
-        })?
-    };
-    globals.set("loadfile", loadfile)?;
-    Ok(())
-}
-
-fn make_actor_for_path(make_actor: &Function, value: Value) -> mlua::Result<Table> {
-    match value {
-        Value::String(text) => {
-            let text = text.to_str()?.to_string();
-            make_actor.call((
-                text.eq_ignore_ascii_case("_blank"),
-                None::<String>,
-                Some(text),
-            ))
-        }
-        Value::Table(path) => {
-            let button = path.get::<Option<String>>("load_button")?;
-            let element = path.get::<Option<String>>("load_element")?;
-            let blank = element
-                .as_deref()
-                .is_some_and(|value| value.eq_ignore_ascii_case("_blank"));
-            make_actor.call((blank, button, element))
-        }
-        _ => make_actor.call((false, None::<String>, None::<String>)),
-    }
-}
-
-fn copy_actor_fields(src: &Table, dst: &Table) -> mlua::Result<()> {
-    for key in [
-        "InitCommand",
-        "BaseRotationX",
-        "BaseRotationY",
-        "BaseRotationZ",
-    ] {
-        let value = src.get::<Value>(key)?;
-        if !matches!(value, Value::Nil) {
-            dst.set(key, value)?;
-        }
-    }
-    Ok(())
-}
-
-fn loadfile_target(
-    data: &noteskin_itg::NoteskinData,
-    value: Value,
-) -> mlua::Result<Option<(Option<String>, Option<String>)>> {
-    match value {
-        Value::Table(path) => {
-            let button = path.get::<Option<String>>("load_button")?;
-            let element = path.get::<Option<String>>("load_element")?;
-            let Some(element_value) = element.as_deref() else {
-                return Ok(None);
-            };
-            let button_value = button.as_deref().unwrap_or("");
-            let Some(path) = data.resolve_path(button_value, element_value) else {
-                return Ok(None);
-            };
-            Ok(path_is_lua(&path).then_some((button, element)))
-        }
-        Value::String(path) => {
-            let path = PathBuf::from(path.to_str()?.as_ref());
-            Ok(path_is_lua(&path).then_some((None, None)))
-        }
-        _ => Ok(None),
-    }
-}
-
 fn path_is_lua(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
-}
-
-fn append_actor_command(
-    lua: &Lua,
-    actor: &Table,
-    command: &str,
-    args: MultiValue,
-) -> mlua::Result<()> {
-    let commands = actor
-        .get::<Option<Table>>("__loader_commands")?
-        .unwrap_or(lua.create_table()?);
-    let mut token = command.to_string();
-    for arg in args {
-        token.push(',');
-        token.push_str(&lua_command_arg(arg)?);
-    }
-    commands.raw_set(commands.raw_len() + 1, token)?;
-    actor.set("__loader_commands", commands)
-}
-
-fn lua_command_arg(value: Value) -> mlua::Result<String> {
-    Ok(match value {
-        Value::Nil => String::new(),
-        Value::Boolean(v) => v.to_string(),
-        Value::Integer(v) => v.to_string(),
-        Value::Number(v) => v.to_string(),
-        Value::String(v) => v.to_str()?.to_string(),
-        _ => String::new(),
-    })
-}
-
-fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<(Table, bool), String> {
-    let mut current = None;
-    let mut color_variants = false;
-    for path in paths {
-        let content = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read '{}': {err}", path.display()))?;
-        color_variants |= uses_actor_var(&content, "Color");
-        let chunk = lua.load(&content).set_name(path.to_string_lossy().as_ref());
-        let function = chunk
-            .into_function()
-            .map_err(|err| format!("failed to compile '{}': {err}", path.display()))?;
-        let next = if let Some(value) = current.take() {
-            function
-                .call(value)
-                .map_err(|err| format!("failed to execute '{}': {err}", path.display()))?
-        } else {
-            function
-                .call(())
-                .map_err(|err| format!("failed to execute '{}': {err}", path.display()))?
-        };
-        current = Some(next);
-    }
-    current
-        .map(|table| (table, color_variants))
-        .ok_or_else(|| "no NoteSkin.lua files were found in fallback chain".to_string())
-}
-
-fn compile_entries(
-    lua: &Lua,
-    noteskin: &Table,
-    game: &str,
-    data: &noteskin_itg::NoteskinData,
-    color_variants: bool,
-) -> Result<Vec<CompiledLoaderEntry>, String> {
-    let (buttons, elements) = collect_loader_domain(game, data);
-    normalize_noteskin_tables(noteskin, &buttons, &elements)
-        .map_err(|err| format!("failed to normalize noteskin loader tables: {err}"))?;
-    let load = noteskin
-        .get::<Function>("Load")
-        .map_err(|err| format!("compiled noteskin is missing Load(): {err}"))?;
-    let globals = lua.globals();
-    let mut out = Vec::with_capacity(buttons.len() * elements.len());
-    for button in &buttons {
-        for element in &elements {
-            globals
-                .set("__itg_button", button.as_str())
-                .map_err(|err| err.to_string())?;
-            globals
-                .set("__itg_element", element.as_str())
-                .map_err(|err| err.to_string())?;
-            globals
-                .set("__itg_sprite_only", true)
-                .map_err(|err| err.to_string())?;
-            let default_index = out.len();
-            let colors = if color_variants {
-                &Quantization::ALL[..]
-            } else {
-                &Quantization::ALL[..1]
-            };
-            for color in colors {
-                globals
-                    .set("__itg_color", color.color_name())
-                    .map_err(|err| err.to_string())?;
-                let actor = load.call::<Table>(()).map_err(|err| {
-                    format!(
-                        "Load() failed for '{button} {element}' ({}): {err}",
-                        color.color_name()
-                    )
-                })?;
-                let mut entry = read_entry(button, element, &actor)?;
-                if *color == Quantization::Q4th {
-                    out.push(entry);
-                } else if entry != out[default_index] {
-                    entry.color = Some(*color);
-                    out.push(entry);
-                }
-            }
-        }
-    }
-    globals
-        .set("__itg_color", "4th")
-        .map_err(|err| err.to_string())?;
-    sort_compiled_loader_entries(&mut out);
-    Ok(out)
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -974,60 +502,6 @@ fn sort_compiled_loader_entries(entries: &mut [CompiledLoaderEntry]) {
             entry.color,
         )
     });
-}
-
-fn normalize_noteskin_tables(
-    noteskin: &Table,
-    buttons: &[String],
-    elements: &[String],
-) -> mlua::Result<()> {
-    for key in ["RedirTable", "ButtonRedir", "ButtonRedirs", "Rotate"] {
-        normalize_table_aliases(noteskin, key, buttons)?;
-    }
-    for key in [
-        "ElementRedir",
-        "ElementRedirs",
-        "PartsToRotate",
-        "Blank",
-        "bBlanks",
-    ] {
-        normalize_table_aliases(noteskin, key, elements)?;
-    }
-    Ok(())
-}
-
-fn normalize_table_aliases(
-    noteskin: &Table,
-    table_key: &str,
-    canonical_keys: &[String],
-) -> mlua::Result<()> {
-    let Some(table) = noteskin.get::<Option<Table>>(table_key)? else {
-        return Ok(());
-    };
-    let mut existing = SmallVec::<[(u64, mlua::BorrowedStr, Value); 8]>::new();
-    table.for_each::<Value, Value>(|key, value| {
-        let Value::String(text) = key else {
-            return Ok(());
-        };
-        let Ok(text) = mlua::BorrowedStr::try_from(text) else {
-            return Ok(());
-        };
-        let fingerprint = ascii_case_hash(&text);
-        existing.push((fingerprint, text, value));
-        Ok(())
-    })?;
-    for want in canonical_keys {
-        if table.contains_key(want.as_str())? {
-            continue;
-        }
-        let fingerprint = ascii_case_hash(want);
-        if let Some((_, _, value)) = existing.iter().find(|(hash, have, _)| {
-            *hash == fingerprint && have.eq_ignore_ascii_case(want)
-        }) {
-            table.set(want.as_str(), value.clone())?;
-        }
-    }
-    Ok(())
 }
 
 fn game_buttons(game: &str) -> &'static [&'static str] {
@@ -1133,79 +607,6 @@ fn split_prefixed_stem<'a>(stem: &'a str, buttons: &[&str]) -> Option<(Option<&'
 
 fn digits_only(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
-}
-
-fn actor_loader_command(actor: &Table) -> Result<Option<String>, String> {
-    let value = actor
-        .get::<Value>("InitCommand")
-        .map_err(|err| err.to_string())?;
-    match value {
-        Value::Function(f) => {
-            f.call::<()>(actor.clone()).map_err(|err| err.to_string())?;
-        }
-        Value::String(s) => {
-            let command = s.to_str().map_err(|err| err.to_string())?.to_string();
-            if !command.trim().is_empty() {
-                return Ok(Some(command));
-            }
-        }
-        _ => {}
-    }
-    let Some(commands) = actor
-        .get::<Option<Table>>("__loader_commands")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(None);
-    };
-    let capacity = commands.raw_len();
-    let mut commands = commands.sequence_values::<String>();
-    let Some(first) = commands.next() else {
-        return Ok(None);
-    };
-    let first = first.map_err(|err| err.to_string())?;
-    let mut out = SmallVec::<[String; 8]>::with_capacity(capacity);
-    if !first.trim().is_empty() {
-        out.push(first);
-    }
-    for command in commands {
-        let command = command.map_err(|err| err.to_string())?;
-        if !command.trim().is_empty() {
-            out.push(command);
-        }
-    }
-    Ok(match out.len() {
-        0 => None,
-        1 => out.pop(),
-        _ => Some(out.join(";")),
-    })
-}
-
-fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoaderEntry, String> {
-    let blank = actor.get::<bool>("__blank").unwrap_or(false);
-    let load_button = actor
-        .get::<Option<String>>("__load_button")
-        .map_err(|err| err.to_string())?
-        .unwrap_or_else(|| button.to_string());
-    let load_element = actor
-        .get::<Option<String>>("__load_element")
-        .map_err(|err| err.to_string())?
-        .unwrap_or_else(|| element.to_string());
-    let rotation_x = actor.get::<Option<i32>>("BaseRotationX").unwrap_or(None);
-    let rotation_y = actor.get::<Option<i32>>("BaseRotationY").unwrap_or(None);
-    let rotation_z = actor.get::<Option<i32>>("BaseRotationZ").unwrap_or(None);
-    let init_command = actor_loader_command(actor)?;
-    Ok(CompiledLoaderEntry {
-        button: button.to_string(),
-        element: element.to_string(),
-        color: None,
-        load_button,
-        load_element,
-        blank,
-        rotation_x,
-        rotation_y,
-        rotation_z,
-        init_command,
-    })
 }
 
 #[cfg(test)]
@@ -1663,11 +1064,3 @@ return Def.ActorFrame {
 #[cfg(test)]
 #[path = "compiler_resources_perf.rs"]
 mod resource_perf;
-
-#[cfg(test)]
-#[path = "compiler_callbacks_perf.rs"]
-mod callbacks_perf;
-
-#[cfg(test)]
-#[path = "compiler_aliases_perf.rs"]
-mod aliases_perf;

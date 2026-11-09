@@ -1,0 +1,11 @@
+{
+  "goal_complete": false,
+  "historical_ledger_prefix_unchanged": true,
+  "new_ledger_links_resolve": true,
+  "document_sha256": {
+    "crates/deadsync-song-lua/README.md": "b930f47a168340bc7dbe4e8208c004419a8c10d4f2d94cb473b65c8d9c7d0397",
+    "docs/lua-architecture.md": "727f68dfff840890513427967fbcdef5ca06e1429d4a810334802bcd4068910b",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "65002c2881b167492e381cbf164db58cc44ac920b915ae5587f87febbfea9d76"
+  },
+  "source_review_sha256": "c86355033e24c524d10ffa1d454eb89ec2a13b444248adaae988bd9b05d4f51d"
+}

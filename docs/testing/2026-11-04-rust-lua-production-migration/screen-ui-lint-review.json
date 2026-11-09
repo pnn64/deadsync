@@ -1,0 +1,9 @@
+{
+  "complete_log_identical_to_baseline": false,
+  "library_diagnostics_identical_to_baseline": true,
+  "baseline_prelude": "    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\nwarning: function `set_windows_gamepad_backend` is never used\n   --> crates/deadsync-config/src/app_update.rs:531:8\n    |\n531 | ...fn set_w...ckend(cf...\n    |       ^^^^^...^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `deadsync-config` (lib) generated 1 warning\n",
+  "current_prelude": "    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on build directory\nwarning: function `set_windows_gamepad_backend` is never used\n   --> crates/deadsync-config/src/app_update.rs:531:8\n    |\n531 | ...fn set_w...ckend(cf...\n    |       ^^^^^...^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `deadsync-config` (lib) generated 1 warning\n",
+  "baseline": "statistics-lint-song-linux-debug",
+  "final": "screen-ui-lint-song-linux-debug",
+  "log_sha256": "34a97b034af6516e606b7f608d0b1ad049ed5e247f5dd8bf0e8fece3230f2e89"
+}

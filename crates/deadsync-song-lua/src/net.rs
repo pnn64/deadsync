@@ -1,9 +1,12 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, MultiValue, Table, Value};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::{
     create_network_response_table, create_websocket_table, method_arg, note_song_lua_side_effect,
 };
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_network_table(lua: &Lua) -> mlua::Result<Table> {
     let network = lua.create_table()?;
     network.set(
@@ -33,6 +36,7 @@ pub fn create_network_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(network)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn encode_query_params(query: Table) -> mlua::Result<String> {
     let mut parts = Vec::new();
     for pair in query.pairs::<Value, Value>() {
@@ -57,6 +61,7 @@ pub fn encode_query_params(query: Table) -> mlua::Result<String> {
     Ok(parts.join("&"))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn query_value_text(value: Value) -> Option<String> {
     match value {
         Value::String(value) => Some(value.to_string_lossy()),
@@ -121,6 +126,7 @@ fn append_encoded_component(out: &mut String, text: &str, encoded_len: usize) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn with_query_value_text<R>(value: Value, use_text: impl FnOnce(Option<&str>) -> R) -> R {
     match value {
         Value::String(value) => {

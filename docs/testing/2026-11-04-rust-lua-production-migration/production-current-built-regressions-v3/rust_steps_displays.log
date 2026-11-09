@@ -1,0 +1,13 @@
+
+running 8 tests
+test detached_setters_accept_table_receivers_and_keep_removed_callback_children_alive ... ok
+test game_state_route_uses_current_object_and_nil_preferred_difficulty ... ok
+test gameplay_initialization_keeps_metrics_player_order_and_real_commands ... ok
+test getter_failures_preserve_partial_writes_and_reentrant_visibility ... ok
+test owned_children_defaults_class_overrides_and_typed_receivers_match ... ok
+test parameters_survive_gc_and_display_queues_advance_before_scene_release ... ok
+test removed_set_children_remain_rooted_through_later_getters_and_parent ... ok
+test setters_keep_parameter_identity_mapping_and_two_child_passes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.58s
+

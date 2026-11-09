@@ -1,0 +1,134 @@
+{
+  "baseline_file_sha256": "28236a79cc17deb18ab2b6d55331c284535c8490cf01a72b73407e26c44d790e",
+  "oracle_file_sha256": "20535ca95015d404d6181b4d63ec20df355617f8000a604fffafda6eae62f6f6",
+  "engine_functions": {
+    "compile_data": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "cdf2d642b077d8a9ad65e5e756eea00db8cddeef90d30d4b669c0f529226a758",
+      "oracle_sha256": "cdf2d642b077d8a9ad65e5e756eea00db8cddeef90d30d4b669c0f529226a758"
+    },
+    "compile_actor_files": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "37eb556c0157744920ed8e7294f56e1a58fb92c5e34e765dcb10db374bcf19ad",
+      "oracle_sha256": "37eb556c0157744920ed8e7294f56e1a58fb92c5e34e765dcb10db374bcf19ad"
+    },
+    "compile_color_paths": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "d676d578ee82afd69e355d188da15982da6e7132efae70646090ac47efe55b8e",
+      "oracle_sha256": "d676d578ee82afd69e355d188da15982da6e7132efae70646090ac47efe55b8e"
+    },
+    "compiled_path_expr": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "e9b57e88b794263760a4678db6b92e8e301d90bc1a99b5c4641194481494d8b4",
+      "oracle_sha256": "e9b57e88b794263760a4678db6b92e8e301d90bc1a99b5c4641194481494d8b4"
+    },
+    "install_host": {
+      "matches_frozen_baseline": false,
+      "baseline_sha256": "2cd46afc4f4b93b4e4e5574826c004fcf3cef3321db5485b9d3830927a4fb685",
+      "oracle_sha256": "9e48328f84365400e0c3437f31176543e335708a149e490ffeccb30f6447b16f",
+      "matches_frozen_baseline_after_rustfmt": true
+    },
+    "make_actor_for_path": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "34958ae1d8c0983c8bb25d821c5ffca038680c83c259a18186c440981402ccf3",
+      "oracle_sha256": "34958ae1d8c0983c8bb25d821c5ffca038680c83c259a18186c440981402ccf3"
+    },
+    "copy_actor_fields": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "d7b5fb89bac0a09dd1ebfe7f361cfbe180fe4300c40e065ca7e6c53543246229",
+      "oracle_sha256": "d7b5fb89bac0a09dd1ebfe7f361cfbe180fe4300c40e065ca7e6c53543246229"
+    },
+    "loadfile_target": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "7a55c85e3aca914d9cc9bfb0eb378e27bdab57bdab2cb9658c106d981473f403",
+      "oracle_sha256": "7a55c85e3aca914d9cc9bfb0eb378e27bdab57bdab2cb9658c106d981473f403"
+    },
+    "append_actor_command": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "38420faa36a70c21a4cf45cf5319570dab61a004c057813669888701cab9944a",
+      "oracle_sha256": "38420faa36a70c21a4cf45cf5319570dab61a004c057813669888701cab9944a"
+    },
+    "lua_command_arg": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "321ba6ebe8418d396043b52b95ad50dd892df2ed604157ec8f2ac0a7df98987d",
+      "oracle_sha256": "321ba6ebe8418d396043b52b95ad50dd892df2ed604157ec8f2ac0a7df98987d"
+    },
+    "load_noteskin_table": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "1c2ca6e1b4fbf4f602fc723130b062d660bd3f7fd7e1772428133d859a391f6d",
+      "oracle_sha256": "1c2ca6e1b4fbf4f602fc723130b062d660bd3f7fd7e1772428133d859a391f6d"
+    },
+    "compile_entries": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "f07631670ebdcab7f8a4e32b00954d92af88ba707809122c2e43cbf4aaf9d64b",
+      "oracle_sha256": "f07631670ebdcab7f8a4e32b00954d92af88ba707809122c2e43cbf4aaf9d64b"
+    },
+    "normalize_noteskin_tables": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "c97df15a063253a06924a6d1fd61d9b831696c48e34991b69e9a2f4f1cd7ca3c",
+      "oracle_sha256": "c97df15a063253a06924a6d1fd61d9b831696c48e34991b69e9a2f4f1cd7ca3c"
+    },
+    "normalize_table_aliases": {
+      "matches_frozen_baseline": false,
+      "baseline_sha256": "96ec9f263f82242a7dd426a45981a33ad12830803572240128ec091bb78fb71d",
+      "oracle_sha256": "ed6cb36397496dcd8f6bac49326488fa205fad9f5acf2e66cb15e9d76d3e3496",
+      "matches_frozen_baseline_after_rustfmt": true
+    },
+    "actor_loader_command": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "d0dc2d0d776c1b967875a5c8e38da202961e4c25b4e81bf7ca86b4568972e519",
+      "oracle_sha256": "d0dc2d0d776c1b967875a5c8e38da202961e4c25b4e81bf7ca86b4568972e519"
+    },
+    "read_entry": {
+      "matches_frozen_baseline": true,
+      "baseline_sha256": "0aa3c5c6227dc7fb9be8363beed3b192d286911a14bd4c24975ae1d0960182b6",
+      "oracle_sha256": "b485a40c33de30c6292903482b00d283e37f152e6164f9857221a605ec483329"
+    }
+  },
+  "compiler_version": 29,
+  "adaptations": [
+    "test-only visibility for install_host, actor_loader_command and source_hash",
+    "root type/module imports supplied by integration test/example",
+    "private strip_lua_comments copied verbatim except visibility and qualified Cow type",
+    "unused export removed; rustfmt whitespace; inline production tests retained in production module"
+  ],
+  "comparison": "LF-normalized function sections; visibility excluded; compiler version stays 29; comparison tests explicitly assert 29 -> 30 and compare payloads after only that header adjustment",
+  "all_engine_function_bodies_match": true,
+  "strict_clippy_files": {
+    "crates/deadsync-noteskin/src/../../../tests/support/paired_bench.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/compiled.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/compiler/../compiler_callbacks_perf.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/draw.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/explosion.rs": {
+      "matches_baseline_bytes": false,
+      "matches_baseline_after_rustfmt": true
+    },
+    "crates/deadsync-noteskin/src/explosion_perf_tests.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/itg.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/perf_tests.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/runtime.rs": {
+      "matches_baseline_bytes": false,
+      "matches_baseline_after_rustfmt": true
+    },
+    "crates/deadsync-noteskin/src/sprite.rs": {
+      "matches_baseline_bytes": true
+    },
+    "crates/deadsync-noteskin/src/sprite_perf_tests.rs": {
+      "matches_baseline_bytes": true
+    }
+  }
+}

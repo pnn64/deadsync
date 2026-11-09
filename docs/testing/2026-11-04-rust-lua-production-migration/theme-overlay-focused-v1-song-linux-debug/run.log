@@ -1,0 +1,114 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 53s
+     Running tests/rust_gameplay_overlay.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_gameplay_overlay-0d7dee7c56ad5bfb)
+
+running 9 tests
+test decorations_load_real_files_merge_metric_on_and_sort_after_init ... 
+thread 'decorations_load_real_files_merge_metric_on_and_sort_after_init' (2661897) panicked at crates/deadsync-song-lua/tests/rust_gameplay_overlay.rs:75:33:
+Rust: 
+            local h=TOP:GetChild('Header');local f=TOP:GetChild('Footer')
+            assert(h~=OLD_H and f~=OLD_F and h:GetParent()==TOP and f:GetParent()==TOP)
+            assert(rawget(h,'__songlua_hibernate_seconds')==math.huge)
+            assert(rawget(f,'__songlua_hibernate_seconds')==math.huge)
+            assert(rawget(f,'__songlua_state_draw_order')==90)
+            local last=-math.huge
+            for _,a in ipairs(TOP)do local order=rawget(a,'__songlua_state_draw_order') or 0;assert(order>=last);last=order end
+            inspect(h);inspect(f)
+            MESSAGEMAN:Broadcast('SetHeaderText',{Text='updated header'})
+            assert(h:GetChild('HeaderText'):GetText()=='updated header')
+            collectgarbage('collect');MESSAGEMAN:Broadcast('ColorSelected');inspect(h);inspect(f)
+        
+Error { kind: Runtime, line: 4, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589937622))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test observed_clock_inputs_use_original_source_lines_and_fifo_values ... 
+thread 'observed_clock_inputs_use_original_source_lines_and_fifo_values' (2661898) panicked at crates/deadsync-song-lua/tests/rust_gameplay_overlay.rs:106:9:
+Err(Error { kind: Runtime, line: 0, message: "/fixture/gameplay-overlay.lua:1: authored debug", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(12884904699))), target_thread: None })
+[]
+FAILED
+test original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc ... 
+thread 'original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc' (2661899) panicked at crates/deadsync-song-lua/tests/rust_gameplay_overlay.rs:71:33:
+legacy: 
+            collectgarbage('collect');collectgarbage('collect')
+            local note={GetTapNoteType=function()return 'TapNoteType_Tap'end,
+                GetTapNoteResult=function()return {GetHeld=function()return false end}end}
+            for _,judgment in ipairs{'TapNoteScore_W1','TapNoteScore_Miss'} do
+                MESSAGEMAN:Broadcast('Judgment',{Player=PLAYER_1,TapNoteScore=judgment,TapNoteOffset=0.005,Notes={[1]=note}})
+            end
+            RUNTIME.__songlua_music_seconds=14.25;RUNTIME.__songlua_uptime_seconds=18.5
+            TOP:GetChild('Overlay'):playcommand('Off')
+            local stats=SL.P1.Stages.Stats[1]
+            assert(#stats.sequential_offsets==2 and stats.sequential_offsets[2][2]=='Miss')
+            assert(stats.column_judgments[1].W1+stats.column_judgments[1].W0==1)
+            assert(stats.column_judgments[1].Miss==1 and stats.ex_counts.Miss==1)
+            log(stats.duration,stats.sequential_offsets[1][2],stats.ex_counts.W0,stats.ex_counts.W1)
+            for _,col in ipairs(stats.column_judgments)do log(col.W0,col.W1,col.Miss)end
+        
+runtime error: /fixture/gameplay-overlay.lua:11: assertion failed!
+stack traceback:
+	[C]: in ?
+	[C]: in function 'assert'
+	/fixture/gameplay-overlay.lua:11: in main chunk
+FAILED
+test overlay_on_failure_preserves_replacement_and_releases_partial_construction ... ok
+test overlay_replaces_its_placeholder_and_preserves_capture_probe_tree_and_layer ... 
+thread 'overlay_replaces_its_placeholder_and_preserves_capture_probe_tree_and_layer' (2661901) panicked at crates/deadsync-song-lua/tests/rust_gameplay_overlay.rs:75:33:
+Rust: 
+            local o=TOP:GetChild('Overlay');assert(o~=OLD and o:GetName()=='Overlay')
+            assert(o:GetParent()==TOP and rawget(o,'__songlua_top_screen_child_name')=='Overlay')
+            assert(rawget(o,'__songlua_state_draw_order')==77)
+            local seen=0;for _,child in ipairs(TOP)do assert(child~=OLD);if child==o then seen=seen+1 end end;assert(seen==1)
+            inspect(o);log(SL.P1.Stages.Stats[1]~=nil,SL.P2.Stages.Stats[1]~=nil)
+        
+Error { kind: Runtime, line: 4, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589937517))), target_thread: None }
+FAILED
+test overlay_resource_loader_uses_current_shared_environment_and_closed_paths ... ok
+test overlay_root_is_replaced_before_init_and_direct_begin_on_keep_native_order ... ok
+test screen_release_retires_overlay_and_decoration_owners ... ok
+test uptime_keeps_native_precision_runtime_replacement_and_error_rules ... 
+thread 'uptime_keeps_native_precision_runtime_replacement_and_error_rules' (2661905) panicked at crates/deadsync-song-lua/tests/rust_gameplay_overlay.rs:91:9:
+assertion `left == right` failed: 
+            for _,v in ipairs{1.333333333333,16777217.125,'9.333333333333',-0.0}do
+                RUNTIME.__songlua_music_seconds=v;RUNTIME.__songlua_uptime_seconds=v
+                log(GetTimeSinceStart());if tonumber(v)==0 then log(1/GetTimeSinceStart())end
+            end
+            __songlua_compile_song_runtime=setmetatable({}, {__index=function(_,key)
+                if key=='__songlua_uptime_seconds' then return 23.1234567890123 end
+                if key=='__songlua_music_seconds' then return 17.3333333333 end
+            end})
+            log(GetTimeSinceStart())
+            __songlua_compile_song_runtime={__songlua_music_seconds={},__songlua_uptime_seconds={}}
+            local ok,value=pcall(GetTimeSinceStart);log(ok,ok and value)
+            __songlua_compile_song_runtime=nil
+            local ok,value=pcall(GetTimeSinceStart);log(ok,ok and value)
+            __songlua_compile_song_runtime=false;log(pcall(function()GetTimeSinceStart()end))
+        
+  left: "1.3333333730697632|16777218|9.3333330154418945|0|inf|17.333333969116211|true,0|true,0|false,/fixture/gameplay-overlay.lua:15: expected song runtime table"
+ right: "1.3333333730697632|16777218|9.3333330154418945|0|inf|17.333333969116211|true,0|true,0|false,error converting Lua boolean to table\nstack traceback:\n\t[C]: in function 'GetTimeSinceStart'\n\t/fixture/gameplay-overlay.lua:15: in function </fixture/gameplay-overlay.lua:15>\n\t[C]: in function 'pcall'\n\t/fixture/gameplay-overlay.lua:15: in main chunk\n"
+FAILED
+
+failures:
+
+failures:
+    decorations_load_real_files_merge_metric_on_and_sort_after_init
+    observed_clock_inputs_use_original_source_lines_and_fifo_values
+    original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc
+    overlay_replaces_its_placeholder_and_preserves_capture_probe_tree_and_layer
+    uptime_keeps_native_precision_runtime_replacement_and_error_rules
+
+test result: FAILED. 4 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.02s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_gameplay_overlay`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_gameplay_overlay`

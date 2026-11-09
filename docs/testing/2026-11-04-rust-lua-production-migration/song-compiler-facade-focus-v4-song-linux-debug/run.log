@@ -1,0 +1,65 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 3m 19s
+     Running tests/rust_song_compiler.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_compiler-3e35322a6753bf57)
+
+running 10 tests
+test chronological_background_and_screen_output_match_complete_compiler ... ok
+test empty_preparation_returns_before_entry_validation ... ok
+test queued_sounds_and_message_sounds_use_real_dispatch_frames ... ok
+test resources_proxy_targets_custom_draw_and_sound_output_match ... ok
+test scalar_entries_preserve_global_schedule_without_actor_output ... ok
+test separate_layers_own_messages_wrappers_and_parent_indices ... ok
+test startup_capture_excludes_reload_construction_init_and_end_broadcasts ... ok
+test startup_reload_retains_globals_rng_and_outgoing_end ... ok
+test static_commands_startup_tweens_and_messages_match_complete_compiler ... ok
+test unsupported_startup_screen_request_is_rejected ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.58s
+
+     Running tests/rust_song_multitap.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_multitap-73747558a05393cf)
+
+running 14 tests
+test complete_plan_rejects_hidden_root_wrapper_column_and_screen_callbacks ... ok
+test descriptor_typed_errors_match_and_challenge_fallback_suppresses_only_fallback_errors ... ok
+test descriptors_preserve_selection_coercion_holes_and_peak_errors ... ok
+test double_two_player_decorations_and_existing_visuals_match ... ok
+test hit_command_capture_rewinds_shared_locals_globals_and_rng ... ok
+test hit_command_failures_remove_temporary_commands_and_preserve_actor_state ... ok
+test loaded_theme_and_truthy_deferred_fields_keep_chronological_replay ... ok
+test malformed_plan_fields_and_optional_rotation_propagate_errors ... ok
+test numbered_factory_curves_and_missing_visuals_match ... ok
+test plan_cache_retains_traversal_until_update_function_invalidates_it ... ok
+test precision_collapsed_beat_edges_preserve_replay_fallback ... ok
+test update_stage_installs_model_clocks_from_compiled_initial_state ... ok
+test update_stage_keeps_chronological_theme_and_authored_callbacks ... ok
+test update_stage_selects_analytic_curves_and_prepares_hits ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.55s
+
+     Running tests/rust_song_updates.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_updates-d497579e929025fc)
+
+running 10 tests
+test complete_driver_appends_runtime_wrappers_and_remaps_their_tracks ... ok
+test complete_driver_bakes_player_options_and_column_rotation ... ok
+test complete_driver_captures_notefield_wrappers_motion_and_hold_frames ... ok
+test complete_driver_captures_parent_child_callbacks_and_getter_feedback ... ok
+test complete_driver_keeps_field_wrapper_cursor_reads_after_authored_gc ... ok
+test complete_driver_keeps_startup_queues_cancellation_and_recurrence ... ok
+test complete_driver_preserves_message_replay_and_broadcast_provenance ... ok
+test complete_driver_preserves_static_tree_output ... ok
+test complete_driver_reports_frame_metadata_errors ... ok
+test complete_driver_uses_exact_song_timing_origin_rate_and_frame_clocks ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.87s
+

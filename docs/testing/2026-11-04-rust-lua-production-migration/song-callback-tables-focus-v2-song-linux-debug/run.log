@@ -1,0 +1,24 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 4m 40s
+     Running tests/rust_song_activation.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 7 tests
+test callback_tables_global_name_predicate_keeps_literals_short_circuit_and_meter_stream ... ok
+test callback_tables_keep_direct_nested_recurring_and_raw_child_discovery_order ... ok
+test callback_tables_keep_original_global_namespace_and_authored_debug_getter ... ok
+test callback_tables_mod_windows_keep_native_coercions_holes_spans_and_time_units ... ok
+test callback_tables_preserve_optional_debug_lookup_and_typed_metadata_errors ... ok
+test callback_tables_root_detached_results_across_getters_gc_and_foreign_release ... ok
+test callback_tables_runtime_mods_keep_first_unique_order_player_state_and_static_selection ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 193 filtered out; finished in 6.76s
+

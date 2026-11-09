@@ -2,8 +2,10 @@
 use std::sync::Arc;
 
 use deadlib_present::actors::TextAttribute;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Table, Value};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn sync_text(actor: &Table, text: &mut Arc<str>) -> mlua::Result<()> {
     // Keep the normal lookup: Text may be supplied by an authored __index.
     match actor.get::<Value>("Text")? {
@@ -23,6 +25,7 @@ pub(crate) fn sync_text(actor: &Table, text: &mut Arc<str>) -> mlua::Result<()> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn sync_attributes(
     actor: &Table,
     attributes: &mut Arc<[TextAttribute]>,

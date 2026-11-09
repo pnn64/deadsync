@@ -1,0 +1,130 @@
+//! Existing combined input/update owner, retaining native hierarchy arithmetic.
+use super::*;
+
+pub(in crate::rust_engine::actors) enum SourceJob {
+    Enter { actor: TableId, parent: Option<usize>, wrappers: bool },
+    Callback { actor: TableId, slot: usize },
+}
+
+struct Node {
+    actor: Option<usize>,
+    parent: Option<usize>,
+    wrappers: bool,
+    rate: f32,
+    sleeping: f32,
+    paused: bool,
+}
+#[derive(Clone, Copy, Default)]
+struct Delta {
+    wrappers: Option<f64>,
+    children: Option<f64>,
+}
+enum Job {
+    Enter(usize),
+    Callback { slot: usize, program: usize },
+}
+
+/// An independent snapshot of input callbacks and the authored root's update
+/// callbacks, sharing their actual captured scalar tables and actor states.
+///
+/// Real input and elapsed time remain runtime data. Hierarchical update order,
+/// static update rates and hibernation gates follow the loading scene's plan.
+/// Queued commands, tweens, effects, drawing and other scene lifecycle behavior
+/// are not compiled by this owner. Unsupported units return None at loading.
+pub struct CompiledActorInteractions {
+    owner: CompiledActorInputs,
+    nodes: Box<[Node]>,
+    jobs: Box<[Job]>,
+    deltas: Box<[Delta]>,
+}
+
+impl CompiledActorInteractions {
+    pub fn input(&mut self, event: &SongLuaInputEvent<'_>) -> bool {
+        self.owner.input(event)
+    }
+    pub fn input_with_actions(
+        &mut self,
+        event: &SongLuaInputEvent<'_>,
+        observe: impl FnMut(SongLuaActorInputAction),
+    ) -> bool {
+        self.owner.input_with_actions(event, observe)
+    }
+    pub fn states(&self) -> &[SongLuaOverlayState] {
+        self.owner.states()
+    }
+    pub fn tracked_states(
+        &self,
+    ) -> impl Iterator<Item = (SongLuaTrackedActorTarget, SongLuaOverlayState)> + '_ {
+        self.owner.tracked_states()
+    }
+    pub fn scalar_states(
+        &self,
+    ) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar<'_>)> + '_ {
+        self.owner.scalar_states()
+    }
+
+    /// Advance this callback unit using the actual parent delta in seconds.
+    pub fn update(&mut self, delta_seconds: f64) {
+        self.update_with_actions(delta_seconds, |_| {})
+    }
+
+    /// Advance and observe visibility writes in the original traversal order.
+    pub fn update_with_actions(
+        &mut self,
+        delta_seconds: f64,
+        mut observe: impl FnMut(SongLuaActorInputAction),
+    ) {
+        // The frozen plan enters each parent and slot before any read. Every
+        // Enter overwrites both fields, including paused/hibernating slots.
+        for job in &self.jobs {
+            match *job {
+                Job::Enter(slot) => {
+                    let node = &mut self.nodes[slot];
+                    let incoming = node.parent.map_or(Some(delta_seconds), |parent| {
+                        if node.wrappers {
+                            self.deltas[parent].wrappers
+                        } else {
+                            self.deltas[parent].children
+                        }
+                    });
+                    let delta = incoming.and_then(|delta| {
+                        if node.paused {
+                            return None;
+                        }
+                        if node.sleeping <= 0.0 || node.sleeping.is_nan() {
+                            return Some(f64::from(delta as f32));
+                        }
+                        let left = node.sleeping - delta as f32;
+                        node.sleeping = left.max(0.0);
+                        if left <= 0.0
+                            && let Some(actor) = node.actor
+                        {
+                            self.owner.states[actor].hibernating = false;
+                        }
+                        (left <= 0.0).then(|| f64::from(-left))
+                    });
+                    self.deltas[slot] = Delta {
+                        wrappers: delta,
+                        children: delta.map(|delta| f64::from(delta as f32 * node.rate)),
+                    };
+                }
+                Job::Callback { slot, program } => {
+                    if let Some(delta) = self.deltas[slot].children {
+                        // Update results never stop the remaining update callbacks.
+                        self.owner
+                            .run(program, &[Datum::Number(delta)], &mut observe);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>() - std::mem::size_of::<CompiledActorInputs>()
+            + self.owner.retained_bytes()
+            + std::mem::size_of_val(self.nodes.as_ref())
+            + std::mem::size_of_val(self.jobs.as_ref())
+            + std::mem::size_of_val(self.deltas.as_ref())
+    }
+}
+

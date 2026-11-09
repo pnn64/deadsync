@@ -3,13 +3,13 @@ use super::*;
 
 /// Resolve shared unconditional jumps once, including cycles in empty loops.
 /// Boolean LOADBOOL skips remain adjacent to their two materializers.
-pub(super) fn thread_jumps(code: &mut [Instruction]) {
+pub(super) fn thread_jumps(code: &mut [Instruction]) -> Result<(), Error> {
     if !code.iter().any(|i| i.op == Op::Jump && i.b == 0) {
-        return;
+        return Ok(());
     }
     const NEW: u32 = u32::MAX;
     const VISITING: u32 = u32::MAX - 1;
-    let mut targets = vec![NEW; code.len()];
+    let mut targets = fallible::repeat(NEW, code.len())?;
     let mut path = Vec::new();
     for pc in 0..code.len() {
         if code[pc].op != Op::Jump || code[pc].b != 0 || targets[pc] != NEW {
@@ -21,7 +21,7 @@ pub(super) fn thread_jumps(code: &mut [Instruction]) {
                 break;
             }
             targets[target] = VISITING;
-            path.push(target);
+            path.try_push(target)?;
             target = i.c as usize;
         }
         let destination = match targets.get(target) {
@@ -41,6 +41,7 @@ pub(super) fn thread_jumps(code: &mut [Instruction]) {
             i.c = target;
         }
     }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Default)]
@@ -109,16 +110,16 @@ impl Compiler<'_> {
         self.function.gc_live.pop();
         self.function.code.pop().unwrap()
     }
-    pub(super) fn boolean_node(&mut self, id: ExprId, work: u8) {
+    pub(super) fn boolean_node(&mut self, id: ExprId, work: u8) -> Result<(), Error> {
         let inner = self.unparen(id);
         match self.ast.exprs[inner].0 {
             Expr::Binary(Kind::And | Kind::Or, left, ..) => {
-                self.tasks.push(Task::BooleanLeft(inner, work));
-                self.tasks.push(Task::BooleanNode(left, work));
+                self.tasks.try_push(Task::BooleanLeft(inner, work))?;
+                self.tasks.try_push(Task::BooleanNode(left, work))?;
             }
             Expr::Unary(Kind::Not, child) => {
-                self.tasks.push(Task::BooleanNot(inner, work));
-                self.tasks.push(Task::BooleanNode(child, work));
+                self.tasks.try_push(Task::BooleanNot(inner, work))?;
+                self.tasks.try_push(Task::BooleanNode(child, work))?;
             }
             _ if self.constant_truth(inner).is_some() => {
                 self.boolean = Boolean {
@@ -135,10 +136,11 @@ impl Compiler<'_> {
                 };
             }
             _ => {
-                self.tasks.push(Task::BooleanLeaf(id, work));
-                self.tasks.push(Task::Expr(id, work));
+                self.tasks.try_push(Task::BooleanLeaf(id, work))?;
+                self.tasks.try_push(Task::Expr(id, work))?;
             }
         }
+        Ok(())
     }
     pub(super) fn boolean_leaf(&mut self, id: ExprId, work: u8) {
         let value = if matches!(
@@ -260,8 +262,8 @@ impl Compiler<'_> {
             (value.no, value.yes)
         };
         self.list_patch(continuing, self.function.code.len());
-        self.tasks.push(Task::BooleanRight(op, pending));
-        self.tasks.push(Task::BooleanNode(right, work));
+        self.tasks.try_push(Task::BooleanRight(op, pending))?;
+        self.tasks.try_push(Task::BooleanNode(right, work))?;
         Ok(())
     }
     pub(super) fn boolean_right(&mut self, op: Kind, pending: List) {

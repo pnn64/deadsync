@@ -1,28 +1,85 @@
 //! Reusable flat object storage with generation-checked external identities.
 use crate::Error;
+use crate::memory::{Buffer, Memory};
 use std::ops::{Index, IndexMut};
+
+// Objects stay in flat, movable storage. Only opaque pointer identities need
+// fixed addresses; pages keep those addresses stable without one allocation per
+// object. Pages cover reserved slots and are reused with the arena's free list.
+const IDENTITY_PAGE: usize = 64;
+
+#[derive(Debug)]
+struct Identities {
+    pages: Buffer<Buffer<usize>>,
+}
+impl Identities {
+    fn reserve(&mut self, slots: usize) -> Result<(), Error> {
+        let pages = slots.div_ceil(IDENTITY_PAGE);
+        if pages <= self.pages.len() {
+            return Ok(());
+        }
+        self.pages.try_reserve(pages - self.pages.len())?;
+        while self.pages.len() < pages {
+            let mut page = Buffer::new_in(self.pages.memory().clone());
+            page.try_reserve_exact(IDENTITY_PAGE)?;
+            page.resize(IDENTITY_PAGE, 0);
+            self.pages.push(page);
+        }
+        Ok(())
+    }
+    fn pointer(&self, slot: usize) -> usize {
+        &self.pages[slot / IDENTITY_PAGE][slot % IDENTITY_PAGE] as *const usize as usize
+    }
+    fn storage_bytes(&self) -> usize {
+        self.pages.capacity() * size_of::<Buffer<usize>>()
+            + self.pages.len() * IDENTITY_PAGE * size_of::<usize>()
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct Arena<T> {
-    values: Vec<Option<T>>,
-    generations: Vec<u32>,
-    free: Vec<u32>,
-    marks: Vec<u64>,
+    values: Buffer<Option<T>>,
+    generations: Buffer<u32>,
+    free: Buffer<u32>,
+    marks: Buffer<u64>,
+    identities: Option<Identities>,
     live: usize,
     protect_new: bool,
     pub allocated: usize,
 }
 impl<T> Default for Arena<T> {
     fn default() -> Self {
+        Self::new_in(Memory::default())
+    }
+}
+impl<T> Arena<T> {
+    pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
-            values: Vec::new(),
-            generations: Vec::new(),
-            free: Vec::new(),
-            marks: Vec::new(),
+            values: Buffer::new_in(memory.clone()),
+            generations: Buffer::new_in(memory.clone()),
+            free: Buffer::new_in(memory.clone()),
+            marks: Buffer::new_in(memory),
+            identities: None,
             live: 0,
             protect_new: false,
             allocated: 0,
         }
+    }
+    pub(crate) fn memory(&self) -> &Memory {
+        self.values.memory()
+    }
+    pub(crate) fn identified_in(memory: Memory) -> Self {
+        let mut arena = Self::new_in(memory.clone());
+        arena.identities = Some(Identities {
+            pages: Buffer::new_in(memory),
+        });
+        arena
+    }
+    /// A live object's opaque identity is prepared before insertion and never
+    /// allocates on lookup. Its address may be reused after the object dies.
+    pub(crate) fn pointer(&self, key: u64) -> Option<usize> {
+        self.get(key)?;
+        Some(self.identities.as_ref()?.pointer(index(key)))
     }
 }
 pub(crate) fn index(key: u64) -> usize {
@@ -34,35 +91,42 @@ impl<T> Arena<T> {
     }
     /// Reserve every parallel buffer before publishing a new identity. The free
     /// list also covers every slot, so removing objects never allocates.
-    fn reserve_insert(&mut self) -> Result<(), Error> {
-        if !self.free.is_empty() {
+    fn reserve_slots(&mut self, additional: usize) -> Result<(), Error> {
+        let additional = additional.saturating_sub(self.free.len());
+        if additional == 0 {
             return Ok(());
         }
-        let slot = self.values.len();
-        if slot >= u32::MAX as usize {
+        let total = self
+            .values
+            .len()
+            .checked_add(additional)
+            .ok_or_else(Error::memory)?;
+        if total > u32::MAX as usize {
             return Err(Error::memory());
         }
-        self.values.try_reserve(1).map_err(|_| Error::memory())?;
-        self.generations
-            .try_reserve(1)
-            .map_err(|_| Error::memory())?;
-        self.free
-            .try_reserve(slot + 1)
-            .map_err(|_| Error::memory())?;
-        if slot.is_multiple_of(64) {
-            self.marks.try_reserve(1).map_err(|_| Error::memory())?;
+        self.values.try_reserve(additional)?;
+        self.generations.try_reserve(additional)?;
+        self.free.try_reserve(total - self.free.len())?;
+        self.marks
+            .try_reserve(total.div_ceil(64) - self.marks.len())?;
+        if let Some(identities) = &mut self.identities {
+            identities.reserve(total)?;
         }
         Ok(())
     }
-    pub fn try_insert(&mut self, value: T) -> Result<u64, Error> {
+    /// Reserve several future insertions without publishing any identities.
+    pub(crate) fn try_reserve(&mut self, additional: usize) -> Result<(), Error> {
         let before = self.storage_bytes();
-        let reserved = self.reserve_insert();
+        let reserved = self.reserve_slots(additional);
         // A failed reservation can still grow an earlier buffer. Account for
         // that real storage while retaining all logical identities and marks.
         self.allocated = self
             .allocated
             .saturating_add(self.storage_bytes().saturating_sub(before));
-        reserved?;
+        reserved
+    }
+    pub fn try_insert(&mut self, value: T) -> Result<u64, Error> {
+        self.try_reserve(1)?;
         let slot = if let Some(slot) = self.free.pop() {
             self.values[slot as usize] = Some(value);
             slot as usize
@@ -180,6 +244,10 @@ impl<T> Arena<T> {
             + self.generations.capacity() * 4
             + self.free.capacity() * 4
             + self.marks.capacity() * 8
+            + self
+                .identities
+                .as_ref()
+                .map_or(0, Identities::storage_bytes)
     }
     pub fn note_alloc(&mut self, bytes: usize) {
         self.allocated = self.allocated.saturating_add(bytes);

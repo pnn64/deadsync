@@ -1,12 +1,16 @@
 #![cfg(target_os = "windows")]
 //! One focused production playback/pixel differential, without the Song lib harness.
 pub use deadsync_song_lua::*;
-#[path = "../src/input.rs"]
-mod input;
-#[path = "../src/runtime_fallback.rs"]
-mod runtime_fallback;
 #[path = "../src/actor_quaternion.rs"]
 mod actor_quaternion;
+#[path = "../src/input.rs"]
+mod input;
+#[path = "../src/input_types.rs"]
+mod input_types;
+#[path = "../src/runtime_fallback.rs"]
+mod runtime_fallback;
+#[path = "support/paths.rs"]
+mod tests;
 #[allow(dead_code)]
 mod renderer {
     include!("../src/playback.rs");

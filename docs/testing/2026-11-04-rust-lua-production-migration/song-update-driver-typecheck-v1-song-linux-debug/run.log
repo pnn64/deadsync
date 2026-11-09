@@ -1,0 +1,141 @@
+    Checking deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: empty line after doc comment
+  --> crates/deadsync-song-lua/src/actor_input.rs:44:1
+   |
+44 | / /// Other scene lifecycle work is not pa...
+45 | |
+   | |_^
+46 |   pub s...nputs {
+   |   -----...----- the comment documents this struct
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#empty_line_after_doc_comments
+   = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+   = help: if the empty line is unintentional, remove it
+
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs:512:21
+    |
+512 |               capture.write(
+    |  _____________________^^^^^-
+513 | |                 message.clone(),
+514 | |                 crate::SongLu...
+515 | |                     overlay_i...
+...   |
+523 | |                 },
+524 | |             );
+    | |_____________- argument #3 of type `f32` is missing
+    |
+note: method defined here
+   --> crates/deadsync-song-lua/src/rust_engine/actors/song_messages.rs:31:19
+    |
+ 31 | ...ub(super) fn write(
+    |                 ^^^^^
+...
+ 35 | ...   advance: f32,
+    |       ------------
+help: provide the argument
+    |
+512 |             capture.write(
+...
+523 |                 },
+524 ~                 /* f32 */,
+525 ~             );
+    |
+
+error[E0277]: the trait bound `Value: Eq` is not satisfied
+   --> crates/deadsync-song-lua/src/rust_engine/song_updates.rs:989:21
+    |
+989 | ...es.insert(value, i);
+    |       ^^^^^^ ----- `deadlib_lua::Value` doesn't satisfy the trait bound
+    |       |
+    |       unsatisfied trait bound
+    |
+    = help: the trait `std::cmp::Eq` is not implemented for `Value`
+note: required by a bound in `std::collections::HashMap::<K, V, S, A>::insert`
+   --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/collections/hash/map.rs:1332:4
+    = note: the full name for the type has been written to '/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/deadsync_song_lua-9ce4acb2cff41b27.long-type-1628253592804435216.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0277]: the trait bound `Value: Hash` is not satisfied
+   --> crates/deadsync-song-lua/src/rust_engine/song_updates.rs:989:21
+    |
+989 | ...es.insert(value, i);
+    |       ^^^^^^ ----- `deadlib_lua::Value` doesn't satisfy the trait bound
+    |       |
+    |       unsatisfied trait bound
+    |
+    = help: the trait `std::hash::Hash` is not implemented for `Value`
+note: required by a bound in `std::collections::HashMap::<K, V, S, A>::insert`
+   --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/collections/hash/map.rs:1332:4
+    = note: the full name for the type has been written to '/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/deadsync_song_lua-9ce4acb2cff41b27.long-type-1628253592804435216.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0599]: the method `get` exists for struct `HashMap<Value, usize>`, but its trait bounds were not satisfied
+   --> crates/deadsync-song-lua/src/rust_engine/song_updates.rs:996:44
+    |
+996 | ...es.get(&V...
+    |       ^^^ method cannot be called on `HashMap<Value, usize>` due to unsatisfied trait bounds
+    |
+   ::: crates/deadlib-lua/src/value.rs:35:1
+    |
+ 35 | pub e...Value {
+    | -----...----- doesn't satisfy `deadlib_lua::Value: std::cmp::Eq` or `deadlib_lua::Value: std::hash::Hash`
+    |
+    = note: the following trait bounds were not satisfied:
+            `deadlib_lua::Value: std::cmp::Eq`
+            `deadlib_lua::Value: std::hash::Hash`
+    = help: items from traits can only be used if the trait is implemented and in scope
+note: `perframe::ModState` defines an item `get`, perhaps you need to implement it
+   --> crates/deadsync-song-lua/src/perframe.rs:263:1
+    |
+263 | pub(c...State {
+    | ^^^^^...^^^^^
+    = note: the full name for the type has been written to '/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/deadsync_song_lua-9ce4acb2cff41b27.long-type-13369651246912706202.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0599]: the method `insert` exists for struct `HashMap<Value, usize>`, but its trait bounds were not satisfied
+    --> crates/deadsync-song-lua/src/rust_engine/song_updates.rs:1032:21
+     |
+1032 | ...es.insert(Va...
+     |       ^^^^^^
+     |
+    ::: crates/deadlib-lua/src/value.rs:35:1
+     |
+  35 | pub e...Value {
+     | -----...----- doesn't satisfy `deadlib_lua::Value: std::cmp::Eq` or `deadlib_lua::Value: std::hash::Hash`
+     |
+     = note: the following trait bounds were not satisfied:
+             `deadlib_lua::Value: std::cmp::Eq`
+             `deadlib_lua::Value: std::hash::Hash`
+     = note: the full name for the type has been written to '/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/deadsync_song_lua-9ce4acb2cff41b27.long-type-13369651246912706202.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+
+error[E0499]: cannot borrow `*call` as mutable more than once at a time
+   --> crates/deadsync-song-lua/src/rust_engine/actors/chronological.rs:360:24
+    |
+358 | ...if initi..._text(
+    |       -----...----- first borrow later used by call
+359 | ...    call,
+    |        ---- first mutable borrow occurs here
+360 | ...    sprites::field(call, actor,...
+    |                       ^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/deadsync-song-lua/src/rust_engine/actors/chronological.rs:360:9
+    |
+360 | ...   sprit...and")?,
+    |       ^^^^^...^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/deadsync-song-lua/src/rust_engine/actors/chronological.rs:358:8
+    |
+358 |       if init...
+    |  ________^
+359 | |         call,
+360 | |         spr...
+361 | |     )?
+    | |_____^
+
+Some errors have detailed explanations: E0061, E0277, E0499, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `deadsync-song-lua` (lib) generated 1 warning
+error: could not compile `deadsync-song-lua` (lib) due to 6 previous errors; 1 warning emitted

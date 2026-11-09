@@ -1,0 +1,26 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 7m 42s
+     Running tests/rust_song_activation.rs (/mnt/deadsync-build-d/CodexBuildCache/deadsync-ease-probes-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 7 tests
+test static_schedule_composes_prefix_global_mods_eases_actions_and_perframe_inputs ... ok
+test static_schedule_hard_errors_preserve_partial_script_effects_and_clean_roots ... ok
+test static_schedule_keeps_prefix_lookup_order_soft_perframe_errors_and_fresh_globals ... ok
+test static_schedule_retains_selected_perframe_tables_after_global_replacement ... ok
+test static_schedule_skips_reader_owned_tables_by_identity_and_initialized_presence ... ok
+test static_schedule_xero_captures_retain_future_functions_and_release_parsed_tables ... ok
+test static_schedule_xero_nodes_keep_first_winner_sparse_pairs_state_and_capture_dedup ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 9.96s
+

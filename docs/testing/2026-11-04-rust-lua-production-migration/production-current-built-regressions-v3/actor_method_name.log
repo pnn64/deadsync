@@ -1,0 +1,11 @@
+
+running 2 tests
+test method_name_flags_preserve_binary_keys_utf8_errors_and_gc_roots ... ok
+test raw_vm::tests::raw_read_keeps_the_callers_stack_on_success_and_error ... 
+thread 'raw_vm::tests::raw_read_keeps_the_callers_stack_on_success_and_error' (47352) panicked at crates\deadsync-song-lua\tests\..\src\raw_vm.rs:70:21:
+raw stack unwind probe
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

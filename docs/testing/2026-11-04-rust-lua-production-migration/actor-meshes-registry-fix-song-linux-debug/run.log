@@ -1,0 +1,46 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 33s
+     Running tests/rust_meshes.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_meshes-299e45fcf747710f)
+
+running 8 tests
+test draw_state_getters_reenter_collect_and_keep_partial_writes ... ok
+test host_buffer_provenance_is_weak ... ok
+test mesh_modes_ranges_and_line_joins_match_the_production_reader ... ok
+test mesh_reader_rejects_invalid_buffers_and_recovers_without_stale_output ... ok
+test mesh_updates_and_texture_loads_remain_immediate_during_tweens ... ok
+test mesh_upload_conversion_and_count_rules_keep_existing_fallbacks ... ok
+test uploaded_buffer_collection_after_successful_and_failed_queries ... ok
+test vertex_uploads_copy_scalars_and_survive_collection ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/rust_messages.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_messages-522c9039fff91c30)
+
+running 13 tests
+test authored_and_theme_message_errors_restore_state_and_recover ... ok
+test broadcast_arity_identity_dynamic_fields_and_manager_call_styles ... ok
+test broadcast_validation_suppression_history_and_logging_match_production ... ok
+test fatal_broadcast_restores_scopes_and_guard_after_gc ... ok
+test judgment_metamethods_gc_and_existing_native_objects_match_production ... ok
+test judgment_normalization_retains_note_and_result_objects_across_gc ... ok
+test listener_snapshot_reloads_handlers_and_defers_new_subscribers ... ok
+test native_messages_preserve_engine_params_and_omitted_arguments ... ok
+test natural_delivery_uses_vm_identities_and_release_removes_subscribers ... ok
+test null_actor_instances_copy_template_native_state_without_advancing_template ... ok
+test null_actor_is_an_independent_live_template_and_subscriber ... ok
+test queued_messages_use_empty_shared_params_and_frame_boundaries ... ok
+test same_message_reentry_preserves_direct_command_guard_and_scopes ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+

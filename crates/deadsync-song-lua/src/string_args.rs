@@ -1,6 +1,10 @@
-use crate::{create_split_table, path_basename};
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_split_table;
+use crate::path_basename;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{BorrowedStr, Lua, MultiValue, Table, Value};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn string_value(value: &Value) -> Option<BorrowedStr> {
     // These callbacks accept UTF-8 strings; other values fall back to "".
     let Value::String(text) = value else {
@@ -9,6 +13,7 @@ pub(crate) fn string_value(value: &Value) -> Option<BorrowedStr> {
     text.to_str().ok()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn split_args(
     lua: &Lua,
     args: &MultiValue,
@@ -24,6 +29,7 @@ pub(crate) fn split_args(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn basename(lua: &Lua, value: Value) -> mlua::Result<Value> {
     let text = string_value(&value);
     Ok(Value::String(lua.create_string(path_basename(

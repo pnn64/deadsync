@@ -1,0 +1,17 @@
+[
+  "crates/deadsync-song-lua/src/rust_engine.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input.rs",
+  "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/predicate.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/batch.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/compile.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/decode.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/dedup.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/mod.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/strings.rs",
+  "crates/deadsync-song-lua/src/rust_engine/input/program/tables.rs",
+  "crates/deadsync-song-lua/tests/rust_baked_program.rs",
+  "crates/deadsync-song-lua/tests/rust_baked_program_tables.rs",
+  "crates/deadsync-song-lua/tests/rust_input.rs",
+  "crates/deadsync-song-lua/tests/support/baked_program.rs"
+]

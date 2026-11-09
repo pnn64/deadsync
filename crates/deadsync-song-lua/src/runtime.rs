@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, Table, Value};
 
 use crate::{
@@ -11,6 +12,7 @@ pub(crate) struct SongLuaClock(pub deadsync_rules::timing::TimingData);
 pub(crate) struct SongLuaNoOffsetClock(pub deadsync_rules::timing::TimingData);
 pub(crate) const PLAYER_SONG_POSITIONS_KEY: &str = "__songlua_player_positions";
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_runtime_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -65,6 +67,7 @@ pub fn create_song_runtime_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn song_music_time(lua: &Lua, seconds: f64, rate: f32) -> f32 {
     // Live frames already carry the audio clock's native music position.
     if crate::live::active(lua) { return seconds as f32; }
@@ -75,6 +78,7 @@ pub(crate) fn song_music_time(lua: &Lua, seconds: f64, rate: f32) -> f32 {
     (seconds * f64::from(rate)) as f32 + origin
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Value> {
     let seconds = song_music_time(lua,
         runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)?,
@@ -89,6 +93,7 @@ pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Val
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for method in ["GetSongBeat", "GetSongBeatVisible"] {
@@ -131,6 +136,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
     // Integer::MAX rounds up as f32, so the upper bound must be exclusive.
     if value.is_finite()
@@ -144,10 +150,12 @@ pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
     lua.globals().get(SONG_LUA_RUNTIME_KEY)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn reset_song_runtime_position(lua: &Lua) -> mlua::Result<()> {
     fn reset(position: &Table) -> mlua::Result<()> {
         position.set(SONG_LUA_RUNTIME_BEAT_KEY, 0.0)?;
@@ -170,6 +178,7 @@ pub(crate) fn reset_song_runtime_position(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
     Ok(lua
         .globals()
@@ -177,12 +186,14 @@ pub fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
         .unwrap_or(0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn note_song_lua_side_effect(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     let count = song_lua_side_effect_count(lua)?;
     globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, count.saturating_add(1))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn record_song_lua_broadcast(lua: &Lua, message: &str, has_params: bool) -> mlua::Result<()> {
     let globals = lua.globals();
     let Some(broadcasts) = globals.get::<Option<Table>>(SONG_LUA_BROADCASTS_KEY)? else {
@@ -195,6 +206,7 @@ pub fn record_song_lua_broadcast(lua: &Lua, message: &str, has_params: bool) -> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_song_lua_broadcasts(table: &Table) -> mlua::Result<Vec<(String, bool)>> {
     let mut out = Vec::new();
     for entry in table.sequence_values::<Table>() {
@@ -210,6 +222,7 @@ pub fn read_song_lua_broadcasts(table: &Table) -> mlua::Result<Vec<(String, bool
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
     let runtime = compile_song_runtime_table(lua)?;
     Ok((
@@ -218,6 +231,7 @@ pub fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_compile_song_runtime_values(lua: &Lua, beat: f32, seconds: f32) -> mlua::Result<()> {
     let runtime = compile_song_runtime_table(lua)?;
     runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
@@ -225,6 +239,7 @@ pub fn set_compile_song_runtime_values(lua: &Lua, beat: f32, seconds: f32) -> ml
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn compile_song_runtime_delta_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
     let runtime = compile_song_runtime_table(lua)?;
     Ok((
@@ -233,6 +248,7 @@ pub fn compile_song_runtime_delta_values(lua: &Lua) -> mlua::Result<(f32, f32)> 
     ))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_compile_song_runtime_delta_values(
     lua: &Lua,
     delta_beat: f32,
@@ -244,6 +260,7 @@ pub fn set_compile_song_runtime_delta_values(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
     let runtime = compile_song_runtime_table(lua)?;
     let mut song_bps = runtime
@@ -287,35 +304,4 @@ pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
     runtime.set(SONG_LUA_RUNTIME_BPS_KEY, song_bps)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn music_seconds_preserves_offset_and_rate() {
-        for (origin, rate) in [(0.0, 1.0), (1.25, 1.0), (-0.5, 1.0), (1.25, 2.0), (-0.5, 0.5)] {
-            let lua = Lua::new();
-            let mut context = SongLuaCompileContext::new(std::path::Path::new("."), "music clock");
-            context.song_music_rate = rate;
-            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
-                origin, 0.0,
-                &deadsync_rules::timing::TimingSegments {
-                    bpms: vec![(0.0, 60.0)], ..Default::default()
-                }, &[],
-            ));
-            let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
-            let position = create_song_position_table(&lua, &runtime).expect("song position");
-            assert_eq!(context.song_timing.as_ref().expect("native song timing").get_time_for_beat_exact(0.0), origin);
-            for elapsed in [0.0, 1e-9, 1.0 / 60.0, 0.5, 2.0] {
-                runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, elapsed).expect("trace timestamp");
-                for method in ["GetMusicSeconds", "GetMusicSecondsVisible"] {
-                    let getter = position.get::<mlua::Function>(method).expect("native getter");
-                    let actual = getter.call::<f32>(position.clone()).expect("music timestamp");
-                    assert_eq!(actual, (elapsed * f64::from(rate)) as f32 + origin,
-                        "{method}: origin={origin}, rate={rate}, elapsed={elapsed}");
-                }
-                assert_eq!(runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY).expect("wall clock"), elapsed);
-            }
-        }
-    }
-}

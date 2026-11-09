@@ -1,0 +1,16 @@
+
+running 11 tests
+test columns_advance_after_frame_with_original_delta_through_rate_and_hibernation ... ok
+test construction_eagerly_owns_style_columns_board_and_spline_handlers ... ok
+test cubic_solving_looping_resize_and_float_evaluation_match_existing_geometry ... ok
+test field_methods_keep_bound_receivers_alias_lookup_and_argument_rules ... ok
+test handler_setters_use_argument_two_preserve_aliases_and_original_spline ... ok
+test invalid_geometry_rejects_before_replacing_existing_values ... ok
+test ordinary_field_access_reenters_and_keeps_selected_geometry_rooted ... ok
+test regenerated_columns_follow_current_style_and_root_authored_getters ... ok
+test retained_handler_queries_release_field_and_keep_only_their_selected_objects ... ok
+test retired_field_query_cannot_construct_actors_in_a_released_scene ... ok
+test tap_callbacks_keep_public_forwarders_reentry_and_partial_failure_behavior ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.51s
+

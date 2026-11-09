@@ -1,0 +1,41 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.13s
+     Running tests/rust_gameplay_underlay.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_gameplay_underlay-eef9ed9a16dba049)
+
+running 11 tests
+test complete_underlay_keeps_native_tree_order_options_and_initial_song_message ... ok
+test note_field_error_bar_variants_use_relative_environments_and_actual_layouts ... ok
+test optional_note_field_widgets_use_existing_chart_and_turn_helpers ... ok
+test player_enum_and_other_player_tables_keep_native_aliases_and_reverse_identity ... ok
+test required_brightness_and_alignment_keep_native_values_and_partial_writes ... ok
+test required_numeric_color_and_time_helpers_preserve_native_coercion_and_values ... ok
+test retained_underlay_messages_keep_danger_state_and_title_after_collection ... ok
+test screen_release_relinquishes_loaded_underlay_callback_owners ... underlay release live=false
+
+thread 'screen_release_relinquishes_loaded_underlay_callback_owners' (2658088) panicked at crates/deadsync-song-lua/tests/rust_gameplay_underlay.rs:270:14:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 30, message: "retained underlay actor 1: not found among 2187 reachable references", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294973507))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test step_statistics_loads_its_real_shared_environment_and_nested_resources ... ok
+test underlay_loaders_preserve_shared_writes_relative_paths_and_missing_resource_errors ... ok
+test underlay_startup_queues_wait_until_the_original_discovery_boundary ... ok
+
+failures:
+
+failures:
+    screen_release_relinquishes_loaded_underlay_callback_owners
+
+test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.93s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_gameplay_underlay`
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_gameplay_underlay`

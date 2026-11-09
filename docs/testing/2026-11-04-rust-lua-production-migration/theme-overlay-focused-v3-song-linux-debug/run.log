@@ -1,0 +1,28 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 52s
+     Running tests/rust_gameplay_overlay.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_gameplay_overlay-0d7dee7c56ad5bfb)
+
+running 9 tests
+test decorations_load_real_files_merge_metric_on_and_sort_after_init ... ok
+test observed_clock_inputs_use_original_source_lines_and_fifo_values ... ok
+test original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc ... ok
+test overlay_on_failure_preserves_replacement_and_releases_partial_construction ... ok
+test overlay_replaces_its_placeholder_and_preserves_capture_probe_tree_and_layer ... ok
+test overlay_resource_loader_uses_current_shared_environment_and_closed_paths ... ok
+test overlay_root_is_replaced_before_init_and_direct_begin_on_keep_native_order ... ok
+test screen_release_retires_overlay_and_decoration_owners ... ok
+test uptime_keeps_native_precision_runtime_replacement_and_error_rules ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.80s
+

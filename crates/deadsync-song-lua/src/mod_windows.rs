@@ -1,10 +1,19 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Table, Value};
 
-use crate::{
-    SongLuaModWindow, SongLuaSpanMode, SongLuaTimeUnit, read_f32, read_player, read_span_mode,
-    read_string,
-};
+use crate::SongLuaModWindow;
+use crate::SongLuaSpanMode;
+use crate::SongLuaTimeUnit;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_player;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_span_mode;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_string;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_mod_windows(
     table: Option<Table>,
     unit: SongLuaTimeUnit,

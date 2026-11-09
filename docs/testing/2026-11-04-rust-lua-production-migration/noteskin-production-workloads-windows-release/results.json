@@ -1,0 +1,20 @@
+[
+  {
+    "name": "compare_lua_engines",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "deadsync-noteskin",
+      "--example",
+      "compare_lua_engines",
+      "--release"
+    ],
+    "exit_code": 0,
+    "seconds": 80.63678149995394,
+    "log_sha256": "a96efeb097337681665e4b73ce13b11f333805dfc8395f5fb64cf59322c1cf85",
+    "artifact": "C:\\GitHub\\deadsync\\target\\rust-lua-production-noteskin-production\\artifacts\\windows\\release\\compare_lua_engines.exe",
+    "artifact_sha256": "b5752bc2c51e05c4eab509dd451bcc62b8f77a2af94986f345a95ac9534447a3"
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "stage": "gif-cutover",
+  "suite": "gifs",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-theme-simply-love",
+    "--release",
+    "--lib",
+    "step_stats_gifs",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 960.1817572000436,
+  "log_sha256": "343a5f9f2c11f09fcf2bd04ec311efddee48c2b402b7f502d3a5f6edecd73aec",
+  "tests_passed": 15,
+  "test_results": [
+    "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 1532 filtered out; finished in 1.09s"
+  ],
+  "sources_unchanged": false,
+  "environment": {
+    "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4"
+  }
+}

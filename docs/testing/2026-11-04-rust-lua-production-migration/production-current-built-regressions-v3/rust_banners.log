@@ -1,0 +1,11 @@
+
+running 6 tests
+test banner_construction_inheritance_and_scrolling_match_production ... ok
+test banner_live_texture_events_animation_and_retained_handles ... ok
+test banner_path_queries_and_fallbacks_preserve_load_distinctions ... ok
+test banner_song_loader_uses_real_blank_bitmap_and_lossy_song_paths ... ok
+test current_background_helper_keeps_dynamic_calls_and_theme_provenance ... ok
+test group_sort_and_reentrant_path_getters_match_error_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+

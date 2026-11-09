@@ -133,7 +133,12 @@ fn main() {
         assert_eq!(scalars(&native), scalars(&expected));
         trace.push(serde_json::json!({"phase":"update","actions":format!("{actions:?}"),"states":format!("{:?}",native.states()),"scalars":scalars(&native)}));
     }
-    let memory = serde_json::json!({"native_payload_bytes":native.retained_bytes(),"current_lua_allocator_bytes":scene.lua_memory_bytes(),"scope":"Native input/update code, scalar cells, actor states and schedule payload. Allocator/Arc bookkeeping excluded; Lua bytes include pending garbage without forced GC and exclude Rust payload."});
+    let heap = scene.runtime().vm_mut().heap_stats();
+    let memory = serde_json::json!({"native_payload_bytes":native.retained_bytes(),
+        "rust_vm_estimated_live_bytes":heap.live_bytes,
+        "rust_vm_estimated_reserved_bytes":heap.reserved_bytes,
+        "rust_vm_observed_peak_reserved_bytes":heap.peak_reserved_bytes,
+        "scope":"Native payload counts input/update code, scalar cells, actor states and schedule payload, excluding allocator/Arc bookkeeping. Rust VM heap figures are estimates without forced GC; they exclude allocator headers, exact hash layouts and opaque Rust adapter state. They are not equivalent to the legacy Lua allocator count; compare process memory separately."});
     let mut rows = Vec::new();
     let runtime_samples = if mode.as_deref() == Some("prepare") || native_rounds.is_some() {
         0

@@ -5,7 +5,7 @@ use std::{env, fs, path::Path, process::ExitCode};
 fn main() -> ExitCode {
     let args: Vec<_> = env::args().skip(1).collect();
     let [engine, path] = args.as_slice() else {
-        eprintln!("usage: official_suite rust|rust-cache|reference path.lua");
+        eprintln!("usage: official_suite rust|rust-cache path.lua");
         return ExitCode::FAILURE;
     };
     let source = fs::read(path).expect("read test source");
@@ -48,25 +48,6 @@ fn main() -> ExitCode {
                         String::from_utf8_lossy(vm.string_bytes(id).unwrap())
                     );
                 }
-                ExitCode::FAILURE
-            }
-        }
-    } else if engine == "reference" {
-        // SAFETY: this developer-only runner executes pinned official Lua tests in
-        // a dedicated test directory; no untrusted native modules are supplied.
-        let lua = unsafe { lua_reference::Lua::unsafe_new() };
-        lua.load(bootstrap.as_slice()).exec().unwrap();
-        match lua
-            .load(source)
-            .set_name(name)
-            .eval::<lua_reference::MultiValue>()
-        {
-            Ok(values) => {
-                eprintln!("PASS\t{} return values", values.len());
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("FAIL\t{e}");
                 ExitCode::FAILURE
             }
         }

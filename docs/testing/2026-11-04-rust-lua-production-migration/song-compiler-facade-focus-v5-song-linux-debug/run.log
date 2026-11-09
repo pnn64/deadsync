@@ -1,0 +1,393 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 3m 10s
+     Running tests/rust_song_compiler.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_compiler-3e35322a6753bf57)
+
+running 12 tests
+test chronological_background_and_screen_output_match_complete_compiler ... Song lua compile stage: host elapsed_ms=166.292
+Song lua compile stage: execute_init elapsed_ms=1.842
+Song lua compile stage: startup_commands elapsed_ms=40.418
+Song lua compile stage: update_functions elapsed_ms=0.115
+Song lua compile stage: draw_functions elapsed_ms=0.009
+Song lua compile stage: easing_names elapsed_ms=0.014
+Song lua compile stage: read_overlays elapsed_ms=0.738
+Song lua compile stage: read_globals elapsed_ms=0.497
+Song lua compile stage: global_mods elapsed_ms=0.090
+Song lua compile stage: global_eases elapsed_ms=0.074
+Song lua compile stage: xero_eases elapsed_ms=0.035
+Song lua compile stage: global_actions elapsed_ms=0.033
+Song lua compile stage: perframes elapsed_ms=0.024
+Song lua compile stage: note_hides elapsed_ms=0.131
+Song lua update timing: frames=12 reset_ms=0.331 message_ms=0.010 update_ms=85.104 player_ms=0.330 mod_ms=0.127 column_ms=2.844 overlay_ms=0.323
+Song lua compile stage: update_overlays elapsed_ms=99.439
+Song lua compile stage: deferred_messages elapsed_ms=0.002
+Song lua compile stage: finalize elapsed_ms=0.072
+Song lua compile stage: host elapsed_ms=487.250
+Song lua compile stage: execute_init elapsed_ms=10.433
+Song lua compile stage: startup_commands elapsed_ms=30.923
+Song lua compile stage: update_functions elapsed_ms=27.751
+Song lua compile stage: draw_functions elapsed_ms=0.062
+Song lua compile stage: easing_names elapsed_ms=0.055
+Song lua compile stage: read_overlays elapsed_ms=2.999
+Song lua compile stage: read_globals elapsed_ms=2.236
+Song lua compile stage: global_mods elapsed_ms=0.390
+Song lua compile stage: global_eases elapsed_ms=0.301
+Song lua compile stage: xero_eases elapsed_ms=0.208
+Song lua compile stage: global_actions elapsed_ms=0.256
+Song lua compile stage: perframes elapsed_ms=0.047
+Song lua compile stage: note_hides elapsed_ms=1.579
+Song lua update timing: frames=12 reset_ms=3.604 message_ms=0.040 update_ms=275.112 player_ms=3.116 mod_ms=0.968 column_ms=37.432 overlay_ms=2.502
+Song lua compile stage: update_overlays elapsed_ms=365.348
+Song lua compile stage: deferred_messages elapsed_ms=0.037
+Song lua compile stage: finalize elapsed_ms=0.268
+ok
+test empty_preparation_returns_before_entry_validation ... ok
+test framebuffer_and_deferred_sprite_kinds_match_complete_compiler ... Song lua compile stage: host elapsed_ms=112.096
+Song lua compile stage: execute_init elapsed_ms=5.934
+Song lua compile stage: startup_commands elapsed_ms=33.624
+Song lua compile stage: update_functions elapsed_ms=0.101
+Song lua compile stage: draw_functions elapsed_ms=0.012
+Song lua compile stage: easing_names elapsed_ms=0.016
+Song lua compile stage: read_overlays elapsed_ms=1.168
+Song lua compile stage: read_globals elapsed_ms=0.516
+Song lua compile stage: global_mods elapsed_ms=0.092
+Song lua compile stage: global_eases elapsed_ms=0.078
+Song lua compile stage: xero_eases elapsed_ms=0.088
+Song lua compile stage: global_actions elapsed_ms=0.074
+Song lua compile stage: perframes elapsed_ms=0.024
+Song lua compile stage: note_hides elapsed_ms=0.162
+Song lua compile stage: update_overlays elapsed_ms=2.227
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.071
+Song lua compile stage: host elapsed_ms=457.127
+Song lua compile stage: execute_init elapsed_ms=22.225
+Song lua compile stage: startup_commands elapsed_ms=8.281
+Song lua compile stage: update_functions elapsed_ms=30.096
+Song lua compile stage: draw_functions elapsed_ms=0.046
+Song lua compile stage: easing_names elapsed_ms=0.045
+Song lua compile stage: read_overlays elapsed_ms=4.402
+Song lua compile stage: read_globals elapsed_ms=2.642
+Song lua compile stage: global_mods elapsed_ms=0.785
+Song lua compile stage: global_eases elapsed_ms=0.515
+Song lua compile stage: xero_eases elapsed_ms=0.545
+Song lua compile stage: global_actions elapsed_ms=0.554
+Song lua compile stage: perframes elapsed_ms=0.053
+Song lua compile stage: note_hides elapsed_ms=1.649
+Song lua compile stage: update_overlays elapsed_ms=14.725
+Song lua compile stage: deferred_messages elapsed_ms=0.029
+Song lua compile stage: finalize elapsed_ms=0.465
+ok
+test queued_sounds_and_message_sounds_use_real_dispatch_frames ... Song lua compile stage: host elapsed_ms=113.972
+Song lua compile stage: execute_init elapsed_ms=1.986
+Song lua compile stage: startup_commands elapsed_ms=29.143
+Song lua compile stage: update_functions elapsed_ms=0.108
+Song lua compile stage: draw_functions elapsed_ms=0.012
+Song lua compile stage: easing_names elapsed_ms=0.015
+Song lua compile stage: read_overlays elapsed_ms=4.628
+Song lua compile stage: read_globals elapsed_ms=0.382
+Song lua compile stage: global_mods elapsed_ms=0.059
+Song lua compile stage: global_eases elapsed_ms=0.026
+Song lua compile stage: xero_eases elapsed_ms=0.039
+Song lua compile stage: global_actions elapsed_ms=0.021
+Song lua compile stage: perframes elapsed_ms=0.015
+Song lua compile stage: note_hides elapsed_ms=0.144
+Song lua update timing: frames=12 reset_ms=0.318 message_ms=0.008 update_ms=9.739 player_ms=0.374 mod_ms=0.107 column_ms=2.571 overlay_ms=0.184
+Song lua compile stage: update_overlays elapsed_ms=22.463
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.070
+Song lua compile stage: host elapsed_ms=432.229
+Song lua compile stage: execute_init elapsed_ms=10.647
+Song lua compile stage: startup_commands elapsed_ms=6.918
+Song lua compile stage: update_functions elapsed_ms=27.201
+Song lua compile stage: draw_functions elapsed_ms=0.061
+Song lua compile stage: easing_names elapsed_ms=0.093
+Song lua compile stage: read_overlays elapsed_ms=21.025
+Song lua compile stage: read_globals elapsed_ms=2.194
+Song lua compile stage: global_mods elapsed_ms=0.341
+Song lua compile stage: global_eases elapsed_ms=0.203
+Song lua compile stage: xero_eases elapsed_ms=0.267
+Song lua compile stage: global_actions elapsed_ms=0.245
+Song lua compile stage: perframes elapsed_ms=0.043
+Song lua compile stage: note_hides elapsed_ms=1.415
+Song lua update timing: frames=12 reset_ms=3.463 message_ms=0.011 update_ms=20.130 player_ms=3.199 mod_ms=0.858 column_ms=35.392 overlay_ms=1.794
+Song lua compile stage: update_overlays elapsed_ms=101.655
+Song lua compile stage: deferred_messages elapsed_ms=0.054
+Song lua compile stage: finalize elapsed_ms=0.247
+ok
+test reload_media_boundary_preserves_only_final_on_and_zero_update_sounds ... Song lua compile stage: host elapsed_ms=94.362
+Song lua compile stage: execute_init elapsed_ms=2.089
+Song lua compile stage: execute_init elapsed_ms=106.255
+Song lua compile stage: startup_commands elapsed_ms=28.693
+Song lua compile stage: update_functions elapsed_ms=0.086
+Song lua compile stage: draw_functions elapsed_ms=0.010
+Song lua compile stage: easing_names elapsed_ms=0.014
+Song lua compile stage: read_overlays elapsed_ms=0.894
+Song lua compile stage: read_globals elapsed_ms=0.394
+Song lua compile stage: global_mods elapsed_ms=0.071
+Song lua compile stage: global_eases elapsed_ms=0.042
+Song lua compile stage: xero_eases elapsed_ms=0.033
+Song lua compile stage: global_actions elapsed_ms=0.031
+Song lua compile stage: perframes elapsed_ms=0.014
+Song lua compile stage: note_hides elapsed_ms=0.120
+Song lua update timing: frames=12 reset_ms=0.360 message_ms=0.008 update_ms=8.989 player_ms=0.549 mod_ms=0.186 column_ms=2.625 overlay_ms=0.136
+Song lua compile stage: update_overlays elapsed_ms=22.608
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.062
+Song lua compile stage: host elapsed_ms=370.056
+Song lua compile stage: execute_init elapsed_ms=8.260
+Song lua compile stage: execute_init elapsed_ms=209.161
+Song lua compile stage: startup_commands elapsed_ms=5.061
+Song lua compile stage: update_functions elapsed_ms=26.063
+Song lua compile stage: draw_functions elapsed_ms=0.043
+Song lua compile stage: easing_names elapsed_ms=0.044
+Song lua compile stage: read_overlays elapsed_ms=2.409
+Song lua compile stage: read_globals elapsed_ms=2.392
+Song lua compile stage: global_mods elapsed_ms=0.385
+Song lua compile stage: global_eases elapsed_ms=0.304
+Song lua compile stage: xero_eases elapsed_ms=0.196
+Song lua compile stage: global_actions elapsed_ms=0.263
+Song lua compile stage: perframes elapsed_ms=0.038
+Song lua compile stage: note_hides elapsed_ms=1.427
+Song lua update timing: frames=12 reset_ms=3.977 message_ms=0.012 update_ms=17.643 player_ms=3.005 mod_ms=1.193 column_ms=35.177 overlay_ms=1.145
+Song lua compile stage: update_overlays elapsed_ms=103.134
+Song lua compile stage: deferred_messages elapsed_ms=0.039
+Song lua compile stage: finalize elapsed_ms=0.243
+ok
+test resources_proxy_targets_custom_draw_and_sound_output_match ... Song lua compile stage: host elapsed_ms=116.738
+Song lua compile stage: execute_init elapsed_ms=4.657
+Song lua compile stage: startup_commands elapsed_ms=33.028
+Song lua compile stage: update_functions elapsed_ms=0.089
+Song lua compile stage: draw_functions elapsed_ms=0.305
+Song lua compile stage: easing_names elapsed_ms=0.016
+Song lua compile stage: read_overlays elapsed_ms=1.213
+Song lua compile stage: read_globals elapsed_ms=0.461
+Song lua compile stage: global_mods elapsed_ms=0.100
+Song lua compile stage: global_eases elapsed_ms=0.071
+Song lua compile stage: xero_eases elapsed_ms=0.077
+Song lua compile stage: global_actions elapsed_ms=0.071
+Song lua compile stage: perframes elapsed_ms=0.019
+Song lua compile stage: note_hides elapsed_ms=0.131
+Song lua update timing: frames=12 reset_ms=0.360 message_ms=0.012 update_ms=12.532 player_ms=0.358 mod_ms=0.103 column_ms=2.460 overlay_ms=0.130
+Song lua compile stage: update_overlays elapsed_ms=25.488
+Song lua compile stage: deferred_messages elapsed_ms=0.013
+Song lua compile stage: finalize elapsed_ms=0.098
+Song lua compile stage: host elapsed_ms=434.818
+Song lua compile stage: execute_init elapsed_ms=18.213
+Song lua compile stage: startup_commands elapsed_ms=7.518
+Song lua compile stage: update_functions elapsed_ms=29.662
+Song lua compile stage: draw_functions elapsed_ms=2.121
+Song lua compile stage: easing_names elapsed_ms=0.045
+Song lua compile stage: read_overlays elapsed_ms=4.021
+Song lua compile stage: read_globals elapsed_ms=2.440
+Song lua compile stage: global_mods elapsed_ms=0.858
+Song lua compile stage: global_eases elapsed_ms=0.632
+Song lua compile stage: xero_eases elapsed_ms=0.616
+Song lua compile stage: global_actions elapsed_ms=0.534
+Song lua compile stage: perframes elapsed_ms=0.071
+Song lua compile stage: note_hides elapsed_ms=1.433
+Song lua update timing: frames=12 reset_ms=3.659 message_ms=0.016 update_ms=65.457 player_ms=3.370 mod_ms=0.883 column_ms=34.203 overlay_ms=1.247
+Song lua compile stage: update_overlays elapsed_ms=153.133
+Song lua compile stage: deferred_messages elapsed_ms=0.047
+Song lua compile stage: finalize elapsed_ms=0.507
+ok
+test scalar_entries_preserve_global_schedule_without_actor_output ... Song lua compile stage: host elapsed_ms=114.193
+Song lua compile stage: execute_init elapsed_ms=1.053
+Song lua compile stage: startup_commands elapsed_ms=26.460
+Song lua compile stage: update_functions elapsed_ms=0.222
+Song lua compile stage: draw_functions elapsed_ms=0.011
+Song lua compile stage: easing_names elapsed_ms=0.013
+Song lua compile stage: read_overlays elapsed_ms=0.801
+Song lua compile stage: read_globals elapsed_ms=0.362
+Song lua compile stage: global_mods elapsed_ms=0.035
+Song lua compile stage: global_eases elapsed_ms=0.011
+Song lua compile stage: xero_eases elapsed_ms=0.016
+Song lua compile stage: global_actions elapsed_ms=0.017
+Song lua compile stage: perframes elapsed_ms=0.007
+Song lua compile stage: note_hides elapsed_ms=0.136
+Song lua compile stage: update_overlays elapsed_ms=1.702
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.053
+Song lua compile stage: host elapsed_ms=427.383
+Song lua compile stage: execute_init elapsed_ms=8.218
+Song lua compile stage: startup_commands elapsed_ms=6.047
+Song lua compile stage: update_functions elapsed_ms=25.008
+Song lua compile stage: draw_functions elapsed_ms=0.062
+Song lua compile stage: easing_names elapsed_ms=0.050
+Song lua compile stage: read_overlays elapsed_ms=2.525
+Song lua compile stage: read_globals elapsed_ms=1.952
+Song lua compile stage: global_mods elapsed_ms=0.184
+Song lua compile stage: global_eases elapsed_ms=0.099
+Song lua compile stage: xero_eases elapsed_ms=0.134
+Song lua compile stage: global_actions elapsed_ms=0.124
+Song lua compile stage: perframes elapsed_ms=0.037
+Song lua compile stage: note_hides elapsed_ms=1.478
+Song lua compile stage: update_overlays elapsed_ms=14.551
+Song lua compile stage: deferred_messages elapsed_ms=0.029
+Song lua compile stage: finalize elapsed_ms=0.172
+ok
+test separate_layers_own_messages_wrappers_and_parent_indices ... Song lua compile stage: host elapsed_ms=113.077
+Song lua compile stage: execute_init elapsed_ms=3.564
+Song lua compile stage: startup_commands elapsed_ms=32.099
+Song lua compile stage: update_functions elapsed_ms=0.098
+Song lua compile stage: draw_functions elapsed_ms=0.014
+Song lua compile stage: easing_names elapsed_ms=0.017
+Song lua compile stage: read_overlays elapsed_ms=1.185
+Song lua compile stage: read_globals elapsed_ms=0.436
+Song lua compile stage: global_mods elapsed_ms=0.116
+Song lua compile stage: global_eases elapsed_ms=0.058
+Song lua compile stage: xero_eases elapsed_ms=0.050
+Song lua compile stage: global_actions elapsed_ms=0.056
+Song lua compile stage: perframes elapsed_ms=0.028
+Song lua compile stage: note_hides elapsed_ms=0.151
+Song lua compile stage: update_overlays elapsed_ms=2.051
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.051
+Song lua compile stage: host elapsed_ms=454.873
+Song lua compile stage: execute_init elapsed_ms=15.420
+Song lua compile stage: startup_commands elapsed_ms=7.693
+Song lua compile stage: update_functions elapsed_ms=28.533
+Song lua compile stage: draw_functions elapsed_ms=0.066
+Song lua compile stage: easing_names elapsed_ms=0.094
+Song lua compile stage: read_overlays elapsed_ms=4.115
+Song lua compile stage: read_globals elapsed_ms=2.330
+Song lua compile stage: global_mods elapsed_ms=0.660
+Song lua compile stage: global_eases elapsed_ms=0.624
+Song lua compile stage: xero_eases elapsed_ms=0.404
+Song lua compile stage: global_actions elapsed_ms=0.470
+Song lua compile stage: perframes elapsed_ms=0.055
+Song lua compile stage: note_hides elapsed_ms=1.348
+Song lua compile stage: update_overlays elapsed_ms=14.192
+Song lua compile stage: deferred_messages elapsed_ms=0.046
+Song lua compile stage: finalize elapsed_ms=0.334
+ok
+test startup_capture_excludes_reload_construction_init_and_end_broadcasts ... Song lua compile stage: host elapsed_ms=114.448
+Song lua compile stage: execute_init elapsed_ms=2.680
+Song lua compile stage: execute_init elapsed_ms=131.375
+Song lua compile stage: startup_commands elapsed_ms=31.219
+Song lua compile stage: update_functions elapsed_ms=0.094
+Song lua compile stage: draw_functions elapsed_ms=0.011
+Song lua compile stage: easing_names elapsed_ms=0.016
+Song lua compile stage: read_overlays elapsed_ms=0.952
+Song lua compile stage: read_globals elapsed_ms=0.393
+Song lua compile stage: global_mods elapsed_ms=0.066
+Song lua compile stage: global_eases elapsed_ms=0.035
+Song lua compile stage: xero_eases elapsed_ms=0.033
+Song lua compile stage: global_actions elapsed_ms=0.046
+Song lua compile stage: perframes elapsed_ms=0.015
+Song lua compile stage: note_hides elapsed_ms=0.145
+Song lua update timing: frames=12 reset_ms=0.338 message_ms=0.029 update_ms=8.663 player_ms=0.376 mod_ms=0.205 column_ms=2.715 overlay_ms=0.114
+Song lua compile stage: update_overlays elapsed_ms=22.698
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.049
+Song lua compile stage: host elapsed_ms=463.664
+Song lua compile stage: execute_init elapsed_ms=14.261
+Song lua compile stage: execute_init elapsed_ms=259.296
+Song lua compile stage: startup_commands elapsed_ms=10.746
+Song lua compile stage: update_functions elapsed_ms=26.972
+Song lua compile stage: draw_functions elapsed_ms=0.067
+Song lua compile stage: easing_names elapsed_ms=0.047
+Song lua compile stage: read_overlays elapsed_ms=2.869
+Song lua compile stage: read_globals elapsed_ms=2.072
+Song lua compile stage: global_mods elapsed_ms=0.383
+Song lua compile stage: global_eases elapsed_ms=0.284
+Song lua compile stage: xero_eases elapsed_ms=0.226
+Song lua compile stage: global_actions elapsed_ms=0.259
+Song lua compile stage: perframes elapsed_ms=0.043
+Song lua compile stage: note_hides elapsed_ms=1.330
+Song lua update timing: frames=12 reset_ms=3.836 message_ms=0.025 update_ms=20.679 player_ms=3.186 mod_ms=1.436 column_ms=36.507 overlay_ms=1.412
+Song lua compile stage: update_overlays elapsed_ms=109.073
+Song lua compile stage: deferred_messages elapsed_ms=0.096
+Song lua compile stage: finalize elapsed_ms=0.353
+ok
+test startup_reload_retains_globals_rng_and_outgoing_end ... Song lua compile stage: host elapsed_ms=124.452
+Song lua compile stage: execute_init elapsed_ms=2.758
+Song lua compile stage: execute_init elapsed_ms=139.132
+Song lua compile stage: startup_commands elapsed_ms=30.182
+Song lua compile stage: update_functions elapsed_ms=0.096
+Song lua compile stage: draw_functions elapsed_ms=0.009
+Song lua compile stage: easing_names elapsed_ms=0.016
+Song lua compile stage: read_overlays elapsed_ms=0.930
+Song lua compile stage: read_globals elapsed_ms=0.470
+Song lua compile stage: global_mods elapsed_ms=0.061
+Song lua compile stage: global_eases elapsed_ms=0.037
+Song lua compile stage: xero_eases elapsed_ms=0.032
+Song lua compile stage: global_actions elapsed_ms=0.030
+Song lua compile stage: perframes elapsed_ms=0.017
+Song lua compile stage: note_hides elapsed_ms=0.156
+Song lua compile stage: update_overlays elapsed_ms=2.093
+Song lua compile stage: deferred_messages elapsed_ms=0.003
+Song lua compile stage: finalize elapsed_ms=0.054
+Song lua compile stage: host elapsed_ms=448.736
+Song lua compile stage: execute_init elapsed_ms=12.567
+Song lua compile stage: execute_init elapsed_ms=246.019
+Song lua compile stage: startup_commands elapsed_ms=5.855
+Song lua compile stage: update_functions elapsed_ms=26.789
+Song lua compile stage: draw_functions elapsed_ms=0.084
+Song lua compile stage: easing_names elapsed_ms=0.073
+Song lua compile stage: read_overlays elapsed_ms=3.340
+Song lua compile stage: read_globals elapsed_ms=2.121
+Song lua compile stage: global_mods elapsed_ms=0.443
+Song lua compile stage: global_eases elapsed_ms=0.337
+Song lua compile stage: xero_eases elapsed_ms=0.313
+Song lua compile stage: global_actions elapsed_ms=0.360
+Song lua compile stage: perframes elapsed_ms=0.060
+Song lua compile stage: note_hides elapsed_ms=1.871
+Song lua compile stage: update_overlays elapsed_ms=14.045
+Song lua compile stage: deferred_messages elapsed_ms=0.030
+Song lua compile stage: finalize elapsed_ms=0.240
+ok
+test static_commands_startup_tweens_and_messages_match_complete_compiler ... Song lua compile stage: host elapsed_ms=104.790
+Song lua compile stage: execute_init elapsed_ms=2.458
+Song lua compile stage: startup_commands elapsed_ms=29.169
+Song lua compile stage: update_functions elapsed_ms=0.077
+Song lua compile stage: draw_functions elapsed_ms=0.008
+Song lua compile stage: easing_names elapsed_ms=0.017
+Song lua compile stage: read_overlays elapsed_ms=4.406
+Song lua compile stage: read_globals elapsed_ms=0.321
+Song lua compile stage: global_mods elapsed_ms=0.088
+Song lua compile stage: global_eases elapsed_ms=0.037
+Song lua compile stage: xero_eases elapsed_ms=0.030
+Song lua compile stage: global_actions elapsed_ms=0.039
+Song lua compile stage: perframes elapsed_ms=0.023
+Song lua compile stage: note_hides elapsed_ms=0.109
+Song lua update timing: frames=12 reset_ms=0.283 message_ms=0.634 update_ms=8.920 player_ms=0.313 mod_ms=0.101 column_ms=2.218 overlay_ms=0.237
+Song lua compile stage: update_overlays elapsed_ms=22.419
+Song lua compile stage: deferred_messages elapsed_ms=0.002
+Song lua compile stage: finalize elapsed_ms=0.041
+Song lua compile stage: host elapsed_ms=416.017
+Song lua compile stage: execute_init elapsed_ms=11.370
+Song lua compile stage: startup_commands elapsed_ms=6.379
+Song lua compile stage: update_functions elapsed_ms=27.215
+Song lua compile stage: draw_functions elapsed_ms=0.069
+Song lua compile stage: easing_names elapsed_ms=0.053
+Song lua compile stage: read_overlays elapsed_ms=23.707
+Song lua compile stage: read_globals elapsed_ms=2.253
+Song lua compile stage: global_mods elapsed_ms=0.409
+Song lua compile stage: global_eases elapsed_ms=0.327
+Song lua compile stage: xero_eases elapsed_ms=0.322
+Song lua compile stage: global_actions elapsed_ms=0.332
+Song lua compile stage: perframes elapsed_ms=0.047
+Song lua compile stage: note_hides elapsed_ms=1.498
+Song lua update timing: frames=12 reset_ms=3.786 message_ms=4.680 update_ms=18.115 player_ms=3.158 mod_ms=0.969 column_ms=35.039 overlay_ms=1.901
+Song lua compile stage: update_overlays elapsed_ms=107.611
+Song lua compile stage: deferred_messages elapsed_ms=0.045
+Song lua compile stage: finalize elapsed_ms=0.319
+ok
+test unsupported_startup_screen_request_is_rejected ... Song lua compile stage: host elapsed_ms=134.813
+Song lua compile stage: execute_init elapsed_ms=1.850
+Song lua compile stage: host elapsed_ms=578.959
+Song lua compile stage: execute_init elapsed_ms=8.283
+ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.67s
+

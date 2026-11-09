@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/mnt/c/GitHub/deadsync/target/rust-lua-production-baseline-dbus/artifacts/linux/debug/song_lua_execution",
+    "/mnt/c/GitHub/deadsync/target/debug/Songs/lua-songs/Bad Trails/Maybe it was fated.ssc",
+    "/mnt/c/GitHub/deadsync/docs/testing/2026-11-04-rust-lua-production-migration/baseline-live-bad-trails-linux-debug/output.json",
+    "--benchmark",
+    "481"
+  ],
+  "binary_sha256": "4045d0211c8f21427c0fac9e9c4b81507d74d125b2d632466ed00af0d1ed474d",
+  "simfile_sha256": "be02a0092fe0ba4bd4a7fc70aaf3b0509b6a74b71232adab267c210f636289a8",
+  "exit_code": 1,
+  "seconds": 2343.953666203888,
+  "inputs_sha256": "4bb0d6b892e5099a03aff321168764e1099d111e064f997970424de4f2377806",
+  "log_sha256": "82561ca5dafb09a0bceaeb1fedcd8c6c176e7ccafd6cc90b65bd7c09d6d46cca",
+  "limitations": "Debug and concurrent-build runs establish functionality only; release timing comparisons require controlled paired runs. RSS includes the whole process, not just Lua.",
+  "peak_rss_bytes": 502894592,
+  "user_seconds": 102.873703,
+  "system_seconds": 167.455728,
+  "inputs_unchanged": true,
+  "output_sha256": "d57e3d2eade99ae42419dbb65766c61ea8b5599fc69b8902b3ab443b0e64dfec"
+}

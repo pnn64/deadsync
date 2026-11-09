@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::Lua;
 
 const WRAPPER: &[u8] = br#"local calls=0;local at=0
 local ok,f,e=pcall(function()
@@ -14,17 +13,16 @@ end)
 if not ok then e=f;f=nil end
 return ok,f~=nil,e,calls"#;
 
-struct Oracle {
+struct Harness {
     vm: Vm,
-    lua: Lua,
+
     wrapper: deadlib_lua::Program,
 }
-impl Oracle {
+impl Harness {
     fn new() -> Self {
         Self {
             vm: Vm::new(),
-            // SAFETY: fixed developer text exercises the protected official loader.
-            lua: unsafe { Lua::unsafe_new() },
+
             wrapper: compile(WRAPPER).unwrap(),
         }
     }
@@ -33,16 +31,11 @@ impl Oracle {
         for (key, bytes) in [("source", source.as_bytes()), ("name", name.as_slice())] {
             let value = self.vm.intern(bytes);
             self.vm.set_global(key.as_bytes(), value).unwrap();
-            self.lua
-                .globals()
-                .set(key, self.lua.create_string(bytes).unwrap())
-                .unwrap();
         }
         for (key, number) in [("width", width), ("fault", fault)] {
             self.vm
                 .set_global(key.as_bytes(), Value::Number(number as f64))
                 .unwrap();
-            self.lua.globals().set(key, number).unwrap();
         }
         let values = self.vm.execute(&self.wrapper).unwrap().to_vec();
         let [
@@ -60,16 +53,10 @@ impl Oracle {
             other => panic!("unexpected diagnostic: {other:?}"),
         };
         let actual = (*ok, *loaded, error, *calls as usize);
-        let (ok, loaded, error, calls): (bool, bool, Option<lua_reference::LuaString>, usize) =
-            self.lua.load(WRAPPER).eval().unwrap();
-        let expected = (ok, loaded, error.map(|s| s.as_bytes().to_vec()), calls);
-        assert_eq!(
-            actual, expected,
-            "width={width}, fault={fault}, source={source}"
-        );
+        reference_test::assert_debug("tests/register_limits.rs::check::expected", &actual);
     }
     fn valid(&mut self, source: &str) {
-        self.lua.load(source).into_function().expect(source);
+        deadlib_lua::compile(source.as_bytes()).expect(source);
         self.check(source, 0, 0);
     }
 }
@@ -88,7 +75,7 @@ fn repeated(value: &str, count: usize) -> String {
 
 #[test]
 fn calls_returns_and_constructor_boundaries_match_the_reference() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for locals in [0, 1, 20, 100, 199, 200] {
         let prefix = if locals == 0 {
             String::new()
@@ -118,7 +105,7 @@ fn calls_returns_and_constructor_boundaries_match_the_reference() {
 
 #[test]
 fn logical_expression_lifetimes_match_at_the_register_boundary() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for expr in [
         "a",
         "f()",
@@ -169,7 +156,7 @@ fn logical_expression_lifetimes_match_at_the_register_boundary() {
 
 #[test]
 fn register_checks_keep_error_precedence_and_reader_consumption() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for tail in [
         ")", ") ", ")\n'bad", ",1)", ",0xZ", ",f()", ",...)", ",{1})", ",a..b)",
     ] {
@@ -188,7 +175,7 @@ fn register_checks_keep_error_precedence_and_reader_consumption() {
 
 #[test]
 fn constant_pools_and_function_scopes_have_independent_resource_limits() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for pool in [0, 254, 255, 256, 300] {
         let prefix = format!(
             "local pad={{{}}};",
@@ -225,7 +212,7 @@ fn constant_pools_and_function_scopes_have_independent_resource_limits() {
 
 #[test]
 fn assignments_loop_headers_and_fixed_multiple_results_match() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [1, 2, 49, 100, 198, 199, 200] {
         let targets = names(count);
         for args in [47, 48, 49, 100, 247, 248, 249] {
@@ -250,7 +237,7 @@ fn assignments_loop_headers_and_fixed_multiple_results_match() {
 
 #[test]
 fn constructor_lookahead_and_expression_discharge_preserve_reader_order() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let locals = format!("local {};", names(200));
     let pending = repeated("1", 48);
     for tail in ["a=1}", "a\n'bad", "[1]=1}", "0xZ}", "...}", "f()}"] {
@@ -275,7 +262,7 @@ fn constructor_lookahead_and_expression_discharge_preserve_reader_order() {
 
 #[test]
 fn conditions_conflicts_and_nested_expressions_share_the_logical_stack() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [190, 198, 199, 200] {
         let prefix = format!("local {};", names(count));
         for expr in [
@@ -334,7 +321,7 @@ fn conditions_conflicts_and_nested_expressions_share_the_logical_stack() {
 
 #[test]
 fn local_stores_contribute_to_reference_constant_pool_boundaries() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for pool in [250, 254, 255, 256, 300] {
         let prefix = format!(
             "local x;{}local {};",
@@ -354,7 +341,7 @@ fn local_stores_contribute_to_reference_constant_pool_boundaries() {
 
 #[test]
 fn mixed_expression_pressure_matches_reference_acceptance_and_diagnostics() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let mut random = 0x51c0ffe_u32;
     for case in 0..512 {
         let count = [0, 50, 180, 199, 200][case % 5];
@@ -394,3 +381,7 @@ fn mixed_expression_pressure_matches_reference_acceptance_and_diagnostics() {
         oracle.check(&source, 0, 0);
     }
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -1,6 +1,6 @@
 //! Loading policy for authored callbacks that cannot use offline playback.
 use crate::SongLuaCompileContext;
-use crate::input::RUNTIME_REQUIRED as REQUIRED;
+use crate::input_types::RUNTIME_REQUIRED as REQUIRED;
 
 pub(crate) fn compile<T>(
     context: &SongLuaCompileContext,

@@ -1,0 +1,192 @@
+{
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "sources": 1307,
+  "reviewed_sources_sha256": "81007bd0eda62bb89edd5280fd43b6467b09d59e8983fb3cb42aad747c6be8fa",
+  "source_review": {
+    "sources": 1307,
+    "changed": [
+      "crates/deadsync-song-lua/Cargo.toml",
+      "crates/deadsync-song-lua/src/rust_engine.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/effects.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+      "crates/deadsync-song-lua/src/rust_engine/input.rs",
+      "crates/deadsync-song-lua/src/rust_engine/live_scene.rs"
+    ],
+    "added": [
+      "crates/deadsync-song-lua/src/rust_engine/actors/input_snapshot.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/input_snapshot/tables.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/input_snapshot/update.rs",
+      "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle/snapshot.rs",
+      "crates/deadsync-song-lua/src/rust_engine/live_scene/interactions.rs",
+      "crates/deadsync-song-lua/tests/rust_actor_input_contract.rs",
+      "crates/deadsync-song-lua/tests/rust_actor_inputs.rs"
+    ],
+    "interpreter_unchanged": true,
+    "existing_tests_unchanged": true,
+    "runtime_owners_match_native": true,
+    "existing_actor_update_unchanged": true
+  },
+  "checks": {
+    "actor-input-snapshots-windows-v1-song-windows-debug": {
+      "stage": "actor-input-snapshots-windows-v1",
+      "suite": "song",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "rust-engine,test-support",
+        "--test",
+        "rust_actor_input_contract",
+        "--test",
+        "rust_actor_inputs",
+        "--test",
+        "rust_actors",
+        "--test",
+        "rust_live_scene",
+        "--no-fail-fast",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 776.6782340998761,
+      "log_sha256": "5af2c4173893da38e8c82319d92ff52b32f56cb1eb42a5ac22649f383e64a9a1",
+      "tests_passed": 71,
+      "tests_failed": 0,
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.31s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.07s",
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.48s",
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.27s"
+      ],
+      "sources_unchanged": true,
+      "environment": {
+        "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_PROFILE_RELEASE_DEBUG": "0",
+        "CARGO_BUILD_JOBS": "4"
+      },
+      "result_sha256": "269b7dd37d8573e183a36c554e0b5e6b3e991462d045f78013a44514aea2b3c3"
+    },
+    "actor-input-snapshots-windows-v2-song-windows-debug": {
+      "stage": "actor-input-snapshots-windows-v2",
+      "suite": "song",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "rust-engine,test-support",
+        "--test",
+        "rust_actor_input_contract",
+        "--test",
+        "rust_actor_inputs",
+        "--test",
+        "rust_actors",
+        "--test",
+        "rust_live_scene",
+        "--test",
+        "rust_models",
+        "--no-fail-fast",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 341.83786249998957,
+      "log_sha256": "5828e412668498f757e359763990a841c144f4295483a4918de584e8634125d7",
+      "tests_passed": 78,
+      "tests_failed": 0,
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.35s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.12s",
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.70s",
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.34s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s"
+      ],
+      "sources_unchanged": true,
+      "environment": {
+        "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_PROFILE_RELEASE_DEBUG": "0",
+        "CARGO_BUILD_JOBS": "4"
+      },
+      "result_sha256": "bf792604401a2b1c561c7f3f7391134e73282dc61d578bc27a5ab720224f012d"
+    },
+    "actor-input-snapshots-lint-windows-v2-song-windows-debug": {
+      "stage": "actor-input-snapshots-lint-windows-v2",
+      "suite": "song",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "rust-engine,test-support",
+        "--no-deps",
+        "--lib"
+      ],
+      "exit_code": 101,
+      "seconds": 27.297825899906456,
+      "log_sha256": "4ee530373bba6c2be50bdb64c4f4295d9980753406f9c288b2e9c24f058ca0b7",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "test_results": [],
+      "sources_unchanged": true,
+      "environment": {
+        "CARGO_TARGET_DIR": "C:/GitHub/deadsync/target/rust-adapters",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_PROFILE_RELEASE_DEBUG": "0",
+        "CARGO_BUILD_JOBS": "4"
+      },
+      "result_sha256": "e4cf3e7acf0de4078230162267e5d16b6ab3e6f22e66bf88862af0a59bbf7fe9"
+    },
+    "actor-input-snapshots-shipping-windows-v2": {
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "rust-engine",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 29.859991499921307,
+      "sources_unchanged": true,
+      "log_sha256": "311f6c487690c8cf147fa76e5b98d214c809ef095b16b2721f5b0eda39dcb60b",
+      "result_sha256": "273d3af5aef8abe59aab9ac84b96f2ea70acf5164a37a466c6ceab8018ab74f5"
+    }
+  },
+  "behavior_tests": 78,
+  "final_cleanup": "Only one doc-comment blank line and three scoped Clippy attributes; complete executable source equivalence verified.",
+  "final_shipping_configuration_passed": true,
+  "clippy": "166 warnings and the unchanged pre-existing cmd.rs:349 immutable-loop error; no snapshot diagnostics remain.",
+  "interrupted_linux_verification": {
+    "actor-input-snapshots-contract-v1-host-source-proof.json": "034f1e1f8430798d56684d7b36fdc20e72f8787133897c1df6bba30c3b52bc92",
+    "actor-input-snapshots-contract-v1-interruption.txt": "ad7f56f9652b3c14fa1108c480a2600e41ef7c636a19cd42cf28bf52958adc42"
+  },
+  "documents": {
+    "docs/lua-architecture.md": "a8bc7f3cc4d527972c38513e03f10a348088888bc9cc108369fdb534627ae2dd",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "3b4c8ef8c0b136b6a886724ffbe5eba54461593d678cf556b0e0df22350b742c"
+  },
+  "interpreter_milestone": "Closed",
+  "c_api_removal_milestone": "Closed",
+  "production_song_engine": "Still legacy; unconditional production cutover remains required.",
+  "migration_goal_complete": false,
+  "remaining": "Production facade/fallback/cache cutover, legacy isolation, existing API and coverage gaps, saved-handle/session audit, final core/adapter/downstream/content tests, normal application build and rendered song/gameplay/noteskin smoke, dependency/link proof, matched preparation/live/memory measurements."
+}

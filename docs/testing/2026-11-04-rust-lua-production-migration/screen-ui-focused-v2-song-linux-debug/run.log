@@ -1,0 +1,28 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.57s
+     Running tests/rust_screen_ui.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_screen_ui-6ca655e96245dca1)
+
+running 8 tests
+test all_option_factories_match_native_metadata_and_create_independent_rows ... ok
+test load_selections_uses_captured_count_raw_lists_and_native_argument_forms ... ok
+test save_selections_publishes_preferences_and_player_modifiers_with_existing_policies ... ok
+test save_uses_current_fields_and_callbacks_with_rooted_values_and_partial_errors ... ok
+test saved_row_callbacks_retain_only_required_objects_then_collect ... ok
+test screen_routing_background_fit_and_centering_use_existing_dynamic_policies ... ok
+test simply_love_formatting_and_messages_preserve_dynamic_lookup_order_and_reentry ... ok
+test theme_row_initialization_forwards_exact_arguments_to_current_global_method ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.91s
+

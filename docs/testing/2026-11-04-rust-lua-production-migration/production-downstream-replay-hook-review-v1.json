@@ -1,0 +1,60 @@
+{
+  "trigger": "Original eight-package downstream regression could not compile live_song_lua: four test-support scene methods absent and selected_context required mutable self unlike the frozen public facade.",
+  "frozen_harness_sha256": "66bba8b2afc07bdb93c0ec0bc30af612b4b84f498112ad322d4b048e6605efb9",
+  "original_harness_unchanged": true,
+  "original_live_scene_tests_preserved_as_exact_text_prefix": true,
+  "changes": [
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine.rs",
+      "before_sha256": "1f6c39295c985085684ff57cf169cc42dc3e77d6d8f5801fcb8bd093429c7854",
+      "after_sha256": "f80c1c49bbb17243b855fc5a2729f7e7f53a77a2378c73ea25a8193a1cdc82fe"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/live_scene.rs",
+      "before_sha256": "dae51963d1dc866d73b6963ca448e540a9095728c2109f2a5b8e6a6631fa6d66",
+      "after_sha256": "eb129c3ccf035fd43bd485657ce376f6d48e41714482d42fa397de79bece4c95"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+      "before_sha256": "1cdf255232051f8b53d5babed6fd5ccd321dce2d0dc735ca4f51ebccc9635898",
+      "after_sha256": "dbe2f458144e1672ead3c908b2de25d2e48a986ed4dc4ec58fffc8c41f95dc0c"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+      "before_sha256": "3d19e19df6c5c21584e6d1921b5c93c85335432fa1efdb3a2284cdf1ef3cbad5",
+      "after_sha256": "b0c0e6422c2f416ae7f46617a538902a42c75c5bc216585e6390c7f2ae826ded"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/live_visuals.rs",
+      "before_sha256": "a9fca63321ce54432ef51bbee1f5888ffbd9347c2b67934ca7ce14ffe0d76228",
+      "after_sha256": "b0f540ac137a6148682234f12708bfd69ae7b7ba99dfa47dd4a762c6ac6b1a1b"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs",
+      "before_sha256": "7a512e44f444bfa138b7004fc5dd8bf338154194a286946e6046753884292240",
+      "after_sha256": "555295a86da5dc394fb6f991545a73211daa6168e236ad2b998c807f8f693caf"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+      "before_sha256": "04dca720db1ed4c8ab682a2fcdf49603bfcebd00b797dbb79145ae4f3d907ff0",
+      "after_sha256": "21175394dc723023fdfe5d1c86c45f53dab4f7e5476046233901754c8a78545d"
+    },
+    {
+      "path": "crates/deadsync-song-lua/src/rust_engine/managers/game_state/scene.rs",
+      "before_sha256": "9913d4c2c5c491d8eea8834352f237e9d0573ebdd97a77729a4598138fc9fcc2",
+      "after_sha256": "d5296c5da523ea59ce70721a75ecc70a4265efd683b75d4fddc0066138057aa3"
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_scene.rs",
+      "before_sha256": "2d7dbc18999422264b1765fb11d833421b8784cb021722f112062e84d19804fe",
+      "after_sha256": "b24f5584b57da1e7c5aca4ea9e31488b305891291e4b27622b6054f4ded4baac"
+    }
+  ],
+  "additions": [
+    "crates/deadsync-song-lua/src/rust_engine/live_scene/replay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_observation.rs"
+  ],
+  "production_scope": "Replay controls, observer callbacks, captured identity ordering and explicit option-clock inputs are test-support only. selected_context now accepts shared self over the existing owned runtime mutex; normal frame delta remains None.",
+  "validation": "production-downstream-replay-hooks-v1 retains the initial borrow-check failure; v2 is active. No passing-result claim yet.",
+  "clippy_attempt": "production-final-downstream-clippy-v1 was stopped before completion, after the test build exposed the missing hooks. It records exit 1 and unchanged sources, not a lint pass."
+}

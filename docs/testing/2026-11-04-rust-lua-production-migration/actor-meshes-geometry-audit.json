@@ -1,0 +1,8 @@
+{
+  "source": "crates/deadsync-song-lua/src/rust_engine/actors/mesh_geometry.rs",
+  "source_sha256": "293c861d77b7b770d44049e48afaecda949a783d022bad0ea9f241d1d5e77d4d",
+  "baseline": "target/rust-lua-production-before/crates/deadsync-song-lua/src/lua_util.rs",
+  "baseline_sha256": "adb84a02e9e0cb1aee3e9d182e03b56a6e5f04cc683011514ac2ca30fc9780fa",
+  "body_identical_ignoring_whitespace": true,
+  "added_visibility": "pub(super)"
+}

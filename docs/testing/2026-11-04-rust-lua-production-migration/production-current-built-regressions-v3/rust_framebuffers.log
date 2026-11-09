@@ -1,0 +1,12 @@
+
+running 7 tests
+test collecting_allocation_getters_preserve_partial_publication_and_retry ... ok
+test creation_errors_dispatch_script_error_and_allow_retry ... ok
+test creation_freezes_settings_and_retained_texture_metadata ... ok
+test dimensions_and_strict_buffer_arguments_match_production ... ok
+test lua_error_service_preserves_message_reentry_gc_and_failure_cleanup ... ok
+test malformed_allocation_reads_recover_without_stale_output ... ok
+test texture_handle_equality_and_collection_keep_captured_metadata ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+

@@ -1,0 +1,36 @@
+{
+  "command": [
+    "rustfmt",
+    "--check",
+    "--edition",
+    "2024",
+    "--config",
+    "skip_children=true",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/live_scene.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_visuals.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs",
+    "crates/deadsync-song-lua/src/rust_engine/gameplay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers/game_state/scene.rs",
+    "crates/deadsync-song-lua/tests/rust_live_scene.rs",
+    "crates/deadsync-song-lua/src/rust_engine/live_scene/replay.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_observation.rs"
+  ],
+  "exit_code": 0,
+  "seconds": 0.38539079995825887,
+  "files": {
+    "crates/deadsync-song-lua/src/rust_engine.rs": "f80c1c49bbb17243b855fc5a2729f7e7f53a77a2378c73ea25a8193a1cdc82fe",
+    "crates/deadsync-song-lua/src/rust_engine/live_scene.rs": "eb129c3ccf035fd43bd485657ce376f6d48e41714482d42fa397de79bece4c95",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs": "dbe2f458144e1672ead3c908b2de25d2e48a986ed4dc4ec58fffc8c41f95dc0c",
+    "crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs": "b0c0e6422c2f416ae7f46617a538902a42c75c5bc216585e6390c7f2ae826ded",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_visuals.rs": "b0f540ac137a6148682234f12708bfd69ae7b7ba99dfa47dd4a762c6ac6b1a1b",
+    "crates/deadsync-song-lua/src/rust_engine/actors/messages.rs": "555295a86da5dc394fb6f991545a73211daa6168e236ad2b998c807f8f693caf",
+    "crates/deadsync-song-lua/src/rust_engine/gameplay.rs": "21175394dc723023fdfe5d1c86c45f53dab4f7e5476046233901754c8a78545d",
+    "crates/deadsync-song-lua/src/rust_engine/managers/game_state/scene.rs": "d5296c5da523ea59ce70721a75ecc70a4265efd683b75d4fddc0066138057aa3",
+    "crates/deadsync-song-lua/tests/rust_live_scene.rs": "b24f5584b57da1e7c5aca4ea9e31488b305891291e4b27622b6054f4ded4baac",
+    "crates/deadsync-song-lua/src/rust_engine/live_scene/replay.rs": "eb8209ca32d9b264f9694ea55c3170260f17dae6df40b12d845b2c88e3c4b941",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_observation.rs": "2c6421f837e201eb95b424482077457e10f6c698bbaf0fb61cb40da199060647"
+  }
+}

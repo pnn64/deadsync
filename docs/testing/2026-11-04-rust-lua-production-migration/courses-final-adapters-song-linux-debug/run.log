@@ -1,0 +1,112 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 2m 50s
+     Running tests/rust_actors.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_actors-4388fa2e489c3f32)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.62s
+
+     Running tests/rust_banners.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_banners-2b946be6f93bdd61)
+
+running 6 tests
+test banner_construction_inheritance_and_scrolling_match_production ... ok
+test banner_live_texture_events_animation_and_retained_handles ... ok
+test banner_path_queries_and_fallbacks_preserve_load_distinctions ... ok
+test banner_song_loader_uses_real_blank_bitmap_and_lossy_song_paths ... ok
+test current_background_helper_keeps_dynamic_calls_and_theme_provenance ... ok
+test group_sort_and_reentrant_path_getters_match_error_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running tests/rust_bitmap_text.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_bitmap_text-e2d15f2e22059c1a)
+
+running 8 tests
+test attributes_dedup_aliases_raw_reads_and_immutable_publication ... ok
+test collecting_getters_reentry_and_failed_reads_leave_no_stale_payload ... ok
+test font_resolution_and_builtin_fallback_match_production ... ok
+test load_font_templates_concat_composition_and_independent_attributes ... ok
+test native_fixture_inheritance_and_theme_helpers ... ok
+test retained_text_updates_during_live_tweens_and_draw_callbacks ... ok
+test text_conversion_stroke_errors_and_fresh_color_tables ... ok
+test text_layout_strict_flags_fit_bounds_and_zoom_ordering ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests/rust_clock.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_clock-01f108064b1570e5)
+
+running 8 tests
+test bpm_segments_deltas_and_backward_seeks_match_legacy ... ok
+test generated_bpm_tables_and_invalid_numeric_fields_follow_legacy_behavior ... ok
+test getters_preserve_metamethod_coercion_and_callback_captures_under_gc ... ok
+test live_players_keep_separate_positions_and_reset_without_losing_identity ... ok
+test lua_error_identity_matches_puc_while_the_legacy_host_wraps_it ... ok
+test native_timing_stops_delays_warps_and_seeks_match_legacy ... ok
+test replay_music_time_preserves_native_float_rounding_rate_and_origin ... ok
+test temporary_player_tables_remain_rooted_during_reentrant_reset_setters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/rust_courses.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_courses-27a9ffed75489c97)
+
+running 11 tests
+test existing_display_actor_and_duplicate_array_declaration_keep_native_names ... ok
+test leaf_display_receives_both_set_song_passes_and_missing_steps_defaults ... ok
+test malformed_display_cleanup_leaves_the_runtime_usable ... 
+thread 'malformed_display_cleanup_leaves_the_runtime_usable' (2521187) panicked at crates/deadsync-song-lua/tests/rust_courses.rs:307:9:
+assertion failed: test_support::legacy_actor_scene_with_context(source, &context).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test positioning_preserves_transform_priority_and_collecting_callbacks ... ok
+test raw_children_are_selected_at_init_and_conditions_keep_constructor_side_effects ... ok
+test raw_display_identity_child_first_init_and_startup ... ok
+test raw_load_name_and_draw_order_survive_child_callbacks ... ok
+test scroller_defaults_coercion_clamps_and_private_methods ... ok
+test set_song_params_are_per_player_shared_with_leaves_and_reentrant_safe ... ok
+test shared_display_keeps_identity_and_initializes_once ... ok
+test shared_scene_release_keeps_actor_and_later_wrappers_until_last_owner ... ok
+
+failures:
+
+failures:
+    malformed_display_cleanup_leaves_the_runtime_usable
+
+test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_courses`

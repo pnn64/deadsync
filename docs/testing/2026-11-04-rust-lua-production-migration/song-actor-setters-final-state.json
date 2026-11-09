@@ -1,0 +1,22 @@
+{
+  "goal_status": "active",
+  "goal_complete": false,
+  "production_cutover": false,
+  "source_count": 1300,
+  "tests_passed": 998,
+  "test_targets": 73,
+  "focused_tests": 10,
+  "filtered_library_tests": 1,
+  "old_library_tests_filtered": 849,
+  "interpreter_unchanged": true,
+  "existing_tests_unchanged": true,
+  "snapshot_factories_migrated": false,
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "documents": {
+    "docs/lua-architecture.md": "1ca83cb0652f88b3f38e3f421742a50310877cb80bc4c7a109a21f058f9cef18",
+    "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "c5dd8bb074a1e6732d178bb94afccc5c2bf72e00e29a78892b70e427666706c7",
+    "docs/testing/2026-11-04-rust-lua-production-migration/review_song_actor_setters.py": "0183176f6f49e6c05991bd8b6d682bd958e344997be58528d24554113157d489",
+    "docs/testing/2026-11-04-rust-lua-production-migration/song-actor-setters-review.json": "87b989028fe6e9f1605a0df0bb15addc8860c050b014502406aa75b49b0199b8",
+    "docs/testing/2026-11-04-rust-lua-production-migration/audit_song_actor_setters.py": "7d3ef97036800ee7d4125ec2a6d4ee4b2080cff3524be62f8c67d8bd174ea9b0"
+  }
+}

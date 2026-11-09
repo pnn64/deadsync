@@ -1,0 +1,6 @@
+{
+  "baseline": "generated-players-lint-song-linux-debug",
+  "current": "notefield-lint-song-linux-debug",
+  "library_diagnostics_identical_to_baseline": true,
+  "log_sha256": "d1bf2c3fdaa3fa0a8ac919693e9024fafceab40d4710cfa45a8d756a969dd3fd"
+}

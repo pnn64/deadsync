@@ -1,0 +1,34 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: empty line after doc comment
+  --> crates/deadsync-song-lua/src/actor_input.rs:44:1
+   |
+44 | / /// Other scene lifecycle work is not pa...
+45 | |
+   | |_^
+46 |   pub s...nputs {
+   |   -----...----- the comment documents this struct
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#empty_line_after_doc_comments
+   = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+   = help: if the empty line is unintentional, remove it
+
+error[E0599]: no method named `with_native_stack` found for mutable reference `&mut _` in the current scope
+   --> crates/deadsync-song-lua/src/rust_engine/actors/state_snapshot.rs:171:10
+    |
+171 |     call.with_...stack(|s...
+    |     -----^^^^^...^^^^^
+    |
+help: there is a method `native_stack` with a similar name, but with different arguments
+   --> crates/deadlib-lua/src/vm/host/stack.rs:62:5
+    |
+ 62 |     pub f...rror> {
+    |     ^^^^^...^^^^^
+    = note: the full name for the type has been written to '/var/tmp/deadsync-rust-adapters-target/debug/deps/deadsync_song_lua-7e2fb71057845b5a.long-type-17297658315144172558.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `deadsync-song-lua` (lib) generated 1 warning
+error: could not compile `deadsync-song-lua` (lib) due to 1 previous error; 1 warning emitted

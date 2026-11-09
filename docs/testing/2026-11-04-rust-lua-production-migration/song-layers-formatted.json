@@ -1,0 +1,11 @@
+[
+  "crates/deadsync-song-lua/src/rust_engine.rs",
+  "crates/deadsync-song-lua/src/rust_engine/loader.rs",
+  "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+  "crates/deadsync-song-lua/src/rust_engine/actors/gameplay_theme.rs",
+  "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+  "crates/deadsync-song-lua/src/rust_engine/song_layers.rs",
+  "crates/deadsync-song-lua/src/rust_engine/actors/song_layers.rs",
+  "crates/deadsync-song-lua/tests/rust_song_layers.rs",
+  "crates/deadsync-song-lua/src/rust_engine/compiler_debug.rs"
+]

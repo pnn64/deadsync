@@ -2,109 +2,26 @@
 
 use std::sync::Arc;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, Table};
 use rustc_hash::FxHashMap;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::lua_util::{
     SongLuaOverlayCompileActor, actor_overlay_initial_state, call_actor_function,
     drain_actor_command_queue, read_actor_multi_vertex_mesh,
 };
-use crate::{
-    SongLuaOverlayMeshVertex, SongLuaOverlayState, SongLuaTrackedActor, SongLuaTrackedActorTarget,
-};
+use crate::SongLuaOverlayMeshVertex;
+use crate::SongLuaOverlayState;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::SongLuaTrackedActor;
+use crate::SongLuaTrackedActorTarget;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DrawSource {
-    Overlay(usize),
-    Player(usize),
-    Judgment(usize),
-    Combo(usize),
-    SongForeground,
-    ScreenLayer(usize),
-}
+pub use crate::draw_commands::{DrawFrame, DrawOp, DrawSource};
+use crate::draw_commands::{Capture, Context, RawCall, RawFrame, RawOp, MAX_BYTES, MAX_OPS, convert, partially_opaque};
+pub(crate) use crate::draw_commands::DRAW_INSTALLED_KEY;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum DrawOp {
-    Begin {
-        capture: usize,
-        preserve: bool,
-    },
-    Finish {
-        capture: usize,
-    },
-    Draw {
-        source: DrawSource,
-        state: SongLuaOverlayState,
-        /// Caller draw stack, outermost first; BeginRenderingTo resets it.
-        parents: Arc<[SongLuaOverlayState]>,
-        camera: Option<SongLuaOverlayState>,
-        vertices: Option<Arc<[SongLuaOverlayMeshVertex]>>,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct DrawFrame {
-    pub second: f32,
-    /// A command/update submission, played once before ordinary scene drawing.
-    /// It does not replace the owner's normal DrawPrimitives traversal.
-    pub immediate: bool,
-    pub owners: Vec<usize>,
-    /// Exclusive operation end for each owner, in the same order as `owners`.
-    pub owner_ends: Vec<usize>,
-    pub ops: Vec<DrawOp>,
-}
-
-#[derive(Clone, Default)]
-struct Context {
-    owner: usize,
-    parents: Arc<[SongLuaOverlayState]>,
-    camera: Option<SongLuaOverlayState>,
-}
-
-enum RawOp {
-    Begin(usize, bool),
-    Finish(usize),
-    Draw(
-        usize,
-        SongLuaOverlayState,
-        Context,
-        Option<Arc<[SongLuaOverlayMeshVertex]>>,
-    ),
-}
-
-struct RawCall {
-    owner: usize,
-    op: RawOp,
-}
-
-struct RawFrame {
-    second: f32,
-    immediate: bool,
-    owners: Vec<usize>,
-    calls: Vec<RawCall>,
-}
-
-/// Song-load worker only, no synchronization or gameplay maintenance. Retains
-/// immutable frames until compilation hands them to song-lifetime playback.
-/// At most 256 operations/frame and 256 MiB/song, including vertex payloads
-/// and caller stacks. Overflow reports unsupported capture; it never prunes or
-/// silently reuses the final pass. No I/O or GPU work occurs here.
-#[derive(Default)]
-struct Capture {
-    context: Option<Context>,
-    targets: Vec<(usize, Context)>,
-    calls: Vec<RawCall>,
-    owners: Vec<usize>,
-    frames: Vec<RawFrame>,
-    labels: FxHashMap<usize, String>,
-    bytes: usize,
-    frame_ops: usize,
-}
-
-const MAX_BYTES: usize = 256 * 1024 * 1024;
-const MAX_OPS: usize = 256;
-pub(crate) const DRAW_INSTALLED_KEY: &str = "__songlua_draw_installed";
-
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
     let Some(mut capture) = lua.app_data_mut::<Capture>() else {
         return Ok(());
@@ -139,6 +56,7 @@ fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn begin(lua: &Lua, actor: &Table, preserve: bool) -> mlua::Result<()> {
     let pointer = actor.to_pointer() as usize;
     push(lua, RawOp::Begin(pointer, preserve))?;
@@ -155,6 +73,7 @@ pub(crate) fn begin(lua: &Lua, actor: &Table, preserve: bool) -> mlua::Result<()
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn finish(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let pointer = actor.to_pointer() as usize;
     if let Some(capture) = lua.app_data_ref::<Capture>() {
@@ -180,6 +99,7 @@ pub(crate) fn finish(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 
 struct IsSprite(bool);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl mlua::FromLua for IsSprite {
     fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
         Ok(Self(matches!(value, mlua::Value::String(kind)
@@ -203,6 +123,7 @@ impl mlua::FromLua for IsSprite {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     if crate::live::active(lua) {
         crate::live::read_state(lua, actor)
@@ -219,20 +140,7 @@ fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     }
 }
 
-// Actor::PreDraw multiplies diffuse by its inherited diffuse and combines
-// glow with Screen blending before Actor::PartiallyOpaque tests the result.
-fn partially_opaque(state: SongLuaOverlayState, parents: &[SongLuaOverlayState]) -> bool {
-    let mut diffuse = 1.0;
-    let mut glow = 0.0;
-    for parent in parents {
-        diffuse *= parent.vertex_colors.map_or(parent.diffuse[3], |colors| colors[0][3]);
-        glow = glow + parent.glow[3] - glow * parent.glow[3];
-    }
-    let diffuse_visible = state.vertex_colors.map_or(state.diffuse[3] * diffuse > 0.0,
-        |colors| colors.iter().any(|color| color[3] * diffuse > 0.0));
-    diffuse_visible || state.glow[3] + glow - state.glow[3] * glow > 0.0
-}
-
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Option<Context>> {
     // Transition::EarlyAbortDraw: waiting transitions are not drawable, even
     // if their child has an opaque queued destination state.
@@ -285,6 +193,7 @@ fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Opt
     }))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// Execute an explicit Actor:Draw using the caller's frozen draw context.
 pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let prior = lua
@@ -430,6 +339,7 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn frame_second(lua: &Lua) -> mlua::Result<f32> {
     let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
     let elapsed = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
@@ -442,6 +352,7 @@ fn frame_second(lua: &Lua) -> mlua::Result<f32> {
 // Lua Actor:Draw executes immediately, including during a parent's OnCommand
 // before its children's OnCommands. Freeze that submission at the call site;
 // using the eventual overlay pose loses its size, crop, color and draw stack.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn draw_immediate(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let second = frame_second(lua)?;
     if lua.app_data_ref::<Capture>().is_none() { lua.set_app_data(Capture::default()); }
@@ -466,6 +377,7 @@ fn draw_immediate(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
     if crate::live::active(lua) && actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
         return Ok(());
@@ -506,6 +418,7 @@ fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// The live VM retains only this frame's draw stack. Reuse the same owned
 /// traversal and explicit Draw/render-target scopes as the baker, while
 /// releasing prior frame payloads before any callback runs. Trace events and
@@ -532,6 +445,7 @@ pub(crate) fn live_storage(lua: &Lua) -> (usize, usize, usize) {
         (capture.frames.len(), capture.frames.iter().map(|frame| frame.calls.len()).sum(), capture.bytes))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
     // Monotone across callback removal: existing frames still need quiet tails.
     // Ordinary charts avoid traversing and reading every actor on each update.
@@ -585,6 +499,7 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -618,6 +533,7 @@ pub(crate) fn take<Kind>(
 
 pub(crate) struct LiveSources(pub FxHashMap<usize, DrawSource>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
     if lua.app_data_ref::<Capture>().is_none_or(|capture|
         !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()) {
@@ -641,140 +557,6 @@ pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
     result.map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
 }
 
-fn convert(
-    raw_frames: Vec<RawFrame>,
-    labels: &FxHashMap<usize, String>,
-    sources: &FxHashMap<usize, DrawSource>,
-) -> Result<Vec<(usize, DrawFrame)>, String> {
-    let overlay_index = |pointer| match sources.get(&pointer) {
-        Some(DrawSource::Overlay(index)) => Ok(*index),
-        _ => Err("custom draw references an uncompiled capture or callback owner".to_owned()),
-    };
-    let mut owners = Vec::new();
-    for frame in raw_frames.iter().filter(|frame| !frame.immediate) {
-        for &owner in &frame.owners {
-            if !owners.contains(&owner) {
-                owners.push(owner);
-            }
-        }
-    }
-    // Normal frames include the union of callback owners, even quiet tails.
-    // Duplicate authored pointers may need extra slots and retain Vec growth.
-    let capacity = raw_frames
-        .iter()
-        .map(|frame| {
-            if frame.immediate {
-                frame.owners.len()
-            } else {
-                frame.owners.len().max(owners.len())
-            }
-        })
-        .sum();
-    let mut frames = Vec::with_capacity(capacity);
-    let mut positions = FxHashMap::<usize, usize>::default();
-    let mut counts = Vec::new();
-    for raw in raw_frames {
-        let mut frame_owners = raw.owners;
-        for &owner in owners.iter().filter(|_| !raw.immediate) {
-            if !frame_owners.contains(&owner) {
-                frame_owners.push(owner);
-            }
-        }
-        let start = frames.len();
-        // With one owner every valid call belongs to that frame. Quiet tails
-        // reserve nothing; multiple owners retain their independent growth.
-        let command_capacity = if frame_owners.len() == 1 {
-            raw.calls.len()
-        } else {
-            0
-        };
-        let multiple = frame_owners.len() > 1 && !raw.calls.is_empty();
-        if multiple {
-            positions.clear();
-            positions.reserve(frame_owners.len());
-            counts.clear();
-            counts.resize(frame_owners.len(), 0usize);
-        }
-        for pointer in frame_owners {
-            let owner = overlay_index(pointer)?;
-            // Aliased source bindings and duplicate owners route to the first
-            // output frame, matching the original ordered search.
-            if multiple {
-                positions.entry(owner).or_insert(frames.len() - start);
-            }
-            frames.push((
-                owner,
-                DrawFrame {
-                    second: raw.second,
-                    immediate: raw.immediate,
-                    owners: vec![owner],
-                    owner_ends: Vec::with_capacity(1),
-                    ops: Vec::with_capacity(command_capacity),
-                },
-            ));
-        }
-        let by_owner = &mut frames[start..];
-        if multiple {
-            // This sizing pass must not validate calls: source/target errors
-            // still occur in operation order in the consuming loop below.
-            for call in &raw.calls {
-                if let Some(DrawSource::Overlay(owner)) = sources.get(&call.owner)
-                    && let Some(&index) = positions.get(owner)
-                {
-                    counts[index] += 1;
-                }
-            }
-            for ((_, frame), count) in by_owner.iter_mut().zip(&counts) {
-                frame.ops.reserve_exact(*count);
-            }
-        }
-        for call in raw.calls {
-            let owner = overlay_index(call.owner)?;
-            let op = match call.op {
-                RawOp::Begin(pointer, preserve) => DrawOp::Begin {
-                    capture: overlay_index(pointer)?,
-                    preserve,
-                },
-                RawOp::Finish(pointer) => DrawOp::Finish {
-                    capture: overlay_index(pointer)?,
-                },
-                RawOp::Draw(pointer, state, context, vertices) => DrawOp::Draw {
-                    source: *sources.get(&pointer).ok_or_else(|| {
-                        format!(
-                            "custom draw references an uncompiled actor {} at {:.6}s",
-                            labels
-                                .get(&pointer)
-                                .map_or("<unnamed>", String::as_str),
-                            raw.second,
-                        )
-                    })?,
-                    state,
-                    parents: context.parents,
-                    camera: context.camera,
-                    vertices,
-                },
-            };
-            let slot = if multiple {
-                positions.get(&owner).copied()
-            } else {
-                by_owner
-                    .first()
-                    .filter(|(index, _)| *index == owner)
-                    .map(|_| 0)
-            };
-            if let Some(slot) = slot {
-                let frame = &mut by_owner[slot].1;
-                frame.ops.push(op);
-            } else {
-                return Err("custom draw lost its callback owner".to_owned());
-            }
-        }
-        for (_, frame) in by_owner {
-            frame.owner_ends.push(frame.ops.len());
-        }
-    }
-    Ok(frames)
-}
 
 #[cfg(test)]
 pub(crate) mod perf {

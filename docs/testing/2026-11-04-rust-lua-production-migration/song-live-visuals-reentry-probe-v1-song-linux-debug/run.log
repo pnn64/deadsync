@@ -1,0 +1,30 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 35.02s
+     Running tests/rust_live_visuals.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_visuals-8c5ea65d717e29ff)
+
+running 1 test
+test single_use_publication_callbacks_reject_recursive_and_saved_lua_calls ... 
+thread 'single_use_publication_callbacks_reject_recursive_and_saved_lua_calls' (3076496) panicked at crates/deadsync-song-lua/tests/rust_live_visuals.rs:164:9:
+assertion `left == right` failed: rust: Err("line 11: /live-visual-check.lua:11: 0:Lua:nil,1:Lua:nil,2:Lua:nil,3:Lua:nil,4:Lua:nil,5:Lua:nil,6:Lua:nil,7:Lua:nil,8:Lua:nil")
+  left: false
+ right: true
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    single_use_publication_callbacks_reject_recursive_and_saved_lua_calls
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.74s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_live_visuals`

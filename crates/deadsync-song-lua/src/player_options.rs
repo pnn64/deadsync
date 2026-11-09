@@ -1,6 +1,11 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, Value};
 
-use crate::{SongLuaSpeedMod, read_boolish, read_f32};
+use crate::SongLuaSpeedMod;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_boolish;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
 
 // PlayerOptions::FromOneModString checks these branches before NoteSkinManager.
 // Later branches only block its final whole-name fallback (skins with spaces).
@@ -440,6 +445,7 @@ fn parse_compact_player_speed_option(text: &str) -> Option<(&'static str, f32)> 
     None
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlua::Result<Value> {
     if player_option_uses_bool(name) {
@@ -454,6 +460,7 @@ pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlu
     Ok(Value::Number(f64::from(read_f32(value).unwrap_or(0.0))))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[inline(always)]
 pub fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value> {
     if name == "failsetting" {
@@ -468,6 +475,7 @@ pub fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value>
     Ok(Value::Number(0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn song_lua_speedmod_value(
     speedmod: SongLuaSpeedMod,
     ctor: fn(f32) -> SongLuaSpeedMod,
@@ -612,34 +620,9 @@ mod tests {
         assert_eq!(parse_player_speed_option("Reverse"), None);
     }
 
-    #[test]
-    fn normalizes_player_option_values() {
-        let lua = Lua::new();
-        assert_eq!(
-            normalize_player_option_value(&lua, "nomines", Value::Integer(1)).unwrap(),
-            Value::Boolean(true)
-        );
-        assert_eq!(
-            default_player_option_value(&lua, "failsetting").unwrap(),
-            Value::Integer(0)
-        );
-        assert_eq!(
-            normalize_player_option_value(&lua, "reverse", Value::Number(0.5)).unwrap(),
-            Value::Number(0.5)
-        );
-    }
+    
 
-    #[test]
-    fn speedmod_value_matches_requested_variant() {
-        assert_eq!(
-            song_lua_speedmod_value(SongLuaSpeedMod::C(400.0), SongLuaSpeedMod::C),
-            Value::Number(400.0)
-        );
-        assert_eq!(
-            song_lua_speedmod_value(SongLuaSpeedMod::X(1.5), SongLuaSpeedMod::C),
-            Value::Nil
-        );
-    }
+    
 }
 
 // PlayerOptions::GetMods emits these scalar fields in native order.

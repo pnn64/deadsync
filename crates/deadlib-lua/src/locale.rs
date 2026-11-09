@@ -6,15 +6,14 @@ use crate::Error;
 )))]
 use crate::ErrorKind;
 use std::{
-    borrow::Cow,
     cmp::Ordering,
     sync::{
-        LazyLock, Mutex, RwLock,
+        Mutex, RwLock,
         atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
     },
 };
 
-static DECIMAL: LazyLock<Mutex<Vec<u8>>> = LazyLock::new(|| Mutex::new(b".".to_vec()));
+static DECIMAL: Mutex<Decimal> = Mutex::new(Decimal::Dot);
 static DECIMAL_DOT: AtomicBool = AtomicBool::new(true);
 static COLLATE_C: AtomicBool = AtomicBool::new(true);
 static REVISION: AtomicU64 = AtomicU64::new(0);
@@ -30,7 +29,7 @@ static CTYPE: RwLock<Ctype> = RwLock::new(Ctype {
 
 #[cfg(all(windows, target_env = "msvc"))]
 #[allow(unsafe_code)]
-mod windows;
+pub(crate) mod windows;
 #[cfg(all(windows, target_env = "msvc"))]
 use windows as native;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
@@ -48,13 +47,13 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
         let mut decimal = DECIMAL
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(change) = native::set(name, category) else {
+        let Some(change) = native::set(name, category)? else {
             return Ok(None);
         };
         if let Some(cache) = change.cache {
             if let Some(point) = cache.decimal {
                 *decimal = point;
-                DECIMAL_DOT.store(decimal.as_slice() == b".", AtomicOrdering::Release);
+                DECIMAL_DOT.store(&**decimal == b".", AtomicOrdering::Release);
             }
             if let Some((ctype, ctype_c)) = cache.ctype {
                 *CTYPE
@@ -69,7 +68,10 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
                 COLLATE_C.store(collate_c, AtomicOrdering::Release);
             }
         }
-        Ok(Some(change.result))
+        // Windows may have applied the native selection before copying its
+        // returned name fails. Publish its allocation-free cache first, so a
+        // memory error never leaves the numeric/ctype rules on the old locale.
+        change.result.map(Some)
     }
     #[cfg(not(any(
         all(windows, target_env = "msvc"),
@@ -88,25 +90,94 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
 pub(crate) fn revision() -> u64 {
     REVISION.load(AtomicOrdering::Acquire)
 }
-pub(crate) fn decimal() -> Cow<'static, [u8]> {
-    if DECIMAL_DOT.load(AtomicOrdering::Acquire) {
-        Cow::Borrowed(b".")
-    } else {
-        Cow::Owned(
-            DECIMAL
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone(),
-        )
+#[derive(Clone)]
+pub(crate) enum Decimal {
+    Dot,
+    Inline {
+        bytes: [u8; 16],
+        len: usize,
+    },
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    Shared(crate::memory::Shared<Vec<u8>>),
+}
+impl Decimal {
+    fn inline(value: &[u8]) -> Option<Self> {
+        if value == b"." {
+            return Some(Self::Dot);
+        }
+        let mut bytes = [0; 16];
+        bytes.get_mut(..value.len())?.copy_from_slice(value);
+        Some(Self::Inline {
+            bytes,
+            len: value.len(),
+        })
+    }
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    fn try_new(value: &[u8]) -> Result<Self, Error> {
+        use crate::memory::{Memory, Shared, fallible::SliceExt};
+        match Self::inline(value) {
+            Some(value) => Ok(value),
+            None => Ok(Self::Shared(Shared::try_new_in(
+                value.try_to_vec()?,
+                Memory::default(),
+            )?)),
+        }
     }
 }
-pub(crate) fn localize(bytes: &mut Vec<u8>) {
+impl std::ops::Deref for Decimal {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Dot => b".",
+            Self::Inline { bytes, len } => &bytes[..*len],
+            #[cfg(all(target_os = "linux", target_env = "gnu"))]
+            Self::Shared(bytes) => bytes,
+        }
+    }
+}
+pub(crate) fn decimal() -> Decimal {
+    if DECIMAL_DOT.load(AtomicOrdering::Acquire) {
+        Decimal::Dot
+    } else {
+        DECIMAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+pub(crate) fn try_localize(bytes: &mut Vec<u8>) -> Result<(), Error> {
     if !DECIMAL_DOT.load(AtomicOrdering::Acquire)
         && let Some(at) = bytes.iter().position(|&b| b == b'.')
     {
         let point = decimal();
+        bytes
+            .try_reserve(point.len().saturating_sub(1))
+            .map_err(|_| Error::memory())?;
         bytes.splice(at..at + 1, point.iter().copied());
     }
+    Ok(())
+}
+pub(crate) fn try_localize_owned(bytes: &mut crate::memory::Buffer<u8>) -> Result<(), Error> {
+    if !DECIMAL_DOT.load(AtomicOrdering::Acquire)
+        && let Some(at) = bytes.iter().position(|&b| b == b'.')
+    {
+        // Snapshot before allocation: a custom callback may enter a distinct
+        // state and use numeric formatting without holding this process lock.
+        let point = decimal();
+        let len = bytes.len();
+        let next = len
+            .checked_sub(1)
+            .and_then(|len| len.checked_add(point.len()))
+            .ok_or_else(Error::memory)?;
+        bytes.try_reserve(next.saturating_sub(len))?;
+        if next > len {
+            bytes.resize(next, 0);
+        }
+        bytes.copy_within(at + 1..len, at + point.len());
+        bytes.truncate(next);
+        bytes[at..at + point.len()].copy_from_slice(&point);
+    }
+    Ok(())
 }
 fn mask(byte: u8) -> u32 {
     CTYPE
@@ -160,25 +231,25 @@ pub(crate) fn class(byte: u8, class: u8) -> bool {
     };
     hit != class.is_ascii_uppercase()
 }
-pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut Vec<u8>) {
+pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut crate::memory::Buffer<u8>) {
     let ctype = CTYPE
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if ctype.is_c {
-        output.extend(source.iter().map(|b| {
+        for byte in source.iter().map(|b| {
             if upper {
                 b.to_ascii_uppercase()
             } else {
                 b.to_ascii_lowercase()
             }
-        }));
+        }) {
+            output.push(byte);
+        }
     } else {
         let shift = if upper { 8 } else { 0 };
-        output.extend(
-            source
-                .iter()
-                .map(|&b| (ctype.values[usize::from(b)] >> shift) as u8),
-        );
+        for &byte in source {
+            output.push((ctype.values[usize::from(byte)] >> shift) as u8);
+        }
     }
 }
 pub(crate) fn lower(byte: u8) -> u8 {
@@ -191,9 +262,9 @@ pub(crate) fn lower(byte: u8) -> u8 {
         ctype.values[usize::from(byte)] as u8
     }
 }
-pub(crate) fn compare(left: &[u8], right: &[u8]) -> Ordering {
+pub(crate) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     if COLLATE_C.load(AtomicOrdering::Acquire) {
-        return left.cmp(right);
+        return Ok(left.cmp(right));
     }
     #[cfg(any(
         all(windows, target_env = "msvc"),
@@ -207,8 +278,17 @@ pub(crate) fn compare(left: &[u8], right: &[u8]) -> Ordering {
         all(target_os = "linux", target_env = "gnu")
     )))]
     {
-        left.cmp(right)
+        Ok(left.cmp(right))
     }
+}
+
+fn terminated(bytes: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut result = crate::memory::fallible::with_capacity(
+        bytes.len().checked_add(1).ok_or_else(Error::memory)?,
+    )?;
+    result.extend_from_slice(bytes);
+    result.push(0);
+    Ok(result)
 }
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
@@ -229,18 +309,10 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         return None;
     }
     let point = decimal();
-    let mut normalized = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        if bytes[at..].starts_with(&point) {
-            normalized.push(b'.');
-            at += point.len();
-        } else {
-            normalized.push(bytes[at]);
-            at += 1;
-        }
+    if point.is_empty() || !bytes.windows(point.len()).any(|window| window == &*point) {
+        return parse_normalized(bytes);
     }
-    parse_normalized(&normalized)
+    crate::numeric::localized_number(bytes, &point)
 }
 fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     let (negative, unsigned) = match bytes.first() {
@@ -250,18 +322,13 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     };
     if unsigned.starts_with(b"0x") || unsigned.starts_with(b"0X") {
         let hex = &unsigned[2..];
-        let end = hex
-            .iter()
-            .position(|b| matches!(b, b'p' | b'P'))
-            .unwrap_or(hex.len());
-        let digits = &hex[..end];
-        if !digits.iter().any(u8::is_ascii_hexdigit)
-            || digits.iter().filter(|&&b| b == b'.').count() > 1
-            || digits.iter().any(|b| !b.is_ascii_hexdigit() && *b != b'.')
-        {
-            return None;
-        }
-        return crate::numeric::hex_number(hex, negative);
+        return crate::numeric::hex_number(hex.iter().copied(), negative);
+    }
+    // UCRT's runtime converter truncates its decimal significand after 768
+    // digits and clamps the textual exponent before adjusting for the radix
+    // position. Short inputs cannot expose either difference from core's parser.
+    if cfg!(all(windows, target_env = "msvc")) && bytes.len() > 768 {
+        return crate::numeric::localized_number(bytes, b".");
     }
     crate::lexer::parse_number(bytes)
 }

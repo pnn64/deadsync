@@ -1,0 +1,111 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+warning: method `identity` is never used
+  --> crates/deadsync-song-lua/src/rust_engine/actors/scalar_methods.rs:50:19
+   |
+39 | impl Methods {
+   | ------------ method in this implementation
+...
+50 |     pub(super) fn identity(&s...
+   |                   ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 2m 45s
+     Running tests/rust_actor_setters.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_actor_setters-4955e7c4d7206408)
+
+running 6 tests
+test assigned_and_raw_copied_setters_return_the_captured_actor_for_chaining ... ok
+test bound_setters_keep_their_target_and_consume_the_second_argument ... ok
+test custom_assignment_hooks_observe_writes_to_the_captured_target ... 
+thread 'custom_assignment_hooks_observe_writes_to_the_captured_target' (3080222) panicked at crates/deadsync-song-lua/tests/rust_actor_setters.rs:30:9:
+assertion `left == right` failed: live=false
+  left: [95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 118, 105, 115, 105, 98, 108, 101, 61, 102, 97, 108, 115, 101]
+ right: [95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 118, 105, 115, 105, 98, 108, 101, 61, 102, 97, 108, 115, 101, 124, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 99, 97, 112, 116, 117, 114, 101, 95, 98, 108, 111, 99, 107, 61, 116, 97, 98, 108, 101, 58, 32, 48, 120, 55, 57, 99, 50, 57, 56, 48, 97, 56, 48, 99, 48, 124, 95, 95, 115, 111, 110, 103, 108, 117, 97, 95, 115, 116, 97, 116, 101, 95, 118, 105, 115, 105, 98, 108, 101, 61, 102, 97, 108, 115, 101]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test lookup_uses_current_raw_kind_and_missing_public_class_falls_back_to_bound ... ok
+test public_forwarders_observe_bound_overrides_and_preserve_all_results ... ok
+test saved_bound_setter_roots_retired_target_then_releases_the_scene ... ok
+
+failures:
+
+failures:
+    custom_assignment_hooks_observe_writes_to_the_captured_target
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.20s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_actor_setters`
+     Running tests/rust_actors.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_actors-f7220eb9984bca7d)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.94s
+
+     Running tests/rust_scene_retirement.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_scene_retirement-0f46df6cffe01876)
+
+running 11 tests
+test detached_fields_metatables_and_collecting_callbacks_keep_native_state ... 
+thread 'detached_fields_metatables_and_collecting_callbacks_keep_native_state' (3080254) panicked at crates/deadsync-song-lua/tests/rust_scene_retirement.rs:10:10:
+called `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 1, message: "/fixture/retirement.lua:1: native actor method x has no semantic implementation", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(12884902641))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test failed_end_still_allows_retained_state_and_eventual_cleanup ... ok
+test late_wrapper_subscriptions_remain_rooted_until_the_next_registry_replacement ... ok
+test retained_sound_handle_keeps_its_actor_and_native_parameters ... ok
+test retirement_unsubscribes_old_messages_but_keeps_direct_commands_callable ... ok
+test saved_actor_state_and_late_wrappers_match_native_after_retirement ... ok
+test scene_handles_from_another_vm_cannot_retire_or_release_local_actors ... ok
+test screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them ... ok
+test shared_actors_transfer_after_the_last_active_owner_retires_or_releases ... ok
+test unused_retired_scenes_release_rust_metadata_in_repeated_cycles ... ok
+test weak_authored_command_fields_still_follow_native_collection_rules ... ok
+
+failures:
+
+failures:
+    detached_fields_metatables_and_collecting_callbacks_keep_native_state
+
+test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.37s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_scene_retirement`
+error: 2 targets failed:
+    `-p deadsync-song-lua --test rust_actor_setters`
+    `-p deadsync-song-lua --test rust_scene_retirement`

@@ -1,0 +1,701 @@
+[
+    SongLuaOverlayUpdateTrack {
+        overlay_index: 1,
+        target: Diffuse,
+        samples: [
+            SongLuaOverlayUpdateSample {
+                time: 0.016666668,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.0,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.0166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.9833343,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.0333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.96666765,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.05,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.950001,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.0666666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.93333435,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.0833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.9166677,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.1,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.90000105,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.1166666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.8833344,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.1333334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.8666675,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.15,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.85000086,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.1666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.8333342,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.1833334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.81666756,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.2,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.8000009,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.2166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.78333426,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.2333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.7666676,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.25,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.75000095,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.2666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.7333343,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.2833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.71666765,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.3,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.700001,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.3166666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.68333435,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.3333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.6666677,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.35,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.65000105,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.3666666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.6333344,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.3833334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.6166675,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.4,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.60000086,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.4166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.5833342,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.4333334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.56666756,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.45,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.5500009,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.4666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.53333426,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.4833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.5166676,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.5,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.50000095,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.5166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.4833343,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.5333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.46666765,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.55,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.450001,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.5666666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.43333435,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.5833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.4166677,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.6,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.40000105,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.6166666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.3833344,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.6333334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.3666675,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.65,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.35000086,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.6666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.3333342,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.6833334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.31666756,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.7,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.3000009,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.7166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.28333426,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.7333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.2666676,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.75,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.25000095,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.7666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.2333343,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.7833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.21666765,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.8,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.200001,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.8166666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.18333435,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.8333333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.1666677,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.85,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.15000105,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.8666666,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.1333344,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.8833334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.11666751,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.9,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.10000086,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.9166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.08333421,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.9333334,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.06666756,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.95,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.050000906,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.9666667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.033334255,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 2.9833333,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.016667604,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 3.0,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        9.536743e-7,
+                    ],
+                ),
+            },
+            SongLuaOverlayUpdateSample {
+                time: 3.0166667,
+                value: Vec4(
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.0,
+                    ],
+                ),
+            },
+        ],
+    },
+]

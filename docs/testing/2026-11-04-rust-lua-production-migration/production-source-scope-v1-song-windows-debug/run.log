@@ -1,0 +1,52 @@
+    Blocking waiting for file lock on build directory
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 9m 28s
+     Running tests\rust_live_compiler.rs (target/rust-adapters\debug\deps\rust_live_compiler-b17b59dfc7bec47c.exe)
+
+running 16 tests
+test empty_live_session_keeps_the_screen_and_zero_authored_entries ... ok
+test live_startup_reload_limit_rejects_after_the_existing_128_reconstructions ... ok
+test malformed_live_file_keeps_rust_dummy_fallback_and_prior_side_effects ... ok
+test multilayer_wrapper_proxy_aft_and_sprite_payloads_use_shared_layer_splitting ... ok
+test nested_tail_loaded_actor_keeps_live_file_directory ... ok
+test original_unsupported_statistics_getlife_fixture_remains_a_rejection_control ... ok
+test replacement_init_does_not_observe_the_previous_frames_live_player_feedback ... ok
+test retained_rust_scene_moves_from_loading_worker_to_the_playback_thread ... ok
+test retained_scene_reload_runs_end_then_rebuilds_in_the_same_vm ... ok
+test saved_scalar_getters_and_writes_revert_to_lua_backing_after_reload ... ok
+test sound_owner_events_survive_startup_and_runtime_reload_in_native_order ... ok
+test source_callback_scope_survives_nested_theme_gc_and_unwinds_after_error ... 
+thread 'source_callback_scope_survives_nested_theme_gc_and_unwinds_after_error' (56476) panicked at crates\deadsync-song-lua\tests\rust_live_compiler.rs:574:5:
+assertion `left == right` failed
+  left: []
+ right: ["NestedTheme"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test startup_reloads_preserve_globals_rng_end_order_and_saved_actor_ownership ... ok
+test unified_live_compilation_freezes_initial_assets_and_retains_future_callbacks ... ok
+test unified_offline_entry_preserves_existing_finite_output ... ok
+test unsupported_startup_screen_rejection_matches ... ok
+
+failures:
+
+failures:
+    source_callback_scope_survives_nested_theme_gc_and_unwinds_after_error
+
+test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.09s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_live_compiler`

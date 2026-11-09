@@ -1,0 +1,67 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+   Compiling deadsync-profile-gameplay v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-assets)
+    Finished `test` profile [unoptimized] target(s) in 1m 47s
+     Running tests/rust_generated_players.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_generated_players-1ab8a2372df80921)
+
+running 6 tests
+test constructors_own_attack_display_and_preserve_actor_methods ... 
+thread 'constructors_own_attack_display_and_preserve_actor_methods' (2580353) panicked at crates/deadsync-song-lua/tests/rust_generated_players.rs:66:33:
+legacy: 
+            assert(PlayerActor==nil and LifeMeter==nil)
+            for i,a in ipairs{p,q} do
+                assert(a:GetName()=='PlayerP'..i and a:GetParent()==nil)
+                assert(a.__songlua_player_index==i-1 and a.__songlua_visible)
+                assert(a.__songlua_style_name=='dance-single')
+                local child=a:GetChild('')
+                assert(child==a[1] and child==a.__songlua_attack_display and a[2]==nil)
+                assert(child:GetParent()==a and child:GetName()=='' and child:GetX()==-40)
+                assert(a:GetNumChildren()==1 and a:GetChild('missing')==nil)
+                log(a:GetX(),a:GetY(),a:GetDestX(),a:GetDestY(),child:GetY())
+            end
+            assert(p:GetX()==144.5 and p:GetY()==-37.25)
+            assert(q:GetX()==432.25 and q:GetY()==120)
+            assert(m:GetName()=='LifeP1' and n:GetName()=='LifeP2')
+            assert(m:GetParent()==nil and m.SetUpdateFunction==nil and p.SetUpdateFunction~=nil)
+            assert(not p:get_oitg_zoom_mode())
+            assert(p:set_oitg_zoom_mode(0)==p and p:get_oitg_zoom_mode())
+            assert(p:set_oitg_zoom_mode(false)==p and not p:get_oitg_zoom_mode())
+            local f=p.set_oitg_zoom_mode;local t={};assert(f(t,'yes')==t)
+            assert(p.get_oitg_zoom_mode(t));t.__songlua_oitg_zoom_mode='invalid'
+            assert(not pcall(p.get_oitg_zoom_mode,t));assert(not pcall(f,false,true))
+            p:x(21);p[1]:y(11);assert(p:GetX()==21 and p[1]:GetY()==11)
+            ActorFrame.SetLife=function(self)return self,'override' end
+            local a,b=p:SetLife(.3);assert(a==p and b=='override');ActorFrame.SetLife=nil
+            Actor.GetLife=function()return 12 end;assert(m:GetLife()==12);Actor.GetLife=nil
+            log(m:GetLife(),m:IsFailing(),m:IsHot(),m:IsInDanger())
+        
+runtime error: ...deadsync-song-lua/tests/rust_generated_players.rs:64:6: assertion failed!
+stack traceback:
+	[C]: in ?
+	[C]: in function 'assert'
+	...deadsync-song-lua/tests/rust_generated_players.rs:64:6: in main chunk
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test errors_keep_native_partial_writes_and_clear_recursion_guard ... ok
+test life_queries_capture_meter_and_distinguish_live_value_from_local_flags ... ok
+test meter_getters_can_reenter_collect_and_replace_their_receiver_fields ... ok
+test released_player_scene_unsubscribes_and_releases_generated_owners ... ok
+test set_life_updates_shared_stats_and_notifies_before_side_effect ... ok
+
+failures:
+
+failures:
+    constructors_own_attack_display_and_preserve_actor_methods
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.31s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_generated_players`

@@ -1,0 +1,72 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+error[E0499]: cannot borrow `*call` as mutable more than once at a time
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:59:53
+   |
+59 | ... = trail(call, song, table(call, s...
+   |       ----- ----              ^^^^ second mutable borrow occurs here
+   |       |     |
+   |       |     first mutable borrow occurs here
+   |       first borrow later used by call
+   |
+help: try adding a local storing this argument...
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:59:47
+   |
+59 | ...g, table...teps)?, ...
+   |       ^^^^^...^^^^^
+help: ...and then using that local as the argument to this call
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:59:29
+   |
+59 | ... = trail...bpms)?;
+   |       ^^^^^...^^^^^
+
+error[E0499]: cannot borrow `*call` as mutable more than once at a time
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:66:57
+   |
+66 | ... = course(call, &context, song, table(call, p...
+   |       ------ ----                        ^^^^ second mutable borrow occurs here
+   |       |      |
+   |       |      first mutable borrow occurs here
+   |       first borrow later used by call
+   |
+help: try adding a local storing this argument...
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:66:51
+   |
+66 | ...g, table...mary)?)?;
+   |       ^^^^^...^^^^^
+help: ...and then using that local as the argument to this call
+  --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:66:22
+   |
+66 | ... = cours...ry)?)?;
+   |       ^^^^^...^^^^^
+
+error[E0499]: cannot borrow `*call` as mutable more than once at a time
+   --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:548:45
+    |
+548 | ... = entry(call, song, table(call, s...
+    |       ----- ----              ^^^^ second mutable borrow occurs here
+    |       |     |
+    |       |     first mutable borrow occurs here
+    |       first borrow later used by call
+    |
+help: try adding a local storing this argument...
+   --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:548:39
+    |
+548 | ...g, table...teps)?)?;
+    |       ^^^^^...^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs:548:21
+    |
+548 | ... = entry...ps)?)?;
+    |       ^^^^^...^^^^^
+
+For more information about this error, try `rustc --explain E0499`.
+error: could not compile `deadsync-song-lua` (lib) due to 3 previous errors

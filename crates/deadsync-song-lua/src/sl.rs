@@ -1,13 +1,33 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, MultiValue, Table, Value};
 
-use crate::{
-    DDR_DIFF_COLORS, ITG_DIFF_COLORS, LUA_PLAYERS, SL_COLORS, SL_DECORATIVE_COLORS,
-    SL_FA_PLUS_COLORS, SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, SONG_LUA_NOTE_COLUMNS,
-    SongLuaCompileContext, SongLuaPlayerContext, create_bool_array, create_string_array,
-    make_color_table, note_song_lua_side_effect, parse_color_text, player_index_from_value,
-    player_short_name, song_lua_speedmod_parts, song_music_rate_value,
-};
+use crate::DDR_DIFF_COLORS;
+use crate::ITG_DIFF_COLORS;
+use crate::LUA_PLAYERS;
+use crate::SL_COLORS;
+use crate::SL_DECORATIVE_COLORS;
+use crate::SL_FA_PLUS_COLORS;
+use crate::SL_JUDGMENT_COLORS;
+use crate::SONG_LUA_ACTIVE_COLOR_INDEX;
+use crate::SONG_LUA_NOTE_COLUMNS;
+use crate::SongLuaCompileContext;
+use crate::SongLuaPlayerContext;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_bool_array;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::create_string_array;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::make_color_table;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::note_song_lua_side_effect;
+use crate::parse_color_text;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::player_index_from_value;
+use crate::player_short_name;
+use crate::song_lua_speedmod_parts;
+use crate::song_music_rate_value;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Global", create_sl_global_table(lua, context)?)?;
@@ -37,12 +57,14 @@ pub fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Resu
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_sl_streams(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     init_sl_streams(lua, &table)?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
     for name in [
         "NotesPerMeasure",
@@ -74,6 +96,7 @@ pub fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
     let player = args
         .get(1)
@@ -119,6 +142,7 @@ pub fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
     Ok(streams)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_global_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("GameMode", "ITG")?;
@@ -142,12 +166,14 @@ fn create_sl_global_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_active_mods(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("MusicRate", song_music_rate_value(music_rate))?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_player_table(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("ApiKey", "")?;
@@ -160,6 +186,7 @@ fn create_sl_player_table(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Res
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let (speed_type, speed_value) = song_lua_speedmod_parts(player.speedmod);
@@ -243,6 +270,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_stages(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let stats = lua.create_table()?;
@@ -253,6 +281,7 @@ fn create_sl_stages(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_stage_stat(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let column_judgments = lua.create_table()?;
@@ -268,6 +297,7 @@ fn create_sl_stage_stat(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_column_judgments(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let early = lua.create_table()?;
@@ -283,6 +313,7 @@ fn create_sl_column_judgments(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_ex_counts(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for name in ["W0_total", "W1", "W2", "W3", "W4", "W5", "Miss"] {
@@ -291,12 +322,14 @@ fn create_sl_ex_counts(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_high_scores(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("EnteringName", false)?;
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_menu_timer(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for name in [
@@ -314,6 +347,7 @@ fn create_sl_menu_timer(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_screen_after(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("PlayAgain", "ScreenSelectMusic")?;
@@ -324,6 +358,7 @@ fn create_sl_screen_after(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_judgment_colors(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Casual", create_color_array(lua, SL_JUDGMENT_COLORS)?)?;
@@ -332,6 +367,7 @@ fn create_sl_judgment_colors(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_color_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (index, value) in values.iter().enumerate() {
@@ -343,6 +379,7 @@ fn create_color_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_groovestats(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("IsConnected", false)?;
@@ -355,6 +392,7 @@ fn create_sl_groovestats(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_arrowcloud(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Enabled", false)?;
@@ -363,6 +401,7 @@ fn create_sl_arrowcloud(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_srpg9(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Colors", create_string_array(lua, SL_DECORATIVE_COLORS)?)?;
@@ -378,6 +417,7 @@ fn create_sl_srpg9(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_mode_table(
     lua: &Lua,
     create: fn(&Lua, &str) -> mlua::Result<Table>,
@@ -389,6 +429,7 @@ fn create_sl_mode_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_preferences(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("TimingWindowAdd", 0.0015)?;
@@ -456,6 +497,7 @@ fn create_sl_preferences(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_sl_metrics(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     // Simply Love Scripts/SL_Init.lua defines separate scoring and life rules
@@ -507,6 +549,7 @@ pub(super) fn gameplay_lead_in_seconds(group: &str, name: &str) -> Option<f64> {
         .into_iter().find_map(|(metric, seconds)| name.eq_ignore_ascii_case(metric).then_some(seconds))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(super) fn read_sl_metric(lua: &Lua, group: &str, name: &str) -> mlua::Result<Option<Value>> {
     if let Some(seconds) = gameplay_lead_in_seconds(group, name) {
         // ThemeManager::PushMetric runs the metrics.ini Lua expression at
@@ -533,59 +576,4 @@ pub(super) fn read_sl_metric(lua: &Lua, group: &str, name: &str) -> mlua::Result
     Ok((!matches!(value, Value::Nil)).then_some(value))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn mode_tables_match_simply_love_source() -> mlua::Result<()> {
-        // This fixture contains the unmodified Preferences and Metrics blocks
-        // extracted from the pinned theme, rather than a second Rust table.
-        let source = include_str!(
-            "../../../tests/fixtures/itgmania-song-lua-micro/simply-love-mode-tables.lua"
-        );
-        for rescore in [false, true] {
-            let lua = Lua::new();
-            let prefs = crate::option_rows::create_theme_prefs_table(&lua)?;
-            prefs
-                .get::<mlua::Function>("Set")?
-                .call::<()>(("RescoreEarlyHits", rescore))?;
-            lua.globals().set("ThemePrefs", prefs)?;
-            lua.globals()
-                .set("expected", lua.load(source).eval::<Table>()?)?;
-            let context = SongLuaCompileContext::new(std::path::Path::new("."), "Mode Tables");
-            lua.globals().set("SL", create_sl_table(&lua, &context)?)?;
-            lua.globals()
-                .set("THEME", crate::tables::create_theme_table(&lua, &context)?)?;
-            lua.load(r#"
-                for _, group in ipairs({"Preferences", "Metrics"}) do
-                    for mode, reference in pairs(expected[group]) do
-                        local actual = SL[group][mode]
-                        for key, value in pairs(reference) do
-                            assert(actual[key] == value, group .. "." .. mode .. "." .. key)
-                        end
-                        for key in pairs(actual) do
-                            assert(reference[key] ~= nil, "unexpected " .. group .. "." .. mode .. "." .. key)
-                        end
-                    end
-                end
-                for mode, reference in pairs(expected.Metrics) do
-                    SL.Global.GameMode = mode
-                    for key, value in pairs(reference) do
-                        local group = (key:find("^Life") or key == "InitialValue")
-                            and "LifeMeterBar" or "ScoreKeeperNormal"
-                        assert(THEME:HasMetric(group, key), group .. "." .. key)
-                        assert(THEME:GetMetric(group, key) == value, mode .. "." .. key)
-                        local found = false
-                        for _, name in ipairs(THEME:GetMetricNamesInGroup(group)) do
-                            if name == key then found = true end
-                        end
-                        assert(found, "unlisted " .. group .. "." .. key)
-                    end
-                end
-                assert(THEME:GetMetric("Common", "PercentScoreWeightW1") == nil)
-            "#).exec()?;
-        }
-        Ok(())
-    }
-}

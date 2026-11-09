@@ -1,4 +1,5 @@
 use super::*;
+use crate::memory::Shared;
 use crate::{Value, Vm, bytecode::Constant};
 use std::sync::Arc;
 
@@ -74,7 +75,7 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
         b"local trace={};debug.sethook(function(e,l)trace[#trace+1]=e..':'..l end,'l');local a=1;if a<4 then a=a+3 end;debug.sethook();local function f(...)return arg.n,arg[1]end;return a,f(12,nil),table.concat(trace,'|')",
     ] {
         let mut program=crate::compile_named(source,b"@cache-source.lua").unwrap();
-        let data=Arc::make_mut(&mut program.data);
+        let data=Shared::make_mut(&mut program.data);
         let entry=data.entry as usize;
         for bits in [0x8000_0000_0000_0000,0x7ff8_0000_0000_1234,0xfff0_0000_0000_0000,1] {
             let p=&mut data.prototypes[entry];
@@ -98,8 +99,8 @@ fn imported_chunks_retain_native_words_sources_captures_and_debug_data() {
         b"local function f(a,...)local t={...};return a,t[2],debug.getinfo(1,'S').source end;return f(4,5,6)",
         b"local t={};for i=1,150 do t[i]=i end;return #t,t[149]",
     ] {
-        let lua=lua_reference::Lua::new();
-        let native=lua.load(source).set_name("@cached-native.lua").into_function().unwrap().dump(false);
+
+        let native=crate::reference_test::native_chunk("src/cache/tests.rs::imported_chunks_retain_native_words_sources_captures_and_debug_data::chunk0", &(source));
         let program=crate::compile_named(&native,b"=load-error-name").unwrap();
         let bytes=encode(&program,&native,b"=load-error-name");
         let loaded=decode(&bytes,&native,b"=load-error-name").unwrap();
@@ -116,16 +117,14 @@ fn imported_chunks_retain_native_words_sources_captures_and_debug_data() {
 
 #[test]
 fn retained_native_export_ranges_and_tree_edges_are_checked() {
-    let lua = lua_reference::Lua::new();
-    let source = lua
-        .load("local x=1;return function()return x end")
-        .into_function()
-        .unwrap()
-        .dump(false);
+    let source = crate::reference_test::native_chunk(
+        "src/cache/tests.rs::retained_native_export_ranges_and_tree_edges_are_checked::chunk0",
+        &("local x=1;return function()return x end"),
+    );
     let good = crate::compile(&source).unwrap();
     for change in 0..7 {
         let mut bad = good.clone();
-        let data = Arc::make_mut(&mut bad.data);
+        let data = Shared::make_mut(&mut bad.data);
         let p = &mut data.prototypes[0];
         let n = p.debug.native.as_mut().unwrap();
         match change {
@@ -292,7 +291,7 @@ fn cache_bytecode_verification_and_decode_budgets_are_enforced() {
     }
     for change in 0..4 {
         let mut bad = good.clone();
-        let data = Arc::make_mut(&mut bad.data);
+        let data = Shared::make_mut(&mut bad.data);
         let p = &mut data.prototypes[data.entry as usize];
         match change {
             0 => p.code[0].c = u32::MAX,

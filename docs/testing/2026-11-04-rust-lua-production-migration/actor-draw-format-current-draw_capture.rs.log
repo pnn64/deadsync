@@ -1,0 +1,329 @@
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:13:
+     SongLuaOverlayMeshVertex, SongLuaOverlayState, SongLuaTrackedActor, SongLuaTrackedActorTarget,
+ };
+ 
+[31m-pub use crate::draw_commands::{DrawFrame, DrawOp, DrawSource};
+(B[m[31m-use crate::draw_commands::{Capture, Context, RawCall, RawFrame, RawOp, MAX_BYTES, MAX_OPS, convert, partially_opaque};
+(B[m pub(crate) use crate::draw_commands::DRAW_INSTALLED_KEY;
+[32m+use crate::draw_commands::{
+(B[m[32m+    Capture, Context, MAX_BYTES, MAX_OPS, RawCall, RawFrame, RawOp, convert, partially_opaque,
+(B[m[32m+};
+(B[m[32m+pub use crate::draw_commands::{DrawFrame, DrawOp, DrawSource};
+(B[m 
+ fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
+     let Some(mut capture) = lua.app_data_mut::<Capture>() else {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:98:
+             if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"))))
+     }
+ 
+[31m-    unsafe fn from_stack(index: std::os::raw::c_int, raw: &mlua::state::RawLua) -> mlua::Result<Self> {
+(B[m[32m+    unsafe fn from_stack(
+(B[m[32m+        index: std::os::raw::c_int,
+(B[m[32m+        raw: &mlua::state::RawLua,
+(B[m[32m+    ) -> mlua::Result<Self> {
+(B[m         // SAFETY: mlua supplies a live stack slot under its VM lock. Borrow
+         // only an actual Lua string; no coercion, allocation or pointer escapes.
+         // Non-strings and arbitrary binary strings retain Value's predicate.
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:123:
+         // __index code before later scalar fields are read. Keep those reads
+         // sequential so mutations and errors from that lookup stay observable.
+         let sprite = actor.raw_get::<IsSprite>("__songlua_actor_type")?.0;
+[31m-        if sprite && actor.raw_get::<mlua::Value>("__songlua_state_sprite_texture")?.is_nil() {
+(B[m[32m+        if sprite
+(B[m[32m+            && actor
+(B[m[32m+                .raw_get::<mlua::Value>("__songlua_state_sprite_texture")?
+(B[m[32m+                .is_nil()
+(B[m[32m+        {
+(B[m             actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+         } else {
+             crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:151:
+         return Ok(None);
+     }
+     let wrappers = actor.raw_get::<Option<Table>>("__songlua_wrappers")?;
+[31m-    let mut parents = Vec::with_capacity(
+(B[m[31m-        prior.parents.len() + wrappers.as_ref().map_or(0, Table::raw_len) + 1,
+(B[m[31m-    );
+(B[m[32m+    let mut parents =
+(B[m[32m+        Vec::with_capacity(prior.parents.len() + wrappers.as_ref().map_or(0, Table::raw_len) + 1);
+(B[m     parents.extend_from_slice(&prior.parents);
+     if let Some(wrappers) = wrappers {
+         for index in (1..=wrappers.raw_len()).rev() {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:160:
+             let wrapper = state(lua, &wrappers.raw_get::<Table>(index)?)?;
+             if !wrapper.draw_visible()
+[31m-                || (crate::live::active(lua) && !partially_opaque(wrapper, &parents)) {
+(B[m[32m+                || (crate::live::active(lua) && !partially_opaque(wrapper, &parents))
+(B[m[32m+            {
+(B[m                 return Ok(None);
+             }
+             parents.push(wrapper);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:166:
+         }
+     }
+     let state = state(lua, actor)?;
+[31m-    if !state.draw_visible()
+(B[m[31m-        || (crate::live::active(lua) && !partially_opaque(state, &parents)) {
+(B[m[32m+    if !state.draw_visible() || (crate::live::active(lua) && !partially_opaque(state, &parents)) {
+(B[m         return Ok(None);
+     }
+     parents.push(state);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:188:
+     let prior = lua
+         .app_data_ref::<Capture>()
+         .and_then(|capture| capture.context.clone());
+[31m-    let Some(prior) = prior else { return draw_immediate(lua, actor); };
+(B[m[32m+    let Some(prior) = prior else {
+(B[m[32m+        return draw_immediate(lua, actor);
+(B[m[32m+    };
+(B[m     let Some(context) = scoped_context(lua, actor, &prior)? else {
+         return Ok(());
+     };
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:213:
+                 crate::live::callback_phase(lua, false);
+                 if crate::live::active(lua) {
+                     if let Err(error) = result {
+[31m-                        crate::lua_util::report_update_error(lua, actor,
+(B[m[31m-                            "__songlua_draw_error_reported", "draw callback", &error)?;
+(B[m[32m+                        crate::lua_util::report_update_error(
+(B[m[32m+                            lua,
+(B[m[32m+                            actor,
+(B[m[32m+                            "__songlua_draw_error_reported",
+(B[m[32m+                            "draw callback",
+(B[m[32m+                            &error,
+(B[m[32m+                        )?;
+(B[m                     }
+                     // Native draw callbacks do not update the actor queue.
+                     // queuecommand from Draw waits for the next actor Update.
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:232:
+                 // traverse their children, including empty transition frames.
+                 // Keep this set aligned with read_tracked_compile_actors.
+                 let screen_child = actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>(
+[31m-                    "__songlua_top_screen_child_name")?;
+(B[m[32m+                    "__songlua_top_screen_child_name",
+(B[m[32m+                )?;
+(B[m                 let player_child = actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>(
+[31m-                    "__songlua_player_child_name")?;
+(B[m[31m-                let external = matches!(screen_child.as_ref().map(|name| name.as_str()),
+(B[m[31m-                    Some("Underlay" | "Overlay" | "SongBackground" | "SongForeground" | "In"))
+(B[m[31m-                    || matches!(player_child.as_ref().map(|name| name.as_str()),
+(B[m[31m-                        Some("Judgment" | "Combo"));
+(B[m[32m+                    "__songlua_player_child_name",
+(B[m[32m+                )?;
+(B[m[32m+                let external = matches!(
+(B[m[32m+                    screen_child.as_ref().map(|name| name.as_str()),
+(B[m[32m+                    Some("Underlay" | "Overlay" | "SongBackground" | "SongForeground" | "In")
+(B[m[32m+                ) || matches!(
+(B[m[32m+                    player_child.as_ref().map(|name| name.as_str()),
+(B[m[32m+                    Some("Judgment" | "Combo")
+(B[m[32m+                );
+(B[m                 // Actor::DrawPrimitives is empty. Logic actors still receive
+                 // explicit Draw calls, but submit no geometry or draw payload.
+                 if kind.eq_ignore_ascii_case("Actor") {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:247:
+                 // BitmapText::EarlyAbortDraw skips empty text. Native screen
+                 // placeholders are not compiled overlay leaves either.
+                 if kind.eq_ignore_ascii_case("BitmapText")
+[31m-                    && actor.raw_get::<Option<mlua::LuaString>>("Text")?
+(B[m[32m+                    && actor
+(B[m[32m+                        .raw_get::<Option<mlua::LuaString>>("Text")?
+(B[m                         .is_none_or(|text| text.as_bytes().is_empty())
+                 {
+                     return Ok(());
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:254:
+                 }
+[31m-                let local = *context.parents.last().expect("draw context includes the actor");
+(B[m[32m+                let local = *context
+(B[m[32m+                    .parents
+(B[m[32m+                    .last()
+(B[m[32m+                    .expect("draw context includes the actor");
+(B[m                 // The bundled fallback bitmap contains only transparent pixels.
+                 // Its ordinary alpha draw cannot change color, depth or masks.
+                 if kind.eq_ignore_ascii_case("Sprite")
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:259:
+[31m-                    && actor.raw_get::<Option<mlua::LuaString>>("Texture")?
+(B[m[31m-                        .is_some_and(|path| path.as_bytes().as_ref()
+(B[m[31m-                            == crate::lua_util::NATIVE_BLANK_TEXTURE_PATH.as_bytes())
+(B[m[32m+                    && actor
+(B[m[32m+                        .raw_get::<Option<mlua::LuaString>>("Texture")?
+(B[m[32m+                        .is_some_and(|path| {
+(B[m[32m+                            path.as_bytes().as_ref()
+(B[m[32m+                                == crate::lua_util::NATIVE_BLANK_TEXTURE_PATH.as_bytes()
+(B[m[32m+                        })
+(B[m                     && local.blend == crate::SongLuaOverlayBlendMode::Alpha
+[31m-                    && !local.depth_write && !local.mask_source && !local.mask_dest
+(B[m[32m+                    && !local.depth_write
+(B[m[32m+                    && !local.mask_source
+(B[m[32m+                    && !local.mask_dest
+(B[m                 {
+                     return Ok(());
+                 }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:267:
+                 // ActorProxy::DrawPrimitives submits nothing until SetTarget.
+                 // A parent's early Draw must not borrow a later On target.
+[31m-                if !external && kind.eq_ignore_ascii_case("ActorProxy")
+(B[m[31m-                    && actor.raw_get::<Option<Table>>("__songlua_proxy_target_actor")?.is_none()
+(B[m[32m+                if !external
+(B[m[32m+                    && kind.eq_ignore_ascii_case("ActorProxy")
+(B[m[32m+                    && actor
+(B[m[32m+                        .raw_get::<Option<Table>>("__songlua_proxy_target_actor")?
+(B[m[32m+                        .is_none()
+(B[m                 {
+                     return Ok(());
+                 }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:304:
+                     let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
+                     push(
+                         lua,
+[31m-                        RawOp::Draw(
+(B[m[31m-                            pointer,
+(B[m[31m-                            local,
+(B[m[31m-                            Context {
+(B[m[31m-                                parents,
+(B[m[31m-                                ..context
+(B[m[31m-                            },
+(B[m[31m-                            vertices,
+(B[m[31m-                        ),
+(B[m[32m+                        RawOp::Draw(pointer, local, Context { parents, ..context }, vertices),
+(B[m                     )
+                 }
+             }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:332:
+     let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+     let elapsed = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
+     let rate = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_RATE_KEY)?;
+[31m-    let origin = lua.app_data_ref::<crate::runtime::SongLuaClock>()
+(B[m[32m+    let origin = lua
+(B[m[32m+        .app_data_ref::<crate::runtime::SongLuaClock>()
+(B[m         .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
+     Ok(elapsed * rate + origin)
+ }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:342:
+ // using the eventual overlay pose loses its size, crop, color and draw stack.
+ fn draw_immediate(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+     let second = frame_second(lua)?;
+[31m-    if lua.app_data_ref::<Capture>().is_none() { lua.set_app_data(Capture::default()); }
+(B[m[32m+    if lua.app_data_ref::<Capture>().is_none() {
+(B[m[32m+        lua.set_app_data(Capture::default());
+(B[m[32m+    }
+(B[m     let owner = actor.to_pointer() as usize;
+     let start = {
+         let mut capture = lua.app_data_mut::<Capture>().expect("capture installed");
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:349:
+[31m-        capture.context = Some(Context { owner, ..Context::default() });
+(B[m[32m+        capture.context = Some(Context {
+(B[m[32m+            owner,
+(B[m[32m+            ..Context::default()
+(B[m[32m+        });
+(B[m         capture.calls.len()
+     };
+     let result = draw(lua, actor);
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:353:
+[31m-    let mut capture = lua.app_data_mut::<Capture>().expect("capture retained during Draw");
+(B[m[32m+    let mut capture = lua
+(B[m[32m+        .app_data_mut::<Capture>()
+(B[m[32m+        .expect("capture retained during Draw");
+(B[m     capture.context = None;
+     let calls = capture.calls.split_off(start);
+     if !calls.is_empty() {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:357:
+         let bytes = std::mem::size_of::<RawFrame>() + std::mem::size_of::<usize>();
+         if capture.bytes.saturating_add(bytes) > MAX_BYTES {
+[31m-            return Err(mlua::Error::external("custom draw capture exceeds its song budget"));
+(B[m[32m+            return Err(mlua::Error::external(
+(B[m[32m+                "custom draw capture exceeds its song budget",
+(B[m[32m+            ));
+(B[m         }
+         capture.bytes += bytes;
+[31m-        capture.frames.push(RawFrame { second, immediate: true, owners: vec![owner], calls });
+(B[m[32m+        capture.frames.push(RawFrame {
+(B[m[32m+            second,
+(B[m[32m+            immediate: true,
+(B[m[32m+            owners: vec![owner],
+(B[m[32m+            calls,
+(B[m[32m+        });
+(B[m     }
+     result
+ }
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:366:
+ 
+ fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
+[31m-    if crate::live::active(lua) && actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
+(B[m[32m+    if crate::live::active(lua)
+(B[m[32m+        && actor
+(B[m[32m+            .raw_get::<Option<bool>>("__songlua_live_inactive")?
+(B[m[32m+            .unwrap_or(false)
+(B[m[32m+    {
+(B[m         return Ok(());
+     }
+     let custom = actor
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:426:
+ 
+ #[cfg(test)]
+ pub(crate) fn live_storage(lua: &Lua) -> (usize, usize, usize) {
+[31m-    lua.app_data_ref::<Capture>().map_or((0, 0, 0), |capture|
+(B[m[31m-        (capture.frames.len(), capture.frames.iter().map(|frame| frame.calls.len()).sum(), capture.bytes))
+(B[m[32m+    lua.app_data_ref::<Capture>().map_or((0, 0, 0), |capture| {
+(B[m[32m+        (
+(B[m[32m+            capture.frames.len(),
+(B[m[32m+            capture.frames.iter().map(|frame| frame.calls.len()).sum(),
+(B[m[32m+            capture.bytes,
+(B[m[32m+        )
+(B[m[32m+    })
+(B[m }
+ 
+ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:438:
+         .raw_get::<Option<bool>>(DRAW_INSTALLED_KEY)?
+         .unwrap_or(false)
+     {
+[31m-        if let Some(mut capture) = lua.app_data_mut::<Capture>() { capture.frame_ops = 0; }
+(B[m[32m+        if let Some(mut capture) = lua.app_data_mut::<Capture>() {
+(B[m[32m+            capture.frame_ops = 0;
+(B[m[32m+        }
+(B[m         return Ok(());
+     }
+     let screen = lua
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:517:
+ pub(crate) struct LiveSources(pub FxHashMap<usize, DrawSource>);
+ 
+ pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
+[31m-    if lua.app_data_ref::<Capture>().is_none_or(|capture|
+(B[m[31m-        !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()) {
+(B[m[32m+    if lua.app_data_ref::<Capture>().is_none_or(|capture| {
+(B[m[32m+        !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()
+(B[m[32m+    }) {
+(B[m         return Ok(Vec::new());
+     }
+[31m-    if lua.app_data_ref::<LiveSources>().is_none() { return Ok(Vec::new()); }
+(B[m[31m-    let mut capture = lua.remove_app_data::<Capture>().expect("complete capture frames");
+(B[m[31m-    let immediate = capture.frames.extract_if(.., |frame| frame.immediate).collect();
+(B[m[32m+    if lua.app_data_ref::<LiveSources>().is_none() {
+(B[m[32m+        return Ok(Vec::new());
+(B[m[32m+    }
+(B[m[32m+    let mut capture = lua
+(B[m[32m+        .remove_app_data::<Capture>()
+(B[m[32m+        .expect("complete capture frames");
+(B[m[32m+    let immediate = capture
+(B[m[32m+        .frames
+(B[m[32m+        .extract_if(.., |frame| frame.immediate)
+(B[m[32m+        .collect();
+(B[m     // Conversion reads labels only for errors and invokes no Lua callbacks.
+     // Borrow them before restoring capture, including when conversion fails.
+     let result = {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:530:
+[31m-        let sources = lua.app_data_ref::<LiveSources>().expect("live source bindings");
+(B[m[32m+        let sources = lua
+(B[m[32m+            .app_data_ref::<LiveSources>()
+(B[m[32m+            .expect("live source bindings");
+(B[m         convert(immediate, &capture.labels, &sources.0)
+     };
+     if capture.frames.is_empty() && capture.calls.is_empty() && capture.targets.is_empty() {
+Diff in /mnt/c/GitHub/deadsync/crates/deadsync-song-lua/src/draw_capture.rs:538:
+     lua.set_app_data(capture);
+     result.map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
+ }
+[31m-
+(B[m 
+ #[cfg(test)]
+ pub(crate) mod perf {

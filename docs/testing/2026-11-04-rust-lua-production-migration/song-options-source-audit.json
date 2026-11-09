@@ -1,0 +1,24 @@
+{
+  "previous_turn": "no progress: scope clarification; no implementation changes",
+  "current_turn": "progress: finalize song-options review and validation",
+  "previous_count": 1066,
+  "current_count": 1068,
+  "changed": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/rust_engine/managers/catalog.rs",
+    "crates/deadsync-song-lua/src/rust_engine/managers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/src/song_tables.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/managers/song_options.rs",
+    "crates/deadsync-song-lua/tests/rust_song_options.rs"
+  ],
+  "removed": [],
+  "unchanged_count": 1061,
+  "core_and_root_unchanged_count": 240,
+  "legacy_controls_unchanged": {
+    "crates/deadsync-song-lua/src/host.rs": true,
+    "crates/deadsync-song-lua/src/lib.rs": true
+  }
+}

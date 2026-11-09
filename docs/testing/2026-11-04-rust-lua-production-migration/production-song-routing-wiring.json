@@ -1,0 +1,53 @@
+{
+  "manifest": "crates/deadsync-song-lua/Cargo.toml",
+  "explicit_native_controls": [
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_actor_inputs.rs",
+      "qualified_sites": 1
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_arrows.rs",
+      "qualified_sites": 3
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_actors.rs",
+      "qualified_sites": 1
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_compiler.rs",
+      "qualified_sites": 7
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_frames.rs",
+      "qualified_sites": 1
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_gameplay.rs",
+      "qualified_sites": 3
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_layers.rs",
+      "qualified_sites": 1
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_scene.rs",
+      "qualified_sites": 2
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_live_visuals.rs",
+      "qualified_sites": 2
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_song_compiler.rs",
+      "qualified_sites": 3
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_song_diagnostics.rs",
+      "qualified_sites": 1
+    },
+    {
+      "path": "crates/deadsync-song-lua/tests/rust_song_observations.rs",
+      "qualified_sites": 1
+    }
+  ]
+}

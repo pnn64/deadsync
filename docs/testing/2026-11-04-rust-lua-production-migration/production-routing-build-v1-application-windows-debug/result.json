@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--locked",
+    "-p",
+    "deadsync",
+    "--bin",
+    "deadsync"
+  ],
+  "exit_code": 0,
+  "seconds": 246.46133810002357,
+  "log_sha256": "3d409f4e54a64953ec0aa6619d9371132151100b3bfaeb7b9111d5385f403789",
+  "sources_unchanged": true
+}

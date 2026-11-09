@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -71,23 +70,7 @@ fn compare(source: &[u8]) {
             _ => panic!("return scalar observations"),
         })
         .collect();
-    let lua = Lua::new();
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Bool(b),
-            Ref::Integer(n) => number(n as f64),
-            Ref::Number(n) => number(n),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalars"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/stdlib.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -695,15 +678,16 @@ fn random_state_is_shared_between_vms_on_the_same_os_thread() {
         b.execute(&program).unwrap()[0],
         a.execute(&program).unwrap()[0],
     ];
-    let a = Lua::new();
-    let b = Lua::new();
-    a.load("math.randomseed(123)").exec().unwrap();
-    let expected = [
-        a.load(source).eval::<f64>().unwrap(),
-        b.load(source).eval::<f64>().unwrap(),
-        a.load(source).eval::<f64>().unwrap(),
-    ];
-    for (actual, expected) in actual.into_iter().zip(expected) {
-        assert_eq!(actual, Value::Number(expected));
-    }
+    let actual = actual.map(|value| match value {
+        Value::Number(number) => number,
+        other => panic!("random result must be numeric: {other:?}"),
+    });
+    reference_test::assert_debug(
+        "tests/stdlib.rs::random_state_is_shared_between_vms_on_the_same_os_thread::expected",
+        &actual,
+    );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

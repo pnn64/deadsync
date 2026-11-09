@@ -1,0 +1,44 @@
+{
+  "created_utc": "2026-11-08T07:57:01.660420+00:00",
+  "goal_status": "active",
+  "objective": "objective.txt (verbatim source unchanged; standalone interpreter/C API removal milestones remain closed)",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "previous_goal_turn_classification": "no progress (acknowledgement only); objective and authoritative worktree/process state revalidated before the next safe action",
+  "current_goal_turn_classification": "progress",
+  "progress": [
+    "Adopted and completed existing host basic/version/date/table/JSON/offline/file/color/enum bindings against frozen native scope.",
+    "Fixed per-activation native stack ownership in recursive table scanning and retained all copied/encoded entries across nested calls.",
+    "Corrected original numeric conversion for table colors; restored frozen recursive debug walks.",
+    "Installed the public lua error-report service after managers and verified GC, message reentry, failure propagation and guard cleanup.",
+    "Preserved formatter infinite-input probes and protected the unchanged native debug overflow at the song binding boundary.",
+    "Verified 45 oracle/adjacent regressions and five normal production-routing checks on identical unchanged sources; current changed-file formatting passes.",
+    "Recorded the terminal broader affected regression results: 543 passes and the sole audited pre-existing mesh alpha assertion failure."
+  ],
+  "verified_sources": [
+    "production-host-compat-oracles-v6-song-windows-debug",
+    "production-host-compat-normal-v1-song-windows-debug"
+  ],
+  "evidence": [
+    "production-host-compat-review-v3.json",
+    "production-host-compat-native-reference-v2.json",
+    "production-dynamic-global-baseline-scope-v2.json",
+    "production-host-compat-framebuffer-coverage-preservation-v1.json",
+    "production-affected-song-review-v2.json"
+  ],
+  "live_runner": null,
+  "source_freeze": "Released. Every runner started in this continuation is terminal and its exit/result consumed.",
+  "next_existing_scope_work": "Live-actor DeepCopy metadata: generic table/key/value copying passes, but the native helper also exports owned live destination/current pose, render flags and base-field presence. Implement and compare that existing behavior without exporting unrelated draw fields or changing the generic engine. The compat clone hook remains unused until this wiring is complete.",
+  "remaining_fixed_scope": [
+    "Complete/verify live-actor DeepCopy metadata against native preparation/playback/retirement behavior.",
+    "Finish fixed inventory, roots/reentry/thread/session teardown, cache/source/coverage audits.",
+    "Run final relevant interpreter, adapter, downstream and fixed content regression suites.",
+    "Build final normal application, repeat strict actual rendered song/gameplay/noteskin smoke, retain final graph/link evidence.",
+    "Run final applicable formatting/Clippy and matched before/after preparation/live/memory measurements.",
+    "Update active documentation and audit each original completion requirement."
+  ],
+  "preexisting_defects": [
+    "The directly constructed textured mesh alpha assertion, audited in song-after-noteskin-song-windows-release/glow-baseline-audit.json.",
+    "Unchanged shared time formatter debug overflow on infinite input; protected call behavior and Rust runtime recovery now explicitly verified."
+  ],
+  "completion": "Unproven; goal remains active. No completed milestone is reopened and no additional acceptance scope is introduced."
+}

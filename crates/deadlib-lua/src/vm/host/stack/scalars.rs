@@ -84,8 +84,7 @@ impl NativeStack<'_, '_> {
             .checked_sub(count)
             .ok_or_else(|| self.error(b"native concat stack underflow"))?;
         if count == 0 {
-            let empty = self.intern(b"");
-            return self.push(empty);
+            return self.push_bytes(b"");
         }
         if count == 1 {
             return Ok(());
@@ -142,6 +141,7 @@ impl NativeStack<'_, '_> {
                 let thread = self.thread_id();
                 let depth = self.call.vm.frames.len();
                 let barriers = self.call.vm.frames.last().map_or(0, |f| f.barriers);
+                self.call.vm.reserve_api_call()?;
                 self.call.vm.api_calls.push(ApiCall {
                     thread,
                     frame: depth,

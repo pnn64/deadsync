@@ -1,5 +1,6 @@
 use std::path::Path;
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
 use crate::*;
@@ -23,10 +24,12 @@ const NATIVE_STEPS_TYPES: [&str; 38] = [
     "kickbox-human", "kickbox-quadarm", "kickbox-insect", "kickbox-arachnid",
 ];
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn options_level(value: Option<&Value>) -> mlua::Result<usize> {
     option_enum(value, &MODS_LEVELS, "ModsLevel")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn option_enum(value: Option<&Value>, names: &[&str], kind: &str) -> mlua::Result<usize> {
     let level = match value {
         Some(Value::Integer(index)) if *index >= 0 && (*index as usize) < names.len() => {
@@ -54,12 +57,14 @@ pub(crate) fn option_enum(value: Option<&Value>, names: &[&str], kind: &str) -> 
 // One compiler VM owns these four option levels for each player and the song.
 // Their lifetime is the song compilation; only chronological frame replay
 // advances the injected clock. Direct getters and speculative probes do not.
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) struct SongLuaOptionLevels {
     pub players: [[Table; 4]; LUA_PLAYERS],
     pub songs: [Table; 4],
     pub clock_us: i64,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn current_music_rate(lua: &Lua) -> mlua::Result<f32> {
     // Read the owned native option state, independently of public Lua method
     // overrides and query instrumentation (TimingData.cpp uses GetCurrent()).
@@ -67,6 +72,7 @@ pub(crate) fn current_music_rate(lua: &Lua) -> mlua::Result<f32> {
         .map_or(Ok(1.0), |levels| levels.songs[3].raw_get("__songlua_music_rate"))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
     let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else { return Ok(()); };
     levels.clock_us = 0;
@@ -92,6 +98,7 @@ pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn clear_active_attack_options(lua: &Lua) -> mlua::Result<()> {
     let Some(levels) = lua.app_data_ref::<SongLuaOptionLevels>() else { return Ok(()); };
     let players = levels.players.clone();
@@ -112,6 +119,7 @@ pub(crate) fn clear_active_attack_options(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn rebuild_active_attack_options<'a>(
     lua: &Lua, player: usize, master: bool, modifiers: impl Iterator<Item = &'a str>,
 ) -> mlua::Result<()> {
@@ -137,6 +145,7 @@ pub(crate) fn rebuild_active_attack_options<'a>(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
     if !(amount >= 0.0) {
         return Err(mlua::Error::runtime("negative native option approach"));
@@ -154,6 +163,7 @@ fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
     Ok(value + movement)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn copy_option_table(lua: &Lua, source: &Table) -> mlua::Result<Table> {
     let result = lua.create_table()?;
     for pair in source.pairs::<Value, Value>() {
@@ -163,6 +173,7 @@ fn copy_option_table(lua: &Lua, source: &Table) -> mlua::Result<Table> {
     Ok(result)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn assign_player_options(lua: &Lua, destination: &Table, source: &Table) -> mlua::Result<()> {
     let skin = destination.raw_get::<Value>("__songlua_noteskin_name")?;
     let skin_override = destination.raw_get::<Value>("__songlua_noteskin_override")?;
@@ -212,10 +223,12 @@ fn assign_player_options(lua: &Lua, destination: &Table, source: &Table) -> mlua
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()> {
     advance_option_levels_inner(lua, seconds, None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn live_player_fail_type(
     lua: &Lua, player: usize, level: usize,
 ) -> mlua::Result<Option<deadsync_gameplay::GameplayFailType>> {
@@ -232,18 +245,21 @@ pub(crate) fn live_player_fail_type(
         .ok_or_else(|| mlua::Error::runtime("Invalid FailType"))).transpose()
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn advance_option_levels_with_frame_delta(
     lua: &Lua, seconds: f64, delta: f32,
 ) -> mlua::Result<()> {
     advance_option_levels_inner(lua, seconds, Some([delta; LUA_PLAYERS + 1]))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn advance_option_levels_with_clock_deltas(
     lua: &Lua, seconds: f64, deltas: [f32; LUA_PLAYERS + 1],
 ) -> mlua::Result<()> {
     advance_option_levels_inner(lua, seconds, Some(deltas))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_deltas: Option<[f32; LUA_PLAYERS + 1]>) -> mlua::Result<()> {
     let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else {
         return Ok(());
@@ -374,6 +390,7 @@ const AUTOSYNC_TYPES: [&str; 4] = [
     "AutosyncType_Tempo",
 ];
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (name, field, speed, initial) in [
@@ -477,6 +494,7 @@ pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Tab
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn song_options_text(options: &Table) -> mlua::Result<String> {
     let mut parts = Vec::new();
     let rate = options.raw_get::<f32>("__songlua_music_rate")?;
@@ -511,6 +529,7 @@ pub(crate) fn song_options_text(options: &Table) -> mlua::Result<String> {
     Ok(parts.join(", "))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn assign_song_options(
     lua: &Lua,
     levels: &[Table; 4],
@@ -534,6 +553,7 @@ pub(crate) fn assign_song_options(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn apply_stage_modifiers(
     lua: &Lua,
     player: &[Table; 4],
@@ -545,6 +565,7 @@ pub(crate) fn apply_stage_modifiers(
     apply_modifiers_from_level(lua, player, song, text, 1)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn apply_modifiers_from_level(
     lua: &Lua, player: &[Table; 4], song: &[Table; 4], text: &str, level: usize,
 ) -> mlua::Result<()> {
@@ -557,6 +578,7 @@ pub(crate) fn apply_modifiers_from_level(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn apply_game_command_modifiers(
     lua: &Lua, text: &str, player: Option<usize>,
 ) -> mlua::Result<()> {
@@ -590,6 +612,7 @@ pub(crate) fn apply_game_command_modifiers(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn apply_song_options_string(options: &Table, text: &str) -> mlua::Result<()> {
     // SongOptions::FromOneModString has a separate, small grammar. In
     // particular, percentage and approach prefixes do not scale haste.
@@ -660,6 +683,7 @@ fn apply_song_options_string(options: &Table, text: &str) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub struct PlayerLuaTables {
     pub player_states: [Table; LUA_PLAYERS],
     pub player_options: [Table; LUA_PLAYERS],
@@ -667,6 +691,7 @@ pub struct PlayerLuaTables {
     pub(crate) option_levels: [[Table; 4]; LUA_PLAYERS],
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_player_tables(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -707,6 +732,7 @@ pub fn create_player_tables(
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_enabled_players_table(
     lua: &Lua,
     players: [SongLuaPlayerContext; LUA_PLAYERS],
@@ -723,6 +749,7 @@ pub fn create_enabled_players_table(
     Ok(enabled)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_player_state_table(
     lua: &Lua,
     player: SongLuaPlayerContext,
@@ -842,6 +869,7 @@ fn option_string_part(parts: &mut Vec<String>, name: &str, value: f32) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_options_parts(lua: &Lua, owner: &Table) -> mlua::Result<Vec<String>> {
     let state = player_option_state(lua, owner)?;
     let mut parts = vec!["NoHideLights".to_string()];
@@ -951,6 +979,7 @@ fn player_options_parts(lua: &Lua, owner: &Table) -> mlua::Result<Vec<String>> {
     Ok(parts)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_steps_table(
     lua: &Lua,
     difficulty: SongLuaDifficulty,
@@ -1012,6 +1041,7 @@ pub fn create_steps_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     player_option_state(lua, &table)?.raw_set("playerautoplay", player.autoplay)?;
@@ -1232,6 +1262,7 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     if let Some(table) = owner.raw_get::<Option<Table>>("__songlua_disabled_timing_windows")? {
         return Ok(table);
@@ -1241,12 +1272,14 @@ fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f32> {
     Ok(player_option_state(lua, owner)?
         .get::<Option<f32>>(name)?
         .unwrap_or(0.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
@@ -1292,6 +1325,7 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
 
 // PlayerOptions perspective aliases share only these two native fields.
 // Keeping alias names out of the sampled state also makes write order explicit.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_perspective_angle(state: &Table, key: &str, value: f32) -> mlua::Result<bool> {
     let (tilt, skew) = match key {
         "incoming" => (-value, value),
@@ -1306,6 +1340,7 @@ fn set_perspective_angle(state: &Table, key: &str, value: f32) -> mlua::Result<b
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Result<[Value; 2]> {
     if !matches!(
         key,
@@ -1336,6 +1371,7 @@ fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Res
     ])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_fail_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
     use deadsync_gameplay::GameplayFailType;
     let owner = owner.clone();
@@ -1364,6 +1400,7 @@ fn create_fail_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_timer_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
     use crate::player_options::MOD_TIMER_NAMES;
     let owner = owner.clone();
@@ -1412,6 +1449,7 @@ fn create_timer_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
 #[derive(Default)]
 pub(crate) struct SongLuaBoolWrites(pub Vec<SongLuaBoolWrite>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn capture_bool_write(
     lua: &Lua,
@@ -1454,6 +1492,7 @@ fn capture_bool_write(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn keep_option_speed(speeds: &Table, key: &str) -> mlua::Result<()> {
     if speeds.raw_get::<Option<f32>>(key)?.is_none() {
         // PlayerOptions::Init initializes scalar approach speeds to one.
@@ -1462,6 +1501,7 @@ fn keep_option_speed(speeds: &Table, key: &str) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     if key == "modtimersetting" {
         return create_timer_option(lua, owner);
@@ -1548,6 +1588,7 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
 #[derive(Default)]
 pub(crate) struct SongLuaSpeedWrites(pub Vec<SongLuaSpeedWrite>);
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn speed_fields(lua: &Lua, owner: &Table) -> mlua::Result<[[f32; 2]; 4]> {
     let speeds = player_option_speeds(lua, owner)?;
@@ -1564,6 +1605,7 @@ fn speed_fields(lua: &Lua, owner: &Table) -> mlua::Result<[[f32; 2]; 4]> {
     Ok(fields)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn speed_audit_before(lua: &Lua, owner: &Table, args: &MultiValue) -> mlua::Result<Option<(usize, [[f32; 2]; 4])>> {
     if lua.app_data_ref::<SongLuaSpeedWrites>().is_none()
@@ -1580,6 +1622,7 @@ fn speed_audit_before(lua: &Lua, owner: &Table, args: &MultiValue) -> mlua::Resu
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn capture_speed_write(lua: &Lua, owner: &Table, key: &str, before: Option<(usize, [[f32; 2]; 4])>, failed: bool, chained: bool) -> mlua::Result<()> {
     let Some((player, previous)) = before else { return Ok(()) };
@@ -1596,6 +1639,7 @@ fn capture_speed_write(lua: &Lua, owner: &Table, key: &str, before: Option<(usiz
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     let (field, approach, default) = match key.as_str() {
         "timespacing" => ("__songlua_time_spacing", "_spacing", 0.0),
@@ -1644,6 +1688,7 @@ fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Fun
     })
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     if let Some(state) = owner.raw_get::<Option<Table>>("__songlua_player_option_state")? {
         return Ok(state);
@@ -1653,6 +1698,7 @@ fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     Ok(state)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_option_speeds(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     if let Some(speeds) = owner.raw_get::<Option<Table>>("__songlua_player_option_speeds")? {
         return Ok(speeds);
@@ -1662,6 +1708,7 @@ fn player_option_speeds(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     Ok(speeds)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn seed_speed_approaches(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     let speeds = player_option_speeds(lua, owner)?;
     // PlayerOptions::Init gives each field its own approach of one. An amount
@@ -1674,6 +1721,7 @@ fn seed_speed_approaches(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> mlua::Result<()> {
     let speeds = player_option_speeds(lua, owner)?;
     let speed = speed
@@ -1689,6 +1737,7 @@ fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     let state = player_option_state(lua, owner)?;
     let speeds = player_option_speeds(lua, owner)?;
@@ -1710,6 +1759,7 @@ fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     set_player_speed_approaches(lua, owner, Some(1.0))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Result<()> {
     for option in text.split(',') {
         apply_player_option_token(lua, owner, option)?;
@@ -1717,6 +1767,7 @@ fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Re
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub(crate) fn player_uses_modifiers(
     lua: &Lua,
     owner: &Table,
@@ -1796,6 +1847,7 @@ pub(crate) fn player_uses_modifiers(
     Ok(true)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Result<()> {
     let mut name = "";
     let mut amount = 1.0;
@@ -1930,6 +1982,7 @@ impl Default for SongLuaSkinWrites {
     fn default() -> Self { Self { writes: Vec::new(), active: true } }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[cfg(feature = "test-support")]
 fn capture_skin_write(lua: &Lua, owner: &Table, key: &str, previous: String) -> mlua::Result<()> {
     if !lua.app_data_ref::<SongLuaSkinWrites>().is_some_and(|capture| capture.active) {
@@ -1959,12 +2012,14 @@ fn capture_skin_write(lua: &Lua, owner: &Table, key: &str, previous: String) -> 
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_noteskin(owner: &Table) -> mlua::Result<String> {
     Ok(owner.raw_get::<Option<String>>("__songlua_noteskin_name")?
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| SONG_LUA_DEFAULT_NOTESKIN_NAME.to_owned()))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn apply_string_skin(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<bool> {
     let skins = lua.globals().get::<Table>("NOTESKIN")?;
     let exists = skins.get::<Function>("DoesNoteSkinExist")?
@@ -1977,6 +2032,7 @@ fn apply_string_skin(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<bool>
     Ok(exists)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_speedmod_method(
     lua: &Lua,
     table: &Table,
@@ -1988,6 +2044,7 @@ fn install_speedmod_method(
     install_speedmod_state_method(lua, table, name, initial)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_speedmod_state_method(
     lua: &Lua,
     table: &Table,
@@ -2053,6 +2110,7 @@ fn install_speedmod_state_method(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
@@ -2117,6 +2175,7 @@ fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result
 // Unknown/coercible values still use FromLua<String>, preserving numeric
 // conversion and exact errors, including invalid UTF-8. No state is cached:
 // every call observes the owner's current raw field.
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn player_speedmod_is_active(
     owner: &Table,
     key: &str,
@@ -2139,6 +2198,7 @@ fn player_speedmod_is_active(
         .map(|active| active == key))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Result<()> {
     // FromString produces these five keys; installed methods already retain
     // their full field key. Preserve the fallback for other internal callers.
@@ -2160,6 +2220,7 @@ fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Re
     set_player_speedmod_with_key(owner, key, value_key, value)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn set_player_speedmod_with_key(
     owner: &Table,
     key: &str,
@@ -2195,6 +2256,7 @@ fn set_player_speedmod_with_key(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let song_dir = song_dir_string(context.song_dir.as_path());
@@ -2359,6 +2421,7 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_course_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -2428,6 +2491,7 @@ pub fn create_course_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_trail_table(
     lua: &Lua,
     song: Table,
@@ -2479,6 +2543,7 @@ pub fn create_trail_table(
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_trail_entry_table(lua: &Lua, song: Table, steps: Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -2499,6 +2564,7 @@ fn create_trail_entry_table(lua: &Lua, song: Table, steps: Table) -> mlua::Resul
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_song_util_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -2533,6 +2599,7 @@ pub fn create_song_util_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn song_util_song_arg(args: &MultiValue) -> mlua::Result<Option<Table>> {
     for value in args {
         let Value::Table(table) = value else {
@@ -2545,6 +2612,7 @@ fn song_util_song_arg(args: &MultiValue) -> mlua::Result<Option<Table>> {
     Ok(None)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn call_song_steps_method(
     lua: &Lua,
     song: &Table,
@@ -2562,6 +2630,7 @@ fn call_song_steps_method(
     method.call::<Value>(args)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_songman_table(
     lua: &Lua,
     current_song: Table,
@@ -2865,6 +2934,7 @@ pub fn create_songman_table(
     Ok(songman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (index, step) in context.song_steps.iter().enumerate() {
@@ -2899,6 +2969,7 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn density_player(args: &MultiValue) -> mlua::Result<usize> {
     match method_arg(args, 0) {
         None | Some(Value::Nil) => Ok(0),
@@ -2907,6 +2978,7 @@ fn density_player(args: &MultiValue) -> mlua::Result<usize> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_step_measure_density(
     lua: &Lua, steps: &Table, notes: Option<&std::sync::Arc<[u8]>>, row_beats: &[f32],
     steps_type: &str, timing_model: Option<&deadsync_rules::timing::TimingData>,
@@ -2986,6 +3058,7 @@ fn install_step_measure_density(
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn install_step_column_cues(
     lua: &Lua,
     steps: &Table,
@@ -3065,563 +3138,10 @@ fn install_step_column_cues(
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    fn options_lua() -> Lua {
-        let lua = Lua::new();
-        // Native FromString/clearall requires a manager even with no skin assets.
-        let skins = lua.create_table().expect("empty noteskin manager");
-        skins.set("DoesNoteSkinExist", lua.create_function(|_, _: MultiValue| Ok(false))
-            .expect("empty skin lookup")).expect("install lookup");
-        skins.set("GetNoteSkinNames", lua.create_function(|lua, _: MultiValue| lua.create_table())
-            .expect("empty skin list")).expect("install names");
-        lua.globals().set("NOTESKIN", skins).expect("expose noteskin manager");
-        lua
-    }
 
-    #[test]
-    fn stage_modifiers_preserve_options_and_native_player_enum() {
-        let lua = options_lua();
-        let context = SongLuaCompileContext::new(".", "stage modifiers");
-        crate::host::install_game_state_globals(&lua, &context).expect("game state");
-        lua.load(r#"
-            local p1 = GAMESTATE:GetPlayerState('PlayerNumber_P1')
-            local p2 = GAMESTATE:GetPlayerState('PlayerNumber_P2')
-            p2:GetPlayerOptions('ModsLevel_Stage'):Mini(0.25)
-            GAMESTATE:GetSongOptionsObject('ModsLevel_Stage'):AssistClap(true)
-            assert(GAMESTATE:ApplyStageModifiers(1, '50% Reverse, 1.5xmusic') == GAMESTATE)
-            for _, level in ipairs({'ModsLevel_Stage', 'ModsLevel_Song', 'ModsLevel_Current'}) do
-                assert(p2:GetPlayerOptions(level):Reverse() == 0.5)
-                assert(p1:GetPlayerOptions(level):Reverse() == 0)
-                assert(GAMESTATE:GetSongOptionsObject(level):MusicRate() == 1.5)
-            end
-            assert(p2:GetPlayerOptions('ModsLevel_Stage'):Mini() == 0.25)
-            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Stage'):AssistClap())
-            assert(p2:GetPlayerOptions('ModsLevel_Preferred'):Reverse() == 0)
-            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Preferred'):MusicRate() == 1)
-            GAMESTATE:ApplyStageModifiers('PlayerNumber_P1', '25% Reverse')
-            assert(p1:GetPlayerOptions('ModsLevel_Current'):Reverse() == 0.25)
-            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate() == 1.5)
-            assert(not pcall(function() GAMESTATE:ApplyStageModifiers(2, 'Reverse') end))
-        "#).exec().expect("native stage modifier propagation");
-    }
-
-    #[test]
-    fn reverse_columns_match_native_composition() {
-        for (name, expected) in [
-            ("single", &[0.5, 0.625, 1.0, 0.875][..]),
-            (
-                "double",
-                &[0.5, 0.375, 0.5, 0.625, 1.0, 0.875, 0.75, 0.875][..],
-            ),
-        ] {
-            let lua = options_lua();
-            let style = crate::tables::create_style_table(&lua, name).expect("style");
-            let gamestate = lua.create_table().expect("gamestate");
-            gamestate
-                .set(
-                    "GetCurrentStyle",
-                    lua.create_function(move |_, _: MultiValue| Ok(style.clone()))
-                        .expect("style getter"),
-                )
-                .expect("install getter");
-            lua.globals()
-                .set("GAMESTATE", gamestate)
-                .expect("expose gamestate");
-            let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
-                .expect("options");
-            lua.globals()
-                .set("o", options.clone())
-                .expect("expose options");
-            lua.load(
-                "o:FromString('25% Reverse, 50% Split, 12.5% Alternate, 25% Cross, 25% Reverse1')",
-            )
-            .exec()
-            .expect("write scroll options");
-            let query = options
-                .get::<Function>("GetReversePercentForColumn")
-                .expect("query");
-            for (column, &expected) in expected.iter().enumerate() {
-                assert_eq!(
-                    query
-                        .call::<f32>((options.clone(), column))
-                        .expect("column reverse"),
-                    expected,
-                    "{name} column {column}"
-                );
-            }
-            assert!(
-                query
-                    .call::<Option<f32>>((options.clone(), -1))
-                    .expect("negative column")
-                    .is_none()
-            );
-            assert!(
-                query
-                    .call::<Option<f32>>((options.clone(), expected.len() + 1))
-                    .expect("overflow column")
-                    .is_none()
-            );
-            lua.load("o:FromString('clearall, 175% Reverse'); assert(o:GetReversePercentForColumn(0) == 0.25); o:FromString('clearall, -50% Reverse'); assert(o:GetReversePercentForColumn(0) == -0.5)").exec().expect("native folding");
-        }
-    }
-
-    #[test]
-    fn perspective_aliases_read_shared_native_fields_and_speeds() {
-        let lua = Lua::new();
-        let options =
-            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
-        lua.globals()
-            .set("o", options.clone())
-            .expect("expose options");
-        lua.load(
-            r#"
-assert(o:Overhead() == true and select('#', o:Overhead()) == 1)
-for _, name in ipairs{'Incoming', 'Space', 'Hallway', 'Distant'} do
-    local value, speed = o[name](o)
-    assert(value == nil and speed == nil and select('#', o[name](o)) == 2)
-end
-o:FromString('*3 50% incoming')
-assert(o:Tilt() == -0.5 and o:Skew() == 0.5 and o:Overhead() == false)
-local value, speed = o:Incoming()
-assert(value == 0.5 and speed == 3)
-local old, oldspeed = o:Space(-0.25, 7)
-assert(old == nil and oldspeed == nil and o:Space() == -0.25)
-assert(o:Incoming() == nil and o:Tilt() == -0.25 and o:Skew() == -0.25)
-old, oldspeed = o:Space(0.75)
-assert(old == -0.25 and oldspeed == 7)
-o:Hallway(-0.75)
-assert(o:Hallway() == nil and o:Distant() == 0.75 and o:Skew() == 0)
-old, oldspeed = o:Tilt(-0.4, 2)
-assert(old == 0.75 and oldspeed == 7 and math.abs(o:Hallway() - 0.4) < 1e-6)
-old, oldspeed = o:Skew(0.6, 9)
-assert(old == 0 and oldspeed == 7)
-value, speed = o:Incoming()
-assert(math.abs(value - 0.6) < 1e-6 and speed == 9)
-assert(o:Space() == nil and o:Hallway() == nil and o:Distant() == nil)
-o:Incoming('-0.5', '4')
-assert(o:Incoming() == -0.5 and o:Tilt() == 0.5 and o:Skew() == -0.5)
-o:Distant(-0.25)
-assert(o:Hallway() == 0.25 and o:Distant() == nil)
-"#,
-        )
-        .exec()
-        .expect("native perspective aliases");
-        let state = player_option_state(&lua, &options).expect("state");
-        for alias in ["incoming", "space", "hallway", "distant", "overhead"] {
-            assert!(matches!(
-                state.raw_get::<Value>(alias).expect("alias state"),
-                Value::Nil
-            ));
-        }
-    }
-
-    #[test]
-    fn timer_binding_matches_native_enum_and_float_protocol() {
-        let lua = options_lua();
-        let options =
-            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
-        lua.globals().set("o", options).expect("expose options");
-        lua.load(
-            r#"
-assert(o:ModTimerSetting() == 'ModTimerType_Default' and select('#', o:ModTimerSetting()) == 1)
-assert(o:ModTimerSetting('ModTimerType_Song') == 'ModTimerType_Default')
-assert(o:ModTimerSetting('GaMe', true) == o and o:ModTimerSetting() == 'ModTimerType_Game')
-assert(o:ModTimerSetting(1) == 'ModTimerType_Game' and o:ModTimerSetting() == 'ModTimerType_Beat')
-assert(o:ModTimerSetting(nil) == 'ModTimerType_Beat' and o:ModTimerSetting(nil, true) == o)
-for _, invalid in ipairs({-1, 4, 1.5, '1', 'modtimertype_song', false}) do
-    assert(not pcall(function() o:ModTimerSetting(invalid) end))
-    assert(o:ModTimerSetting() == 'ModTimerType_Beat')
-end
-for _, mode in ipairs({'Game', 'Beat', 'Song', 'Default'}) do
-    o:FromString('*0 no modtimer'..mode)
-    assert(o:ModTimerSetting() == 'ModTimerType_'..mode)
-end
-for _, name in ipairs({'ModTimerMult', 'ModTimerOffset'}) do
-    local value, speed = o[name](o)
-    assert(value == 0 and speed == 1 and select('#', o[name](o)) == 2)
-    assert(o[name](o, -2, 3, true) == o)
-    value, speed = o[name](o, 1)
-    assert(value == -2 and speed == 3)
-    assert(not pcall(function() o[name](o, -.5, -1) end))
-    assert(o[name](o) == -.5 and select(2, o[name](o)) == 3)
-end
-o:FromString('modtimersong, clearall')
-assert(o:ModTimerSetting() == 'ModTimerType_Default')
-assert(o:ModTimerMult() == 0 and select(2, o:ModTimerMult()) == 1)
-assert(o:ModTimerOffset() == 0 and select(2, o:ModTimerOffset()) == 1)
-"#,
-        )
-        .exec()
-        .expect("native timer protocol");
-    }
-
-    #[test]
-    fn perspective_methods_keep_native_truthiness_chaining_and_error_order() {
-        let lua = Lua::new();
-        let options =
-            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
-        lua.globals().set("o", options).expect("expose options");
-        lua.load(
-            r#"
-assert(o:Space(0.5, 3, true) == o)
-assert(o:Overhead(false, 4, true) == o)
-assert(o:Tilt() == 0.5 and o:Skew() == 0.5)
-local value, speed = o:Space()
-assert(value == 0.5 and speed == 4)
-assert(o:Overhead(false, 6) == false and o:Overhead() == false)
-assert(select(2, o:Tilt()) == 6 and select(2, o:Skew()) == 6)
-assert(o:Overhead(0) == false and o:Overhead() == true)
-assert(o:Overhead(true) == o)
-assert(o:Space(0.75, 4, true):Incoming(-0.5, true) == o)
-value, speed = o:Incoming(nil, 11)
-assert(value == -0.5 and speed == 4)
-assert(o:Incoming() == -0.5 and select(2, o:Tilt()) == 11 and select(2, o:Skew()) == 11)
-assert(o:Hallway(true) == o and o:Incoming() == -0.5)
-assert(not pcall(o.Hallway, o, 0.75, -1))
-assert(o:Hallway() == 0.75 and select(2, o:Hallway()) == 11)
-assert(o:Overhead(nil, 8, true) == o and o:Hallway() == 0.75)
-assert(select(2, o:Tilt()) == 8 and select(2, o:Skew()) == 8)
-o:FromString('no overhead')
-assert(o:Overhead() == true)
-o:FromString('*3 50% incoming,*7 -25% space,*4 no distant')
-assert(o:Overhead() == true and select(2, o:Tilt()) == 4 and select(2, o:Skew()) == 4)
-"#,
-        )
-        .exec()
-        .expect("native perspective calls");
-    }
-
-    #[test]
-    fn perspective_getters_select_one_speed_correction_in_any_order() {
-        let lua = Lua::new();
-        let options =
-            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
-        lua.globals().set("o", options).expect("expose options");
-        lua.load(r#"
--- Sharkmode queries all four aliases in a pairs loop. Only the active alias
--- may be truthy; otherwise hash iteration changes the chosen correction.
-for _, order in ipairs{{'Hallway','Distant','Incoming','Space'}, {'Space','Incoming','Distant','Hallway'}} do
-    for _, active in ipairs(order) do
-        o[active](o, 0.5, 3)
-        local selected, count = nil, 0
-        for _, name in ipairs(order) do
-            if o[name](o) then selected = name; count = count + 1 end
-        end
-        assert(selected == active and count == 1)
-    end
-end
-"#).exec().expect("stable perspective selection");
-    }
-
-    #[test]
-    fn repeated_state_option_replacement_releases_temporary_values() {
-        let lua = Lua::new();
-        let context = SongLuaCompileContext::new(Path::new("."), "Repeated option assignment");
-        let runtime = create_song_runtime_table(&lua, &context).expect("create runtime");
-        let (state, _) =
-            create_player_state_table(&lua, context.players[0].clone(), 0, &runtime)
-                .expect("create player state");
-        lua.globals().set("player", state).expect("expose player");
-        lua.load(r#"
-local options = player:GetPlayerOptions("ModsLevel_Song")
-for i = 1, 1000 do
-    player:SetPlayerOptions("ModsLevel_Song", "*3 75% Reverse, C500")
-    assert(options:Reverse() == 0.75 and options:CMod() == 500)
-    player:SetPlayerOptions("ModsLevel_Song", "")
-    assert(options:Reverse() == 0 and options:XMod() == 1 and options:CMod() == nil)
-    if i % 10 == 0 then collectgarbage("collect") end
-end
-"#).exec().expect("temporary native option values must not retain Lua references");
-    }
-
-    #[test]
-    fn native_song_seconds_use_resolved_note_bounds_and_absolute_hint() {
-        let lua = Lua::new();
-        let mut context = SongLuaCompileContext::new(Path::new("."), "Native song bounds");
-        context.music_length_seconds = 120.0;
-        context.song_note_bounds = Some([10.0, 90.0]);
-        context.song_music_rate = 1.5;
-        context.global_offset_seconds = 0.125;
-        crate::host::install_basic_globals(&lua, &context, false).unwrap();
-        crate::host::install_manager_globals(&lua, &context).unwrap();
-        crate::host::install_game_state_globals(&lua, &context).unwrap();
-        lua.load(r#"
-local song = GAMESTATE:GetCurrentSong()
-assert(song:MusicLengthSeconds() == 120)
-assert(song:GetFirstSecond() == 10 and song:GetLastSecond() == 90)
-GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate(2)
-assert(song:GetFirstSecond() == 10 and song:GetLastSecond() == 90)
-assert(song:GetLastSecond() - song:GetFirstSecond() == 80)
-"#).exec().expect("capture-engine endpoints remain resolved when the current music rate changes");
-    }
-
-    #[test]
-    fn state_options_replace_previous_targets() {
-        let lua = Lua::new();
-        let context = SongLuaCompileContext::new(Path::new("."), "Option assignment");
-        let runtime = create_song_runtime_table(&lua, &context).expect("create runtime");
-        let (state, options) =
-            create_player_state_table(&lua, context.players[0].clone(), 0, &runtime)
-                .expect("create player state");
-        lua.globals()
-            .set("player", state)
-            .expect("expose player state");
-        lua.load(
-            r#"
-local options = player:GetPlayerOptions("ModsLevel_Song")
-options:FromString("*7 50% Drunk, Shuffle, C500, *2 75% Space")
-options:FromString("25% Mini")
-assert(options:Drunk() == 0.5 and options:Mini() == 0.25)
-assert(options:Space() == 0.75 and options:Overhead() == false)
-player:SetPlayerOptions("ModsLevel_Song", "*3 75% Reverse")
-assert(options == player:GetPlayerOptions("ModsLevel_Song"))
-assert(options:Drunk() == 0 and options:Mini() == 0 and not options:Shuffle())
-assert(options:Overhead() == true and options:Space() == nil)
-assert(options:XMod() == 1 and options:CMod() == nil and options:Reverse() == 0.75)
-player:SetPlayerOptions("ModsLevel_Song", "")
-assert(options:Reverse() == 0 and options:XMod() == 1)
-"#,
-        )
-        .exec()
-        .expect("run native-style option assignment");
-        let speeds = player_option_speeds(&lua, &options[2]).expect("read approach speeds");
-        for key in ["drunk", "reverse", "xmod", "cmod", "mmod", "tilt", "skew"] {
-            assert_eq!(speeds.raw_get::<f32>(key).expect("recorded approach"), 1.0);
-        }
-    }
-
-    #[test]
-    fn current_levels_match_compiled_native_control() {
-        let lua = Lua::new();
-        let context = SongLuaCompileContext::new(Path::new("."), "Native option levels");
-        crate::host::install_basic_globals(&lua, &context, false).expect("basic globals");
-        crate::host::install_manager_globals(&lua, &context).expect("native default preferences");
-        crate::host::install_game_state_globals(&lua, &context).expect("option levels");
-        lua.globals()
-            .set(
-                "NOTESKIN",
-                crate::create_noteskin_table(
-                    &lua,
-                    &context,
-                    SongLuaNoteskinResolver::default(),
-                    |lua, _| lua.create_table(),
-                )
-                .expect("empty numeric-control skin context"),
-            )
-            .expect("noteskin global");
-        lua.globals()
-            .set(
-                "_ITG_OPTIONS_ADVANCE",
-                lua.create_function(|lua, (seconds, _scaled_delta): (f64, Option<f32>)| {
-                    advance_option_levels(lua, seconds)
-                })
-                .expect("inject native time"),
-            )
-            .expect("clock boundary");
-        lua.globals()
-            .set(
-                "_ITG_OPTIONS_LEVEL",
-                lua.create_function(|lua, value: Value| {
-                    lua.create_string(MODS_LEVELS[options_level(Some(&value))?])
-                })
-                .expect("native enum input"),
-            )
-            .expect("level boundary");
-        // Adapt the already-verified C++ control to normal Lua APIs. Its
-        // assertion body is byte-identical to the standalone harness fixture;
-        // no expected numbers or approach arithmetic are generated here.
-        lua.load(
-            r#"
-function _ITG_OPTIONS_AT(player, level, method, ...)
-    if player == -1 then
-        if method == 'SetSongOptions' then return GAMESTATE:SetSongOptions(level, ...) end
-        local options = GAMESTATE:GetSongOptionsObject(level)
-        return options[method](options, ...)
-    end
-    local state = GAMESTATE:GetPlayerState(player)
-    if method == 'SetPlayerOptions' then return state:SetPlayerOptions(level, ...) end
-    local options = state:GetPlayerOptions(level)
-    return options[method](options, ...)
-end
-function _ITG_USING_MODIFIER(player, text) return GAMESTATE:PlayerIsUsingModifier(player, text) end
-function _ITG_OPTIONS_RATE_TWEENS(value)
-    local previous = PREFSMAN:GetPreference('RateModsAffectFGChanges')
-    if type(value) == 'boolean' then PREFSMAN:SetPreference('RateModsAffectFGChanges', value) end
-    return previous
-end
-"#,
-        )
-        .exec()
-        .expect("public option API adapter");
-        for source in [
-            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/window-control.json"),
-            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/native-control.json"),
-            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/speed-query-control.json"),
-        ] {
-            let control: serde_json::Value = serde_json::from_str(source)
-                .expect("standalone compiled-native control");
-            lua.load(control["lua_assertions"].as_str().expect("native assertions"))
-                .exec()
-                .expect("compiled native option level and clock expectations");
-        }
-    }
-
-    #[test]
-    fn modifier_prefix_order_matches_native() {
-        let lua = Lua::new();
-        let options =
-            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
-        lua.globals().set("o", options).expect("expose options");
-        // These assertions also run against the linked ITGmania PlayerOptions
-        // binding in the native text/prefix probe, including negative speeds.
-        lua.load(
-            r#"
-o:Tipsy(7)
-o:FromString('0.8 0% Tipsy')
-assert(o:Tipsy() == 0)
-o:FromString('*2 10% *5 25% Drunk')
-assert(o:Drunk() == 0.25 and select(2, o:Drunk()) == 5)
-o:FromString('50% no Flip')
-assert(o:Flip() == 0)
-o:FromString('no 75% Flip')
-assert(o:Flip() == 0.75)
-o:FromString('*inf 25% Mini')
-assert(o:Mini() == 0.25 and select(2, o:Mini()) == 1)
-o:FromString('*-2 25% Mini')
-assert(select(2, o:Mini()) == -2)
-o:FromString('100ms Passmark')
-assert(math.abs(o:Passmark() - 0.1) < 1e-6)
-o:FromString('25* Drunk')
-assert(o:Drunk() == 0.25)
-o:FromString('.5 Drunk')
-assert(o:Drunk() == 1)
-"#,
-        )
-        .exec()
-        .expect("native modifier prefixes");
-    }
-
-    #[test]
-    fn speed_option_writes_preserve_shared_approach_speed() {
-        let lua = Lua::new();
-        let options = create_player_options_table(&lua, SongLuaPlayerContext::default()).unwrap();
-        lua.globals().set("options", options.clone()).unwrap();
-        for (script, expected) in [
-            ("options:XMod(2.5)", [1.0, 1.0, 1.0, 1.0]),
-            ("options:XMod(2.5, 10000)", [10000.0; 4]),
-            ("options:CMod(300)", [10000.0; 4]),
-            ("options:MMod(400, 0)", [0.0; 4]),
-            ("options:XMod(1.5)", [0.0; 4]),
-            ("options:FromString('*7 2x')", [7.0, 0.0, 0.0, 7.0]),
-            ("options:FromString('C500')", [7.0, 1.0, 0.0, 1.0]),
-        ] {
-            lua.load(script).exec().unwrap();
-            let speeds = player_option_speeds(&lua, &options).unwrap();
-            for (key, expected) in ["xmod", "cmod", "mmod", "_spacing"]
-                .into_iter()
-                .zip(expected)
-            {
-                assert_eq!(
-                    // Missing capture metadata is the implicit native Init
-                    // speed of one, not an authored modifier target.
-                    speeds.raw_get::<Option<f32>>(key).unwrap().unwrap_or(1.0),
-                    expected,
-                    "{script}: {key}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn boolean_options_match_native_binding() {
-        let methods = SONG_LUA_PLAYER_OPTION_CAPABILITIES
-            .iter()
-            .copied()
-            .filter(|name| {
-                *name != "Overhead" && player_option_uses_bool(&name.to_ascii_lowercase())
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(methods.len(), 40, "cover every native BOOL_INTERFACE");
-        for method in methods {
-            let key = method.to_ascii_lowercase();
-            let lua = Lua::new();
-            let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
-                .expect("create options");
-            lua.globals()
-                .set("o", options.clone())
-                .expect("expose options");
-            lua.load(
-                r#"
-assert(o:StealthType() == false and select('#', o:StealthType()) == 1)
-assert(o:StealthType(true) == false and o:StealthType() == true)
-for _, value in ipairs({0, 1, 'true', 'false', {}}) do
-    assert(o:StealthType(value) == true and o:StealthType() == true)
-end
-assert(o:StealthType(nil, false) == o)
-assert(o:StealthType(false, 0, true) == true and o:StealthType() == false)
-assert(o:StealthType(true, true) == o)
-"#
-                .replace("StealthType", method),
-            )
-            .exec()
-            .expect("native boolean protocol");
-            // Direct boolean writes have no approach speed, even with a numeric arg.
-            let speeds = player_option_speeds(&lua, &options).expect("read speeds");
-            lua.load(format!("o:{method}(true, -1)"))
-                .exec()
-                .expect("numeric arg is ignored");
-            assert_eq!(
-                speeds.get::<Option<f32>>(key).expect("no approach speed"),
-                None
-            );
-        }
-    }
-
-    #[test]
-    fn boolean_option_strings_use_native_half_threshold() {
-        let lua = Lua::new();
-        let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
-            .expect("create option table");
-        lua.globals()
-            .set("options", options)
-            .expect("expose options");
-        lua.load(
-            r#"
-options:FromString('50% stealthpastreceptors')
-assert(options:StealthPastReceptors() == false)
-options:FromString('51% stealthpastreceptors')
-assert(options:StealthPastReceptors() == true)
-options:FromString('-50% stealthpastreceptors')
-assert(options:StealthPastReceptors() == false)
-options:FromString('25% noholds')
-assert(options:NoHolds() == false)
-options:FromString('51% noholds')
-assert(options:NoHolds() == true)
-"#,
-        )
-        .exec()
-        .expect("native boolean threshold");
-    }
-
-    #[test]
-    fn dynamic_player_option_methods_are_cached_after_first_lookup() {
-        let lua = Lua::new();
-        let options = create_player_options_table(&lua, SongLuaPlayerContext::default()).unwrap();
-        assert!(
-            options
-                .raw_get::<Option<Function>>("Drunk")
-                .unwrap()
-                .is_none()
-        );
-
-        let first = options.get::<Function>("Drunk").unwrap();
-        let cached = options.raw_get::<Function>("Drunk").unwrap();
-        assert_eq!(first.to_pointer(), cached.to_pointer());
-
-        first.call::<Value>((options.clone(), 0.5_f32)).unwrap();
-        assert_eq!(player_option_number(&lua, &options, "drunk").unwrap(), 0.5);
-    }
+#[cfg(any(test, feature = "legacy-oracle"))]
+#[cfg(feature = "test-support")]
+pub(crate) fn migration_apply_song_options(options: &Table, text: &str) -> mlua::Result<()> {
+    apply_song_options_string(options, text)
 }

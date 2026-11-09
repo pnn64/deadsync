@@ -4,6 +4,8 @@ use std::hint::black_box;
 mod before;
 #[path = "../src/input.rs"]
 mod input;
+#[path = "../src/input_types.rs"]
+mod input_types;
 #[path = "../../../tests/support/song_lua_metrics.rs"]
 mod metrics;
 

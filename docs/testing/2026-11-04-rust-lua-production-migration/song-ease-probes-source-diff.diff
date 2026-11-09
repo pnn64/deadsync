@@ -1,0 +1,1554 @@
+--- before/crates/deadsync-song-lua/src/rust_engine.rs
++++ crates/deadsync-song-lua/src/rust_engine.rs
+@@ -24,7 +24,9 @@
+ mod song_action_compile;
+ pub use song_action_compile::SongActionOutput;
+ mod song_column_eases;
++mod song_ease_probe;
+ mod song_easing;
++pub use song_ease_probe::SongFunctionEaseProbe;
+ mod song_easing_reader;
+ pub use song_easing_reader::{SongEasingNames, SongFunctionEaseInput};
+ mod song_tree;
+--- before/crates/deadsync-song-lua/src/rust_engine/actors.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -54,6 +54,7 @@
+ pub(super) use song_media::TARGETS as MEDIA_CAPTURE_TARGETS;
+ mod action_capture;
+ mod command_locals;
++pub(super) mod ease_probe;
+ mod function_action;
+ mod function_capture;
+ mod song_columns;
+@@ -262,6 +263,7 @@
+     startup_queues: Option<Vec<TableId>>,
+     startup_discovery: bool,
+     capture_scope: Option<f32>,
++    ease_probe_active: bool,
+     command_locals: Option<command_locals::Scope>,
+     action_capture: Option<action_capture::State>,
+     deferred_messages: Vec<messages::Deferred>,
+@@ -2372,6 +2374,9 @@
+     if frame_method && !is_frame(&store, actor) && !private_child_query {
+         return Err(call.error(b"ActorFrame expected"));
+     }
++    if let Op::Set(name) | Op::Render(name) = op {
++        ease_probe::method(call, &store, actor, name)?;
++    }
+     match op {
+         Op::Lifecycle(operation) => return lifecycle::method(call, &store, actor, operation),
+         Op::Render(name) => return render::method(call, &store, actor, name),
+@@ -2660,7 +2665,7 @@
+ ) -> Result<(), Error> {
+     if name == "draworder" {
+         if let Some(value) = integer_scalar(call, arg(call, 1)) {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -2691,7 +2696,7 @@
+         let x = float_scalar(call, arg(call, 1), false);
+         let y = float_scalar(call, arg(call, 2), false);
+         if x.is_some() || y.is_some() {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+         }
+         let mut store = store.lock().unwrap();
+         let position = store.actors.get_mut(&actor).unwrap().destination_mut();
+@@ -2739,7 +2744,7 @@
+         sprites::refresh_size(call, store, actor)?;
+     }
+     if matches!(name, "SetWidth" | "SetHeight" | "setsize" | "visible") {
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+     }
+     if matches!(name, "SetWidth" | "SetHeight" | "setsize") {
+         let size = {
+@@ -2774,7 +2779,7 @@
+     } else {
+         None
+     };
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     let id = actor;
+     let mut guard = store.lock().unwrap();
+     let actor = guard.actors.get_mut(&id).unwrap();
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs
+@@ -181,6 +181,15 @@
+     output.activated = true;
+     Ok(())
+ }
++/// Setter preflight. Structural and queue/tween operations use prepare directly.
++pub(super) fn prepare_write(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    actor: TableId,
++) -> Result<(), Error> {
++    super::ease_probe::actor(call, store, actor)?;
++    prepare(call, store, actor)
++}
+ pub(super) fn prepare(
+     call: &mut HostCall<'_>,
+     store: &Shared,
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/effects.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/effects.rs
+@@ -254,7 +254,7 @@
+         }
+         "effectcolor1" | "effectcolor2" => {
+             let color = render::color(call)?.unwrap_or([1.0; 4]);
+-            super::action_capture::prepare(call, store, actor)?;
++            super::action_capture::prepare_write(call, store, actor)?;
+             let mut store = store.lock().unwrap();
+             let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+             if name == "effectcolor1" {
+@@ -267,7 +267,7 @@
+         }
+         "effectperiod" | "effectoffset" => {
+             if let Some(value) = float_scalar(call, value, false) {
+-                super::action_capture::prepare(call, store, actor)?;
++                super::action_capture::prepare_write(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 if name == "effectperiod" {
+@@ -285,7 +285,7 @@
+         "effectmagnitude" => {
+             let magnitude =
+                 [1, 2, 3].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
+-            super::action_capture::prepare(call, store, actor)?;
++            super::action_capture::prepare_write(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -310,7 +310,7 @@
+                 .max(0.0);
+             let total = timing.iter().sum::<f32>();
+             if total > 0.0 {
+-                super::action_capture::prepare(call, store, actor)?;
++                super::action_capture::prepare_write(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 render.effect_timing = Some(timing);
+@@ -331,7 +331,7 @@
+             if hold < 0.0 || total <= 0.0 {
+                 return Err(call.error(b"effect timings must be nonnegative and not all zero"));
+             }
+-            super::action_capture::prepare(call, store, actor)?;
++            super::action_capture::prepare_write(call, store, actor)?;
+             let mut guard = store.lock().unwrap();
+             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             render.effect_timing = Some(timing);
+@@ -344,7 +344,7 @@
+             {
+                 let no_offset = raw.eq_ignore_ascii_case("beatnooffset");
+                 let timer = raw.eq_ignore_ascii_case("timer");
+-                super::action_capture::prepare(call, store, actor)?;
++                super::action_capture::prepare_write(call, store, actor)?;
+                 let mut store = store.lock().unwrap();
+                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+                 render.effect_clock = clock;
+@@ -358,7 +358,7 @@
+             }
+         }
+         _ => {
+-            super::action_capture::prepare(call, store, actor)?;
++            super::action_capture::prepare_write(call, store, actor)?;
+             fields = select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name);
+         }
+     }
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/framebuffers.rs
+@@ -137,7 +137,7 @@
+     created: bool,
+     value: bool,
+ ) -> Result<(), Error> {
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     let key = if created {
+         "__songlua_state_aft_created"
+     } else {
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
+@@ -208,6 +208,7 @@
+     command: Option<Vec<u8>>,
+ ) -> Result<(), Error> {
+     let duration = exact_duration as f32;
++    let shared = store;
+     action_capture::prepare(call, store, id)?;
+     capture::enter_replay_queue(store, id);
+     // BeginTweening finishes the actor subtree before adding its 52nd state.
+@@ -278,6 +279,10 @@
+             (!command_step).then_some(easing),
+         )?;
+     }
++    if !command_step {
++        // Native BeginTweening owns an empty destination capture block too.
++        super::ease_probe::actor(call, shared, id)?;
++    }
+     Ok(())
+ }
+ 
+@@ -386,7 +391,7 @@
+                 .hibernate = duration;
+             let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+             call.raw_table_set(actor, key, Value::Number(duration as f64))?;
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             capture::write(
+                 call,
+                 store,
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/render.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/render.rs
+@@ -95,7 +95,7 @@
+     let value = call.raw_table_get(actor, key)?;
+     if value != Value::Nil {
+         let number = super::sprites::number(call, value)? as f32;
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         scalar(call, store, actor, "fov", number);
+     }
+     Ok(())
+@@ -231,7 +231,7 @@
+     target: Target,
+     enabled: bool,
+ ) -> Result<(), Error> {
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     {
+         let mut store = store.lock().unwrap();
+         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
+@@ -259,7 +259,7 @@
+     if name == "align" {
+         for (index, vertical) in [(1, false), (2, true)] {
+             if let Some(value) = alignment(call, arg(call, index), vertical) {
+-                action_capture::prepare(call, store, actor)?;
++                action_capture::prepare_write(call, store, actor)?;
+                 let mut delta = crate::SongLuaOverlayStateDelta::default();
+                 {
+                     let mut guard = store.lock().unwrap();
+@@ -323,7 +323,7 @@
+         || corner_mask(name).is_some()
+     {
+         if let Some(mut color) = color(call)? {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             let shared = store;
+             let id = actor;
+             let mut store = store.lock().unwrap();
+@@ -378,7 +378,7 @@
+             .then(|| text(call, value).and_then(crate::parse_overlay_text_align))
+             .flatten();
+         if align.is_some() || text_align.is_some() {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+         }
+         let shared = store;
+         let mut guard = store.lock().unwrap();
+@@ -426,7 +426,7 @@
+         } else {
+             cull_mode(call)?
+         };
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         store
+             .lock()
+             .unwrap()
+@@ -444,7 +444,7 @@
+             crate::SongLuaOverlayUpdateValue::CullMode(mode),
+         );
+     } else if matches!(name, "MaskSource" | "MaskDest") {
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         let key = if name == "MaskSource" {
+             "mask_source"
+         } else {
+@@ -494,7 +494,7 @@
+             .arguments()
+             .get(1)
+             .is_none_or(|v| !matches!(v, Value::Nil | Value::Boolean(false)));
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         let mut guard = store.lock().unwrap();
+         let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+         if name == "SetTextureFiltering" {
+@@ -516,7 +516,7 @@
+         );
+     } else if name == "blend" {
+         if let Some(blend) = text(call, value).and_then(crate::parse_overlay_blend_mode) {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -555,7 +555,7 @@
+         ) || (name == "diffusealpha"
+             && matches!(value, Value::Number(v) if v.is_infinite()));
+         if let Some(number) = float_scalar(call, value, nonfinite) {
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             scalar(call, store, actor, name, number);
+             if name == "diffusealpha" {
+                 song_replay::sync_getters(call, store, actor)?;
+@@ -719,7 +719,7 @@
+         // an explicit center; invalid dimensions must still report an error.
+         center[index] = value.unwrap_or(screen_size(call)?[index] * 0.5);
+     }
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     let mut guard = store.lock().unwrap();
+     let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
+     if name != "CenterY" {
+@@ -760,7 +760,7 @@
+     } else {
+         None
+     };
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     let id = actor;
+     let mut guard = store.lock().unwrap();
+     let actor = guard.actors.get_mut(&id).unwrap();
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/song_columns.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_columns.rs
+@@ -103,7 +103,10 @@
+ fn required_table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
+     table(call, value)
+ }
+-fn optional_integer(call: &mut HostCall<'_>, value: Value) -> Result<Option<i64>, Error> {
++pub(super) fn optional_integer(
++    call: &mut HostCall<'_>,
++    value: Value,
++) -> Result<Option<i64>, Error> {
+     if value == Value::Nil {
+         Ok(None)
+     } else {
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs
+@@ -9,7 +9,8 @@
+         || song_media::TARGETS.contains(&target)
+ }
+ pub(super) fn mode(store: &Store, id: TableId) -> bool {
+-    song_immediate::context(store, id).is_some()
++    !store.ease_probe_active
++        && song_immediate::context(store, id).is_some()
+         && store.replay_clock.as_ref().is_some_and(|c| c.fallback(id))
+ }
+ pub(super) fn prior_position(store: &Store, id: TableId) -> Option<[f32; 3]> {
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/sound.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/sound.rs
+@@ -103,7 +103,7 @@
+         if !matches!(name, "play" | "pause") {
+             return call.push(Value::Table(actor));
+         }
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         store
+             .lock()
+             .unwrap()
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/sprites.rs
+@@ -403,7 +403,7 @@
+     clear_rect: bool,
+ ) -> Result<(), Error> {
+     if clear_rect {
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+     }
+     set(
+         call,
+@@ -463,7 +463,7 @@
+     actor: TableId,
+     rect: [f32; 4],
+ ) -> Result<(), Error> {
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     state(
+         call,
+         store,
+@@ -780,7 +780,7 @@
+     }
+     if name == "loop" {
+         let value = boolish(call, value).unwrap_or(true);
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         set(
+             call,
+             actor,
+@@ -798,7 +798,7 @@
+             .sprite_loop = value;
+         song_media::record(call, store, actor, "sprite_loop");
+     } else if let Some(value) = float_scalar(call, value, false) {
+-        action_capture::prepare(call, store, actor)?;
++        action_capture::prepare_write(call, store, actor)?;
+         set(
+             call,
+             actor,
+@@ -865,7 +865,7 @@
+         }
+         "animate" | "texturewrapping" => {
+             let enabled = boolish(call, value).unwrap_or(true);
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             let mut guard = store.lock().unwrap();
+             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "animate" {
+@@ -906,7 +906,7 @@
+         "SetAllStateDelays" => {
+             if let Some(delay) = float_scalar(call, value, false) {
+                 let delay = delay.max(0.0);
+-                action_capture::prepare(call, store, actor)?;
++                action_capture::prepare_write(call, store, actor)?;
+                 set(
+                     call,
+                     actor,
+@@ -984,7 +984,7 @@
+                     Value::Number(length as f64),
+                 )?;
+                 if let Some(delay) = first_delay {
+-                    action_capture::prepare(call, store, actor)?;
++                    action_capture::prepare_write(call, store, actor)?;
+                     set(
+                         call,
+                         actor,
+@@ -1032,7 +1032,7 @@
+         }
+         "texturetranslate" | "texcoordvelocity" => {
+             let value = [1, 2].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             let mut guard = store.lock().unwrap();
+             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+             if name == "texturetranslate" {
+@@ -1058,7 +1058,7 @@
+             };
+             let target = [w, h];
+             if name == "scaletoclipped" {
+-                action_capture::prepare(call, store, actor)?;
++                action_capture::prepare_write(call, store, actor)?;
+                 size(store, actor, target);
+                 capture::property(call, store, actor, "size");
+             } else if target.iter().all(|n| n.is_finite() && *n > 0.0) {
+@@ -1069,7 +1069,7 @@
+                 if let Some(source) = source
+                     && let Some(crop) = crate::crop_texture_rect(source, target)
+                 {
+-                    action_capture::prepare(call, store, actor)?;
++                    action_capture::prepare_write(call, store, actor)?;
+                     size(store, actor, target);
+                     capture::property(call, store, actor, "size");
+                     rect(call, store, actor, crop)?;
+--- before/crates/deadsync-song-lua/src/rust_engine/actors/text.rs
++++ crates/deadsync-song-lua/src/rust_engine/actors/text.rs
+@@ -352,7 +352,7 @@
+     key: &str,
+     value: bool,
+ ) -> Result<(), Error> {
+-    action_capture::prepare(call, store, actor)?;
++    action_capture::prepare_write(call, store, actor)?;
+     {
+         let mut guard = store.lock().unwrap();
+         let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+@@ -479,7 +479,7 @@
+                     .unwrap_or(0.)
+                     .max(0.)
+             };
+-            action_capture::prepare(call, store, actor)?;
++            action_capture::prepare_write(call, store, actor)?;
+             store
+                 .lock()
+                 .unwrap()
+@@ -505,7 +505,7 @@
+                     n as i32
+                 };
+                 if name == "vertspacing" || n >= 0 {
+-                    action_capture::prepare(call, store, actor)?;
++                    action_capture::prepare_write(call, store, actor)?;
+                     let key = if name == "vertspacing" {
+                         "vert_spacing"
+                     } else {
+@@ -533,7 +533,7 @@
+         "maxwidth" | "maxheight" => {
+             if let Some(n) = float_scalar(call, arg(call, 1), false) {
+                 let width = name == "maxwidth";
+-                action_capture::prepare(call, store, actor)?;
++                action_capture::prepare_write(call, store, actor)?;
+                 {
+                     let mut guard = store.lock().unwrap();
+                     let s = &mut guard.actors.get_mut(&actor).unwrap().state.render;
+@@ -586,7 +586,7 @@
+             if let Some(mode) =
+                 render::text(call, arg(call, 1)).and_then(crate::parse_overlay_text_glow_mode)
+             {
+-                action_capture::prepare(call, store, actor)?;
++                action_capture::prepare_write(call, store, actor)?;
+                 store
+                     .lock()
+                     .unwrap()
+--- before/crates/deadsync-song-lua/src/rust_engine/song_easing.rs
++++ crates/deadsync-song-lua/src/rust_engine/song_easing.rs
+@@ -2,6 +2,158 @@
+ use super::*;
+ 
+ impl RustSongRuntime {
++    /// The existing static compiler pipeline: column endpoints first, then
++    /// setter target classification, then indexed/touched overlay endpoints.
++    pub fn read_song_eases_for_overlay_actors(
++        &mut self,
++        table: Option<Value>,
++        unit: crate::SongLuaTimeUnit,
++        names: &SongEasingNames,
++        overlays: &[(usize, Value)],
++    ) -> Result<crate::SongLuaReadEasesResult, String> {
++        let started = std::time::Instant::now();
++        let mut pins = Vec::new();
++        let result = (|| {
++            if table.is_some_and(|v| v != Value::Nil) {
++                for (_, actor) in overlays {
++                    pins.push(self.vm.pin(*actor).map_err(|e| e.to_string())?);
++                }
++            }
++            self.read_song_eases_with_function_capture(
++                table,
++                unit,
++                names,
++                |runtime, input, info| runtime.capture_function_ease(overlays, input, info),
++            )
++        })();
++        for pin in pins {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        let output = result?;
++        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.;
++        if elapsed_ms >= 1000. {
++            let stats = output.stats;
++            log::info!(
++                "Song lua read_eases timing: unit={unit:?} entries={} function_targets={} overlay_capture_attempts={} overlay_capture_outputs={} player_eases={} overlay_eases={} unsupported_function_eases={} probe_ms={:.3} overlay_capture_ms={:.3} elapsed_ms={elapsed_ms:.3}",
++                stats.entry_count,
++                stats.function_targets,
++                stats.overlay_capture_attempts,
++                stats.overlay_capture_outputs,
++                output.eases.len(),
++                output.overlay_eases.len(),
++                output.info.unsupported_function_eases,
++                stats.probe_ms,
++                stats.overlay_capture_ms
++            );
++        }
++        Ok(output)
++    }
++    fn capture_function_ease(
++        &mut self,
++        overlays: &[(usize, Value)],
++        input: SongFunctionEaseInput,
++        info: &mut crate::SongLuaCompileInfo,
++    ) -> Result<crate::SongLuaFunctionEaseResult, String> {
++        use crate::{
++            SongLuaEaseTarget as Target, SongLuaFunctionEaseDecision as Decision,
++            SongLuaFunctionEaseResult as Output,
++        };
++        let mut stats = crate::SongLuaReadEasesStats::default();
++        match self.capture_song_note_column_function_eases(
++            input.function,
++            crate::SongLuaColumnOffsetBuildParams {
++                unit: input.unit,
++                start: input.start,
++                limit: input.limit,
++                span_mode: input.span_mode,
++                easing: input.easing.clone(),
++                sustain: input.sustain,
++                opt1: input.opt1,
++                opt2: input.opt2,
++            },
++            [input.from, input.to],
++        ) {
++            Ok(rows) if !rows.is_empty() => {
++                return Ok(Output {
++                    decision: Decision::ColumnOffsets(rows),
++                    stats,
++                });
++            }
++            Ok(_) => {}
++            Err(error) => {
++                log::debug!("Skipping song lua note-column position function ease capture: {error}")
++            }
++        }
++        let started = std::time::Instant::now();
++        let mut probe = self.probe_song_function_ease_target(input.function)?;
++        stats.probe_ms += started.elapsed().as_secs_f64() * 1000.;
++        let result = (|| {
++            let target = probe.target.clone().unwrap_or(Target::Function);
++            if !matches!(target, Target::Function) {
++                return Ok(Output {
++                    decision: Decision::Target(target),
++                    stats,
++                });
++            }
++            stats.overlay_capture_attempts += 1;
++            let actors = self.song_function_ease_probe_actors(&probe)?;
++            let started = std::time::Instant::now();
++            let captured = self.capture_song_overlay_function_eases(
++                overlays,
++                input.function,
++                crate::SongLuaOverlayEaseBuildParams {
++                    unit: input.unit,
++                    start: input.start,
++                    limit: input.limit,
++                    span_mode: input.span_mode,
++                    easing: input.easing.clone(),
++                    sustain: input.sustain,
++                    opt1: input.opt1,
++                    opt2: input.opt2,
++                },
++                [input.from, input.to],
++                &actors,
++            );
++            let capture_ms = started.elapsed().as_secs_f64() * 1000.;
++            stats.overlay_capture_ms += capture_ms;
++            if capture_ms >= 1000. {
++                log::info!(
++                    "Slow song lua function ease capture: unit={:?} start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?} probe_actors={} overlays={} capture_ms={capture_ms:.3}",
++                    input.unit,
++                    input.start,
++                    input.limit,
++                    input.span_mode,
++                    input.from,
++                    input.to,
++                    input.easing,
++                    actors.len(),
++                    overlays.len()
++                );
++            }
++            let decision = match captured {
++                Ok(rows) if !rows.is_empty() => Decision::OverlayEases(rows),
++                _ => {
++                    let detail = crate::record_unsupported_function_ease_capture(
++                        info,
++                        input.unit,
++                        input.start,
++                        input.limit,
++                        input.span_mode,
++                        input.from,
++                        input.to,
++                        &input.easing,
++                        &probe.methods,
++                    );
++                    log::debug!("Unsupported song lua function ease capture: {detail}");
++                    Decision::Skip
++                }
++            };
++            Ok(Output { decision, stats })
++        })();
++        self.release_song_function_ease_probe(&mut probe)
++            .map_err(|e| e.to_string())?;
++        result
++    }
+     /// Probe the existing from/to endpoints. Known actor identities use indexed
+     /// capture; an empty or unknown selection uses lazy touched capture. Shared
+     /// script state belongs to the caller's outer compiler snapshot, as native.
+--- before/crates/deadsync-song-lua/src/rust_engine/test_support.rs
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1762,6 +1762,36 @@
+         })
+         .collect()
+ }
++pub type LegacyFunctionEases = (
++    Vec<crate::SongLuaEaseWindow>,
++    Vec<crate::SongLuaOverlayEase>,
++    Vec<crate::SongLuaColumnOffsetWindow>,
++    crate::SongLuaCompileInfo,
++);
++pub fn legacy_read_function_eases(
++    lua: &mlua::Lua,
++    table: Option<mlua::Table>,
++    unit: crate::SongLuaTimeUnit,
++    names: &crate::SongLuaHostState,
++    actors: &[mlua::Table],
++) -> Result<LegacyFunctionEases, String> {
++    let mut commands = vec![Vec::new(); actors.len()];
++    let targets = actors
++        .iter()
++        .zip(&mut commands)
++        .map(|(actor, commands)| LegacyMessageTarget {
++            actor: actor.clone(),
++            commands,
++        })
++        .collect::<Vec<_>>();
++    crate::read_eases_for_overlay_actors(
++        lua,
++        table,
++        unit,
++        &names.easing_names,
++        &mut legacy_message_overlays(&targets),
++    )
++}
+ pub fn legacy_capture_stable_messages(
+     lua: &mlua::Lua,
+     targets: &mut [LegacyMessageTarget<'_>],
+--- before/crates/deadsync-song-lua/tests/rust_song_activation.rs
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -8862,3 +8862,498 @@
+                 && w.sustain == Some(9.))
+     );
+ }
++
++fn function_ease_pair() -> (tempfile::TempDir, Pair) {
++    let (dir, mut pair) = command_scope_pair(
++        "return Def.ActorFrame{Def.Quad{InitCommand=function(self)saved.a=self end},Def.Quad{InitCommand=function(self)saved.b=self end}}",
++    );
++    pair.script("saved.p=SCREENMAN:GetTopScreen():GetChild('PlayerP1');saved.p2=SCREENMAN:GetTopScreen():GetChild('PlayerP2');saved.n=saved.p:GetChild('NoteField');saved.j=saved.p:GetChild('Judgment');probe_ids={saved.a,saved.b,saved.p,saved.p2,saved.n,saved.j}");
++    (dir, pair)
++}
++fn compare_function_ease_probe(
++    pair: &mut Pair,
++) -> Result<
++    (
++        Option<deadsync_song_lua::SongLuaEaseTarget>,
++        Vec<String>,
++        Vec<usize>,
++    ),
++    String,
++> {
++    let known: Vec<mlua::Table> = pair.native.globals().get("probe_ids").unwrap();
++    let Value::Table(ids) = pair.rust.vm_mut().get_global(b"probe_ids").unwrap() else {
++        panic!()
++    };
++    let ids = (1..=known.len())
++        .map(|i| {
++            pair.rust
++                .vm_mut()
++                .raw_table_get(ids, Value::Number(i as f64))
++                .unwrap()
++        })
++        .collect::<Vec<_>>();
++    let f = pair
++        .native
++        .globals()
++        .get::<mlua::Function>("probe_fn")
++        .unwrap();
++    let native = deadsync_song_lua::probe_function_ease_target(&pair.native, &f).map(
++        |(target, methods, actors)| {
++            (
++                target,
++                methods,
++                actors
++                    .into_iter()
++                    .map(|id| {
++                        known
++                            .iter()
++                            .position(|t| t.to_pointer() as usize == id)
++                            .unwrap_or(usize::MAX)
++                    })
++                    .collect::<Vec<_>>(),
++            )
++        },
++    );
++    let f = pair.rust.vm_mut().get_global(b"probe_fn").unwrap();
++    let rust = pair.rust.probe_song_function_ease_target(f);
++    assert_eq!(
++        rust.is_ok(),
++        native.is_ok(),
++        "native={:?} rust={:?}",
++        native.as_ref().err(),
++        rust.as_ref().err()
++    );
++    let rust = rust.map(|mut r| {
++        let actors = pair
++            .rust
++            .song_function_ease_probe_actors(&r)
++            .unwrap()
++            .into_iter()
++            .map(|v| ids.iter().position(|id| *id == v).unwrap_or(usize::MAX))
++            .collect::<Vec<_>>();
++        let out = (r.target.clone(), r.methods.clone(), actors);
++        pair.rust.release_song_function_ease_probe(&mut r).unwrap();
++        out
++    });
++    if let (Ok(a), Ok(b)) = (&rust, &native) {
++        assert_eq!(a, b);
++    }
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    pair.compare();
++    rust
++}
++fn compare_function_eases(
++    pair: &mut Pair,
++    keys: &[&str],
++) -> Result<deadsync_song_lua::SongLuaReadEasesResult, String> {
++    let mut actors = Vec::new();
++    let mut values = Vec::new();
++    for key in keys {
++        let (a, b) = saved_pair(pair, key);
++        actors.push(a);
++        values.push((values.len(), Value::Table(b)));
++    }
++    let mut names = easing_reader_names(pair);
++    let native = test_support::legacy_read_function_eases(
++        &pair.native,
++        pair.native.globals().get("eases_probe").unwrap(),
++        deadsync_song_lua::SongLuaTimeUnit::Beat,
++        &names.0,
++        &actors,
++    );
++    let table = pair.rust.vm_mut().get_global(b"eases_probe").unwrap();
++    let rust = pair.rust.read_song_eases_for_overlay_actors(
++        Some(table),
++        deadsync_song_lua::SongLuaTimeUnit::Beat,
++        &names.1,
++        &values,
++    );
++    pair.rust.release_song_easing_names(&mut names.1).unwrap();
++    assert_eq!(
++        rust.is_ok(),
++        native.is_ok(),
++        "native={:?} rust={:?}",
++        native.as_ref().err(),
++        rust.as_ref().err()
++    );
++    if let (Ok(a), Ok(b)) = (&rust, &native) {
++        assert_eq!(
++            (&a.eases, &a.overlay_eases, &a.column_offsets, &a.info),
++            (&b.0, &b.1, &b.2, &b.3)
++        );
++        assert!(a.stats.probe_ms >= 0. && a.stats.overlay_capture_ms >= 0.);
++    }
++    assert_eq!(
++        pair.rust.values().unwrap(),
++        deadsync_song_lua::compile_song_runtime_values(&pair.native).unwrap()
++    );
++    pair.compare();
++    rust
++}
++
++#[test]
++fn function_ease_probe_classifies_all_existing_player_targets_and_repeated_setters() {
++    use deadsync_song_lua::SongLuaEaseTarget as T;
++    let (_dir, mut pair) = function_ease_pair();
++    for (method, target) in [
++        ("x", T::PlayerX),
++        ("y", T::PlayerY),
++        ("z", T::PlayerZ),
++        ("rotationx", T::PlayerRotationX),
++        ("rotationy", T::PlayerRotationY),
++        ("rotationz", T::PlayerRotationZ),
++        ("skewx", T::PlayerSkewX),
++        ("skewy", T::PlayerSkewY),
++        ("zoom", T::PlayerZoom),
++        ("zoomx", T::PlayerZoomX),
++        ("zoomy", T::PlayerZoomY),
++        ("zoomz", T::PlayerZoomZ),
++    ] {
++        pair.script(&format!(
++            "probe_fn=function(v)saved.p:{method}(v);saved.p:{method}(v+1)end"
++        ));
++        let out = compare_function_ease_probe(&mut pair).unwrap();
++        assert_eq!(out.0, Some(target));
++        assert_eq!(out.1, vec![format!("player.{method}"); 2]);
++        assert_eq!(out.2, [2]);
++    }
++}
++
++#[test]
++fn function_ease_probe_tracks_write_order_separately_from_named_setter_calls() {
++    let (_dir, mut pair) = function_ease_pair();
++    for (body, methods, actors) in [
++        (
++            "saved.b:diffusealpha(.3);saved.a:x(2);saved.b:y(3)",
++            vec!["overlay.x", "overlay.y"],
++            vec![1, 0],
++        ),
++        (
++            "saved.p:x(2);saved.p:y(3)",
++            vec!["player.x", "player.y"],
++            vec![2],
++        ),
++        ("saved.n:x(2)", vec!["notefield.x"], vec![4]),
++        ("saved.j:rotationz(2)", vec!["judgment.rotationz"], vec![5]),
++        (
++            "saved.p:baserotationx(3)",
++            vec!["player.baserotationx"],
++            vec![2],
++        ),
++        (
++            "saved.a:diffusealpha(.3);saved.b:skewx(4)",
++            vec!["overlay.skewx"],
++            vec![0, 1],
++        ),
++    ] {
++        pair.script(&format!("probe_fn=function(){body} end"));
++        let out = compare_function_ease_probe(&mut pair).unwrap();
++        assert!(out.0.is_none());
++        assert_eq!(out.1, methods);
++        assert_eq!(out.2, actors);
++    }
++}
++
++#[test]
++fn function_ease_probe_keeps_native_empty_tween_ownership_and_skips_nonwriting_operations() {
++    let (_dir, mut pair) = function_ease_pair();
++    for (body, methods, actors) in [
++        (
++            "saved.a:linear(1):queuecommand('Empty');saved.b:AddWrapperState()",
++            vec![],
++            vec![0],
++        ),
++        ("saved.a:GetX();saved.b:GetY()", vec![], vec![]),
++        ("saved.a:xy(false,false)", vec![], vec![]),
++        ("saved.a:diffusealpha(false)", vec![], vec![]),
++        ("saved.a:x(false)", vec!["overlay.x"], vec![0]),
++        ("saved.a:visible(false)", vec![], vec![0]),
++        ("saved.a:play()", vec![], vec![0]),
++        ("saved.a:effectmagnitude(1,2,3)", vec![], vec![0]),
++        ("saved.a:hibernate(.2)", vec![], vec![0]),
++    ] {
++        pair.script(&format!("probe_fn=function(){body} end"));
++        let out = compare_function_ease_probe(&mut pair).unwrap();
++        assert!(out.0.is_none());
++        assert_eq!(out.1, methods);
++        assert_eq!(out.2, actors);
++    }
++}
++
++#[test]
++fn function_ease_probe_restores_rng_clocks_globals_and_keeps_shared_writes_on_body_errors() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("math.randomseed(4321);__songlua_probe_methods='old methods';__songlua_probe_actors=17;__songlua_probe_actor_set=false;local count=0;probe_fn=function(v)count=count+1;probe_count=count;probe_random=math.random();saved.p:x(40+v);error('probe body failure')end");
++    let out = compare_function_ease_probe(&mut pair).unwrap();
++    assert!(out.0.is_none());
++    assert_eq!(out.1, ["player.x"]);
++    assert_eq!(out.2, [2]);
++    pair.script("assert(probe_count==1 and saved.p:GetX()==41);assert(__songlua_probe_methods=='old methods' and __songlua_probe_actors==17 and __songlua_probe_actor_set==false);assert(math.random()==probe_random)");
++}
++
++#[test]
++fn function_ease_probe_uses_original_observation_tables_and_validates_corrupt_sequences() {
++    use deadsync_song_lua::SongLuaEaseTarget as T;
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("probe_fn=function()__songlua_probe_methods[1]='player.y';__songlua_probe_methods={};__songlua_probe_actors={};saved.p:x(9)end");
++    let out = compare_function_ease_probe(&mut pair).unwrap();
++    assert_eq!(out.0, Some(T::PlayerY));
++    assert_eq!(out.1, ["player.y"]);
++    assert!(out.2.is_empty());
++    for body in [
++        "__songlua_probe_methods[1]=false",
++        "__songlua_probe_actors[1]=false",
++    ] {
++        pair.script(&format!("probe_fn=function(){body} end"));
++        assert!(compare_function_ease_probe(&mut pair).is_err());
++        pair.script("saved.p:y(18);__songlua_probe_methods=nil;__songlua_probe_actors=nil;__songlua_probe_actor_set=nil");
++    }
++}
++
++#[test]
++fn function_ease_probe_keeps_first_return_through_authored_global_restoration() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script(r#"
++        __songlua_probe_methods=17
++        setmetatable(_G,{__newindex=function(t,k,v)
++            if k=='__songlua_probe_methods' and probe_return_weak then
++                collectgarbage();collectgarbage();assert(probe_return_weak[1] and probe_return_weak[2]==nil);log('probe cleanup')
++            end;rawset(t,k,v)
++        end})
++        probe_fn=function()
++            rawset(_G,'__songlua_probe_methods',nil)
++            local first,second={},{};probe_return_weak=setmetatable({first,second},{__mode='v'});return first,second
++        end
++    "#);
++    let out = compare_function_ease_probe(&mut pair).unwrap();
++    assert!(out.0.is_none());
++    assert!(out.1.is_empty());
++    assert_eq!(pair.compare(), "probe cleanup");
++    pair.script("setmetatable(_G,nil);collectgarbage();collectgarbage();assert(probe_return_weak[1]==nil and probe_return_weak[2]==nil)");
++}
++
++#[test]
++fn function_ease_probe_root_batch_keeps_unknown_tables_until_release_and_rejects_foreign_vms() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("probe_fn=function()local a={marker=7};__songlua_probe_actors[1]=a;probe_weak=setmetatable({a},{__mode='v'})end");
++    let f = pair.rust.vm_mut().get_global(b"probe_fn").unwrap();
++    let mut probe = pair.rust.probe_song_function_ease_target(f).unwrap();
++    let mut other = RustSongRuntime::new(&pair.context).unwrap();
++    assert!(other.song_function_ease_probe_actors(&probe).is_err());
++    assert!(other.release_song_function_ease_probe(&mut probe).is_err());
++    pair.rust
++        .vm_mut()
++        .execute(
++            &compile_named(
++                b"collectgarbage();collectgarbage();assert(probe_weak[1].marker==7)",
++                b"=probe actor roots",
++            )
++            .unwrap(),
++        )
++        .unwrap();
++    assert_eq!(
++        pair.rust
++            .song_function_ease_probe_actors(&probe)
++            .unwrap()
++            .len(),
++        1
++    );
++    assert!(
++        pair.rust
++            .release_song_function_ease_probe(&mut probe)
++            .unwrap()
++    );
++    assert!(
++        !pair
++            .rust
++            .release_song_function_ease_probe(&mut probe)
++            .unwrap()
++    );
++    assert!(pair.rust.song_function_ease_probe_actors(&probe).is_err());
++    pair.rust
++        .vm_mut()
++        .execute(
++            &compile_named(
++                b"collectgarbage();collectgarbage();assert(probe_weak[1]==nil)",
++                b"=probe actor release",
++            )
++            .unwrap(),
++        )
++        .unwrap();
++}
++
++#[test]
++fn function_ease_probe_instruction_abort_still_cleans_up_and_allows_a_later_probe() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("probe_fn=function()saved.p:x(33);while true do end end");
++    let f = pair.rust.vm_mut().get_global(b"probe_fn").unwrap();
++    let clock = pair.rust.values().unwrap();
++    pair.rust.vm_mut().set_instruction_limit(Some(50_000));
++    let mut out = pair.rust.probe_song_function_ease_target(f).unwrap();
++    pair.rust.vm_mut().set_instruction_limit(None);
++    assert!(out.target.is_none());
++    assert_eq!(out.methods, ["player.x"]);
++    assert_eq!(pair.rust.values().unwrap(), clock);
++    pair.rust
++        .release_song_function_ease_probe(&mut out)
++        .unwrap();
++    pair.rust.vm_mut().execute(&compile_named(b"assert(saved.p:GetX()==33);assert(__songlua_probe_methods==nil and __songlua_probe_actors==nil and __songlua_probe_actor_set==nil);probe_fn=function()saved.p:y(12)end",b"=probe abort cleanup").unwrap()).unwrap();
++    let f = pair.rust.vm_mut().get_global(b"probe_fn").unwrap();
++    let mut out = pair.rust.probe_song_function_ease_target(f).unwrap();
++    assert_eq!(
++        out.target,
++        Some(deadsync_song_lua::SongLuaEaseTarget::PlayerY)
++    );
++    pair.rust
++        .release_song_function_ease_probe(&mut out)
++        .unwrap();
++}
++
++#[test]
++fn function_ease_pipeline_compiles_player_targets_after_column_endpoints_and_probe() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("ease=nil;xero=nil;local count=0;eases_probe={{4,2,2,6,function(v)count=count+1;function_ease_count=count;saved.p:x(v);function_ease_random=math.random()end,'end','linear',1.9,3,4,5},{9,1,0,1,'drunk'}}");
++    let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++    assert_eq!(out.eases.len(), 2);
++    assert!(out.overlay_eases.is_empty());
++    assert_eq!(out.stats.function_targets, 1);
++    assert_eq!(out.stats.overlay_capture_attempts, 0);
++    assert_eq!(
++        out.eases[0].target,
++        deadsync_song_lua::SongLuaEaseTarget::PlayerX
++    );
++    pair.script(
++        "assert(function_ease_count==3 and saved.p:GetX()==1);log('rng after ease',math.random())",
++    );
++}
++
++#[test]
++fn function_ease_pipeline_compiles_all_written_overlays_with_named_and_unnamed_setters() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("ease=nil;xero=nil;local count=0;eases_probe={{4,2,2,6,function(v)count=count+1;function_ease_count=count;saved.a:x(v);saved.b:diffusealpha(v/10)end,'len','linear',1,9,8,7}}");
++    let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++    assert!(out.eases.is_empty());
++    assert_eq!(out.overlay_eases.len(), 2);
++    assert_eq!(out.stats.overlay_capture_attempts, 1);
++    assert_eq!(out.stats.overlay_capture_outputs, 2);
++    assert_eq!(out.info.unsupported_function_eases, 0);
++    pair.script("assert(function_ease_count==5 and saved.a:GetX()==1 and math.abs(saved.b:GetDiffuseAlpha()-.1)<.0001)");
++}
++
++#[test]
++fn function_ease_pipeline_keeps_empty_and_unknown_probe_selections_on_touched_fallback() {
++    for unknown in [false, true] {
++        let (_dir, mut pair) = function_ease_pair();
++        pair.script(if unknown {"ease=nil;xero=nil;eases_probe={{4,2,2,6,function(v)saved.n:x(v);saved.n:diffusealpha(v/10)end}}"} else {"ease=nil;xero=nil;eases_probe={{4,2,2,6,function(v)if v~=1 then saved.a:x(v)end end}}"});
++        let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++        if unknown {
++            assert!(out.eases.is_empty());
++            assert_eq!(out.info.unsupported_function_eases, 1);
++            assert_eq!(out.stats.overlay_capture_attempts, 1);
++        } else {
++            assert_eq!(out.overlay_eases.len(), 1);
++            assert_eq!(out.stats.overlay_capture_attempts, 1);
++        }
++    }
++}
++
++#[test]
++fn function_ease_pipeline_column_windows_take_priority_over_overlay_writes() {
++    let (_dir, mut pair) = function_ease_pair();
++    column_endpoint_fixture(&mut pair);
++    pair.script("ease=nil;xero=nil;local count=0;eases_probe={{4,2,2,6,function(v)count=count+1;function_ease_count=count;saved.a:x(v);column_pos:SetSplineMode('NoteColumnSplineMode_Offset');column_spline:SetSize(3);for i=1,3 do column_spline:SetPoint(i,{v,v,0})end end,'len','linear'}}");
++    let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++    assert_eq!(out.column_offsets.len(), 2);
++    assert!(out.overlay_eases.is_empty());
++    assert_eq!(out.stats.overlay_capture_attempts, 0);
++    pair.script("assert(function_ease_count==2 and saved.a:GetX()==6 and column_spline.__songlua_spline_size==0)");
++}
++
++#[test]
++fn function_ease_pipeline_continues_failed_endpoints_and_deduplicates_unsupported_details() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("ease=nil;xero=nil;local function bad(v)saved.a:x(v);if v==2 then error('endpoint failure')end end;eases_probe={{4,2,2,6,bad},{4,2,2,6,bad},{8,1,0,1,'after'}}");
++    let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++    assert_eq!(out.info.unsupported_function_eases, 2);
++    assert_eq!(out.info.unsupported_function_ease_captures.len(), 1);
++    assert_eq!(out.stats.overlay_capture_attempts, 2);
++    assert_eq!(out.eases.len(), 1);
++    pair.script("assert(saved.a:GetX()==1)");
++}
++
++#[test]
++fn function_ease_pipeline_propagates_corrupt_probe_reads_and_accepts_existing_native_functions() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script("ease=nil;xero=nil;eases_probe={{1,1,0,1,'before'},{4,2,2,6,function(v)saved.a:x(v);if type(__songlua_probe_methods)=='table'then __songlua_probe_methods[1]=false end end},{8,1,0,1,'unreached'}}");
++    assert!(compare_function_eases(&mut pair, &["a", "b"]).is_err());
++    pair.script("__songlua_probe_methods=nil;__songlua_probe_actors=nil;__songlua_probe_actor_set=nil;eases_probe={{4,2,2,6,math.abs},{8,1,0,1,'after-native'}}");
++    let out = compare_function_eases(&mut pair, &["a", "b"]).unwrap();
++    assert_eq!(out.info.unsupported_function_eases, 1);
++    assert_eq!(out.eases.len(), 1);
++    assert_eq!(out.stats.function_targets, 1);
++}
++
++#[test]
++fn function_ease_probe_preserves_setter_error_preflight_before_semantic_writes() {
++    for body in [
++        "__songlua_probe_actors=false;saved.a:diffusealpha(.2)",
++        "__songlua_probe_actor_set=false;saved.a:diffusealpha(.2)",
++        "__songlua_probe_methods=false;saved.p:x(9)",
++        "saved.p.__songlua_player_index=true;saved.p:x(9)",
++    ] {
++        let (_dir, mut pair) = function_ease_pair();
++        pair.script("probe_before_alpha=saved.a:GetDiffuseAlpha();probe_before_x=saved.p:GetX();probe_before_player_index=saved.p.__songlua_player_index");
++        pair.script(&format!("probe_fn=function(){body} end"));
++        let out = compare_function_ease_probe(&mut pair).unwrap();
++        assert!(out.0.is_none());
++        assert!(out.1.is_empty());
++        pair.script("saved.p.__songlua_player_index=probe_before_player_index;assert(saved.a:GetDiffuseAlpha()==probe_before_alpha and saved.p:GetX()==probe_before_x)");
++    }
++}
++
++#[test]
++fn function_ease_probe_preserves_partial_global_restoration_when_a_setter_fails() {
++    let (_dir, mut pair) = function_ease_pair();
++    pair.script(r#"
++        __songlua_probe_methods='old methods';__songlua_probe_actors='old actors';__songlua_probe_actor_set='old set'
++        setmetatable(_G,{__newindex=function(t,k,v)
++            if k=='__songlua_probe_actors'then error('probe restore failure')end
++            rawset(t,k,v)
++        end})
++        probe_fn=function()rawset(_G,'__songlua_probe_methods',nil);rawset(_G,'__songlua_probe_actors',nil)end
++    "#);
++    deadsync_song_lua::set_compile_song_runtime_beat(&pair.native, 7.).unwrap();
++    pair.rust.set_beat(7.).unwrap();
++    assert!(compare_function_ease_probe(&mut pair).is_err());
++    pair.script("assert(__songlua_probe_methods=='old methods' and __songlua_probe_actors==nil and type(__songlua_probe_actor_set)=='table');assert(GAMESTATE:GetSongBeat()==0);setmetatable(_G,nil);__songlua_probe_methods=nil;__songlua_probe_actor_set=nil;probe_fn=function()saved.p:y(3)end");
++    assert_eq!(
++        compare_function_ease_probe(&mut pair).unwrap().0,
++        Some(deadsync_song_lua::SongLuaEaseTarget::PlayerY)
++    );
++}
++
++#[test]
++fn function_ease_probe_follows_native_lifecycle_capture_ownership() {
++    for body in [
++        "saved.a:AddWrapperState()",
++        "saved.a:queuecommand('Empty')",
++        "saved.a:sleep(.1)",
++        "saved.a:linear(.1)",
++        "saved.a:linear(.1):stoptweening()",
++        "saved.a:linear(.1):finishtweening()",
++        "saved.a:linear(.1):hurrytweening(.5)",
++        "saved.a:stoptweening()",
++        "saved.a:finishtweening()",
++    ] {
++        let (_dir, mut pair) = function_ease_pair();
++        pair.script(&format!(
++            "probe_case={body:?};probe_fn=function(){body} end"
++        ));
++        let out = compare_function_ease_probe(&mut pair).unwrap();
++        assert!(out.0.is_none());
++        assert!(out.1.is_empty());
++    }
++}
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/actors/ease_probe.rs
+@@ -0,0 +1,257 @@
++//! Function-ease setter instrumentation and temporary observation data.
++use super::*;
++use crate::SongLuaEaseTarget as Target;
++
++const KEYS: [&str; 3] = [
++    "__songlua_probe_methods",
++    "__songlua_probe_actors",
++    "__songlua_probe_actor_set",
++];
++pub(in crate::rust_engine) const ACTORS: usize = 7;
++pub(in crate::rust_engine) struct Session {
++    pub retained: TableId,
++    pub pin: Root,
++}
++pub(in crate::rust_engine) struct Read {
++    pub methods: Vec<String>,
++    pub target: Result<Option<Target>, Error>,
++}
++fn global(call: &mut HostCall<'_>, key: &str) -> Result<Value, Error> {
++    super::super::field(call, helper(call, 5)?, key)
++}
++fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, Error> {
++    if value == Value::Nil {
++        Ok(None)
++    } else {
++        table(call, value).map(Some)
++    }
++}
++pub(super) fn actor(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
++    if !store.lock().unwrap().ease_probe_active {
++        return Ok(());
++    }
++    let actors = global(call, KEYS[1])?;
++    let Some(actors_id) = optional_table(call, actors)? else {
++        return Ok(());
++    };
++    call.with_roots(&[actors], |call| {
++        let seen = global(call, KEYS[2])?;
++        let Some(seen_id) = optional_table(call, seen)? else {
++            return Ok(());
++        };
++        call.with_roots(&[seen], |call| {
++            if call
++                .raw_table_get(seen_id, Value::Table(actor))?
++                .is_truthy()
++            {
++                return Ok(());
++            }
++            call.raw_table_set(seen_id, Value::Table(actor), Value::Boolean(true))?;
++            let index = call.raw_table_len(actors_id)? + 1;
++            call.raw_table_set(actors_id, Value::Number(index as f64), Value::Table(actor))
++        })
++    })
++}
++fn kind(call: &mut HostCall<'_>, actor: TableId) -> Result<&'static str, Error> {
++    let player = sprites::field(call, actor, "__songlua_player_index")?;
++    if song_columns::optional_integer(call, player)?.is_none() {
++        return Ok("overlay");
++    }
++    let child = sprites::field(call, actor, "__songlua_player_child_name")?;
++    Ok(match initial_state::value_text(call, child)?.as_deref() {
++        None => "player",
++        Some(v) if v.eq_ignore_ascii_case("NoteField") => "notefield",
++        Some(v) if v.eq_ignore_ascii_case("Judgment") => "judgment",
++        Some(v) if v.eq_ignore_ascii_case("Combo") => "combo",
++        _ => "player-child",
++    })
++}
++pub(super) fn method(
++    call: &mut HostCall<'_>,
++    store: &Shared,
++    id: TableId,
++    name: &str,
++) -> Result<(), Error> {
++    if !matches!(
++        name,
++        "x" | "y"
++            | "z"
++            | "rotationx"
++            | "rotationy"
++            | "rotationz"
++            | "zoom"
++            | "zoomx"
++            | "zoomy"
++            | "zoomz"
++            | "baserotationx"
++            | "baserotationy"
++            | "baserotationz"
++            | "skewx"
++            | "skewy"
++    ) || !store.lock().unwrap().ease_probe_active
++    {
++        return Ok(());
++    }
++    actor(call, store, id)?;
++    let calls = global(call, KEYS[0])?;
++    let Some(calls_id) = optional_table(call, calls)? else {
++        return Ok(());
++    };
++    call.with_roots(&[calls], |call| {
++        let name = format!("{}.{name}", kind(call, id)?);
++        let value = call.try_intern(name.as_bytes())?;
++        let index = call.raw_table_len(calls_id)? + 1;
++        call.raw_table_set(calls_id, Value::Number(index as f64), value)
++    })
++}
++fn text(call: &mut HostCall<'_>, value: Value) -> Result<String, Error> {
++    initial_state::value_text(call, value)?
++        .ok_or_else(|| call.error(b"probe method string expected"))
++}
++fn classify(call: &mut HostCall<'_>, calls: TableId) -> Result<Option<Target>, Error> {
++    let targets = [
++        Target::PlayerX,
++        Target::PlayerY,
++        Target::PlayerZ,
++        Target::PlayerRotationX,
++        Target::PlayerRotationY,
++        Target::PlayerRotationZ,
++        Target::PlayerSkewX,
++        Target::PlayerSkewY,
++        Target::PlayerZoom,
++        Target::PlayerZoomX,
++        Target::PlayerZoomY,
++        Target::PlayerZoomZ,
++    ];
++    let mut flags = 0u16;
++    for index in 1usize.. {
++        let value = call.raw_table_get(calls, Value::Number(index as f64))?;
++        if value == Value::Nil {
++            break;
++        }
++        let value = text(call, value)?;
++        let (kind, name) = value.split_once('.').unwrap_or(("player", &value));
++        if kind != "player" {
++            return Ok(None);
++        }
++        let flag = match name {
++            "x" => 0,
++            "y" => 1,
++            "z" => 2,
++            "rotationx" => 3,
++            "rotationy" => 4,
++            "rotationz" => 5,
++            "skewx" => 6,
++            "skewy" => 7,
++            "zoom" => 8,
++            "zoomx" => 9,
++            "zoomy" => 10,
++            "zoomz" => 11,
++            _ => return Ok(None),
++        };
++        flags |= 1 << flag;
++    }
++    Ok((flags.count_ones() == 1).then(|| targets[flags.trailing_zeros() as usize].clone()))
++}
++impl Actors {
++    pub(in crate::rust_engine) fn set_ease_probe_active(&self, active: bool) {
++        self.store.lock().unwrap().ease_probe_active = active;
++    }
++    pub(in crate::rust_engine) fn begin_ease_probe(&self, vm: &mut Vm) -> Result<Session, Error> {
++        let retained = vm.try_new_table()?;
++        let pin = vm.pin(Value::Table(retained))?;
++        let result = (|| {
++            let setup = vm.new_host_function(
++                |call| {
++                    let retained = table(call, call.captures()[2])?;
++                    for (i, key) in KEYS.iter().enumerate() {
++                        let value = global(call, key)?;
++                        call.raw_table_set(retained, Value::Number((i + 1) as f64), value)?;
++                    }
++                    for slot in [4, 5, ACTORS] {
++                        let table = call.try_new_table()?;
++                        call.raw_table_set(
++                            retained,
++                            Value::Number(slot as f64),
++                            Value::Table(table),
++                        )?;
++                    }
++                    for (i, key) in KEYS.iter().enumerate() {
++                        let value = if i == 2 {
++                            Value::Table(call.try_new_table()?)
++                        } else {
++                            call.raw_table_get(retained, Value::Number((i + 4) as f64))?
++                        };
++                        super::super::set(call, helper(call, 5)?, key, value)?;
++                    }
++                    Ok(())
++                },
++                &[
++                    Value::Table(self.registry),
++                    Value::Table(self.helpers),
++                    Value::Table(retained),
++                ],
++            )?;
++            vm.call(setup, &[])?;
++            Ok(())
++        })();
++        if let Err(error) = result {
++            vm.unpin(pin)?;
++            return Err(error);
++        }
++        Ok(Session { retained, pin })
++    }
++    pub(in crate::rust_engine) fn finish_ease_probe(
++        &self,
++        vm: &mut Vm,
++        session: &Session,
++    ) -> Result<Read, Error> {
++        let output = Arc::new(Mutex::new(None));
++        let callback = vm.new_host_function_with_data(
++            |call| {
++                let retained = table(call, call.captures()[2])?;
++                let calls = table(call, call.raw_table_get(retained, Value::Number(4.))?)?;
++                let actors = table(call, call.raw_table_get(retained, Value::Number(5.))?)?;
++                let keep = table(
++                    call,
++                    call.raw_table_get(retained, Value::Number(ACTORS as f64))?,
++                )?;
++                let mut methods = Vec::new();
++                for i in 1usize.. {
++                    let v = call.raw_table_get(calls, Value::Number(i as f64))?;
++                    if v == Value::Nil {
++                        break;
++                    }
++                    methods.push(text(call, v)?);
++                }
++                for i in 1usize.. {
++                    let v = call.raw_table_get(actors, Value::Number(i as f64))?;
++                    if v == Value::Nil {
++                        break;
++                    }
++                    table(call, v)?;
++                    call.raw_table_set(keep, Value::Number(i as f64), v)?;
++                }
++                let target = classify(call, calls);
++                for (i, key) in KEYS.iter().enumerate() {
++                    let old = call.raw_table_get(retained, Value::Number((i + 1) as f64))?;
++                    super::super::set(call, helper(call, 5)?, key, old)?;
++                }
++                *call
++                    .function_data::<Arc<Mutex<Option<Read>>>>()
++                    .unwrap()
++                    .lock()
++                    .unwrap() = Some(Read { methods, target });
++                Ok(())
++            },
++            &[
++                Value::Table(self.registry),
++                Value::Table(self.helpers),
++                Value::Table(session.retained),
++            ],
++            output.clone(),
++        )?;
++        vm.call(callback, &[])?;
++        Ok(output.lock().unwrap().take().unwrap())
++    }
++}
+--- /dev/null
++++ crates/deadsync-song-lua/src/rust_engine/song_ease_probe.rs
+@@ -0,0 +1,104 @@
++//! Function-ease target probes and retained actor identities.
++use super::*;
++
++/// Owned observations and an explicit root batch for the following captures.
++pub struct SongFunctionEaseProbe {
++    pub target: Option<crate::SongLuaEaseTarget>,
++    pub methods: Vec<String>,
++    owner: Option<Root>,
++}
++impl RustSongRuntime {
++    /// Probe at beat zero with RNG restoration. Script and actor writes persist.
++    /// Body errors suppress classification; malformed reads and cleanup errors
++    /// still propagate in native order. The enclosing compiler owns wider rewind.
++    pub fn probe_song_function_ease_target(
++        &mut self,
++        function: Value,
++    ) -> Result<SongFunctionEaseProbe, String> {
++        let pin = self.vm.pin(function).map_err(|e| e.to_string())?;
++        let mut returned = None;
++        let mut owner = None;
++        let result = (|| {
++            let previous = self.values().map_err(|e| e.to_string())?;
++            self.set_beat(0.).map_err(|e| e.to_string())?;
++            let session = self
++                .actors
++                .begin_ease_probe(&mut self.vm)
++                .map_err(|e| e.to_string())?;
++            owner = Some(session.pin);
++            let random = self.random.preserve();
++            self.actors.set_ease_probe_active(true);
++            let body = self
++                .vm
++                .call(function, &[Value::Number(1.)])
++                .map(|v| v.first().copied().unwrap_or(Value::Nil))
++                .and_then(|v| self.vm.pin(v).map(|pin| returned = Some(pin)));
++            drop(random);
++            // Native removes the marker rather than restoring a nested one.
++            self.actors.set_ease_probe_active(false);
++            let read = self
++                .actors
++                .finish_ease_probe(&mut self.vm, &session)
++                .map_err(|e| e.to_string())?;
++            self.set_values(previous.0, previous.1)
++                .map_err(|e| e.to_string())?;
++            let target = if body.is_ok() {
++                read.target.map_err(|e| e.to_string())?
++            } else {
++                None
++            };
++            Ok(SongFunctionEaseProbe {
++                target,
++                methods: read.methods,
++                owner: owner.take(),
++            })
++        })();
++        if let Some(owner) = owner {
++            self.vm.unpin(owner).map_err(|e| e.to_string())?;
++        }
++        if let Some(pin) = returned {
++            self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        }
++        self.vm.unpin(pin).map_err(|e| e.to_string())?;
++        result
++    }
++    pub fn song_function_ease_probe_actors(
++        &self,
++        probe: &SongFunctionEaseProbe,
++    ) -> Result<Vec<Value>, String> {
++        let owner = probe.owner.ok_or("released function ease probe")?;
++        let Value::Table(owner) = self.vm.rooted(owner).map_err(|e| e.to_string())? else {
++            unreachable!()
++        };
++        let Value::Table(actors) = self
++            .vm
++            .raw_table_get(owner, Value::Number(actors::ease_probe::ACTORS as f64))
++            .map_err(|e| e.to_string())?
++        else {
++            unreachable!()
++        };
++        let mut values = Vec::new();
++        for i in 1usize.. {
++            let v = self
++                .vm
++                .raw_table_get(actors, Value::Number(i as f64))
++                .map_err(|e| e.to_string())?;
++            if v == Value::Nil {
++                break;
++            }
++            values.push(v);
++        }
++        Ok(values)
++    }
++    pub fn release_song_function_ease_probe(
++        &mut self,
++        probe: &mut SongFunctionEaseProbe,
++    ) -> Result<bool, Error> {
++        let Some(owner) = probe.owner else {
++            return Ok(false);
++        };
++        self.vm.unpin(owner)?;
++        probe.owner = None;
++        Ok(true)
++    }
++}

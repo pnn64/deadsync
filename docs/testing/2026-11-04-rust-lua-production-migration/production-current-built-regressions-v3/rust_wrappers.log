@@ -1,0 +1,13 @@
+
+running 8 tests
+test callback_wrapper_creation_invalidates_next_plan_and_keeps_gc_roots ... ok
+test failed_directory_and_tag_reads_preserve_partial_registration ... ok
+test releasing_scene_retires_nested_wrappers_and_their_callbacks ... ok
+test wrapper_directories_are_inherited_from_current_scope_across_gc ... ok
+test wrapper_membership_indices_and_frame_methods_match_production ... ok
+test wrapper_queues_and_messages_remain_separate_from_child_commands ... ok
+test wrapper_tag_reads_reenter_and_fail_without_losing_owned_actors ... ok
+test wrappers_advance_before_owner_rate_and_obey_ancestor_hibernation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+

@@ -1,0 +1,14 @@
+{
+  "native": {
+    "Ok": {
+      "overlays": 6,
+      "draw_frames": 0,
+      "overlay_update_tracks": 0,
+      "info": "SongLuaCompileInfo { unsupported_perframes: 0, unsupported_function_eases: 0, unsupported_function_actions: 0, unsupported_perframe_captures: [], unsupported_function_ease_captures: [], unsupported_function_action_captures: [], skipped_message_command_captures: [] }"
+    }
+  },
+  "rust": {
+    "Err": "line 16: [string \"C:\\GitHub\\deadsync\\docs\\testing\\2026-11-04-...\"]:16: assertion failed!"
+  },
+  "limit": "Original copied-AMV operation with raw-field diagnostics; compare trace logging off/on. Not original root regression acceptance."
+}

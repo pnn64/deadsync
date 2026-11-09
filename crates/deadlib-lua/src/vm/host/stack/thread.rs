@@ -2,10 +2,6 @@
 use super::*;
 
 impl NativeStack<'_, '_> {
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn main_thread_id(&self) -> ThreadId {
-        self.call.vm.main
-    }
     /// Identity of the active Lua thread, including the main thread.
     pub fn thread_id(&self) -> ThreadId {
         self.call.vm.thread

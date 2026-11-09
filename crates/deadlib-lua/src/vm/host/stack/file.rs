@@ -1,35 +1,8 @@
 //! Native file loading uses the same streams and header prelude as Lua loadfile.
 use super::*;
+use crate::memory::fallible::{SliceExt, VecExt};
 
 impl NativeStack<'_, '_> {
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn install_file_backend(
-        &mut self,
-        backend: Arc<dyn io::native::FileBackend>,
-    ) -> Result<(), Error> {
-        self.call.vm.install_file_backend(backend)
-    }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn attach_standard_stream(
-        &mut self,
-        index: isize,
-        kind: usize,
-    ) -> Result<(), Error> {
-        let Some(Value::Userdata(id)) = self.value(index) else {
-            return Err(self.error(b"standard stream userdata expected"));
-        };
-        if kind > 2
-            || self.call.vm.userdata[slot_index(id.0)].bytes.len() != std::mem::size_of::<usize>()
-        {
-            return Err(self.error(b"invalid standard stream"));
-        }
-        self.call.vm.standard_stream(kind);
-        self.call
-            .vm
-            .file_key(Value::Userdata(id), false)
-            .ok_or_else(|| self.error(b"invalid standard stream"))?;
-        Ok(())
-    }
     /// Compile a named file, or shared standard input when `path` is None.
     /// Paths use the prefix before NUL. The file is closed on every named-file
     /// outcome; stdin remains open, including its buffered lookahead. A temporary
@@ -41,28 +14,25 @@ impl NativeStack<'_, '_> {
     /// Rejects pending unprotected errors, stack overflow and fatal quotas,
     /// following [`Self::load_reader`].
     pub fn load_file(&mut self, path: Option<&[u8]>) -> Result<NativeLoadStatus, Error> {
-        if path.is_none() {
-            self.call.vm.ensure_file_backend()?;
-        }
         self.check_error()?;
         if !self.check_stack(2) {
             return Err(self.error(b"native stack overflow"));
         }
-        let path = path.map(|p| io::c_bytes(p).to_vec());
+        let path = path.map(io::c_bytes);
         let mut name = Vec::new();
         if let Some(path) = &path {
-            name.push(b'@');
-            name.extend_from_slice(path);
+            name.try_push(b'@')?;
+            name.try_extend_from_slice(path)?;
         } else {
-            name.extend_from_slice(b"=stdin");
+            name.try_extend_from_slice(b"=stdin")?;
         }
         let index = self.top() + 1;
         // luaL_loadfile's initial string push checks GC outside lua_load's
         // protection, before the source-name slot or file handle exists.
         self.check_gc()?;
-        let value = self.intern(&name);
+        let value = self.call.vm.try_intern(&name)?;
         self.push(value)?;
-        let mut file = match self.call.vm.open_file_reader(path.as_deref()) {
+        let mut file = match self.call.vm.open_file_reader(path)? {
             Ok(file) => file,
             Err(code) => return self.native_file_error(index, &name, b"open", code),
         };
@@ -115,8 +85,11 @@ impl NativeStack<'_, '_> {
         // errfile formats its diagnostic after closing the file, outside the
         // protected parser. A failing collector callback must still escape.
         self.check_gc()?;
-        let name = self.to_bytes(index as isize)?.unwrap_or(original).to_vec();
-        let value = self.call.vm.file_load_error(&name, what, code);
+        let name = self
+            .to_bytes(index as isize)?
+            .unwrap_or(original)
+            .try_to_vec()?;
+        let value = self.call.vm.file_load_error(&name, what, code)?;
         self.push(value)?;
         self.remove(index as isize)?;
         Ok(NativeLoadStatus::FileError)

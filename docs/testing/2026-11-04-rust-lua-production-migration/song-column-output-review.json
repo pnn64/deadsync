@@ -1,0 +1,58 @@
+{
+  "goal_complete": false,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "acceptance_scope": "objective.txt",
+  "objective_sha256": "86cbb91ab372fad5ac5326b3c3b04fb3db8cab9d4f3a4cc8e71cb64dba48ae34",
+  "source_count": 1250,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/perframe.rs",
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_columns.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/song_column_output.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/column_output.rs",
+    "crates/deadsync-song-lua/tests/rust_song_column_output.rs"
+  ],
+  "native_accumulator_only_shares_visibility": true,
+  "existing_column_reader_only_shares_private_helpers_and_formats_signatures": true,
+  "existing_actor_dispatch_unchanged": true,
+  "engine_unchanged": true,
+  "production_dependencies_unchanged": true,
+  "manifest_only_registers_new_test_feature_requirements": true,
+  "original_212_activation_tests_byte_unchanged": true,
+  "new_cases": 8,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "runner_unchanged": true,
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-column-output-regressions-v1-song-linux-debug": [],
+    "song-column-output-lint-v1-song-linux-debug": []
+  },
+  "other_source_changes_preserved": [],
+  "resolved_graph_sha256": "684526a07919b632da56d9698cf6088f9a7b37287834b5b3bb43b2e3ab797435",
+  "source_diff_sha256": "203c1b83f82520704bb81e8d466c4300370249bcc28acfd53b26d01f93437a44",
+  "results": {
+    "song-column-output-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 470.1248713149689,
+      "log_sha256": "c99d7ff34025f233a6ae07a845c4f3eaa5b09eb678a6ee6ad2c637b57d66c182",
+      "tests_passed": 220,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-column-output-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 184.08535371604376,
+      "log_sha256": "3afde528185adc1bd1b7447071d9e1b300e8852e9ca96b11a0adebc9c73ee5c9",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

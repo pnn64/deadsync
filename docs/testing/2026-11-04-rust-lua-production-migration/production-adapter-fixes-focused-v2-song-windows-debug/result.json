@@ -1,0 +1,45 @@
+{
+  "stage": "production-adapter-fixes-focused-v2",
+  "suite": "song",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadsync-song-lua",
+    "--features",
+    "test-support,legacy-oracle",
+    "--test",
+    "rust_song_compiler",
+    "--test",
+    "rust_live_compiler",
+    "--test",
+    "rust_loader",
+    "--test",
+    "rust_messages",
+    "--no-fail-fast",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "seconds": 656.9531740997918,
+  "log_sha256": "c5a41831d268ba15c73884d0c9660916fdc5d0066e6295f229bc16592539c070",
+  "tests_passed": 54,
+  "tests_failed": 1,
+  "test_results": [
+    "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.45s",
+    "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s",
+    "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s",
+    "test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.91s"
+  ],
+  "sources_unchanged": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "target/rust-adapters",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "2"
+  }
+}

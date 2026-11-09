@@ -1,0 +1,24 @@
+[2026-11-08T04:48:39Z INFO  startup] deadsync 0.5.2494 (build 9a2a87e000, 20261107 @ 01:29:59)
+[2026-11-08T04:48:39Z INFO  startup] --------------------------------------
+[2026-11-08T04:48:39Z INFO  startup] Log starting 2026-11-08 05:48:39
+[2026-11-08T04:48:39Z INFO  startup] OS: windows x86_64
+[2026-11-08T04:48:39Z INFO  startup] CPU: Intel64 Family 6 Model 79 Stepping 1, GenuineIntel (44 logical cores)
+[2026-11-08T04:48:39Z INFO  startup] Executable: C:\GitHub\deadsync\target\rust-adapters\debug\deadsync.exe
+[2026-11-08T04:48:39Z INFO  startup] Runtime dir: C:\GitHub\deadsync\target\rust-adapters\debug
+[2026-11-08T04:48:39Z INFO  startup] Drive: C:
+[2026-11-08T04:48:39Z INFO  startup] Portable mode: false
+[2026-11-08T04:48:39Z INFO  startup] Data directory: \\?\C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-rendered-dreaming-windows-v3\data
+[2026-11-08T04:48:39Z INFO  startup] Cache directory: \\?\C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-rendered-dreaming-windows-v3\data\cache
+[2026-11-08T04:48:39Z INFO  startup] Log file: \\?\C:\GitHub\deadsync\docs\testing\2026-11-04-rust-lua-production-migration\production-rendered-dreaming-windows-v3\data\deadsync.log
+[2026-11-08T04:48:39Z INFO  startup] Log level: Warn
+[2026-11-08T04:48:39Z INFO  startup] Video renderer: OpenGL
+[2026-11-08T04:48:39Z INFO  startup] Display: Windowed 1280x720
+[2026-11-08T04:48:39Z INFO  startup] Present: vsync=off policy=immediate
+[2026-11-08T04:48:39Z INFO  startup] Audio request: device=Auto, mode=Auto, rate=Auto
+[2026-11-08T04:48:40Z INFO  startup] Startup audio devices:
+[2026-11-08T04:48:40Z INFO  startup] Sound device 0: Digital Audio (S/PDIF) (High Definition Audio Device) [48000 Hz]
+[2026-11-08T04:48:40Z INFO  startup] Sound device 1: Speakers (High Definition Audio Device) (default) [48000 Hz]
+[2026-11-08T04:48:47Z WARN  deadsync_song_lua::rust_engine] LoadIni() Error: No such file or directory (C:/GitHub/deadsync/target/debug/Songs/lua-songs/DREAMING-ING!!/SaveData.ini)
+[2026-11-08T04:48:47Z WARN  deadsync_song_lua::rust_engine] SaveIni() Error: Not a writable file path (C:/GitHub/deadsync/target/debug/Songs/lua-songs/DREAMING-ING!!/)
+[2026-11-08T04:48:49Z WARN  deadsync_song_lua::rust_engine] LoadIni() Error: No such file or directory (C:/GitHub/deadsync/target/debug/Songs/lua-songs/DREAMING-ING!!/SaveData.ini)
+[2026-11-08T04:48:49Z WARN  deadsync_song_lua::rust_engine] SaveIni() Error: Not a writable file path (C:/GitHub/deadsync/target/debug/Songs/lua-songs/DREAMING-ING!!/)

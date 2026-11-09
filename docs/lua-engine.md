@@ -1,45 +1,195 @@
 # Independent Lua engine
 
-The full objective is a standalone Rust Lua 5.1â€“5.5 implementation, followed by
-song and noteskin integrations sharing the compiler, VM, heap and semantics.
-The first completion target remains arbitrary standalone Lua 5.1 programs with
-correct libraries, GC, closures, metatables, coroutines and errors. The current
-implementation is an early functional stage of that target.
+`deadlib-lua` is the independent Rust Lua 5.1 compiler, bytecode VM, GC, standard
+library, program cache and Rust host API. The [interpreter milestone](testing/2026-11-04-rust-lua-interpreter.md)
+is complete for its recorded snapshot. The user separately requested removal
+of Lua C compatibility; [that report](testing/2026-11-04-rust-lua-capi-removal.md)
+records the completed removal and its own validation. Both goals are closed.
+Do not reopen those goals or extend their completion criteria. The separately
+authorized [production migration](testing/2026-11-04-rust-lua-production-migration/README.md)
+has its own fixed scope and validation; baking expansion, optimization and
+unrelated hardening remain outside it.
 
-Current work follows correctness and Lua 5.1 compatibility first. Performance
-tuning stays deferred until the full standalone Lua 5.1 parity gate is met.
-Close missing behavior and failures, run the full official suite, and expand
-differential coverage against official Lua. Existing performance reports remain
-historical baselines; compatibility milestones require correctness checks.
-Full standalone Lua 5.1 parity is still an open gate.
+## Supported interface and completion boundary
 
-## Preservation and current scope
+The engine supports Rust host callbacks and owned data, traced captures,
+userdata, roots, protected calls, errors, coroutines, Lua/preload modules and
+native Lua bytecode. Rust stack/body interfaces remain shared runtime APIs.
+The [crate README](../crates/deadlib-lua/README.md) documents embedding and the
+deterministic unsupported C-module results.
 
-The mlua fork lives in `crates/deadlib-lua-legacy`, including tests, benchmarks,
-examples, macros, FFI and existing optimizations. Its three Cargo packages use
-the `deadlib-lua-legacy` prefix. Rust imports remain `mlua`, `mlua_sys` and
-`mlua_derive`. All production consumers select the legacy workspace alias.
-Current benchmark scripts and Markdown commands follow the move; historical
-performance JSON keeps its recorded measurement provenance.
+Lua C API/ABI compatibility is permanently excluded: no `deadlib-lua-capi`
+package, compatibility features, C-owned states, Lua C exports/headers, dynamic
+C-module loading or generated lua51 library. OS FFI, locale/stream services,
+intrinsics and assembly are distinct and preserved. `build.rs` retains cache
+identity generation. The pinned C Lua development oracle is also preserved.
 
-| Requirement | Evidence and remaining work |
-| --- | --- |
-| Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Native Lua 5.1 chunks are decoded, checked and translated into the shared VM with per-site captures and native debug/hook metadata. Lua 5.1 function dumps lower to native chunks, while imported functions retain native words for re-export. Broader export/resource limits and complete reference-suite coverage remain open. |
-| Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Source diagnostics retain raw bytes, token context, opening lines and tested local/assignment bounds. Full runtime/compiler diagnostics, debug behavior and broader numeric/resource edge cases remain open. |
-| Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
-| Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Table propagation advances in 64-slot physical slices, restarting after compaction, hash-to-array moves and metatable changes. Sweeping advances in bounded arena-slot batches. Other object scans, final root/metatable/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
-| Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. The default Windows/Linux C ABI adapter enables `package.loadlib` and C/C-root searchers; custom host resolvers remain supported. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC and Linux/glibc native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Other libc ABIs, remaining base functions, full native C API semantics, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
-| Persistent compiled cache | Opt-in ProgramCache persists the shared bytecode, constants, collector/debug metadata and native re-export words. Entries bind the format/dialect/target, Cargo compiler build and lexer character classes; full source/name equality guards filename collisions. Bounded decoding, integrity checks, Program verification and native tree/range checks reject incompatible entries. Temporary-file replacement and compile fallback preserve availability. Fresh-process source/native reloads and concurrent writers are tested. Directory eviction, a memory cache and package/CLI integration remain open; tiny/native inputs may reload more slowly than recompilation. |
-| Native host calls | Builtins and registered Rust function pointers use numeric native IDs and register argument ranges. HostCall borrows arguments, writes separate results and accesses up to 255 traced/mutable Lua captures. Private owned binding data stays separate from Lua upvalues. Protected nested Lua/native calls preserve outer frames, share the instruction quota and return arbitrary error values to Rust. Unprotected stack calls retain failing child frames for outer error handlers. Hooks, coroutine callers, resumed children, finalizers, preload modules and per-VM cached-program bindings are tested. Callback and nested-call measurements exist. Suspending Rust callback stacks, richer Rust host objects and broader error/overhead work remain open. |
-| Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
-| Machine code | Optional; defer until full standalone Lua 5.1 parity, then use profiles to identify profitable paths. |
-| Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
-| Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. The unchanged stock `main.lua` and `all.lua` pass in both standalone CLIs on Linux i686 SSE2 with the stock native libraries enabled. T/testC remains absent. All eighteen independent files pass on Linux x64 in reference, Rust and both cache modes; Windows retains seventeen passes and the common `files.lua:59` rename failure. Native x64 full-suite failures, remaining standalone mismatches, broader source/bytecode fuzzing and per-dialect CI remain open. |
-| Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
-| Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
+The removal finish line is: normal Rust-only builds; production artifacts with
+no Lua C interface; applicable retained regression checks with no unexplained
+new failures; and matching active manifests, tooling and documentation. A
+pre-existing unrelated interpreter defect does not extend this finish line.
+
+The separately authorized production migration is complete within its fixed
+inventory. Song compilation, preparation, live callbacks, reloads and fallback,
+noteskin preparation and Simply Love's GIF loader use `deadlib-lua`
+unconditionally. Normal and instrumented application graphs contain no legacy
+runtime; the final normal release/link map and 600-frame rendered smoke pass.
+
+The [completion audit](testing/2026-11-04-rust-lua-production-migration/completion-audit.md)
+records the original 88-target incremental regression coverage, final affected
+suite refreshes, preserved red assertions and platform limits. The
+[measured costs](testing/2026-11-04-rust-lua-production-migration/measurement-summary.md)
+include preparation/live time and process memory plus paired bundled noteskins;
+background-build interference qualifies the live timing. No new performance or
+language target follows from these results. The [architecture contract](lua-architecture.md)
+keeps generic Rust language facilities separate from domain adapters. Native
+controls remain isolated to development/tests. The [matrix](lua-parity-matrix.md)
+keeps this completed migration separate from earlier closed milestones.
+
+## Historical evidence
+
+Everything below records earlier snapshots and the former broader compatibility
+effort. References to C interfaces, removed scripts, unfinished parity or future
+work describe history, not the supported API or an active backlog. Preserve
+these reports and their failures; use the removal report for current evidence.
+
+## Historical standalone C-compatibility audit
+
+The [active gap-to-test matrix](lua-parity-matrix.md) follows the corrected
+interpreter/Rust API scope above. The older ledger below includes C allocator,
+continuation and private T/testC requirements that no longer gate this goal.
+Its reports retain their recorded failures and source snapshots; they do not
+reinstate those requirements or prove current-source completion.
+
+The newer [allocator ownership checkpoint](testing/2026-11-03-rust-lua-ownership.md)
+adds explicit allocation domains, including callback-owned control storage,
+allocator replacement, exact prior sizes and per-buffer lifetime retention.
+Arenas, table/string/userdata buffers, registers, frames, open-upvalue lists and
+native captures use those domains. Native thread/capture creation propagates
+allocation errors, and GC string-index compaction no longer grows its buffer.
+Compiler, loaded-program, GC and native-control migration remains unfinished;
+the public allocator APIs remain absent. The report distinguishes current-source
+validation from the preceding string checkpoint.
+
+The subsequent [binding checkpoint](testing/2026-11-03-rust-lua-bindings.md)
+adds allocator-owned loaded-program buffers, Lua captures, debug-name roots and
+retained parser prototype maps. `try_load_program` provides recoverable binding
+failure without publishing partial identities; loader callers retain their Lua
+status conventions. Compiler/active-parser, GC and native-control ownership and
+the public allocator API remain open. All four package profiles pass (Windows 883 each, Linux 885 each), with fault, Miri, boundary, staged-C and i686 stock-suite evidence for that snapshot. Shared reference and incomplete internal-adapter gates remain explicit.
+
+The [2026-11-03 string allocation checkpoint](testing/2026-11-03-rust-lua-strings.md)
+adds fallible intern storage, native string pushes and numeric coercions, common
+string-library operations, pattern compilation/backtracking and concatenation.
+Native numeric file scanning now uses the engine locale on glibc and across
+Windows static CRT images. Failure injection also exposed an
+infallible Lua call-register growth; entry now reserves that storage before
+publishing the callee. The allocator APIs and ownership migration are still
+required. These changes use the existing compiler, VM and native C boundary;
+production consumers retain the legacy runtime.
+
+The [host-storage checkpoint](testing/2026-11-03-rust-lua-host-storage.md)
+adds domain-owned shared host binding/thread-state holders, API/body control
+buffers and native return scratch. Return allocation failures now propagate
+through the same VM, and native protection covers setup and result padding.
+All four package/fault profiles pass (Windows 893 each, Linux 895 each), along
+with boundary, stdlib, staged-C and i686 official-entry checks for their scopes.
+Miri passes all 25 ownership tests. Earlier reports remain evidence for their
+own hashes.
+Compiler, GC, bridge and remaining continuation
+ownership, public allocator APIs and full standalone parity remain open.
+
+The preceding [GC-storage checkpoint](testing/2026-11-03-rust-lua-gc-storage.md)
+owns pending finalizers and candidate ordering buffers, reserves their storage
+before userdata publication, and propagates dispatcher setup failures. Shutdown
+makes progress under persistent rejection. Weak-table erasure uses fixed-size
+batches without allocating a list of dead entries. All four package/fault
+profiles pass (Windows 900 each, Linux 902 each), along with boundary, stdlib,
+staged-C observations and i686 official-entry scopes. Miri passes all 30 ownership
+tests; collector frontier/liveness ownership and recoverable tracing remained open. Shared
+x64 reference failures and the missing internal-adapter helpers remain explicit.
+
+The preceding [tracing checkpoint](testing/2026-11-03-rust-lua-tracing.md) moves
+the frontier, reusable register-liveness bitmap and pending closed-cell scans
+into the VM allocation domain. Trace failures retain their work item and phase;
+mutation barriers reserve before publication. Closing a marked cell needs no
+allocation, and automatic GC failure leaves protected cleanup able to return
+memory status. Seven collector tests cover 30 rejected-allocation points,
+including explicit collection on current and selected threads. Full supported-
+profile validation found an i686 hook bug: open native tail-call results were
+cleared between the call and its following Lua return. Hook stack sizing now
+retains that range, with a forced-collection differential regression. Corrected-
+source package/fault runs pass on all four profiles (Windows 908 tests each,
+Linux 910 each), and all 37 ownership/collector tests pass under Miri. Refreshed
+boundary, stdlib, process, locale, isolated-file, staged-C and suite audits retain
+their scoped passes and explicit shared-reference/adapter failures. Compiler/
+parser, bridge and other control
+ownership, public allocator APIs and complete standalone parity remain open.
+
+The preceding [hook checkpoint](testing/2026-11-03-rust-lua-hooks.md) adds owned
+hidden/popped hook windows and fallible preparation for native/Lua hooks,
+instruction continuations, tail collapse and debug hook results. Five new tests
+cover 78 rejection points on all four supported profiles. All four package/fault
+runs pass (Windows 913 each, Linux 915 each), as do all 42 ownership/collector/hook
+tests under Miri. External audits retain their scoped passes and explicit
+reference/implementation failures. Real PUC internal tests also run on Windows debug/release:
+closure/attrib and direct native controls pass, while api and main/all retain
+the reference failures detailed in the checkpoint.
+
+The unchanged internal reference suite is now exercised with its real `ltests.c`
+and `ltests.h`. Both [Linux i686 SSE2](testing/2026-11-03-rust-lua-internal-reference-hooks-final-i686.json)
+and [Linux x64](testing/2026-11-03-rust-lua-internal-reference-hooks-final-x64.json)
+pass `api.lua` (including its allocation-limit tests) and `main.lua`; `all.lua`
+stops at the reference's own `code.lua:21` instruction assertion. The partial
+[public-API T adapter](testing/2026-11-03-rust-lua-hooks.md#external-audits-and-partial-t-adapter)
+passes unchanged closure.lua in reference/checked/Rust on all four profiles with
+real C hooks and yields. Unchanged api.lua stops at line 231 on Linux because
+checkmemory is absent; this is an adapter implementation gap. Windows stops
+earlier at the shared directory-load assertion at line 169 (called from 172).
+Full heap/allocator and other internal coverage still needs implementation.
+Neither reference failures nor stock-mode skipping of T count as a Rust pass.
+
+The preceding [identity checkpoint](testing/2026-11-03-rust-lua-identity.md) prepares
+allocator-owned opaque pointer tokens before object publication and replaces the
+builtin environment map with fixed owned storage. Pointer queries need no
+allocation. Protected memory errors return before automatic collection retries.
+All four package/fault profiles pass: 918 package tests per Windows profile and
+920 per Linux profile. Formatting, Clippy and feature-disabled checks pass on
+Windows debug and both Linux targets. External audits are complete for their
+recorded scopes, retaining shared suite failures, the strict lowered-yield
+mismatch and the missing private T helpers. All 47 ownership/collector/hook/identity tests pass under Miri.
+The hook results above remain the preceding verified source snapshot.
+
+The preceding [pattern and table storage work](testing/2026-11-03-rust-lua-pattern-storage.md)
+owns compiled patterns, the lookup cache, backtracking choices and per-thread
+sort controls. Table-library writes propagate memory errors, and cold selected
+protected-call setup returns status 4 if retaining its caller fails. Nine new
+main-tree tests pass 150 rejection points. All four package/fault profiles pass
+(927 package tests per Windows profile and 929 per Linux profile). External audits
+are complete for their scopes, retaining shared suite failures, the strict yield
+mismatch and incomplete T coverage. All 56 combined ownership, collector, hook,
+identity, pattern and table-library tests pass under Miri. Full standalone parity remains open.
+
+The current [library storage work](testing/2026-11-03-rust-lua-library-storage.md)
+adds owned/fallible traceback, substitution and formatting storage, recoverable
+debug-local names and allocation-free loader cleanup. Isolated native fault and
+differential checks pass. All four main-tree package/fault profiles pass (935
+package tests per Windows profile; 937 per Linux profile). External audits are
+complete for their recorded scopes, retaining shared suite failures, the strict
+yield mismatch and incomplete T coverage. The 61-test Miri run now passes with
+verified source and command-log hashes.
+Public allocator APIs and whole-interpreter parity remain open.
+
+## Historical implementation evidence
+
+The following entries record incremental checkpoints, not a single current
+capability matrix. Later entries supersede earlier limitations and counts.
+Historical performance deferrals describe the work order at those checkpoints;
+future work follows the [current delivery gates](lua-architecture.md#delivery-gates-and-work-order).
+The latest recorded checkpoint is the
+[2026-10-29 table-write work](testing/2026-10-29-rust-lua-table-writes.md), which
+still leaves full parity open. Re-run the relevant gates on the current tree
+before claiming completion or a performance result.
 
 Unchanged `all.lua` and `main.lua` run against both standalone CLIs, with retained
 failures directing compatibility fixes. Linux `main.lua` passes in both engines.

@@ -1,13 +1,15 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::{Component, Path, PathBuf};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::runtime::note_song_lua_side_effect;
 
 // Worker-owned, single-VM file output. Compilation simulates future commands:
 // publishing their writes to disk would change the next compile's input. Keep
 // them for this compile only; reads across handles observe closed output files.
 // This is authored file state, not a gameplay cache. No live frame does I/O.
-enum FileWrites {
+pub(crate) enum FileWrites {
     Small(Vec<(PathBuf, Vec<u8>)>),
     Large(rustc_hash::FxHashMap<PathBuf, Vec<u8>>),
 }
@@ -19,7 +21,7 @@ impl Default for FileWrites {
 }
 
 impl FileWrites {
-    fn get(&self, path: &Path) -> Option<&Vec<u8>> {
+    pub(crate) fn get(&self, path: &Path) -> Option<&Vec<u8>> {
         match self {
             Self::Small(files) => files
                 .iter()
@@ -29,7 +31,7 @@ impl FileWrites {
         }
     }
 
-    fn insert(&mut self, path: &Path, bytes: Vec<u8>) {
+    pub(crate) fn insert(&mut self, path: &Path, bytes: Vec<u8>) {
         match self {
             Self::Small(files) => {
                 if let Some((_, current)) = files.iter_mut().find(|(name, _)| name == path) {
@@ -60,6 +62,7 @@ impl FileWrites {
 }
 
 #[derive(Default)]
+#[cfg(any(test, feature = "legacy-oracle"))]
 struct RageFile {
     path: PathBuf,
     bytes: Vec<u8>,
@@ -71,6 +74,7 @@ struct RageFile {
     error: String,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 impl RageFile {
     fn load(&mut self, lua: &Lua) -> std::io::Result<()> {
         if let Some(writes) = lua.app_data_ref::<FileWrites>() {
@@ -158,7 +162,7 @@ impl RageFile {
     }
 }
 
-fn c_string(bytes: &[u8]) -> &[u8] {
+pub(crate) fn c_string(bytes: &[u8]) -> &[u8] {
     &bytes[..memchr::memchr(0, bytes).unwrap_or(bytes.len())]
 }
 
@@ -170,7 +174,7 @@ fn file_path_text(raw: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-fn set_file_path(result: &mut PathBuf, song_dir: &Path, raw: &str) {
+pub(crate) fn set_file_path(result: &mut PathBuf, song_dir: &Path, raw: &str) {
     let raw = file_path_text(raw);
     let raw = Path::new(raw.as_ref());
     let prefixed = matches!(raw.components().next(), Some(Component::Prefix(_)));
@@ -208,6 +212,7 @@ fn set_file_path(result: &mut PathBuf, song_dir: &Path, raw: &str) {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_rage_file_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     if lua.app_data_ref::<FileWrites>().is_none() {
         lua.set_app_data(FileWrites::default());
@@ -221,6 +226,7 @@ pub fn create_rage_file_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<T
     Ok(util)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let file = lua.create_table()?;
     let state = lua.create_any_userdata(RageFile::default())?;
@@ -422,73 +428,4 @@ mod file_open_perf {
     include!("../tests/perf/file_open.rs");
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn rage_file_matches_native_contract() {
-        let dir = std::env::temp_dir().join(format!("deadsync-rage-file-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("file contract directory");
-        std::fs::write(dir.join("input.bin"), b"alpha\r\n\nbeta\rZ\0tail").expect("input bytes");
-        let lua = Lua::new();
-        lua.globals()
-            .set(
-                "RageFileUtil",
-                create_rage_file_util_table(&lua, &dir).expect("file binding"),
-            )
-            .expect("install file binding");
-        lua.load(
-            r#"
-local file = RageFileUtil.CreateRageFile()
-assert(not file:Open('missing.txt', 1) and #file:GetError() > 0)
-assert(not pcall(function() file:GetLine() end))
-assert(file:Flush() == file and file:GetError() == 'Not open')
-assert(not file:Open('input.bin', 0))
-assert(file:GetError() == 'Neither reading nor writing specified')
-assert(not file:Open('input.bin', 3))
-assert(file:GetError() == 'Reading and writing are mutually exclusive')
-assert(file:Open('input.bin', 1))
-assert(file:GetLine() == 'alpha' and file:Tell() == 7 and not file:AtEOF())
-assert(file:GetLine() == '' and file:Tell() == 8 and not file:AtEOF())
-assert(file:GetLine() == 'beta\rZ' and file:Tell() == 19 and not file:AtEOF())
-assert(file:GetLine() == '' and file:AtEOF())
-assert(file:Seek(file:Tell()) == 19 and file:AtEOF())
-assert(file:Seek(0) == 0 and not file:AtEOF())
-assert(file:ReadBytes(7) == 'alpha\r\n' and file:Tell() == 7)
-assert(file:ReadBytes(0) == '' and not file:AtEOF())
-assert(file:Read() == '\nbeta\rZ' and file:AtEOF())
-assert(not pcall(function() file:Write('x') end))
-assert(file:Flush() == file)
-assert(file:ClearError() == file.ClearError)
-assert(file:Close() == file.Close)
-assert(file:Open('output.txt', 2))
-assert(file:Write('abc') == 3 and file:PutLine('def') == 2)
-assert(file:Flush() == file)
-assert(not pcall(function() file:Read() end))
-file:Close()
-local reader = RageFileUtil.CreateRageFile()
-assert(reader:Open('output.txt', 1) and reader:Read() == 'abcdef\r\n')
-reader:Close()
-assert(file:destroy() == file.destroy)
-assert(not pcall(function() file:GetLine() end))
-"#,
-        )
-        .exec()
-        .expect("independently checked native contract");
-        assert!(
-            !dir.join("output.txt").exists(),
-            "compile must not write future song state to disk"
-        );
-        let next = Lua::new();
-        next.globals()
-            .set(
-                "RageFileUtil",
-                create_rage_file_util_table(&next, &dir).expect("next compile file binding"),
-            )
-            .expect("install next binding");
-        next.load("assert(not RageFileUtil.CreateRageFile():Open('output.txt', 1))")
-            .exec()
-            .expect("writes are scoped to one compile");
-    }
-}

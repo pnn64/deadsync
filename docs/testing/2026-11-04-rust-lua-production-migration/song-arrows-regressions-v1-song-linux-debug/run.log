@@ -1,0 +1,1073 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 4m 44s
+     Running tests/rust_actors.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_actors-f7220eb9984bca7d)
+
+running 26 tests
+test authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort ... ok
+test commands_propagate_in_sorted_order_and_preserve_parameter_identity ... ok
+test duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results ... ok
+test failed_build_releases_partial_instances_and_later_scenes_remain_usable ... ok
+test full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalues ... ok
+test instances_are_distinct_and_child_first_init_observes_native_loading_order ... ok
+test lifecycle_easing_destinations_and_native_bezier_match_production ... ok
+test lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery ... ok
+test lifecycle_hibernation_rates_update_order_and_replacement_match_production ... ok
+test lifecycle_nonterminating_queue_limit_and_recovery_match_production ... ok
+test lifecycle_numeric_coercions_and_invalid_calls_match_production ... ok
+test lifecycle_preserves_production_traversal_cache_and_callback_lookup ... ok
+test lifecycle_queue_reentry_stop_finish_hurry_and_overflow_match_production ... ok
+test lifecycle_queued_callback_replacement_gc_and_partial_errors_match_production ... ok
+test lifecycle_scene_ownership_release_and_update_diagnostic_lifetime ... ok
+test lifecycle_startup_and_exact_queue_boundaries_match_production ... ok
+test named_children_commands_use_each_childs_handler_and_include_empty_frames_as_leaves ... ok
+test production_baseline_actor_loading_and_instance_fields ... ok
+test production_callback_directories_restore_across_nested_calls_errors_and_gc ... ok
+test production_child_groups_class_hooks_and_visibility_coercions ... ok
+test production_command_fields_reentry_parameters_and_failure_recovery ... ok
+test production_command_walk_order_handlers_and_callback_errors ... ok
+test production_draw_order_rounding_and_invalid_arguments_preserve_stable_sort ... ok
+test production_scalar_defaults_coercions_nonfinite_values_and_size_signs ... ok
+test scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_state ... ok
+test scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_cycles ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.19s
+
+     Running tests/rust_arrows.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_arrows-b28a4bf857134065)
+
+running 14 tests
+test alpha_preserves_visibility_boundaries_and_nonfinite_far_edge_results ... ok
+test cache_commit_is_atomic_and_selected_options_remain_rooted_across_collection ... ok
+test captured_native_x_cases_match_full_float_results ... ok
+test captured_native_y_cache_wave_reverse_and_selected_timer_cases_match ... ok
+test captured_native_zoom_and_column_tiny_cases_match ... ok
+test cmod_and_reentrant_option_getters_keep_the_existing_selection_and_wave_order ... ok
+test live_cache_refresh_follows_actor_and_health_callbacks_and_ignores_public_update_override ... ok
+test live_raw_frame_clocks_are_consumed_after_success_and_independent_of_queries ... ok
+test optional_arguments_and_fallible_methods_keep_conversion_and_selection_order ... ok
+test preparation_and_live_yoffset_keep_pause_speed_ramps_origin_and_music_rate ... ok
+test public_arrow_table_collects_while_the_private_updater_and_cache_survive ... ok
+test raw_query_clock_tape_is_independent_per_read_and_timer_domain ... ok
+test rotation_uses_per_player_beat_radians_column_offsets_and_hold_policy ... ok
+test scene_reload_keeps_arrow_bindings_and_saved_option_handles_in_the_same_vm ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 179.46s
+
+     Running tests/rust_bitmap_text.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_bitmap_text-e9522f03d6e4fbd0)
+
+running 8 tests
+test attributes_dedup_aliases_raw_reads_and_immutable_publication ... ok
+test collecting_getters_reentry_and_failed_reads_leave_no_stale_payload ... ok
+test font_resolution_and_builtin_fallback_match_production ... ok
+test load_font_templates_concat_composition_and_independent_attributes ... ok
+test native_fixture_inheritance_and_theme_helpers ... ok
+test retained_text_updates_during_live_tweens_and_draw_callbacks ... ok
+test text_conversion_stroke_errors_and_fresh_color_tables ... ok
+test text_layout_strict_flags_fit_bounds_and_zoom_ordering ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running tests/rust_clock.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_clock-241b2dad96379dc7)
+
+running 8 tests
+test bpm_segments_deltas_and_backward_seeks_match_legacy ... ok
+test generated_bpm_tables_and_invalid_numeric_fields_follow_legacy_behavior ... ok
+test getters_preserve_metamethod_coercion_and_callback_captures_under_gc ... ok
+test live_players_keep_separate_positions_and_reset_without_losing_identity ... ok
+test lua_error_identity_matches_puc_while_the_legacy_host_wraps_it ... ok
+test native_timing_stops_delays_warps_and_seeks_match_legacy ... ok
+test replay_music_time_preserves_native_float_rounding_rate_and_origin ... ok
+test temporary_player_tables_remain_rooted_during_reentrant_reset_setters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.29s
+
+     Running tests/rust_draw.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_draw-b78770f786d9994b)
+
+running 12 tests
+test callbacks_keep_partial_draws_report_once_and_defer_queued_commands ... ok
+test draw_function_binding_validation_and_mesh_payloads_match ... ok
+test draw_samples_tween_and_spin_state_at_each_update_boundary ... ok
+test frame_traversal_wrappers_visibility_and_proxy_leaves_match ... ok
+test immediate_draws_preserve_call_time_pose_and_live_frames_replace_only_ordinary_frames ... ok
+test nested_targets_restore_caller_stacks_and_freeze_each_submission ... ok
+test preparation_operation_limit_and_live_high_draw_count_match ... ok
+test preparation_preserves_all_owners_and_quiet_tails ... ok
+test traced_callbacks_and_textures_survive_reentry_then_collect ... ok
+test transition_coercion_and_binary_sprite_predicates_preserve_native_reads ... ok
+test unbalanced_and_mismatched_targets_keep_errors_and_recover_next_live_frame ... ok
+test unmapped_sources_fail_conversion_then_allow_new_capture ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.55s
+
+     Running tests/rust_effects.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_effects-adb30e8fc73b01ce)
+
+running 10 tests
+test detached_runtime_tables_stay_rooted_across_clock_reads_and_reentry ... ok
+test effect_defaults_reselection_and_phase_resets_match_production ... ok
+test effect_timing_colors_magnitude_and_invalid_inputs_match_production ... ok
+test failed_first_clock_read_retains_partial_state_and_recovers ... ok
+test global_clocks_aliases_rewinds_and_switches_match_production ... ok
+test preparation_rate_music_origin_and_no_offset_timing_match_production ... ok
+test queued_resets_and_reentrant_callbacks_keep_clocks_and_gc_roots ... ok
+test rotation_getter_publication_preserves_the_playback_boundary ... ok
+test spin_precedes_tweens_and_queued_commands_match_production ... ok
+test timers_exact_boundaries_hibernation_and_update_rates_match_production ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.66s
+
+     Running tests/rust_generated_players.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_generated_players-902b8f0a499c4e1e)
+
+running 7 tests
+test constructors_own_attack_display_and_preserve_actor_methods ... ok
+test errors_keep_native_partial_writes_and_clear_recursion_guard ... ok
+test execution_limit_unwinds_life_notification_and_allows_later_updates ... ok
+test life_queries_capture_meter_and_distinguish_live_value_from_local_flags ... ok
+test meter_getters_can_reenter_collect_and_replace_their_receiver_fields ... ok
+test released_player_scene_unsubscribes_and_releases_generated_owners ... ok
+test set_life_updates_shared_stats_and_notifies_before_side_effect ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.81s
+
+     Running tests/rust_input.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_input-7839703a662eb3bc)
+
+running 12 tests
+test a_false_compiled_prefix_enters_lua_and_later_predicates_see_mutation ... ok
+test additions_and_nested_removals_repair_the_dispatch_cursor ... ok
+test binding_a_screen_does_not_introduce_an_authored_call_for_hooks ... ok
+test collected_registry_callbacks_and_screens_release_at_remove_and_rebind ... ok
+test compiled_predicates_match_lua_for_all_event_fields_and_reject_side_effects ... ok
+test errors_truthiness_and_deferred_removals_preserve_identity_order ... ok
+test event_shape_conversions_shared_mutation_and_fresh_dispatch_tables ... ok
+test fully_compiled_dispatch_allocates_no_lua_event_and_hooks_force_fallback ... ok
+test mixed_callbacks_share_mutations_and_removal_restores_compiled_dispatch ... ok
+test resource_limit_unwinds_dispatch_and_applies_deferred_cleanup ... ok
+test screen_replacement_keeps_active_callbacks_live_and_saved_methods_use_new_registry ... ok
+test strict_registration_chaining_dedup_and_sticky_offline_rejection ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.29s
+
+     Running tests/rust_live_actors.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_actors-f9b2cfe60a949c9e)
+
+running 16 tests
+test entry_hook_precedes_inactivity_delta_selection_and_observes_player_feedback ... ok
+test failed_entry_callback_leaves_the_cached_plan_usable_on_the_next_frame ... ok
+test feedback_errors_preserve_the_written_timestamp_and_resume_without_retry ... ok
+test feedback_methods_modifiers_and_color_remain_rooted_across_replacement_gc ... ok
+test feedback_runs_for_hibernating_and_inactive_players ... ok
+test foreign_retired_nonlive_and_unactivated_owners_are_rejected ... ok
+test held_let_go_missed_hold_and_duplicate_timestamp_queues_match ... ok
+test hold_callbacks_can_change_judgment_and_zoom_inputs_before_their_phases ... ok
+test judgment_frames_fa_plus_early_late_autoplay_and_tilt_match ... ok
+test live_screen_player_children_columns_song_and_final_screen_order ... ok
+test mini_zoom_uses_owned_current_options_after_player_update_before_song ... ok
+test ordinary_actor_callback_errors_report_once_without_stopping_song_callbacks ... ok
+test original_nonframe_update_setter_fixtures_are_rejected ... ok
+test prepared_frame_uses_refreshed_judgments_in_the_actor_feedback_phase ... ok
+test queued_commands_and_runtime_wrappers_invalidate_next_plan_without_losing_current_jobs ... ok
+test wrapper_rates_hibernation_and_column_input_delta_match ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.25s
+
+     Running tests/rust_live_compiler.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_compiler-06b26faae054b5c3)
+
+running 14 tests
+test empty_live_session_keeps_the_screen_and_zero_authored_entries ... ok
+test live_startup_reload_limit_rejects_after_the_existing_128_reconstructions ... ok
+test malformed_live_file_keeps_rust_dummy_fallback_and_prior_side_effects ... ok
+test multilayer_wrapper_proxy_aft_and_sprite_payloads_use_shared_layer_splitting ... ok
+test original_unsupported_statistics_getlife_fixture_remains_a_rejection_control ... ok
+test replacement_init_does_not_observe_the_previous_frames_live_player_feedback ... ok
+test retained_rust_scene_moves_from_loading_worker_to_the_playback_thread ... ok
+test retained_scene_reload_runs_end_then_rebuilds_in_the_same_vm ... ok
+test saved_scalar_getters_and_writes_revert_to_lua_backing_after_reload ... ok
+test sound_owner_events_survive_startup_and_runtime_reload_in_native_order ... ok
+test startup_reloads_preserve_globals_rng_end_order_and_saved_actor_ownership ... ok
+test unified_live_compilation_freezes_initial_assets_and_retains_future_callbacks ... ok
+test unified_offline_entry_preserves_existing_finite_output ... ok
+test unsupported_startup_screen_rejection_matches ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 90.37s
+
+     Running tests/rust_live_frames.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_frames-e4bf9fd92f5079a7)
+
+running 17 tests
+test attack_activation_uses_prior_player_position_and_strict_endpoints ... ok
+test disabled_following_player_keeps_health_fallback_after_nested_life_write ... ok
+test disabled_player_position_stays_owned_while_statistics_still_feed ... ok
+test explicit_option_return_values_use_the_same_chunk_execution_mode ... ok
+test foreign_runtime_is_rejected_without_consuming_live_owners ... ok
+test frozen_music_keeps_independent_uptime_and_option_clock_deltas ... ok
+test health_notification_can_write_the_following_player_before_its_health_read ... ok
+test health_partial_errors_keep_prior_status_and_recover_without_duplicate_notifications ... ok
+test health_thresholds_and_fail_off_match_native_phase ... ok
+test live_frame_clock_statistics_feedback_and_uptime_match ... ok
+test original_life_meter_call_keeps_prior_health_event_and_reports_unsupported_method ... ok
+test prepared_frame_refreshes_feedback_without_reapplying_options_or_uptime ... ok
+test rejected_option_clock_keeps_prior_raw_writes_and_next_frame_recovers ... ok
+test released_live_owners_reject_use_and_new_owner_resets_health_publication ... ok
+test replacement_attack_schedule_rebuilds_even_when_active_indices_match ... ok
+test retained_statistics_survive_global_replacement_and_gc ... ok
+test song_and_selected_player_timings_use_the_same_audio_position ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.78s
+
+     Running tests/rust_live_gameplay.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_gameplay-53682c9471556c01)
+
+running 11 tests
+test callback_failures_preserve_prior_writes_and_prepared_frame ... ok
+test did_tap_note_preserves_independent_returns_brightness_and_error_suppression ... ok
+test event_clock_reads_owned_music_rate_and_contains_malformed_frame_errors ... ok
+test gameplay_judgment_pipeline_uses_installed_callbacks ... ok
+test held_misses_and_all_hold_results_keep_native_unormalized_parameter_shapes ... ok
+test installed_callbacks_survive_collection_reload_and_loading_thread_handoff ... ok
+test missing_tap_handlers_and_invalid_players_keep_native_write_drain_boundaries ... ok
+test pending_output_writes_and_song_fail_policy_follow_current_only_precedence ... ok
+test retained_callbacks_own_the_vm_after_scene_drop_and_release_it_on_teardown ... ok
+test row_judgments_include_current_notes_preceding_holds_and_retained_results ... ok
+test step_messages_refresh_stats_clocks_and_reenter_lua_without_advancing_uptime ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.95s
+
+     Running tests/rust_live_layers.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_layers-9d4c3e2b83eafb1e)
+
+running 16 tests
+test absent_layers_keep_only_the_option_phase_preference_read ... ok
+test background_reset_preserves_resources_masks_wrappers_and_authored_fields ... ok
+test backgrounds_activate_repeat_reset_and_fade_in_native_order ... ok
+test foreground_crossing_start_runs_on_after_players_then_uses_music_delta ... ok
+test foreground_reads_music_rate_again_after_on_and_keeps_selected_options_rooted ... ok
+test foreground_visible_override_restarts_on_without_repeating_child_startup ... ok
+test layer_owner_rejects_foreign_and_retired_screens_without_consuming_release ... ok
+test model_reset_restores_native_depth_and_wrap_defaults_with_dimensions_intact ... ok
+test original_preference_rejection_occurs_in_options_even_without_layers ... ok
+test prepared_frame_does_not_repeat_background_focus_or_player_options ... ok
+test rate_preference_changes_background_and_foreground_tween_deltas ... ok
+test reset_typed_failure_preserves_raw_partial_state_and_recovers_on_retry ... ok
+test retained_layer_method_owners_survive_lookup_replacement_and_gc ... ok
+test sprite_reset_preserves_loaded_size_and_restarts_state_and_animation ... ok
+test two_background_layers_ties_and_rate_wrappers_preserve_callback_order ... ok
+test unsupported_transition_keeps_partial_focus_state_and_recovers ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.98s
+
+     Running tests/rust_live_scene.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_live_scene-ad24fc511c115c43)
+
+running 19 tests
+test a_rejected_broadcast_history_write_does_not_capture_a_source_event ... ok
+test a_sound_without_a_file_keeps_the_existing_compiled_owner_filter ... ok
+test authored_startup_and_runtime_tween_queues_keep_current_render_poses ... ok
+test authored_statistics_selection_before_scene_construction_governs_live_writes ... ok
+test ended_scene_handoff_preserves_saved_actors_without_duplicate_sound_stops ... ok
+test gameplay_outro_noted_after_actors_uses_the_same_off_boundary ... ok
+test health_callback_failures_are_reported_once_and_preserve_the_live_scene ... ok
+test health_callbacks_write_the_selected_statistics_and_freeze_poses_before_health ... ok
+test immediate_draw_submissions_and_normal_draw_frames_keep_their_live_boundaries ... ok
+test input_and_custom_draw_update_states_and_drain_in_execution_order ... ok
+test live_outputs_preserve_explicit_nil_tables_nested_messages_and_requests ... ok
+test malformed_live_source_keeps_the_existing_dummy_actor_fallback ... ok
+test malformed_raw_pose_fields_do_not_override_native_owned_live_tweens ... ok
+test original_startup_request_fixture_retains_the_native_reload_limit ... ok
+test prepared_background_failure_retries_the_host_phase_without_a_stale_prepared_mark ... ok
+test retained_scene_update_prepare_draw_end_and_owned_render_states_match ... ok
+test retained_sound_owners_preserve_startup_play_pause_and_teardown_order ... ok
+test scene_outro_clears_attacks_and_orders_success_and_all_failed_off ... ok
+test source_broadcast_snapshots_keep_functions_actors_cycles_and_trace_limits ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.74s
+
+     Running tests/rust_messages.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_messages-c8e79f737613ba65)
+
+running 13 tests
+test authored_and_theme_message_errors_restore_state_and_recover ... ok
+test broadcast_arity_identity_dynamic_fields_and_manager_call_styles ... ok
+test broadcast_validation_suppression_history_and_logging_match_production ... ok
+test fatal_broadcast_restores_scopes_and_guard_after_gc ... ok
+test judgment_metamethods_gc_and_existing_native_objects_match_production ... ok
+test judgment_normalization_retains_note_and_result_objects_across_gc ... ok
+test listener_snapshot_reloads_handlers_and_defers_new_subscribers ... ok
+test native_messages_preserve_engine_params_and_omitted_arguments ... ok
+test natural_delivery_uses_vm_identities_and_release_removes_subscribers ... ok
+test null_actor_instances_copy_template_native_state_without_advancing_template ... ok
+test null_actor_is_an_independent_live_template_and_subscriber ... ok
+test queued_messages_use_empty_shared_params_and_frame_boundaries ... ok
+test same_message_reentry_preserves_direct_command_guard_and_scopes ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.08s
+
+     Running tests/rust_models.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_models-2ee090ffa6c3d38d)
+
+running 7 tests
+test capture_owns_frame_data_until_finish_or_last_scene_release ... ok
+test existing_model_material_fixture_loads_identical_owned_geometry_and_materials ... ok
+test existing_texture_order_fixture_preserves_hibernation_parent_rates_and_queued_selection ... ok
+test material_state_selection_callback_order_static_layers_and_reset_match_control ... ok
+test model_construction_defaults_inheritance_and_immediate_render_controls ... ok
+test model_paths_preserve_fallbacks_getter_order_gc_and_failed_query_cleanup ... ok
+test model_private_child_queries_preserve_names_groups_and_registry_aliases ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.30s
+
+     Running tests/rust_notefields.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_notefields-987584e2221825d4)
+
+running 11 tests
+test columns_advance_after_frame_with_original_delta_through_rate_and_hibernation ... ok
+test construction_eagerly_owns_style_columns_board_and_spline_handlers ... ok
+test cubic_solving_looping_resize_and_float_evaluation_match_existing_geometry ... ok
+test field_methods_keep_bound_receivers_alias_lookup_and_argument_rules ... ok
+test handler_setters_use_argument_two_preserve_aliases_and_original_spline ... ok
+test invalid_geometry_rejects_before_replacing_existing_values ... ok
+test ordinary_field_access_reenters_and_keeps_selected_geometry_rooted ... ok
+test regenerated_columns_follow_current_style_and_root_authored_getters ... ok
+test retained_handler_queries_release_field_and_keep_only_their_selected_objects ... ok
+test retired_field_query_cannot_construct_actors_in_a_released_scene ... ok
+test tap_callbacks_keep_public_forwarders_reentry_and_partial_failure_behavior ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.85s
+
+     Running tests/rust_player_parts.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_player_parts-c43022fc3f85ae82)
+
+running 7 tests
+test failed_hold_construction_releases_partial_scene_and_allows_later_construction ... ok
+test generated_child_lookup_keeps_aliases_and_group_forwarding_after_renames ... ok
+test hidden_or_empty_font_combo_is_the_existing_invisible_leaf ... ok
+test hold_texture_method_reenters_gc_once_per_player_and_uses_raw_modifiers ... ok
+test player_init_owns_ordered_children_and_shared_named_aliases ... ok
+test player_update_traversal_visits_each_part_once_and_columns_last ... ok
+test scene_release_collects_the_entire_generated_tree_and_keeps_other_player_alive ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.81s
+
+     Running tests/rust_render.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_render-bc3b2ca27c4d4e0f)
+
+running 8 tests
+test color_crop_and_quaternion_tweens_match_production ... ok
+test colors_gradients_and_getter_ownership_match_production ... ok
+test declared_camera_fov_and_command_override_match_production ... ok
+test geometry_dimensions_alignment_and_flip_order_match_production ... ok
+test immediate_base_alignment_shadow_and_frame_properties_match_production ... ok
+test render_callbacks_reenter_force_gc_and_clone_template_state ... ok
+test render_flags_propagate_in_call_order_and_keep_strict_arguments ... ok
+test render_numeric_edge_cases_match_production ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.75s
+
+     Running tests/rust_scene_retirement.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_scene_retirement-0f46df6cffe01876)
+
+running 11 tests
+test detached_fields_metatables_and_collecting_callbacks_keep_native_state ... ok
+test failed_end_still_allows_retained_state_and_eventual_cleanup ... ok
+test late_wrapper_subscriptions_remain_rooted_until_the_next_registry_replacement ... ok
+test retained_sound_handle_keeps_its_actor_and_native_parameters ... ok
+test retirement_unsubscribes_old_messages_but_keeps_direct_commands_callable ... ok
+test saved_actor_state_and_late_wrappers_match_native_after_retirement ... ok
+test scene_handles_from_another_vm_cannot_retire_or_release_local_actors ... ok
+test screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them ... ok
+test shared_actors_transfer_after_the_last_active_owner_retires_or_releases ... ok
+test unused_retired_scenes_release_rust_metadata_in_repeated_cycles ... ok
+test weak_authored_command_fields_still_follow_native_collection_rules ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.95s
+
+     Running tests/rust_screen_manager.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_screen_manager-24baf328c8d1945d)
+
+running 12 tests
+test clock_lookup_reentry_preserves_request_order_and_roots_old_runtime ... ok
+test effect_only_methods_keep_return_arity_and_typed_counter_conversion ... ok
+test hooks_observe_authored_calls_without_internal_numeric_conversion_calls ... ok
+test invalid_names_only_count_effects_and_disabled_capture_does_not_read_clock ... ok
+test loading_and_top_queries_are_raw_while_add_screen_uses_ordinary_lookup ... ok
+test pending_transition_survives_higher_priority_new_screen_and_runtimes_are_isolated ... ok
+test publication_preserves_manager_identity_and_saved_player_getters ... ok
+test publication_roots_all_arguments_across_global_setters_and_partial_errors ... ok
+test replacement_recreates_invalid_managers_and_preserves_authored_tables ... ok
+test request_and_name_writes_keep_partial_effects_on_failure ... ok
+test requests_preserve_duplicates_precision_and_drain_without_changing_top ... ok
+test saved_getters_keep_only_their_player_pair_and_old_screens_are_collectible ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.66s
+
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 212 tests
+test action_compiler_mixed_parameter_broadcasts_preserve_all_or_none_named_publication ... ok
+test action_compiler_publication_keeps_broadcast_order_direct_tracked_sounds_and_counter ... ok
+test action_compiler_publication_keeps_native_empty_side_effect_listener_and_error_results ... ok
+test action_compiler_reader_accepts_existing_native_functions_and_records_unhandled_gc ... ok
+test action_compiler_reader_continues_failed_or_unhandled_functions_and_deduplicates_details ... ok
+test action_compiler_reader_hard_string_errors_preserve_prior_publications_and_recover ... ok
+test action_compiler_reader_instruction_abort_records_unsupported_continues_and_recovers ... ok
+test action_compiler_reader_keeps_original_table_and_reads_mutated_next_entry_after_cleanup_error_gc ... ok
+test action_compiler_reader_uses_raw_fields_native_float_rules_truthiness_and_nil_boundary ... ok
+test actor_messages_command_defaults_and_missing_handlers_match_native ... ok
+test actor_messages_command_errors_restore_reached_actors_locals_rng_and_keep_structural_edits ... ok
+test actor_messages_command_preserves_prior_capture_history_queues_and_mutable_alias_boundary ... ok
+test actor_messages_discard_command_returns_before_reentrant_mutable_restore_gc ... ok
+test actor_messages_failures_defer_once_and_keep_actor_roots_through_retirement ... ok
+test actor_messages_instruction_limits_restore_history_and_live_mode_skips_message_probes ... ok
+test actor_messages_key_errors_preserve_native_partial_state_and_allow_recovery ... ok
+test actor_messages_scan_freezes_sorted_names_restores_history_and_extracts_sounds ... ok
+test callback_tables_global_name_predicate_keeps_literals_short_circuit_and_meter_stream ... ok
+test callback_tables_keep_direct_nested_recurring_and_raw_child_discovery_order ... ok
+test callback_tables_keep_original_global_namespace_and_authored_debug_getter ... ok
+test callback_tables_mod_windows_keep_native_coercions_holes_spans_and_time_units ... ok
+test callback_tables_preserve_optional_debug_lookup_and_typed_metadata_errors ... ok
+test callback_tables_root_detached_results_across_getters_gc_and_foreign_release ... ok
+test callback_tables_runtime_mods_keep_first_unique_order_player_state_and_static_selection ... ok
+test capture_queues_enter_frame_scheduling_in_actual_actor_order ... ok
+test captured_initial_update_blocks_and_wrapper_defaults_match_compiler ... ok
+test captured_queue_dispatch_keeps_nested_starts_partial_errors_and_scope_restoration ... ok
+test chronological_replay_rebuilds_startup_queues_after_future_discovery ... ok
+test column_eases_endpoint_capture_keeps_metadata_clocks_shared_cells_rng_and_original_splines ... ok
+test column_eases_endpoint_errors_keep_native_body_sample_and_restore_priority ... ok
+test column_eases_endpoint_first_return_stays_alive_during_authored_restoration ... ok
+test column_eases_global_collection_roots_both_fields_before_reading_columns ... ok
+test column_eases_instruction_abort_restores_columns_clocks_and_releases_detached_values ... ok
+test column_eases_reader_publishes_real_column_endpoints_and_keeps_owned_rows_after_teardown ... ok
+test column_eases_samples_keep_native_mode_baselines_numeric_coercion_and_target_order ... ok
+test column_eases_samples_pin_transient_columns_handlers_and_points_during_witness_setters ... ok
+test column_eases_samples_recheck_nonuniform_witnesses_and_keep_later_y_errors ... ok
+test column_eases_samples_release_each_processed_field_before_the_next_getter ... ok
+test column_eases_samples_validate_two_point_splines_and_preserve_sparse_raw_points ... ok
+test column_eases_snapshot_failure_preserves_selected_clock_and_does_not_call_body ... ok
+test command_local_nested_scopes_defer_locals_but_restore_rng_at_each_boundary ... ok
+test command_local_scopes_capture_commands_reached_by_play_queue_and_broadcast ... ok
+test command_local_scopes_keep_custom_environment_bindings_and_restore_referenced_tables ... ok
+test command_local_scopes_restore_after_callback_errors_and_instruction_limits ... ok
+test command_local_scopes_restore_shared_cells_cycles_and_detached_commands_after_gc ... ok
+test deferred_live_update_still_activates_and_retains_transition_request ... ok
+test discovery_error_keeps_partial_mutations_without_a_later_rewind ... ok
+test discovery_rewind_handles_more_shared_tables_than_the_native_stack_limit ... ok
+test discovery_snapshot_retirement_is_safe_and_foreign_scenes_are_rejected ... ok
+test easing_reader_callback_mutation_keeps_original_sequence_and_function_alive_through_gc ... ok
+test easing_reader_decisions_preserve_callback_metadata_output_order_and_stats_merging ... ok
+test easing_reader_hard_function_and_utf8_errors_stop_the_sequence_and_allow_recovery ... ok
+test easing_reader_loaded_aliases_table_tags_native_functions_and_registry_roots ... ok
+test easing_reader_nested_capture_retains_detached_function_and_entry_until_callback_returns ... ok
+test easing_reader_raw_fields_preserve_span_float_player_and_nil_rules ... ok
+test easing_reader_registration_getters_preserve_order_raw_tags_and_partial_errors ... ok
+test easing_reader_registry_rejects_foreign_or_released_owners_and_abort_releases_iteration_roots ... ok
+test easing_reader_runs_existing_overlay_endpoints_and_keeps_owned_output_after_teardown ... ok
+test failed_on_preserves_partial_state_and_releases_new_constructor_owners ... ok
+test fallback_clock_dispatch_preserves_rates_hibernation_and_backdated_publications ... ok
+test fallback_clock_hands_only_dispatch_remainder_to_new_recurring_commands ... ok
+test fallback_clock_nested_inline_commands_restore_absent_timestamps ... ok
+test fallback_clock_queue_errors_report_once_and_restore_dispatch_for_later_frames ... ok
+test function_action_cleanup_order_retains_first_return_and_counts_late_column_side_effects ... ok
+test function_action_collects_overlay_tracked_broadcast_sound_and_rewinds_shared_state ... ok
+test function_action_column_restore_errors_keep_native_partial_state_and_release_scope ... ok
+test function_action_instruction_abort_restores_actor_clock_globals_and_allows_later_capture ... ok
+test function_action_output_errors_preserve_cleanup_and_precede_callback_errors ... ok
+test function_action_restores_column_membership_and_cloned_spline_values_after_replacement ... ok
+test function_action_sound_manager_keeps_existing_methods_lookup_rules_and_return_identity ... ok
+test function_action_sound_manager_preserves_partial_errors_gc_and_runtime_message_context ... ok
+test function_ease_pipeline_column_windows_take_priority_over_overlay_writes ... ok
+test function_ease_pipeline_compiles_all_written_overlays_with_named_and_unnamed_setters ... ok
+test function_ease_pipeline_compiles_player_targets_after_column_endpoints_and_probe ... ok
+test function_ease_pipeline_continues_failed_endpoints_and_deduplicates_unsupported_details ... ok
+test function_ease_pipeline_keeps_empty_and_unknown_probe_selections_on_touched_fallback ... ok
+test function_ease_pipeline_propagates_corrupt_probe_reads_and_accepts_existing_native_functions ... ok
+test function_ease_probe_classifies_all_existing_player_targets_and_repeated_setters ... ok
+test function_ease_probe_follows_native_lifecycle_capture_ownership ... ok
+test function_ease_probe_instruction_abort_still_cleans_up_and_allows_a_later_probe ... ok
+test function_ease_probe_keeps_first_return_through_authored_global_restoration ... ok
+test function_ease_probe_keeps_native_empty_tween_ownership_and_skips_nonwriting_operations ... ok
+test function_ease_probe_preserves_partial_global_restoration_when_a_setter_fails ... ok
+test function_ease_probe_preserves_setter_error_preflight_before_semantic_writes ... ok
+test function_ease_probe_restores_rng_clocks_globals_and_keeps_shared_writes_on_body_errors ... ok
+test function_ease_probe_root_batch_keeps_unknown_tables_until_release_and_rejects_foreign_vms ... ok
+test function_ease_probe_tracks_write_order_separately_from_named_setter_calls ... ok
+test function_ease_probe_uses_original_observation_tables_and_validates_corrupt_sequences ... ok
+test function_probe_state_errors_rewind_removed_functions_and_allow_recovery ... ok
+test function_probe_state_handles_large_shared_graphs_and_native_function_roots ... ok
+test function_probe_state_restores_custom_environments_and_referenced_helpers ... ok
+test function_probe_state_restores_shared_cells_cycles_helpers_and_global_bindings ... ok
+test function_probe_state_retains_actor_sources_without_global_or_closure_references ... ok
+test function_probe_state_roots_new_return_values_and_retains_aliases_after_gc ... ok
+test immediate_capture_keeps_partial_queue_errors_wake_writes_and_owned_output_after_teardown ... ok
+test immediate_capture_preserves_actor_order_after_message_pose_writes ... ok
+test immediate_capture_preserves_base_alignment_size_visibility_and_explicit_writes ... ok
+test immediate_capture_publishes_sprite_state_culling_and_framebuffer_flags ... ok
+test immediate_effect_capture_preserves_native_preset_order_and_invalid_argument_rules ... ok
+test indexed_actor_capture_errors_rewind_state_and_restore_reentrant_properties ... ok
+test indexed_actor_capture_keeps_nested_queue_output_and_outer_script_mutations ... ok
+test indexed_actor_capture_limit_errors_restore_metadata_and_allow_later_capture ... ok
+test indexed_actor_capture_preserves_order_duplicates_state_and_runtime_clock ... ok
+test indexed_actor_capture_preserves_preexisting_tween_queue_steps ... ok
+test indexed_actor_capture_restores_media_effects_raw_tables_and_wrapper_membership ... ok
+test indexed_actor_capture_roots_first_return_through_restoration_then_releases_it ... ok
+test indexed_actor_capture_snapshot_errors_keep_native_clock_boundary_and_recover ... ok
+test kind_output_keeps_startup_text_and_eager_authored_reads_across_gc ... ok
+test kind_output_model_errors_and_missing_resources_keep_native_loader_boundaries ... ok
+test kind_output_payloads_survive_teardown_and_failed_authored_resources_recover ... ok
+test kind_output_preserves_existing_renderer_variants_in_preparation_and_live ... ok
+test kind_output_preserves_startup_sprite_binding_and_aft_name_rules ... ok
+test live_and_replaced_startup_screens_never_probe_or_rewind ... ok
+test malformed_initialized_globals_stop_at_the_same_request_boundary ... ok
+test malformed_sprite_capture_stops_before_queued_commands_and_releases_the_barrier ... ok
+test media_output_captures_text_masks_and_sprite_setters_in_native_order ... ok
+test media_output_preserves_retained_texture_state_and_geometry_write_order ... ok
+test media_output_retains_partial_writes_and_pending_stop_finish_values ... ok
+test media_output_startup_blocks_and_queued_discovery_match_native ... ok
+test message_probe_defaults_match_all_existing_parameter_shapes_and_retained_methods ... ok
+test message_probe_explicit_roots_hold_defaults_and_detached_handler_until_release ... ok
+test message_probe_runner_errors_release_command_guard_and_recover_after_instruction_abort ... ok
+test message_probe_runner_keeps_selected_handler_defaults_guard_and_nested_queues ... ok
+test message_probe_runner_without_defaults_preserves_arity_directory_and_unrelated_queues ... ok
+test message_retry_consumption_releases_retired_deferred_actor_roots ... ok
+test message_retry_deferred_rejects_unrepresentable_sound_music_broadcast_and_state_changes ... ok
+test message_retry_deferred_success_captures_source_cross_tracked_and_repeated_sounds ... ok
+test message_retry_removed_handler_preserves_prior_publication_and_consumes_records_on_error ... ok
+test message_retry_runtime_capture_coverage_and_missing_overlay_consume_without_retry ... ok
+test message_retry_stable_cross_actor_scope_freezes_handlers_and_preserves_alias_indices ... ok
+test message_retry_successful_chronological_delivery_marks_observed_even_without_writes ... ok
+test message_retry_unstable_targets_and_second_run_errors_defer_with_original_details ... ok
+test on_and_zero_update_follow_mutated_raw_children_and_preserve_partial_errors ... ok
+test overlay_compiler_ease_duplicate_indices_empty_output_and_error_recovery_match_native ... ok
+test overlay_compiler_ease_endpoints_keep_intersection_metadata_and_clamped_clocks ... ok
+test overlay_compiler_ease_known_and_unknown_probes_keep_native_rewind_boundaries ... ok
+test overlay_compiler_ease_retains_detached_function_through_both_endpoints_and_releases_it ... ok
+test overlay_compiler_tree_authored_registry_membership_controls_reference_elision ... ok
+test overlay_compiler_tree_batch_roots_survive_retirement_and_reject_foreign_or_released_rows ... ok
+test overlay_compiler_tree_detached_transient_child_survives_getter_gc_only_until_batch_release ... ok
+test overlay_compiler_tree_forward_aft_names_and_generic_proxy_targets_remap_after_elision ... ok
+test overlay_compiler_tree_getter_errors_keep_partial_state_release_roots_and_allow_recovery ... ok
+test overlay_compiler_tree_keeps_wrapper_order_parents_and_excludes_wrapper_children ... ok
+test overlay_compiler_tree_live_mode_keeps_unnamed_default_actors_without_message_probes ... ok
+test overlay_compiler_tree_messages_keep_preprobe_state_postprobe_name_and_changed_children ... ok
+test overlay_compiler_tree_plain_elision_uses_only_two_global_table_levels_and_values ... ok
+test pose_output_captures_all_fallback_targets_timing_and_ordered_messages ... ok
+test pose_output_preserves_pending_finish_stop_partial_errors_and_owned_values ... ok
+test pose_output_reconciles_current_destinations_prior_reads_and_sampled_getters ... ok
+test queue_clock_keeps_final_frame_zero_states_deferred_until_their_actor_update ... ok
+test queue_clock_predicts_render_samples_and_cross_actor_frame_advancement ... ok
+test queue_clock_preserves_actor_frame_spans_zero_tails_hurry_and_cancellation ... ok
+test queue_clock_retains_dispatch_remainders_and_sample_arrays_after_queue_callbacks ... ok
+test queued_actor_captures_separate_startup_writes_and_retain_removed_siblings ... ok
+test queued_discovery_preserves_custom_environment_targets_and_referenced_tables ... ok
+test queued_discovery_rewinds_shared_cells_cycles_and_global_bindings_after_gc ... ok
+test queued_immediate_capture_preserves_dispatch_precision_final_values_and_cancellation ... ok
+test queued_sprite_bindings_and_startup_text_keep_the_real_zero_frame ... ok
+test recurring_capture_hurry_and_cancellation_preserve_the_stored_interval ... ok
+test recurring_capture_keeps_exact_intervals_hibernation_rates_and_conditional_stop ... ok
+test recurring_capture_reports_once_preserves_partial_writes_and_restores_dispatch_after_errors ... ok
+test recurring_capture_zero_intervals_and_per_update_cap_match_native ... ok
+test reference_clock_is_applied_after_begin_and_before_message_on_and_update ... ok
+test render_property_capture_keeps_partial_errors_nested_messages_and_cancellation ... ok
+test render_property_capture_preserves_timing_replacement_flags_and_message_order ... ok
+test render_property_capture_reuses_pending_destinations_across_drains_and_validates_owners ... ok
+test replay_boundary_rejects_foreign_retired_live_and_replaced_scenes ... ok
+test replay_color_writes_and_queue_cancellation_publish_native_getters ... ok
+test replay_message_provenance_keeps_nested_cross_actor_and_equal_value_writes ... ok
+test replay_message_provenance_keeps_tail_delays_hurry_and_queue_dispatch_resets ... ok
+test replay_message_provenance_survives_errors_and_teardown_without_leaking_scope ... ok
+test replay_restores_sprite_binding_and_only_the_exported_getter_fields ... ok
+test replay_uses_block_step_associations_and_easing_options ... ok
+test sampled_perframes_keep_gap_holds_and_side_effect_only_diagnostics ... ok
+test sampled_perframes_keep_prefix_global_order_overlaps_raw_holes_and_player_curves ... ok
+test sampled_perframes_replay_messages_in_stable_order_and_filter_queued_blocks ... ok
+test sampled_perframes_restore_clocks_after_errors_and_keep_partial_script_writes ... ok
+test sampled_perframes_root_future_callbacks_and_release_consumed_inputs_after_gc ... ok
+test scheduled_layers_defer_on_and_updates_but_foreground_receives_begin ... ok
+test startup_broadcast_capture_preserves_phase_params_and_nested_delivery ... ok
+test startup_media_capture_skips_future_probes_in_live_and_replaced_screens ... ok
+test startup_order_retained_init_globals_options_and_requests_match_compiler ... ok
+test startup_queue_collection_preserves_enqueue_order_and_includes_zero_update ... ok
+test static_schedule_composes_prefix_global_mods_eases_actions_and_perframe_inputs ... ok
+test static_schedule_hard_errors_preserve_partial_script_effects_and_clean_roots ... ok
+test static_schedule_keeps_prefix_lookup_order_soft_perframe_errors_and_fresh_globals ... ok
+test static_schedule_retains_selected_perframe_tables_after_global_replacement ... ok
+test static_schedule_skips_reader_owned_tables_by_identity_and_initialized_presence ... ok
+test static_schedule_xero_captures_retain_future_functions_and_release_parsed_tables ... ok
+test static_schedule_xero_nodes_keep_first_winner_sparse_pairs_state_and_capture_dedup ... ok
+test touched_actor_capture_covers_existing_setter_families_independently ... touched setter frame:x(1)
+touched setter frame:sleep(.125):linear(.25):x(1)
+touched setter frame:y(2)
+touched setter frame:sleep(.125):linear(.25):y(2)
+touched setter frame:z(3)
+touched setter frame:sleep(.125):linear(.25):z(3)
+touched setter frame:aux(4)
+touched setter frame:sleep(.125):linear(.25):aux(4)
+touched setter frame:zoom(2)
+touched setter frame:sleep(.125):linear(.25):zoom(2)
+touched setter frame:rotationx(5)
+touched setter frame:sleep(.125):linear(.25):rotationx(5)
+touched setter frame:rotationy(6)
+touched setter frame:sleep(.125):linear(.25):rotationy(6)
+touched setter frame:rotationz(7)
+touched setter frame:sleep(.125):linear(.25):rotationz(7)
+touched setter frame:skewx(.1)
+touched setter frame:sleep(.125):linear(.25):skewx(.1)
+touched setter frame:skewy(.2)
+touched setter frame:sleep(.125):linear(.25):skewy(.2)
+touched setter frame:cropleft(.1)
+touched setter frame:sleep(.125):linear(.25):cropleft(.1)
+touched setter frame:cropright(.2)
+touched setter frame:sleep(.125):linear(.25):cropright(.2)
+touched setter frame:croptop(.3)
+touched setter frame:sleep(.125):linear(.25):croptop(.3)
+touched setter frame:cropbottom(.4)
+touched setter frame:sleep(.125):linear(.25):cropbottom(.4)
+touched setter frame:fadeleft(.1)
+touched setter frame:sleep(.125):linear(.25):fadeleft(.1)
+touched setter frame:faderight(.2)
+touched setter frame:sleep(.125):linear(.25):faderight(.2)
+touched setter frame:fadetop(.3)
+touched setter frame:sleep(.125):linear(.25):fadetop(.3)
+touched setter frame:fadebottom(.4)
+touched setter frame:sleep(.125):linear(.25):fadebottom(.4)
+touched setter frame:diffuse(.2,.3,.4,.5)
+touched setter frame:sleep(.125):linear(.25):diffuse(.2,.3,.4,.5)
+touched setter frame:diffuseupperleft(1,0,0,1)
+touched setter frame:sleep(.125):linear(.25):diffuseupperleft(1,0,0,1)
+touched setter frame:glow(.5,.4,.3,.2)
+touched setter frame:sleep(.125):linear(.25):glow(.5,.4,.3,.2)
+touched setter frame:heading(15)
+touched setter frame:sleep(.125):linear(.25):heading(15)
+touched setter frame:visible(false)
+touched setter frame:sleep(.125):linear(.25):visible(false)
+touched setter frame:hibernate(.1)
+touched setter frame:sleep(.125):linear(.25):hibernate(.1)
+touched setter frame:halign(.2)
+touched setter frame:sleep(.125):linear(.25):halign(.2)
+touched setter frame:valign(.7)
+touched setter frame:sleep(.125):linear(.25):valign(.7)
+touched setter frame:horizalign('left')
+touched setter frame:sleep(.125):linear(.25):horizalign('left')
+touched setter frame:basezoom(2)
+touched setter frame:sleep(.125):linear(.25):basezoom(2)
+touched setter frame:basezoomx(3)
+touched setter frame:sleep(.125):linear(.25):basezoomx(3)
+touched setter frame:basezoomy(4)
+touched setter frame:sleep(.125):linear(.25):basezoomy(4)
+touched setter frame:basezoomz(5)
+touched setter frame:sleep(.125):linear(.25):basezoomz(5)
+touched setter frame:basealpha(.3)
+touched setter frame:sleep(.125):linear(.25):basealpha(.3)
+touched setter frame:baserotationz(8)
+touched setter frame:sleep(.125):linear(.25):baserotationz(8)
+touched setter frame:shadowlength(2)
+touched setter frame:sleep(.125):linear(.25):shadowlength(2)
+touched setter frame:shadowcolor(.1,.2,.3,.4)
+touched setter frame:sleep(.125):linear(.25):shadowcolor(.1,.2,.3,.4)
+touched setter frame:setsize(10,20)
+touched setter frame:sleep(.125):linear(.25):setsize(10,20)
+touched setter frame:vibrate()
+touched setter frame:sleep(.125):linear(.25):vibrate()
+touched setter frame:rainbow()
+touched setter frame:sleep(.125):linear(.25):rainbow()
+touched setter frame:glowshift()
+touched setter frame:sleep(.125):linear(.25):glowshift()
+touched setter frame:effectperiod(2)
+touched setter frame:sleep(.125):linear(.25):effectperiod(2)
+touched setter frame:effecttiming(1,2,3,4,5)
+touched setter frame:sleep(.125):linear(.25):effecttiming(1,2,3,4,5)
+touched setter frame:effectmagnitude(1,2,3)
+touched setter frame:sleep(.125):linear(.25):effectmagnitude(1,2,3)
+touched setter frame:effectcolor1(.1,.2,.3,.4)
+touched setter frame:sleep(.125):linear(.25):effectcolor1(.1,.2,.3,.4)
+touched setter frame:effectcolor2(.4,.3,.2,.1)
+touched setter frame:sleep(.125):linear(.25):effectcolor2(.4,.3,.2,.1)
+touched setter frame:effectoffset(.2)
+touched setter frame:sleep(.125):linear(.25):effectoffset(.2)
+touched setter frame:effectclock('timer')
+touched setter frame:sleep(.125):linear(.25):effectclock('timer')
+touched setter frame:cullmode('back')
+touched setter frame:sleep(.125):linear(.25):cullmode('back')
+touched setter frame:zbias(.1)
+touched setter frame:sleep(.125):linear(.25):zbias(.1)
+touched setter frame:draworder(3)
+touched setter frame:sleep(.125):linear(.25):draworder(3)
+touched setter frame:SetDrawByZPosition(true)
+touched setter frame:sleep(.125):linear(.25):SetDrawByZPosition(true)
+touched setter frame:fov(60)
+touched setter frame:sleep(.125):linear(.25):fov(60)
+touched setter frame:fov(-1)
+touched setter frame:sleep(.125):linear(.25):fov(-1)
+touched setter frame:vanishpoint(10,20)
+touched setter frame:sleep(.125):linear(.25):vanishpoint(10,20)
+touched setter frame:blend('add')
+touched setter frame:sleep(.125):linear(.25):blend('add')
+touched setter frame:ztest(true)
+touched setter frame:sleep(.125):linear(.25):ztest(true)
+touched setter frame:ztestmode('writeonfail')
+touched setter frame:sleep(.125):linear(.25):ztestmode('writeonfail')
+touched setter frame:zwrite(true)
+touched setter frame:sleep(.125):linear(.25):zwrite(true)
+touched setter frame:SetTextureFiltering(false)
+touched setter frame:sleep(.125):linear(.25):SetTextureFiltering(false)
+touched setter frame:MaskSource()
+touched setter frame:sleep(.125):linear(.25):MaskSource()
+touched setter frame:MaskDest()
+touched setter frame:sleep(.125):linear(.25):MaskDest()
+touched setter frame:diffusealpha(.4)
+touched setter frame:sleep(.125):linear(.25):diffusealpha(.4)
+touched setter frame:xy(10,20)
+touched setter frame:sleep(.125):linear(.25):xy(10,20)
+touched setter frame:addx(2)
+touched setter frame:sleep(.125):linear(.25):addx(2)
+touched setter frame:SetWidth(12)
+touched setter frame:sleep(.125):linear(.25):SetWidth(12)
+touched setter frame:SetHeight(13)
+touched setter frame:sleep(.125):linear(.25):SetHeight(13)
+touched setter frame:align(.2,.3)
+touched setter frame:sleep(.125):linear(.25):align(.2,.3)
+touched setter frame:vertalign('top')
+touched setter frame:sleep(.125):linear(.25):vertalign('top')
+touched setter frame:Center()
+touched setter frame:sleep(.125):linear(.25):Center()
+touched setter frame:FullScreen()
+touched setter frame:sleep(.125):linear(.25):FullScreen()
+touched setter frame:zoomto(10,20)
+touched setter frame:sleep(.125):linear(.25):zoomto(10,20)
+touched setter frame:stretchto(0,0,10,20)
+touched setter frame:sleep(.125):linear(.25):stretchto(0,0,10,20)
+touched setter frame:scaletofit(0,0,10,20)
+touched setter frame:sleep(.125):linear(.25):scaletofit(0,0,10,20)
+touched setter frame:scaletocover(0,0,10,20)
+touched setter frame:sleep(.125):linear(.25):scaletocover(0,0,10,20)
+touched setter frame:setsize(0,0):scaletofit(0,0,10,20)
+touched setter frame:sleep(.125):linear(.25):setsize(0,0):scaletofit(0,0,10,20)
+touched setter frame:setsize(0,0):scaletocover(0,0,10,20)
+touched setter frame:sleep(.125):linear(.25):setsize(0,0):scaletocover(0,0,10,20)
+touched setter sprite:SetTexture(nil)
+touched setter sprite:sleep(.125):linear(.25):SetTexture(nil)
+touched setter sprite:setstate(0)
+touched setter sprite:sleep(.125):linear(.25):setstate(0)
+touched setter sprite:animate(false)
+touched setter sprite:sleep(.125):linear(.25):animate(false)
+touched setter sprite:loop(false)
+touched setter sprite:sleep(.125):linear(.25):loop(false)
+touched setter sprite:rate(2)
+touched setter sprite:sleep(.125):linear(.25):rate(2)
+touched setter sprite:SetAllStateDelays(.125)
+touched setter sprite:sleep(.125):linear(.25):SetAllStateDelays(.125)
+touched setter sprite:texturewrapping(true)
+touched setter sprite:sleep(.125):linear(.25):texturewrapping(true)
+touched setter sprite:texturetranslate(.25,.5)
+touched setter sprite:sleep(.125):linear(.25):texturetranslate(.25,.5)
+touched setter sprite:customtexturerect(0,.1,.8,.9)
+touched setter sprite:sleep(.125):linear(.25):customtexturerect(0,.1,.8,.9)
+touched setter sprite:texcoordvelocity(1,2)
+touched setter sprite:sleep(.125):linear(.25):texcoordvelocity(1,2)
+touched setter sprite:play()
+touched setter sprite:sleep(.125):linear(.25):play()
+touched setter sprite:pause()
+touched setter sprite:sleep(.125):linear(.25):pause()
+touched setter sprite:Load('one.png')
+touched setter sprite:sleep(.125):linear(.25):Load('one.png')
+touched setter sprite:SetStateProperties({{Frame=0,Delay=.2},{Frame=1,Delay=.3}})
+touched setter sprite:sleep(.125):linear(.25):SetStateProperties({{Frame=0,Delay=.2},{Frame=1,Delay=.3}})
+touched setter sprite:SetSecondsIntoAnimation(.2)
+touched setter sprite:sleep(.125):linear(.25):SetSecondsIntoAnimation(.2)
+touched setter sprite:stretchtexcoords(.1,.2)
+touched setter sprite:sleep(.125):linear(.25):stretchtexcoords(.1,.2)
+touched setter sprite:CropTo(4,4)
+touched setter sprite:sleep(.125):linear(.25):CropTo(4,4)
+touched setter sprite:scaletoclipped(5,6)
+touched setter sprite:sleep(.125):linear(.25):scaletoclipped(5,6)
+touched setter text:uppercase(true)
+touched setter text:sleep(.125):linear(.25):uppercase(true)
+touched setter text:rainbowscroll(true)
+touched setter text:sleep(.125):linear(.25):rainbowscroll(true)
+touched setter text:jitter(true)
+touched setter text:sleep(.125):linear(.25):jitter(true)
+touched setter text:distort(.2)
+touched setter text:sleep(.125):linear(.25):distort(.2)
+touched setter text:textglowmode('TextGlowMode_Inner')
+touched setter text:sleep(.125):linear(.25):textglowmode('TextGlowMode_Inner')
+touched setter text:set_mult_attrs_with_diffuse(true)
+touched setter text:sleep(.125):linear(.25):set_mult_attrs_with_diffuse(true)
+touched setter text:vertspacing(3)
+touched setter text:sleep(.125):linear(.25):vertspacing(3)
+touched setter text:wrapwidthpixels(120)
+touched setter text:sleep(.125):linear(.25):wrapwidthpixels(120)
+touched setter text:maxwidth(80)
+touched setter text:sleep(.125):linear(.25):maxwidth(80)
+touched setter text:maxheight(40)
+touched setter text:sleep(.125):linear(.25):maxheight(40)
+touched setter text:max_dimension_use_zoom(true)
+touched setter text:sleep(.125):linear(.25):max_dimension_use_zoom(true)
+touched setter aft:EnablePreserveTexture(true)
+touched setter aft:sleep(.125):linear(.25):EnablePreserveTexture(true)
+touched setter aft:Create()
+touched setter aft:sleep(.125):linear(.25):Create()
+touched setter mesh:LoadTexture(nil)
+touched setter mesh:sleep(.125):linear(.25):LoadTexture(nil)
+touched setter mesh:LoadTexture('one.png')
+touched setter mesh:sleep(.125):linear(.25):LoadTexture('one.png')
+touched setter mesh:SetTexture(nil)
+touched setter mesh:sleep(.125):linear(.25):SetTexture(nil)
+ok
+test touched_actor_capture_filters_readonly_actors_preserves_order_and_restores_unselected_writes ... ok
+test touched_actor_capture_includes_render_effect_and_media_writes ... ok
+test touched_actor_capture_instruction_limits_restore_state_clock_and_allow_later_capture ... ok
+test touched_actor_capture_nested_queues_rewind_all_reached_actors_and_keep_script_bindings ... ok
+test touched_actor_capture_preserves_preexisting_tween_queue_steps ... ok
+test touched_actor_capture_preserves_structural_sort_and_following_updates ... ok
+test touched_actor_capture_restores_wrapper_membership_and_detached_wrapper_state ... ok
+test touched_actor_capture_roots_previous_globals_and_first_return_through_gc_then_releases ... ok
+test touched_actor_capture_snapshot_and_callback_errors_clean_scope_and_allow_recovery ... ok
+test touched_actor_capture_snapshots_at_first_write_and_restores_command_locals_and_rng ... ok
+test tracked_output_manual_snapshot_keeps_raw_data_and_does_not_repeat_authored_getters ... ok
+test tracked_output_pins_identities_through_retirement_and_rejects_foreign_or_released_roots ... ok
+test tracked_output_preserves_order_state_aliases_and_optional_layers ... ok
+test tracked_output_recreates_missing_children_and_retains_native_partial_errors ... ok
+test tracked_output_roots_transient_foregrounds_before_reentrant_global_reads ... ok
+test tracked_output_uses_manual_draw_snapshots_without_resurrecting_whole_players ... ok
+test tween_progress_keeps_cancelled_indices_and_tracks_explicit_pose_writes ... ok
+test tween_progress_preserves_song_time_hibernation_rates_and_wrapper_spans ... ok
+test tween_progress_retains_partial_errors_and_rejects_invalid_scene_handles ... ok
+test zero_update_snapshot_keeps_removed_actors_and_strips_only_unchanged_prefixes ... ok
+test zero_update_visits_wrappers_and_honors_sleep_and_pending_callback_fields ... ok
+
+test result: ok. 212 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 234.48s
+
+     Running tests/rust_song_compiler.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_compiler-3e35322a6753bf57)
+
+running 12 tests
+test chronological_background_and_screen_output_match_complete_compiler ... ok
+test empty_preparation_returns_before_entry_validation ... ok
+test framebuffer_and_deferred_sprite_kinds_match_complete_compiler ... ok
+test queued_sounds_and_message_sounds_use_real_dispatch_frames ... ok
+test reload_media_boundary_preserves_only_final_on_and_zero_update_sounds ... ok
+test resources_proxy_targets_custom_draw_and_sound_output_match ... ok
+test scalar_entries_preserve_global_schedule_without_actor_output ... ok
+test separate_layers_own_messages_wrappers_and_parent_indices ... ok
+test startup_capture_excludes_reload_construction_init_and_end_broadcasts ... ok
+test startup_reload_retains_globals_rng_and_outgoing_end ... ok
+test static_commands_startup_tweens_and_messages_match_complete_compiler ... ok
+test unsupported_startup_screen_request_is_rejected ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.85s
+
+     Running tests/rust_song_diagnostics.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_diagnostics-f845b6bfdb4e6d0d)
+
+running 11 tests
+test authored_flag_reset_reenables_callback_reporting ... ok
+test callback_and_queue_failures_use_independent_report_once_flags ... ok
+test draw_errors_keep_partial_output_and_report_the_compiler_root_once ... ok
+test framebuffer_script_notices_do_not_become_callback_failures ... ok
+test initial_update_errors_keep_partial_state_and_report_once ... ok
+test ordinary_report_flags_and_labels_can_reenter_and_collect ... ok
+test positive_update_errors_keep_each_actor_and_later_frames ... ok
+test queued_and_recurring_failures_preserve_dispatch_frames_and_command_labels ... ok
+test startup_recurring_commands_without_errors_keep_chronological_output ... ok
+test startup_tween_queue_failure_still_rejects_preparation ... ok
+test truthy_report_flags_suppress_errors_without_stopping_callback_writes ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.13s
+
+     Running tests/rust_song_layers.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_layers-7ae586be6a2043ac)
+
+running 10 tests
+test authored_sources_parenting_init_and_foreground_attachment_match_production ... ok
+test background_upper_left_wraps_before_init_and_composes_existing_commands ... ok
+test compiler_debug_keeps_context_policy_lua_upvalues_and_author_replacements ... ok
+test compiler_initial_states_precede_layer_init_and_keep_player_and_screen_boundaries ... ok
+test compiler_initial_states_preserve_authored_raw_render_properties ... ok
+test failed_init_preserves_partial_state_and_all_constructor_owners_retire ... ok
+test invalid_plans_reject_entries_before_any_lua_execution ... ok
+test live_load_errors_and_scalar_returns_keep_prior_side_effects_and_dummy_layers ... ok
+test malformed_initial_render_state_errors_before_init_in_both_modes ... ok
+test source_alias_selects_xero_environment_and_nested_file_directory ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.03s
+
+     Running tests/rust_song_multitap.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_multitap-73747558a05393cf)
+
+running 14 tests
+test complete_plan_rejects_hidden_root_wrapper_column_and_screen_callbacks ... ok
+test descriptor_typed_errors_match_and_challenge_fallback_suppresses_only_fallback_errors ... ok
+test descriptors_preserve_selection_coercion_holes_and_peak_errors ... ok
+test double_two_player_decorations_and_existing_visuals_match ... ok
+test hit_command_capture_rewinds_shared_locals_globals_and_rng ... ok
+test hit_command_failures_remove_temporary_commands_and_preserve_actor_state ... ok
+test loaded_theme_and_truthy_deferred_fields_keep_chronological_replay ... ok
+test malformed_plan_fields_and_optional_rotation_propagate_errors ... ok
+test numbered_factory_curves_and_missing_visuals_match ... ok
+test plan_cache_retains_traversal_until_update_function_invalidates_it ... ok
+test precision_collapsed_beat_edges_preserve_replay_fallback ... ok
+test update_stage_installs_model_clocks_from_compiled_initial_state ... ok
+test update_stage_keeps_chronological_theme_and_authored_callbacks ... ok
+test update_stage_selects_analytic_curves_and_prepares_hits ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.05s
+
+     Running tests/rust_song_observations.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_observations-d67acf2a86f913c3)
+
+running 14 tests
+test accepted_rejected_and_parsed_noteskin_writes_match ... ok
+test chronological_direct_queued_update_and_message_writes_match ... ok
+test chronological_option_setters_and_gc_match ... ok
+test current_steps_observation_uses_authored_metadata_after_notifications ... ok
+test multilayer_screen_and_player_write_indices_match ... ok
+test nested_manager_calls_and_reload_history_match ... ok
+test option_observation_follows_republished_global_owner_identity ... ok
+test original_init_screen_request_remains_discarded ... ok
+test original_nil_message_probe_preserves_error_cause_and_observations ... ok
+test original_non_frame_update_fixtures_remain_rejected ... ok
+test original_stage_queue_is_not_the_published_song_option_owner ... ok
+test queued_update_command_keeps_last_same_frame_immediate_setter ... ok
+test startup_option_setters_and_partial_speed_failures_match ... ok
+test startup_queue_capture_excludes_noteskin_discovery_writes ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.20s
+
+     Running tests/rust_song_update_output.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_update_output-f407fc1bc3d2d7b8)
+
+running 8 tests
+test compact_option_snapshots_preserve_raw_state_and_numeric_conversion_rules ... ok
+test option_capture_construction_validates_both_globals_and_keeps_lookup_order ... ok
+test option_capture_retains_original_tables_across_gc_and_replaced_globals ... ok
+test option_snapshots_recover_from_typed_errors_without_losing_roots_or_state ... ok
+test static_output_keeps_column_transforms_and_owned_spline_coefficients ... ok
+test static_output_preserves_phase_order_and_releases_option_roots_on_failure ... ok
+test static_output_uses_song_clock_origin_rate_and_exact_tail_limits ... ok
+test static_update_output_keeps_public_option_targets_and_approach_speeds ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.93s
+
+     Running tests/rust_song_updates.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_song_updates-d497579e929025fc)
+
+running 10 tests
+test complete_driver_appends_runtime_wrappers_and_remaps_their_tracks ... ok
+test complete_driver_bakes_player_options_and_column_rotation ... ok
+test complete_driver_captures_notefield_wrappers_motion_and_hold_frames ... ok
+test complete_driver_captures_parent_child_callbacks_and_getter_feedback ... ok
+test complete_driver_keeps_field_wrapper_cursor_reads_after_authored_gc ... ok
+test complete_driver_keeps_startup_queues_cancellation_and_recurrence ... ok
+test complete_driver_preserves_message_replay_and_broadcast_provenance ... ok
+test complete_driver_preserves_static_tree_output ... ok
+test complete_driver_reports_frame_metadata_errors ... ok
+test complete_driver_uses_exact_song_timing_origin_rate_and_frame_clocks ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.26s
+
+     Running tests/rust_sound.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_sound-1b682496c6109602)
+
+running 10 tests
+test end_callbacks_precede_owner_stops_without_advancing_queued_work ... ok
+test failed_end_keeps_partial_effects_and_is_not_retried ... ok
+test immediate_sound_order_is_independent_of_tweens_and_keeps_actor_identity ... ok
+test preparation_capture_preserves_beat_message_scope_and_startup_phase ... ok
+test preparation_errors_retain_emitted_events_and_restore_broadcast_scope ... ok
+test retiring_scene_stops_sound_owners_and_retained_handles_keep_metadata ... ok
+test sound_file_getters_reenter_collect_and_preserve_error_recovery ... ok
+test sound_handles_parameters_and_borrowed_methods_match_production ... ok
+test sound_length_cache_uses_file_text_and_retains_failed_prefix_probes ... ok
+test sound_paths_prefix_selection_and_metadata_cache_match_production ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s
+
+     Running tests/rust_sprites.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_sprites-94d79bd29ffb8110)
+
+running 8 tests
+test load_and_settexture_preserve_their_distinct_state_and_return_rules ... ok
+test retained_texture_metadata_survives_owner_retirement_and_releases_cycles ... ok
+test sprite_animation_and_uv_properties_remain_immediate_across_tweens ... ok
+test sprite_geometry_uses_image_frames_and_retained_handle_dimensions ... ok
+test sprite_loading_and_retained_texture_metadata_match_production ... ok
+test texture_capture_errors_keep_prior_mutations_and_recover ... ok
+test texture_capture_preserves_epochs_frame_sheets_states_and_startup_suppression ... ok
+test texture_lookups_survive_reentry_gc_and_recover_after_errors ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.89s
+
+     Running tests/rust_statistics.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_statistics-1d87cbc2a6724a53)
+
+running 10 tests
+test complete_manager_stage_and_player_surfaces_defaults_and_identities ... ok
+test fail_player_publishes_and_queues_in_native_order_only_in_live_mode ... ok
+test frame_errors_preserve_prior_raw_writes_and_next_frame_recovers ... ok
+test frame_feed_retains_original_players_and_distinguishes_recorded_and_meter_life ... ok
+test frozen_native_dance_percent_fixture_matches_rust_statistics ... ok
+test receiver_based_queries_and_fresh_list_factories_do_not_retain_original_player ... 
+thread 'receiver_based_queries_and_fresh_list_factories_do_not_retain_original_player' (3068271) panicked at crates/deadsync-song-lua/tests/rust_statistics.rs:37:29:
+
+        local p=STATSMAN:GetCurStageStats():GetPlayerStageStats(0)
+        weak=setmetatable({p},{__mode='v'})
+        life,combo,taps,record,radar=p.GetCurrentLife,p.GetCurrentCombo,p.GetTapNoteScores,p.GetLifeRecord,p.GetRadarPossible
+        STATSMAN=nil;SONGMAN=nil;p=nil
+        collectgarbage('collect');collectgarbage('collect');assert(weak[1]==nil)
+        local fake={__songlua_life=0.75,__songlua_combo=17,__songlua_tap_scores={W1=8}}
+        assert(life(fake)==0.75 and combo(fake)==17 and taps(fake,'W1')==8)
+        assert(#record({},10,3)==3 and radar():GetValue()==1)
+    
+Error { kind: Runtime, line: 6, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589935300))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test reset_preserves_selected_objects_and_array_identity_across_collecting_callbacks ... ok
+test score_and_limit_argument_conversions_return_values_and_effect_order ... ok
+test statistics_and_saved_methods_survive_gc_then_release_their_owners ... 
+thread 'statistics_and_saved_methods_survive_gc_then_release_their_owners' (3068274) panicked at crates/deadsync-song-lua/tests/rust_statistics.rs:37:29:
+
+        collectgarbage('collect');collectgarbage('collect');assert(weak[1]==nil and weak[2]==nil)
+        assert(weak[3] and weak[4] and weak[5] and saved()==0)
+        saved=nil;collectgarbage('collect');collectgarbage('collect')
+        for i=1,5 do assert(weak[i]==nil,'unreleased statistics owner '..i)end
+    
+Error { kind: Runtime, line: 2, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589936338))), target_thread: None }
+FAILED
+test typed_getters_and_raw_receiver_fields_match_native_coercions ... ok
+
+failures:
+
+failures:
+    receiver_based_queries_and_fresh_list_factories_do_not_retain_original_player
+    statistics_and_saved_methods_survive_gc_then_release_their_owners
+
+test result: FAILED. 8 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.25s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_statistics`
+     Running tests/rust_transitions.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_transitions-ba2e155cb6571196)
+
+running 22 tests
+test cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update ... ok
+test capture_cancellation_uses_the_spin_queue_created_at_first_spin_selection ... ok
+test capture_finish_merges_blocks_and_discards_pending_callbacks_without_advancing_getters ... ok
+test capture_finish_retains_detached_immediate_cache_until_its_scope_changes ... ok
+test capture_hurry_scales_history_and_clock_but_retains_queued_dispatch_starts ... ok
+test capture_parent_finish_and_hurry_visit_children_while_stop_only_changes_self ... ok
+test capture_queue_overflow_finishes_history_before_the_next_tween_or_command ... ok
+test capture_stop_cancels_pending_commands_and_keeps_direct_and_immediate_blocks ... ok
+test capture_zero_duration_getters_and_cancellation_keep_explicit_writes ... ok
+test existing_iterator_and_enum_helpers_keep_indexing_conversion_and_alias_identity ... ok
+test incoming_hide_queue_and_off_survive_collection_and_scene_release ... ok
+test incoming_init_and_on_handlers_use_native_color_helpers_and_current_class_methods ... ok
+test incoming_style_spooky_reload_and_stage_variants_match ... ok
+test live_constructors_keep_real_children_commands_geometry_and_textures ... ok
+test outgoing_off_preserves_white_score_and_routine_updates ... ok
+test preparation_constructors_keep_captured_queue_effects_and_shared_state ... ok
+test preparation_exports_constructor_blocks_with_timing_easing_and_explicit_writes ... ok
+test preparation_queues_preserve_order_shared_state_and_handoff_without_duplicate_callbacks ... ok
+test screen_geometry_uses_current_globals_typed_dimensions_and_owner_binding ... ok
+test transition_owner_hibernation_and_rate_control_child_delta_and_last_callback ... ok
+test transition_start_owns_plain_callback_children_snapshot_through_gc ... ok
+test transition_time_uses_retained_child_and_raw_state_not_owner_queue ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.22s
+
+     Running tests/rust_wrappers.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_wrappers-0493b488e2070ffa)
+
+running 8 tests
+test callback_wrapper_creation_invalidates_next_plan_and_keeps_gc_roots ... ok
+test failed_directory_and_tag_reads_preserve_partial_registration ... ok
+test releasing_scene_retires_nested_wrappers_and_their_callbacks ... ok
+test wrapper_directories_are_inherited_from_current_scope_across_gc ... ok
+test wrapper_membership_indices_and_frame_methods_match_production ... ok
+test wrapper_queues_and_messages_remain_separate_from_child_commands ... ok
+test wrapper_tag_reads_reenter_and_fail_without_losing_owned_actors ... ok
+test wrappers_advance_before_owner_rate_and_obey_ancestor_hibernation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.27s
+
+error: 1 target failed:
+    `-p deadsync-song-lua --test rust_statistics`

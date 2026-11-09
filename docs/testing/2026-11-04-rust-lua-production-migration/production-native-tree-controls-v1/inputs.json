@@ -1,0 +1,18 @@
+[
+  {
+    "name": "native_overlay_preserves_theme_tree_and_capture_probe_input",
+    "lua_sha256": "29df293a950b5d90f622dc30e7ffe88ca7bc71226f495aa1903e38b2e3862347"
+  },
+  {
+    "name": "native_gameplay_decorations_retain_children_while_hibernating",
+    "lua_sha256": "f034a30cd89b42419686dd792f0365989a5b6f6ca8e4ee4860d24382022c7bf9"
+  },
+  {
+    "name": "native_gameplay_transitions_retain_their_loaded_auto_actors",
+    "lua_sha256": "51b31065d6e591abb219917515e6c40de38cc363c3924d83f54c261725594811"
+  },
+  {
+    "name": "native_multivertex_texture_getter_preserves_runtime_and_observation_scope",
+    "lua_sha256": "88e9a60c7fdfe3830c5da7b0b70767d0467df1457b6cdb72c2e55f71744321a5"
+  }
+]

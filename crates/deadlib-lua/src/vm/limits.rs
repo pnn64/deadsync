@@ -9,8 +9,17 @@ fn depth(frames: &[Frame]) -> usize {
 }
 
 impl Vm {
+    pub(super) fn reserve_frames(&mut self, additional: usize) -> Result<(), Error> {
+        let before = self.frames.capacity();
+        self.frames
+            .try_reserve(additional)
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control((self.frames.capacity() - before) * size_of::<Frame>());
+        Ok(())
+    }
     #[inline]
     pub(super) fn check_calls(&mut self) -> Result<(), Error> {
+        self.reserve_frames(1)?;
         // Physical frames include internal continuations, so this upper bound
         // avoids walking ordinary stacks without counting helpers as Lua calls.
         if self.frames.len() + 1 < usize::from(self.call_slots) {

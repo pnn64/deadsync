@@ -1,6 +1,9 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Lua, MultiValue, Table, Value};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::lua_util::{make_color_table, read_color_value};
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::values::{player_index_from_value, read_boolish, read_f32, read_string};
 
 pub const SONG_LUA_ACTIVE_COLOR_INDEX: i64 = 1;
@@ -269,6 +272,7 @@ pub fn color_to_hex(color: [f32; 4]) -> String {
     String::from_utf8(bytes.to_vec()).expect("hexadecimal lookup table contains only ASCII")
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<()> {
     globals.set(
         "GetHexColor",
@@ -949,6 +953,7 @@ end
     Ok(())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn difficulty_index_from_value(value: Value) -> Option<i64> {
     match value {
         Value::Integer(value) => Some(i64::from(value)),
@@ -958,6 +963,7 @@ fn difficulty_index_from_value(value: Value) -> Option<i64> {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn custom_difficulty_color_value(value: Value) -> Option<[f32; 4]> {
     let Value::String(text) = value else {
         return None;
@@ -965,6 +971,7 @@ fn custom_difficulty_color_value(value: Value) -> Option<[f32; 4]> {
     custom_difficulty_color(text.to_str().ok()?.as_ref())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn steps_or_trail_color(value: Value) -> Option<[f32; 4]> {
     if let Some(color) = custom_difficulty_color_value(value.clone()) {
         return Some(color);
@@ -978,6 +985,7 @@ fn steps_or_trail_color(value: Value) -> Option<[f32; 4]> {
     custom_difficulty_color_value(get_difficulty.call::<Value>(table).ok()?)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn stage_color_value(value: Value) -> Option<[f32; 4]> {
     let Value::String(text) = value else {
         return None;
@@ -985,6 +993,7 @@ fn stage_color_value(value: Value) -> Option<[f32; 4]> {
     stage_color(text.to_str().ok()?.as_ref())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn judgment_line_color_value(value: Value) -> Option<[f32; 4]> {
     let Value::String(text) = value else {
         return None;

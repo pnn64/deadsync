@@ -1,0 +1,39 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 8.87s
+     Running tests/rust_player_options.rs (/var/tmp/deadsync-song-rust-production-20261107/debug/deps/rust_player_options-b73771151f4947db)
+
+running 1 test
+test retained_scalar_method_owns_only_its_level_and_discarded_cycles_collect ... 
+thread 'retained_scalar_method_owns_only_its_level_and_discarded_cycles_collect' (3068925) panicked at crates/deadsync-song-lua/tests/rust_player_options.rs:15:29:
+
+        weak=setmetatable({},{__mode='v'})
+        for p=1,2 do for l=1,4 do weak[(p-1)*4+l]=catalog.player_options[p][l] end end
+        saved=catalog.player_options[1][3].Drunk
+        local owner=catalog.player_options[1][3];local old=owner.__songlua_player_option_state
+        weak.old=old;owner.__songlua_player_option_state={drunk=0.75};owner=nil;old=nil
+        catalog=nil;collectgarbage('collect');collectgarbage('collect')
+        for i=1,8 do assert((weak[i]~=nil)==(i==3)) end
+        assert(weak.old==nil and saved()==0.75)
+        saved=nil;collectgarbage('collect');collectgarbage('collect');assert(weak[3]==nil)
+    
+Error { kind: Runtime, line: 8, message: "assertion failed!", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(8589935300))), target_thread: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    retained_scalar_method_owns_only_its_level_and_discarded_cycles_collect
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.54s
+
+error: test failed, to rerun pass `-p deadsync-song-lua --test rust_player_options`

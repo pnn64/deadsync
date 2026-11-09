@@ -8,8 +8,15 @@ use super::{
     bindings::{Bindings, Reference},
 };
 use crate::lexer::Kind;
+use crate::{
+    Error, ErrorKind,
+    memory::fallible::{self, SliceExt, VecExt},
+};
 
-type Check<T = ()> = Result<T, ()>;
+type Check<T = ()> = Result<T, Error>;
+fn too_complex() -> Error {
+    Error::new_static(ErrorKind::Limit, 0, "function or expression too complex")
+}
 const RK: u16 = 256;
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Form {
@@ -87,15 +94,15 @@ fn hash(bytes: &[u8]) -> u64 {
     })
 }
 impl Key {
-    fn constant(self, cx: &Context<'_>) -> crate::bytecode::Constant {
+    fn constant(self, cx: &Context<'_>) -> Result<crate::bytecode::Constant, Error> {
         use crate::bytecode::Constant;
-        match self.kind {
+        Ok(match self.kind {
             0 => Constant::Number(f64::from_bits(self.data)),
             1 => Constant::Nil,
             2 | 3 => Constant::Boolean(self.kind == 3),
-            4 | 5 => Constant::String(self.bytes(cx).into()),
+            4 | 5 => Constant::String(self.bytes(cx).try_boxed()?),
             _ => unreachable!(),
-        }
+        })
     }
     fn scalar(kind: u8, data: u64) -> Self {
         Self {
@@ -119,7 +126,7 @@ impl Key {
     }
 }
 impl Pool {
-    fn insert(&mut self, key: Key, cx: &Context<'_>) -> u32 {
+    fn insert(&mut self, key: Key, cx: &Context<'_>) -> Result<u32, Error> {
         if !self.buckets.is_empty() {
             let mut slot = key.hash as usize & (self.buckets.len() - 1);
             while self.buckets[slot] != 0 {
@@ -132,13 +139,13 @@ impl Pool {
                         old.kind == key.kind && old.data == key.data
                     })
                 {
-                    return index;
+                    return Ok(index);
                 }
                 slot = (slot + 1) & (self.buckets.len() - 1);
             }
         }
         if (self.entries.len() + 1) * 2 >= self.buckets.len() {
-            self.buckets = vec![0; (self.buckets.len() * 2).max(16)];
+            self.buckets = fallible::repeat(0, (self.buckets.len() * 2).max(16))?;
             for (index, entry) in self.entries.iter().enumerate() {
                 let mut slot = entry.hash as usize & (self.buckets.len() - 1);
                 while self.buckets[slot] != 0 {
@@ -153,8 +160,8 @@ impl Pool {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
         self.buckets[slot] = index + 1;
-        self.entries.push(key);
-        index
+        self.entries.try_push(key)?;
+        Ok(index)
     }
     fn heap_bytes(&self) -> usize {
         self.entries.capacity() * size_of::<Key>() + self.buckets.capacity() * size_of::<u32>()
@@ -192,21 +199,19 @@ impl Resources {
         &self,
         start: usize,
         cx: &Context<'_>,
-    ) -> impl Iterator<Item = crate::bytecode::Constant> {
-        self.function.pool.entries[start..]
-            .iter()
-            .map(|k| {
-                let mut constant = k.constant(cx);
-                if let crate::bytecode::Constant::Number(n) = &mut constant
-                    && *n == 0.0
-                    && self.function.zero_sign == Some(true)
-                {
-                    *n = -0.0;
-                }
-                constant
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
+    ) -> Result<Vec<crate::bytecode::Constant>, Error> {
+        let mut out = fallible::with_capacity(self.function.pool.entries.len() - start)?;
+        for key in &self.function.pool.entries[start..] {
+            let mut constant = key.constant(cx)?;
+            if let crate::bytecode::Constant::Number(n) = &mut constant
+                && *n == 0.0
+                && self.function.zero_sign == Some(true)
+            {
+                *n = -0.0;
+            }
+            out.push(constant);
+        }
+        Ok(out)
     }
     pub(super) fn heap_bytes(&self) -> usize {
         self.parents.capacity() * size_of::<Function>()
@@ -222,14 +227,14 @@ impl Resources {
     }
     pub(super) fn check(&mut self, count: usize) -> Check {
         if usize::from(self.function.next) + count >= 250 {
-            Err(())
+            Err(too_complex())
         } else {
             self.function.max = self.function.max.max(self.function.next + count as u16);
             Ok(())
         }
     }
     pub(super) fn default_step(&mut self, cx: &Context<'_>) -> Check {
-        self.function.pool.insert(Key::number(1.0), cx);
+        self.function.pool.insert(Key::number(1.0), cx)?;
         self.reserve(1)?;
         Ok(())
     }
@@ -247,9 +252,10 @@ impl Resources {
     pub(super) fn reset(&mut self) {
         self.function.next = self.function.locals;
     }
-    pub(super) fn enter(&mut self, count: u16) {
-        self.parents.push(std::mem::take(&mut self.function));
+    pub(super) fn enter(&mut self, count: u16) -> Result<(), Error> {
+        self.parents.try_push(std::mem::take(&mut self.function))?;
         self.locals(count);
+        Ok(())
     }
     pub(super) fn leave(&mut self) -> (Option<bool>, u16) {
         let child = std::mem::replace(
@@ -264,15 +270,15 @@ impl Resources {
         ast.root_zero_sign = self.function.zero_sign;
         ast.root_stack = self.function.max.max(2);
     }
-    fn number(&mut self, number: f64, cx: &Context<'_>) -> u32 {
+    fn number(&mut self, number: f64, cx: &Context<'_>) -> Result<u32, Error> {
         if number == 0.0 && self.function.zero_sign.is_none() {
             self.function.zero_sign = Some(number.is_sign_negative());
         }
         self.function.pool.insert(Key::number(number), cx)
     }
-    fn save_operand(&mut self, id: ExprId, operand: u16) {
+    fn save_operand(&mut self, id: ExprId, operand: u16) -> Result<(), Error> {
         if operand < RK {
-            return;
+            return Ok(());
         }
         let key = self.function.pool.entries[usize::from(operand - RK)];
         let constant = match key.kind {
@@ -292,7 +298,8 @@ impl Resources {
             4 => ConstantOperand::String(key.data as ExprId),
             _ => unreachable!("a constant string operand has an AST literal"),
         };
-        self.constants.push((id, constant));
+        self.constants.try_push((id, constant))?;
+        Ok(())
     }
     fn free(&mut self, reg: u16) {
         if reg < RK && reg >= self.function.locals {
@@ -317,18 +324,19 @@ impl Resources {
             other => other,
         };
     }
-    fn load(&mut self, value: &mut Value, reg: u16, cx: &Context<'_>) {
+    fn load(&mut self, value: &mut Value, reg: u16, cx: &Context<'_>) -> Result<(), Error> {
         if value.form == Form::Number {
-            self.number(value.number, cx);
+            self.number(value.number, cx)?;
         }
         value.form = Form::Temp;
         value.info = u32::from(reg);
+        Ok(())
     }
     fn next_value(&mut self, value: &mut Value, cx: &Context<'_>) -> Check {
         self.discharge(value);
         self.free_value(*value);
         let reg = self.reserve(1)?;
-        self.load(value, reg, cx);
+        self.load(value, reg, cx)?;
         value.jumps = 0;
         Ok(())
     }
@@ -347,7 +355,7 @@ impl Resources {
         self.discharge(value);
         if value.form != Form::Temp {
             let reg = self.reserve(1)?;
-            self.load(value, reg, cx);
+            self.load(value, reg, cx)?;
         }
         Ok(())
     }
@@ -372,9 +380,9 @@ impl Resources {
             && self.function.pool.entries.len() <= 255
         {
             value.info = if value.form == Form::Number {
-                self.number(value.number, cx)
+                self.number(value.number, cx)?
             } else {
-                self.function.pool.insert(key, cx)
+                self.function.pool.insert(key, cx)?
             };
             value.form = Form::Constant;
         }
@@ -403,7 +411,12 @@ impl Resources {
         self.values[id] = v;
         Ok(())
     }
-    pub(super) fn resolve(&mut self, id: ExprId, reference: Reference, cx: &Context<'_>) {
+    pub(super) fn resolve(
+        &mut self,
+        id: ExprId,
+        reference: Reference,
+        cx: &Context<'_>,
+    ) -> Result<(), Error> {
         let Expr::Name(name) = &cx.ast.exprs[id].0 else {
             unreachable!()
         };
@@ -418,10 +431,11 @@ impl Resources {
                         kind: 5,
                     },
                     cx,
-                );
+                )?;
                 Value::new(Form::Global, index)
             }
         };
+        Ok(())
     }
     fn condition_value(&mut self, value: &mut Value, truth: bool, cx: &Context<'_>) -> Check {
         self.discharge(value);
@@ -548,13 +562,13 @@ impl Resources {
             let br = self.rk(&mut b, cx)?;
             (self.rk(&mut a, cx)?, br)
         };
-        self.save_operand(left, ar);
-        self.save_operand(right, br);
+        self.save_operand(left, ar)?;
+        self.save_operand(right, br)?;
         if ar < RK
             && let Some(number) = folded_left
         {
             self.constants
-                .push((left, ConstantOperand::Number(number, false)));
+                .try_push((left, ConstantOperand::Number(number, false)))?;
         }
         if ar > br {
             self.free_value(a);
@@ -577,7 +591,7 @@ impl Resources {
                 kind: 5,
             },
             cx,
-        );
+        )?;
         let mut v = self.values[id];
         self.any_value(&mut v, cx)?;
         self.free_value(v);
@@ -674,7 +688,7 @@ impl Resources {
     ) -> Check {
         for &target in targets {
             if let Expr::Index(_, key) = cx.ast.exprs[target].0 {
-                self.save_operand(key, self.values[target].key);
+                self.save_operand(key, self.values[target].key)?;
             }
         }
         if targets.len() == values.len() {
@@ -682,7 +696,7 @@ impl Resources {
             let target = self.values[*targets.last().unwrap()];
             self.discharge(&mut value);
             if target.form == Form::Local {
-                self.load(&mut value, target.info as u16, cx);
+                self.load(&mut value, target.info as u16, cx)?;
             } else {
                 if target.form == Form::Index {
                     self.rk(&mut value, cx)?;
@@ -697,13 +711,13 @@ impl Resources {
     }
     pub(super) fn begin_table(&mut self) -> Check {
         let reg = self.reserve(1)?;
-        self.tables.push(Table {
+        self.tables.try_push(Table {
             reg,
             saved: self.function.next,
             last: None,
             pending: 0,
             prepared: false,
-        });
+        })?;
         Ok(())
     }
     pub(super) fn prepare_field(&mut self, cx: &Context<'_>) -> Check {
@@ -727,7 +741,7 @@ impl Resources {
     pub(super) fn record_key(&mut self, id: ExprId, cx: &Context<'_>) -> Check {
         let mut v = self.values[id];
         let operand = self.rk(&mut v, cx)?;
-        self.save_operand(id, operand);
+        self.save_operand(id, operand)?;
         self.values[id] = v;
         Ok(())
     }
@@ -735,7 +749,7 @@ impl Resources {
         if key.is_some() {
             let mut v = self.values[value];
             let operand = self.rk(&mut v, cx)?;
-            self.save_operand(value, operand);
+            self.save_operand(value, operand)?;
             self.function.next = self.tables.last().unwrap().saved;
         }
         let t = self.tables.last_mut().unwrap();
@@ -760,7 +774,7 @@ impl Resources {
                         kind: 4,
                     },
                     cx,
-                );
+                )?;
                 // An identifier or method may have interned these bytes first.
                 // Retain this literal as an allocation-free compiler source.
                 self.function.pool.entries[k as usize].kind = 4;
@@ -781,7 +795,7 @@ impl Resources {
             Expr::Index(table, key) => {
                 let mut k = self.values[*key];
                 let operand = self.rk(&mut k, cx)?;
-                self.save_operand(*key, operand);
+                self.save_operand(*key, operand)?;
                 let mut v = self.values[*table];
                 v.form = Form::Index;
                 v.key = operand;
@@ -813,7 +827,7 @@ impl Resources {
             }
         };
         debug_assert_eq!(self.values.len(), id);
-        self.values.push(v);
+        self.values.try_push(v)?;
         Ok(())
     }
 }

@@ -1,0 +1,34 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 38.79s
+     Running tests/rust_song_activation.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_activation-2f22624423a5226f)
+
+running 17 tests
+test function_ease_pipeline_column_windows_take_priority_over_overlay_writes ... ok
+test function_ease_pipeline_compiles_all_written_overlays_with_named_and_unnamed_setters ... ok
+test function_ease_pipeline_compiles_player_targets_after_column_endpoints_and_probe ... ok
+test function_ease_pipeline_continues_failed_endpoints_and_deduplicates_unsupported_details ... ok
+test function_ease_pipeline_keeps_empty_and_unknown_probe_selections_on_touched_fallback ... ok
+test function_ease_pipeline_propagates_corrupt_probe_reads_and_accepts_existing_native_functions ... ok
+test function_ease_probe_classifies_all_existing_player_targets_and_repeated_setters ... ok
+test function_ease_probe_follows_native_lifecycle_capture_ownership ... ok
+test function_ease_probe_instruction_abort_still_cleans_up_and_allows_a_later_probe ... ok
+test function_ease_probe_keeps_first_return_through_authored_global_restoration ... ok
+test function_ease_probe_keeps_native_empty_tween_ownership_and_skips_nonwriting_operations ... ok
+test function_ease_probe_preserves_partial_global_restoration_when_a_setter_fails ... ok
+test function_ease_probe_preserves_setter_error_preflight_before_semantic_writes ... ok
+test function_ease_probe_restores_rng_clocks_globals_and_keeps_shared_writes_on_body_errors ... ok
+test function_ease_probe_root_batch_keeps_unknown_tables_until_release_and_rejects_foreign_vms ... ok
+test function_ease_probe_tracks_write_order_separately_from_named_setter_calls ... ok
+test function_ease_probe_uses_original_observation_tables_and_validates_corrupt_sequences ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 176 filtered out; finished in 26.14s
+

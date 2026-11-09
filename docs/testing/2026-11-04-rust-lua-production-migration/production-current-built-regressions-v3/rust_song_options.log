@@ -1,0 +1,16 @@
+
+running 11 tests
+test assignment_parsing_and_level_propagation_match_without_replacing_tables ... ok
+test boolean_setters_use_truthiness_for_previous_state_and_boolean_chain_arguments ... ok
+test current_options_approach_song_targets_in_float_order_and_drive_timing ... ok
+test enum_arguments_are_strict_but_stored_integer_fields_use_native_coercion ... ok
+test float_setters_preserve_previous_results_chaining_and_partial_failure ... ok
+test four_levels_preserve_initial_values_methods_and_current_timing_identity ... ok
+test frozen_song_option_string_control_runs_unchanged_with_real_actor_and_message_bindings ... ok
+test incremental_stage_changes_restart_and_attack_clear_preserve_shared_values ... ok
+test raw_state_reads_ignore_metatables_and_saved_primitives_survive_global_replacement ... ok
+test saved_getters_retain_only_their_option_owner_and_runtime_instances_are_isolated ... ok
+test update_failures_preserve_song_phase_order_and_recover ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.52s
+

@@ -1,0 +1,5 @@
+{
+  "file": "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+  "sha256": "56a633296aa22d7e731c0cbd5edc36f57ef6d08c46227544a9417b6b55712658",
+  "reason": "Preserve original bytes before startup self-queue capture fix; all prior guarded runners terminal and native sessions consumed"
+}

@@ -1,16 +1,37 @@
 use log::debug;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, Table, Value};
 use std::collections::{HashMap, hash_map::RandomState};
 use std::ffi::c_void;
 use std::hash::{BuildHasher, Hash, Hasher};
 
-use crate::{
-    LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayStateDelta, SongLuaSpanMode,
-    SongLuaTimeUnit, actor_pointers_touch_actor, capture_overlay_compile_actor_function_eases,
-    probe_function_ease_target, push_unique_compile_detail, read_easing_name, read_f32,
-    read_player, read_string, truthy,
-};
+use crate::LUA_PLAYERS;
+use crate::SongLuaCompileContext;
+use crate::SongLuaCompileInfo;
+use crate::SongLuaEaseTarget;
+use crate::SongLuaEaseWindow;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::SongLuaOverlayCompileActor;
+use crate::SongLuaOverlayEase;
+use crate::SongLuaOverlayStateDelta;
+use crate::SongLuaSpanMode;
+use crate::SongLuaTimeUnit;
+use crate::actor_pointers_touch_actor;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::capture_overlay_compile_actor_function_eases;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::probe_function_ease_target;
+use crate::push_unique_compile_detail;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_easing_name;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_f32;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_player;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::read_string;
+#[cfg(any(test, feature = "legacy-oracle"))]
+use crate::truthy;
 
 #[derive(Clone)]
 pub struct RuntimeModEaseEntry {
@@ -27,12 +48,14 @@ pub struct RuntimeModEaseEntry {
     pub add: bool,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 #[derive(Clone)]
 pub struct XeroRuntimeOverlayFunctionEntry {
     pub entry: RuntimeModEaseEntry,
     pub function: Function,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub enum XeroRuntimeModEaseEntry {
     Player(RuntimeModEaseEntry),
     Overlay(XeroRuntimeOverlayFunctionEntry),
@@ -52,6 +75,7 @@ pub struct RuntimeOverlayCaptureKey {
     pub opt2: Option<u32>,
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -153,6 +177,7 @@ pub fn read_runtime_mod_eases(
     Ok((eases, overlay_eases))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_xero_runtime_mod_entries(
     ease_tables: Vec<Table>,
     node_tables: Vec<Table>,
@@ -251,6 +276,7 @@ pub fn read_xero_runtime_mod_entries(
     Ok(entries)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -362,6 +388,7 @@ where
     Ok((out, overlay_eases, info))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_xero_runtime_mod_eases_for_overlay_actors<Kind>(
     lua: &Lua,
     ease_tables: Vec<Table>,
@@ -386,6 +413,7 @@ pub fn read_xero_runtime_mod_eases_for_overlay_actors<Kind>(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn compile_xero_overlay_function_ease<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
@@ -448,6 +476,7 @@ fn compile_xero_overlay_function_ease<Kind>(
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn xero_node_touches_overlay<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     probe_actor_ptrs: &[usize],
@@ -459,6 +488,7 @@ fn xero_node_touches_overlay<Kind>(
     )
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn read_xero_node_functions(tables: Vec<Table>) -> Result<HashMap<String, Function>, String> {
     let mut out = HashMap::new();
     for table in tables {
@@ -487,6 +517,7 @@ fn read_xero_node_functions(tables: Vec<Table>) -> Result<HashMap<String, Functi
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn read_runtime_mod_ease_entry(
     entry: Table,
     easing_names: &HashMap<*const c_void, String>,
@@ -754,6 +785,7 @@ pub fn runtime_mod_end_value(from: f32, entry: &RuntimeModEaseEntry) -> f32 {
     if entry.add { from + entry.to } else { entry.to }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn runtime_overlay_capture_key(
     entry: &RuntimeModEaseEntry,
     function: &Function,

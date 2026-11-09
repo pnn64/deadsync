@@ -1,0 +1,43 @@
+warning: function `set_windows_gamepad_backend` is never used
+   --> crates/deadsync-config/src/app_update.rs:531:8
+    |
+531 | ...fn set_w...ckend(cf...
+    |       ^^^^^...^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `deadsync-config` (lib) generated 1 warning
+   Compiling deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
+    Finished `test` profile [unoptimized] target(s) in 9.30s
+     Running tests/rust_noteskin.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_noteskin-831d455166fe6693)
+
+running 9 tests
+test delayed_template_commands_survive_collection_and_run_through_scene_teardown ... ok
+test discovery_snapshots_local_skins_and_returns_fresh_resolver_lists ... ok
+test exact_file_errors_restore_context_and_preserve_tagging_metamethods ... ok
+test image_and_missing_templates_support_methods_and_independent_concatenation ... ok
+test metric_commands_use_original_compiler_and_current_global_environment ... ok
+test metrics_surface_defaults_conversion_and_receiver_rules_match_production ... ok
+test nested_lua_templates_keep_skin_button_and_fallback_after_gc_and_global_replacement ... ok
+test retained_lookup_does_not_retain_manager_and_actual_player_options_uses_it ... ok
+test var_game_command_preserves_dynamic_queries_errors_and_fresh_identity ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests/rust_song_options.rs (/var/tmp/deadsync-rust-adapters-target/debug/deps/rust_song_options-c05862b95371baf5)
+
+running 11 tests
+test assignment_parsing_and_level_propagation_match_without_replacing_tables ... ok
+test boolean_setters_use_truthiness_for_previous_state_and_boolean_chain_arguments ... ok
+test current_options_approach_song_targets_in_float_order_and_drive_timing ... ok
+test enum_arguments_are_strict_but_stored_integer_fields_use_native_coercion ... ok
+test float_setters_preserve_previous_results_chaining_and_partial_failure ... ok
+test four_levels_preserve_initial_values_methods_and_current_timing_identity ... ok
+test frozen_song_option_string_control_runs_unchanged_with_real_actor_and_message_bindings ... ok
+test incremental_stage_changes_restart_and_attack_clear_preserve_shared_values ... ok
+test raw_state_reads_ignore_metatables_and_saved_primitives_survive_global_replacement ... ok
+test saved_getters_retain_only_their_option_owner_and_runtime_instances_are_isolated ... ok
+test update_failures_preserve_song_phase_order_and_recover ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.06s
+

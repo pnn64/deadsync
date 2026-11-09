@@ -1,0 +1,36 @@
+[
+  {
+    "original": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\rust_song_update_output-63e8f1b3acf29b19.exe",
+    "binary": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-control-production-affected-neutral-controls-v2-0.exe",
+    "original_sha256": "d611cf96f1cccbc5fe9e1c5b90a504ea64866e1d629493a5da01315c92ba3929",
+    "binary_sha256": "d611cf96f1cccbc5fe9e1c5b90a504ea64866e1d629493a5da01315c92ba3929",
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-control-production-affected-neutral-controls-v2-0.exe",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 9.445066899992526,
+    "tests_passed": 8,
+    "tests_failed": 0,
+    "sources_unchanged": true,
+    "elevation_used": false
+  },
+  {
+    "original": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\rust_song_updates-a42df165a1dd4456.exe",
+    "binary": "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-control-production-affected-neutral-controls-v2-1.exe",
+    "original_sha256": "d3d51a7d4202b5cda3382def317510a2d26145bf1399b665bb1a99f322b5fdb2",
+    "binary_sha256": "d3d51a7d4202b5cda3382def317510a2d26145bf1399b665bb1a99f322b5fdb2",
+    "command": [
+      "C:\\GitHub\\deadsync\\target\\rust-adapters\\debug\\deps\\migration-control-production-affected-neutral-controls-v2-1.exe",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 11.284342299913988,
+    "tests_passed": 10,
+    "tests_failed": 0,
+    "sources_unchanged": true,
+    "elevation_used": false
+  }
+]

@@ -1,9 +1,13 @@
+#[cfg(any(test, feature = "legacy-oracle"))]
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::lua_util::method_arg;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::runtime::note_song_lua_side_effect;
+#[cfg(any(test, feature = "legacy-oracle"))]
 use crate::values::{read_boolish, read_string};
 
 const SONG_LUA_LOADER_ENVS_KEY: &str = "__songlua_loader_envs";
@@ -89,6 +93,7 @@ pub fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
     }
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
     resolve_script_path_with(lua, song_dir, path, false)
 }
@@ -115,6 +120,7 @@ pub(crate) fn collapse_actor_path(path: &Path) -> PathBuf {
     output
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn resolve_script_path_with(
     lua: &Lua,
     song_dir: &Path,
@@ -153,6 +159,7 @@ fn resolve_script_path_with(
     )))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
     let mut resolved = if let Ok(resolved) = resolve_script_path_with(lua, song_dir, path, true) {
         if resolved.is_dir() {
@@ -189,6 +196,7 @@ pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::
     )))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
     for candidate in [dir.join("default.lua"), dir.join("default.xml")] {
         if candidate.is_file() {
@@ -202,6 +210,7 @@ fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua
     )))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn resolve_load_actor_autowildcard(
     lua: &Lua,
     song_dir: &Path,
@@ -265,6 +274,7 @@ fn resolve_load_actor_autowildcard(
     )))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn load_actor_search_dirs(lua: &Lua, song_dir: &Path) -> mlua::Result<Vec<PathBuf>> {
     let globals = lua.globals();
     let mut out = Vec::with_capacity(2);
@@ -283,6 +293,7 @@ fn load_actor_search_dirs(lua: &Lua, song_dir: &Path) -> mlua::Result<Vec<PathBu
     Ok(out)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
     let globals = lua.globals();
     let envs = match globals.get::<Option<Table>>(SONG_LUA_LOADER_ENVS_KEY)? {
@@ -296,6 +307,7 @@ pub fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
     envs.set(loader_env_key(lua, function)?, env.clone())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
     let Some(envs) = lua
         .globals()
@@ -309,6 +321,7 @@ pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
     loader_env.set("__songlua_env_target", env.clone())
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn loader_env_key(lua: &Lua, function: &Function) -> mlua::Result<mlua::LuaString> {
     use std::io::Write;
     // Pointer text keeps the existing registry keys, including the 0x prefix.
@@ -320,6 +333,7 @@ fn loader_env_key(lua: &Lua, function: &Function) -> mlua::Result<mlua::LuaStrin
     lua.create_string(&buffer[..len])
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn call_with_script_dir<T>(
     lua: &Lua,
     script_dir: &Path,
@@ -336,6 +350,7 @@ pub fn call_with_script_dir<T>(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn call_with_script_path<T>(
     lua: &Lua,
     script_path: &str,
@@ -349,6 +364,7 @@ pub fn call_with_script_path<T>(
     result
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn call_with_chunk_env<T>(
     lua: &Lua,
     chunk_env: &Table,
@@ -399,6 +415,7 @@ pub fn fileman_dir_listing(
     Ok(entries)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let fileman = lua.create_table()?;
     let song_dir = song_dir.to_path_buf();
@@ -465,6 +482,7 @@ pub fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     Ok(fileman)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn fileman_dir_listing_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let Some(raw_path) = method_arg(args, 0).cloned().and_then(read_string) else {
@@ -487,6 +505,7 @@ fn fileman_dir_listing_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> m
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let read_song_dir = song_dir.to_path_buf();
@@ -546,11 +565,13 @@ pub fn find_compat_files(song_dir: &Path, dir: &str, extension: &str) -> io::Res
     Ok(files)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_find_files_function(lua: &Lua, song_dir: &Path) -> mlua::Result<Function> {
     let song_dir = song_dir.to_path_buf();
     lua.create_function(move |lua, args: MultiValue| find_compat_files_table(lua, &song_dir, &args))
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 fn find_compat_files_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
     let dir = args
         .front()
@@ -570,6 +591,7 @@ fn find_compat_files_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlu
     Ok(table)
 }
 
+#[cfg(any(test, feature = "legacy-oracle"))]
 pub fn create_actor_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let resolve_song_dir = song_dir.to_path_buf();

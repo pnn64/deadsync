@@ -1,0 +1,47 @@
+{
+  "goal_complete": false,
+  "source_count": 1221,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/action_capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "native_change": "no native production or oracle implementation changed; test-support delegates to existing public native helper",
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_action.rs",
+    "crates/deadsync-song-lua/src/rust_engine/song_action.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/sound_manager.rs"
+  ],
+  "other_source_changes_preserved": [],
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-function-action-regressions-v1-song-linux-debug": [],
+    "song-function-action-lint-v1-song-linux-debug": []
+  },
+  "earlier_109_activation_tests_unchanged": true,
+  "new_cases": 8,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-function-action-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 409.12762353615835,
+      "log_sha256": "813078174c0ac185bf1bc7b3a5468758114c3dff2a9803028272629d00524315",
+      "tests_passed": 350,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    },
+    "song-function-action-lint-v1-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 34.5905553009361,
+      "log_sha256": "1478af1927dc9a12e65016b830c374199056efd88e7d997c940de2a1adab7d5d",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": true
+    }
+  }
+}

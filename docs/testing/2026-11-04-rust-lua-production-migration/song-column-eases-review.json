@@ -1,0 +1,81 @@
+{
+  "goal_complete": false,
+  "source_count": 1236,
+  "adapter_changed": [
+    "crates/deadsync-song-lua/src/rust_engine.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_action.rs",
+    "crates/deadsync-song-lua/tests/rust_song_activation.rs"
+  ],
+  "added": [
+    "crates/deadsync-song-lua/src/rust_engine/song_column_eases.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_columns.rs"
+  ],
+  "native_column_helpers_and_test_support_unchanged": true,
+  "other_source_changes_preserved": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/deadsync-shell/Cargo.toml",
+    "crates/deadsync-shell/src/app/mod.rs",
+    "crates/deadsync-shell/src/app/reflex_runtime.rs",
+    "crates/deadsync-shell/src/app/smx_runtime.rs",
+    "crates/deadsync-shell/src/input.rs",
+    "crates/deadsync-shell/src/input_backend.rs",
+    "crates/deadsync-shell/src/pad_config.rs",
+    "crates/deadsync-shell/src/select_music.rs",
+    "crates/deadsync-theme-simply-love/src/screens/pad_config.rs",
+    "crates/deadsync-theme-simply-love/src/screens/pad_config/host.rs",
+    "crates/deadsync-theme-simply-love/src/screens/pad_config/paging.rs"
+  ],
+  "concurrent_workspace_manifests_match_both_final_checks": true,
+  "watched_dependency_sources_match_checks": true,
+  "out_of_dependency_graph_changes_since_checks": {
+    "song-column-eases-regressions-v1-song-linux-debug": [
+      "crates/deadsync-shell/src/app/mod.rs",
+      "crates/deadsync-shell/src/app/reflex_runtime.rs",
+      "crates/deadsync-shell/src/app/smx_runtime.rs",
+      "crates/deadsync-shell/src/input.rs",
+      "crates/deadsync-shell/src/pad_config.rs",
+      "crates/deadsync-shell/src/select_music.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config/host.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config/paging.rs"
+    ],
+    "song-column-eases-lint-v2-song-linux-debug": [
+      "crates/deadsync-shell/src/app/mod.rs",
+      "crates/deadsync-shell/src/app/reflex_runtime.rs",
+      "crates/deadsync-shell/src/app/smx_runtime.rs",
+      "crates/deadsync-shell/src/input.rs",
+      "crates/deadsync-shell/src/input_backend.rs",
+      "crates/deadsync-shell/src/pad_config.rs",
+      "crates/deadsync-shell/src/select_music.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config/host.rs",
+      "crates/deadsync-theme-simply-love/src/screens/pad_config/paging.rs"
+    ]
+  },
+  "earlier_164_activation_tests_unchanged": true,
+  "new_cases": 12,
+  "adapter_formatting_passed": true,
+  "song_clippy_baseline_unchanged": true,
+  "production_cutover": false,
+  "final_application_validation": false,
+  "results": {
+    "song-column-eases-regressions-v1-song-linux-debug": {
+      "exit_code": 0,
+      "seconds": 656.3119201189838,
+      "log_sha256": "4570299bd5f18ee0f33085ea49469b5f9695f6f0984bc96904c7cff7b6cbb4a6",
+      "tests_passed": 409,
+      "tests_failed": 0,
+      "sources_unchanged": false
+    },
+    "song-column-eases-lint-v2-song-linux-debug": {
+      "exit_code": 101,
+      "seconds": 43.270726040005684,
+      "log_sha256": "e94fce9f0744d4eb6cc5cd745f9e2a95ffa834d24b39213a31b7450ab5644b6a",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "sources_unchanged": false
+    }
+  }
+}

@@ -1,0 +1,16 @@
+
+running 11 tests
+test complete_declared_surface_and_column_methods_match_native_dispatch ... ok
+test deleting_eager_methods_uses_the_native_generic_fallback_and_original_owner ... ok
+test derived_reverse_attack_and_window_queries_follow_current_state_and_style ... ok
+test eight_initial_objects_match_profiles_and_keep_level_identity ... ok
+test explicit_native_diagnostics_preserve_messages_and_partial_writes ... ok
+test lazy_methods_observe_replaced_state_and_speeds_through_reentrant_metamethods ... ok
+test noteskin_callbacks_keep_receiver_rules_gc_ownership_and_partial_error_writes ... ok
+test retained_scalar_method_owns_only_its_level_and_discarded_cycles_collect ... ok
+test scalar_aliases_enum_conversion_and_fixed_tuple_methods_preserve_partial_writes ... ok
+test speed_fields_modes_and_approaches_keep_native_write_and_return_order ... ok
+test string_parser_preserves_grammar_field_sharing_skin_precedence_and_resets ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.84s
+

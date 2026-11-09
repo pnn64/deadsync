@@ -1,9 +1,17 @@
-use deadsync_song_lua::{create_range_table, json_to_lua_value, song_lua_runtime_number};
-use mlua::{Lua, MultiValue, Value};
+use deadlib_lua::{Value, compile};
+use deadsync_song_lua::{SongLuaCompileContext, rust_engine::RustSongRuntime};
+
+fn runtime() -> RustSongRuntime {
+    RustSongRuntime::new(&SongLuaCompileContext::new(
+        ".",
+        "integer boundary fixtures",
+    ))
+    .unwrap()
+}
 
 #[test]
 fn json_integers_preserve_values_beyond_i32() {
-    let lua = Lua::new();
+    let mut runtime = runtime();
     for value in [
         i64::MIN,
         i64::from(i32::MIN) - 1,
@@ -13,34 +21,51 @@ fn json_integers_preserve_values_beyond_i32() {
         i64::from(i32::MAX) + 1,
         i64::MAX,
     ] {
-        let actual = json_to_lua_value(&lua, serde_json::json!(value)).unwrap();
-        assert_eq!(lua.coerce_number(actual).unwrap(), Some(value as f64));
+        let vm = runtime.vm_mut();
+        let decode = vm.get_global(b"JsonDecode").unwrap();
+        let json = vm.intern(serde_json::json!(value).to_string().as_bytes());
+        assert_eq!(
+            vm.call(decode, &[json]).unwrap(),
+            &[Value::Number(value as f64)]
+        );
     }
 }
 
 #[test]
 fn runtime_numbers_preserve_values_beyond_native_integer_range() {
-    let lua = Lua::new();
+    let mut runtime = runtime();
+    let read = compile(b"local r=__songlua_compile_song_runtime;return r.__songlua_song_beat,r.__songlua_music_seconds").unwrap();
     for value in boundary_values() {
-        let actual = song_lua_runtime_number(value).unwrap();
-        assert_eq!(lua.coerce_number(actual).unwrap(), Some(f64::from(value)));
+        runtime.set_values(value, value).unwrap();
+        assert_eq!(
+            runtime.vm_mut().execute(&read).unwrap(),
+            &[
+                Value::Number(f64::from(value)),
+                Value::Number(f64::from(value))
+            ]
+        );
     }
 }
 
 #[test]
 fn range_numbers_preserve_values_beyond_native_integer_range() {
-    let lua = Lua::new();
+    let mut runtime = runtime();
     for value in boundary_values() {
-        let args = MultiValue::from_vec(vec![
+        let args = [
             Value::Number(f64::from(value)),
             Value::Number(f64::from(value)),
             Value::Number(f64::from(value.abs().max(1.0))),
-        ]);
-        let Value::Table(table) = create_range_table(&lua, &args).unwrap() else {
+        ];
+        let vm = runtime.vm_mut();
+        let range = vm.get_global(b"range").unwrap();
+        let [Value::Table(table)] = *vm.call(range, &args).unwrap() else {
             panic!("range should return a table");
         };
-        assert_eq!(table.raw_len(), 1);
-        assert_eq!(table.raw_get::<f64>(1).unwrap(), f64::from(value));
+        assert_eq!(vm.raw_table_len(table).unwrap(), 1);
+        assert_eq!(
+            vm.raw_table_get(table, Value::Number(1.)).unwrap(),
+            Value::Number(f64::from(value))
+        );
     }
 }
 

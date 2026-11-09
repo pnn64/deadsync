@@ -1,0 +1,89 @@
+{
+  "verified_stage": "production-actor-copy-phases-v3-song-windows-debug",
+  "passed": 137,
+  "failed": 0,
+  "counts": {
+    "rust_actor_copy": 9,
+    "rust_baked_program": 27,
+    "rust_baked_program_tables": 4,
+    "rust_compat_globals": 16,
+    "rust_definitions": 12,
+    "rust_draw": 12,
+    "rust_live_layers": 16,
+    "rust_preparation": 21,
+    "rust_render": 9,
+    "rust_scene_retirement": 11
+  },
+  "log_sha256": "1c0996272267a132aad573b27af23e33f886e07b6e15b3e46571b7cf24b16896",
+  "source_unchanged": true,
+  "coverage": [
+    "Nine new copy controls cover preparation, before-promotion and live copy, exact frozen live exports, untouched actor shape, explicit default base values, immediate flag presence, sampled getter writes, independent materialization, retained callbacks and GC.",
+    "Existing constructor, live-layer reset, baking, preparation, drawing, retirement, render and host helper tests remain unchanged and pass."
+  ],
+  "changed_files": [
+    "crates/deadsync-song-lua/Cargo.toml",
+    "crates/deadsync-song-lua/src/base_transform.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/host_compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_layers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/offline.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/render.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_getters.rs",
+    "crates/deadsync-song-lua/tests/rust_actor_copy.rs"
+  ],
+  "interpreter_unchanged": true,
+  "format_command": [
+    "rustfmt",
+    "--edition",
+    "2024",
+    "--check",
+    "--config",
+    "skip_children=true",
+    "crates/deadsync-song-lua/src/base_transform.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/function_capture.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/host_compat.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/live_layers.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/offline.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/perframes.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/render.rs",
+    "crates/deadsync-song-lua/src/rust_engine/actors/song_getters.rs",
+    "crates/deadsync-song-lua/tests/rust_actor_copy.rs"
+  ],
+  "format_exit_code": 0,
+  "normal_routing": {
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--test",
+      "production_routing",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "seconds": 147.7923785999883,
+    "log_sha256": "07e293858e6796f260f264408f57a9b93c5c2552c7fa0b7fe844f762f23a03ae",
+    "sources_unchanged": true,
+    "tests_passed": 5,
+    "tests_failed": 0,
+    "check_only": false
+  },
+  "completion": "This verifies the copy repair and adjacent coverage; full original migration completion remains unproven.",
+  "normal_and_oracle_sources_identical": true,
+  "subsequent_tooling_change": {
+    "files": [
+      "crates/deadsync-song-lua/examples/actor_input.rs",
+      "crates/deadsync-song-lua/examples/timed_input.rs"
+    ],
+    "verification": "production-actor-copy-examples-v1-windows-debug",
+    "description": "Use explicit Rust VM live/reserved/observed peak estimates, with exclusions stated; do not relabel them as legacy Lua allocator counts."
+  }
+}

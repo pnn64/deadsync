@@ -1,0 +1,414 @@
+--- crates/deadsync-song-lua/src/rust_engine/actors.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors.rs
+@@ -234,7 +234,8 @@
+     clock: Arc<super::Clock>,
+     playback: bool,
+     replay_frame: Option<(u64, f64)>,
+-    replay_dispatch: Option<f64>,
++    replay_dispatch: Option<song_immediate::Dispatch>,
++    replay_advancing: bool,
+     constructing_capture: bool,
+     defer_registration: bool,
+     preparing: bool,
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_replay.rs
+@@ -15,6 +15,7 @@
+ #[derive(Clone)]
+ struct Setup {
+     store: Shared,
++    scene: u64,
+     overlays: Vec<(TableId, SongLuaOverlayState)>,
+     startup: HashMap<TableId, SongStartupState>,
+     spin: HashMap<TableId, [f32; 3]>,
+@@ -85,6 +86,7 @@
+             &captures,
+             Setup {
+                 store: self.store.clone(),
++                scene: screen.id,
+                 overlays: overlays.to_vec(),
+                 startup: startup.clone(),
+                 spin,
+@@ -152,6 +154,11 @@
+         restore_getters(call, &setup.store, id, state)?;
+     }
+     let mut store = setup.store.lock().unwrap();
++    // Native chronological queues are installed only for actors with startup
++    // steps. Other actors retain command capture until frame-driven queueing.
++    for actor in store.actors.values_mut().filter(|a| a.scene == setup.scene) {
++        actor.capture = Some(capture::Capture::default());
++    }
+     for (&id, startup) in setup
+         .startup
+         .iter()
+@@ -167,6 +174,7 @@
+             );
+         let mut to = current;
+         let actor = store.actors.get_mut(&id).unwrap();
++        actor.capture = None;
+         let getters = *actor.destination();
+         let replay = actor.replay.get_or_insert(State {
+             getters: Some(getters),
+@@ -543,7 +551,9 @@
+             store.replay_frame = Some((screen.id, seconds));
+             store.next
+         };
++        let previous = std::mem::replace(&mut self.store.lock().unwrap().replay_advancing, true);
+         let result = self.advance(vm, screen, delta);
++        self.store.lock().unwrap().replay_advancing = previous;
+         song_activation::adopt_created(&self.store, screen.id, first);
+         result
+     }
+--- crates/deadsync-song-lua/src/rust_engine/actors/capture.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/capture.rs
+@@ -73,6 +73,10 @@
+             steps: self.steps.iter().copied().collect(),
+             queued_commands: self.pending.iter().cloned().collect(),
+         }
++    }
++
++    pub(super) fn cursor(&self) -> f32 {
++        self.cursor
+     }
+ 
+     pub(super) fn pending_steps(&self) -> usize {
+@@ -474,12 +478,28 @@
+     song_immediate::delta(call, store, id, &delta, immediate);
+ }
+ 
++// Once a fallback actor queues during an update, that queue belongs to frame
++// advancement. Captured commands outside the update instead drain synchronously.
++pub(super) fn enter_replay_queue(store: &Shared, actor: TableId) {
++    let mut guard = store.lock().unwrap();
++    if guard.replay_frame.is_some() && guard.replay_advancing {
++        let actor = guard.actors.get_mut(&actor).unwrap();
++        if actor.capture.take().is_some() {
++            // Captured steps have already emitted their timed publications.
++            // The first update-created queue starts its own clock; those old
++            // durations must not postpone commands queued by this callback.
++            actor.queue.clear();
++        }
++    }
++}
++
+ pub(super) fn queue(
+     call: &mut HostCall<'_>,
+     store: &Shared,
+     actor: TableId,
+     name: Vec<u8>,
+ ) -> Result<bool, Error> {
++    enter_replay_queue(store, actor);
+     let mut command_field = name.clone();
+     command_field.extend_from_slice(b"Command");
+     let overflow = {
+@@ -516,6 +536,9 @@
+         capture.pending.push_back((name, capture.cursor));
+         startup || actor.active_commands.is_empty()
+     };
++    if store.lock().unwrap().replay_frame.is_some() {
++        song_messages::timing(call, actor, 0., None)?;
++    }
+     if drain {
+         drain_commands(call, store, actor)?;
+     }
+@@ -568,7 +591,18 @@
+             next
+         };
+         let (name, start) = next;
+-        let prior = store.lock().unwrap().capture_scope.replace(start);
++        let (prior, previous_dispatch) = {
++            let mut guard = store.lock().unwrap();
++            let prior = guard.capture_scope.replace(start);
++            let dispatch = guard.replay_dispatch;
++            if guard.replay_frame.is_some() {
++                guard.replay_dispatch = Some(song_immediate::Dispatch {
++                    seconds: None,
++                    delay: start,
++                });
++            }
++            (prior, dispatch)
++        };
+         // The registry and this lexical root retain the dispatch target even
+         // when its command edits the scene and forces a collection.
+         let result = call.with_roots(&[Value::Table(actor)], |call| {
+@@ -599,7 +633,11 @@
+                 result
+             }
+         });
+-        store.lock().unwrap().capture_scope = prior;
++        {
++            let mut guard = store.lock().unwrap();
++            guard.capture_scope = prior;
++            guard.replay_dispatch = previous_dispatch;
++        }
+         result?;
+     }
+ }
+--- crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/lifecycle.rs
+@@ -199,6 +199,7 @@
+     easing: &str,
+     command: Option<Vec<u8>>,
+ ) -> Result<(), Error> {
++    capture::enter_replay_queue(store, id);
+     // BeginTweening finishes the actor subtree before adding its 52nd state.
+     let count = {
+         let guard = store.lock().unwrap();
+@@ -558,7 +559,12 @@
+             song_messages::reset_timing(call, store, actor)?;
+             let previous = {
+                 let mut guard = store.lock().unwrap();
+-                let time = guard.replay_frame.map(|(_, time)| time);
++                let time = guard
++                    .replay_frame
++                    .map(|(_, time)| song_immediate::Dispatch {
++                        seconds: Some(time),
++                        delay: 0.,
++                    });
+                 std::mem::replace(&mut guard.replay_dispatch, time)
+             };
+             let result = if let Some(message) = command.strip_prefix(b"!") {
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_immediate.rs
+@@ -39,6 +39,12 @@
+     Target::AftCreated,
+ ];
+ 
++#[derive(Clone, Copy)]
++pub(super) struct Dispatch {
++    pub(super) seconds: Option<f64>,
++    pub(super) delay: f32,
++}
++
+ #[derive(Default)]
+ pub(super) struct Capture {
+     touched: Vec<usize>,
+@@ -64,15 +70,21 @@
+         })
+     }
+ 
+-    fn record(&mut self, index: usize, target: Target, value: UpdateValue, dispatch: Option<f64>) {
++    fn record(
++        &mut self,
++        index: usize,
++        target: Target,
++        value: UpdateValue,
++        dispatch: Option<Dispatch>,
++    ) {
+         let frame = self.touch(index);
+         replace(&mut frame.final_values, target, value.clone());
+-        if let Some(seconds) = dispatch {
+-            if let Some(previous) = frame
+-                .scheduled
+-                .iter_mut()
+-                .find(|update| update.target == target && update.dispatch_seconds == Some(seconds))
+-            {
++        if let Some(dispatch) = dispatch {
++            if let Some(previous) = frame.scheduled.iter_mut().find(|update| {
++                update.target == target
++                    && update.dispatch_seconds == dispatch.seconds
++                    && update.delay_seconds == dispatch.delay
++            }) {
+                 previous.value = value;
+             } else {
+                 let initial_value = frame
+@@ -82,10 +94,10 @@
+                     .map(|(_, value)| value.clone());
+                 frame.scheduled.push(SongReplayScheduledUpdate {
+                     progress: None,
+-                    dispatch_seconds: Some(seconds),
++                    dispatch_seconds: dispatch.seconds,
+                     frame_advance: 0.,
+                     initial_value,
+-                    delay_seconds: 0.,
++                    delay_seconds: dispatch.delay,
+                     duration_seconds: 0.,
+                     easing: None,
+                     opt1: None,
+@@ -190,7 +202,7 @@
+                 beat,
+                 target,
+                 value: value.clone(),
+-                delay_seconds: 0.,
++                delay_seconds: dispatch.map_or(0., |scope| scope.delay),
+                 duration_seconds: 0.,
+                 easing: None,
+                 opt1: None,
+--- crates/deadsync-song-lua/src/rust_engine/actors/song_messages.rs before
++++ crates/deadsync-song-lua/src/rust_engine/actors/song_messages.rs
+@@ -242,7 +242,10 @@
+     let Some(actor) = guard.actors.get(&id) else {
+         return;
+     };
+-    let delay = lifecycle::message_delay(actor, duration);
++    let delay = actor.capture.as_ref().map_or_else(
++        || lifecycle::message_delay(actor, duration),
++        |capture| capture.cursor().max(0.),
++    );
+     if guard.retired_scenes.contains_key(&context.0) {
+         return;
+     }
+--- crates/deadsync-song-lua/tests/rust_song_activation.rs before
++++ crates/deadsync-song-lua/tests/rust_song_activation.rs
+@@ -2284,9 +2284,9 @@
+             );
+         }
+     }
+-    // Resource setters dispatched from a queue still publish at the dispatch
+-    // time, independently of the receiver's tween destination.
+-    pair.script("saved.sprite.ApplyCommand=function(a)a:setstate(3):backfacecull(true);saved.aft:EnablePreserveTexture(true)end;saved.sprite:queuecommand('Apply')");
++    // Without startup queue steps, queuecommand drains capture immediately.
++    // Its publications retain the captured start, with no frame timestamp.
++    pair.script("saved.applied=0;saved.sprite.ApplyCommand=function(a)saved.applied=saved.applied+1;a:setstate(3):backfacecull(true);saved.aft:EnablePreserveTexture(true)end;saved.sprite:queuecommand('Apply');assert(saved.applied==1)");
+     test_support::legacy_advance_song_replay(&pair.native, &native, 2., 2.).unwrap();
+     pair.rust.advance_song_replay(pair.scene, 2., 2.).unwrap();
+     let frames = compare_immediate_updates(&mut pair);
+@@ -2294,7 +2294,105 @@
+         frames
+             .iter()
+             .flat_map(|f| &f.scheduled)
+-            .all(|u| u.dispatch_seconds == Some(2.))
++            .all(|u| u.dispatch_seconds.is_none() && u.delay_seconds == 1.)
+     );
+     assert_eq!(frames.iter().map(|f| f.scheduled.len()).sum::<usize>(), 3);
+-}
++    pair.script("assert(saved.applied==1)");
++}
++
++#[test]
++fn captured_queue_dispatch_keeps_nested_starts_partial_errors_and_scope_restoration() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        return Def.ActorFrame{
++            InitCommand=function(self)saved.parent=self end,
++            OuterCommand=function(self)
++                log('outer');self:basealpha(0.25):sleep(0.5):queuecommand('Inner')
++                saved.other:basealpha(0.5);collectgarbage();log('outer end')
++            end,
++            InnerCommand=function(self)
++                log('inner');saved.other:basealpha(0.75);error('after publication')
++            end,
++            Def.Quad{InitCommand=function(self)saved.other=self end},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "captured queue scopes",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["parent", "other"]);
++    pair.script("saved.parent:sleep(1);assert(not pcall(function()saved.parent:queuecommand('Outer')end));saved.other:visible(false);log('recovered')");
++    assert_eq!(pair.compare(), "outer|outer end|inner|recovered");
++    let frames = compare_immediate_updates(&mut pair);
++    assert!(
++        frames
++            .iter()
++            .flat_map(|f| &f.scheduled)
++            .all(|u| u.dispatch_seconds.is_none())
++    );
++    assert!(
++        frames
++            .iter()
++            .flat_map(|f| &f.scheduled)
++            .any(|u| u.delay_seconds == 1.5)
++    );
++    pair.script("saved.parent:queuecommand('Missing');saved.other:basealpha(1);collectgarbage()");
++    compare_immediate_updates(&mut pair);
++}
++
++#[test]
++fn capture_queues_enter_frame_scheduling_in_actual_actor_order() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        dir.path(),
++        "default.lua",
++        r#"
++        local function fire(self)
++            log(self:GetName());self:basealpha(0.5);collectgarbage()
++        end
++        return Def.ActorFrame{
++            Def.Quad{Name='early',InitCommand=function(self)saved.early=self end,FireCommand=fire},
++            Def.ActorFrame{Name='driver',InitCommand=function(self)saved.driver=self end,
++                FireCommand=fire,
++                OnCommand=function(self)self:SetUpdateFunction(function(self)
++                    if not saved.armed or saved.started then return end
++                    saved.started=true;log('queue begin')
++                    saved.early:sleep(0.125):queuecommand('Fire')
++                    saved.late:sleep(0.125):queuecommand('Fire')
++                    self:sleep(0.125):queuecommand('Fire');log('queue end')
++                end)end},
++            Def.Quad{Name='late',InitCommand=function(self)saved.late=self end,FireCommand=fire},
++        }
++    "#,
++    );
++    let mut pair = Pair::new(SongLuaCompileContext::new(
++        dir.path(),
++        "capture frame order",
++    ));
++    let (native, rust) = pair.activate(&[&path]);
++    begin_message_replay(&mut pair, &native, &rust, &["early", "driver", "late"]);
++    let frames: Vec<_> = (0..7)
++        .map(|i| (i as f64, if i == 0 { 0. } else { 0.125 }))
++        .collect();
++    test_support::legacy_set_song_replay_frames(&pair.native, &frames).unwrap();
++    pair.script("saved.armed=true;saved.early:linear(10):basealpha(0.8)");
++    compare_immediate_updates(&mut pair);
++    for i in 1..frames.len() {
++        let seconds = i as f64 * 0.125;
++        pair.rust.set_values(i as f32, seconds as f32).unwrap();
++        deadsync_song_lua::set_compile_song_runtime_values(&pair.native, i as f32, seconds as f32)
++            .unwrap();
++        test_support::legacy_advance_song_replay_at_frame(&pair.native, &native, i, 0.125).unwrap();
++        pair.rust
++            .advance_song_replay(pair.scene, seconds, 0.125)
++            .unwrap();
++        pair.compare();
++        compare_immediate_updates(&mut pair);
++    }
++    assert_eq!(pair.compare(), "queue begin|queue end|late|early|driver");
++}
+--- crates/deadsync-song-lua/src/rust_engine/test_support.rs before
++++ crates/deadsync-song-lua/src/rust_engine/test_support.rs
+@@ -1308,6 +1308,25 @@
+ pub fn legacy_begin_song_replay_clock(lua: &mlua::Lua) -> mlua::Result<()> {
+     crate::lua_util::set_compile_frames(lua, [(0., 0.)].into_iter())
+ }
++
++/// Exercise the real preparation scheduler with its complete frame timeline.
++pub fn legacy_set_song_replay_frames(lua: &mlua::Lua, frames: &[(f64, f64)]) -> mlua::Result<()> {
++    crate::lua_util::set_compile_frames(lua, frames.iter().copied())
++}
++
++pub fn legacy_advance_song_replay_at_frame(
++    lua: &mlua::Lua,
++    activation: &LegacySongActivation,
++    frame: usize,
++    delta: f64,
++) -> mlua::Result<()> {
++    crate::lua_util::set_compile_frame(lua, frame);
++    crate::lua_util::run_actor_compile_update_functions_with_delta(
++        lua,
++        &mlua::Value::Table(activation.root.clone()),
++        delta,
++    )
++}
+ pub fn legacy_song_tween_replay(
+     lua: &mlua::Lua,
+ ) -> std::collections::HashMap<usize, super::SongTweenReplay> {
+--- crates/deadsync-song-lua/src/rust_engine/song_discovery.rs before
++++ crates/deadsync-song-lua/src/rust_engine/song_discovery.rs
+@@ -49,8 +49,9 @@
+     pub tween_reset: bool,
+ }
+ 
+-/// Existing compiler scheduling contract. Immediate setters use zero duration
+-/// and delay, with an optional queued-command publication timestamp.
++/// Existing compiler scheduling contract. Immediate setters have zero duration.
++/// Captured commands retain their relative start as a delay; frame-dispatched
++/// commands use a publication timestamp and zero delay.
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct SongReplayScheduledUpdate {
+     pub progress: Option<std::sync::Arc<[[f32; 2]]>>,

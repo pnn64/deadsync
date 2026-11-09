@@ -1,0 +1,27 @@
+   Compiling deadsync-song-lua v0.1.0 (C:\GitHub\deadsync\crates\deadsync-song-lua)
+warning: unused import: `SongLuaMessageEvent`
+  --> crates\deadsync-song-lua\src\compile.rs:12:23
+   |
+12 |     SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+   |                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SongLuaInputType`
+ --> crates\deadsync-song-lua\src\input.rs:4:49
+  |
+4 | pub use crate::input_types::{SongLuaInputEvent, SongLuaInputType};
+  |                                                 ^^^^^^^^^^^^^^^^
+
+   Compiling deadsync-profile-gameplay v0.1.0 (C:\GitHub\deadsync\crates\deadsync-profile-gameplay)
+   Compiling deadsync-assets v0.1.0 (C:\GitHub\deadsync\crates\deadsync-assets)
+warning: `deadsync-song-lua` (lib) generated 2 warnings (run `cargo fix --lib -p deadsync-song-lua` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 3m 27s
+     Running tests\rust_render.rs (target\rust-adapters\debug\deps\rust_render-0427397f58333b09.exe)
+
+running 2 tests
+test declared_camera_fov_and_command_override_match_production ... ok
+test existing_set_fov_frame_alias_matches_command_and_class_calls ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.92s
+
