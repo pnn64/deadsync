@@ -2401,96 +2401,195 @@ fn rasterize_environment(
             let Some(setup) = triangle_setup(p.map(|v| v.x), p.map(|v| v.y), width, height) else {
                 continue;
             };
-            let Some((min_x, max_x, min_y, max_y, start)) =
-                setup.stripe_bounds(stripe_y_start, stripe_y_end)
-            else {
+            let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
                 continue;
             };
-            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
-                let image = texture.texels();
-                if sampler.filter == SamplerFilter::Linear {
-                    sample_tex_linear::<false, 4>(
-                        image,
-                        image.width,
-                        image.height,
-                        uv[0],
-                        uv[1],
-                        sampler,
-                    )
-                } else {
-                    sample_tex_nearest::<false, 4>(
-                        image,
-                        image.width,
-                        image.height,
-                        uv[0],
-                        uv[1],
-                        sampler,
-                    )
+            let reflection = triangle[0].normal[3] as u8 & 4 != 0;
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            // Positive normal inverse-W and bounded shading keep perspective
+            // interpolation finite; exceptional inputs retain portable math.
+            if std::arch::is_x86_feature_detected!("fma")
+                && primary.half_pixels.is_empty()
+                && additive.is_none_or(|texture| texture.half_pixels.is_empty())
+                && p.iter().all(|v| {
+                    v.inv_w >= f32::MIN_POSITIVE
+                        && v.inv_w <= f32::MAX / 4.0
+                        && v.color
+                            .into_iter()
+                            .chain([v.u, v.v, v.z])
+                            .all(|value| value.abs() <= f32::MAX / 4.0)
+                })
+                && q.iter()
+                    .all(|v| v.u.abs() <= f32::MAX / 4.0 && v.v.abs() <= f32::MAX / 4.0)
+            {
+                // SAFETY: runtime detection checks CPU and OS support for FMA.
+                unsafe {
+                    rasterize_environment_triangle_fma(
+                        &p,
+                        &q,
+                        setup,
+                        bounds,
+                        instance.texture_mask,
+                        reflection,
+                        primary,
+                        primary_sampler,
+                        additive,
+                        width,
+                        blend,
+                        buffer,
+                        depth,
+                    );
                 }
-                .unwrap_or([0.0; 4])
-            };
-            let edges = [
-                owns_edge(p[1].x, p[1].y, p[2].x, p[2].y, setup.inv_denom),
-                owns_edge(p[2].x, p[2].y, p[0].x, p[0].y, setup.inv_denom),
-                owns_edge(p[0].x, p[0].y, p[1].x, p[1].y, setup.inv_denom),
-            ];
-            for y in min_y..=max_y {
-                for x in min_x..=max_x {
-                    let px = x as f32 + 0.5;
-                    let py = y as f32 + 0.5;
-                    let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
-                    let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
-                    let c = 1.0 - a - b;
-                    if !covered([a, b, c], edges) {
-                        continue;
-                    }
-                    let z = a * p[0].z + b * p[1].z + c * p[2].z;
-                    let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
-                    let w = [
-                        a * p[0].inv_w / sum,
-                        b * p[1].inv_w / sum,
-                        c * p[2].inv_w / sum,
-                    ];
-                    let uv = |v: &[ScreenVertexTexColor; 3]| {
-                        [
-                            w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
-                            w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
-                        ]
-                    };
-                    let texel = sample(primary, primary_sampler, uv(&p));
-                    let tint: [f32; 4] = std::array::from_fn(|i| {
-                        w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
-                    });
-                    let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
-                    if instance.texture_mask > 0.5 {
-                        color[..3].copy_from_slice(&tint[..3]);
-                    } else if triangle[0].normal[3] as u8 & 4 != 0 {
-                        let reflection = sample(
-                            additive.unwrap_or(primary),
-                            SamplerDesc {
-                                wrap: SamplerWrap::Repeat,
-                                ..additive.unwrap_or(primary).sampler
-                            },
-                            uv(&q),
-                        );
-                        for i in 0..3 {
-                            color[i] = (color[i] + reflection[i]).min(1.0);
-                        }
-                        color[3] *= reflection[3];
-                    }
-                    if color[3] <= 1.0 / 256.0 {
-                        continue;
-                    }
-                    let index = (y - start) as usize * width + x as usize;
-                    if !depth.test(index, z) {
-                        continue;
-                    }
-                    buffer(index, color, blend);
-                }
+                continue;
             }
+            rasterize_environment_triangle_impl::<false>(
+                &p,
+                &q,
+                setup,
+                bounds,
+                instance.texture_mask,
+                reflection,
+                primary,
+                primary_sampler,
+                additive,
+                width,
+                blend,
+                buffer,
+                depth,
+            );
         }
     }
     count
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_environment_triangle_fma(
+    p: &[ScreenVertexTexColor; 3],
+    q: &[ScreenVertexTexColor; 3],
+    setup: RasterSetup,
+    bounds: (i32, i32, i32, i32, i32),
+    texture_mask: f32,
+    reflection: bool,
+    primary: &Texture,
+    primary_sampler: SamplerDesc,
+    additive: Option<&Texture>,
+    width: usize,
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    depth: &mut DepthRows<'_>,
+) {
+    rasterize_environment_triangle_impl::<true>(
+        p,
+        q,
+        setup,
+        bounds,
+        texture_mask,
+        reflection,
+        primary,
+        primary_sampler,
+        additive,
+        width,
+        blend,
+        buffer,
+        depth,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_environment_triangle_impl<const PACKED: bool>(
+    p: &[ScreenVertexTexColor; 3],
+    q: &[ScreenVertexTexColor; 3],
+    setup: RasterSetup,
+    bounds: (i32, i32, i32, i32, i32),
+    texture_mask: f32,
+    reflection: bool,
+    primary: &Texture,
+    primary_sampler: SamplerDesc,
+    additive: Option<&Texture>,
+    width: usize,
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    depth: &mut DepthRows<'_>,
+) {
+    let (min_x, max_x, min_y, max_y, start) = bounds;
+    #[inline(always)]
+    fn sample(texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]) -> [f32; 4] {
+        let image = texture.texels();
+        if sampler.filter == SamplerFilter::Linear {
+            sample_tex_linear::<false, 4>(image, image.width, image.height, uv[0], uv[1], sampler)
+        } else {
+            sample_tex_nearest::<false, 4>(image, image.width, image.height, uv[0], uv[1], sampler)
+        }
+        .unwrap_or([0.0; 4])
+    }
+    let edges = [
+        owns_edge(p[1].x, p[1].y, p[2].x, p[2].y, setup.inv_denom),
+        owns_edge(p[2].x, p[2].y, p[0].x, p[0].y, setup.inv_denom),
+        owns_edge(p[0].x, p[0].y, p[1].x, p[1].y, setup.inv_denom),
+    ];
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
+            let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
+            let c = 1.0 - a - b;
+            if !covered([a, b, c], edges) {
+                continue;
+            }
+            let z = a * p[0].z + b * p[1].z + c * p[2].z;
+            let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
+            let w = if PACKED {
+                let numerators = Vector4::new(a * p[0].inv_w, b * p[1].inv_w, c * p[2].inv_w, 0.0);
+                let w = (numerators / sum).to_array();
+                [w[0], w[1], w[2]]
+            } else {
+                [
+                    a * p[0].inv_w / sum,
+                    b * p[1].inv_w / sum,
+                    c * p[2].inv_w / sum,
+                ]
+            };
+            let uv = |v: &[ScreenVertexTexColor; 3]| {
+                [
+                    w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
+                    w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
+                ]
+            };
+            let texel = sample(primary, primary_sampler, uv(p));
+            let tint: [f32; 4] = std::array::from_fn(|i| {
+                w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
+            });
+            let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
+            if texture_mask > 0.5 {
+                color[..3].copy_from_slice(&tint[..3]);
+            } else if reflection {
+                let reflection = sample(
+                    additive.unwrap_or(primary),
+                    SamplerDesc {
+                        wrap: SamplerWrap::Repeat,
+                        ..additive.unwrap_or(primary).sampler
+                    },
+                    uv(q),
+                );
+                for i in 0..3 {
+                    color[i] = (color[i] + reflection[i]).min(1.0);
+                }
+                color[3] *= reflection[3];
+            }
+            if color[3] <= 1.0 / 256.0 {
+                continue;
+            }
+            let index = (y - start) as usize * width + x as usize;
+            if !depth.test(index, z) {
+                continue;
+            }
+            buffer(index, color, blend);
+        }
+    }
 }
 
 fn rasterize_textured_mesh_triangles(
@@ -6299,3 +6398,6 @@ mod texture_raster_performance;
 
 #[cfg(test)]
 mod tmesh_raster_performance;
+
+#[cfg(test)]
+mod environment_raster_performance;
