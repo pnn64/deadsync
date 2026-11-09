@@ -2,7 +2,6 @@ use crate::ui_layout::UILayoutType;
 
 const LEFT_PANEL_REFERENCE_WIDTH: f32 = 720.0;
 const SONG_DETAILS_HEIGHT: f32 = 50.0;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WidgetBounds {
     pub x: f32,

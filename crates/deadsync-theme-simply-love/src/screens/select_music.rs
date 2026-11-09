@@ -75,7 +75,7 @@ use deadsync_theme::views::{AudioPlaybackView, SmxAssignmentPadView, SmxAssignme
 use deadsync_theme::{AudioCut, AudioRequest};
 use log::{debug, warn};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1691,7 +1691,7 @@ fn build_info_box_children(key: &InfoBoxActorKey, layout: SongDetailsLayout) -> 
 /// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
 /// (that would rewrite the pad's just-captured live values).
 pub struct State {
-    layout: SongSelectLayout,
+    layout: OnceCell<SongSelectLayout>,
     /// Reused visible-wheel buffer owned by Select Music's main-thread state.
     /// It lives for the screen, is pre-sized to the largest built-in cached sort
     /// during initialization, and is then cleared/refilled without allocation.
@@ -1939,8 +1939,12 @@ pub struct State {
 }
 
 impl State {
+    fn layout(&self) -> &SongSelectLayout {
+        self.layout.get_or_init(SongSelectLayout::current)
+    }
+
     pub fn density_graph_dimensions(&self) -> [f32; 2] {
-        let bounds = self.layout.chart_panel.bounds;
+        let bounds = self.layout().chart_panel.bounds;
         [bounds.width, bounds.height]
     }
 }
@@ -3655,7 +3659,6 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
 #[must_use]
 pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
-    let layout = SongSelectLayout::current();
     debug!("Preparing SelectMusic state...");
     let song_cache = &init_view.song_packs;
 
@@ -3903,7 +3906,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let folder_stats = FolderStatsCache::new(&group_entries);
 
     let mut state = State {
-        layout,
+        layout: OnceCell::new(),
         all_entries: Arc::clone(&group_entries),
         series_entries,
         group_entries,
@@ -4162,7 +4165,7 @@ pub fn init_placeholder() -> State {
     };
 
     State {
-        layout: SongSelectLayout::current(),
+        layout: OnceCell::new(),
         all_entries: Arc::from([]),
         series_entries: Arc::from([]),
         group_entries: Arc::from([]),
@@ -13070,7 +13073,7 @@ pub fn push_actors(
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    let song_select_layout = state.layout;
+    let song_select_layout = *state.layout();
     let left_panel_scale = song_select_layout.zoom;
     actors.reserve(256);
     state.labels.borrow_mut().sync();
@@ -15597,6 +15600,20 @@ mod tests {
         let fallback_b = banner_texture_key(&state);
         assert_eq!(fallback_a.as_ref(), "banner12.png");
         assert!(Arc::ptr_eq(&fallback_a, &fallback_b));
+    }
+
+    #[test]
+    fn placeholder_layout_uses_metrics_available_when_first_requested() {
+        use deadlib_present::space::{Metrics, screen_height, screen_width, set_current_metrics};
+
+        let previous = Metrics::centered(screen_width(), screen_height());
+        set_current_metrics(Metrics::centered(2.0, 2.0));
+        let state = init_placeholder();
+        set_current_metrics(Metrics::centered(853.0, 480.0));
+
+        assert_eq!(state.density_graph_dimensions(), [384.5, 64.0]);
+
+        set_current_metrics(previous);
     }
 
     #[test]
