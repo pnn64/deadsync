@@ -5340,7 +5340,45 @@ fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn apply_effect_to_sprite(
+    effect: anim::EffectState,
+    elapsed: f32,
+    tint: &mut [f32; 4],
+    scale: &mut [f32; 2],
+    rot_deg: &mut [f32; 3],
+) {
+    // Amortize dispatch over color/scale interpolation; other modes stay local.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseRamp | anim::EffectMode::DiffuseShift | anim::EffectMode::Pulse
+    ) && std::arch::is_x86_feature_detected!("fma")
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe { apply_effect_to_sprite_fma(effect, elapsed, tint, scale, rot_deg) };
+    }
+    apply_effect_to_sprite_portable(effect, elapsed, tint, scale, rot_deg);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn apply_effect_to_sprite_fma(
+    effect: anim::EffectState,
+    elapsed: f32,
+    tint: &mut [f32; 4],
+    scale: &mut [f32; 2],
+    rot_deg: &mut [f32; 3],
+) {
+    apply_effect_to_sprite_portable(effect, elapsed, tint, scale, rot_deg);
+}
+
+#[inline(always)]
+fn apply_effect_to_sprite_portable(
     effect: anim::EffectState,
     elapsed: f32,
     tint: &mut [f32; 4],
@@ -5425,7 +5463,42 @@ fn apply_effect_to_sprite(
 }
 
 #[inline(always)]
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn apply_effect_to_text(
+    effect: anim::EffectState,
+    elapsed: f32,
+    color: &mut [f32; 4],
+    scale: &mut [f32; 2],
+) {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseRamp | anim::EffectMode::DiffuseShift | anim::EffectMode::Pulse
+    ) && std::arch::is_x86_feature_detected!("fma")
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe { apply_effect_to_text_fma(effect, elapsed, color, scale) };
+    }
+    apply_effect_to_text_portable(effect, elapsed, color, scale);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn apply_effect_to_text_fma(
+    effect: anim::EffectState,
+    elapsed: f32,
+    color: &mut [f32; 4],
+    scale: &mut [f32; 2],
+) {
+    apply_effect_to_text_portable(effect, elapsed, color, scale);
+}
+
+#[inline(always)]
+fn apply_effect_to_text_portable(
     effect: anim::EffectState,
     elapsed: f32,
     color: &mut [f32; 4],
@@ -15978,3 +16051,7 @@ mod clip_performance;
 #[cfg(test)]
 #[path = "compose_sprite_clip_performance.rs"]
 mod sprite_clip_performance;
+
+#[cfg(test)]
+#[path = "compose_effect_performance.rs"]
+mod effect_performance;
