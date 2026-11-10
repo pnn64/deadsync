@@ -12,6 +12,8 @@ mod returns;
 #[allow(unsafe_code)]
 mod stdio;
 mod stream;
+#[cfg(test)]
+mod write_tests;
 use number::read_number;
 pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
     output::write(bytes)
@@ -713,19 +715,25 @@ impl Vm {
                 let mut status = Ok(());
                 for index in first..count {
                     let value = self.argument(base, count, index);
-                    let s = match value {
-                        Value::Number(n) => self.intern_number(n)?,
-                        _ => Value::String(self.string_argument(base, count, index)?),
+                    let formatted;
+                    let bytes = match value {
+                        Value::Number(n) => {
+                            formatted = native::try_format_number(n)
+                                .map_err(|_| self.memory_failure())?;
+                            formatted.as_slice()
+                        }
+                        _ => {
+                            let s = self.string_argument(base, count, index)?;
+                            self.strings.bytes[slot_index(s.0)].as_ref()
+                        }
                     };
-                    let Value::String(s) = s else { unreachable!() };
                     if status.is_ok() {
                         if self.io.is_stdout(key)
                             && let Some(output) = self.output.as_mut()
                         {
-                            output.try_extend_from_slice(&self.strings.bytes[slot_index(s.0)])?;
+                            output.try_extend_from_slice(bytes)?;
                         } else {
-                            status =
-                                self.io.files[slot].write(&self.strings.bytes[slot_index(s.0)]);
+                            status = self.io.files[slot].write(bytes);
                         }
                     }
                 }

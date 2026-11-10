@@ -1236,6 +1236,14 @@ pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
         } else {
             output.write_str("inf").unwrap();
         }
+    } else if n.abs() < 100_000_000_000_000.0 && n.fract() == 0.0 {
+        // Integers with at most fourteen digits need no decimal rounding.
+        // Keep the sign of zero, which an integer cast would discard.
+        if n == 0.0 && n.is_sign_negative() {
+            output.write_str("-0").unwrap();
+        } else {
+            write!(output, "{}", n as i64).unwrap();
+        }
     } else {
         let mut scientific = Buffer::new();
         write!(scientific, "{n:.13e}").unwrap();
